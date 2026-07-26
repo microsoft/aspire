@@ -87,7 +87,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     public required ITelemetryErrorRecorder ErrorRecorder { get; init; }
 
     [Inject]
-    public required DimensionManager DimensionManager { get; set; }
+    public required DimensionManager DimensionManager { get; init; }
 
     [Inject]
     public required IOptions<DashboardOptions> DashboardOptions { get; init; }

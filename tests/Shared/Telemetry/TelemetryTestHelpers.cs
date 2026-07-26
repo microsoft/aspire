@@ -9,6 +9,7 @@ using Aspire.Dashboard.Configuration;
 #if !ASPIRE_DASHBOARD_COMPONENT_TESTS
 using Aspire.Dashboard.Model;
 #endif
+using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 #if !ASPIRE_DASHBOARD_COMPONENT_TESTS
 using Aspire.Dashboard.Otlp.Storage;
@@ -30,6 +31,8 @@ namespace Aspire.Tests.Shared.Telemetry;
 
 internal static class TelemetryTestHelpers
 {
+    private static long s_nextLogEntryId;
+
     public static void AssertId(string expected, string actual)
     {
         var resolvedActual = GetStringId(actual);
@@ -213,6 +216,11 @@ internal static class TelemetryTestHelpers
         }
 
         return logRecord;
+    }
+
+    public static OtlpLogEntry CreateOtlpLogEntry(LogRecord record, OtlpResourceView resourceView, OtlpScope scope, OtlpContext context)
+    {
+        return new OtlpLogEntryData(record, resourceView, scope, context).CreateLogEntry(Interlocked.Increment(ref s_nextLogEntryId));
     }
 
     public static Resource CreateResource(string? name = null, string? instanceId = null, IEnumerable<KeyValuePair<string, string>>? attributes = null)

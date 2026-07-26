@@ -77,7 +77,10 @@ public sealed partial class SqliteTelemetryRepository
                                 cachedResource.ResourceId,
                                 resourceViewId,
                                 scopeId,
-                                new OtlpLogEntry(record, resourceView, scope, _otlpContext)));
+                                record,
+                                resourceView,
+                                scope,
+                                _otlpContext));
                         }
                         catch (Exception exception)
                         {
@@ -117,49 +120,33 @@ public sealed partial class SqliteTelemetryRepository
             "log_id",
             static (pendingLog, parameters) =>
             {
-                var log = pendingLog.Log;
                 parameters[0].Value = pendingLog.ResourceId;
                 parameters[1].Value = pendingLog.ResourceViewId;
                 parameters[2].Value = pendingLog.ScopeId;
-                parameters[3].Value = log.TimeStamp.Ticks;
-                parameters[4].Value = (long)log.Flags;
-                parameters[5].Value = (int)log.Severity;
-                parameters[6].Value = log.Severity.ToString();
-                parameters[7].Value = log.SeverityNumber;
-                parameters[8].Value = log.Message;
-                parameters[9].Value = log.SpanId;
-                parameters[10].Value = log.TraceId;
-                parameters[11].Value = log.ParentId;
-                parameters[12].Value = log.OriginalFormat ?? (object)DBNull.Value;
-                parameters[13].Value = log.EventName ?? (object)DBNull.Value;
+                parameters[3].Value = pendingLog.TimeStamp.Ticks;
+                parameters[4].Value = (long)pendingLog.Flags;
+                parameters[5].Value = (int)pendingLog.Severity;
+                parameters[6].Value = pendingLog.Severity.ToString();
+                parameters[7].Value = pendingLog.SeverityNumber;
+                parameters[8].Value = pendingLog.Message;
+                parameters[9].Value = pendingLog.SpanId;
+                parameters[10].Value = pendingLog.TraceId;
+                parameters[11].Value = pendingLog.ParentId;
+                parameters[12].Value = pendingLog.OriginalFormat ?? (object)DBNull.Value;
+                parameters[13].Value = pendingLog.EventName ?? (object)DBNull.Value;
             });
 
         InsertLogAttributes(connection, transaction, logs, logIds);
         for (var i = 0; i < logs.Count; i++)
         {
-            var log = logs[i].Log;
-            addedLogs.Add(new OtlpLogEntry(
-                logIds[i],
-                log.TimeStamp,
-                log.Flags,
-                log.Severity,
-                log.SeverityNumber,
-                log.Message,
-                log.SpanId,
-                log.TraceId,
-                log.ParentId,
-                log.OriginalFormat,
-                log.ResourceView,
-                log.Scope,
-                log.Attributes,
-                log.EventName));
+            addedLogs.Add(logs[i].CreateLogEntry(logIds[i]));
         }
     }
 
     private static void InsertLogAttributes(SqliteConnection connection, IDbTransaction transaction, List<PendingLog> logs, List<long> logIds)
     {
         var attributes = logs
-            .SelectMany((pendingLog, logIndex) => pendingLog.Log.Attributes.Select((attribute, ordinal) => (LogId: logIds[logIndex], Ordinal: ordinal, Attribute: attribute)))
+            .SelectMany((pendingLog, logIndex) => pendingLog.Attributes.Select((attribute, ordinal) => (LogId: logIds[logIndex], Ordinal: ordinal, Attribute: attribute)))
             .ToArray();
         SqliteBatchInsert.BatchInsertRows(
             connection,
@@ -775,7 +762,26 @@ public sealed partial class SqliteTelemetryRepository
 
     private sealed record LogQuery(string FromAndWhere, DynamicParameters Parameters);
 
-    private sealed record PendingLog(long ResourceId, long ResourceViewId, long ScopeId, OtlpLogEntry Log);
+    private sealed class PendingLog : OtlpLogEntryData
+    {
+        public PendingLog(
+            long resourceId,
+            long resourceViewId,
+            long scopeId,
+            OpenTelemetry.Proto.Logs.V1.LogRecord record,
+            OtlpResourceView resourceView,
+            OtlpScope scope,
+            OtlpContext context) : base(record, resourceView, scope, context)
+        {
+            ResourceId = resourceId;
+            ResourceViewId = resourceViewId;
+            ScopeId = scopeId;
+        }
+
+        public long ResourceId { get; }
+        public long ResourceViewId { get; }
+        public long ScopeId { get; }
+    }
 
     private class AttributeRecord
     {

@@ -5,9 +5,20 @@ using Aspire.Dashboard.Otlp.Storage;
 
 namespace Aspire.Dashboard.ServiceClient;
 
-internal interface IDashboardRunSelection
+/// <summary>
+/// Controls the dashboard run selected in the current scope.
+/// </summary>
+public interface IDashboardRunSelection
 {
+    /// <summary>
+    /// Gets the selected dashboard run.
+    /// </summary>
     DashboardRunDescriptor SelectedRun { get; }
+
+    /// <summary>
+    /// Selects the dashboard run with the specified identifier.
+    /// </summary>
+    /// <param name="runId">The run identifier, or <see langword="null"/> to select the current run.</param>
     void SelectRun(string? runId);
 }
 

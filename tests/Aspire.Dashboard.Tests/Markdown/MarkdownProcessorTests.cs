@@ -147,6 +147,7 @@ public class MarkdownProcessorTests
 
         // Assert
         Assert.Contains("language-csharp", html);
+        Assert.Contains("aria-label=\"Localized:GridValueCopyToClipboard\"", html);
         Assert.Contains("</code>", html);
     }
 

@@ -226,7 +226,7 @@ public sealed class StructuredLogsPageViewModelTests
         };
 
         var logRecord = TelemetryTestHelpers.CreateLogRecord(message: message, severity: severityNumber);
-        var logEntry = new OtlpLogEntry(logRecord, resourceView, scope, context);
+        var logEntry = TelemetryTestHelpers.CreateOtlpLogEntry(logRecord, resourceView, scope, context);
 
         return new StructureLogsDetailsViewModel { LogEntry = logEntry };
     }

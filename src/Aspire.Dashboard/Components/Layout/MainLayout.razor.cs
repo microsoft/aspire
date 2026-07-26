@@ -81,7 +81,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     public required IDashboardRunStore RunStore { get; init; }
 
     [Inject]
-    internal IDashboardRunSelection RunSelection { get; init; } = null!;
+    public required IDashboardRunSelection RunSelection { get; init; }
 
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }

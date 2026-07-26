@@ -82,10 +82,10 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     public required ILogger<Traces> Logger { get; init; }
 
     [Inject]
-    public required NavigationManager NavigationManager { get; set; }
+    public required NavigationManager NavigationManager { get; init; }
 
     [Inject]
-    public required ISessionStorage SessionStorage { get; set; }
+    public required ISessionStorage SessionStorage { get; init; }
 
     [Inject]
     public required DimensionManager DimensionManager { get; init; }

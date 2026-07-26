@@ -106,7 +106,7 @@ public sealed class TraceDetailPageViewModelTests
         var trace = new OtlpTrace(new byte[] { 1, 2, 3 }, DateTime.MinValue);
         var scope = TelemetryTestHelpers.CreateOtlpScope(context);
         var span = TelemetryTestHelpers.CreateOtlpSpan(resource, trace, scope, spanId: "span1", parentSpanId: null, startDate: DateTime.UtcNow);
-        var logEntry = new OtlpLogEntry(TelemetryTestHelpers.CreateLogRecord(message: "test log"), resourceView, scope, context);
+        var logEntry = TelemetryTestHelpers.CreateOtlpLogEntry(TelemetryTestHelpers.CreateLogRecord(message: "test log"), resourceView, scope, context);
         var logSummary = new LogSummary
         {
             InternalId = logEntry.InternalId,
@@ -147,7 +147,7 @@ public sealed class TraceDetailPageViewModelTests
         var trace = new OtlpTrace(new byte[] { 1, 2, 3 }, DateTime.MinValue);
         var scope = TelemetryTestHelpers.CreateOtlpScope(context);
         var span = TelemetryTestHelpers.CreateOtlpSpan(resource, trace, scope, spanId: "span1", parentSpanId: null, startDate: DateTime.UtcNow);
-        var logEntry = new OtlpLogEntry(TelemetryTestHelpers.CreateLogRecord(message: "test log"), resourceView, scope, context);
+        var logEntry = TelemetryTestHelpers.CreateOtlpLogEntry(TelemetryTestHelpers.CreateLogRecord(message: "test log"), resourceView, scope, context);
 
         // Span with no logs
         var spanVm = CreateSpanWaterfallViewModel(span);

@@ -22,6 +22,7 @@ using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Metrics.V1;
 using OpenTelemetry.Proto.Resource.V1;
 using OpenTelemetry.Proto.Trace.V1;
+using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 using static OpenTelemetry.Proto.Trace.V1.Span.Types;
 
 namespace Aspire.Dashboard.Otlp.Storage;
@@ -402,7 +403,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
                 {
                     try
                     {
-                        var logEntry = new OtlpLogEntry(record, resourceView, scope, _otlpContext);
+                        var logEntry = CreateOtlpLogEntry(record, resourceView, scope, _otlpContext);
 
                         // Insert log entry in the correct position based on timestamp.
                         // Logs can be added out of order by different services.
