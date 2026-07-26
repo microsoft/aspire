@@ -449,8 +449,18 @@ public static class AspireMcpClientExtensions
         {
             return new UriBuilder(resolvedUri)
             {
-                Path = endpoint.AbsolutePath,
+                Path = CombinePathPrefixes(resolvedUri.AbsolutePath, endpoint.AbsolutePath),
             }.Uri;
+        }
+
+        private static string CombinePathPrefixes(string basePath, string requestPath)
+        {
+            return (basePath, requestPath) switch
+            {
+                ("", _) or ("/", _) => requestPath,
+                (_, "") or (_, "/") => basePath,
+                _ => $"{basePath.TrimEnd('/')}/{requestPath.TrimStart('/')}",
+            };
         }
 
         private static Uri CreateResolvedEndpointUri(Uri endpoint, string host, int port)

@@ -374,6 +374,26 @@ public class AspireMcpClientExtensionsTests
         Assert.Contains(handler.RequestUris, uri => uri.ToString() == "http://resolved-mcp/mcp");
     }
 
+    [Fact]
+    public void McpClientPreservesServiceDiscoveryEndpointPathPrefix()
+    {
+        var handler = new SuccessfulInitializationHandler();
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["services:mcp:https:0"] = "https://resolved-mcp/base",
+        });
+        builder.Services.AddServiceDiscovery();
+        builder.Services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => handler));
+        builder.AddMcpClient("mcp");
+
+        using var host = builder.Build();
+        var exception = Record.Exception(() => _ = host.Services.GetRequiredService<McpClient>());
+
+        Assert.Null(exception);
+        Assert.Contains(handler.RequestUris, uri => uri.ToString() == "https://resolved-mcp/base/mcp");
+    }
+
     public static TheoryData<EndPoint, string> PlatformServiceDiscoveryEndpoints { get; } = new()
     {
         { new DnsEndPoint("platform-mcp", 5001), "https://platform-mcp:5001/mcp" },
