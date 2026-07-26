@@ -502,19 +502,20 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     public async Task SelectedHistoricalRun_HoldsLeaseUntilSelectionChanges()
     {
         var options = CreateOptions();
+        var startedAt = new DateTimeOffset(2026, 7, 26, 12, 34, 56, TimeSpan.Zero);
         string historicalRunId;
         string historicalRunDirectory;
 
-        using (var historicalRunStore = CreateRunStore(options))
+        using (var historicalRunStore = CreateRunStore(options, new FixedTimeProvider(startedAt)))
         {
             historicalRunId = historicalRunStore.RunId;
             historicalRunDirectory = historicalRunStore.RunDirectory;
             using var historicalTelemetryContext = await CreateTelemetryRepositoryAsync(historicalRunStore.DatabasePath, options);
         }
 
-        using var currentRunStore = CreateRunStore(options);
+        using var currentRunStore = CreateRunStore(options, new FixedTimeProvider(startedAt.AddMilliseconds(1)));
         var repositoryFactory = CreateRepositoryFactory(options);
-    using var dataSource = CreateDataSource(currentRunStore, repositoryFactory);
+        using var dataSource = CreateDataSource(currentRunStore, repositoryFactory);
         dataSource.SelectRun(historicalRunId);
 
         var runsDirectory = Path.GetDirectoryName(historicalRunDirectory)!;
@@ -522,14 +523,14 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         {
             Directory.CreateDirectory(Path.Combine(
                 runsDirectory,
-                $"{DateTimeOffset.UtcNow.AddDays(index):yyyyMMddTHHmmssfffZ}"));
+                $"{startedAt.AddDays(index):yyyyMMddTHHmmssfffZ}"));
         }
 
         var deletedRunDirectories = new List<string>();
         using var pruningRunStore = new DashboardRunStore(
             options,
             NullLogger<DashboardRunStore>.Instance,
-            TimeProvider.System,
+            new FixedTimeProvider(startedAt.AddMilliseconds(2)),
             deletedRunDirectories.Add);
 
         Assert.Empty(deletedRunDirectories);
@@ -539,7 +540,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         using var nextPruningRunStore = new DashboardRunStore(
             options,
             NullLogger<DashboardRunStore>.Instance,
-            TimeProvider.System,
+            new FixedTimeProvider(startedAt.AddMilliseconds(3)),
             deletedRunDirectories.Add);
 
         Assert.Equal(historicalRunDirectory, Assert.Single(deletedRunDirectories));
