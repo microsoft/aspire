@@ -334,6 +334,30 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task VerifyDockerfile_PublishAsPackageScriptPreservesPosixDoubleQuoteEscapes()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+        File.WriteAllText(Path.Combine(appDir, "deno.json"), """{"tasks":{"start":"deno run -A main.ts"}}""");
+
+        // Inside double quotes POSIX only treats a backslash as an escape before $ ` " \ and newline, so
+        // "\d+" must survive intact while "C:\\tmp" collapses to a single backslash.
+        var app = builder.AddJavaScriptApp("js", appDir)
+            .WithDeno()
+            .PublishAsPackageScript("start", """-- --pattern "\d+" --path "C:\\tmp" --quote "say \"hi\"" """);
+
+        await ManifestUtils.GetManifest(app.Resource, workspace.Path);
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
+        Assert.Equal(
+            """ENTRYPOINT ["deno","task","start","--","--pattern","\\d+","--path","C:\\tmp","--quote","say \"hi\""]""",
+            GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
+    }
+
+    [Fact]
     public async Task VerifyDockerfile_CacheUsesNoLockWhenConfigured()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

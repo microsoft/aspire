@@ -1039,10 +1039,27 @@ public static partial class JavaScriptHostingExtensions
             // Inside single quotes every character is literal.
             if (c == '\\' && quote != '\'' && index + 1 < runScriptArguments.Length)
             {
-                index++;
-                current.Append(runScriptArguments[index]);
-                hasToken = true;
-                continue;
+                var next = runScriptArguments[index + 1];
+
+                // POSIX rules differ by context. Unquoted, a backslash escapes the character that follows it.
+                // Inside double quotes it is only an escape before $ ` " \ and <newline>; before anything else
+                // the backslash is retained literally, so `--pattern "\d+"` must stay `--pattern \d+` rather
+                // than collapsing to `d+`.
+                // https://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html#tag_18_02_03
+                if (quote == '\0' || next is '$' or '`' or '"' or '\\' or '\n')
+                {
+                    index++;
+
+                    // A backslash immediately before a newline is a line continuation in both contexts:
+                    // both characters are removed rather than producing a literal newline.
+                    if (next != '\n')
+                    {
+                        current.Append(next);
+                        hasToken = true;
+                    }
+
+                    continue;
+                }
             }
 
             current.Append(c);

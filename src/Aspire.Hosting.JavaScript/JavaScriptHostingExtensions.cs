@@ -1400,14 +1400,16 @@ public static partial class JavaScriptHostingExtensions
     }
 
     /// <summary>
-    /// Configures the JavaScript application to publish as a Node.js server that uses a <c>package.json</c> script at runtime.
+    /// Configures the JavaScript application to publish as a server that runs a package manager script at runtime.
     /// </summary>
     /// <typeparam name="TResource">The JavaScript resource type.</typeparam>
     /// <param name="builder">The JavaScript resource builder.</param>
     /// <param name="scriptName">
-    /// The name of the <c>package.json</c> script to run in the published container.
+    /// The name of the script to run in the published container. For Node.js and Bun applications this is a
+    /// <c>package.json</c> script; for Deno applications it is a task defined in <c>deno.json</c>.
     /// For example, <c>start</c> invokes the configured package manager's run command for the <c>start</c> script,
-    /// such as <c>npm run start</c>, <c>pnpm run start</c>, <c>yarn run start</c>, or <c>bun run start</c>.
+    /// such as <c>npm run start</c>, <c>pnpm run start</c>, <c>yarn run start</c>, <c>bun run start</c>, or
+    /// <c>deno task start</c>.
     /// </param>
     /// <param name="runScriptArguments">
     /// Optional arguments appended after the script name at runtime,
@@ -1416,13 +1418,20 @@ public static partial class JavaScriptHostingExtensions
     /// <returns>The updated resource builder.</returns>
     /// <remarks>
     /// <para>
-    /// Use this method for frameworks where the production server depends on packages in <c>node_modules</c> at runtime.
-    /// The resulting container includes the full application with production dependencies installed.
+    /// Use this method for frameworks where the production server depends on packages resolved at runtime, either
+    /// from <c>node_modules</c> or from the Deno dependency cache. The resulting container includes the full
+    /// application with its production dependencies already installed.
     /// </para>
     /// <para>
     /// This method is appropriate for frameworks like Nuxt (where <c>useAsyncData</c>/<c>useFetch</c> requires the
     /// full Nitro environment), Remix (where <c>react-router-serve</c> is an npm dependency), and Astro SSR
     /// (where the built entry point imports unbundled <c>@astrojs/*</c> packages).
+    /// </para>
+    /// <para>
+    /// For Deno applications the generated container runs <c>deno task &lt;scriptName&gt;</c> and copies the populated
+    /// <c>DENO_DIR</c> cache from the build stage, so the container does not re-download dependencies on first run.
+    /// Unlike the Node.js and Bun package managers, Deno does not need a separate production install step because
+    /// <c>deno cache</c> during the build already materializes every dependency.
     /// </para>
     /// <para>
     /// For frameworks that produce a self-contained server artifact that does not require <c>node_modules</c>,
