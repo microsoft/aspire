@@ -76,10 +76,10 @@ entrypoint does not read `PORT` and must be told the port on the command line.
 
 Passing `--port`/`--host` again through `WithDenoRuntimeArgs` does not merely duplicate the flag — Deno rejects
 it outright (`error: the argument '--port <port>' cannot be used multiple times`, verified on 2.9.0), so the
-resource fails to start. Aspire detects this case and throws with actionable guidance instead of letting the
-raw Deno parser error surface. To change the port, configure the endpoint (for example
-`WithHttpEndpoint(port: 5005)`) and let `WithDenoServe()` project it; `WithDenoServe()` deliberately exposes no
-port method of its own.
+resource fails to start. This is one instance of the general rule in
+[Managed flags and `WithDenoRuntimeArgs`](#managed-flags-and-withdenoruntimeargs) below. To change the port,
+configure the endpoint (for example `WithHttpEndpoint(port: 5005)`) and let `WithDenoServe()` project it;
+`WithDenoServe()` deliberately exposes no port method of its own.
 
 The injected `PORT` environment variable remains relevant for `deno run` entrypoints, which create their
 own listener (`Deno.serve({ port: Number(Deno.env.get("PORT")) }, ...)`).
@@ -136,7 +136,9 @@ relying on interactive permission prompts.
   entrypoints to resolve the entrypoint's module graph — remote URLs and `npm:`/`jsr:` specifiers —
   into `DENO_DIR`. `DENO_DIR` is pinned to `/deno-dir` in both stages and copied `--from=build` into
   the runtime stage. Direct `run`/`serve` published entrypoints add `--cached-only`, so missing
-  dependencies fail fast instead of fetching from the network at container start. `deno task`
+  dependencies fail fast instead of fetching from the network at container start — unless the caller
+  selects their own cache policy (see
+  [Managed flags and `WithDenoRuntimeArgs`](#managed-flags-and-withdenoruntimeargs)). `deno task`
   entrypoints skip this pre-cache because Aspire cannot infer the task's actual module graph.
 - **Build context hygiene.** The generated per-Dockerfile `.dockerignore` excludes local
   `node_modules` folders. Deno can materialize `node_modules` during the build for npm compatibility,
@@ -154,5 +156,47 @@ relying on interactive permission prompts.
 Any Deno flag without a dedicated method (for example `--v8-flags=...`, `--seed`, `--cached-only`,
 `--reload`, `--env-file`) can be injected verbatim before the entrypoint with `WithDenoRuntimeArgs(...)`,
 giving full parity with `AddExecutable("name", "deno", workdir, args...)`. This is unvalidated by
-design; the conflicts documented above still apply when the injected flag overlaps Aspire-managed
-concerns.
+design, except where the injected flag overlaps an Aspire-managed concern.
+
+## Managed flags and `WithDenoRuntimeArgs`
+
+Deno treats most of the flags Aspire manages as single-occurrence, so supplying one again through
+`WithDenoRuntimeArgs` is a hard parse error rather than an override. All of the following were verified
+on Deno 2.9.0:
+
+| Managed flag | Emitted by | Conflict on 2.9.0 |
+| --- | --- | --- |
+| `--host`, `--port` | `WithDenoServe()` | `cannot be used multiple times` |
+| `--config` | `WithDenoConfig(...)` | `cannot be used multiple times` |
+| `--import-map` | `WithDenoImportMap(...)` | `cannot be used multiple times` |
+| `--lock`, `--no-lock` | `WithDenoLock(...)` / `WithDenoNoLock()` | `cannot be used multiple times` / `cannot be used with` |
+| `--node-modules-dir` | `WithDenoNodeModulesDir(...)` | `cannot be used multiple times` |
+| `--watch`, `--watch-hmr` | `WithDenoWatch(...)` | `cannot be used multiple times` / `cannot be used with` |
+| `--inspect`, `--inspect-brk`, `--inspect-wait` | `WithDenoInspect*()` | `cannot be used multiple times` |
+
+Aspire detects these ahead of time and throws with actionable guidance naming the managed flag, the
+API that emits it, and the supported way to configure it — instead of letting the raw Deno parser error
+surface at container start. Both `--flag value` and `--flag=value` spellings are detected.
+
+The check is scoped to what each mode actually emits. `deno task` entrypoints emit config, lock, and
+node-modules-dir flags but **not** `--import-map` or the debugging flags, so those remain available
+through `WithDenoRuntimeArgs` in task mode.
+
+Repeatable flags are deliberately **not** treated as conflicts, because Deno accepts them: `-A` alongside
+`--allow-all` is fine, and `--allow-read=/tmp --allow-read=/var` merges rather than erroring.
+
+### Cache policy is suppressed, not rejected
+
+`--cached-only` is the one managed flag that does not error when duplicated — but it silently wins.
+Verified against a real `jsr:` import on 2.9.0, `--cached-only --reload` is accepted and `--reload`
+becomes a no-op; with a cold cache the run fails identically with or without it:
+
+```text
+error: Specifier not found in cache: "https://jsr.io/@std/fmt/1.0.10/colors.ts", --cached-only is specified.
+```
+
+Because `--cached-only` is an Aspire default (hermetic builds) rather than a caller requirement, Aspire
+**omits** it when `WithDenoRuntimeArgs` contains `--reload`, `-r`, or an explicit `--cached-only`, so the
+caller's cache policy takes effect instead of being silently discarded. `--no-remote` is not treated as a
+cache policy — it is orthogonal to caching.
+
