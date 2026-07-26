@@ -31,6 +31,11 @@
                         <FluentIcon Value="@item.Icon" Style="vertical-align: text-bottom;" Width="16px" />
                     </span>
                 }
+                else if (item.ReserveIconSpace)
+                {
+                    @* Empty placeholder preserves the icon column width so sibling items' text aligns. *@
+                    <span slot="start" style="display: inline-block; width: 16px;"></span>
+                }
             </FluentMenuItem>;
         }
     }

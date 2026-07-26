@@ -502,6 +502,15 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Don&apos;t wrap lines.
+        /// </summary>
+        public static string GridValueNoWrapLines {
+            get {
+                return ResourceManager.GetString("GridValueNoWrapLines", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Hide value.
         /// </summary>
         public static string GridValueMaskHideValue {
@@ -516,6 +525,15 @@ namespace Aspire.Dashboard.Resources {
         public static string GridValueMaskShowValue {
             get {
                 return ResourceManager.GetString("GridValueMaskShowValue", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Wrap lines.
+        /// </summary>
+        public static string GridValueWrapLines {
+            get {
+                return ResourceManager.GetString("GridValueWrapLines", resourceCulture);
             }
         }
         

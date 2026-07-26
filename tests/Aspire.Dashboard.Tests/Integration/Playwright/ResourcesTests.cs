@@ -6,8 +6,10 @@ using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
 using Aspire.Dashboard.Resources;
 using Aspire.TestUtilities;
 using Aspire.Tests.Shared.DashboardModel;
+using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Playwright;
+using System.Text.Json;
 using Xunit;
 
 namespace Aspire.Dashboard.Tests.Integration.Playwright;
@@ -103,6 +105,108 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
         });
     }
 
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task TextVisualizer_NoWrap_KeepsDialogWidthAndShowsHorizontalOverflow()
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(1280, 900);
+            await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
+
+            var row = page.GetByText("LongSourceResource", new PageGetByTextOptions { Exact = true })
+                .Locator("xpath=ancestor::*[@role='row']")
+                .First;
+            await Assertions.Expect(row).ToBeVisibleAsync();
+
+            var sourceCell = row.Locator("td[col-index='4']");
+            await sourceCell.HoverAsync();
+
+            var openTextVisualizerButton = page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+            {
+                Name = Dashboard.Resources.Dialogs.OpenInTextVisualizer,
+                Exact = true
+            });
+            await Assertions.Expect(openTextVisualizerButton).ToBeVisibleAsync();
+            await openTextVisualizerButton.ClickAsync();
+
+            var optionsButton = page.Locator("fluent-button.text-visualizer-options-menu-button");
+            await optionsButton.ClickAsync();
+            await page.GetByRole(AriaRole.Menuitem, new() { Name = ControlsStrings.GridValueNoWrapLines, Exact = true }).ClickAsync();
+            await Assertions.Expect(page.Locator(".text-visualizer-container .wrap-log-container")).ToHaveCountAsync(1);
+
+            var metricsJson = await page.EvaluateAsync<string>(@"() => {
+                const overflow = document.querySelector('.text-visualizer-container .log-overflow');
+                const dialogHost = document.querySelector('fluent-dialog.fluent-dialog-main');
+                const dialog = dialogHost?.shadowRoot?.querySelector('[part=""control""]');
+                if (overflow) {
+                    overflow.scrollLeft = 50;
+                }
+
+                if (!dialog) {
+                    throw new Error('Could not find the fluent-dialog control part for the text visualizer dialog.');
+                }
+
+                return JSON.stringify({
+                    overflowScrollLeft: overflow ? overflow.scrollLeft : 0,
+                    dialogRight: dialog.getBoundingClientRect().right,
+                    viewportWidth: window.innerWidth,
+                    documentScrollWidth: document.documentElement.scrollWidth
+                });
+            }");
+
+            using var metricsDocument = JsonDocument.Parse(metricsJson);
+            var metrics = metricsDocument.RootElement;
+            var overflowScrollLeft = metrics.GetProperty("overflowScrollLeft").GetDouble();
+            var dialogRight = metrics.GetProperty("dialogRight").GetDouble();
+            var viewportWidth = metrics.GetProperty("viewportWidth").GetDouble();
+            var documentScrollWidth = metrics.GetProperty("documentScrollWidth").GetDouble();
+
+            Assert.True(overflowScrollLeft > 0, "No-wrap should allow horizontal scrolling inside the viewer.");
+            Assert.True(dialogRight <= viewportWidth, "Dialog should remain within viewport width when no-wrap is enabled.");
+            Assert.True(documentScrollWidth <= viewportWidth, "No-wrap should not cause page-level horizontal overflow.");
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task TextVisualizer_ActionsStayWithinDialogAtNarrowViewport()
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(1280, 900);
+            await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
+
+            var row = page.GetByText("LongSourceResource", new PageGetByTextOptions { Exact = true })
+                .Locator("xpath=ancestor::*[@role='row']")
+                .First;
+            await Assertions.Expect(row).ToBeVisibleAsync();
+
+            var sourceCell = row.Locator("td[col-index='4']");
+            await sourceCell.HoverAsync();
+
+            var openTextVisualizerButton = page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+            {
+                Name = Dashboard.Resources.Dialogs.OpenInTextVisualizer,
+                Exact = true
+            });
+            await Assertions.Expect(openTextVisualizerButton).ToBeVisibleAsync();
+            await openTextVisualizerButton.ClickAsync();
+
+            await page.SetViewportSizeAsync(360, 900);
+
+            var optionsButton = page.Locator("fluent-button.text-visualizer-options-menu-button");
+            var copyButton = page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+            {
+                Name = ControlsStrings.GridValueCopyToClipboard,
+                Exact = true
+            });
+
+            await AssertElementWithinViewportAsync(optionsButton, 360);
+            await AssertElementWithinViewportAsync(copyButton, 360);
+        });
+    }
+
     public sealed class ResourcesDashboardServerFixture : DashboardServerFixture
     {
         protected override IReadOnlyList<ResourceViewModel> Resources =>
@@ -119,6 +223,27 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
                 resourceName: "HiddenResource",
                 resourceType: KnownResourceTypes.Container,
                 hidden: true)
+            ,
+            ModelTestHelpers.CreateResource(
+                resourceName: "LongSourceResource",
+                resourceType: KnownResourceTypes.Project,
+                state: KnownResourceState.Running,
+                properties: new[]
+                {
+                    new KeyValuePair<string, ResourcePropertyViewModel>(
+                        KnownProperties.Project.Path,
+                        new ResourcePropertyViewModel(
+                            KnownProperties.Project.Path,
+                            new Value
+                            {
+                                StringValue = new string('a', 12000)
+                            },
+                            isValueSensitive: false,
+                            knownProperty: new(KnownProperties.Project.Path, _ => "Path"),
+                            sortOrder: 0,
+                            displayName: null,
+                            isHighlighted: false))
+                }.ToDictionary())
         ];
     }
 
@@ -130,5 +255,16 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
         Assert.NotNull(tabBounds);
         Assert.True(tabBounds.X >= 0, $"Tab should be within the viewport, but its X position was {tabBounds.X}.");
         Assert.True(tabBounds.X + tabBounds.Width <= viewportWidth, $"Tab should fit inside the {viewportWidth}px viewport, but its right edge was {tabBounds.X + tabBounds.Width}.");
+    }
+
+    private static async Task AssertElementWithinViewportAsync(ILocator element, int viewportWidth)
+    {
+        await Assertions.Expect(element).ToBeVisibleAsync();
+
+        var elementBounds = await element.BoundingBoxAsync();
+
+        Assert.NotNull(elementBounds);
+        Assert.True(elementBounds.X >= 0, $"Element should not overflow the viewport on the left. Element X: {elementBounds.X}.");
+        Assert.True(elementBounds.X + elementBounds.Width <= viewportWidth, $"Element should fit inside the {viewportWidth}px viewport. Element right edge: {elementBounds.X + elementBounds.Width}.");
     }
 }

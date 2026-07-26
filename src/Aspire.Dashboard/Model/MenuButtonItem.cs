@@ -12,6 +12,13 @@ public class MenuButtonItem
     public string? Text { get; set; }
     public string? Tooltip { get; set; }
     public Icon? Icon { get; set; }
+    /// <summary>
+    /// When <see langword="true"/>, an empty start-slot placeholder is always rendered so
+    /// that all sibling items in the same menu align their label text regardless of whether
+    /// they carry an icon. Only set this for items in menus where some (but not all) items
+    /// have icons and text alignment matters.
+    /// </summary>
+    public bool ReserveIconSpace { get; set; }
     public Func<Task>? OnClick { get; set; }
     public bool IsDisabled { get; set; }
     public string Id { get; set; } = Identifier.NewId();
