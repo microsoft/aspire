@@ -233,16 +233,8 @@ public static partial class JavaScriptHostingExtensions
 
                         if (resource.TryGetLastAnnotation<JavaScriptBuildScriptAnnotation>(out var buildCommand))
                         {
-                            var commandArgs = new List<string>() { packageManager.ExecutableName };
-                            if (!string.IsNullOrEmpty(packageManager.ScriptCommand))
-                            {
-                                commandArgs.Add(packageManager.ScriptCommand);
-                            }
-                            commandArgs.Add(buildCommand.ScriptName);
-                            commandArgs.AddRange(buildCommand.Args);
-
                             builderStage.EmptyLine()
-                                .Run(string.Join(' ', commandArgs));
+                                .Run(BuildPackageScriptCommand(packageManager, buildCommand));
                         }
                     }
                     else
@@ -588,16 +580,8 @@ public static partial class JavaScriptHostingExtensions
 
                         if (resource.TryGetLastAnnotation<JavaScriptBuildScriptAnnotation>(out var buildCommand))
                         {
-                            var commandArgs = new List<string>() { packageManager.ExecutableName };
-                            if (!string.IsNullOrEmpty(packageManager.ScriptCommand))
-                            {
-                                commandArgs.Add(packageManager.ScriptCommand);
-                            }
-                            commandArgs.Add(buildCommand.ScriptName);
-                            commandArgs.AddRange(buildCommand.Args);
-
                             builderStage.EmptyLine()
-                                .Run(string.Join(' ', commandArgs));
+                                .Run(BuildPackageScriptCommand(packageManager, buildCommand));
                         }
                     }
                     else
@@ -645,7 +629,7 @@ public static partial class JavaScriptHostingExtensions
                             prodDepsStage.Copy("package.json", "./");
                         }
 
-                        var prodInstallCmd = $"{pm.ExecutableName} {string.Join(' ', install.Args)} {install.ProductionInstallArgs}";
+                        var prodInstallCmd = BuildProductionInstallCommand(pm, install);
                         if (!string.IsNullOrEmpty(pm.CacheMount))
                         {
                             prodDepsStage.Run($"--mount=type=cache,target={pm.CacheMount} {prodInstallCmd}");
@@ -1479,7 +1463,7 @@ public static partial class JavaScriptHostingExtensions
     private static void AddInstallCommand(this DockerfileStage builderStage, JavaScriptPackageManagerAnnotation packageManager, JavaScriptInstallCommandAnnotation installCommand)
     {
         // Use BuildKit cache mount for package manager cache if available
-        var installCmd = $"{packageManager.ExecutableName} {string.Join(' ', installCommand.Args)}";
+        var installCmd = JoinDockerShellCommand([packageManager.ExecutableName, .. installCommand.Args]);
         if (!string.IsNullOrEmpty(packageManager.CacheMount))
         {
             builderStage.Run($"--mount=type=cache,target={packageManager.CacheMount} {installCmd}");
@@ -1489,6 +1473,82 @@ public static partial class JavaScriptHostingExtensions
             builderStage.Run(installCmd);
         }
     }
+
+    /// <summary>
+    /// Builds the <c>RUN</c> command that executes a package script during the Docker build, for example
+    /// <c>npm run build</c> or <c>deno task build</c>.
+    /// </summary>
+    /// <remarks>
+    /// The script name and its arguments are caller-supplied and are each a single logical token, so they are
+    /// shell-quoted. A script named <c>build prod</c> would otherwise emit <c>RUN npm run build prod</c>, which
+    /// runs the <c>build</c> script with an extra argument instead of the script the caller named.
+    /// </remarks>
+    private static string BuildPackageScriptCommand(JavaScriptPackageManagerAnnotation packageManager, JavaScriptBuildScriptAnnotation buildCommand)
+    {
+        var commandArgs = new List<string>() { packageManager.ExecutableName };
+        if (!string.IsNullOrEmpty(packageManager.ScriptCommand))
+        {
+            commandArgs.Add(packageManager.ScriptCommand);
+        }
+        commandArgs.Add(buildCommand.ScriptName);
+        commandArgs.AddRange(buildCommand.Args);
+
+        return JoinDockerShellCommand(commandArgs);
+    }
+
+    /// <summary>
+    /// Builds the production dependency install command, appending the package manager's production-only flag.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="JavaScriptInstallCommandAnnotation.ProductionInstallArgs"/> is deliberately not quoted. Unlike the
+    /// entries in <see cref="JavaScriptInstallCommandAnnotation.Args"/>, which are individual tokens, it is documented
+    /// as a pre-formatted flag fragment (for example <c>--omit=dev</c>), so quoting it would break a caller who
+    /// supplies more than one flag.
+    /// </remarks>
+    private static string BuildProductionInstallCommand(JavaScriptPackageManagerAnnotation packageManager, JavaScriptInstallCommandAnnotation installCommand)
+        => $"{JoinDockerShellCommand([packageManager.ExecutableName, .. installCommand.Args])} {installCommand.ProductionInstallArgs}";
+
+    /// <summary>
+    /// Joins arguments into a single command string for Dockerfile <c>RUN</c>, quoting each argument so that
+    /// values containing spaces or shell metacharacters survive as one token.
+    /// </summary>
+    private static string JoinDockerShellCommand(IEnumerable<string> args)
+        => string.Join(' ', args.Select(QuoteDockerShellArgument));
+
+    /// <summary>
+    /// Quotes a single argument for a Dockerfile <c>RUN</c> instruction, which is executed through <c>/bin/sh -c</c>.
+    /// </summary>
+    /// <remarks>
+    /// Uses a fail-closed allowlist: anything outside the set of characters that are unambiguously inert to the shell
+    /// is quoted. A denylist would silently pass through any metacharacter nobody enumerated.
+    /// </remarks>
+    private static string QuoteDockerShellArgument(string value)
+    {
+        if (value.Length == 0)
+        {
+            return "''";
+        }
+
+        if (value.All(IsUnquotedDockerShellArgumentCharacter))
+        {
+            return value;
+        }
+
+        // Single-quote the argument and use the standard POSIX shell escape sequence for embedded quotes:
+        //   import map's.json -> 'import map'"'"'s.json'
+        return $"'{value.Replace("'", "'\"'\"'", StringComparison.Ordinal)}'";
+    }
+
+    private static bool IsUnquotedDockerShellArgumentCharacter(char c) =>
+        c is >= 'a' and <= 'z'
+            or >= 'A' and <= 'Z'
+            or >= '0' and <= '9'
+            or '-'
+            or '_'
+            or '.'
+            or '/'
+            or ':'
+            or '=';
 
     private static string GetPackageScriptRuntimeImage(
         string appDirectory,
@@ -1596,15 +1656,7 @@ public static partial class JavaScriptHostingExtensions
 
                         if (c.Resource.TryGetLastAnnotation<JavaScriptBuildScriptAnnotation>(out var buildCommand))
                         {
-                            var commandArgs = new List<string>() { packageManager.ExecutableName };
-                            if (!string.IsNullOrEmpty(packageManager.ScriptCommand))
-                            {
-                                commandArgs.Add(packageManager.ScriptCommand);
-                            }
-                            commandArgs.Add(buildCommand.ScriptName);
-                            commandArgs.AddRange(buildCommand.Args);
-
-                            dockerBuilder.Run(string.Join(' ', commandArgs));
+                            dockerBuilder.Run(BuildPackageScriptCommand(packageManager, buildCommand));
                         }
 
                         switch (publishMode?.Mode)
@@ -1717,7 +1769,7 @@ public static partial class JavaScriptHostingExtensions
                                     throw new InvalidOperationException($"Package manager '{packageManager.ExecutableName}' does not have ProductionInstallArgs configured, which is required for PublishAsPackageScript.");
                                 }
 
-                                var prodInstallCmd = $"{packageManager.ExecutableName} {string.Join(' ', installAnnotation.Args)} {installAnnotation.ProductionInstallArgs}";
+                                var prodInstallCmd = BuildProductionInstallCommand(packageManager, installAnnotation);
                                 if (!string.IsNullOrEmpty(packageManager.CacheMount))
                                 {
                                     prodDepsStage.Run($"--mount=type=cache,target={packageManager.CacheMount} {prodInstallCmd}");

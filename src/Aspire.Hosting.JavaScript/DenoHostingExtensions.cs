@@ -1069,37 +1069,8 @@ public static partial class JavaScriptHostingExtensions
 
         args.Add(ToDenoContainerPath(scriptPath));
         NormalizeDenoContainerPathArguments(args);
-        return string.Join(' ', args.Select(QuoteDockerShellArgument));
+        return JoinDockerShellCommand(args);
     }
-
-    private static string QuoteDockerShellArgument(string value)
-    {
-        if (value.Length == 0)
-        {
-            return "''";
-        }
-
-        if (value.All(IsUnquotedDockerShellArgumentCharacter))
-        {
-            return value;
-        }
-
-        // Dockerfile RUN uses /bin/sh -c. Single-quote each argument and use the standard
-        // POSIX shell escape sequence for embedded quotes:
-        //   import map's.json -> 'import map'"'"'s.json'
-        return $"'{value.Replace("'", "'\"'\"'", StringComparison.Ordinal)}'";
-    }
-
-    private static bool IsUnquotedDockerShellArgumentCharacter(char c) =>
-        c is >= 'a' and <= 'z'
-            or >= 'A' and <= 'Z'
-            or >= '0' and <= '9'
-            or '-'
-            or '_'
-            or '.'
-            or '/'
-            or ':'
-            or '=';
 
     /// <summary>
     /// Builds the ENTRYPOINT for a Deno package-script container.
@@ -1250,6 +1221,18 @@ public static partial class JavaScriptHostingExtensions
 
             current.Append(c);
             hasToken = true;
+        }
+
+        if (quote != '\0')
+        {
+            // A shell rejects this outright:
+            //   $ sh -c "printf '%s' --name 'unterminated"
+            //   sh: unexpected EOF while looking for matching `''
+            // Silently closing the quote here would publish an exec-form command that differs from what the
+            // caller wrote, so fail at build time rather than shipping a container that runs something else.
+            var quoteKind = quote == '\'' ? "single" : "double";
+            throw new InvalidOperationException(
+                $"The Deno run script arguments '{runScriptArguments}' contain an unterminated {quoteKind} quote. Close the quote so the arguments can be parsed the way a shell would parse them.");
         }
 
         if (hasToken)

@@ -285,6 +285,50 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task VerifyDockerfile_BuildScriptWithSpacesIsQuotedForDeno()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+        File.WriteAllText(Path.Combine(appDir, "deno.json"), """{"tasks":{"build prod":"deno run -A build.ts","start":"deno run -A main.ts"}}""");
+
+        var app = builder.AddJavaScriptApp("js", appDir)
+            .WithDeno()
+            .WithBuildScript("build prod")
+            .PublishAsPackageScript("start");
+
+        await ManifestUtils.GetManifest(app.Resource, workspace.Path);
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
+        // Without quoting the shell word-splits this into `deno task build` plus a stray `prod` argument.
+        Assert.Equal("RUN deno task 'build prod'", GetDockerfileLine(dockerfileContents, "RUN deno task"));
+    }
+
+    [Fact]
+    public async Task VerifyDockerfile_BuildScriptWithSpacesIsQuotedForNpm()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+        File.WriteAllText(Path.Combine(appDir, "package.json"), """{"scripts":{"build prod":"echo build","start":"node main.js"}}""");
+
+        var app = builder.AddJavaScriptApp("js", appDir)
+            .WithNpm()
+            .WithBuildScript("build prod")
+            .PublishAsPackageScript("start");
+
+        await ManifestUtils.GetManifest(app.Resource, workspace.Path);
+
+        // The build-script RUN line is shared by every package manager, so the quoting fix must hold off the Deno path too.
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
+        Assert.Equal("RUN npm run 'build prod'", GetDockerfileLine(dockerfileContents, "RUN npm run"));
+    }
+
+    [Fact]
     public async Task VerifyDockerfile_PublishAsPackageScriptWithCustomDenoRuntimeImagePreservesImageUser()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -410,6 +454,32 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         var entrypoint = JavaScriptHostingExtensions.BuildDenoPackageScriptEntrypoint("deno", "task", "start", runScriptArguments);
 
         Assert.Equal(["sh", "-c", $"exec deno task start {runScriptArguments}"], entrypoint);
+    }
+
+    [Theory]
+    [InlineData("--name 'unterminated", "single")]
+    [InlineData("--name \"unterminated", "double")]
+    [InlineData("'", "single")]
+    [InlineData("--flag=value --other 'still open", "single")]
+    public void BuildDenoPackageScriptEntrypoint_ThrowsForUnterminatedQuote(string runScriptArguments, string quoteKind)
+    {
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => JavaScriptHostingExtensions.BuildDenoPackageScriptEntrypoint("deno", "task", "start", runScriptArguments));
+
+        Assert.Equal(
+            $"The Deno run script arguments '{runScriptArguments}' contain an unterminated {quoteKind} quote. Close the quote so the arguments can be parsed the way a shell would parse them.",
+            exception.Message);
+    }
+
+    [Theory]
+    [InlineData("--name 'closed'", new[] { "deno", "task", "start", "--name", "closed" })]
+    [InlineData("--name \"closed\"", new[] { "deno", "task", "start", "--name", "closed" })]
+    [InlineData("''", new[] { "deno", "task", "start", "" })]
+    public void BuildDenoPackageScriptEntrypoint_AcceptsBalancedQuotes(string runScriptArguments, string[] expected)
+    {
+        var entrypoint = JavaScriptHostingExtensions.BuildDenoPackageScriptEntrypoint("deno", "task", "start", runScriptArguments);
+
+        Assert.Equal(expected, entrypoint);
     }
 
     [Fact]

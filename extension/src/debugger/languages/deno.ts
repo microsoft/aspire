@@ -40,10 +40,15 @@ function findDenoInspectFlag(args: string[], config: JavaScriptRuntimeLaunchConf
         const arg = args[index];
         const explicitPortMatch = /^(--inspect(?:-brk|-wait)?)=(?:.*:)?(\d+)$/.exec(arg);
         if (explicitPortMatch) {
+            const explicitPort = Number(explicitPortMatch[2]);
             return {
                 index,
                 flagName: explicitPortMatch[1],
-                port: Number(explicitPortMatch[2])
+                // Deno treats an explicit port of 0 as "choose an ephemeral port", so the inspector ends up on
+                // an unknown nonzero port (verified on 2.9.0: `--inspect=127.0.0.1:0` reported ports 61501,
+                // 61835 and 61931 across runs). Report it as unresolved so the caller substitutes a concrete
+                // allocated port; otherwise js-debug would attach to port 0 and never connect.
+                port: explicitPort === 0 ? undefined : explicitPort
             };
         }
 

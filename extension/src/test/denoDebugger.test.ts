@@ -181,6 +181,46 @@ suite('Deno Debugger Tests', () => {
         assert.strictEqual(registeredCleanupCount, 0);
     });
 
+    test('replaces an explicit inspector port of 0 with an allocated concrete port', async () => {
+        const launchConfig: DenoLaunchConfiguration = {
+            type: 'deno',
+            runtime_executable: 'deno',
+            script_path: '/workspace/app/main.ts',
+            working_directory: '/workspace/app'
+        };
+        const debugConfig = createDebugConfig('/workspace/app/main.ts');
+
+        // Deno reads ":0" as "choose an ephemeral port", so it listens on an unknown nonzero port.
+        // Attaching to 0 would never connect; the flag must be rewritten to a concrete allocated port.
+        await configure(launchConfig, ['run', '--inspect-wait=127.0.0.1:0', '-A', 'main.ts'], debugConfig);
+
+        const injectedPort = assertInjectedInspectWaitArg(debugConfig.runtimeArgs?.[1], debugConfig);
+        assert.notStrictEqual(injectedPort, 0);
+        assert.deepStrictEqual(debugConfig.runtimeArgs, ['run', `--inspect-wait=127.0.0.1:${injectedPort}`, '-A', 'main.ts']);
+        assert.strictEqual(registeredCleanupCount, 1);
+    });
+
+    test('replaces a bare-host inspector port of 0 on --inspect-brk with an allocated concrete port', async () => {
+        const launchConfig: DenoLaunchConfiguration = {
+            type: 'deno',
+            runtime_executable: 'deno',
+            script_path: '/workspace/app/main.ts',
+            working_directory: '/workspace/app'
+        };
+        const debugConfig = createDebugConfig('/workspace/app/main.ts');
+
+        await configure(launchConfig, ['run', '--inspect-brk=0', '-A', 'main.ts'], debugConfig);
+
+        const injectedArg = debugConfig.runtimeArgs?.[1];
+        const match = /^--inspect-brk=127\.0\.0\.1:(\d+)$/.exec(injectedArg ?? '');
+        assert.ok(match, `expected an allocated --inspect-brk port, got ${injectedArg}`);
+        const injectedPort = Number(match[1]);
+        assert.notStrictEqual(injectedPort, 0);
+        assert.strictEqual(debugConfig.attachSimplePort, injectedPort);
+        assert.deepStrictEqual(debugConfig.runtimeArgs, ['run', `--inspect-brk=127.0.0.1:${injectedPort}`, '-A', 'main.ts']);
+        assert.strictEqual(registeredCleanupCount, 1);
+    });
+
     test('ignores inspector-looking script arguments after the entrypoint', async () => {
         const launchConfig: DenoLaunchConfiguration = {
             type: 'deno',
