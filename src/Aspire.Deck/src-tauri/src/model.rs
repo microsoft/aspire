@@ -44,6 +44,8 @@ pub struct HealthReport {
     pub status: Option<String>,
     pub key: String,
     pub description: String,
+    pub exception_text: Option<String>,
+    pub last_run_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -248,6 +250,11 @@ impl From<&pb::Resource> for Resource {
                 status: h.status.map(|s| health_status_label(s).to_string()),
                 key: h.key.clone(),
                 description: h.description.clone(),
+                // `exception` is a plain proto string, so "no exception" arrives as "" rather than
+                // absent. Normalize to None so the UI only renders a stack trace block when there
+                // really is one.
+                exception_text: (!h.exception.is_empty()).then(|| h.exception.clone()),
+                last_run_at: h.last_run_at.as_ref().and_then(timestamp_to_rfc3339),
             })
             .collect();
 
@@ -352,6 +359,14 @@ pub struct ConsoleLogLine {
     pub line_number: i32,
     pub text: String,
     pub is_std_err: bool,
+    /// Pre-rendered, HTML-encoded markup with ANSI colours applied.
+    ///
+    /// Always `None` on this transport. The ASP.NET Core backends produce this by running the
+    /// shared `LogParser`, and reimplementing that 878-line parser (ConEmu sequences, OSC-8
+    /// hyperlinks, 256-colour SGR) in Rust would guarantee the two renderings drift apart. The
+    /// field is still emitted so the wire contract is identical across all backends; the UI falls
+    /// back to rendering `text`, which is stripped of control sequences below.
+    pub html: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -17,7 +17,23 @@ internal sealed record DeckConfig(
     string Culture,
     DeckCulture[] Cultures,
     bool IsAgentHelpEnabled,
-    string? AgentHelpMarkdown);
+    string? AgentHelpMarkdown,
+    DeckTelemetryLimits TelemetryLimits);
+
+/// <summary>
+/// The retention ceilings the dashboard is actually configured with, so clients can size their
+/// requests and in-memory buffers to match instead of guessing.
+/// </summary>
+/// <remarks>
+/// These mirror Dashboard:TelemetryLimits:*. A client that hardcodes a smaller number silently
+/// hides telemetry the operator deliberately paid to retain, and one that hardcodes a larger number
+/// asks for records the repository has already evicted.
+/// </remarks>
+internal sealed record DeckTelemetryLimits(
+    int MaxLogCount,
+    int MaxTraceCount,
+    int MaxMetricsCount,
+    int MaxConsoleLogCount);
 
 internal sealed record DeckUser(
     string Name,
@@ -128,7 +144,8 @@ internal sealed record DeckConsoleLogEvent(
 internal sealed record DeckConsoleLogLine(
     int LineNumber,
     string Text,
-    bool IsStdErr);
+    bool IsStdErr,
+    string? Html);
 
 internal sealed record DeckInteraction(
     int InteractionId,

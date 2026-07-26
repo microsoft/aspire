@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Hosting;
+
 namespace Aspire.Dashboard.Backend;
 
 internal static class DashboardLegacyAuthentication
@@ -10,7 +12,32 @@ internal static class DashboardLegacyAuthentication
         return app.Use(async (context, next) =>
         {
             var proxy = context.RequestServices.GetRequiredService<IDashboardLegacyApiProxy>();
-            if (proxy.IsConfigured && IsOpenIdConnectResponse(context.Request))
+
+            if (!proxy.IsConfigured)
+            {
+                // Without a legacy dashboard there is nothing that can authenticate the caller.
+                // Fail closed: the API returns raw resource values (environment variables,
+                // connection strings, and properties the dashboard marks sensitive), so serving
+                // them anonymously must be a deliberate operator decision rather than the
+                // consequence of an unset configuration key.
+                var security = context.RequestServices.GetRequiredService<DashboardBackendSecurityOptions>();
+                if (!security.AllowAnonymous)
+                {
+                    context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+                    context.Response.ContentType = "text/plain";
+                    await context.Response.WriteAsync(
+                        $"The dashboard backend cannot authenticate requests. Configure " +
+                        $"'{DashboardLegacyApiProxy.LegacyDashboardUrlKey}' with the loopback URL of the existing dashboard so authentication " +
+                        $"can be delegated to it, or set '{DashboardConfigNames.DashboardUnsecuredAllowAnonymousName.EnvVarName}=true' " +
+                        $"to deliberately serve the dashboard without authentication.").ConfigureAwait(false);
+                    return;
+                }
+
+                await next(context).ConfigureAwait(false);
+                return;
+            }
+
+            if (IsOpenIdConnectResponse(context.Request))
             {
                 // The legacy dashboard deliberately uses "/" as its OIDC callback path. Let the
                 // authority process only callback-shaped root requests; ordinary SPA navigation
@@ -21,7 +48,7 @@ internal static class DashboardLegacyAuthentication
                 return;
             }
 
-            if (!proxy.IsConfigured || IsAnonymousOrDelegatedPath(context.Request.Path))
+            if (IsAnonymousOrDelegatedPath(context.Request.Path))
             {
                 await next(context).ConfigureAwait(false);
                 return;

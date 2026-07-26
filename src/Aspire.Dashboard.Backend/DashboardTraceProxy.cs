@@ -150,7 +150,7 @@ internal sealed class DashboardTraceProxy(IConfiguration configuration) : IDashb
     {
         var configuredUrl = configuration[LegacyDashboardUrlKey];
         if (!Uri.TryCreate(configuredUrl, UriKind.Absolute, out var legacyDashboardUrl)
-            || !DashboardDevelopmentAccessPolicy.IsAllowedOrigin(legacyDashboardUrl.GetLeftPart(UriPartial.Authority)))
+            || !DashboardDevelopmentAccessPolicy.IsLoopbackTarget(legacyDashboardUrl.GetLeftPart(UriPartial.Authority)))
         {
             throw new DashboardTraceServiceUnavailableException(
                 $"Configure {LegacyDashboardUrlKey} with the loopback URL of the existing dashboard.");

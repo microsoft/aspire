@@ -482,12 +482,12 @@ internal sealed class RunCommand : BaseCommand
                     deckPlan.Name = Path.GetFileNameWithoutExtension(effectiveAppHostFile.Name);
                     if (deckPlan.Existing is not null)
                     {
-                        await AttachToDeckAsync(deckPlan, pendingRun, cancellationToken).ConfigureAwait(false);
+                        await AttachToDeckAsync(deckPlan, runTask, cancellationToken).ConfigureAwait(false);
                     }
                     else if (deckPlan.DeckPath is not null)
                     {
                         var deckInfo = new DeckLaunchInfo(deckPlan.OtlpGrpcUrl, deckPlan.OtlpHttpUrl, deckPlan.ResourceServiceUrl);
-                        LaunchDeck(deckPlan.DeckPath, deckInfo, pendingRun, cancellationToken);
+                        await LaunchDeckAsync(deckPlan.DeckPath, deckInfo, runTask, cancellationToken).ConfigureAwait(false);
                     }
                 }
                 else if (dashboardUrls.DashboardHealthy is false)
@@ -1032,7 +1032,7 @@ internal sealed class RunCommand : BaseCommand
     /// ties its lifetime to the run: Deck is terminated when the AppHost run completes or the command
     /// is cancelled. The user closing Deck does not stop the run (mirroring the dashboard browser tab).
     /// </summary>
-    private void LaunchDeck(string deckPath, DeckLaunchInfo deckInfo, Task<int> pendingRun, CancellationToken cancellationToken)
+    private async Task LaunchDeckAsync(string deckPath, DeckLaunchInfo deckInfo, Task<int> pendingRun, CancellationToken cancellationToken)
     {
         var outputCollector = new OutputCollector(_fileLoggerProvider, CliLogFormat.Categories.Dashboard);
         var options = new ProcessInvocationOptions
@@ -1044,7 +1044,7 @@ internal sealed class RunCommand : BaseCommand
         IProcessExecution deckProcess;
         try
         {
-            deckProcess = _deckLauncher.Start(deckPath, deckInfo, options: options);
+            deckProcess = await _deckLauncher.StartAsync(deckPath, deckInfo, options: options).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -1053,7 +1053,10 @@ internal sealed class RunCommand : BaseCommand
             return;
         }
 
-        void KillDeck()
+        // Kill and dispose are both best-effort and must be safe to invoke from a cancellation
+        // callback and from a task continuation, so this never throws and never blocks. IProcessExecution
+        // is IAsyncDisposable, so the dispose is fire-and-forget from these synchronous contexts.
+        async Task KillDeckAsync()
         {
             try
             {
@@ -1067,19 +1070,26 @@ internal sealed class RunCommand : BaseCommand
                 // Best effort: the process may already be gone.
             }
 
-            deckProcess.Dispose();
+            try
+            {
+                await deckProcess.DisposeAsync().ConfigureAwait(false);
+            }
+            catch
+            {
+                // Best effort: disposal races with process exit.
+            }
         }
 
         // Bound Deck's lifetime to the run: stop it when the AppHost exits or the user cancels.
-        cancellationToken.Register(KillDeck);
-        _ = pendingRun.ContinueWith(_ => KillDeck(), TaskScheduler.Default);
+        cancellationToken.Register(() => _ = KillDeckAsync());
+        _ = pendingRun.ContinueWith(_ => KillDeckAsync(), TaskScheduler.Default);
 
         InteractionService.DisplayMessage(KnownEmojis.Rocket, string.Format(CultureInfo.CurrentCulture, DeckCommandStrings.DeckLaunched, deckInfo.OtlpGrpcUrl));
     }
 
     /// <summary>
     /// Attaches this AppHost to an already-running Aspire Deck so it appears in the switcher, and
-    /// detaches it when the run ends or is cancelled. Unlike <see cref="LaunchDeck"/>, this does not
+    /// detaches it when the run ends or is cancelled. Unlike <see cref="LaunchDeckAsync"/>, this does not
     /// own Deck's lifetime — the running Deck (and any other attached AppHosts) keep going.
     /// </summary>
     private async Task AttachToDeckAsync(DeckRunPlan plan, Task<int> pendingRun, CancellationToken cancellationToken)

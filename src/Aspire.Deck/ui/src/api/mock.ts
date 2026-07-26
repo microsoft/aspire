@@ -95,8 +95,8 @@ function makeResources(): Resource[] {
         { name: "ConnectionStrings__cache", value: "localhost:6379,password=p@ssw0rd-redis", isFromSpec: false },
       ],
       healthReports: [
-        { status: "Healthy", key: "self", description: "Liveness probe succeeded." },
-        { status: "Healthy", key: "apiservice", description: "Upstream apiservice reachable." },
+        { status: "Healthy", key: "self", description: "Liveness probe succeeded.", exceptionText: null, lastRunAt: new Date(Date.now() - 4_000).toISOString() },
+        { status: "Healthy", key: "apiservice", description: "Upstream apiservice reachable.", exceptionText: null, lastRunAt: new Date(Date.now() - 9_000).toISOString() },
       ],
       commands: defaultCommands("Running"),
       relationships: [{ resourceName: "apiservice", type: "Reference" }, { resourceName: "cache", type: "Reference" }],
@@ -127,7 +127,7 @@ function makeResources(): Resource[] {
         { name: "ASPNETCORE_ENVIRONMENT", value: "Development", isFromSpec: true },
         { name: "ConnectionStrings__postgres", value: "Host=localhost;Port=5432;Username=postgres;Password=p@ssw0rd-pg", isFromSpec: false },
       ],
-      healthReports: [{ status: "Healthy", key: "self", description: "Liveness probe succeeded." }],
+      healthReports: [{ status: "Healthy", key: "self", description: "Liveness probe succeeded.", exceptionText: null, lastRunAt: new Date(Date.now() - 6_000).toISOString() }],
       commands: [...defaultCommands("Running"), manyInputsCommand(), ...interactionContentCommands(), ...commandResultCommands()],
       relationships: [{ resourceName: "postgres", type: "Reference" }],
       isHidden: false,
@@ -158,7 +158,7 @@ function makeResources(): Resource[] {
       environment: [
         { name: "REDIS_ARGS", value: "--requirepass p@ssw0rd-redis", isFromSpec: true },
       ],
-      healthReports: [{ status: "Healthy", key: "redis", description: "PING returned PONG." }],
+      healthReports: [{ status: "Healthy", key: "redis", description: "PING returned PONG.", exceptionText: null, lastRunAt: new Date(Date.now() - 3_000).toISOString() }],
       commands: defaultCommands("Running"),
       relationships: [],
       isHidden: false,
@@ -189,7 +189,13 @@ function makeResources(): Resource[] {
         { name: "POSTGRES_PASSWORD", value: "p@ssw0rd-pg", isFromSpec: true },
       ],
       healthReports: [
-        { status: "Degraded", key: "npgsql", description: "Connection pool nearing saturation (18/20)." },
+        {
+          status: "Degraded",
+          key: "npgsql",
+          description: "Connection pool nearing saturation (18/20).",
+          exceptionText: "Npgsql.NpgsqlException: The connection pool has been exhausted.\n   at Npgsql.NpgsqlConnector.<Open>d__1.MoveNext()\n   at Npgsql.PoolingDataSource.Get(CancellationToken token)",
+          lastRunAt: new Date(Date.now() - 12_000).toISOString(),
+        },
       ],
       commands: defaultCommands("Running"),
       relationships: [],
@@ -502,6 +508,16 @@ const metricDefs: Array<{ name: string; unit: string | null; resource: string; b
   { name: "process.runtime.dotnet.gc.heap.size", unit: "By", resource: "apiservice", base: 33_554_432, jitter: 4_194_304, kind: "gauge" },
   { name: "cache.hit_ratio", unit: "1", resource: "cache", base: 0.92, jitter: 0.06, kind: "gauge" },
 ];
+
+// Matches the encoding the shared C# LogParser performs before it applies ANSI colouring, so mock
+// markup goes through the same escaping contract the real backends guarantee.
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
 
 const logBodies = [
   "Request starting HTTP/2 GET /api/products",
@@ -1262,6 +1278,9 @@ class MockBackend {
       backlog.lines.push({
         lineNumber: this.nextConsoleLine(resourceName),
         text: `${new Date().toISOString()} ${logBodies[i % logBodies.length]}`,
+        // Mirror the shape the real backends send: markup already coloured by the shared LogParser.
+        // Alternating the colour keeps the ANSI stylesheet exercised in mock mode.
+        html: `<span class="ansi-fg-${i % 2 === 0 ? "brightgreen" : "brightcyan"}">${escapeHtml(logBodies[i % logBodies.length]!)}</span>`,
         isStdErr: false,
       });
     }
@@ -1318,6 +1337,8 @@ class MockBackend {
           status: postgres.health,
           key: "npgsql",
           description: degraded ? "Connection pool recovered (8/20)." : "Connection pool nearing saturation (18/20).",
+          exceptionText: degraded ? null : "Npgsql.NpgsqlException: The connection pool has been exhausted.\n   at Npgsql.NpgsqlConnector.<Open>d__1.MoveNext()\n   at Npgsql.PoolingDataSource.Get(CancellationToken token)",
+          lastRunAt: new Date().toISOString(),
         },
       ];
       this.emitResources({ type: "change", upserts: [structuredClone(postgres)] });
@@ -1339,6 +1360,7 @@ class MockBackend {
           {
             lineNumber: this.nextConsoleLine(resourceName),
             text: `${new Date().toISOString()} ${body}`,
+            html: `<span class="ansi-fg-${isErr ? "brightred" : "white"}">${escapeHtml(body!)}</span>`,
             isStdErr: isErr,
           },
         ],

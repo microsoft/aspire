@@ -101,6 +101,8 @@ import {
   Eye24Regular,
   EyeOff24Regular,
   Filter24Regular,
+  FlashFilled,
+  FlashRegular,
   FolderFilled,
   FolderRegular,
   GlobeArrowForwardFilled,
@@ -245,6 +247,7 @@ const namedIconPairs: readonly IconPair[] = [
   createNamedIcon("Delete", DeleteRegular, DeleteFilled),
   createNamedIcon("Document", DocumentRegular, DocumentFilled),
   createNamedIcon("Edit", EditRegular, EditFilled),
+  createNamedIcon("Flash", FlashRegular, FlashFilled),
   createNamedIcon("Folder", FolderRegular, FolderFilled),
   createNamedIcon("GlobeArrowForward", GlobeArrowForwardRegular, GlobeArrowForwardFilled),
   createNamedIcon("GlobeDesktop", GlobeDesktopRegular, GlobeDesktopFilled),
@@ -353,6 +356,45 @@ export function NamedIcon({
       {...props}
     />
   );
+}
+
+/**
+ * Renders the icon for a resource command using the same fallback chain as the Blazor dashboard's
+ * `IconResolver.ResolveCommandIcon` / `ResolveHighlightedCommandIcon`:
+ *
+ *  - a name that resolves in the registry wins;
+ *  - a name that does NOT resolve falls back to QuestionCircle, so an icon the app host asked for
+ *    but this build does not ship reads as "unknown command" rather than silently borrowing an
+ *    unrelated glyph;
+ *  - no name at all renders nothing, except for highlighted commands which get Flash so the
+ *    inline action button is never blank.
+ *
+ * The static registry here cannot cover the whole Fluent icon set the way Blazor's reflection-based
+ * resolver does, which makes the unresolved-name path a routine occurrence rather than an edge case.
+ */
+export function CommandIcon({
+  iconName,
+  iconVariant,
+  isHighlighted = false,
+  ...props
+}: {
+  iconName?: string | null;
+  iconVariant?: FluentIconVariant | null;
+  isHighlighted?: boolean;
+} & IconProps) {
+  if (iconName) {
+    const resolved = namedIcons[iconName.toLowerCase()];
+    if (resolved) {
+      return <NamedIcon name={iconName} variant={iconVariant} {...props} />;
+    }
+    return <NamedIcon name="QuestionCircle" variant={iconVariant} {...props} data-icon-fallback={iconName} />;
+  }
+
+  if (isHighlighted) {
+    return <NamedIcon name="Flash" variant={iconVariant} {...props} data-icon-fallback="" />;
+  }
+
+  return null;
 }
 
 export function ResourceTypeIcon({

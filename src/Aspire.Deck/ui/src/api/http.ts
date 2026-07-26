@@ -6,6 +6,7 @@ import type {
   ConnectionTarget,
   ConsoleLogEvent,
   DeckConfig,
+  DeckTelemetryLimits,
   ExecuteCommandArgs,
   InteractionFileUploadResponse,
   InteractionInfo,
@@ -21,6 +22,7 @@ import type {
   SpanSummary,
   TelemetrySummary,
 } from "./types";
+import { DEFAULT_TELEMETRY_LIMITS } from "./types";
 import { readNdjson } from "./ndjson";
 import {
   getLogRecordSummaries,
@@ -193,6 +195,26 @@ function getConfig(): Promise<DeckConfig> {
   }
   return configPromise;
 }
+
+/**
+ * Resolves the log/trace retention ceilings the dashboard is configured with.
+ *
+ * Requests are sized from configuration rather than a constant so that raising
+ * Dashboard:TelemetryLimits:MaxLogCount actually surfaces the extra records instead of leaving
+ * them stranded server-side, and so that lowering it does not make the client ask for records the
+ * repository has already evicted.
+ */
+async function telemetryLimits(): Promise<DeckTelemetryLimits> {
+  try {
+    const config = await getConfig();
+    return config.telemetryLimits ?? DEFAULT_TELEMETRY_LIMITS;
+  } catch {
+    // Telemetry must still load when the config endpoint is unavailable; the defaults match the
+    // server-side defaults, so this only loses precision for operators who customised the limits.
+    return DEFAULT_TELEMETRY_LIMITS;
+  }
+}
+
 
 async function listResources(): Promise<Resource[]> {
   return await requestJson<Resource[]>("resources");
@@ -554,7 +576,8 @@ async function clearStructuredLogs(resourceName: string | null): Promise<void> {
 
   // The live NDJSON stream only carries additions. Refresh after a destructive
   // mutation so local totals and dedupe keys exactly match the server snapshot.
-  const response = await requestJson<TelemetryApiResponse>("telemetry/logs?limit=200");
+  const limits = await telemetryLimits();
+  const response = await requestJson<TelemetryApiResponse>(`telemetry/logs?limit=${limits.maxLogCount}`);
   const records = getLogRecordSummaries(response.data);
   telemetryLogKeys.clear();
   for (const record of records) {
@@ -574,7 +597,8 @@ async function clearTraces(resourceName: string | null): Promise<void> {
 
   // Span streams only carry additions, so replace the local snapshot and dedupe
   // keys after the server removes traces.
-  const response = await requestJson<TelemetryApiResponse>("telemetry/spans?limit=200");
+  const limits = await telemetryLimits();
+  const response = await requestJson<TelemetryApiResponse>(`telemetry/spans?limit=${limits.maxTraceCount}`);
   const records = getSpanSummaries(response.data);
   telemetrySpanKeys.clear();
   for (const record of records) {
@@ -729,12 +753,13 @@ export const httpBackend = {
     includeTraces = true,
     includeMetrics = true,
   ): Promise<TelemetrySummary> {
+    const limits = await telemetryLimits();
     const [logsResponse, spansResponse, metrics] = await Promise.all([
       includeStructuredLogs
-        ? requestJson<TelemetryApiResponse>("telemetry/logs?limit=200")
+        ? requestJson<TelemetryApiResponse>(`telemetry/logs?limit=${limits.maxLogCount}`)
         : Promise.resolve(null),
       includeTraces
-        ? requestJson<TelemetryApiResponse>("telemetry/spans?limit=200")
+        ? requestJson<TelemetryApiResponse>(`telemetry/spans?limit=${limits.maxTraceCount}`)
         : Promise.resolve(null),
       includeMetrics
         ? requestJson<MetricSummary[]>("telemetry/metrics")

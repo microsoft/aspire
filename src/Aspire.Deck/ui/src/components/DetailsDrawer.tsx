@@ -6,6 +6,7 @@ import type {
 } from "../api/types";
 import { openExternal } from "../api/deck";
 import { formatTime } from "../lib/format";
+import { maskQueryStringValues } from "../lib/maskUrl";
 import { partitionResourceCommands } from "../lib/resourceCommands";
 import {
   Badge,
@@ -16,7 +17,7 @@ import {
   ExternalIcon,
   LinkIcon,
   MoreIcon,
-  NamedIcon,
+  CommandIcon,
   ResourceTypeIcon,
   SecretValue,
   StateDot,
@@ -24,6 +25,9 @@ import {
 } from "../toolkit";
 
 function commandIcon(command: ResourceCommand) {
+  // Aspire commands frequently ship without an icon name; infer one from the well-known lifecycle
+  // command names so the buttons stay recognisable, and let CommandIcon apply the Blazor fallbacks
+  // for everything else.
   const fallbackName = command.name.includes("start")
     ? "Play"
     : command.name.includes("stop")
@@ -31,7 +35,14 @@ function commandIcon(command: ResourceCommand) {
       : command.name.includes("restart")
         ? "ArrowCounterclockwise"
         : null;
-  return <NamedIcon name={command.iconName ?? fallbackName} variant={command.iconVariant} size={15} />;
+  return (
+    <CommandIcon
+      iconName={command.iconName ?? fallbackName}
+      iconVariant={command.iconVariant}
+      isHighlighted={command.isHighlighted}
+      size={15}
+    />
+  );
 }
 
 function PropertyRow({ prop }: { prop: ResourceProperty }) {
@@ -179,14 +190,14 @@ export function DetailsDrawer({
                 key={`${url.name}-${url.url}`}
                 className="url-chip"
                 href={url.url}
-                title={url.url}
+                title={maskQueryStringValues(url.url)}
                 onClick={(event) => {
                   event.preventDefault();
                   void openExternal(url.url);
                 }}
               >
                 <ExternalIcon size={12} />
-                {url.displayName ?? url.name ?? url.url}
+                {url.displayName ?? url.name ?? maskQueryStringValues(url.url)}
               </a>
             ))}
           </div>
@@ -224,6 +235,16 @@ export function DetailsDrawer({
               <div className="health-report__body">
                 <div className="health-report__key">{report.key}</div>
                 <div className="health-report__desc">{report.description}</div>
+                {report.lastRunAt ? (
+                  <div className="health-report__meta" data-testid={`health-lastrun-${report.key}`}>
+                    Last run {formatTime(report.lastRunAt)}
+                  </div>
+                ) : null}
+                {report.exceptionText ? (
+                  <pre className="health-report__exception" data-testid={`health-exception-${report.key}`}>
+                    {report.exceptionText}
+                  </pre>
+                ) : null}
               </div>
             </div>
           ))}

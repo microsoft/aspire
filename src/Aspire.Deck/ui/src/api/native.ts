@@ -37,6 +37,7 @@ import {
   type OtlpLogRecordSummary,
   type OtlpSpanSummary,
 } from "./otlp";
+import { DEFAULT_TELEMETRY_LIMITS } from "./types";
 
 const dashboardProduct = "Aspire.Dashboard";
 const discoveryPath = "/api/dashboard";
@@ -235,7 +236,11 @@ function rememberTraceKey(key: string): boolean {
 
 async function refreshTraces(): Promise<void> {
   const version = await getNegotiatedVersion();
-  const snapshot = await requestJson(`${version.basePath}/traces?limit=10000`) as DashboardTraceSnapshot;
+  // Sized from the dashboard's configured retention rather than a constant: asking for fewer records
+  // than the repository holds silently truncates the view, and asking for more than it holds just
+  // costs a larger response. See Dashboard:TelemetryLimits:MaxTraceCount.
+  const limit = await traceLimit();
+  const snapshot = await requestJson(`${version.basePath}/traces?limit=${limit}`) as DashboardTraceSnapshot;
   if (!Number.isInteger(snapshot.totalCount)
       || !Number.isInteger(snapshot.returnedCount)
       || typeof snapshot.data !== "object"
@@ -606,6 +611,21 @@ async function removeManageData(request: ManageDataRequest): Promise<void> {
   }
 
   await postNoContent(`${version.basePath}/manage-data/remove`, request);
+}
+
+/**
+ * The trace retention ceiling this dashboard is configured with.
+ *
+ * Falls back to the shared default when the shell payload predates `telemetryLimits`, so an older
+ * host keeps its previous behaviour instead of failing to load traces at all.
+ */
+async function traceLimit(): Promise<number> {
+  try {
+    const config = await getConfig();
+    return config.telemetryLimits?.maxTraceCount ?? DEFAULT_TELEMETRY_LIMITS.maxTraceCount;
+  } catch {
+    return DEFAULT_TELEMETRY_LIMITS.maxTraceCount;
+  }
 }
 
 function getConfig(): Promise<DeckConfig> {

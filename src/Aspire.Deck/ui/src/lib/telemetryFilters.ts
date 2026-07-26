@@ -10,32 +10,95 @@ export interface TelemetryFilter {
   enabled: boolean;
 }
 
-const conditions = new Set<TelemetryFilterCondition>(["equals", "contains", "gt", "lt", "gte", "lte", "notEquals", "notContains"]);
+/**
+ * Wire names for filter conditions, matching `TelemetryFilterFormatter.SerializeFilterToString`
+ * in the Blazor dashboard. Negations use a `!` prefix rather than a camelCase name.
+ */
+const conditionToWire: Record<TelemetryFilterCondition, string> = {
+  equals: "equals",
+  contains: "contains",
+  gt: "gt",
+  lt: "lt",
+  gte: "gte",
+  lte: "lte",
+  notEquals: "!equals",
+  notContains: "!contains",
+};
 
+const wireToCondition = new Map<string, TelemetryFilterCondition>(
+  Object.entries(conditionToWire).map(([condition, wire]) => [wire, condition as TelemetryFilterCondition]),
+);
+
+const DISABLED_TEXT = "disabled";
+
+/**
+ * Parses the `filters` query-string parameter shared with the Blazor dashboard.
+ *
+ * The format is a space-separated list of colon-separated triples, with an optional fourth part
+ * marking the filter as disabled. Field names and values are URL-encoded, which is what keeps
+ * embedded spaces and colons from breaking the split:
+ *
+ *   Severity:equals:Error Message:!contains:health+check url:equals:%2fapi%2fv1:disabled
+ *
+ * `+` decodes to a space because the Blazor side escapes with `HttpUtility.UrlEncode`, which is
+ * form-urlencoding rather than RFC 3986 percent-encoding.
+ * See `src/Aspire.Dashboard/Extensions/TelemetryFilterFormatter.cs`.
+ *
+ * Unrecognised entries are skipped individually - matching Blazor, which returns `null` for a bad
+ * entry and filters it out - so one malformed filter in a hand-edited link cannot discard the
+ * rest.
+ */
 export function parseTelemetryFilters(value: string | null): TelemetryFilter[] {
   if (!value) return [];
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed.flatMap((item, index) => {
-      if (typeof item !== "object" || item === null) return [];
-      const candidate = item as Record<string, unknown>;
-      if (typeof candidate.field !== "string" || typeof candidate.value !== "string" || !conditions.has(candidate.condition as TelemetryFilterCondition)) return [];
-      return [{
-        id: typeof candidate.id === "string" ? candidate.id : `restored-${index}`,
-        field: candidate.field,
-        condition: candidate.condition as TelemetryFilterCondition,
-        value: candidate.value,
-        enabled: candidate.enabled !== false,
-      }];
-    });
-  } catch {
-    return [];
-  }
+
+  return value.split(" ").flatMap((entry, index) => {
+    if (entry.length === 0) return [];
+
+    const [field, wire, rawValue, disabledMarker] = entry.split(":");
+    if (field === undefined || wire === undefined || rawValue === undefined) return [];
+    // A fifth part means an unescaped `:` slipped in, so the entry is not trustworthy.
+    if (entry.split(":").length > 4) return [];
+
+    const condition = wireToCondition.get(wire);
+    if (!condition) return [];
+
+    return [{
+      id: `restored-${index}`,
+      field: unescapeFilterPart(field),
+      condition,
+      value: unescapeFilterPart(rawValue),
+      enabled: disabledMarker !== DISABLED_TEXT,
+    }];
+  });
 }
 
 export function serializeTelemetryFilters(filters: TelemetryFilter[]): string | undefined {
-  return filters.length === 0 ? undefined : JSON.stringify(filters);
+  if (filters.length === 0) return undefined;
+
+  return filters
+    .map((filter) => {
+      const parts = [escapeFilterPart(filter.field), conditionToWire[filter.condition], escapeFilterPart(filter.value)];
+      if (!filter.enabled) {
+        parts.push(DISABLED_TEXT);
+      }
+      return parts.join(":");
+    })
+    .join(" ");
+}
+
+function escapeFilterPart(value: string): string {
+  // `:` and ` ` are the delimiters, so they must always be encoded. encodeURIComponent covers both
+  // and produces output that HttpUtility.UrlDecode round-trips correctly on the Blazor side.
+  return encodeURIComponent(value);
+}
+
+function unescapeFilterPart(value: string): string {
+  try {
+    return decodeURIComponent(value.replace(/\+/g, " "));
+  } catch {
+    // A hand-edited link can contain a stray `%`; show it literally rather than dropping the filter.
+    return value;
+  }
 }
 
 function attributesToMap(attributes: TelemetryAttribute[]): Record<string, string> {

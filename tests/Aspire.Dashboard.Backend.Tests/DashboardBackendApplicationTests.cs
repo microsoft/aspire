@@ -9,8 +9,10 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.DashboardService.Proto.V1;
+using Aspire.Hosting;
 using Aspire.Shared;
 using Google.Protobuf.WellKnownTypes;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR.Client;
@@ -25,10 +27,100 @@ namespace Aspire.Dashboard.Backend.Tests;
 
 public class DashboardBackendApplicationTests
 {
-    [Fact]
-    public async Task Discovery_AdvertisesImplementedVersionedCapabilities()
+    /// <summary>
+    /// Builds the backend over <see cref="TestServer"/> with anonymous access explicitly enabled.
+    /// </summary>
+    /// <remarks>
+    /// The standalone host has no authentication authority of its own, so it refuses to serve
+    /// requests unless either a legacy dashboard is configured to authorize them or the operator
+    /// opts into anonymous access. Tests exercising API behaviour take the second option so the
+    /// opt-in stays visible rather than being an accident of empty configuration.
+    /// </remarks>
+    private static WebApplication BuildTestApp(Action<WebApplicationBuilder>? configureBuilder = null)
     {
+        return DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [KnownConfigNames.DashboardUnsecuredAllowAnonymous] = "true"
+            });
+            configureBuilder?.Invoke(builder);
+        });
+    }
+
+    [Fact]
+    public async Task Authentication_FailsClosedWhenNoAuthorityIsConfigured()
+    {
+        // No legacy dashboard to delegate to and no explicit anonymous opt-in: the host must not
+        // serve resource data, which includes environment variables and sensitive properties.
         await using var app = DashboardBackendApplication.Build([], builder => builder.WebHost.UseTestServer());
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var response = await app.GetTestClient().GetAsync(
+            $"{DashboardApiContract.VersionOneBasePath}/resources",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("DashboardBackend:LegacyDashboardUrl", body, StringComparison.Ordinal);
+        Assert.Contains(KnownConfigNames.DashboardUnsecuredAllowAnonymous, body, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Dashboard:Frontend:AuthMode", "Unsecured")]
+    [InlineData(KnownConfigNames.DashboardUnsecuredAllowAnonymous, "true")]
+    [InlineData(KnownConfigNames.Legacy.DashboardUnsecuredAllowAnonymous, "true")]
+    public async Task Authentication_ServesAnonymouslyOnlyWhenExplicitlyOptedIn(string key, string value)
+    {
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?> { [key] = value });
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var client = app.GetTestClient();
+        using var response = await client.GetAsync(
+            $"{DashboardApiContract.VersionOneBasePath}/config",
+            TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+    }
+
+    [Theory]
+    [InlineData("Dashboard:Frontend:AuthMode", "BrowserToken")]
+    [InlineData("Dashboard:Frontend:AuthMode", "OpenIdConnect")]
+    [InlineData(KnownConfigNames.DashboardUnsecuredAllowAnonymous, "false")]
+    public async Task Authentication_DoesNotTreatOtherAuthModesAsAnonymous(string key, string value)
+    {
+        // BrowserToken and OpenIdConnect describe authorities this host does not implement, so
+        // naming them must not be mistaken for permission to serve requests unauthenticated.
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?> { [key] = value });
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var response = await app.GetTestClient().GetAsync(
+            $"{DashboardApiContract.VersionOneBasePath}/config",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Contains(
+            "cannot authenticate requests",
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Discovery_OmitsTelemetryCapabilitiesWhenNoLegacyDashboardIsConfigured()
+    {
+        // Every telemetry route in this host forwards to the legacy dashboard. Without one they
+        // return 503, so the client must be told they are unavailable instead of rendering
+        // permanently empty logs, traces and metrics pages.
+        await using var app = BuildTestApp();
         await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
@@ -36,7 +128,7 @@ public class DashboardBackendApplicationTests
 
         response.EnsureSuccessStatusCode();
         Assert.Equal(
-            "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"resources\",\"resources-live\",\"commands\",\"structured-logs\",\"structured-logs-live\",\"structured-logs-clear\",\"traces\",\"traces-live\",\"traces-clear\",\"metrics\",\"metrics-series\",\"metrics-clear\",\"console-logs\",\"console-logs-live\",\"terminal\",\"interactions\"]}]}",
+            "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"resources\",\"resources-live\",\"commands\",\"terminal\",\"interactions\"]}]}",
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
@@ -44,9 +136,8 @@ public class DashboardBackendApplicationTests
     public async Task Discovery_AdvertisesDelegatedShellAndAuthenticationOnlyWhenLegacyDashboardIsConfigured()
     {
         var legacyApiProxy = new TestLegacyApiProxy(isConfigured: true);
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<IDashboardLegacyApiProxy>(legacyApiProxy);
         });
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -57,7 +148,7 @@ public class DashboardBackendApplicationTests
 
         response.EnsureSuccessStatusCode();
         Assert.Equal(
-            "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"shell\",\"culture\",\"authentication\",\"manage-data\",\"resources\",\"resources-live\",\"commands\",\"structured-logs\",\"structured-logs-live\",\"structured-logs-clear\",\"traces\",\"traces-live\",\"traces-clear\",\"metrics\",\"metrics-series\",\"metrics-clear\",\"console-logs\",\"console-logs-live\",\"terminal\",\"interactions\"]}]}",
+            "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"shell\",\"culture\",\"authentication\",\"manage-data\",\"resources\",\"resources-live\",\"commands\",\"terminal\",\"interactions\",\"structured-logs\",\"structured-logs-live\",\"structured-logs-clear\",\"traces\",\"traces-live\",\"traces-clear\",\"metrics\",\"metrics-series\",\"metrics-clear\",\"console-logs\",\"console-logs-live\"]}]}",
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
@@ -67,7 +158,7 @@ public class DashboardBackendApplicationTests
     [InlineData("file://")]
     public async Task DevelopmentAccessPolicy_RejectsNonLoopbackBrowserOrigins(string origin)
     {
-        await using var app = DashboardBackendApplication.Build([], builder => builder.WebHost.UseTestServer());
+        await using var app = BuildTestApp();
         await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
@@ -83,14 +174,54 @@ public class DashboardBackendApplicationTests
     [InlineData("https://Stress.dev.localhost:49985")]
     [InlineData("http://127.0.0.1:1430")]
     [InlineData("http://[::1]:1430")]
-    public async Task DevelopmentAccessPolicy_AllowsLoopbackBrowserOrigins(string origin)
+    public async Task DevelopmentAccessPolicy_RejectsCrossOriginLoopbackBrowserOrigins(string origin)
     {
-        await using var app = DashboardBackendApplication.Build([], builder => builder.WebHost.UseTestServer());
+        // Loopback is shared by every locally running dev server and tool, so "some loopback
+        // origin" is not evidence the request came from this dashboard. Only the host's own origin
+        // is trusted by default.
+        await using var app = BuildTestApp();
         await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, DashboardApiContract.DiscoveryPath);
         request.Headers.TryAddWithoutValidation("Origin", origin);
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DevelopmentAccessPolicy_AllowsSameOriginBrowserRequests()
+    {
+        await using var app = BuildTestApp();
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var client = app.GetTestClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, DashboardApiContract.DiscoveryPath);
+        // TestServer serves requests as http://localhost, so this is the page's own origin.
+        request.Headers.TryAddWithoutValidation("Origin", "http://localhost");
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+    }
+
+    [Fact]
+    public async Task DevelopmentAccessPolicy_AllowsExplicitlyConfiguredOrigins()
+    {
+        // Split-origin development: the Vite dev server proxies API calls and rewrites only Host,
+        // so its Origin must be named explicitly rather than trusted because it is loopback.
+        await using var app = BuildTestApp(builder =>
+        {
+            builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["DashboardBackend:AllowedOrigins"] = "http://localhost:1430;http://127.0.0.1:1430"
+            });
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var client = app.GetTestClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, DashboardApiContract.DiscoveryPath);
+        request.Headers.TryAddWithoutValidation("Origin", "http://localhost:1430");
         using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         response.EnsureSuccessStatusCode();
@@ -101,7 +232,7 @@ public class DashboardBackendApplicationTests
     [InlineData("192.168.1.10")]
     public async Task DevelopmentAccessPolicy_RejectsNonLoopbackBrowserHost(string host)
     {
-        await using var app = DashboardBackendApplication.Build([], builder => builder.WebHost.UseTestServer());
+        await using var app = BuildTestApp();
         await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var request = new HttpRequestMessage(HttpMethod.Get, DashboardApiContract.DiscoveryPath);
@@ -128,9 +259,8 @@ public class DashboardBackendApplicationTests
     [Fact]
     public async Task GetConfiguration_ReturnsConfiguredIdentityFromVersionOneRoute()
     {
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["DashboardBackend:ApplicationName"] = "Stress AppHost",
@@ -154,7 +284,7 @@ public class DashboardBackendApplicationTests
     [Fact]
     public async Task GetConfiguration_UsesProductVersionByDefault()
     {
-        await using var app = DashboardBackendApplication.Build([], builder => builder.WebHost.UseTestServer());
+        await using var app = BuildTestApp();
         await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var response = await app.GetTestClient().GetAsync(
@@ -182,9 +312,8 @@ public class DashboardBackendApplicationTests
                     TestContext.Current.CancellationToken);
             }
         };
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<IDashboardLegacyApiProxy>(legacyApiProxy);
         });
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -204,9 +333,8 @@ public class DashboardBackendApplicationTests
     public async Task DirectVersionedRoutes_TransferLegacyAuthenticationChallenge()
     {
         var legacyApiProxy = new TestLegacyApiProxy(isConfigured: true, isAuthorized: false);
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<IDashboardLegacyApiProxy>(legacyApiProxy);
         });
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -225,9 +353,8 @@ public class DashboardBackendApplicationTests
     public async Task CultureLogoutAndLogin_ProxySameOriginLegacyRoutes()
     {
         var legacyApiProxy = new TestLegacyApiProxy(isConfigured: true);
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<IDashboardLegacyApiProxy>(legacyApiProxy);
         });
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -295,9 +422,8 @@ public class DashboardBackendApplicationTests
                 }
             }
         };
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<IDashboardLegacyApiProxy>(legacyApiProxy);
         });
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -351,9 +477,8 @@ public class DashboardBackendApplicationTests
         {
             ["index.html"] = "<!doctype html><meta name=\"aspire-dashboard-backend\" content=\"standalone\" /><script src=\"./assets/index-AbCd1234.js\"></script><div id=\"root\"></div>"
         });
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<IDashboardFrontendAssetProvider>(assets);
         });
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -378,9 +503,8 @@ public class DashboardBackendApplicationTests
         {
             ["assets/index-AbCd1234.js"] = "export const dashboard = true;"
         });
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<IDashboardFrontendAssetProvider>(assets);
         });
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -407,9 +531,8 @@ public class DashboardBackendApplicationTests
         {
             ["index.html"] = "<meta name=\"aspire-dashboard-backend\" content=\"standalone\" />"
         });
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<IDashboardFrontendAssetProvider>(assets);
         });
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -457,9 +580,8 @@ public class DashboardBackendApplicationTests
             "");
         var interactionService = new TestInteractionService([interaction]);
         var commandExecutor = new TestCommandExecutor(new DashboardCommandResponse("succeeded", null, null));
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<IDashboardInteractionService>(interactionService);
             builder.Services.AddSingleton<IDashboardCommandExecutor>(commandExecutor);
         });
@@ -543,9 +665,8 @@ public class DashboardBackendApplicationTests
             LinkText: "",
             LinkUrl: "");
         var interactionService = new TestInteractionService([interaction]);
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<IDashboardInteractionService>(interactionService);
         });
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -605,9 +726,8 @@ public class DashboardBackendApplicationTests
             "",
             "");
         var interactionService = new TestInteractionService([interaction]);
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<IDashboardInteractionService>(interactionService);
         });
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -642,7 +762,7 @@ public class DashboardBackendApplicationTests
                 [new("http", "https://api.example.test", false, false, "API", 1)],
                 [new("project.path", "Project path", "/src/api.csproj", false, true, 10)],
                 [new("ASPNETCORE_ENVIRONMENT", "Development", true)],
-                [new("Healthy", "ready", "Ready")],
+                [new("Healthy", "ready", "Ready", null, null)],
                 [new("restart", "Restart", "Restart API", null, "ArrowCounterclockwise", "regular", true, "enabled")],
                 [new("postgres", "Reference")],
                 false,
@@ -653,9 +773,8 @@ public class DashboardBackendApplicationTests
                 null)
         ];
 
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<IDashboardResourceSnapshotProvider>(new TestResourceSnapshotProvider(resources));
         });
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -677,7 +796,7 @@ public class DashboardBackendApplicationTests
     [Fact]
     public async Task GetResources_ReturnsServiceUnavailableWithoutResourceServiceConfiguration()
     {
-        await using var app = DashboardBackendApplication.Build([], builder => builder.WebHost.UseTestServer());
+        await using var app = BuildTestApp();
         await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
@@ -694,9 +813,8 @@ public class DashboardBackendApplicationTests
         socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
         var endpoint = (IPEndPoint)socket.LocalEndPoint!;
 
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = $"http://127.0.0.1:{endpoint.Port}",
@@ -720,9 +838,8 @@ public class DashboardBackendApplicationTests
             "Restarted",
             new DashboardCommandResult("done", "text", true));
         var executor = new TestCommandExecutor(result);
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<IDashboardCommandExecutor>(executor);
         });
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -745,9 +862,8 @@ public class DashboardBackendApplicationTests
     [InlineData("{\"resourceName\":\"api\",\"commandName\":\"\"}")]
     public async Task ExecuteCommand_RejectsInvalidRequests(string content)
     {
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<IDashboardCommandExecutor>(new TestCommandExecutor(null));
         });
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -764,9 +880,8 @@ public class DashboardBackendApplicationTests
     [Fact]
     public async Task ExecuteCommand_ReturnsNotFoundForUnknownCommand()
     {
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<IDashboardCommandExecutor>(new TestCommandExecutor(null));
         });
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -1278,9 +1393,8 @@ public class DashboardBackendApplicationTests
     public async Task TerminalEndpoint_RejectsMissingOriginBeforeResolvingResource()
     {
         var resolver = new TestTerminalConnectionResolver();
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<ITerminalConnectionResolver>(resolver);
         });
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -1299,9 +1413,8 @@ public class DashboardBackendApplicationTests
     public async Task TerminalEndpoint_SameOriginResolvesResourceServerSide()
     {
         var resolver = new TestTerminalConnectionResolver();
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<ITerminalConnectionResolver>(resolver);
         });
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -1408,9 +1521,8 @@ public class DashboardBackendApplicationTests
             DashboardResourcesEvent.Change(resources, ["worker"])
         ];
 
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<IDashboardResourceEventSource>(new TestResourceEventSource(resourceEvents));
         });
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -1450,9 +1562,8 @@ public class DashboardBackendApplicationTests
                 2,
                 JsonSerializer.SerializeToElement(new { resourceLogs = new[] { new { resource = new { } } } })),
             []);
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<IDashboardStructuredLogSource>(source);
         });
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -1485,9 +1596,8 @@ public class DashboardBackendApplicationTests
                 }
             }))
         ];
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<IDashboardStructuredLogSource>(new TestStructuredLogSource(
                 new DashboardStructuredLogsSnapshot(0, JsonSerializer.SerializeToElement(new { })),
                 logEvents));
@@ -1530,9 +1640,8 @@ public class DashboardBackendApplicationTests
         var source = new TestStructuredLogSource(
             new DashboardStructuredLogsSnapshot(0, JsonSerializer.SerializeToElement(new { })),
             []);
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<IDashboardStructuredLogSource>(source);
         });
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -1579,9 +1688,8 @@ public class DashboardBackendApplicationTests
                     }
                 })),
             []);
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<IDashboardTraceSource>(source);
         });
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -1618,9 +1726,8 @@ public class DashboardBackendApplicationTests
         var source = new TestTraceSource(
             new DashboardTraceSnapshot(0, 0, JsonSerializer.SerializeToElement(new { })),
             []);
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<IDashboardTraceSource>(source);
         });
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -1639,9 +1746,8 @@ public class DashboardBackendApplicationTests
         var source = new TestTraceSource(
             new DashboardTraceSnapshot(0, 0, JsonSerializer.SerializeToElement(new { })),
             []);
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<IDashboardTraceSource>(source);
         });
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -1681,9 +1787,8 @@ public class DashboardBackendApplicationTests
         var source = new TestTraceSource(
             new DashboardTraceSnapshot(0, 0, JsonSerializer.SerializeToElement(new { })),
             traceEvents);
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<IDashboardTraceSource>(source);
         });
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -1749,9 +1854,8 @@ public class DashboardBackendApplicationTests
                     17)
             ],
             series: null);
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<IDashboardMetricSource>(source);
         });
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -1819,9 +1923,8 @@ public class DashboardBackendApplicationTests
                 true,
                 false,
                 "buckets"));
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<IDashboardMetricSource>(source);
         });
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -1874,9 +1977,8 @@ public class DashboardBackendApplicationTests
     public async Task GetMetricSeries_RejectsInvalidQueries(string path)
     {
         var source = new TestMetricSource([], series: null);
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<IDashboardMetricSource>(source);
         });
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -1893,9 +1995,8 @@ public class DashboardBackendApplicationTests
     public async Task ClearMetrics_ForwardsResourceAndCredentials()
     {
         var source = new TestMetricSource([], series: null);
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<IDashboardMetricSource>(source);
         });
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -1917,13 +2018,12 @@ public class DashboardBackendApplicationTests
     {
         DashboardConsoleLogsEvent[] logEvents =
         [
-            new("api", [new(1, "backlog", false), new(2, "warning", true)]),
-            new("api", [new(3, "live", false)])
+            new("api", [new(1, "backlog", false, null), new(2, "warning", true, null)]),
+            new("api", [new(3, "live", false, null)])
         ];
         var source = new TestConsoleLogSource(logEvents);
-        await using var app = DashboardBackendApplication.Build([], builder =>
+        await using var app = BuildTestApp(builder =>
         {
-            builder.WebHost.UseTestServer();
             builder.Services.AddSingleton<IDashboardConsoleLogSource>(source);
         });
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -2345,6 +2445,139 @@ public class DashboardBackendApplicationTests
                 await Task.Yield();
             }
         }
+    }
+
+    [Fact]
+    public void StreamRevocation_CancelsStreamsCreatedBeforeRevoke()
+    {
+        var revocation = new DashboardStreamRevocation();
+        using var caller = new CancellationTokenSource();
+        using var stream = revocation.CreateLinkedTokenSource(caller.Token);
+
+        Assert.False(stream.IsCancellationRequested);
+
+        revocation.RevokeAll();
+
+        Assert.True(stream.IsCancellationRequested);
+    }
+
+    [Fact]
+    public void StreamRevocation_LeavesStreamsCreatedAfterRevokeRunning()
+    {
+        var revocation = new DashboardStreamRevocation();
+        using var caller = new CancellationTokenSource();
+        using var beforeRevoke = revocation.CreateLinkedTokenSource(caller.Token);
+
+        revocation.RevokeAll();
+
+        // A client that reconnects after signing out is authorized again by the middleware, so the
+        // revocation must not latch permanently or the backend would be unusable after one logout.
+        using var afterRevoke = revocation.CreateLinkedTokenSource(caller.Token);
+
+        Assert.True(beforeRevoke.IsCancellationRequested);
+        Assert.False(afterRevoke.IsCancellationRequested);
+    }
+
+    [Fact]
+    public void StreamRevocation_HonoursTheCallersOwnCancellation()
+    {
+        var revocation = new DashboardStreamRevocation();
+        using var caller = new CancellationTokenSource();
+        using var stream = revocation.CreateLinkedTokenSource(caller.Token);
+
+        caller.Cancel();
+
+        Assert.True(stream.IsCancellationRequested);
+    }
+
+    [Fact]
+    public void StreamRevocation_CancelsEveryLiveStream()
+    {
+        var revocation = new DashboardStreamRevocation();
+        using var caller = new CancellationTokenSource();
+        var streams = Enumerable.Range(0, 8)
+            .Select(_ => revocation.CreateLinkedTokenSource(caller.Token))
+            .ToList();
+
+        revocation.RevokeAll();
+
+        Assert.All(streams, source => Assert.True(source.IsCancellationRequested));
+
+        foreach (var source in streams)
+        {
+            source.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task StreamRevocation_IsSafeUnderConcurrentCreateAndRevoke()
+    {
+        var revocation = new DashboardStreamRevocation();
+        using var caller = new CancellationTokenSource();
+        using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+
+        var creator = Task.Run(() =>
+        {
+            while (!stop.Token.IsCancellationRequested)
+            {
+                using var source = revocation.CreateLinkedTokenSource(caller.Token);
+            }
+        });
+
+        var revoker = Task.Run(() =>
+        {
+            while (!stop.Token.IsCancellationRequested)
+            {
+                revocation.RevokeAll();
+            }
+        });
+
+        await Task.WhenAll(creator, revoker);
+
+        // Reaching here without an ObjectDisposedException or deadlock is the assertion: RevokeAll
+        // disposes the source it replaces while other threads are linking against it.
+        using var afterRace = revocation.CreateLinkedTokenSource(caller.Token);
+        Assert.False(afterRace.IsCancellationRequested);
+    }
+
+    [Fact]
+    public void StructuredLogProxy_RequestsTheDashboardsConfiguredLogRetention()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Dashboard:TelemetryLimits:MaxLogCount"] = "250000"
+            })
+            .Build();
+
+        Assert.Equal(250_000, DashboardStructuredLogProxy.ReadMaxLogCount(configuration));
+    }
+
+    [Fact]
+    public void StructuredLogProxy_FallsBackToTheDashboardDefaultRetention()
+    {
+        var configuration = new ConfigurationBuilder().Build();
+
+        // Must match TelemetryLimitOptions.MaxLogCount so the sidecar does not truncate below what
+        // an unconfigured dashboard retains.
+        Assert.Equal(10_000, DashboardStructuredLogProxy.ReadMaxLogCount(configuration));
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("-1")]
+    public void StructuredLogProxy_IgnoresNonPositiveRetention(string configured)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Dashboard:TelemetryLimits:MaxLogCount"] = configured
+            })
+            .Build();
+
+        // A zero or negative limit would make the legacy endpoint fall back to its own 200-record
+        // default, silently hiding telemetry.
+        Assert.Equal(10_000, DashboardStructuredLogProxy.ReadMaxLogCount(configuration));
     }
 
     private sealed class TestTerminalConnectionResolver : ITerminalConnectionResolver

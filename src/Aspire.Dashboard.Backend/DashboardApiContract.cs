@@ -103,7 +103,9 @@ internal sealed record DashboardEnvironmentVariable(
 internal sealed record DashboardHealthReport(
     string? Status,
     string Key,
-    string Description);
+    string Description,
+    string? ExceptionText,
+    DateTime? LastRunAt);
 
 internal sealed record DashboardResourceCommand(
     string Name,
@@ -279,7 +281,10 @@ internal sealed record DashboardMetricAttribute(
 internal sealed record DashboardConsoleLogLine(
     long LineNumber,
     string Text,
-    bool IsStdErr);
+    bool IsStdErr,
+    // Pre-rendered, HTML-encoded markup with ANSI colours applied. Produced by the shared LogParser
+    // so the client never needs its own ANSI implementation. Null when the source does not supply it.
+    string? Html);
 
 internal sealed record DashboardConsoleLogsEvent(
     string ResourceName,

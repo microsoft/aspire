@@ -244,8 +244,9 @@ pub async fn stream_console_logs(app: AppHandle, session: Arc<Session>, resource
                     .into_iter()
                     .map(|line| ConsoleLogLine {
                         line_number: line.line_number,
-                        text: line.text,
+                        text: strip_control_sequences(&line.text),
                         is_std_err: line.is_std_err.unwrap_or(false),
+                        html: None,
                     })
                     .collect();
                 if !lines.is_empty() {
@@ -357,5 +358,105 @@ mod command_result_tests {
             assert_eq!(actual.value, "result");
             assert!(actual.display_immediately);
         }
+    }
+}
+
+/// Removes ANSI escape sequences so console output is legible when rendered as plain text.
+///
+/// Resource stdout regularly carries SGR colour codes, for example:
+///
+/// ```text
+/// \u{1b}[32minfo\u{1b}[0m: Microsoft.Hosting.Lifetime[14]
+/// ```
+///
+/// Without stripping, those bytes render as literal `[32m` garbage in the UI. This deliberately
+/// only *removes* sequences rather than translating them to markup: the ASP.NET Core backends do
+/// the colour translation with the shared `LogParser`, and duplicating that logic here would let
+/// the two renderings drift apart.
+///
+/// Handles the two forms that appear in practice - CSI (`ESC [ ... final-byte`, where the final
+/// byte is in the range `@`-`~`) and OSC (`ESC ] ... BEL` or `ESC ] ... ESC \`), the latter being
+/// how hyperlinks are emitted. A lone trailing `ESC` is dropped.
+///
+/// See <https://en.wikipedia.org/wiki/ANSI_escape_code#Control_Sequence_Introducer_commands>.
+fn strip_control_sequences(text: &str) -> String {
+    if !text.contains('\u{1b}') {
+        return text.to_string();
+    }
+
+    let mut result = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if ch != '\u{1b}' {
+            result.push(ch);
+            continue;
+        }
+
+        match chars.next() {
+            // CSI: parameters and intermediates, terminated by a byte in @-~.
+            Some('[') => {
+                for next in chars.by_ref() {
+                    if ('@'..='~').contains(&next) {
+                        break;
+                    }
+                }
+            }
+            // OSC: arbitrary payload terminated by BEL or ST (ESC \).
+            Some(']') => {
+                while let Some(next) = chars.next() {
+                    if next == '\u{7}' {
+                        break;
+                    }
+                    if next == '\u{1b}' {
+                        if chars.peek() == Some(&'\\') {
+                            chars.next();
+                        }
+                        break;
+                    }
+                }
+            }
+            // Two-character sequence such as ESC c (reset); drop both.
+            Some(_) => {}
+            // Trailing ESC with nothing after it.
+            None => {}
+        }
+    }
+
+    result
+}
+
+#[cfg(test)]
+mod strip_control_sequences_tests {
+    use super::strip_control_sequences;
+
+    #[test]
+    fn returns_input_unchanged_when_there_are_no_escapes() {
+        assert_eq!(strip_control_sequences("plain output"), "plain output");
+    }
+
+    #[test]
+    fn strips_sgr_colour_sequences() {
+        assert_eq!(
+            strip_control_sequences("\u{1b}[32minfo\u{1b}[0m: ready"),
+            "info: ready"
+        );
+    }
+
+    #[test]
+    fn strips_osc_hyperlinks_terminated_by_bel_and_st() {
+        assert_eq!(
+            strip_control_sequences("\u{1b}]8;;https://aspire.dev\u{7}link\u{1b}]8;;\u{7}"),
+            "link"
+        );
+        assert_eq!(
+            strip_control_sequences("\u{1b}]0;title\u{1b}\\body"),
+            "body"
+        );
+    }
+
+    #[test]
+    fn drops_a_trailing_escape() {
+        assert_eq!(strip_control_sequences("done\u{1b}"), "done");
     }
 }

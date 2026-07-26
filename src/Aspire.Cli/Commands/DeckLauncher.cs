@@ -21,7 +21,7 @@ internal sealed record DeckLaunchInfo(string OtlpGrpcUrl, string OtlpHttpUrl, st
 /// standalone <c>aspire deck</c> command and the <c>aspire run --deck</c> path so both resolve and
 /// start Deck identically.
 /// </summary>
-internal sealed class DeckLauncher(LayoutProcessRunner layoutProcessRunner, CliExecutionContext executionContext)
+internal sealed class DeckLauncher(LayoutProcessRunner layoutProcessRunner, IEnvironment environment)
 {
     /// <summary>
     /// Resolves the Aspire Deck executable, in priority order: the explicit path (e.g. the
@@ -35,7 +35,7 @@ internal sealed class DeckLauncher(LayoutProcessRunner layoutProcessRunner, CliE
             return explicitPath;
         }
 
-        var fromEnv = executionContext.GetEnvironmentVariable("ASPIRE_DECK_PATH");
+        var fromEnv = environment.GetEnvironmentVariable("ASPIRE_DECK_PATH");
         if (!string.IsNullOrEmpty(fromEnv) && File.Exists(fromEnv))
         {
             return fromEnv;
@@ -49,7 +49,7 @@ internal sealed class DeckLauncher(LayoutProcessRunner layoutProcessRunner, CliE
     /// from the same environment variables the dashboard reads, so launching is just a matter of
     /// populating them. Additional environment variables can be supplied via <paramref name="extraEnvironment"/>.
     /// </summary>
-    public IProcessExecution Start(string deckPath, DeckLaunchInfo info, IDictionary<string, string>? extraEnvironment = null, ProcessInvocationOptions? options = null)
+    public async Task<IProcessExecution> StartAsync(string deckPath, DeckLaunchInfo info, IDictionary<string, string>? extraEnvironment = null, ProcessInvocationOptions? options = null)
     {
         var environmentVariables = new Dictionary<string, string>
         {
@@ -70,7 +70,7 @@ internal sealed class DeckLauncher(LayoutProcessRunner layoutProcessRunner, CliE
             }
         }
 
-        return layoutProcessRunner.Start(deckPath, [], environmentVariables: environmentVariables, options: options);
+        return await layoutProcessRunner.StartAsync(deckPath, [], environmentVariables: environmentVariables, options: options).ConfigureAwait(false);
     }
 
     /// <summary>

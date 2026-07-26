@@ -6,7 +6,9 @@ using Microsoft.AspNetCore.SignalR;
 
 namespace Aspire.Dashboard.Backend;
 
-internal sealed class DashboardConsoleLogsHub(IDashboardConsoleLogSource consoleLogSource) : Hub
+internal sealed class DashboardConsoleLogsHub(
+    IDashboardConsoleLogSource consoleLogSource,
+    DashboardStreamRevocation revocation) : Hub
 {
     public async IAsyncEnumerable<DashboardConsoleLogsEvent> WatchConsoleLogs(
         string resourceName,
@@ -20,10 +22,12 @@ internal sealed class DashboardConsoleLogsHub(IDashboardConsoleLogSource console
         var request = Context.GetHttpContext()?.Request
             ?? throw new HubException("The console-log request context is unavailable.");
 
+        using var linked = revocation.CreateLinkedTokenSource(cancellationToken);
+
         await foreach (var logEvent in consoleLogSource.WatchAsync(
             resourceName,
             DashboardRequestCredentials.From(request),
-            cancellationToken).ConfigureAwait(false))
+            linked.Token).ConfigureAwait(false))
         {
             yield return logEvent;
         }

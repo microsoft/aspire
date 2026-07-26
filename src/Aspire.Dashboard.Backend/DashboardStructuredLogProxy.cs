@@ -35,6 +35,20 @@ internal sealed class DashboardStructuredLogServiceUnavailableException(string m
 internal sealed class DashboardStructuredLogProxy(IConfiguration configuration) : IDashboardStructuredLogSource
 {
     private const string LegacyDashboardUrlKey = "DashboardBackend:LegacyDashboardUrl";
+
+    // Matches TelemetryLimitOptions.MaxLogCount in the dashboard. Requesting fewer records than the
+    // repository retains would silently hide logs the operator configured it to keep, so the value
+    // is read from the same configuration key the dashboard binds and only falls back to the shared
+    // default when the sidecar was started without it.
+    private const int DefaultMaxLogCount = 10_000;
+    private readonly int _maxLogCount = ReadMaxLogCount(configuration);
+
+    internal static int ReadMaxLogCount(IConfiguration configuration)
+    {
+        var configured = configuration.GetValue<int?>("Dashboard:TelemetryLimits:MaxLogCount");
+        return configured is > 0 ? configured.Value : DefaultMaxLogCount;
+    }
+
     private static readonly HttpClient s_client = new(new SocketsHttpHandler
     {
         AllowAutoRedirect = false,
@@ -45,7 +59,7 @@ internal sealed class DashboardStructuredLogProxy(IConfiguration configuration) 
         DashboardRequestCredentials credentials,
         CancellationToken cancellationToken)
     {
-        using var request = CreateRequest(HttpMethod.Get, "api/deck/telemetry/logs?limit=5000", credentials);
+        using var request = CreateRequest(HttpMethod.Get, $"api/deck/telemetry/logs?limit={_maxLogCount}", credentials);
         using var response = await SendAsync(
             request,
             HttpCompletionOption.ResponseContentRead,
@@ -140,7 +154,7 @@ internal sealed class DashboardStructuredLogProxy(IConfiguration configuration) 
     {
         var configuredUrl = configuration[LegacyDashboardUrlKey];
         if (!Uri.TryCreate(configuredUrl, UriKind.Absolute, out var legacyDashboardUrl)
-            || !DashboardDevelopmentAccessPolicy.IsAllowedOrigin(legacyDashboardUrl.GetLeftPart(UriPartial.Authority)))
+            || !DashboardDevelopmentAccessPolicy.IsLoopbackTarget(legacyDashboardUrl.GetLeftPart(UriPartial.Authority)))
         {
             throw new DashboardStructuredLogServiceUnavailableException(
                 $"Configure {LegacyDashboardUrlKey} with the loopback URL of the existing dashboard.");

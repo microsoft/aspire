@@ -1770,6 +1770,29 @@ table.data tbody tr.selected {
   margin-top: 2px;
 }
 
+.health-report__meta {
+  font-size: 11px;
+  color: var(--text-subtle, var(--text-muted));
+  margin-top: 2px;
+}
+
+.health-report__exception {
+  margin-top: 6px;
+  padding: 8px;
+  max-height: 220px;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  background: var(--surface-sunken, var(--surface-2));
+  border: 1px solid var(--border-subtle, var(--border));
+  border-radius: 6px;
+  /* Stack traces are long, unbreakable single lines; wrap instead of forcing a page-wide scrollbar. */
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* ---------- Relationship chips ---------- */
 .rel-list {
   display: flex;
@@ -1795,7 +1818,58 @@ table.data tbody tr.selected {
   border-radius: var(--radius);
   overflow: hidden;
   background: var(--bg-app);
+
+  /* Windows Terminal palette, matching the Blazor dashboard's .log-overflow block in app.css so a
+     given SGR code paints the same colour in both dashboards. These are ANSI slot definitions, not
+     theme tokens, so they are intentionally fixed hex values rather than themed variables. */
+  --console-theme-black: #0c0c0c;
+  --console-theme-blue: #0037da;
+  --console-theme-cyan: #3a96dd;
+  --console-theme-green: #13a10e;
+  --console-theme-magenta: #cd13e8;
+  --console-theme-bg-red: #f80f24;
+  --console-theme-fg-red: #c50f1f;
+  --console-theme-white: #cccccc;
+  --console-theme-yellow: #c19c00;
+  --console-theme-bright-black: #767676;
+  --console-theme-bright-blue: #3b78ff;
+  --console-theme-bright-cyan: #61d6d6;
+  --console-theme-bright-green: #16c60c;
+  --console-theme-bright-magenta: #da01fa;
+  --console-theme-bright-red: #e74856;
+  --console-theme-bright-white: #f2f2f2;
+  --console-theme-bright-yellow: #f9f1a5;
 }
+
+/* ---------- ANSI colours inside server-rendered console markup ---------- */
+.log-line__text .ansi-fg-black { color: var(--console-theme-black); }
+.log-line__text .ansi-fg-blue { color: var(--console-theme-blue); }
+.log-line__text .ansi-fg-cyan { color: var(--console-theme-cyan); }
+.log-line__text .ansi-fg-green { color: var(--console-theme-green); }
+.log-line__text .ansi-fg-magenta { color: var(--console-theme-magenta); }
+.log-line__text .ansi-fg-red { color: var(--console-theme-fg-red); }
+.log-line__text .ansi-fg-white { color: var(--console-theme-white); }
+.log-line__text .ansi-fg-yellow { color: var(--console-theme-yellow); }
+.log-line__text .ansi-fg-brightblack { color: var(--console-theme-bright-black); }
+.log-line__text .ansi-fg-brightblue { color: var(--console-theme-bright-blue); }
+.log-line__text .ansi-fg-brightcyan { color: var(--console-theme-bright-cyan); }
+.log-line__text .ansi-fg-brightgreen { color: var(--console-theme-bright-green); }
+.log-line__text .ansi-fg-brightmagenta { color: var(--console-theme-bright-magenta); }
+.log-line__text .ansi-fg-brightred { color: var(--console-theme-bright-red); }
+.log-line__text .ansi-fg-brightwhite { color: var(--console-theme-bright-white); }
+.log-line__text .ansi-fg-brightyellow { color: var(--console-theme-bright-yellow); }
+.log-line__text .ansi-bg-black { background-color: var(--console-theme-black); }
+.log-line__text .ansi-bg-blue { background-color: var(--console-theme-blue); }
+.log-line__text .ansi-bg-cyan { background-color: var(--console-theme-cyan); }
+.log-line__text .ansi-bg-green { background-color: var(--console-theme-green); }
+.log-line__text .ansi-bg-magenta { background-color: var(--console-theme-magenta); }
+.log-line__text .ansi-bg-red { background-color: var(--console-theme-bg-red); }
+.log-line__text .ansi-bg-white { background-color: var(--console-theme-white); }
+.log-line__text .ansi-bg-yellow { background-color: var(--console-theme-yellow); }
+.log-line__text .ansi-underline { text-decoration: underline; }
+.log-line__text .ansi-italic { font-style: italic; }
+.log-line__text .ansi-strikethrough { text-decoration: line-through; }
+.log-line__text .ansi-underline.ansi-strikethrough { text-decoration: underline line-through; }
 .console__scroll {
   flex: 1;
   overflow: auto;

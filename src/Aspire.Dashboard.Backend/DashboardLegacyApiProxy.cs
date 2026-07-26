@@ -14,7 +14,7 @@ internal interface IDashboardLegacyApiProxy
 
 internal sealed class DashboardLegacyApiProxy(IConfiguration configuration) : IDashboardLegacyApiProxy
 {
-    private const string LegacyDashboardUrlKey = "DashboardBackend:LegacyDashboardUrl";
+    internal const string LegacyDashboardUrlKey = "DashboardBackend:LegacyDashboardUrl";
     private static readonly HttpClient s_client = new(new SocketsHttpHandler
     {
         AllowAutoRedirect = false,
@@ -168,7 +168,7 @@ internal sealed class DashboardLegacyApiProxy(IConfiguration configuration) : ID
     {
         var configuredUrl = configuration[LegacyDashboardUrlKey];
         return Uri.TryCreate(configuredUrl, UriKind.Absolute, out legacyDashboardUrl!)
-            && DashboardDevelopmentAccessPolicy.IsAllowedOrigin(legacyDashboardUrl.GetLeftPart(UriPartial.Authority));
+            && DashboardDevelopmentAccessPolicy.IsLoopbackTarget(legacyDashboardUrl.GetLeftPart(UriPartial.Authority));
     }
 
     private static void CopyHeader(

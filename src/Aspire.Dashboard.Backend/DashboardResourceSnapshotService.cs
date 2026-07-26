@@ -375,7 +375,12 @@ internal sealed class DashboardResourceSnapshotService(
             [.. resource.HealthReports.OrderBy(report => report.Key, StringComparer.Ordinal).Select(report => new DashboardHealthReport(
                 report.HasStatus ? MapHealthStatus(report.Status) : null,
                 report.Key,
-                report.Description))],
+                report.Description,
+                // `exception` is a non-optional proto string, so an absent value arrives as "" rather
+                // than null. Normalize to null so the UI can distinguish "no exception" from an empty
+                // stack trace, matching HealthReportViewModel.ExceptionText in the Blazor dashboard.
+                string.IsNullOrEmpty(report.Exception) ? null : report.Exception,
+                report.LastRunAt?.ToDateTime()))],
             [.. resource.Commands.Select(command => new DashboardResourceCommand(
                 command.Name,
                 command.DisplayName,

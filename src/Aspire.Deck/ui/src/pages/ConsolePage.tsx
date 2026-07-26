@@ -2,6 +2,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { ConsoleLogLine, Resource, ResourceCommand } from "../api/types";
 import { subscribeConsoleLogs } from "../api/deck";
 import { useResources } from "../lib/useDeckEvent";
+import { useTelemetryLimits } from "../lib/useTelemetryLimits";
+import { useMeasuredWindow } from "../lib/useMeasuredWindow";
 import { useCommandExecution } from "../components/useCommandExecution";
 import { InteractiveTerminal } from "../components/InteractiveTerminal";
 import { formatConsoleTimestamp, parseConsoleLine } from "../lib/consoleLogs";
@@ -13,6 +15,7 @@ import {
   ConsoleIcon,
   EmptyState,
   MoreIcon,
+  CommandIcon,
   NamedIcon,
   Page,
   PageActions,
@@ -28,7 +31,6 @@ import {
 } from "../toolkit";
 
 const ALL_RESOURCES = "__all-resources__";
-const MAX_LINES = 5000;
 const LINE_HEIGHT = 21;
 const OVERSCAN = 12;
 
@@ -37,6 +39,7 @@ interface BufferedLine {
   lineNumber: number;
   text: string;
   rawText: string;
+  html: string | null;
   timestamp: Date | null;
   isStdErr: boolean;
 }
@@ -58,6 +61,26 @@ export interface ConsolePageProps {
   onRouteChange?: (state: ConsoleRouteState) => void;
 }
 
+/**
+ * Renders one console line, preferring the server-rendered ANSI markup when it is available.
+ *
+ * The markup comes from the shared `LogParser` running with `encodeForHtml: true`, which
+ * HTML-encodes the raw console text *before* wrapping it in `<span class="ansi-*">` elements and
+ * turning bare URLs into anchors. Because the encode step runs first, resource output cannot inject
+ * markup of its own, which is what makes `dangerouslySetInnerHTML` acceptable here - it is the same
+ * trust boundary the Blazor LogViewer relies on when it renders the identical string as a
+ * MarkupString.
+ *
+ * Falling back to `text` keeps the page working against backends that predate the `html` field.
+ */
+function LogLineText({ line }: { line: BufferedLine }): React.ReactElement {
+  if (line.html !== null) {
+    return <span className="log-line__text" dangerouslySetInnerHTML={{ __html: line.html }} />;
+  }
+
+  return <span className="log-line__text">{line.text}</span>;
+}
+
 export function ConsolePage({
   routeResourceName = null,
   routeShowTimestamps = false,
@@ -67,6 +90,11 @@ export function ConsolePage({
   onRouteChange,
 }: ConsolePageProps = {}) {
   const { resources } = useResources();
+  // Sized from Dashboard:Frontend:MaxConsoleLogCount so raising the server-side retention actually
+  // keeps the extra lines instead of having the client discard them.
+  const maxLines = useTelemetryLimits().maxConsoleLogCount;
+  const maxLinesRef = useRef(maxLines);
+  maxLinesRef.current = maxLines;
   const [selected, setSelected] = useState<string>(routeResourceName ?? ALL_RESOURCES);
   const [lines, setLines] = useState<BufferedLine[]>([]);
   const [paused, setPaused] = useState(routePaused);
@@ -125,8 +153,11 @@ export function ConsolePage({
   const appendLines = useCallback((incoming: BufferedLine[]): void => {
     setLines((previous) => {
       const next = previous.concat(incoming);
-      return next.length > MAX_LINES ? next.slice(next.length - MAX_LINES) : next;
+      const limit = maxLinesRef.current;
+      return next.length > limit ? next.slice(next.length - limit) : next;
     });
+    // Read through the ref so the callback identity stays stable when the limit arrives from
+    // config; re-creating it would tear down and re-establish every live log subscription.
   }, []);
 
   const subscriptionNames = selectedResource?.hasTerminal
@@ -162,14 +193,15 @@ export function ConsolePage({
             lineNumber: line.lineNumber,
             text: parsed.text,
             rawText: line.text,
+            html: line.html ?? null,
             timestamp: parsed.timestamp,
             isStdErr: line.isStdErr,
           };
         });
         if (pausedRef.current) {
           pendingLinesRef.current.push(...incoming);
-          if (pendingLinesRef.current.length > MAX_LINES) {
-            pendingLinesRef.current = pendingLinesRef.current.slice(-MAX_LINES);
+          if (pendingLinesRef.current.length > maxLinesRef.current) {
+            pendingLinesRef.current = pendingLinesRef.current.slice(-maxLinesRef.current);
           }
           setPendingCount(pendingLinesRef.current.length);
         } else {
@@ -299,13 +331,23 @@ export function ConsolePage({
     }
   };
 
-  // Manual windowing: only render the lines intersecting the viewport.
-  const { startIndex, endIndex } = useMemo(() => {
-    const start = Math.max(0, Math.floor(scrollTop / LINE_HEIGHT) - OVERSCAN);
-    const visibleCount = Math.ceil((viewportHeight || 600) / LINE_HEIGHT) + OVERSCAN * 2;
-    const end = Math.min(lines.length, start + visibleCount);
-    return { startIndex: start, endIndex: end };
-  }, [scrollTop, viewportHeight, lines.length]);
+  // Stable per-line identity, shared by React's key and the height cache so that trimming the
+  // buffer from the front does not misattribute a measured height to a different line.
+  const lineKeys = useMemo(
+    () => lines.map((line, index) => `${line.resourceName}-${line.lineNumber}-${index}`),
+    [lines]
+  );
+
+  // Manual windowing: only render the lines intersecting the viewport. Wrapped lines have variable
+  // height, so their offsets come from measurements; clipped lines are all exactly LINE_HEIGHT and
+  // the measurement path collapses to the same arithmetic as before.
+  const { startIndex, endIndex, totalHeight, offsetTop, measureRef } = useMeasuredWindow({
+    keys: lineKeys,
+    scrollTop,
+    viewportHeight,
+    estimatedRowHeight: LINE_HEIGHT,
+    overscan: OVERSCAN
+  });
 
   const visibleLines = lines.slice(startIndex, endIndex);
   const errorCount = useMemo(() => lines.filter((l) => l.isStdErr).length, [lines]);
@@ -419,7 +461,7 @@ export function ConsolePage({
             disabled={command.state === "disabled"}
             onClick={() => requestCommand(selectedResource, command)}
           >
-            <NamedIcon name={command.iconName} variant={command.iconVariant} size={16} />
+            <CommandIcon iconName={command.iconName} iconVariant={command.iconVariant} isHighlighted={command.isHighlighted} size={16} />
             {command.displayName}
           </Button>
         )) : null}
@@ -432,7 +474,7 @@ export function ConsolePage({
               id: command.name,
               label: command.displayName,
               description: command.displayDescription ?? undefined,
-              icon: <NamedIcon name={command.iconName} variant={command.iconVariant} size={16} />,
+              icon: <CommandIcon iconName={command.iconName} iconVariant={command.iconVariant} isHighlighted={command.isHighlighted} size={16} />,
               disabled: command.state === "disabled",
               onSelect: () => requestCommand(selectedResource, command),
             }))}
@@ -457,34 +499,17 @@ export function ConsolePage({
         ) : (
           <div className={`console ${wrapLines ? "console--wrap" : ""}`}>
             <div className="console__scroll" ref={scrollRef} onScroll={onScroll}>
-              {wrapLines ? (
-                <div className="console__wrapped-lines">
-                  {lines.map((line, index) => (
-                    <div
-                      key={`${line.resourceName}-${line.lineNumber}-${index}`}
-                      data-resource-name={line.resourceName}
-                      className={`log-line ${line.isStdErr ? "stderr" : ""}`}
-                    >
-                      <span className="log-line__num">{line.lineNumber}</span>
-                      {selected === ALL_RESOURCES ? <span className="log-line__resource">{line.resourceName}</span> : null}
-                      {showTimestamps && line.timestamp ? (
-                        <time className="log-line__timestamp" dateTime={line.timestamp.toISOString()}>
-                          {formatConsoleTimestamp(line.timestamp, timestampsUtc)}
-                        </time>
-                      ) : null}
-                      <span className="log-line__text">{line.text}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={{ height: lines.length * LINE_HEIGHT, position: "relative" }}>
-                  <div style={{ position: "absolute", top: startIndex * LINE_HEIGHT, left: 0, right: 0 }}>
-                    {visibleLines.map((line, index) => (
+              <div style={{ height: totalHeight, position: "relative" }}>
+                <div style={{ position: "absolute", top: offsetTop, left: 0, right: 0 }}>
+                  {visibleLines.map((line, index) => {
+                    const key = lineKeys[startIndex + index] ?? `${line.resourceName}-${line.lineNumber}`;
+                    return (
                       <div
-                        key={`${line.resourceName}-${line.lineNumber}-${startIndex + index}`}
+                        key={key}
+                        ref={wrapLines ? measureRef(key) : undefined}
                         data-resource-name={line.resourceName}
                         className={`log-line ${line.isStdErr ? "stderr" : ""}`}
-                        style={{ height: LINE_HEIGHT }}
+                        style={wrapLines ? undefined : { height: LINE_HEIGHT }}
                       >
                         <span className="log-line__num">{line.lineNumber}</span>
                         {selected === ALL_RESOURCES ? <span className="log-line__resource">{line.resourceName}</span> : null}
@@ -493,12 +518,12 @@ export function ConsolePage({
                             {formatConsoleTimestamp(line.timestamp, timestampsUtc)}
                           </time>
                         ) : null}
-                        <span className="log-line__text">{line.text}</span>
+                        <LogLineText line={line} />
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
-              )}
+              </div>
             </div>
             <div className="console__footer">
               <span>{lines.length.toLocaleString()} lines</span>

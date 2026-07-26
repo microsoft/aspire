@@ -6,6 +6,7 @@ import {
   type DashboardArea,
   type ReactParityStatus,
 } from "./dashboard-parity-features";
+import { parseCitations, resolveCitation } from "./citation-resolver";
 
 const areas: readonly DashboardArea[] = [
   "shell",
@@ -18,7 +19,7 @@ const areas: readonly DashboardArea[] = [
   "metrics",
 ];
 
-test("dashboard migration parity ledger is complete and reviewable", async ({}, testInfo) => {
+test("dashboard migration parity ledger is internally consistent", async ({}) => {
   const ids = dashboardParityFeatures.map((feature) => feature.id);
   expect(new Set(ids).size, "Feature IDs must be unique.").toBe(ids.length);
   expect(ids, "The ledger must remain extensive enough to represent the legacy dashboard.").toHaveLength(157);
@@ -37,6 +38,55 @@ test("dashboard migration parity ledger is complete and reviewable", async ({}, 
       expect(feature.currentCoverage, `${feature.id} must cite its current React coverage.`).not.toBeNull();
     }
   }
+});
+
+test("every parity ledger coverage citation resolves to a real test", async ({}, testInfo) => {
+  const failures: string[] = [];
+  const kinds = new Map<string, number>();
+
+  for (const feature of dashboardParityFeatures) {
+    const citations = parseCitations(feature.currentCoverage);
+
+    if (feature.reactStatus === "covered" || feature.reactStatus === "partial") {
+      // A claim of coverage with nothing behind it is exactly the failure mode this test exists for.
+      if (citations.length === 0) {
+        failures.push(`${feature.id}: marked '${feature.reactStatus}' but cites no coverage.`);
+        continue;
+      }
+    }
+
+    let hasTestCitation = false;
+    for (const citation of citations) {
+      const resolution = resolveCitation(citation);
+      kinds.set(resolution.kind ?? "unknown", (kinds.get(resolution.kind ?? "unknown") ?? 0) + 1);
+
+      if (!resolution.resolved) {
+        failures.push(`${feature.id}: citation '${citation}' ${resolution.detail}.`);
+        continue;
+      }
+
+      // A commit SHA records a deliberate upstream removal; it is provenance, not coverage.
+      if (resolution.kind !== "commit") {
+        hasTestCitation = true;
+      }
+    }
+
+    if ((feature.reactStatus === "covered" || feature.reactStatus === "partial") && !hasTestCitation) {
+      failures.push(
+        `${feature.id}: marked '${feature.reactStatus}' but every citation is a commit reference rather than a test.`,
+      );
+    }
+  }
+
+  await testInfo.attach("citation-kinds.txt", {
+    body: Buffer.from([...kinds].map(([kind, count]) => `${kind}: ${count}`).join("\n")),
+    contentType: "text/plain",
+  });
+
+  expect(failures, `Unresolvable parity ledger citations:\n${failures.join("\n")}`).toEqual([]);
+});
+
+test("dashboard migration parity ledger is complete and reviewable", async ({}, testInfo) => {
 
   const report = buildReport();
   await testInfo.attach("dashboard-parity-ledger.md", {

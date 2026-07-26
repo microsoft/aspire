@@ -18,7 +18,31 @@ export interface DeckConfig {
   cultures?: DeckCulture[];
   isAgentHelpEnabled?: boolean;
   agentHelpMarkdown?: string | null;
+  /**
+   * Retention ceilings the dashboard is actually configured with (Dashboard:TelemetryLimits:*).
+   * Optional because older backends do not send it; callers must fall back to
+   * `DEFAULT_TELEMETRY_LIMITS` rather than inventing their own numbers.
+   */
+  telemetryLimits?: DeckTelemetryLimits;
 }
+
+export interface DeckTelemetryLimits {
+  maxLogCount: number;
+  maxTraceCount: number;
+  maxMetricsCount: number;
+  maxConsoleLogCount: number;
+}
+
+/**
+ * Mirrors the defaults in TelemetryLimitOptions (src/Aspire.Dashboard/Configuration/DashboardOptions.cs).
+ * Used only when the backend predates the `telemetryLimits` field.
+ */
+export const DEFAULT_TELEMETRY_LIMITS: DeckTelemetryLimits = {
+  maxLogCount: 10_000,
+  maxTraceCount: 10_000,
+  maxMetricsCount: 50_000,
+  maxConsoleLogCount: 10_000,
+};
 
 // Versioned ASP.NET backend discovery types. Keep these aligned with the
 // versioned contract in ../../CONTRACT.md rather than the legacy /api/deck shapes.
@@ -132,6 +156,10 @@ export interface HealthReport {
   status: string | null;
   key: string;
   description: string;
+  /** Stack trace from the failing health check, or null when the check did not throw. */
+  exceptionText: string | null;
+  /** ISO-8601 timestamp of the last execution, or null if the check has not run yet. */
+  lastRunAt: string | null;
 }
 
 export type ResourceCommandState = "enabled" | "disabled" | "hidden";
@@ -197,6 +225,12 @@ export interface ConsoleLogLine {
   lineNumber: number;
   text: string;
   isStdErr: boolean;
+  /**
+   * Pre-rendered markup with ANSI colours applied, produced server-side by the shared LogParser
+   * (HTML-encoded and URL-linkified before colouring). Null when the backend does not supply it,
+   * in which case `text` is rendered as plain text.
+   */
+  html: string | null;
 }
 
 export interface ConsoleLogEvent {

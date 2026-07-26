@@ -17,8 +17,12 @@ internal static class DashboardBackendApplication
         // standalone dashboard still needs HTTPS when it participates in browser-token or OIDC
         // authentication, so opt into Kestrel's configuration-backed certificate support.
         builder.WebHost.UseKestrelHttpsConfiguration();
-        builder.Services.TryAddSingleton<IDashboardResourceServiceConnection, DashboardResourceServiceConnection>();
-        builder.Services.TryAddSingleton<DashboardResourceSnapshotService>();
+        // Resolved lazily from the built container so configuration contributed by configureBuilder
+        // (used by tests and by hosts that layer their own sources) is taken into account.
+        builder.Services.TryAddSingleton(services => new DashboardBackendSecurityOptions(services.GetRequiredService<IConfiguration>()));
+        builder.Services.TryAddSingleton(services => new DashboardBackendOriginPolicy(services.GetRequiredService<IConfiguration>()));
+        builder.Services.TryAddSingleton<DashboardStreamRevocation>();
+        builder.Services.TryAddSingleton<IDashboardResourceServiceConnection, DashboardResourceServiceConnection>();        builder.Services.TryAddSingleton<DashboardResourceSnapshotService>();
         builder.Services.TryAddSingleton<IDashboardResourceSnapshotProvider>(services => services.GetRequiredService<DashboardResourceSnapshotService>());
         builder.Services.TryAddSingleton<IDashboardResourceEventSource>(services => services.GetRequiredService<DashboardResourceSnapshotService>());
         builder.Services.TryAddSingleton<ITerminalConnectionResolver>(services => services.GetRequiredService<DashboardResourceSnapshotService>());
@@ -41,9 +45,12 @@ internal static class DashboardBackendApplication
         configureBuilder?.Invoke(builder);
 
         var app = builder.Build();
+        // UseWebSockets first so the access policy below can reliably identify upgrade requests
+        // through HttpContext.WebSockets; the feature it installs is what makes IsWebSocketRequest
+        // meaningful, and WebSocket origin checks are the reason the policy exists.
+        app.UseWebSockets();
         app.UseDashboardDevelopmentAccessPolicy();
         app.UseDashboardLegacyAuthentication();
-        app.UseWebSockets();
 
         app.MapGet(DashboardApiContract.DiscoveryPath, (IDashboardLegacyApiProxy legacyApiProxy) =>
         {
@@ -63,20 +70,32 @@ internal static class DashboardBackendApplication
                 DashboardApiContract.ResourcesCapability,
                 DashboardApiContract.ResourceStreamCapability,
                 DashboardApiContract.CommandsCapability,
-                DashboardApiContract.StructuredLogsCapability,
-                DashboardApiContract.StructuredLogStreamCapability,
-                DashboardApiContract.StructuredLogClearCapability,
-                DashboardApiContract.TracesCapability,
-                DashboardApiContract.TraceStreamCapability,
-                DashboardApiContract.TraceClearCapability,
-                DashboardApiContract.MetricsCapability,
-                DashboardApiContract.MetricSeriesCapability,
-                DashboardApiContract.MetricClearCapability,
-                DashboardApiContract.ConsoleLogsCapability,
-                DashboardApiContract.ConsoleLogStreamCapability,
                 DashboardApiContract.TerminalCapability,
                 DashboardApiContract.InteractionsCapability
             ]);
+
+            // Telemetry is not ingested by this host - every structured log, trace, metric and
+            // console log route forwards to the legacy dashboard and returns 503 when no legacy URL
+            // is configured. Advertising these capabilities unconditionally makes the client render
+            // permanently empty telemetry pages instead of degrading to the surfaces that work, so
+            // they are only claimed when the backing proxy actually exists.
+            if (legacyApiProxy.IsConfigured)
+            {
+                capabilities.AddRange(
+                [
+                    DashboardApiContract.StructuredLogsCapability,
+                    DashboardApiContract.StructuredLogStreamCapability,
+                    DashboardApiContract.StructuredLogClearCapability,
+                    DashboardApiContract.TracesCapability,
+                    DashboardApiContract.TraceStreamCapability,
+                    DashboardApiContract.TraceClearCapability,
+                    DashboardApiContract.MetricsCapability,
+                    DashboardApiContract.MetricSeriesCapability,
+                    DashboardApiContract.MetricClearCapability,
+                    DashboardApiContract.ConsoleLogsCapability,
+                    DashboardApiContract.ConsoleLogStreamCapability
+                ]);
+            }
 
             var discovery = new DashboardApiDiscovery(
                 DashboardApiContract.Product,
@@ -124,8 +143,14 @@ internal static class DashboardBackendApplication
 
         app.MapPost(DashboardApiContract.AuthenticationLogoutPath, async (
             HttpContext context,
-            IDashboardLegacyApiProxy legacyApiProxy) =>
+            IDashboardLegacyApiProxy legacyApiProxy,
+            DashboardStreamRevocation revocation) =>
         {
+            // Tear down live streams before proxying. Ordering matters: the proxy call is what
+            // clears the cookie, and a stream cancelled after that point could still be re-created
+            // by a client that reconnects while the old cookie is momentarily valid.
+            revocation.RevokeAll();
+
             await legacyApiProxy.ProxyAsync(context, "authentication/logout").ConfigureAwait(false);
         });
 

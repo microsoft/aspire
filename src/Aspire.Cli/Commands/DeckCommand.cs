@@ -34,6 +34,7 @@ internal sealed class DeckCommand : BaseCommand
     private readonly DeckLauncher _deckLauncher;
     private readonly DeckBroker _deckBroker;
     private readonly FileLoggerProvider _fileLoggerProvider;
+    private readonly IEnvironment _environment;
     private readonly ILogger<DeckCommand> _logger;
 
     private static readonly Option<string?> s_otlpGrpcUrlOption = new("--otlp-grpc-url")
@@ -60,6 +61,7 @@ internal sealed class DeckCommand : BaseCommand
         DeckLauncher deckLauncher,
         DeckBroker deckBroker,
         FileLoggerProvider fileLoggerProvider,
+        IEnvironment environment,
         ILogger<DeckCommand> logger,
         CommonCommandServices services)
         : base("deck", DeckCommandStrings.Description, services)
@@ -67,6 +69,7 @@ internal sealed class DeckCommand : BaseCommand
         _deckLauncher = deckLauncher;
         _deckBroker = deckBroker;
         _fileLoggerProvider = fileLoggerProvider;
+        _environment = environment;
         _logger = logger;
 
         Options.Add(s_otlpGrpcUrlOption);
@@ -95,13 +98,13 @@ internal sealed class DeckCommand : BaseCommand
         }
 
         var otlpGrpcUrl = parseResult.GetValue(s_otlpGrpcUrlOption)
-            ?? ExecutionContext.GetEnvironmentVariable(KnownConfigNames.DashboardOtlpGrpcEndpointUrl)
+            ?? _environment.GetEnvironmentVariable(KnownConfigNames.DashboardOtlpGrpcEndpointUrl)
             ?? "http://localhost:4317";
         var otlpHttpUrl = parseResult.GetValue(s_otlpHttpUrlOption)
-            ?? ExecutionContext.GetEnvironmentVariable(KnownConfigNames.DashboardOtlpHttpEndpointUrl)
+            ?? _environment.GetEnvironmentVariable(KnownConfigNames.DashboardOtlpHttpEndpointUrl)
             ?? "http://localhost:4318";
         var resourceServiceUrl = parseResult.GetValue(s_resourceServiceUrlOption)
-            ?? ExecutionContext.GetEnvironmentVariable(KnownConfigNames.ResourceServiceEndpointUrl);
+            ?? _environment.GetEnvironmentVariable(KnownConfigNames.ResourceServiceEndpointUrl);
 
         var info = new DeckLaunchInfo(otlpGrpcUrl, otlpHttpUrl, resourceServiceUrl);
         return await ExecuteForegroundAsync(deckPath, info, cancellationToken).ConfigureAwait(false);
@@ -121,7 +124,7 @@ internal sealed class DeckCommand : BaseCommand
         IProcessExecution process;
         try
         {
-            process = _deckLauncher.Start(deckPath, info, options: options);
+            process = await _deckLauncher.StartAsync(deckPath, info, options: options).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -130,7 +133,7 @@ internal sealed class DeckCommand : BaseCommand
             return CommandResult.Failure(CliExitCodes.DashboardFailure);
         }
 
-        using var _ = process;
+        await using var _ = process;
 
         RenderDeckSummary(InteractionService, info, ExecutionContext.LogFilePath);
         InteractionService.DisplayEmptyLine();

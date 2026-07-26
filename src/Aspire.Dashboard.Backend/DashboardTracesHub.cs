@@ -6,7 +6,9 @@ using Microsoft.AspNetCore.SignalR;
 
 namespace Aspire.Dashboard.Backend;
 
-internal sealed class DashboardTracesHub(IDashboardTraceSource traceSource) : Hub
+internal sealed class DashboardTracesHub(
+    IDashboardTraceSource traceSource,
+    DashboardStreamRevocation revocation) : Hub
 {
     public async IAsyncEnumerable<DashboardTraceEvent> WatchTraces(
         DashboardTraceStreamRequest streamRequest,
@@ -21,10 +23,12 @@ internal sealed class DashboardTracesHub(IDashboardTraceSource traceSource) : Hu
             Limit: null,
             Search: streamRequest.Search);
 
+        using var linked = revocation.CreateLinkedTokenSource(cancellationToken);
+
         await foreach (var traceEvent in traceSource.WatchAsync(
             query,
             DashboardRequestCredentials.From(request),
-            cancellationToken).ConfigureAwait(false))
+            linked.Token).ConfigureAwait(false))
         {
             yield return traceEvent;
         }

@@ -169,7 +169,7 @@ internal sealed class DashboardMetricProxy(IConfiguration configuration) : IDash
     {
         var configuredUrl = configuration[LegacyDashboardUrlKey];
         if (!Uri.TryCreate(configuredUrl, UriKind.Absolute, out var legacyDashboardUrl)
-            || !DashboardDevelopmentAccessPolicy.IsAllowedOrigin(legacyDashboardUrl.GetLeftPart(UriPartial.Authority)))
+            || !DashboardDevelopmentAccessPolicy.IsLoopbackTarget(legacyDashboardUrl.GetLeftPart(UriPartial.Authority)))
         {
             throw new DashboardMetricServiceUnavailableException(
                 $"Configure {LegacyDashboardUrlKey} with the loopback URL of the existing dashboard.");

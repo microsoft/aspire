@@ -59,6 +59,11 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Aspire.Dashboard.Backend.Tests" />
     <Compile Include="$(SharedDir)AssemblyVersionHelper.cs" Link="AssemblyVersionHelper.cs" />
+    <!-- Share the dashboard's configuration key names so the standalone host honours the exact
+         same authentication switches (ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS,
+         Dashboard:Frontend:AuthMode) that the legacy dashboard documents. -->
+    <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="KnownConfigNames.cs" />
+    <Compile Include="$(SharedDir)DashboardConfigNames.cs" Link="DashboardConfigNames.cs" />
     <!-- The byte-level HMP1 bridge is transport code shared with the legacy dashboard.
          Compile the same implementation into the standalone host so fixes cannot drift. -->
     <Compile Include="..\Aspire.Dashboard\Terminal\TerminalWebSocketProxy.cs"

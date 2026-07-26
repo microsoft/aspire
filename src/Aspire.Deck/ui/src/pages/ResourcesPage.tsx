@@ -5,6 +5,7 @@ import { openExternal } from "../api/deck";
 import { useResources } from "../lib/useDeckEvent";
 import { useCommandExecution } from "../components/useCommandExecution";
 import { formatRelativeTime } from "../lib/format";
+import { maskQueryStringValues } from "../lib/maskUrl";
 import { DetailsDrawer } from "../components/DetailsDrawer";
 import {
   ChevronIcon,
@@ -270,10 +271,10 @@ export function ResourcesPage({
         return urls.length === 0 ? <span className="cell-muted">—</span> : (
           <span className="url-list">
             {urls.map((url) => (
-              <a key={`${url.name}-${url.url}`} className="url-chip" href={url.url} title={url.url} onClick={(event) => {
+              <a key={`${url.name}-${url.url}`} className="url-chip" href={url.url} title={maskQueryStringValues(url.url)} onClick={(event) => {
                 event.preventDefault(); event.stopPropagation(); void openExternal(url.url);
               }}>
-                <ExternalIcon size={11} />{url.displayName || url.name || url.url}
+                <ExternalIcon size={11} />{url.displayName || url.name || maskQueryStringValues(url.url)}
               </a>
             ))}
           </span>

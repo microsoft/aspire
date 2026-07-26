@@ -110,7 +110,7 @@ internal sealed class DashboardConsoleLogProxy(IConfiguration configuration) : I
     {
         var configuredUrl = configuration[LegacyDashboardUrlKey];
         if (!Uri.TryCreate(configuredUrl, UriKind.Absolute, out var legacyDashboardUrl)
-            || !DashboardDevelopmentAccessPolicy.IsAllowedOrigin(legacyDashboardUrl.GetLeftPart(UriPartial.Authority)))
+            || !DashboardDevelopmentAccessPolicy.IsLoopbackTarget(legacyDashboardUrl.GetLeftPart(UriPartial.Authority)))
         {
             throw new InvalidOperationException(
                 $"Configure {LegacyDashboardUrlKey} with the loopback URL of the existing dashboard.");

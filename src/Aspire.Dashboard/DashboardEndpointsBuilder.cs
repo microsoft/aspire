@@ -210,7 +210,14 @@ public static class DashboardEndpointsBuilder
                 Culture: currentCulture.Name,
                 Cultures: [.. GlobalizationHelpers.OrderedLocalizedCultures.Select(culture => new DeckCulture(culture.Name, culture.NativeName.Humanize()))],
                 IsAgentHelpEnabled: isAgentHelpEnabled,
-                AgentHelpMarkdown: agentHelpMarkdown);
+                AgentHelpMarkdown: agentHelpMarkdown,
+                TelemetryLimits: new DeckTelemetryLimits(
+                    MaxLogCount: dashboardOptions.TelemetryLimits.MaxLogCount,
+                    MaxTraceCount: dashboardOptions.TelemetryLimits.MaxTraceCount,
+                    MaxMetricsCount: dashboardOptions.TelemetryLimits.MaxMetricsCount,
+                    // Console retention lives under Frontend rather than TelemetryLimits, but it is
+                    // the same class of client-visible ceiling so it travels with the others.
+                    MaxConsoleLogCount: dashboardOptions.Frontend.MaxConsoleLogCount));
 
             return Results.Json(config, DeckApiJsonSerializerContext.Default.DeckConfig);
         });
@@ -961,6 +968,12 @@ public static class DashboardEndpointsBuilder
 
         try
         {
+            // ANSI colouring is stateful: an SGR sequence stays in effect until it is reset, which can
+            // be several lines later. A single parser instance per stream carries that residual state
+            // across batches, exactly as the Blazor LogViewer does. encodeForHtml also HTML-encodes the
+            // text and linkifies URLs, so the Html payload is safe to render as markup on the client.
+            var logParser = new LogParser(ConsoleColor.Black, encodeForHtml: true);
+
             await foreach (var batch in dashboardClient.SubscribeConsoleLogs(resourceName, cancellationToken).ConfigureAwait(false))
             {
                 var response = new DeckConsoleLogEvent(
@@ -968,7 +981,8 @@ public static class DashboardEndpointsBuilder
                     batch.Select(line => new DeckConsoleLogLine(
                         line.LineNumber,
                         AnsiParser.StripControlSequences(line.Content),
-                        line.IsErrorMessage)).ToArray());
+                        line.IsErrorMessage,
+                        logParser.CreateLogEntry(line.Content, line.IsErrorMessage, resourcePrefix: null).Content)).ToArray());
                 await JsonSerializer.SerializeAsync(
                     httpContext.Response.Body,
                     response,
