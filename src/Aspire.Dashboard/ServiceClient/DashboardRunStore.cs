@@ -113,7 +113,6 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
                         "Existing dashboard database at '{DatabasePath}' is incompatible with schema version {SchemaVersion} and will be replaced.",
                         DatabasePath,
                         SchemaVersion);
-                    ClearDatabasePool();
                     DeleteDatabaseFiles(DatabasePath);
                 }
                 else
@@ -246,8 +245,6 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     {
         try
         {
-            ClearDatabasePool();
-
             if (_metadataPath is not null)
             {
                 WriteMetadata(_metadata with { EndedAtUtc = _timeProvider.GetUtcNow(), CleanShutdown = true });
@@ -261,13 +258,6 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         {
             _runLock?.Dispose();
         }
-    }
-
-    private void ClearDatabasePool()
-    {
-        // Clearing every pool can invalidate connections used by unrelated dashboard instances in the same process.
-        using var database = new DashboardSqliteDatabase(DatabasePath);
-        database.ClearPool();
     }
 
     private void WriteMetadata(DashboardRunMetadata metadata)

@@ -132,7 +132,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         {
             runDirectory = runStore.RunDirectory;
             databasePath = runStore.DatabasePath;
-            new DashboardSqliteDatabase(databasePath).InitializeSchema();
+            using var database = new DashboardSqliteDatabase(databasePath, pooling: false);
+            database.InitializeSchema();
 
             Assert.False(runStore.SupportsRunSelection);
             Assert.False(runDirectory.StartsWith(_workspace.Path, StringComparison.OrdinalIgnoreCase));
@@ -142,6 +143,57 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
 
         Assert.False(Directory.Exists(runDirectory));
         Assert.False(File.Exists(databasePath));
+    }
+
+    [Theory]
+    [InlineData(DashboardPersistenceMode.None)]
+    [InlineData(DashboardPersistenceMode.Run)]
+    [InlineData(DashboardPersistenceMode.Resume)]
+    public void ServiceProviderDisposal_ReleasesDatabaseAndDeletesTemporaryRunDirectory(DashboardPersistenceMode persistenceMode)
+    {
+        var options = CreateOptions($"Dispose-{Guid.NewGuid():N}", persistenceMode);
+        var services = new ServiceCollection()
+            .AddSingleton(options)
+            .AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance)
+            .AddSingleton<ILogger<DashboardRunStore>>(NullLogger<DashboardRunStore>.Instance)
+            .AddSingleton(TimeProvider.System)
+            .AddSingleton<PauseManager>()
+            .AddSingleton<IKnownPropertyLookup, MockKnownPropertyLookup>()
+            .AddSingleton<DashboardRunStore>()
+            .AddSingleton<IDashboardRunStore>(serviceProvider => serviceProvider.GetRequiredService<DashboardRunStore>())
+            .AddSingleton<IRepositoryFactory, RepositoryFactory>()
+            .AddSingleton<DashboardDataSourcePool>();
+
+        string? runDirectory = null;
+        try
+        {
+            using (var serviceProvider = services.BuildServiceProvider())
+            {
+                var runStore = serviceProvider.GetRequiredService<DashboardRunStore>();
+                // Creating the current lease after the run store makes DI dispose the data source pool first.
+                // Initializing the schema leaves a physical connection in the SQLite provider pool to be cleared.
+                var database = serviceProvider.GetRequiredService<DashboardDataSourcePool>().Current.Database;
+                database.InitializeSchema();
+                runDirectory = runStore.RunDirectory;
+            }
+
+            // None mode owns and deletes its temporary directory. Persistent modes retain theirs, so delete
+            // them here; on Windows this also verifies that the SQLite pool no longer holds the database open.
+            Assert.Equal(persistenceMode != DashboardPersistenceMode.None, Directory.Exists(runDirectory));
+
+            if (Directory.Exists(runDirectory))
+            {
+                Directory.Delete(runDirectory, recursive: true);
+            }
+            Assert.False(Directory.Exists(runDirectory));
+        }
+        finally
+        {
+            if (runDirectory is not null && Directory.Exists(runDirectory))
+            {
+                Directory.Delete(runDirectory, recursive: true);
+            }
+        }
     }
 
     [Fact]
@@ -170,7 +222,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     {
         var options = CreateOptions(persistenceMode: DashboardPersistenceMode.None);
         using var activeRunStore = CreateRunStore(options);
-        new DashboardSqliteDatabase(activeRunStore.DatabasePath).InitializeSchema();
+        using var database = new DashboardSqliteDatabase(activeRunStore.DatabasePath, pooling: false);
+        database.InitializeSchema();
 
         using var secondRunStore = CreateRunStore(options);
 
