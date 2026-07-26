@@ -3,6 +3,77 @@ import { timeFormatOptions } from "./timeFormat";
 
 const NANOS_PER_MS = 1_000_000;
 
+// A .NET tick is 100ns. Durations arrive from OTLP in nanoseconds, but the dashboard's formatting
+// rules are expressed in ticks, so the port below converts once and then works in ticks.
+const NANOS_PER_TICK = 100;
+const TICKS_PER_MICROSECOND = 10;
+const TICKS_PER_MILLISECOND = 10_000;
+const TICKS_PER_SECOND = 10_000_000;
+const TICKS_PER_MINUTE = 600_000_000;
+const TICKS_PER_HOUR = 36_000_000_000;
+const TICKS_PER_DAY = 864_000_000_000;
+
+interface UnitStep {
+  readonly unit: string;
+  readonly ticks: number;
+  readonly threshold: number;
+  readonly isDecimal: boolean;
+}
+
+/**
+ * Ported from `DurationFormatter` in src/Shared/DurationFormatter.cs so spans, traces and metrics
+ * read identically to the dashboard. The thresholds are deliberately not "1 of the next unit":
+ * milliseconds take over at 0.01ms and seconds at 0.1s, so a 812µs span reads "0.81ms" rather than
+ * "812µs". Note the microsecond unit uses U+03BC GREEK SMALL LETTER MU, matching the dashboard.
+ */
+const UNIT_STEPS: readonly UnitStep[] = [
+  { unit: "d", ticks: TICKS_PER_DAY, threshold: TICKS_PER_DAY, isDecimal: false },
+  { unit: "h", ticks: TICKS_PER_HOUR, threshold: TICKS_PER_HOUR, isDecimal: false },
+  { unit: "m", ticks: TICKS_PER_MINUTE, threshold: TICKS_PER_MINUTE, isDecimal: false },
+  { unit: "s", ticks: TICKS_PER_SECOND, threshold: TICKS_PER_SECOND / 10, isDecimal: true },
+  { unit: "ms", ticks: TICKS_PER_MILLISECOND, threshold: TICKS_PER_MILLISECOND / 100, isDecimal: true },
+  { unit: "\u03bcs", ticks: TICKS_PER_MICROSECOND, threshold: TICKS_PER_MICROSECOND, isDecimal: true },
+];
+
+function resolveUnits(ticks: number): [UnitStep, UnitStep] {
+  for (let i = 0; i < UNIT_STEPS.length; i++) {
+    const step = UNIT_STEPS[i]!;
+    const keepSearching = i < UNIT_STEPS.length - 1 && step.threshold > ticks;
+    if (!keepSearching) {
+      return [step, i < UNIT_STEPS.length - 1 ? UNIT_STEPS[i + 1]! : step];
+    }
+  }
+
+  const last = UNIT_STEPS[UNIT_STEPS.length - 1]!;
+  return [last, last];
+}
+
+// .NET's "0.##" rounds half away from zero. Durations are non-negative by the time they get here
+// (the sign is handled by the caller), so Math.round -- which rounds half toward +infinity -- is
+// equivalent.
+function formatOptionalDecimals(value: number): string {
+  const rounded = Math.round(value * 100) / 100;
+  return rounded.toFixed(2).replace(/\.?0+$/, "");
+}
+
+function formatTicks(ticks: number): string {
+  const [primary, secondary] = resolveUnits(ticks);
+
+  if (primary.isDecimal) {
+    return `${formatOptionalDecimals(ticks / primary.ticks)}${primary.unit}`;
+  }
+
+  // Whole units are shown as at most two components ("1h 2m"), with the smaller one rounded and
+  // omitted entirely when it rounds to zero.
+  const ofPrevious = primary.ticks / secondary.ticks;
+  const primaryValue = Math.floor(ticks / primary.ticks);
+  const secondaryValue = Math.round((ticks / secondary.ticks) % ofPrevious);
+
+  return secondaryValue === 0
+    ? `${primaryValue}${primary.unit}`
+    : `${primaryValue}${primary.unit} ${secondaryValue}${secondary.unit}`;
+}
+
 export function formatDurationNanos(durationNanos: string): string {
   let nanos: number;
   try {
@@ -13,24 +84,47 @@ export function formatDurationNanos(durationNanos: string): string {
   if (!Number.isFinite(nanos)) {
     return "—";
   }
-  const ms = nanos / NANOS_PER_MS;
-  return formatMilliseconds(ms);
+
+  // Span offsets can be negative (a child that started before its parent's recorded start), so
+  // format the magnitude and re-apply the sign rather than feeding a negative into the unit ladder.
+  const negative = nanos < 0;
+  // TimeSpan.FromTicks takes a whole number of ticks, so sub-tick precision is truncated, not
+  // rounded -- matching that here keeps values on the exact same side of a unit threshold.
+  const ticks = Math.trunc(Math.abs(nanos) / NANOS_PER_TICK);
+  const formatted = formatTicks(ticks);
+
+  return negative ? `-${formatted}` : formatted;
 }
 
 export function formatMilliseconds(ms: number): string {
-  if (ms < 1) {
-    return `${(ms * 1000).toFixed(0)}µs`;
+  if (!Number.isFinite(ms)) {
+    return "—";
   }
-  if (ms < 1000) {
-    return `${ms.toFixed(ms < 10 ? 1 : 0)}ms`;
+
+  // Deliberately NOT the DurationFormatter ladder used by formatDurationNanos. That ladder is tuned
+  // for trace waterfalls, where switching to seconds at 0.1s keeps sibling spans on a common unit.
+  // Metric values are read on their own, so a p99 latency reads better as "320ms" than "0.32s".
+  // The dashboard sidesteps this by formatting every metric as a bare F3 number (MetricTable.razor.cs),
+  // which loses the unit entirely; keeping a unit here is a deliberate Deck improvement.
+  const negative = ms < 0;
+  const magnitude = Math.abs(ms);
+  let formatted: string;
+  if (magnitude < 1) {
+    formatted = `${(magnitude * 1000).toFixed(0)}\u03bcs`;
+  } else if (magnitude < 1000) {
+    formatted = `${magnitude.toFixed(magnitude < 10 ? 1 : 0)}ms`;
+  } else {
+    const seconds = magnitude / 1000;
+    if (seconds < 60) {
+      formatted = `${seconds.toFixed(2)}s`;
+    } else {
+      const minutes = Math.floor(seconds / 60);
+      const remSeconds = Math.round(seconds % 60);
+      formatted = `${minutes}m ${remSeconds}s`;
+    }
   }
-  const seconds = ms / 1000;
-  if (seconds < 60) {
-    return `${seconds.toFixed(2)}s`;
-  }
-  const minutes = Math.floor(seconds / 60);
-  const remSeconds = Math.round(seconds % 60);
-  return `${minutes}m ${remSeconds}s`;
+
+  return negative ? `-${formatted}` : formatted;
 }
 
 // Converts a unix nanosecond string (e.g. OTLP timeUnixNano) to a Date.
@@ -43,6 +137,30 @@ export function dateFromUnixNano(unixNano: string): Date {
   }
 }
 
+/**
+ * Chooses the hour representation the dashboard would use. .NET formats times with the culture's
+ * LongTimePattern, which is "h:mm:ss tt" for 12-hour cultures (no leading zero) but "HH:mm:ss" for
+ * 24-hour ones (zero padded). Intl does not mirror that automatically -- "2-digit" pads 12-hour
+ * clocks and "numeric" leaves 24-hour clocks unpadded -- so resolve the hour cycle first and pick
+ * the option that reproduces the .NET pattern.
+ */
+function hourOption(options: Pick<Intl.DateTimeFormatOptions, "hour12">): "numeric" | "2-digit" {
+  return new Intl.DateTimeFormat(undefined, { ...options, hour: "numeric" }).resolvedOptions().hour12
+    ? "numeric"
+    : "2-digit";
+}
+
+function timeOptions(fractionalSecondDigits?: 3): Intl.DateTimeFormatOptions {
+  const options = timeFormatOptions();
+  return {
+    ...options,
+    hour: hourOption(options),
+    minute: "2-digit",
+    second: "2-digit",
+    ...(fractionalSecondDigits === undefined ? {} : { fractionalSecondDigits }),
+  };
+}
+
 export function formatTime(value: Date | string | null): string {
   if (value === null) {
     return "—";
@@ -51,12 +169,7 @@ export function formatTime(value: Date | string | null): string {
   if (Number.isNaN(date.getTime())) {
     return "—";
   }
-  return date.toLocaleTimeString(undefined, {
-    ...timeFormatOptions(),
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
+  return date.toLocaleTimeString(undefined, timeOptions());
 }
 
 export function formatTimeWithMillis(value: Date | string | null): string {
@@ -67,17 +180,17 @@ export function formatTimeWithMillis(value: Date | string | null): string {
   if (Number.isNaN(date.getTime())) {
     return "—";
   }
-  return date.toLocaleTimeString(undefined, {
-    ...timeFormatOptions(),
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    fractionalSecondDigits: 3,
-  });
+  return date.toLocaleTimeString(undefined, timeOptions(3));
 }
 
+/**
+ * Mirrors `FormatHelpers.FormatDateTime` in src/Shared/FormatHelpers.cs. The dashboard builds this
+ * pattern as `ShortDatePattern + " " + LongTimePattern` (DateFormatStringsHelpers.cs), joining with
+ * a literal space. `toLocaleString` instead uses the locale's own date/time connector, which adds a
+ * comma in en-US ("7/25/2026, 3:09:04 PM"), so compose the two halves explicitly.
+ */
 export function formatDateTime(value: Date): string {
-  return value.toLocaleString(undefined, timeFormatOptions());
+  return `${value.toLocaleDateString(undefined)} ${value.toLocaleTimeString(undefined, timeOptions())}`;
 }
 
 /**

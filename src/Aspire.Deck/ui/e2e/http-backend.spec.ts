@@ -2656,11 +2656,14 @@ test(`${features("HTTP-TRACE-VIRTUALIZATION-001")} virtualizes 1000 trace waterf
 });
 
 test(`${features("HTTP-TRACES-001")} formats trace durations consistently across scales`, async ({ page }) => {
+  // Expectations follow the dashboard's DurationFormatter (src/Shared/DurationFormatter.cs), which
+  // promotes to the next unit well before a full unit is reached: milliseconds take over at 0.01ms
+  // and seconds at 0.1s. That is why 500,000ns reads "0.5ms" rather than "500μs".
   const durations = [
-    ["micro trace", 500_000n, "500µs"],
-    ["small trace", 5_000_000n, "5.0ms"],
-    ["medium trace", 250_000_000n, "250ms"],
-    ["seconds trace", 2_500_000_000n, "2.50s"],
+    ["fractional trace", 500_000n, "0.5ms"],
+    ["millisecond trace", 5_000_000n, "5ms"],
+    ["hundreds trace", 250_000_000n, "0.25s"],
+    ["seconds trace", 2_500_000_000n, "2.5s"],
     ["minute trace", 65_000_000_000n, "1m 5s"],
   ] as const;
   const start = 1_783_670_400_000_000_000n;
