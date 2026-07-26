@@ -326,10 +326,6 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
                 $principalName = "$env:PRINCIPALNAME"
                 $id = "$env:ID"
 
-                # Install SqlServer module - using specific version to avoid breaking changes in 22.4.5.1 (see https://github.com/microsoft/aspire/issues/9926)
-                Install-Module -Name SqlServer -RequiredVersion 22.3.0 -Force -AllowClobber -Scope CurrentUser
-                Import-Module SqlServer
-
                 $sqlCmd = @"
                 DECLARE @name SYSNAME = '$principalName';
                 DECLARE @id UNIQUEIDENTIFIER = '$id';
@@ -337,11 +333,19 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
                 -- Convert the guid to the right type
                 DECLARE @castId NVARCHAR(MAX) = CONVERT(VARCHAR(MAX), CONVERT (VARBINARY(16), @id), 1);
                 
-                -- Construct command: CREATE USER [@name] WITH SID = @castId, TYPE = E;
-                DECLARE @cmd NVARCHAR(MAX) = N'CREATE USER [' + @name + '] WITH SID = ' + @castId + ', TYPE = E;'
-                EXEC (@cmd);
+                -- Only create the user when it is missing. This script is re-executed on redeploys, and the
+                -- retry loop below can also re-run this batch after a transient failure that occurred *after*
+                -- the user was already created. An unguarded CREATE USER would then fail with
+                -- 'Msg 15023: User already exists in current database', turning a transient error into a
+                -- permanent deployment failure.
+                IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = @name)
+                BEGIN
+                    -- Construct command: CREATE USER [@name] WITH SID = @castId, TYPE = E;
+                    DECLARE @cmd NVARCHAR(MAX) = N'CREATE USER [' + @name + '] WITH SID = ' + @castId + ', TYPE = E;'
+                    EXEC (@cmd);
+                END
                 
-                -- Assign roles to the new user
+                -- Assign roles to the user. ALTER ROLE ... ADD MEMBER is a no-op when the principal is already a member.
                 DECLARE @role1 NVARCHAR(MAX) = N'ALTER ROLE db_owner ADD MEMBER [' + @name + ']';
                 EXEC (@role1);
                 
@@ -350,7 +354,28 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
 
                 Write-Host $sqlCmd
 
-                $connectionString = "Server=tcp:${sqlServerFqdn},1433;Initial Catalog=${sqlDatabaseName};Authentication=Active Directory Default;"
+                # This script deliberately avoids the SqlServer PowerShell module (Invoke-Sqlcmd). The Azure
+                # deployment script host imports the Az modules before running user scripts, and Az.Resources
+                # ships Microsoft.Extensions.Caching.Memory 2.2.0. Importing SqlServer afterwards makes its
+                # Always Encrypted Azure Key Vault provider - which is registered unconditionally on the first
+                # Invoke-Sqlcmd call, even though nothing here uses Always Encrypted - bind against that older
+                # assembly and fail with:
+                #   System.MissingMethodException: Method not found: 'Void Microsoft.Extensions.Caching.Memory.MemoryCache..ctor(
+                #     Microsoft.Extensions.Options.IOptions`1<Microsoft.Extensions.Caching.Memory.MemoryCacheOptions>)'.
+                # Both published SqlServer module versions hit this (22.3.0 here, 22.4.5.1 in
+                # https://github.com/microsoft/aspire/issues/9926), so instead we use System.Data.SqlClient, which
+                # ships in-box with PowerShell 7 in the azuredeploymentscripts-powershell images, together with a
+                # managed identity access token. See https://github.com/microsoft/aspire/issues/18892.
+                $tokenResponse = Get-AzAccessToken -ResourceUrl "https://database.windows.net/"
+
+                # Az.Accounts 5.x returns the token as a SecureString, earlier majors return a plain string.
+                $accessToken = if ($tokenResponse.Token -is [System.Security.SecureString]) {
+                    [System.Net.NetworkCredential]::new("", $tokenResponse.Token).Password
+                } else {
+                    $tokenResponse.Token
+                }
+
+                $connectionString = "Server=tcp:${sqlServerFqdn},1433;Initial Catalog=${sqlDatabaseName};Encrypt=True;TrustServerCertificate=False;"
 
                 $maxRetries = 5
                 $retryDelay = 60
@@ -360,8 +385,17 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
                 while (-not $success -and $attempt -lt $maxRetries) {
                     $attempt++
                     Write-Host "Attempt $attempt of $maxRetries..."
+                    $connection = $null
                     try {
-                        Invoke-Sqlcmd -ConnectionString $connectionString -Query $sqlCmd
+                        $connection = New-Object System.Data.SqlClient.SqlConnection
+                        $connection.ConnectionString = $connectionString
+                        $connection.AccessToken = $accessToken
+                        $connection.Open()
+
+                        $command = $connection.CreateCommand()
+                        $command.CommandText = $sqlCmd
+                        [void]$command.ExecuteNonQuery()
+
                         $success = $true
                         Write-Host "SQL command succeeded on attempt $attempt."
                     } catch {
@@ -371,6 +405,10 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
                             Start-Sleep -Seconds $retryDelay
                         } else {
                             throw
+                        }
+                    } finally {
+                        if ($null -ne $connection) {
+                            $connection.Dispose()
                         }
                     }
                 }
