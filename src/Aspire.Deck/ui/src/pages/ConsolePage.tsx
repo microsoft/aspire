@@ -30,6 +30,7 @@ import {
   type ConfirmRequest,
 } from "../toolkit";
 
+import { resolveResourceByName } from "../lib/resourceNames";
 const ALL_RESOURCES = "__all-resources__";
 const LINE_HEIGHT = 21;
 const OVERSCAN = 12;
@@ -89,7 +90,7 @@ export function ConsolePage({
   routePaused = false,
   onRouteChange,
 }: ConsolePageProps = {}) {
-  const { resources } = useResources();
+  const { resources, ready } = useResources();
   // Sized from Dashboard:Frontend:MaxConsoleLogCount so raising the server-side retention actually
   // keeps the extra lines instead of having the client discard them.
   const maxLines = useTelemetryLimits().maxConsoleLogCount;
@@ -128,7 +129,7 @@ export function ConsolePage({
     })),
   ], [visibleResources]);
   const selectedResource = useMemo(
-    () => selected === ALL_RESOURCES ? null : visibleResources.find((resource) => resource.name === selected) ?? null,
+    () => selected === ALL_RESOURCES ? null : resolveResourceByName(visibleResources, selected),
     [selected, visibleResources],
   );
 
@@ -141,14 +142,29 @@ export function ConsolePage({
     pausedRef.current = routePaused;
   }, [routePaused, routeResourceName, routeShowTimestamps, routeTimestampsUtc, routeWrapLines]);
 
-  // Pick a default resource once the list loads.
+  // Normalize the selection once the resource inventory is known.
+  //
+  // The select is keyed by DCP instance name (`empty-0000-dgwtqzkh`) but a deep link carries the
+  // logical name (`empty-0000`), so an incoming route value usually matches no option. Waiting for
+  // `ready` matters as much as the lookup: resources arrive asynchronously, and discarding the
+  // selection while the list is still empty would drop a perfectly valid deep link before its
+  // resource ever showed up.
   useEffect(() => {
-    if (selected === "" && visibleResources.length > 0) {
-      setSelected(ALL_RESOURCES);
-    } else if (visibleResources.length > 0 && selected !== "" && !resourceOptions.some((option) => option.value === selected)) {
-      setSelected(visibleResources.length > 0 ? ALL_RESOURCES : "");
+    if (!ready) {
+      return;
     }
-  }, [resourceOptions, selected, visibleResources.length]);
+    if (selected === "") {
+      if (visibleResources.length > 0) {
+        setSelected(ALL_RESOURCES);
+      }
+      return;
+    }
+    if (selected === ALL_RESOURCES || resourceOptions.some((option) => option.value === selected)) {
+      return;
+    }
+    const resolved = resolveResourceByName(visibleResources, selected);
+    setSelected(resolved ? resolved.name : visibleResources.length > 0 ? ALL_RESOURCES : "");
+  }, [ready, resourceOptions, selected, visibleResources]);
 
   const appendLines = useCallback((incoming: BufferedLine[]): void => {
     setLines((previous) => {

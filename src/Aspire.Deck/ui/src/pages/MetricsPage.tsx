@@ -24,6 +24,7 @@ import {
   Tabs,
 } from "../toolkit";
 
+import { resolveResourceByName } from "../lib/resourceNames";
 const TIME_RANGES: ReadonlyArray<{ label: string; title: string; seconds: number }> = [
   { label: "1m", title: "Last minute", seconds: 60 },
   { label: "5m", title: "Last 5 minutes", seconds: 300 },
@@ -130,19 +131,37 @@ export function MetricsPage({
     () => [...(telemetry?.metrics ?? [])].sort((left, right) => left.name.localeCompare(right.name)),
     [telemetry],
   );
+  // A deep link may carry the logical resource name (`api`) while metrics are reported under the
+  // DCP instance name (`api-abcd1234`), so translate it. The rewrite is only applied when it
+  // actually lands on a resource that has metrics: telemetry names come from OTLP and do not always
+  // match the resource inventory, and rewriting a name that already selects telemetry would move
+  // the selection off the very series the link points at.
+  const routeInstanceName = useMemo(() => {
+    if (routeResourceName === null) {
+      return null;
+    }
+    const metricResourceNames = new Set(
+      allMetrics.flatMap((metric) => metric.resourceName === null ? [] : [metric.resourceName]),
+    );
+    if (metricResourceNames.has(routeResourceName)) {
+      return routeResourceName;
+    }
+    const resolved = resolveResourceByName(resources, routeResourceName);
+    return resolved !== null && metricResourceNames.has(resolved.name) ? resolved.name : routeResourceName;
+  }, [allMetrics, resources, routeResourceName]);
   const resourceOptions = useMemo(() => {
     const resourceTypes = new Map(resources.map((resource) => [resource.name, resource.resourceType]));
     const metricResources = new Set(allMetrics.flatMap((metric) => metric.resourceName === null ? [] : [metric.resourceName]));
-    if (routeResourceName !== null && resources.some((resource) => resource.name === routeResourceName)) {
-      metricResources.add(routeResourceName);
+    if (routeInstanceName !== null && resources.some((resource) => resource.name === routeInstanceName)) {
+      metricResources.add(routeInstanceName);
     }
     return [...metricResources]
       .sort((left, right) => left.localeCompare(right))
       .map((name) => ({ value: name, label: name, group: resourceTypes.get(name) ?? "Telemetry" }));
-  }, [allMetrics, resources, routeResourceName]);
-  const selectedResource = routeResourceName !== null
-    && resourceOptions.some((option) => option.value === routeResourceName)
-    ? routeResourceName
+  }, [allMetrics, resources, routeInstanceName]);
+  const selectedResource = routeInstanceName !== null
+    && resourceOptions.some((option) => option.value === routeInstanceName)
+    ? routeInstanceName
     : resourceOptions[0]?.value ?? null;
   const metrics = useMemo(
     () => allMetrics.filter((metric) => metric.resourceName === selectedResource),

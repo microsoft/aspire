@@ -42,6 +42,7 @@ import {
   type SortDirection,
 } from "../toolkit";
 
+import { resolveResourceByName } from "../lib/resourceNames";
 const PARENT_PROPERTY = "resource.parentName";
 const SOURCE_PROPERTIES = ["project.path", "tool.package", "executable.path", "container.image", "resource.source"];
 
@@ -183,7 +184,7 @@ export function ResourcesPage({
   const rows = useMemo(() => flattenResources(filteredResources, collapsed), [collapsed, filteredResources]);
 
   const selected = useMemo(
-    () => resources.find((resource) => resource.name === route.resourceName) ?? null,
+    () => resolveResourceByName(resources, route.resourceName),
     [resources, route.resourceName],
   );
 
