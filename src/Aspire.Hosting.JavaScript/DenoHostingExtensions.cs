@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Buffers;
 using System.Globalization;
 using System.Text;
 using Aspire.Hosting.ApplicationModel;
@@ -45,12 +44,16 @@ public static partial class JavaScriptHostingExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        values ??= [];
+        // The caller owns the params array and can keep mutating it after this call. Permissions are only read
+        // when the command line is materialized (publish, or resource start), so holding the caller's array by
+        // reference would let a later mutation silently rewrite the launch arguments. Snapshot it, matching the
+        // copy semantics WithDenoScriptArgs and WithDenoRuntimeArgs already get from AddRange.
+        string[] snapshot = values is null ? [] : [.. values];
         var permission = new DenoPermission
         {
             Kind = kind,
             Deny = deny,
-            Values = values,
+            Values = snapshot,
         };
 
         // Deno delimits permission values with commas and offers no escape syntax, so a single value containing a
@@ -58,7 +61,7 @@ public static partial class JavaScriptHostingExtensions
         // one directory named "data,secret" instead grants `data` and `secret` separately, so the requested path is
         // denied while unrelated paths are granted. Reject it here rather than emit a command line that means
         // something other than what the caller asked for.
-        foreach (var value in values)
+        foreach (var value in snapshot)
         {
             if (value is not null && value.Contains(','))
             {
@@ -544,6 +547,18 @@ public static partial class JavaScriptHostingExtensions
         JavaScriptPackageManagerAnnotation? packageManager = null)
     {
         var args = new List<object>();
+
+        // Task mode resolves flags from deno.json and never emits permissions, import map, or the
+        // development-only watch/inspect flags, so the conflict surface differs from run/serve.
+        var isTaskMode = deno.Mode == DenoCommandMode.Task ||
+            (deno.Mode != DenoCommandMode.Serve && runScript is not null && packageManager?.ScriptCommand == "task" && !deno.ModeSet);
+
+        ThrowIfRuntimeArgsConflictWithManagedFlags(
+            deno,
+            emitsServeEndpoint: deno.Mode == DenoCommandMode.Serve && serveEndpointArguments is not null,
+            includeImportMap: !isTaskMode,
+            includeDevelopmentFlags: includeDevelopmentFlags && !isTaskMode);
+
         switch (deno.Mode)
         {
             case DenoCommandMode.Task:
@@ -583,7 +598,7 @@ public static partial class JavaScriptHostingExtensions
 
         AppendPermissionFlags(args, deno);
         AppendResolutionFlags(args, deno);
-        if (includeCachedOnly)
+        if (includeCachedOnly && !RuntimeArgsSelectCachePolicy(deno.RuntimeArgs))
         {
             args.Add("--cached-only");
         }
@@ -597,12 +612,6 @@ public static partial class JavaScriptHostingExtensions
 
         if (deno.Mode == DenoCommandMode.Serve && serveEndpointArguments is not null)
         {
-            // Deno rejects a repeated --host/--port ("the argument '--port <port>' cannot be used multiple
-            // times", verified on 2.9.0), so a caller-supplied value here would make the resource fail to start
-            // with a clap error that says nothing about Aspire. Serve mode always emits the managed pair below,
-            // so surface the conflict with actionable guidance instead.
-            ThrowIfServeEndpointArgumentsAreOverridden(deno.RuntimeArgs);
-
             args.Add("--host");
             args.Add(serveEndpointArguments.Host);
             args.Add("--port");
@@ -705,9 +714,29 @@ public static partial class JavaScriptHostingExtensions
         }
     }
 
-    private static void ThrowIfServeEndpointArgumentsAreOverridden(IEnumerable<string> runtimeArgs)
+    /// <summary>
+    /// Rejects <see cref="WithDenoRuntimeArgs(IResourceBuilder{DenoAppResource}, string[])"/> entries that
+    /// collide with a flag Aspire already emits for this resource.
+    /// </summary>
+    /// <remarks>
+    /// Verified against Deno 2.9.0: single-occurrence options fail with
+    /// <c>error: the argument '--config &lt;FILE&gt;' cannot be used multiple times</c>, and mutually exclusive
+    /// pairs (<c>--no-lock</c> with <c>--lock</c>, <c>--watch</c> with <c>--watch-hmr</c>) fail with
+    /// <c>cannot be used with</c>. Both are clap errors that never mention Aspire, so the resource simply fails
+    /// to start with nothing pointing at the knob that caused it.
+    /// <para>
+    /// Repeatable options are deliberately absent from this check. Deno merges <c>--allow-read=/tmp</c> with
+    /// <c>--allow-read=/var</c> and accepts <c>-A</c> alongside <c>--allow-all</c>, so layering extra grants
+    /// over the managed ones is legitimate and must keep working.
+    /// </para>
+    /// </remarks>
+    private static void ThrowIfRuntimeArgsConflictWithManagedFlags(
+        DenoCommandLineAnnotation deno,
+        bool emitsServeEndpoint,
+        bool includeImportMap,
+        bool includeDevelopmentFlags)
     {
-        foreach (var arg in runtimeArgs)
+        foreach (var arg in deno.RuntimeArgs)
         {
             // Both spellings reach Deno's parser: "--port 3000" (separate value) and "--port=3000".
             var name = arg.AsSpan();
@@ -717,11 +746,111 @@ public static partial class JavaScriptHostingExtensions
                 name = name[..separator];
             }
 
-            if (name.Equals("--host", StringComparison.Ordinal) || name.Equals("--port", StringComparison.Ordinal))
+            if (GetManagedDenoFlagConflict(name, deno, emitsServeEndpoint, includeImportMap, includeDevelopmentFlags) is not { } conflict)
             {
-                throw new InvalidOperationException($"The argument '{arg}' cannot be configured with {nameof(WithDenoRuntimeArgs)} because {nameof(WithDenoServe)} already emits --host and --port from the resource's endpoint, and Deno rejects those arguments when they are supplied more than once. Configure the endpoint instead, for example WithHttpEndpoint(port: 5005).");
+                continue;
+            }
+
+            throw new InvalidOperationException(
+                $"The argument '{arg}' cannot be configured with {nameof(WithDenoRuntimeArgs)} because {conflict.Source} already emits {conflict.ManagedFlag}, and Deno rejects those arguments when they are combined. {conflict.Remedy}");
+        }
+    }
+
+    private static (string ManagedFlag, string Source, string Remedy)? GetManagedDenoFlagConflict(
+        ReadOnlySpan<char> name,
+        DenoCommandLineAnnotation deno,
+        bool emitsServeEndpoint,
+        bool includeImportMap,
+        bool includeDevelopmentFlags)
+    {
+        if (emitsServeEndpoint && (name.Equals("--host", StringComparison.Ordinal) || name.Equals("--port", StringComparison.Ordinal)))
+        {
+            return ("--host and --port from the resource's endpoint", nameof(WithDenoServe), "Configure the endpoint instead, for example WithHttpEndpoint(port: 5005).");
+        }
+
+        if (!string.IsNullOrEmpty(deno.ConfigFile) && name.Equals("--config", StringComparison.Ordinal))
+        {
+            return ("--config", nameof(WithDenoConfig), $"Pass the configuration file to {nameof(WithDenoConfig)} instead.");
+        }
+
+        if (includeImportMap && !string.IsNullOrEmpty(deno.ImportMap) && name.Equals("--import-map", StringComparison.Ordinal))
+        {
+            return ("--import-map", nameof(WithDenoImportMap), $"Pass the import map to {nameof(WithDenoImportMap)} instead.");
+        }
+
+        // --no-lock and --lock are mutually exclusive, so either managed spelling conflicts with either raw one.
+        if ((deno.NoLock || !string.IsNullOrEmpty(deno.Lock)) &&
+            (name.Equals("--lock", StringComparison.Ordinal) || name.Equals("--no-lock", StringComparison.Ordinal)))
+        {
+            var managedFlag = deno.NoLock ? "--no-lock" : "--lock";
+            var source = deno.NoLock ? nameof(WithDenoNoLock) : nameof(WithDenoLock);
+            return (managedFlag, source, $"Configure locking with {source} instead.");
+        }
+
+        if (deno.NodeModulesDirSet && name.Equals("--node-modules-dir", StringComparison.Ordinal))
+        {
+            return ("--node-modules-dir", nameof(WithDenoNodeModulesDir), $"Pass the mode to {nameof(WithDenoNodeModulesDir)} instead.");
+        }
+
+        if (!includeDevelopmentFlags)
+        {
+            return null;
+        }
+
+        if ((deno.Watch || deno.WatchHmr) &&
+            (name.Equals("--watch", StringComparison.Ordinal) || name.Equals("--watch-hmr", StringComparison.Ordinal)))
+        {
+            var managedFlag = deno.WatchHmr ? "--watch-hmr" : "--watch";
+            return (managedFlag, nameof(WithDenoWatch), $"Select the watch mode with {nameof(WithDenoWatch)} instead.");
+        }
+
+        if (deno.Inspect is { } inspectMode && name.StartsWith("--inspect", StringComparison.Ordinal))
+        {
+            var (managedFlag, source) = inspectMode switch
+            {
+                DenoInspectMode.InspectBrk => ("--inspect-brk", nameof(WithDenoInspectBrk)),
+                DenoInspectMode.InspectWait => ("--inspect-wait", nameof(WithDenoInspectWait)),
+                _ => ("--inspect", nameof(WithDenoInspect)),
+            };
+
+            return (managedFlag, source, $"Configure the inspector with {source} instead.");
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Reports whether the caller already selected a module cache policy through
+    /// <see cref="WithDenoRuntimeArgs(IResourceBuilder{DenoAppResource}, string[])"/>.
+    /// </summary>
+    /// <remarks>
+    /// <c>--cached-only</c> is an Aspire default (published images pre-populate <c>DENO_DIR</c>, so a cold
+    /// network fetch at startup indicates a broken image) rather than a hard requirement. Deno accepts
+    /// <c>--cached-only --reload</c> without error but <c>--cached-only</c> silently wins, verified on 2.9.0
+    /// against a real <c>jsr:</c> import: a cold cache fails identically with and without <c>--reload</c>.
+    /// Emitting both would therefore turn an explicit caller instruction into a no-op, so drop the default
+    /// instead of overriding the caller.
+    /// </remarks>
+    private static bool RuntimeArgsSelectCachePolicy(IEnumerable<string> runtimeArgs)
+    {
+        foreach (var arg in runtimeArgs)
+        {
+            var name = arg.AsSpan();
+            var separator = name.IndexOf('=');
+            if (separator >= 0)
+            {
+                name = name[..separator];
+            }
+
+            if (name.Equals("--reload", StringComparison.Ordinal) ||
+                name.Equals("-r", StringComparison.Ordinal) ||
+                name.Equals("--cached-only", StringComparison.Ordinal))
+            {
+                return true;
             }
         }
+
+        return false;
     }
 
     private static void AppendWatchFlags(List<object> args, DenoCommandLineAnnotation deno)
@@ -824,6 +953,18 @@ public static partial class JavaScriptHostingExtensions
         }
     }
 
+    /// <summary>
+    /// Rejects a configured path that would resolve outside the generated Dockerfile's build context.
+    /// </summary>
+    /// <remarks>
+    /// Validation runs on the converted container path rather than the raw input, because
+    /// <see cref="ToDenoContainerPath"/> rewrites backslashes and can make a path rooted that
+    /// <see cref="Path.IsPathRooted(string)"/> considers relative on Linux (<c>\tmp\deno.json</c> becomes
+    /// <c>/tmp/deno.json</c>). Traversal is checked per segment rather than by prefix so an embedded escape
+    /// such as <c>config/../../outside.json</c> is caught, and segment comparison is used instead of
+    /// <see cref="Path.GetFullPath(string, string)"/> because these are virtual container paths whose
+    /// resolution must not vary by host platform.
+    /// </remarks>
     private static void ThrowIfPathEscapesDenoBuildContext(string? path, string methodName)
     {
         if (string.IsNullOrEmpty(path))
@@ -834,11 +975,24 @@ public static partial class JavaScriptHostingExtensions
         var containerPath = ToDenoContainerPath(path);
         if (Path.IsPathRooted(path) ||
             IsWindowsFullyQualifiedPath(path) ||
-            containerPath == ".." ||
-            containerPath.StartsWith("../", StringComparison.Ordinal))
+            containerPath.StartsWith('/') ||
+            ContainsTraversalSegment(containerPath))
         {
             throw new InvalidOperationException($"The path '{path}' configured with {methodName} is outside the Deno application directory, so it is not part of the generated Dockerfile's build context. Move the file inside the application directory or provide a custom Dockerfile.");
         }
+    }
+
+    private static bool ContainsTraversalSegment(string containerPath)
+    {
+        foreach (var segment in containerPath.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (segment == "..")
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -960,7 +1114,10 @@ public static partial class JavaScriptHostingExtensions
     {
         if (RequiresShellForDenoRunScriptArguments(runScriptArguments))
         {
-            var runCommand = $"{executableName} {scriptCommand} {scriptName} {runScriptArguments}";
+            // Only runScriptArguments is meant to be shell-evaluated. The command itself is fixed data
+            // (a task name can legitimately contain spaces, e.g. "build prod"), so quote those parts or
+            // the shell would word-split them into a different command.
+            var runCommand = $"{QuoteDockerShellArgument(executableName)} {QuoteDockerShellArgument(scriptCommand)} {QuoteDockerShellArgument(scriptName)} {runScriptArguments}";
             return ["sh", "-c", $"exec {runCommand}"];
         }
 
@@ -971,11 +1128,40 @@ public static partial class JavaScriptHostingExtensions
 
     // Exec form performs no shell interpretation, so anything that depends on the shell - variable
     // expansion, command substitution, globbing, redirection, or operators - must keep the `sh -c` form.
+    //
+    // This is deliberately an allowlist of characters the tokenizer reproduces faithfully rather than a
+    // denylist of shell metacharacters. A denylist fails open: any character nobody thought to enumerate
+    // is silently assumed inert and gets baked into exec form with different semantics. Real cases that a
+    // metacharacter denylist missed here: `[ab].ts` (bracket expression), `#1` (comment - the rest of the
+    // line is discarded by the shell), `{a,b}.ts` (brace expansion on bash/ash though not dash), and an
+    // embedded newline (a command separator, not whitespace).
     private static bool RequiresShellForDenoRunScriptArguments(string? runScriptArguments) =>
-        runScriptArguments is not null && runScriptArguments.AsSpan().IndexOfAny(s_denoShellMetacharacters) >= 0;
+        runScriptArguments is not null && !runScriptArguments.All(IsShellInertRunScriptArgumentCharacter);
 
-    private static readonly SearchValues<char> s_denoShellMetacharacters =
-        SearchValues.Create("$`|&;<>*?~()");
+    // Characters whose meaning to `sh` is identical to their meaning to TokenizeDenoRunScriptArguments.
+    // Quoting characters are inert because the tokenizer implements the same POSIX quoting rules the shell
+    // does. '!' is inert because history expansion is interactive-only and never applies under `sh -c`.
+    private static bool IsShellInertRunScriptArgumentCharacter(char c) =>
+        c is >= 'a' and <= 'z'
+            or >= 'A' and <= 'Z'
+            or >= '0' and <= '9'
+            or ' '
+            or '\t'
+            or '\''
+            or '"'
+            or '\\'
+            or '-'
+            or '_'
+            or '.'
+            or '/'
+            or ':'
+            or '='
+            or '+'
+            or ','
+            or '@'
+            or '%'
+            or '^'
+            or '!';
 
     /// <summary>
     /// Splits a free-form run-script argument string into individual argv entries.

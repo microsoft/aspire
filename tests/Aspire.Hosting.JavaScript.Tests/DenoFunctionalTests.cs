@@ -68,7 +68,9 @@ public class DenoFunctionalTests : IClassFixture<DenoAppFixture>
             var traceCount = await GetTelemetryCountAsync(dashboardClient, tracesRequest, cancellationToken);
             var logCount = await GetTelemetryCountAsync(dashboardClient, logsRequest, cancellationToken);
 
-            if (traceCount > 0 || logCount > 0)
+            // Deno emits traces and logs over OTLP natively. Requiring both means a regression that silences
+            // one signal fails the test instead of being masked by the other still arriving.
+            if (traceCount > 0 && logCount > 0)
             {
                 return;
             }

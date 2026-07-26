@@ -366,6 +366,62 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
             GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
     }
 
+    // Every character the classifier treats as inert is baked into an exec-form ENTRYPOINT verbatim, so a
+    // character that actually means something to `sh` would silently change the command. These two theories
+    // pin the boundary; the shell-routed set was verified against a real /bin/sh.
+    [Theory]
+    [InlineData("--port 8080", new[] { "--port", "8080" })]
+    [InlineData("--name 'my app'", new[] { "--name", "my app" })]
+    [InlineData("""--path "/a b" """, new[] { "--path", "/a b" })]
+    [InlineData("--flag=a,b", new[] { "--flag=a,b" })]
+    [InlineData("--email a@b.co", new[] { "--email", "a@b.co" })]
+    [InlineData("--pct 50%", new[] { "--pct", "50%" })]
+    [InlineData("--not !x", new[] { "--not", "!x" })]
+    [InlineData("--caret a^b", new[] { "--caret", "a^b" })]
+    [InlineData("--plus a+b", new[] { "--plus", "a+b" })]
+    public void BuildDenoPackageScriptEntrypoint_KeepsShellInertArgumentsInExecForm(string runScriptArguments, string[] expectedArgumentTokens)
+    {
+        var entrypoint = JavaScriptHostingExtensions.BuildDenoPackageScriptEntrypoint("deno", "task", "start", runScriptArguments);
+
+        Assert.Equal(["deno", "task", "start", .. expectedArgumentTokens], entrypoint);
+    }
+
+    [Theory]
+    // Expansion, substitution, operators, and redirection.
+    [InlineData("--port $PORT")]
+    [InlineData("--rev `git rev-parse HEAD`")]
+    [InlineData("--a x|y")]
+    [InlineData("--a x&y")]
+    [InlineData("--a x;y")]
+    [InlineData("--out >log")]
+    [InlineData("--in <log")]
+    [InlineData("--glob *.ts")]
+    [InlineData("--glob ?.ts")]
+    [InlineData("--home ~/app")]
+    [InlineData("--sub (x)")]
+    // Regressions the previous metacharacter denylist missed: bracket expressions and brace expansion glob,
+    // '#' starts a comment that discards the rest of the line, and a newline separates commands.
+    [InlineData("--glob [ab].ts")]
+    [InlineData("--brace {a,b}.ts")]
+    [InlineData("--tag #1")]
+    [InlineData("--a x\ny")]
+    public void BuildDenoPackageScriptEntrypoint_RoutesShellDependentArgumentsToShellForm(string runScriptArguments)
+    {
+        var entrypoint = JavaScriptHostingExtensions.BuildDenoPackageScriptEntrypoint("deno", "task", "start", runScriptArguments);
+
+        Assert.Equal(["sh", "-c", $"exec deno task start {runScriptArguments}"], entrypoint);
+    }
+
+    [Fact]
+    public void BuildDenoPackageScriptEntrypoint_QuotesCommandComponentsInShellForm()
+    {
+        // Only runScriptArguments is meant to be shell-evaluated. A task name with a space would otherwise
+        // word-split into `deno task build prod`, running the "build" task with a stray "prod" argument.
+        var entrypoint = JavaScriptHostingExtensions.BuildDenoPackageScriptEntrypoint("deno", "task", "build prod", "-- --port $PORT");
+
+        Assert.Equal(["sh", "-c", "exec deno task 'build prod' -- --port $PORT"], entrypoint);
+    }
+
     [Fact]
     public async Task VerifyDockerfile_PublishAsPackageScriptPreservesPosixDoubleQuoteEscapes()
     {
@@ -499,6 +555,31 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
 
         var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
         Assert.Equal("""ENTRYPOINT ["deno","run","-A","--cached-only","main.ts"]""", GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
+    }
+
+    // --cached-only is an Aspire default, not a hard requirement. Deno accepts it alongside --reload without
+    // error but --cached-only silently wins, so emitting both would turn the caller's explicit cache policy
+    // into a no-op. Drop the default instead of overriding the caller.
+    [Theory]
+    [InlineData("--reload")]
+    [InlineData("--reload=npm:chalk")]
+    [InlineData("-r")]
+    [InlineData("--cached-only")]
+    public async Task VerifyDockerfile_EntrypointDropsManagedCachedOnlyWhenRuntimeArgsSelectACachePolicy(string cacheFlag)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+
+        var denoApp = builder.AddDenoApp("js", appDir, "main.ts")
+            .WithDenoRuntimeArgs(cacheFlag);
+
+        await ManifestUtils.GetManifest(denoApp.Resource, workspace.Path);
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
+        Assert.Equal($$"""ENTRYPOINT ["deno","run","-A","{{cacheFlag}}","main.ts"]""", GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
     }
 
     [Fact]
@@ -900,6 +981,12 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("../shared/deno.json")]
     [InlineData("/etc/deno.json")]
+    [InlineData("..")]
+    // Traversal embedded mid-path still resolves outside the build context.
+    [InlineData("config/../../outside.json")]
+    // ToDenoContainerPath rewrites backslashes, so this becomes the absolute container path /tmp/deno.json
+    // even though Path.IsPathRooted reports false for it on Linux and macOS.
+    [InlineData("\\tmp\\deno.json")]
     public async Task VerifyDockerfile_RejectsConfigPathOutsideBuildContext(string configFile)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -947,7 +1034,113 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
             () => GetDenoArgsAsync(d => d.WithDenoServe().WithDenoRuntimeArgs(runtimeArgs)));
 
         Assert.Equal(
-            $"The argument '{flag}' cannot be configured with WithDenoRuntimeArgs because WithDenoServe already emits --host and --port from the resource's endpoint, and Deno rejects those arguments when they are supplied more than once. Configure the endpoint instead, for example WithHttpEndpoint(port: 5005).",
+            $"The argument '{flag}' cannot be configured with WithDenoRuntimeArgs because WithDenoServe already emits --host and --port from the resource's endpoint, and Deno rejects those arguments when they are combined. Configure the endpoint instead, for example WithHttpEndpoint(port: 5005).",
+            ex.Message);
+    }
+
+    // Deno hard-errors when a single-occurrence option is repeated ("cannot be used multiple times") or when
+    // mutually exclusive flags are combined ("cannot be used with"), verified on 2.9.0. Both are clap errors
+    // that never mention Aspire, so every managed flag must be guarded, not just the serve endpoint pair.
+    [Theory]
+    [InlineData("--config", "other.json")]
+    [InlineData("--config=other.json", null)]
+    [InlineData("--import-map", "other.json")]
+    [InlineData("--import-map=other.json", null)]
+    [InlineData("--lock", "other.lock")]
+    [InlineData("--lock=other.lock", null)]
+    [InlineData("--no-lock", null)]
+    [InlineData("--node-modules-dir", "none")]
+    [InlineData("--node-modules-dir=none", null)]
+    [InlineData("--watch", null)]
+    [InlineData("--watch-hmr", null)]
+    [InlineData("--inspect", null)]
+    [InlineData("--inspect=127.0.0.1:9230", null)]
+    public async Task WithDenoRuntimeArgs_DuplicatingAManagedFlag_Throws(string flag, string? value)
+    {
+        string[] runtimeArgs = value is null ? [flag] : [flag, value];
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => GetDenoArgsAsync(d => d
+                .WithDenoConfig("deno.json")
+                .WithDenoImportMap("import_map.json")
+                .WithDenoLock("deno.lock")
+                .WithDenoNodeModulesDir()
+                .WithDenoWatch()
+                .WithDenoInspect()
+                .WithDenoRuntimeArgs(runtimeArgs)));
+
+        Assert.StartsWith($"The argument '{flag}' cannot be configured with WithDenoRuntimeArgs because ", ex.Message, StringComparison.Ordinal);
+        Assert.EndsWith(" instead.", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task WithDenoRuntimeArgs_DuplicatingConfig_ThrowsWithActionableGuidance()
+    {
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => GetDenoArgsAsync(d => d
+                .WithDenoConfig("deno.json")
+                .WithDenoRuntimeArgs("--config", "other.json")));
+
+        Assert.Equal(
+            "The argument '--config' cannot be configured with WithDenoRuntimeArgs because WithDenoConfig already emits --config, and Deno rejects those arguments when they are combined. Pass the configuration file to WithDenoConfig instead.",
+            ex.Message);
+    }
+
+    [Fact]
+    public async Task WithDenoRuntimeArgs_LockAndNoLockAreMutuallyExclusiveWithTheManagedFlag()
+    {
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => GetDenoArgsAsync(d => d
+                .WithDenoNoLock()
+                .WithDenoRuntimeArgs("--lock", "other.lock")));
+
+        Assert.Equal(
+            "The argument '--lock' cannot be configured with WithDenoRuntimeArgs because WithDenoNoLock already emits --no-lock, and Deno rejects those arguments when they are combined. Configure locking with WithDenoNoLock instead.",
+            ex.Message);
+    }
+
+    [Theory]
+    // Repeatable options merge in Deno, so layering extra grants over the managed ones must keep working.
+    [InlineData("--allow-read", "/var")]
+    [InlineData("--allow-net", "example.com")]
+    [InlineData("--parallel", null)]
+    [InlineData("--v8-flags=--max-old-space-size=4096", null)]
+    public async Task WithDenoRuntimeArgs_NonConflictingArgumentsArePreserved(string flag, string? value)
+    {
+        string[] runtimeArgs = value is null ? [flag] : [flag, value];
+
+        var args = await GetDenoArgsAsync(d => d
+            .WithDenoAllowRead("/etc/app")
+            .WithDenoConfig("deno.json")
+            .WithDenoRuntimeArgs(runtimeArgs));
+
+        Assert.Equal(["run", "--allow-read=/etc/app", "--config", "deno.json", .. runtimeArgs, "main.ts"], args);
+    }
+
+    // Task mode resolves configuration from deno.json and never emits --import-map or the development-only
+    // watch/inspect flags, so those must stay available through the escape hatch.
+    [Fact]
+    public async Task WithDenoTask_RuntimeArgsForFlagsTaskModeDoesNotEmitArePreserved()
+    {
+        var args = await GetDenoArgsAsync(d => d
+            .WithDenoTask("start")
+            .WithDenoWatch()
+            .WithDenoRuntimeArgs("--import-map", "import_map.json"));
+
+        Assert.Equal(["task", "--import-map", "import_map.json", "start"], args);
+    }
+
+    [Fact]
+    public async Task WithDenoTask_RuntimeArgsDuplicatingAManagedTaskFlag_Throws()
+    {
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => GetDenoArgsAsync(d => d
+                .WithDenoTask("start")
+                .WithDenoConfig("deno.json")
+                .WithDenoRuntimeArgs("--config", "other.json")));
+
+        Assert.Equal(
+            "The argument '--config' cannot be configured with WithDenoRuntimeArgs because WithDenoConfig already emits --config, and Deno rejects those arguments when they are combined. Pass the configuration file to WithDenoConfig instead.",
             ex.Message);
     }
 
@@ -993,6 +1186,23 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task WithDenoPermission_MutatingTheCallerArrayAfterTheCallDoesNotChangeTheCommandLine()
+    {
+        // Permission values are only read when the command line is materialized, so holding the caller's
+        // params array by reference would let a later mutation silently rewrite the launch arguments.
+        var hosts = new[] { "localhost", "api.internal" };
+
+        var args = await GetDenoArgsAsync(d =>
+        {
+            d.WithDenoAllowNet(hosts);
+            hosts[0] = "evil.example";
+            hosts[1] = "attacker.example";
+        });
+
+        Assert.Equal(["run", "--allow-net=localhost,api.internal", "main.ts"], args);
+    }
+
+    [Fact]
     public async Task WithDenoAllowAll_False_DropsBlanketGrant()
     {
         // Least-privilege: explicitly opting out of -A must not emit any allow-all flag; only `run <script>`.
@@ -1008,30 +1218,44 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
     {
         // Configured out of canonical order and across allow/deny to prove deterministic ordering
         // (net, read, write, run, env, import, sys, ffi; allow before deny) independent of call order.
+        // Every granular permission API is exercised here: each one is a distinct one-line call into
+        // AddDenoPermission, so a swapped deny flag or mistyped kind would otherwise ship unnoticed.
         var args = await GetDenoArgsAsync(d => d
             .WithDenoAllowEnv("PORT", "HOME")
+            .WithDenoDenyEnv("SECRET")
             .WithDenoDenyImport("evil.example")
             .WithDenoDenyNet("evil.example")
             .WithDenoAllowNet("localhost:8080", "api.internal")
             .WithDenoAllowRead("/etc/app")
+            .WithDenoDenyRead("/etc/shadow")
+            .WithDenoAllowWrite("/var/app")
             .WithDenoDenyWrite()
             .WithDenoAllowRun("git")
+            .WithDenoDenyRun("curl")
             .WithDenoAllowImport("cdn.example")
             .WithDenoAllowSys()
-            .WithDenoAllowFfi("./native.so"));
+            .WithDenoDenySys("hostname")
+            .WithDenoAllowFfi("./native.so")
+            .WithDenoDenyFfi("./blocked.so"));
 
         Assert.Collection(args,
             a => Assert.Equal("run", a),
             a => Assert.Equal("--allow-net=localhost:8080,api.internal", a),
             a => Assert.Equal("--deny-net=evil.example", a),
             a => Assert.Equal("--allow-read=/etc/app", a),
+            a => Assert.Equal("--deny-read=/etc/shadow", a),
+            a => Assert.Equal("--allow-write=/var/app", a),
             a => Assert.Equal("--deny-write", a),
             a => Assert.Equal("--allow-run=git", a),
+            a => Assert.Equal("--deny-run=curl", a),
             a => Assert.Equal("--allow-env=PORT,HOME", a),
+            a => Assert.Equal("--deny-env=SECRET", a),
             a => Assert.Equal("--allow-import=cdn.example", a),
             a => Assert.Equal("--deny-import=evil.example", a),
             a => Assert.Equal("--allow-sys", a),
+            a => Assert.Equal("--deny-sys=hostname", a),
             a => Assert.Equal("--allow-ffi=./native.so", a),
+            a => Assert.Equal("--deny-ffi=./blocked.so", a),
             a => Assert.Equal("main.ts", a));
     }
 
@@ -1142,6 +1366,16 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
             a => Assert.Equal("--watch", a),
             a => Assert.Equal("--inspect-brk=127.0.0.1:9229", a),
             a => Assert.Equal("main.ts", a));
+    }
+
+    [Fact]
+    public async Task WithDenoInspect_EmitsPlainInspectFlag()
+    {
+        var args = await GetDenoArgsAsync(d => d
+            .WithDenoAllowAll(false)
+            .WithDenoInspect("127.0.0.1:9229"));
+
+        Assert.Equal(["run", "--inspect=127.0.0.1:9229", "main.ts"], args);
     }
 
     [Fact]
