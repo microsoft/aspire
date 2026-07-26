@@ -11,7 +11,9 @@ const baseURL = `http://127.0.0.1:${port}`;
 
 export default defineConfig({
   testDir: "./e2e",
-  testIgnore: ["legacy/**", "legacy-auth/**", "legacy-terminal/**", "live/**"],
+  // `differential/**` drives the Blazor dashboard and Deck side by side against one live AppHost,
+  // so it can only run under playwright.differential.config.ts where those URLs are supplied.
+  testIgnore: ["legacy/**", "legacy-auth/**", "legacy-terminal/**", "live/**", "differential/**"],
   outputDir: "./test-results",
   fullyParallel: true,
   forbidOnly: isCi,

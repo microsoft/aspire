@@ -80,6 +80,29 @@ export function formatDateTime(value: Date): string {
   return value.toLocaleString(undefined, timeFormatOptions());
 }
 
+/**
+ * Mirrors `FormatHelpers.FormatTimeWithOptionalDate` in src/Shared/FormatHelpers.cs: render the
+ * time alone while the timestamp is from today, and prefix the date once it is not, so a value
+ * that scrolls past midnight stays unambiguous. Seconds are included but milliseconds are not,
+ * because the resource service reports start times at second precision.
+ */
+export function formatTimeWithOptionalDate(value: Date | string | null): string {
+  if (value === null) {
+    return "—";
+  }
+  const date = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
+  const now = new Date();
+  const isToday = date.getFullYear() === now.getFullYear()
+    && date.getMonth() === now.getMonth()
+    && date.getDate() === now.getDate();
+
+  return isToday ? formatTime(date) : formatDateTime(date);
+}
+
 export function formatRelativeTime(value: string | null): string {
   if (value === null) {
     return "—";
@@ -198,4 +221,33 @@ export function shortId(id: string | null, length = 8): string {
     return "—";
   }
   return id.length <= length ? id : id.slice(0, length);
+}
+
+/**
+ * Mirrors how the Blazor dashboard renders the resource state column
+ * (`ResourceStateViewModel.GetStateText`), which treats a null *or empty* state as "Unknown" and
+ * otherwise runs the raw value through Humanizer's `string.Humanize()`. Resource states arrive
+ * from DCP as PascalCase tokens ("NotStarted", "FailedToStart", "RuntimeUnhealthy"), so rendering
+ * them unmodified leaks an internal identifier into the UI.
+ *
+ * Humanizer splits on case boundaries and lower-cases every word after the first, while keeping
+ * runs of capitals intact, e.g. "NotStarted" -> "Not started" and "HTTPRequest" -> "HTTP request".
+ */
+export function humanizeResourceState(state: string | null | undefined): string {
+  if (state === null || state === undefined || state.trim() === "") {
+    return "Unknown";
+  }
+
+  // A value that already contains whitespace has been humanized upstream; re-splitting it would
+  // lower-case words that were deliberately capitalised.
+  if (/\s/.test(state)) {
+    return state;
+  }
+
+  return state
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .split(" ")
+    .map((word, index) => (index === 0 || /^[A-Z]{2,}$/.test(word) ? word : word.toLowerCase()))
+    .join(" ");
 }

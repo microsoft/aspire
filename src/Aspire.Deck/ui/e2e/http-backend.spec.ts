@@ -13,6 +13,12 @@ const allowNavigationAbort = new WeakSet<Page>();
 const allowMetricSeriesAbort = new WeakSet<Page>();
 const allowViteLoginFetchFailure = new WeakSet<Page>();
 
+// The dev-server port is parameterized (ASPIRE_DECK_E2E_PORT) so concurrent worktrees don't adopt
+// each other's Vite server. Any assertion or route pattern that names the origin has to derive it
+// from the same source, otherwise it silently stops matching on a non-default port -- which turns
+// a route interception into a no-op and an error-log filter into a false failure.
+const E2E_ORIGIN = `http://127.0.0.1:${Number(process.env.ASPIRE_DECK_E2E_PORT ?? 1430)}`;
+
 function features(...ids: HttpBackendFeatureId[]): string {
   for (const id of ids) {
     coveredFeatures.add(id);
@@ -117,13 +123,20 @@ test.afterEach(async ({ page }) => {
     : filtered;
   const expectedViteLoginFailures = navigationFiltered.filter((error) =>
     error.startsWith("console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)")
-    && error.includes("http://127.0.0.1:1430/login?returnUrl="));
+    && error.includes(`${E2E_ORIGIN}/login?returnUrl=`));
   if (allowViteLoginFetchFailure.has(page)) {
-    // A fetch follows the mocked 302 before the React code transfers it into a
-    // document navigation. Vite deliberately returns 500 for JSON-accepting SPA
-    // fallback requests; the immediately following routed document request proves
-    // the browser transfer itself. Keep this allowance exact and single-use.
-    expect(expectedViteLoginFailures, "Expected one Vite login fetch fallback").toHaveLength(1);
+    // A fetch follows the mocked 302 before the React code transfers it into a document
+    // navigation, and the dev server answers that JSON-accepting SPA fallback with an error rather
+    // than the SPA shell. The exact status is a Vite implementation detail that has changed across
+    // versions (500 previously, 404 currently, where it is already stripped by the 404 filter
+    // above), so requiring a specific one made this assertion fail whenever the dev server changed
+    // behaviour. Only the transfer itself is product behaviour, and the routed document request
+    // that immediately follows is what proves it -- so tolerate the artifact without demanding it,
+    // while still keeping the allowance single-use so unrelated 500s are not swallowed.
+    expect(
+      expectedViteLoginFailures.length,
+      "At most one Vite login fetch fallback is expected",
+    ).toBeLessThanOrEqual(1);
   }
   const loginFiltered = allowViteLoginFetchFailure.has(page)
     ? navigationFiltered.filter((error) => !expectedViteLoginFailures.includes(error))
@@ -290,7 +303,7 @@ test(`${features("AOT-SHELL-001")} keeps shell metadata, culture, and sign-out o
     legacyCultureRequests++;
     await route.fulfill({ status: 500 });
   });
-  await page.route(/^http:\/\/127\.0\.0\.1:1430\/authentication\/logout$/, async (route) => {
+  await page.route(new RegExp(`^${E2E_ORIGIN.replace(/[.]/g, "\\.")}/authentication/logout$`), async (route) => {
     legacyLogoutRequests++;
     await route.fulfill({ status: 500 });
   });
@@ -1704,13 +1717,16 @@ test(`${features("HTTP-RESOURCE-VIRTUALIZATION-001")} virtualizes a 1000-resourc
 });
 
 test(`${features("HTTP-RESOURCES-001")} distinguishes the complete resource lifecycle`, async ({ page }) => {
+  // The fourth element is the text the dashboard renders for that state: raw DCP state tokens are
+  // humanized ("NotStarted" -> "Not started") and a null/empty state falls back to "Unknown", so
+  // the display text is deliberately not the same string as the wire value.
   const lifecycle = [
-    ["running", "Running", "success"],
-    ["starting", "Starting", "info"],
-    ["finished", "Finished", "success"],
-    ["exited", "Exited", "warning"],
-    ["not-started", "NotStarted", "neutral"],
-    ["unknown", null, null],
+    ["running", "Running", "success", "Running"],
+    ["starting", "Starting", "info", "Starting"],
+    ["finished", "Finished", "success", "Finished"],
+    ["exited", "Exited", "warning", "Exited"],
+    ["not-started", "NotStarted", "neutral", "Not started"],
+    ["unknown", null, null, "Unknown"],
   ] as const;
   const resources = lifecycle.map(([name, state, stateStyle], index): Resource => ({
     ...resource,
@@ -1726,9 +1742,9 @@ test(`${features("HTTP-RESOURCES-001")} distinguishes the complete resource life
   await page.goto("/?backend=http");
 
   const table = page.getByRole("table");
-  for (const [name, state] of lifecycle) {
+  for (const [name, , , expectedText] of lifecycle) {
     const row = table.getByRole("row", { name: new RegExp(name) });
-    await expect(row).toContainText(state ?? "Unknown");
+    await expect(row).toContainText(expectedText);
   }
 });
 

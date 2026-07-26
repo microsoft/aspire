@@ -5,7 +5,7 @@ import type {
   ResourceProperty,
 } from "../api/types";
 import { openExternal } from "../api/deck";
-import { formatTime } from "../lib/format";
+import { formatTime, humanizeResourceState } from "../lib/format";
 import { maskQueryStringValues } from "../lib/maskUrl";
 import { partitionResourceCommands } from "../lib/resourceCommands";
 import {
@@ -165,7 +165,7 @@ export function DetailsDrawer({
           <div className="kv__key">Type</div>
           <div className="kv__val">{resource.resourceType}</div>
           <div className="kv__key">State</div>
-          <div className="kv__val">{resource.state ?? "Unknown"}</div>
+          <div className="kv__val">{humanizeResourceState(resource.state)}</div>
           <div className="kv__key">Health</div>
           <div className="kv__val">{resource.health ?? "—"}</div>
           <div className="kv__key">Started</div>

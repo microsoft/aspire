@@ -1,3 +1,5 @@
+import { humanizeResourceState } from "../lib/format";
+
 export type StateTone = "success" | "info" | "warning" | "error" | "neutral";
 
 export function getStateTone(state: string | null, stateStyle: string | null, health: string | null): StateTone {
@@ -37,10 +39,11 @@ export function StateDot({
   health?: string | null;
 }) {
   const tone = getStateTone(state, stateStyle, health ?? null);
+  const label = humanizeResourceState(state);
   return (
     <span className="state">
-      <span className={`state__dot ${tone}`} title={state ?? "Unknown"} />
-      <span>{state ?? "Unknown"}</span>
+      <span className={`state__dot ${tone}`} title={label} />
+      <span>{label}</span>
       {health ? <span className="state__health">· {health}</span> : null}
     </span>
   );

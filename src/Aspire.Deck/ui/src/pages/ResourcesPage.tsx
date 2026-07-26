@@ -4,7 +4,7 @@ import { PARAMETER_RESOURCE_TYPE } from "../api/types";
 import { openExternal } from "../api/deck";
 import { useResources } from "../lib/useDeckEvent";
 import { useCommandExecution } from "../components/useCommandExecution";
-import { formatRelativeTime } from "../lib/format";
+import { formatRelativeTime, formatTimeWithOptionalDate, humanizeResourceState } from "../lib/format";
 import { maskQueryStringValues } from "../lib/maskUrl";
 import { DetailsDrawer } from "../components/DetailsDrawer";
 import {
@@ -283,9 +283,16 @@ export function ResourcesPage({
     },
     {
       key: "started",
-      header: "Started",
-      width: "120px",
-      render: ({ resource }) => <span className="cell-muted">{formatRelativeTime(resource.startedAt)}</span>,
+      header: "Start time",
+      width: "150px",
+      // The dashboard shows the absolute start time here, and the relative form on hover. A purely
+      // relative rendering ("15m ago") cannot answer *when* a resource started, which is what the
+      // column exists to convey once a session has been running for a while.
+      render: ({ resource }) => (
+        <span className="cell-muted" title={formatRelativeTime(resource.startedAt)}>
+          {formatTimeWithOptionalDate(resource.startedAt)}
+        </span>
+      ),
       compareWithDirection: hierarchyCompare((left, right) => (left.startedAt ? Date.parse(left.startedAt) : 0) - (right.startedAt ? Date.parse(right.startedAt) : 0)),
     },
   ];
@@ -298,7 +305,7 @@ export function ResourcesPage({
   const graphNodes: ForceGraphNode[] = filteredResources.map((resource) => ({
     id: resource.name,
     label: resource.displayName,
-    description: `${resource.resourceType}, ${resource.state ?? "Unknown"}${resource.health ? `, ${resource.health}` : ""}`,
+    description: `${resource.resourceType}, ${humanizeResourceState(resource.state)}${resource.health ? `, ${resource.health}` : ""}`,
     endpoint: graphEndpoint(resource),
     tone: resourceTone(resource),
     icon: <ResourceTypeIcon type={resource.resourceType} iconName={resource.iconName} iconVariant={resource.iconVariant} size={32} />,
