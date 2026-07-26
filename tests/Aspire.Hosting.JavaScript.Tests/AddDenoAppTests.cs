@@ -311,6 +311,39 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
             GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task VerifyDockerfile_RuntimeOnlyBaseImageOverrideStillBuildsWithDeno(bool denoBeforeOverride)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+        File.WriteAllText(Path.Combine(appDir, "deno.json"), """{"tasks":{"start":"deno run -A main.ts"}}""");
+
+        // WithDockerfileBaseImage replaces the annotation, so a runtime-only override leaves BuildImage null in
+        // either ordering. The build stage must still resolve to a Deno image or `deno install` would not exist.
+        var app = builder.AddJavaScriptApp("js", appDir);
+        if (denoBeforeOverride)
+        {
+            app.WithDeno(install: true).WithDockerfileBaseImage(runtimeImage: "denoland/deno:2.1-distroless");
+        }
+        else
+        {
+            app.WithDockerfileBaseImage(runtimeImage: "denoland/deno:2.1-distroless").WithDeno(install: true);
+        }
+
+        app.PublishAsPackageScript("start");
+
+        await ManifestUtils.GetManifest(app.Resource, workspace.Path);
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
+        Assert.Equal("FROM denoland/deno:2.9.0 AS build", GetDockerfileLine(dockerfileContents, "FROM denoland/deno:2.9.0"));
+        Assert.Equal("FROM denoland/deno:2.1-distroless AS runtime", GetDockerfileLine(dockerfileContents, "FROM denoland/deno:2.1-distroless"));
+    }
+
     [Fact]
     public async Task VerifyDockerfile_PublishAsPackageScriptWithPlainArgumentsUsesExecForm()
     {

@@ -184,16 +184,21 @@ public static partial class JavaScriptHostingExtensions
                 {
                     var defaultBaseImage = new Lazy<string>(() => GetDefaultBaseImage(appDirectory, "alpine", dockerfileContext.Services));
 
-                    // Get custom base image from annotation, if present
+                    // Get custom base image from annotation, if present. A caller can configure only a runtime
+                    // image, which leaves BuildImage null, so fall back to the package manager's own image
+                    // before the Node.js default - bun and deno are absent from the Node.js images.
                     dockerfileContext.Resource.TryGetLastAnnotation<DockerfileBaseImageAnnotation>(out var baseImageAnnotation);
+                    resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager);
 
-                    var baseBuildImage = baseImageAnnotation?.BuildImage ?? defaultBaseImage.Value;
+                    var baseBuildImage = baseImageAnnotation?.BuildImage
+                        ?? packageManager?.DefaultBuildImage
+                        ?? defaultBaseImage.Value;
                     var builderStage = dockerfileContext.Builder
                         .From(baseBuildImage, "build")
                         .EmptyLine()
                         .WorkDir("/app");
 
-                    if (resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager))
+                    if (packageManager is not null)
                     {
                         // Initialize the Docker build stage with package manager-specific setup commands.
                         // This allows package managers to add prerequisite commands (e.g., enabling pnpm via corepack)
@@ -1546,9 +1551,13 @@ public static partial class JavaScriptHostingExtensions
 
                     if (c.Resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager))
                     {
-                        // Get custom base image from annotation, if present
+                        // Get custom base image from annotation, if present. A caller can configure only a runtime
+                        // image, which leaves BuildImage null, so fall back to the package manager's own image
+                        // before the Node.js default - bun and deno are absent from the Node.js images.
                         dockerfileContext.Resource.TryGetLastAnnotation<DockerfileBaseImageAnnotation>(out var baseImageAnnotation);
-                        var baseImage = baseImageAnnotation?.BuildImage ?? GetDefaultBaseImage(appDirectory, "slim", dockerfileContext.Services);
+                        var baseImage = baseImageAnnotation?.BuildImage
+                            ?? packageManager.DefaultBuildImage
+                            ?? GetDefaultBaseImage(appDirectory, "slim", dockerfileContext.Services);
 
                         var dockerBuilder = publishMode is not null
                             ? dockerfileContext.Builder.From(baseImage, "build").WorkDir("/app")
@@ -2284,6 +2293,7 @@ public static partial class JavaScriptHostingExtensions
                 // bun supports passing script flags without the `--` separator.
                 CommandSeparator = null,
                 ResolvePackageScriptRuntimeImage = buildImage => buildImage,
+                DefaultBuildImage = DefaultBunImage,
             })
             .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs])
             {
@@ -2362,6 +2372,7 @@ public static partial class JavaScriptHostingExtensions
             // Deno's task runner forwards script arguments without requiring the `--` separator.
             CommandSeparator = null,
             ResolvePackageScriptRuntimeImage = buildImage => buildImage,
+            DefaultBuildImage = DefaultDenoImage,
             // Deliberately no BuildKit cache mount. For npm/bun/pnpm the mount only holds a download cache
             // while the resolved dependencies still land in /app/node_modules, so discarding the mount at the
             // end of the build is harmless. For Deno, DENO_DIR *is* the dependency store, so mounting it would
