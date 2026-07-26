@@ -346,6 +346,7 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 }
 .card-btn:hover { border-color: var(--border-strong); background: var(--card-hover); }
 .card-btn:disabled, .card-btn.busy { opacity: .6; cursor: default; }
+.card-btn.spin .cb-ico svg { animation: spin 1s linear infinite; }
 .card-btn.done { color: var(--success); border-color: color-mix(in srgb, var(--success) 48%, transparent); background: color-mix(in srgb, var(--success) 12%, transparent); }
 .card-btn.failed { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 48%, transparent); background: color-mix(in srgb, var(--danger) 12%, transparent); }
 .card-btn .cb-ico { display: inline-flex; }
@@ -687,7 +688,7 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
   .view, .view.back { animation: none; }
   .loadbar { transition: opacity .25s ease; }
   .sk::after { animation: none; }
-  .iconbtn.spin svg, .rescan-btn.spin svg { animation: none; }
+  .iconbtn.spin svg, .rescan-btn.spin svg, .card-btn.spin .cb-ico svg { animation: none; }
   .caret, .acct-detail, .notif-card, .card, .lane-body, .lane-caret, .repo-row, .repo-acts, .repo-err, .repo-ico { transition: none; }
   .repo-row.added, .repo-row.removing, .repo-add input.shake, .repo-edit-input.shake { animation: none; }
 }
@@ -1289,8 +1290,15 @@ function cardActionBtn(pr, a) {
   // If a click's POST is still in flight when this card re-renders (e.g. from a streamed
   // 'state' event), keep the replacement split disabled so it can't re-queue the same action.
   const inflight = inflightActions.has(actionKey(a.kind, pr.url || "", pr.repository || "", pr.number));
-  const busyCls = inflight ? " busy" : "";
-  const disabledAttr = inflight ? " disabled" : "";
+  // While a forced refresh is finalizing, cards can be visible from a streamed partial before the
+  // final snapshot (which action resolution trusts) arrives. Grey out actions during that window
+  // and show a spinner so users get immediate feedback instead of a transient "no longer in view".
+  const finalizing = refreshing && !inflight;
+  const busyCls = (inflight || finalizing) ? " busy" : "";
+  const spinCls = finalizing ? " spin" : "";
+  const disabledAttr = (inflight || refreshing) ? " disabled" : "";
+  const mainIcon = finalizing ? '<span class="cb-ico">' + ICONS.refresh + "</span>" : icon;
+  const mainLabel = finalizing ? "Finalizing\u2026" : a.label;
   // open_pr_session can only target github.com, so the server degrades a new-session action on a
   // GHES/EMU (non-dotcom) PR to the current session. Detect that here from the server-resolved PR
   // url and don't advertise "Open in new session" for those cards: render a single current-session
@@ -1302,8 +1310,8 @@ function cardActionBtn(pr, a) {
   // request runs so focus may move away. Announcing politely surfaces that async result to screen
   // readers even after the button loses focus. A full re-render swaps in a fresh element with its
   // initial label, which does not announce, so only the in-place status updates are spoken.
-  const mainBtn = '<button type="button" class="card-btn cb-main' + busyCls + '" data-target="' + mainTarget + '" aria-live="polite"' + disabledAttr + '>' +
-    icon + '<span class="cb-label">' + esc(a.label) + "</span></button>";
+  const mainBtn = '<button type="button" class="card-btn cb-main' + busyCls + spinCls + '" data-target="' + mainTarget + '" aria-live="polite"' + disabledAttr + '>' +
+    mainIcon + '<span class="cb-label">' + esc(mainLabel) + "</span></button>";
   // A GHES/EMU card has only the current-session target, so render the lone main button with no
   // caret or menu — there is nothing to choose and no unsupported option to mislead with.
   if (!isDotcom) {

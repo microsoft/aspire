@@ -263,6 +263,18 @@ test("cardActionBtn re-renders a disabled button while its action's POST is stil
   assert.doesNotMatch(other, /disabled/);
 });
 
+test("cardActionBtn greys out and spins while refresh finalization is in progress", () => {
+  const { api } = createRendererHarness();
+  const pr = { url: "https://github.com/o/r/pull/1", number: 1, repository: "o/r", title: "t", author: "a" };
+  const action = { kind: "review", label: "Review", done: "Review requested", icon: "" };
+
+  api.setRefreshing(true);
+  const html = api.cardActionBtn(pr, action);
+  assert.match(html, /class="card-btn cb-main busy spin" data-target="new-session" aria-live="polite" disabled/);
+  assert.match(html, /Finalizing…/);
+  assert.match(html, /class="card-btn cb-caret"[^>]*disabled/);
+});
+
 test("cardActionBtn defaults a GHES/EMU card to the current session with no new-session option", () => {
   const { api } = createRendererHarness();
   const action = { kind: "review", label: "Review", done: "Review requested", icon: "" };
@@ -663,7 +675,7 @@ function createRendererHarness(overrides = {}) {
     console,
   };
 
-  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  withRefresh,\n  load,\n  rescanAccounts,\n  onCardAction,\n  onSseRefresh,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  focusCardActions,\n  laneCardActions,\n  signalActions,\n  mergeActions,\n  queuePanel,\n  cardActionBtn,\n  actionKey,\n  inflightActions,\n  setProgress,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  setPrefs(value) { prefs = value; },\n  setView(value) { view = value; },\n  setRefreshInFlight(value) { refreshInFlight = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
+  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  withRefresh,\n  load,\n  rescanAccounts,\n  onCardAction,\n  onSseRefresh,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  focusCardActions,\n  laneCardActions,\n  signalActions,\n  mergeActions,\n  queuePanel,\n  cardActionBtn,\n  actionKey,\n  inflightActions,\n  setProgress,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  setPrefs(value) { prefs = value; },\n  setView(value) { view = value; },\n  setRefreshing(value) { refreshing = !!value; },\n  setRefreshInFlight(value) { refreshInFlight = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
 
   return { app, api: sandbox.__test };
 }
