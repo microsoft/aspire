@@ -729,6 +729,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         using (var command = connection.CreateCommand())
         {
             Assert.True(new SqliteConnectionStringBuilder(connection.ConnectionString).Pooling);
+            Assert.Equal(5, connection.DefaultTimeout);
+            Assert.Equal(5, command.CommandTimeout);
 
             command.CommandText = """
                 SELECT

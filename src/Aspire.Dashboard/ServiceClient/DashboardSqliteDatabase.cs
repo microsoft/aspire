@@ -47,6 +47,7 @@ public sealed class DashboardSqliteDatabase : IDisposable
             DataSource = DatabasePath,
             Mode = readOnly ? SqliteOpenMode.ReadOnly : SqliteOpenMode.ReadWriteCreate,
             Pooling = pooling,
+            ForeignKeys = true,
             DefaultTimeout = 5
         }.ToString();
     }
@@ -96,7 +97,6 @@ public sealed class DashboardSqliteDatabase : IDisposable
     {
         var connection = new TracingSqliteConnection(_connectionString, DatabasePath, _activitySource);
         connection.Open();
-        connection.Execute("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
 
         return connection;
     }

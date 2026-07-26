@@ -852,7 +852,7 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
 
     private static void AssertBatchedResourceQueries(IReadOnlyList<string> queries)
     {
-        Assert.Equal(10, queries.Count);
+        Assert.Equal(9, queries.Count);
 
         string[] insertedTables =
         [
