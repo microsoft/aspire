@@ -1418,9 +1418,17 @@ public static partial class JavaScriptHostingExtensions
     /// </para>
     /// <para>
     /// For Deno applications the generated container runs <c>deno task &lt;scriptName&gt;</c> and copies the populated
-    /// <c>DENO_DIR</c> cache from the build stage, so the container does not re-download dependencies on first run.
-    /// Unlike the Node.js and Bun package managers, Deno does not need a separate production install step because
-    /// <c>deno cache</c> during the build already materializes every dependency.
+    /// <c>DENO_DIR</c> cache from the build stage, so whatever the build resolved is already present at runtime.
+    /// Unlike the Node.js and Bun package managers there is no separate production install step, because the build
+    /// stage runs <c>deno install</c> and <c>DENO_DIR</c> is carried forward as-is rather than being pruned.
+    /// </para>
+    /// <para>
+    /// <c>deno install</c> only resolves the dependencies declared in <c>deno.json</c> or <c>package.json</c>. An
+    /// import written as a bare specifier in source, such as <c>import { assert } from "jsr:@std/assert"</c>, is not
+    /// declared anywhere the installer can see, so it is fetched on first use and the container needs network access
+    /// at startup. The same applies to anything reachable only from inside the build script's own task command, which
+    /// Aspire cannot inspect. Add those imports to the <c>imports</c> map in <c>deno.json</c> if the container has to
+    /// start without network access.
     /// </para>
     /// <para>
     /// For frameworks that produce a self-contained server artifact that does not require <c>node_modules</c>,
