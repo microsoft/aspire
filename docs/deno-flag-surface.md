@@ -199,4 +199,3 @@ Because `--cached-only` is an Aspire default (hermetic builds) rather than a cal
 **omits** it when `WithDenoRuntimeArgs` contains `--reload`, `-r`, or an explicit `--cached-only`, so the
 caller's cache policy takes effect instead of being silently discarded. `--no-remote` is not treated as a
 cache policy — it is orthogonal to caching.
-
