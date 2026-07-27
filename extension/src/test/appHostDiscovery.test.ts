@@ -634,6 +634,54 @@ suite('AppHost discovery', () => {
             }
         });
 
+        test('watched file invalidation cancels superseded in-flight discovery', async () => {
+            const watcherCallbacks = stubFileSystemWatchers(sandbox);
+            const clock = sandbox.useFakeTimers();
+            const killedArgs: string[][] = [];
+            let hangCli = true;
+            const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
+                const childProcess = {
+                    killed: false,
+                    kill: sandbox.stub().callsFake(() => {
+                        childProcess.killed = true;
+                        killedArgs.push(args);
+                        return true;
+                    }),
+                };
+
+                if (!hangCli) {
+                    options?.stdoutCallback?.('[]');
+                    options?.exitCallback?.(0);
+                }
+
+                return childProcess as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+
+            try {
+                const firstDiscovery = service.discover(workspaceFolder);
+                await waitForMicrotasks();
+                assert.strictEqual(spawnStub.callCount, 1);
+
+                watcherCallbacks[0]();
+                await clock.tickAsync(250);
+
+                await assert.rejects(firstDiscovery, vscode.CancellationError);
+                assert.deepStrictEqual(killedArgs, [
+                    ['ls', '--format', 'json', '--nologo', '--stream'],
+                ]);
+
+                hangCli = false;
+                assert.deepStrictEqual(await service.discover(workspaceFolder), []);
+                assert.strictEqual(spawnStub.callCount, 2);
+            }
+            finally {
+                service.dispose();
+                clock.restore();
+            }
+        });
+
         test('already cancelled caller token does not start discovery on cache miss', async () => {
             stubFileSystemWatchers(sandbox);
             const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
@@ -1162,7 +1210,7 @@ suite('AppHost discovery', () => {
             }
         });
 
-        test('reprobes aspire ls with --stream after force refresh', async () => {
+        test('keeps buffered aspire ls after force refresh when the same CLI rejected --stream', async () => {
             stubFileSystemWatchers(sandbox);
             const candidate = {
                 path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
@@ -1193,7 +1241,7 @@ suite('AppHost discovery', () => {
                 assert.deepStrictEqual(observedArgs, [
                     ['ls', '--format', 'json', '--nologo', '--stream'],
                     ['ls', '--format', 'json', '--nologo'],
-                    ['ls', '--format', 'json', '--nologo', '--stream'],
+                    ['ls', '--format', 'json', '--nologo'],
                 ]);
             }
             finally {

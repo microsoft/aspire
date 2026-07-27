@@ -41,10 +41,10 @@ class TestChildProcess extends EventEmitter {
     }
 }
 
-function createLsLineCallback(options: cliModule.SpawnProcessOptions | undefined): (line: string) => void {
+function createLsOutputCallback(options: cliModule.SpawnProcessOptions | undefined): (line: string) => void {
     return line => {
         if (options?.lineCallback) {
-            for (const candidate of toStreamCandidates(line)) {
+            for (const candidate of toStreamedLsCandidates(line)) {
                 options.lineCallback(JSON.stringify(candidate));
             }
 
@@ -57,7 +57,7 @@ function createLsLineCallback(options: cliModule.SpawnProcessOptions | undefined
     };
 }
 
-function toStreamCandidates(output: string): CandidateAppHostDisplayInfo[] {
+function toStreamedLsCandidates(output: string): CandidateAppHostDisplayInfo[] {
     const parsed = JSON.parse(output);
     if (Array.isArray(parsed)) {
         return parsed;
@@ -1262,7 +1262,7 @@ suite('AppHostDataRepository', () => {
     test('describe reports generic error when workspace AppHost exits with runtime failure', async () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
         spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsLineCallback(options);
+            getAppHostsLineCallback = createLsOutputCallback(options);
             return new TestChildProcess();
         });
         spawnStub.onSecondCall().returns(new TestChildProcess());
@@ -1334,7 +1334,7 @@ suite('AppHostDataRepository', () => {
     test('describe clears compatibility error after receiving resource data', async () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
         spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsLineCallback(options);
+            getAppHostsLineCallback = createLsOutputCallback(options);
             return new TestChildProcess();
         });
         const workspaceFoldersStub = stubWorkspaceFolders([{
@@ -1394,7 +1394,7 @@ suite('AppHostDataRepository', () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
         const getAppHostsProcess = new TestChildProcess();
         spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsLineCallback(options);
+            getAppHostsLineCallback = createLsOutputCallback(options);
             return getAppHostsProcess;
         });
         const workspaceFoldersStub = stubWorkspaceFolders([{
@@ -1476,7 +1476,7 @@ suite('AppHostDataRepository', () => {
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             switch (args[0]) {
                 case 'ls':
-                    getAppHostsLineCallback = createLsLineCallback(options);
+                    getAppHostsLineCallback = createLsOutputCallback(options);
                     return getAppHostsProcess;
                 case 'describe':
                     return describeProcesses.shift() ?? new TestChildProcess();
@@ -1542,7 +1542,7 @@ suite('AppHostDataRepository', () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             if (args[0] === 'ls') {
-                getAppHostsLineCallback = createLsLineCallback(options);
+                getAppHostsLineCallback = createLsOutputCallback(options);
             }
             return new TestChildProcess();
         });
@@ -2155,7 +2155,7 @@ suite('AppHostDataRepository', () => {
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             switch (args[0]) {
                 case 'ls':
-                    getAppHostsLineCallback = createLsLineCallback(options);
+                    getAppHostsLineCallback = createLsOutputCallback(options);
                     return getAppHostsProcess;
                 case 'describe':
                     return describeProcess;
@@ -2200,7 +2200,7 @@ suite('AppHostDataRepository', () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             if (args[0] === 'ls') {
-                getAppHostsLineCallback = createLsLineCallback(options);
+                getAppHostsLineCallback = createLsOutputCallback(options);
             }
             return new TestChildProcess();
         });
@@ -2270,7 +2270,7 @@ suite('AppHostDataRepository', () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             if (args[0] === 'ls') {
-                getAppHostsLineCallback = createLsLineCallback(options);
+                getAppHostsLineCallback = createLsOutputCallback(options);
             }
             return new TestChildProcess();
         });
@@ -2334,7 +2334,7 @@ suite('AppHostDataRepository', () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
         spawnStub.callsFake((_terminalProvider: any, _command: any, args: string[], options: any) => {
             if (args[0] === 'ls') {
-                getAppHostsLineCallback = createLsLineCallback(options);
+                getAppHostsLineCallback = createLsOutputCallback(options);
             }
             return new TestChildProcess();
         });
@@ -2452,7 +2452,7 @@ suite('AppHostDataRepository', () => {
             let getAppHostsLineCallback: ((line: string) => void) | undefined;
             spawnStub.callsFake((_terminalProvider, _command, args, options) => {
                 if (args[0] === 'ls') {
-                    getAppHostsLineCallback = createLsLineCallback(options);
+                    getAppHostsLineCallback = createLsOutputCallback(options);
                 }
                 return new TestChildProcess();
             });
@@ -2522,7 +2522,7 @@ suite('AppHostDataRepository', () => {
     test('single workspace AppHost candidate keeps workspace mode', async () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
         spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsLineCallback(options);
+            getAppHostsLineCallback = createLsOutputCallback(options);
             return new TestChildProcess();
         });
         const workspaceFoldersStub = stubWorkspaceFolders([{
@@ -2557,7 +2557,7 @@ suite('AppHostDataRepository', () => {
     test('possibly unbuildable AppHost candidates do not force global mode', async () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
         spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsLineCallback(options);
+            getAppHostsLineCallback = createLsOutputCallback(options);
             return new TestChildProcess();
         });
         const workspaceFoldersStub = stubWorkspaceFolders([{
@@ -2612,7 +2612,7 @@ suite('AppHostDataRepository', () => {
         const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
         spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsLineCallback(options);
+            getAppHostsLineCallback = createLsOutputCallback(options);
             return new TestChildProcess();
         });
         const repository = new AppHostDataRepository(terminalProvider);
@@ -2669,7 +2669,7 @@ suite('AppHostDataRepository', () => {
         const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
         spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsLineCallback(options);
+            getAppHostsLineCallback = createLsOutputCallback(options);
             return new TestChildProcess();
         });
         const repository = new AppHostDataRepository(terminalProvider);
@@ -3260,7 +3260,7 @@ suite('AppHostDataRepository', () => {
         }
     });
 
-    test('workspace discovery change clears stale selection before streaming replacement candidates', async () => {
+    test('workspace discovery change keeps stale selection until streaming replacement completes', async () => {
         const workspaceFolder = {
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
@@ -3282,8 +3282,8 @@ suite('AppHostDataRepository', () => {
         let secondDiscoveryCallback: ((candidate: CandidateAppHostDisplayInfo) => void) | undefined;
         const discoverStub = sinon.stub();
         discoverStub.onFirstCall().resolves([oldCandidate]);
-        discoverStub.onSecondCall().callsFake((_folder: vscode.WorkspaceFolder, _forceRefresh?: boolean, _cancellationToken?: vscode.CancellationToken, onCandidate?: (candidate: CandidateAppHostDisplayInfo) => void) => {
-            secondDiscoveryCallback = onCandidate;
+        discoverStub.onSecondCall().callsFake((_folder: vscode.WorkspaceFolder, _forceRefresh?: boolean, _cancellationToken?: vscode.CancellationToken, onStreamedCandidate?: (candidate: CandidateAppHostDisplayInfo) => void) => {
+            secondDiscoveryCallback = onStreamedCandidate;
             return secondDiscovery.promise;
         });
         const appHostDiscoveryService = {
@@ -3300,18 +3300,17 @@ suite('AppHostDataRepository', () => {
             discoveryChanges.fire(workspaceFolder);
             await waitForCondition(() => discoverStub.callCount === 2, 'workspace rediscovery did not start');
 
-            assert.strictEqual(repository.workspaceAppHostPath, undefined);
-            assert.strictEqual(repository.workspaceAppHostName, undefined);
-            assert.strictEqual(repository.workspaceAppHostDescription, undefined);
-            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, []);
+            assert.strictEqual(repository.workspaceAppHostPath, oldCandidate.path);
+            assert.strictEqual(repository.workspaceAppHostName, 'AppHost.csproj');
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, [oldCandidate.path]);
             assert.ok(secondDiscoveryCallback);
 
             secondDiscoveryCallback(newCandidate);
             await waitForMicrotasks();
 
-            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, [newCandidate.path]);
-            assert.strictEqual(repository.workspaceAppHostPath, undefined);
-            assert.strictEqual(repository.workspaceAppHostName, undefined);
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, [oldCandidate.path]);
+            assert.strictEqual(repository.workspaceAppHostPath, oldCandidate.path);
+            assert.strictEqual(repository.workspaceAppHostName, 'AppHost.csproj');
 
             secondDiscovery.resolve([newCandidate]);
             await waitForCondition(() => repository.workspaceAppHostPath === newCandidate.path, 'replacement workspace discovery did not apply');
@@ -3681,7 +3680,7 @@ suite('AppHostDataRepository', () => {
         const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
         spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsLineCallback(options);
+            getAppHostsLineCallback = createLsOutputCallback(options);
             return new TestChildProcess();
         });
         spawnStub.onSecondCall().returns(new TestChildProcess());
@@ -3891,7 +3890,7 @@ suite('AppHostDataRepository', () => {
         let psOptions: any;
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             if (args[0] === 'ls') {
-                getAppHostsLineCallback = createLsLineCallback(options);
+                getAppHostsLineCallback = createLsOutputCallback(options);
             }
             if (args[0] === 'describe') {
                 describeOptions = options;
@@ -3993,7 +3992,7 @@ suite('AppHostDataRepository', () => {
         let psOptions: any;
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             if (args[0] === 'ls') {
-                getAppHostsLineCallback = createLsLineCallback(options);
+                getAppHostsLineCallback = createLsOutputCallback(options);
             }
             if (args[0] === 'ps') {
                 psArgs = args;
@@ -4050,7 +4049,7 @@ suite('AppHostDataRepository', () => {
         let psOptions: any;
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             if (args[0] === 'ls') {
-                getAppHostsLineCallback = createLsLineCallback(options);
+                getAppHostsLineCallback = createLsOutputCallback(options);
             }
             if (args[0] === 'ps') {
                 psOptions = options;
@@ -4120,7 +4119,7 @@ suite('AppHostDataRepository', () => {
         let psOptions: any;
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             if (args[0] === 'ls') {
-                getAppHostsLineCallback = createLsLineCallback(options);
+                getAppHostsLineCallback = createLsOutputCallback(options);
             }
             if (args[0] === 'ps') {
                 psOptions = options;
@@ -4197,7 +4196,7 @@ suite('AppHostDataRepository', () => {
         let psOptions: any;
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             if (args[0] === 'ls') {
-                getAppHostsLineCallback = createLsLineCallback(options);
+                getAppHostsLineCallback = createLsOutputCallback(options);
             }
             if (args[0] === 'describe') {
                 describeOptions = options;
@@ -4262,7 +4261,7 @@ suite('AppHostDataRepository', () => {
         let psOptions: any;
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             if (args[0] === 'ls') {
-                getAppHostsLineCallback = createLsLineCallback(options);
+                getAppHostsLineCallback = createLsOutputCallback(options);
             }
             if (args[0] === 'describe') {
                 describeOptions = options;
@@ -4329,7 +4328,7 @@ suite('AppHostDataRepository', () => {
         const oneShotPsOptions: any[] = [];
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             if (args[0] === 'ls') {
-                getAppHostsLineCallback = createLsLineCallback(options);
+                getAppHostsLineCallback = createLsOutputCallback(options);
             }
             if (args[0] === 'describe') {
                 describeOptions = options;
@@ -4420,7 +4419,7 @@ suite('AppHostDataRepository', () => {
         const describeOptions: any[] = [];
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             if (args[0] === 'ls') {
-                getAppHostsLineCallback = createLsLineCallback(options);
+                getAppHostsLineCallback = createLsOutputCallback(options);
             }
             if (args[0] === 'describe') {
                 describeOptions.push(options);
@@ -4508,7 +4507,7 @@ suite('AppHostDataRepository', () => {
         const describeOptions: any[] = [];
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             if (args[0] === 'ls') {
-                getAppHostsLineCallback = createLsLineCallback(options);
+                getAppHostsLineCallback = createLsOutputCallback(options);
             }
             if (args[0] === 'describe') {
                 describeOptions.push(options);

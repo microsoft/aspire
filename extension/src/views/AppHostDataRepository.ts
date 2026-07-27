@@ -280,9 +280,7 @@ export class AppHostDataRepository {
         this._appHostDiscoveryChangeDisposable = this._appHostDiscoveryService.onDidChangeCandidates(workspaceFolder => {
             const rootFolder = vscode.workspace.workspaceFolders?.[0];
             if (rootFolder?.uri.toString() === workspaceFolder.uri.toString()) {
-                this._workspaceAppHostDiscoveryComplete = false;
-                this._clearWorkspaceAppHostDiscovery();
-                this._updateWorkspaceContext();
+                this._markWorkspaceAppHostDiscoveryPending();
                 this._fetchWorkspaceAppHost();
             }
         });
@@ -436,9 +434,7 @@ export class AppHostDataRepository {
         // even when the file watcher has not delivered an invalidation event yet.
         // Refresh only needs to re-pull discovery + the authoritative `ps` snapshot and let
         // reconcile preserve streams for still-rendered hosts.
-        this._workspaceAppHostDiscoveryComplete = false;
-        this._clearWorkspaceAppHostDiscovery();
-        this._updateWorkspaceContext();
+        this._markWorkspaceAppHostDiscoveryPending();
         this._fetchWorkspaceAppHost({ forceRefresh: true });
         this._reconcileDescribes();
         if (this._dataActive) {
@@ -711,6 +707,7 @@ export class AppHostDataRepository {
         const cancellationSource = new vscode.CancellationTokenSource();
         this._workspaceAppHostDiscoveryInProgress = true;
         this._workspaceAppHostDiscoveryCancellationSource = cancellationSource;
+        const canApplyStreamedCandidateUpdates = this._workspaceAppHostPath === undefined && this._workspaceAppHostCandidatePaths.length === 0;
 
         const streamedCandidates: CandidateAppHostDisplayInfo[] = [];
         const onCandidate = (candidate: CandidateAppHostDisplayInfo): void => {
@@ -719,6 +716,10 @@ export class AppHostDataRepository {
             }
 
             streamedCandidates.push(candidate);
+            if (!canApplyStreamedCandidateUpdates) {
+                return;
+            }
+
             const result = getWorkspaceAppHostProjectSearchResult(rootFolder, streamedCandidates);
             const buildableAppHostCandidates = result.app_host_candidates.filter(isBuildableAppHostCandidate);
             if (buildableAppHostCandidates.length === 0) {
@@ -739,6 +740,10 @@ export class AppHostDataRepository {
             this._handleWorkspaceAppHostCandidates(result.app_host_candidates, result.selected_project_file);
         }).catch(error => {
             if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
+                return;
+            }
+
+            if (error instanceof vscode.CancellationError) {
                 return;
             }
 
@@ -771,6 +776,14 @@ export class AppHostDataRepository {
         this._workspaceAppHostDiscoveryCancellationSource?.dispose();
         this._workspaceAppHostDiscoveryCancellationSource = undefined;
         this._workspaceAppHostDiscoveryInProgress = false;
+    }
+
+    private _markWorkspaceAppHostDiscoveryPending(): void {
+        this._workspaceAppHostDiscoveryComplete = false;
+        if (this._workspaceAppHostPath === undefined && this._workspaceAppHostCandidatePaths.length === 0) {
+            this._loadingWorkspace = true;
+            this._updateLoadingContext();
+        }
     }
 
     private _handleWorkspaceAppHostCandidates(appHostCandidates: readonly AppHostCandidate[], selectedAppHostPath: string | null): void {
