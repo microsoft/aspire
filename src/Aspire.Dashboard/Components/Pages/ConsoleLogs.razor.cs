@@ -21,6 +21,7 @@ using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using Microsoft.JSInterop;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
+using MenuItemRole = Microsoft.FluentUI.AspNetCore.Components.MenuItemRole;
 
 namespace Aspire.Dashboard.Components.Pages;
 
@@ -610,24 +611,27 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         // no-terminal case.
         if (_selectedResourceHasTerminal)
         {
-            // Mark the active view with a checkmark so the picker indicates the
-            // current selection. MenuButtonItem has no built-in checked/radio
-            // state, so we surface it via the leading icon — the same start-slot
-            // checkmark other menus use (e.g. GenAIVisualizerDialog). The icon
-            // gutter is always reserved by FluentMenuItem, so the unchecked item's
-            // text stays aligned with the checked one.
+            // Model the two view options as checkable menu items so the picker
+            // exposes the current selection to assistive technology, not just to
+            // sighted users. FluentMenuItem only emits role="menuitemcheckbox" and
+            // the reflected aria-checked state (which screen readers announce) when
+            // the item carries a checkable Role; a leading icon alone conveys the
+            // selection visually but is silent to a screen reader. The checkbox role
+            // also renders a checkmark indicator on the checked item.
             _logsMenuItems.Add(new()
             {
                 OnClick = () => HandleViewChangedAsync(nameof(ConsoleLogsView.Console)),
                 Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsViewConsoleOption)],
-                Icon = _activeView == ConsoleLogsView.Console ? new Icons.Regular.Size16.Checkmark() : null,
+                Role = MenuItemRole.MenuItemCheckbox,
+                Checked = _activeView == ConsoleLogsView.Console,
             });
 
             _logsMenuItems.Add(new()
             {
                 OnClick = () => HandleViewChangedAsync(nameof(ConsoleLogsView.Terminal)),
                 Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsViewTerminalOption)],
-                Icon = _activeView == ConsoleLogsView.Terminal ? new Icons.Regular.Size16.Checkmark() : null,
+                Role = MenuItemRole.MenuItemCheckbox,
+                Checked = _activeView == ConsoleLogsView.Terminal,
             });
 
             _logsMenuItems.Add(new()

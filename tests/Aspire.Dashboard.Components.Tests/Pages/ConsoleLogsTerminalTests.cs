@@ -90,7 +90,7 @@ public partial class ConsoleLogsTests
     }
 
     [Fact]
-    public async Task TerminalResource_ViewPicker_MarksActiveViewWithCheckmark()
+    public async Task TerminalResource_ViewPicker_MarksActiveViewAsChecked()
     {
         var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
         var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -122,18 +122,21 @@ public partial class ConsoleLogsTests
         cut.WaitForState(() => cut.FindComponents<TerminalView>().Count > 0);
 
         // The view-toggle items are the first two entries in the menu, added in
-        // Console-then-Terminal order (see UpdateMenuButtons). The live resource
-        // defaults to Terminal, so only the Terminal item carries the checkmark.
-        // Assert via Icon.Name so the test doesn't need the Icons icon package.
+        // Console-then-Terminal order (see UpdateMenuButtons). Both are modeled as
+        // checkable menu items so assistive technology can announce the selection;
+        // the live resource defaults to Terminal, so only the Terminal item is
+        // checked.
         cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Terminal);
-        Assert.Null(instance.LogsMenuItemsForTest[0].Icon);
-        Assert.Equal("Checkmark", instance.LogsMenuItemsForTest[1].Icon?.Name);
+        Assert.Equal(MenuItemRole.MenuItemCheckbox, instance.LogsMenuItemsForTest[0].Role);
+        Assert.Equal(MenuItemRole.MenuItemCheckbox, instance.LogsMenuItemsForTest[1].Role);
+        Assert.False(instance.LogsMenuItemsForTest[0].Checked);
+        Assert.True(instance.LogsMenuItemsForTest[1].Checked);
 
-        // Switching to Console moves the checkmark to the Console item.
+        // Switching to Console moves the checked state to the Console item.
         await cut.InvokeAsync(() => instance.HandleViewChangedForTestAsync(nameof(ConsoleLogs.ConsoleLogsView.Console)));
         cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Console);
-        Assert.Equal("Checkmark", instance.LogsMenuItemsForTest[0].Icon?.Name);
-        Assert.Null(instance.LogsMenuItemsForTest[1].Icon);
+        Assert.True(instance.LogsMenuItemsForTest[0].Checked);
+        Assert.False(instance.LogsMenuItemsForTest[1].Checked);
     }
 
     [Fact]
