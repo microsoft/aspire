@@ -1,0 +1,16 @@
+{
+  "id": "sqlserver-container-coinitializesecurity-failure",
+  "type": "infra-failure",
+  "title": "SQL Server container exits with CoInitializeSecurity failure (HRESULT 0x800706b5)",
+  "error_pattern": "Container exited with code 255.\n  Stderr:\n    ERROR: CoInitializeSecurity failure. (HRESULT 0x800706b5)\nContainerNotRunningException: Container ... exited with code 255.\nDocker API responded with status code=Conflict, response={\"message\":\"container ... is not running\"}",
+  "occurrences": [
+    {
+      "run_id": 30237175621,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/30237175621",
+      "job": "Tests / Microsoft.EntityFrameworkCore.SqlServer / Microsoft.EntityFrameworkCore.SqlServer (ubuntu-latest)",
+      "pr_number": 18865,
+      "observed_at": "2026-07-27T05:22:03Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/18901"
+}

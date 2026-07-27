@@ -1,0 +1,38 @@
+{
+  "run_id": 30237175621,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/30237175621",
+  "analyzed_at": "2026-07-27T05:22:03Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 18865,
+    "title": "Reject histogram bucket count length changes",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "fix/histogram-bucket-count-validation",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18865"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Microsoft.EntityFrameworkCore.SqlServer / Microsoft.EntityFrameworkCore.SqlServer (ubuntu-latest)",
+      "id": 89887320186,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/30237175621/job/89887320186",
+      "classification": "flaky-test",
+      "reason": "SQL Server container failed to start with 'CoInitializeSecurity failure (HRESULT 0x800706b5)'. This is a Docker/container infrastructure error unrelated to the PR changes (which only touch Aspire.Dashboard files). All 27 failures share the same SqlServerContainerFixture initialization failure.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Microsoft.EntityFrameworkCore.SqlServer.Tests.ConformanceTests_TypeSpecificConfig.DbContextPoolingRegistersIDbContextPool",
+      "job": "Tests / Microsoft.EntityFrameworkCore.SqlServer / Microsoft.EntityFrameworkCore.SqlServer (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Microsoft.Data.SqlClient.Tests.SqlServerContainerFixture' threw in InitializeAsync\n---- DotNet.Testcontainers.Containers.ContainerNotRunningException : Container 8c7d4927bf6e761108c23096a868e1a2c76d841dfc8b87e9b4b93be5c768fd3e exited with code 255.\n  Stderr:\n    2026-07-27T04:31:44.131678074Z ERROR: CoInitializeSecurity failure. (HRESULT 0x800706b5)",
+      "stack_trace": "at DotNet.Testcontainers.Containers.DockerContainer.ThrowIfContainerNotRunningAsync(...)\n   at DotNet.Testcontainers.Containers.DockerContainer.CheckReadinessAsync(...)\n   at DotNet.Testcontainers.Containers.DockerContainer.StartAsync(...)\n   at Aspire.Microsoft.Data.SqlClient.Tests.SqlServerContainerFixture.InitializeAsync() in SqlServerContainerFixture.cs:line 25",
+      "classification": "flaky",
+      "reason": "SQL Server container failed to start with CoInitializeSecurity failure (HRESULT 0x800706b5) - a transient Docker infrastructure issue. PR only changes Aspire.Dashboard files, not SqlServer tests."
+    }
+  ],
+  "causes": ["sqlserver-container-coinitializesecurity-failure"]
+}
