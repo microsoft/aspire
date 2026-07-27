@@ -44,6 +44,16 @@ For more information, see https://aka.ms/aspire/container-runtime-unhealthy.</so
         <target state="needs-review-translation">리소스가 자동으로 시작되지 않도록 구성되어 있어 시작되지 않았습니다.</target>
         <note />
       </trans-unit>
+      <trans-unit id="StateColumnResourceUnresolvedParameters">
+        <source>Resource is waiting for parameter values.</source>
+        <target state="new">Resource is waiting for parameter values.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StateColumnResourceUnresolvedParametersList">
+        <source>Waiting for parameters: {0}</source>
+        <target state="new">Waiting for parameters: {0}</target>
+        <note>{0} is a comma-separated list of parameter resource names.</note>
+      </trans-unit>
       <trans-unit id="StateColumnResourceWaiting">
         <source>Resource is waiting for dependencies.</source>
         <target state="needs-review-translation">해당 리소스는 다른 리소스가 실행 중이며 정상 상태가 될 때까지 대기하고 있습니다.</target>

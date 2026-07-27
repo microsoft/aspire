@@ -148,10 +148,15 @@ internal static class ResourceViewModelExtensions
     {
         return resource.TryGetCustomDataString(KnownProperties.Terminal.ConsumerUdsPath, out consumerUdsPath);
     }
-    
+
     public static bool TryGetWaitingForDependencies(this ResourceViewModel resource, out ImmutableArray<string> dependencies)
     {
         return resource.TryGetCustomDataStringArray(KnownProperties.Resource.WaitingFor, out dependencies) && dependencies.Length > 0;
+    }
+
+    public static bool TryGetUnresolvedParameters(this ResourceViewModel resource, out ImmutableArray<string> parameters)
+    {
+        return resource.TryGetCustomDataStringArray(KnownProperties.Resource.UnresolvedParameters, out parameters) && parameters.Length > 0;
     }
 
     public static bool TryGetResolvedWaitingForDependencies(

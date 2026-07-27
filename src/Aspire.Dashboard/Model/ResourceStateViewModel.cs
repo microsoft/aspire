@@ -130,6 +130,12 @@ internal class ResourceStateViewModel(string text, Icon icon, Color color)
             // DCP reports the container runtime is unhealthy. Most likely the container runtime (e.g. Docker) isn't running.
             return loc[nameof(Columns.StateColumnResourceContainerRuntimeUnhealthy)];
         }
+        else if (resource.HasUnresolvedParametersState())
+        {
+            return resource.TryGetUnresolvedParameters(out var parameters)
+                ? loc.GetString(nameof(Columns.StateColumnResourceUnresolvedParametersList), string.Join(", ", parameters))
+                : loc[nameof(Columns.StateColumnResourceUnresolvedParameters)];
+        }
         else if (resource.IsWaiting())
         {
             if (allResources is not null

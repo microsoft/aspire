@@ -44,6 +44,16 @@ Per altre informazioni, vedere https://aka.ms/dotnet/aspire/container-runtime-un
         <target state="needs-review-translation">La risorsa non è stata avviata perché è configurata per non avviarsi automaticamente.</target>
         <note />
       </trans-unit>
+      <trans-unit id="StateColumnResourceUnresolvedParameters">
+        <source>Resource is waiting for parameter values.</source>
+        <target state="new">Resource is waiting for parameter values.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StateColumnResourceUnresolvedParametersList">
+        <source>Waiting for parameters: {0}</source>
+        <target state="new">Waiting for parameters: {0}</target>
+        <note>{0} is a comma-separated list of parameter resource names.</note>
+      </trans-unit>
       <trans-unit id="StateColumnResourceWaiting">
         <source>Resource is waiting for dependencies.</source>
         <target state="needs-review-translation">La risorsa è in attesa che altre risorse siano in esecuzione e in stato integro.</target>

@@ -44,6 +44,16 @@ Aby uzyskać więcej informacji, zobacz https://aka.ms/dotnet/aspire/container-r
         <target state="needs-review-translation">Zasób nie został uruchomiony, ponieważ jest skonfigurowany tak, aby nie uruchamiał się automatycznie.</target>
         <note />
       </trans-unit>
+      <trans-unit id="StateColumnResourceUnresolvedParameters">
+        <source>Resource is waiting for parameter values.</source>
+        <target state="new">Resource is waiting for parameter values.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StateColumnResourceUnresolvedParametersList">
+        <source>Waiting for parameters: {0}</source>
+        <target state="new">Waiting for parameters: {0}</target>
+        <note>{0} is a comma-separated list of parameter resource names.</note>
+      </trans-unit>
       <trans-unit id="StateColumnResourceWaiting">
         <source>Resource is waiting for dependencies.</source>
         <target state="needs-review-translation">Zasób oczekuje, aż inne zasoby będą w stanie uruchomionym i w dobrej kondycji.</target>

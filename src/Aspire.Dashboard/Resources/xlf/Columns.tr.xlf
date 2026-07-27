@@ -44,6 +44,16 @@ Daha fazla bilgi için bkz. https://aka.ms/dotnet/aspire/container-runtime-unhea
         <target state="needs-review-translation">Kaynak, otomatik olarak başlatılmak için yapılandırılmadığından başlatılmadı.</target>
         <note />
       </trans-unit>
+      <trans-unit id="StateColumnResourceUnresolvedParameters">
+        <source>Resource is waiting for parameter values.</source>
+        <target state="new">Resource is waiting for parameter values.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StateColumnResourceUnresolvedParametersList">
+        <source>Waiting for parameters: {0}</source>
+        <target state="new">Waiting for parameters: {0}</target>
+        <note>{0} is a comma-separated list of parameter resource names.</note>
+      </trans-unit>
       <trans-unit id="StateColumnResourceWaiting">
         <source>Resource is waiting for dependencies.</source>
         <target state="needs-review-translation">Kaynak, diğer kaynakların çalışır durumda ve sağlıklı olmasını bekliyor.</target>

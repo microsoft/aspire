@@ -821,6 +821,14 @@ public class ResourceNotificationService : IDisposable
                 };
             }
 
+            if (!string.Equals(newState.State?.Text, KnownResourceStates.UnresolvedParameters, StringComparisons.ResourceState))
+            {
+                newState = newState with
+                {
+                    Properties = newState.Properties.RemoveResourceProperty(KnownProperties.Resource.UnresolvedParameters)
+                };
+            }
+
             // Increment the snapshot version, this is a per resource version.
             newState = newState with { Version = notificationState.GetNextVersion() };
 

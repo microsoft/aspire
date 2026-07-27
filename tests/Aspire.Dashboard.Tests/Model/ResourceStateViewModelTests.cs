@@ -63,6 +63,9 @@ public class ResourceStateViewModelTests
     [InlineData(
         /* state */ "Container", KnownResourceState.RuntimeUnhealthy, null, null, null,
         /* expected output */ $"Localized:{nameof(Columns.StateColumnResourceContainerRuntimeUnhealthy)}", "Warning", Color.Warning, "Runtime unhealthy")]
+    [InlineData(
+        /* state */ "Container", KnownResourceState.UnresolvedParameters, null, null, "warning",
+        /* expected output */ $"Localized:{nameof(Columns.StateColumnResourceUnresolvedParameters)}", "Warning", Color.Warning, "Unresolved parameters")]
     public void ResourceViewModel_ReturnsCorrectIconAndTooltip(
         string resourceType,
         KnownResourceState state,
@@ -131,6 +134,31 @@ public class ResourceStateViewModelTests
         var tooltip = ResourceStateViewModel.GetResourceStateTooltip(resource, localizer);
 
         Assert.Equal($"Localized:{nameof(Columns.StateColumnResourceWaitingFor)}:nginx, redis", tooltip);
+    }
+
+    [Fact]
+    public void UnresolvedParametersTooltipIncludesParameterNames()
+    {
+        var resource = ModelTestHelpers.CreateResource(
+            state: KnownResourceState.UnresolvedParameters,
+            stateStyle: "warning",
+            properties: new Dictionary<string, ResourcePropertyViewModel>
+            {
+                [KnownProperties.Resource.UnresolvedParameters] = new(
+                    KnownProperties.Resource.UnresolvedParameters,
+                    Value.ForList(Value.ForString("first"), Value.ForString("second")),
+                    isValueSensitive: false,
+                    knownProperty: null,
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false)
+            });
+
+        var localizer = new TestStringLocalizer<Columns>();
+
+        var tooltip = ResourceStateViewModel.GetResourceStateTooltip(resource, localizer);
+
+        Assert.Equal($"Localized:{nameof(Columns.StateColumnResourceUnresolvedParametersList)}:first, second", tooltip);
     }
 
     [Fact]

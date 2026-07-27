@@ -572,6 +572,131 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(KnownResourceStates.Starting, snapshotEvent.Snapshot.State?.Text);
     }
 
+    [Fact]
+    public async Task OnResourceStarting_WithUnresolvedParameters_PublishesParameterNamesUntilResolved()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var firstParameter = builder.AddParameter("first", () => throw new MissingParameterValueException("Missing first parameter."));
+        var secondParameter = builder.AddParameter("second", () => throw new MissingParameterValueException("Missing second parameter."));
+        var container = builder.AddContainer("api", "test-image")
+            .WithEnvironment("FIRST", firstParameter)
+            .WithEnvironment("SECOND", secondParameter);
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events);
+        await appOrchestrator.RunApplicationAsync();
+        await events.PublishAsync(new OnResourcesPreparedContext(CancellationToken.None));
+
+        await events.PublishAsync(new OnResourceStartingContext(CancellationToken.None, KnownResourceTypes.Container, container.Resource, "api-dcp"));
+
+        Assert.True(resourceNotificationService.TryGetCurrentState("api-dcp", out var unresolvedEvent));
+        Assert.Equal(KnownResourceStates.UnresolvedParameters, unresolvedEvent.Snapshot.State?.Text);
+        Assert.Equal(KnownResourceStateStyles.Warn, unresolvedEvent.Snapshot.State?.Style);
+        Assert.Equal(
+            ["first", "second"],
+            Assert.IsType<string[]>(Assert.Single(unresolvedEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters).Value));
+
+        var configurationTask = ExecutionConfigurationBuilder.Create(container.Resource)
+            .WithEnvironmentVariablesConfig()
+            .BuildAsync(new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run), NullLogger.Instance);
+        Assert.False(configurationTask.IsCompleted);
+
+        var partiallyResolvedTask = resourceNotificationService.WaitForResourceAsync(
+            container.Resource.Name,
+            e => e.Snapshot.State?.Text == KnownResourceStates.UnresolvedParameters &&
+                Assert.IsType<string[]>(Assert.Single(e.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters).Value)
+                    .SequenceEqual(["second"]));
+        Assert.True(firstParameter.Resource.WaitForValueTcs!.TrySetResult("first-value"));
+        _ = await partiallyResolvedTask.DefaultTimeout();
+        Assert.False(configurationTask.IsCompleted);
+
+        var startingTask = resourceNotificationService.WaitForResourceAsync(
+            container.Resource.Name,
+            e => e.Snapshot.State?.Text == KnownResourceStates.Starting);
+        Assert.True(secondParameter.Resource.WaitForValueTcs!.TrySetResult("second-value"));
+        var startingEvent = await startingTask.DefaultTimeout();
+        var configuration = await configurationTask.DefaultTimeout();
+
+        Assert.DoesNotContain(startingEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters);
+        Assert.Null(configuration.Exception);
+        Assert.Equal("first-value", configuration.EnvironmentVariables.Single(e => e.Key == "FIRST").Value);
+        Assert.Equal("second-value", configuration.EnvironmentVariables.Single(e => e.Key == "SECOND").Value);
+    }
+
+    [Fact]
+    public async Task OnResourceStarting_WithUnrelatedUnresolvedParameter_RemainsStarting()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        _ = builder.AddParameter("unrelated", () => throw new MissingParameterValueException("Missing unrelated parameter."));
+        var container = builder.AddContainer("api", "test-image");
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events);
+        await appOrchestrator.RunApplicationAsync();
+        await events.PublishAsync(new OnResourcesPreparedContext(CancellationToken.None));
+
+        await events.PublishAsync(new OnResourceStartingContext(CancellationToken.None, KnownResourceTypes.Container, container.Resource, "api-dcp"));
+
+        Assert.True(resourceNotificationService.TryGetCurrentState("api-dcp", out var startingEvent));
+        Assert.Equal(KnownResourceStates.Starting, startingEvent.Snapshot.State?.Text);
+        Assert.DoesNotContain(startingEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters);
+    }
+
+    [Fact]
+    public async Task OnResourceStarting_WhenResourceLeavesUnresolvedParameters_DoesNotRegressState()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var parameter = builder.AddParameter("value", () => throw new MissingParameterValueException("Missing parameter."));
+        var container = builder.AddContainer("api", "test-image")
+            .WithEnvironment("VALUE", parameter);
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events);
+        await appOrchestrator.RunApplicationAsync();
+        await events.PublishAsync(new OnResourcesPreparedContext(CancellationToken.None));
+        await events.PublishAsync(new OnResourceStartingContext(CancellationToken.None, KnownResourceTypes.Container, container.Resource, "api-dcp"));
+
+        Assert.True(resourceNotificationService.TryGetCurrentState("api-dcp", out var unresolvedEvent));
+        Assert.Equal(KnownResourceStates.UnresolvedParameters, unresolvedEvent.Snapshot.State?.Text);
+
+        await resourceNotificationService.PublishUpdateAsync(container.Resource, "api-dcp", s => s with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+
+        Assert.True(resourceNotificationService.TryGetCurrentState("api-dcp", out var runningEvent));
+        var monitorUpdateTask = resourceNotificationService.WaitForResourceAsync(
+            container.Resource.Name,
+            e => e.Snapshot.Version > runningEvent.Snapshot.Version);
+
+        Assert.True(parameter.Resource.WaitForValueTcs!.TrySetResult("resolved-value"));
+        var monitorUpdate = await monitorUpdateTask.DefaultTimeout();
+
+        Assert.Equal(KnownResourceStates.Running, monitorUpdate.Snapshot.State?.Text);
+        Assert.DoesNotContain(monitorUpdate.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters);
+    }
+
     private ApplicationOrchestrator CreateOrchestrator(
         DistributedApplicationModel distributedAppModel,
         ResourceNotificationService notificationService,

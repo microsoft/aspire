@@ -161,6 +161,13 @@ For more information, see https://aka.ms/aspire/container-runtime-unhealthy.</va
   <data name="StateColumnResourceNotStarted" xml:space="preserve">
     <value>Resource is not configured to start automatically.</value>
   </data>
+  <data name="StateColumnResourceUnresolvedParameters" xml:space="preserve">
+    <value>Resource is waiting for parameter values.</value>
+  </data>
+  <data name="StateColumnResourceUnresolvedParametersList" xml:space="preserve">
+    <value>Waiting for parameters: {0}</value>
+    <comment>{0} is a comma-separated list of parameter resource names.</comment>
+  </data>
   <data name="StateColumnResourceWaiting" xml:space="preserve">
     <value>Resource is waiting for dependencies.</value>
   </data>

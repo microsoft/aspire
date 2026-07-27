@@ -44,6 +44,16 @@ Pour plus d’informations, consultez https://aka.ms/dotnet/aspire/container-run
         <target state="needs-review-translation">La ressource n’a pas démarré, car elle est configurée pour ne pas démarrer automatiquement.</target>
         <note />
       </trans-unit>
+      <trans-unit id="StateColumnResourceUnresolvedParameters">
+        <source>Resource is waiting for parameter values.</source>
+        <target state="new">Resource is waiting for parameter values.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StateColumnResourceUnresolvedParametersList">
+        <source>Waiting for parameters: {0}</source>
+        <target state="new">Waiting for parameters: {0}</target>
+        <note>{0} is a comma-separated list of parameter resource names.</note>
+      </trans-unit>
       <trans-unit id="StateColumnResourceWaiting">
         <source>Resource is waiting for dependencies.</source>
         <target state="needs-review-translation">La ressource attend que les autres ressources soient dans un état d’exécution et sain.</target>

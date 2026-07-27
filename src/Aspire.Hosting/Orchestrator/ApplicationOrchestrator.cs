@@ -209,6 +209,8 @@ internal sealed class ApplicationOrchestrator
                 break;
         }
 
+        await PublishUnresolvedParametersStateAsync(context).ConfigureAwait(false);
+
         var beforeResourceStartedEvent = new BeforeResourceStartedEvent(context.Resource, _serviceProvider);
         await _eventing.PublishAsync(beforeResourceStartedEvent, context.CancellationToken).ConfigureAwait(false);
 
@@ -218,6 +220,126 @@ internal sealed class ApplicationOrchestrator
                 ? notificationService.PublishUpdateAsync(resource, resourceId, stateFactory)
                 : notificationService.PublishUpdateAsync(resource, stateFactory);
         }
+    }
+
+    private async Task PublishUnresolvedParametersStateAsync(OnResourceStartingContext context)
+    {
+        if (!_model.Resources.OfType<ParameterResource>().Any(static parameter => parameter.WaitForValueTcs?.Task.IsCompleted is false))
+        {
+            return;
+        }
+
+        var dependencies = await context.Resource.GetResourceDependenciesAsync(
+            _executionContext,
+            ResourceDependencyDiscoveryMode.Recursive,
+            context.CancellationToken).ConfigureAwait(false);
+        var unresolvedParameters = dependencies
+            .OfType<ParameterResource>()
+            .Where(static parameter => parameter.WaitForValueTcs?.Task.IsCompleted is false)
+            .OrderBy(static parameter => parameter.Name, StringComparers.ResourceName)
+            .ToArray();
+
+        if (unresolvedParameters.Length == 0)
+        {
+            return;
+        }
+
+        await PublishUnresolvedParametersUpdateAsync(context.Resource, context.DcpResourceName, unresolvedParameters, allowStartingState: true).ConfigureAwait(false);
+
+        _ = MonitorUnresolvedParametersAsync(context.Resource, context.DcpResourceName, unresolvedParameters, context.CancellationToken);
+    }
+
+    private async Task MonitorUnresolvedParametersAsync(
+        IResource resource,
+        string? resourceId,
+        ParameterResource[] unresolvedParameters,
+        CancellationToken cancellationToken)
+    {
+        var remainingParameters = unresolvedParameters.ToHashSet();
+        using var updateLock = new SemaphoreSlim(1, 1);
+
+        try
+        {
+            await Task.WhenAll(unresolvedParameters.Select(WaitForParameterAsync)).ConfigureAwait(false);
+
+            async Task WaitForParameterAsync(ParameterResource parameter)
+            {
+                var parameterTask = parameter.WaitForValueTcs!.Task;
+                try
+                {
+                    await parameterTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch
+                {
+                    // A completed parameter task no longer blocks startup. The normal resource
+                    // startup path reports the parameter failure separately.
+                }
+
+                await updateLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    remainingParameters.Remove(parameter);
+                    await PublishUnresolvedParametersUpdateAsync(resource, resourceId, remainingParameters).ConfigureAwait(false);
+                }
+                finally
+                {
+                    updateLock.Release();
+                }
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to update unresolved parameters for resource '{ResourceName}'.", resource.Name);
+        }
+    }
+
+    private Task PublishUnresolvedParametersUpdateAsync(
+        IResource resource,
+        string? resourceId,
+        IReadOnlyCollection<ParameterResource> unresolvedParameters,
+        bool allowStartingState = false)
+    {
+        CustomResourceSnapshot UpdateSnapshot(CustomResourceSnapshot snapshot)
+        {
+            var isUnresolvedParametersState = string.Equals(snapshot.State?.Text, KnownResourceStates.UnresolvedParameters, StringComparisons.ResourceState);
+            var canEnterUnresolvedParametersState = allowStartingState &&
+                string.Equals(snapshot.State?.Text, KnownResourceStates.Starting, StringComparisons.ResourceState);
+            if (!isUnresolvedParametersState && !canEnterUnresolvedParametersState)
+            {
+                return snapshot;
+            }
+
+            if (unresolvedParameters.Count == 0)
+            {
+                return snapshot with
+                {
+                    State = KnownResourceStates.Starting,
+                    Properties = snapshot.Properties.RemoveResourceProperty(KnownProperties.Resource.UnresolvedParameters)
+                };
+            }
+
+            var parameterNames = unresolvedParameters
+                .Select(static parameter => parameter.Name)
+                .Order(StringComparers.ResourceName)
+                .ToArray();
+
+            return snapshot with
+            {
+                State = new(KnownResourceStates.UnresolvedParameters, KnownResourceStateStyles.Warn),
+                Properties = snapshot.Properties.SetResourceProperty(KnownProperties.Resource.UnresolvedParameters, parameterNames)
+            };
+        }
+
+        return resourceId is not null
+            ? _notificationService.PublishUpdateAsync(resource, resourceId, UpdateSnapshot)
+            : _notificationService.PublishUpdateAsync(resource, UpdateSnapshot);
     }
 
     private async Task OnResourcesPrepared(OnResourcesPreparedContext context)
