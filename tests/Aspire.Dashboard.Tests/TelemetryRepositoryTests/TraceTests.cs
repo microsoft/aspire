@@ -4353,14 +4353,22 @@ public sealed class SqliteTraceTests : TraceTests
     {
         using var repositoryContext = await CreateRepositoryAsync();
         var repository = Assert.IsType<SqliteTelemetryRepository>(repositoryContext.Repository);
+        var activities = new ConcurrentQueue<Activity>();
+        using var listener = ActivityListenerHelper.Create(repository.SqlActivitySource, onActivityStopped: activities.Enqueue);
+        using var parent = new Activity("trace ingestion test").Start();
+
         await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             CreateResourceSpans("app-one", "trace-one", "warm-one-span"),
             CreateResourceSpans("app-two", "trace-two", "warm-two-span")
         });
-        var activities = new ConcurrentQueue<Activity>();
-        using var listener = ActivityListenerHelper.Create(repository.SqlActivitySource, onActivityStopped: activities.Enqueue);
-        using var parent = new Activity("trace ingestion test").Start();
+
+        var newTraceQueries = activities
+            .Where(activity => activity.ParentSpanId == parent.SpanId)
+            .Select(activity => (string)activity.GetTagItem("db.query.text")!)
+            .ToList();
+        Assert.DoesNotContain(newTraceQueries, query => query.StartsWith("DELETE FROM telemetry_trace_resources", StringComparison.Ordinal));
+        activities.Clear();
 
         var context = new AddContext();
         await repository.AsWriter().AddTracesAsync(context, new RepeatedField<ResourceSpans>

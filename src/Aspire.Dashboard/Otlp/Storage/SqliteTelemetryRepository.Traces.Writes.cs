@@ -627,7 +627,7 @@ public sealed partial class SqliteTelemetryRepository
             }
         }
 
-        RebuildTraceResourceSummaries(connection, transaction, rebuildTraceIds);
+        RebuildTraceResourceSummaries(connection, transaction, rebuildTraceIds, ingestionState.ExistingTraces);
 
         var incrementalSpans = pendingSpans
             .Where(pendingSpan => !rebuildTraceIds.Contains(pendingSpan.Span.TraceId))
@@ -659,7 +659,11 @@ public sealed partial class SqliteTelemetryRepository
         AddTraceResourceAggregateDeltas(connection, transaction, incrementalSpans);
     }
 
-    private static void RebuildTraceResourceSummaries(SqliteConnection connection, IDbTransaction transaction, IEnumerable<string> traceIds)
+    private static void RebuildTraceResourceSummaries(
+        SqliteConnection connection,
+        IDbTransaction transaction,
+        IEnumerable<string> traceIds,
+        IReadOnlyDictionary<string, IngestionTraceRecord> existingTraces)
     {
         foreach (var traceBatch in traceIds.Chunk(MaxTraceBatchSize))
         {
@@ -683,7 +687,7 @@ public sealed partial class SqliteTelemetryRepository
                 WHERE spans.trace_id = span_tree.trace_id AND spans.span_id = span_tree.span_id;
                 """, new { TraceIds = traceBatch }, transaction);
 
-            RebuildTraceResourceAggregates(connection, transaction, traceBatch);
+            RebuildTraceResourceAggregates(connection, transaction, traceBatch, existingTraces);
         }
     }
 
@@ -770,14 +774,34 @@ public sealed partial class SqliteTelemetryRepository
         }
     }
 
-    private static void RebuildTraceResourceAggregates(SqliteConnection connection, IDbTransaction transaction, IEnumerable<string> traceIds)
+    private static void RebuildTraceResourceAggregates(
+        SqliteConnection connection,
+        IDbTransaction transaction,
+        IEnumerable<string> traceIds)
+    {
+        RebuildTraceResourceAggregates(connection, transaction, traceIds, existingTraces: null);
+    }
+
+    private static void RebuildTraceResourceAggregates(
+        SqliteConnection connection,
+        IDbTransaction transaction,
+        IEnumerable<string> traceIds,
+        IReadOnlyDictionary<string, IngestionTraceRecord>? existingTraces)
     {
         foreach (var traceIdBatch in traceIds.Chunk(MaxTraceBatchSize))
         {
-            connection.Execute("""
-                DELETE FROM telemetry_trace_resources
-                WHERE trace_id IN @TraceIds;
+            var existingTraceIds = existingTraces is null
+                ? traceIdBatch
+                : traceIdBatch.Where(existingTraces.ContainsKey).ToArray();
+            if (existingTraceIds.Length > 0)
+            {
+                connection.Execute("""
+                    DELETE FROM telemetry_trace_resources
+                    WHERE trace_id IN @TraceIds;
+                    """, new { TraceIds = existingTraceIds }, transaction);
+            }
 
+            connection.Execute("""
                 INSERT INTO telemetry_trace_resources (
                     trace_id, resource_id, resource_order_ticks, total_spans, errored_spans)
                 SELECT
