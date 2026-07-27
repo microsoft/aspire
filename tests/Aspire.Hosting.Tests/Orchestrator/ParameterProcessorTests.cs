@@ -1516,6 +1516,9 @@ public class ParameterProcessorTests
         await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
         await parameterProcessor.SetParameterCoreAsync(parameter, CreateSetParameterArguments("savedValue", saveToUserSecrets: "true"), CancellationToken.None).DefaultTimeout();
         await parameterProcessor.DeleteParameterCoreAsync(parameter, CreateDeleteParameterArguments(), CancellationToken.None).DefaultTimeout();
+        var deletedValueTask = parameter.GetValueAsync(CancellationToken.None).AsTask();
+
+        Assert.False(deletedValueTask.IsCompleted);
 
         var notificationInteraction = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
         Assert.Equal(InteractionStrings.ParametersBarTitle, notificationInteraction.Title);
@@ -1529,7 +1532,32 @@ public class ParameterProcessorTests
         inputsInteraction.Inputs["testParam"].Value = "newValue";
         inputsInteraction.CompletionTcs.SetResult(InteractionResult.Ok(inputsInteraction.Inputs));
 
-        Assert.Equal("newValue", await parameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+        Assert.Equal("newValue", await deletedValueTask.DefaultTimeout());
+    }
+
+    [Fact]
+    public async Task DeleteParameterCoreAsync_PreservesExistingPendingValueTask()
+    {
+        var testInteractionService = new TestInteractionService { IsAvailable = true };
+        var parameterProcessor = CreateParameterProcessor(interactionService: testInteractionService);
+        var parameter = CreateParameterResource("testParam", "initialValue");
+        var existingWaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        parameter.WaitForValueTcs = existingWaitForValueTcs;
+        var existingValueTask = parameter.GetValueAsync(CancellationToken.None).AsTask();
+
+        await parameterProcessor.DeleteParameterCoreAsync(parameter, CreateDeleteParameterArguments(), CancellationToken.None).DefaultTimeout();
+
+        Assert.Same(existingWaitForValueTcs, parameter.WaitForValueTcs);
+        Assert.False(existingValueTask.IsCompleted);
+
+        var notificationInteraction = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
+        notificationInteraction.CompletionTcs.SetResult(InteractionResult.Ok(true));
+
+        var inputsInteraction = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
+        inputsInteraction.Inputs["testParam"].Value = "newValue";
+        inputsInteraction.CompletionTcs.SetResult(InteractionResult.Ok(inputsInteraction.Inputs));
+
+        Assert.Equal("newValue", await existingValueTask.DefaultTimeout());
     }
 
     [Fact]

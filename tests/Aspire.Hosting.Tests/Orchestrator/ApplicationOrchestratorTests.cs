@@ -725,14 +725,17 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
 
         Assert.DoesNotContain(parameter, distributedAppModel.Resources);
+        Assert.Contains(
+            container.Resource.Annotations.OfType<ResourceRelationshipAnnotation>(),
+            relationship => relationship.Type == KnownRelationshipTypes.Reference && ReferenceEquals(relationship.Resource, parameter));
 
         var events = new DcpExecutorEvents();
         var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
 
-        var appOrchestrator = CreateOrchestrator(distributedAppModel, resourceNotificationService, out var parameterProcessor, dcpEvents: events);
-        await parameterProcessor.InitializeParametersAsync([parameter]);
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events);
         await appOrchestrator.RunApplicationAsync();
         await events.PublishAsync(new OnResourcesPreparedContext(CancellationToken.None));
+        Assert.NotNull(parameter.WaitForValueTcs);
 
         await events.PublishAsync(new OnResourceStartingContext(CancellationToken.None, KnownResourceTypes.Container, container.Resource, "api-dcp"));
 

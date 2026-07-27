@@ -774,8 +774,16 @@ internal sealed class ApplicationOrchestrator
 
     private async Task PublishResourcesInitialStateAsync(CancellationToken cancellationToken)
     {
-        // Initialize all parameter resources up front
-        await _parameterProcessor.InitializeParametersAsync(_model.Resources.OfType<ParameterResource>(), waitForResolution: false).ConfigureAwait(false);
+        // Parameters referenced by declarative environment variables and arguments aren't necessarily added
+        // to the model, but their reference relationships let us initialize them without invoking callbacks.
+        var parameterResources = _model.Resources.OfType<ParameterResource>()
+            .Concat(_model.Resources
+                .SelectMany(static resource => resource.Annotations.OfType<ResourceRelationshipAnnotation>())
+                .Where(static relationship => relationship.Type == KnownRelationshipTypes.Reference)
+                .Select(static relationship => relationship.Resource)
+                .OfType<ParameterResource>())
+            .DistinctBy(static parameter => parameter.Name, StringComparers.ResourceName);
+        await _parameterProcessor.InitializeParametersAsync(parameterResources, waitForResolution: false).ConfigureAwait(false);
 
         // Publish the initial state of the resources that have a snapshot annotation.
         foreach (var resource in _model.Resources)

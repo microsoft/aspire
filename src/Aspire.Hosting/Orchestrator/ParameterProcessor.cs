@@ -468,10 +468,12 @@ public sealed class ParameterProcessor(
                 _unresolvedParameters.Add(parameterResource);
                 _hasUnresolvedParameters = true;
 
-                // Reset the WaitForValueTcs so the parameter can be resolved again
-                var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-                tcs.SetException(new MissingParameterValueException("Parameter value has been deleted."));
-                parameterResource.WaitForValueTcs = tcs;
+                // A completed task represents the deleted value and must be replaced. Preserve a pending task so
+                // callers that were already waiting receive the replacement value instead of being stranded.
+                if (parameterResource.WaitForValueTcs is null || parameterResource.WaitForValueTcs.Task.IsCompleted)
+                {
+                    parameterResource.WaitForValueTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                }
 
                 // Update the parameter's state to show it's missing a value
                 await UpdateParameterStateAsync(parameterResource, "Parameter value has been deleted", new(KnownResourceStates.ValueMissing, KnownResourceStateStyles.Warn)).ConfigureAwait(false);
