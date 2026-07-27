@@ -592,7 +592,7 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
     }
 
     [Fact]
-    public void Schema_TraceSummaryIndexesExist()
+    public void Schema_TraceSummaryShapeAndIndexesExist()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var databasePath = GetDatabasePath(workspace.Path);
@@ -600,9 +600,25 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
         {
         }
 
-        using var connection = new SqliteConnection($"Data Source={databasePath};Mode=ReadOnly;Pooling=False");
+        using var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False");
         connection.Open();
         using var command = connection.CreateCommand();
+
+        command.CommandText = "PRAGMA table_info(telemetry_spans);";
+        var spanColumnNames = new List<string>();
+        using (var columnReader = command.ExecuteReader())
+        {
+            while (columnReader.Read())
+            {
+                spanColumnNames.Add(columnReader.GetString(1));
+            }
+        }
+        Assert.DoesNotContain("resource_order_ticks", spanColumnNames);
+
+        command.CommandText = "SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = 'telemetry_trace_resources';";
+        var traceResourcesSql = Assert.IsType<string>(command.ExecuteScalar());
+        Assert.Contains("CHECK (total_spans >= 0)", traceResourcesSql, StringComparison.Ordinal);
+
         command.CommandText = """
             SELECT name
             FROM sqlite_schema
@@ -612,11 +628,13 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
             ORDER BY name;
             """;
 
-        using var reader = command.ExecuteReader();
         var indexNames = new List<string>();
-        while (reader.Read())
+        using (var reader = command.ExecuteReader())
         {
-            indexNames.Add(reader.GetString(0));
+            while (reader.Read())
+            {
+                indexNames.Add(reader.GetString(0));
+            }
         }
 
         Assert.Equal(
@@ -624,6 +642,25 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
             "ix_telemetry_spans_parent",
             "ix_telemetry_trace_resources_order"
         ], indexNames);
+
+        command.CommandText = "INSERT INTO telemetry_resources (resource_name) VALUES ('test'); SELECT last_insert_rowid();";
+        var resourceId = Assert.IsType<long>(command.ExecuteScalar());
+        command.CommandText = """
+            INSERT INTO telemetry_traces (
+                trace_id, first_span_timestamp_ticks, last_span_end_timestamp_ticks, duration_ticks,
+                last_updated_timestamp_ticks, full_name, primary_span_id, has_error, has_gen_ai)
+            VALUES ('trace', 1, 2, 1, 2, 'trace', 'span', 0, 0);
+            """;
+        command.ExecuteNonQuery();
+        command.CommandText = $"INSERT INTO telemetry_trace_resources VALUES ('trace', {resourceId}, 1, 0, 0);";
+        command.ExecuteNonQuery();
+
+        command.CommandText = "UPDATE telemetry_trace_resources SET total_spans = -1;";
+        Assert.Throws<SqliteException>(() => command.ExecuteNonQuery());
+        command.CommandText = "UPDATE telemetry_trace_resources SET errored_spans = -1;";
+        Assert.Throws<SqliteException>(() => command.ExecuteNonQuery());
+        command.CommandText = "UPDATE telemetry_trace_resources SET errored_spans = total_spans + 1;";
+        Assert.Throws<SqliteException>(() => command.ExecuteNonQuery());
     }
 
     [Fact]

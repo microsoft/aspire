@@ -86,6 +86,7 @@ public sealed partial class SqliteTelemetryRepository
                 FROM telemetry_trace_resources tr
                 JOIN paged_traces pt ON pt.trace_id = tr.trace_id
                 JOIN telemetry_resources r ON r.resource_id = tr.resource_id
+                WHERE tr.total_spans > 0
             ),
             trace_summaries AS (
                 SELECT
@@ -124,7 +125,7 @@ public sealed partial class SqliteTelemetryRepository
             FROM trace_aggregate a
             LEFT JOIN trace_summaries ts ON 1 = 1
             LEFT JOIN resource_summaries rs ON rs.trace_id = ts.trace_id
-            ORDER BY ts.trace_order_ticks, ts.trace_id, rs.resource_order_ticks, rs.uninstrumented_peer, rs.resource_name, rs.instance_id;
+            ORDER BY ts.trace_order_ticks, ts.trace_id, rs.resource_order_ticks DESC, rs.uninstrumented_peer, rs.resource_name, rs.instance_id;
             """, query.Parameters).AsList();
 
         var firstRecord = records[0];
@@ -186,7 +187,7 @@ public sealed partial class SqliteTelemetryRepository
                 }
                 resourcePredicates.Add($"({resourcePredicate})");
             }
-            sql.Append(" AND EXISTS (SELECT 1 FROM telemetry_trace_resources tr JOIN telemetry_resources r ON r.resource_id = tr.resource_id WHERE tr.trace_id = t.trace_id AND (");
+            sql.Append(" AND EXISTS (SELECT 1 FROM telemetry_trace_resources tr JOIN telemetry_resources r ON r.resource_id = tr.resource_id WHERE tr.trace_id = t.trace_id AND tr.total_spans > 0 AND (");
             sql.AppendJoin(" OR ", resourcePredicates);
             sql.Append("))");
         }

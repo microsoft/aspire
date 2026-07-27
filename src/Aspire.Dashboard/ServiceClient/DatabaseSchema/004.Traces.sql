@@ -53,7 +53,6 @@ CREATE TABLE IF NOT EXISTS telemetry_spans (
     status_message TEXT NULL,
     trace_state TEXT NULL,
     uninstrumented_peer_resource_id INTEGER NULL REFERENCES telemetry_resources(resource_id) ON DELETE SET NULL,
-    resource_order_ticks INTEGER NOT NULL,
     PRIMARY KEY (trace_id, span_id)
 ) STRICT;
 
@@ -61,7 +60,7 @@ CREATE TABLE IF NOT EXISTS telemetry_trace_resources (
     trace_id TEXT NOT NULL REFERENCES telemetry_traces(trace_id) ON DELETE CASCADE,
     resource_id INTEGER NOT NULL REFERENCES telemetry_resources(resource_id) ON DELETE CASCADE,
     resource_order_ticks INTEGER NOT NULL,
-    total_spans INTEGER NOT NULL CHECK (total_spans > 0),
+    total_spans INTEGER NOT NULL CHECK (total_spans >= 0),
     errored_spans INTEGER NOT NULL CHECK (errored_spans >= 0 AND errored_spans <= total_spans),
     PRIMARY KEY (trace_id, resource_id)
 ) STRICT;

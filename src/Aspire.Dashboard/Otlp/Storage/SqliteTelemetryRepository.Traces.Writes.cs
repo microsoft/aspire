@@ -44,6 +44,7 @@ public sealed partial class SqliteTelemetryRepository
             var ingestionState = LoadTraceIngestionState(connection, transaction, incomingSpans, traceIds);
             var traces = new Dictionary<string, OtlpTrace>(StringComparer.Ordinal);
             var pendingSpans = new List<PendingSpan>();
+            var latestReceivedTimestampTicks = new Dictionary<string, long>(StringComparer.Ordinal);
             var resourcesWithTraces = new HashSet<CachedResource>();
 
             foreach (var resourceSpansItem in resourceSpans)
@@ -90,7 +91,16 @@ public sealed partial class SqliteTelemetryRepository
                     {
                         try
                         {
-                            var pendingSpan = PrepareSpan(traces, ingestionState, resourceId, resourceViewId, resourceView, scopeId, scope, span);
+                            var pendingSpan = PrepareSpan(
+                                traces,
+                                ingestionState,
+                                latestReceivedTimestampTicks,
+                                resourceId,
+                                resourceViewId,
+                                resourceView,
+                                scopeId,
+                                scope,
+                                span);
                             pendingSpans.Add(pendingSpan);
                             addedSpans.Add(pendingSpan.Span);
                             context.SuccessCount++;
@@ -105,16 +115,11 @@ public sealed partial class SqliteTelemetryRepository
 
             }
 
-            var peerChangedTraceIds = PrepareUninstrumentedPeers(connection, transaction, pendingSpans, ingestionState);
-            UpsertTraces(connection, transaction, traces.Values, ingestionState.ExistingTraces);
+            var traceResourceDeltas = PrepareUninstrumentedPeers(connection, transaction, pendingSpans, ingestionState);
+            UpsertTraces(connection, transaction, traces.Values, ingestionState.ExistingTraces, latestReceivedTimestampTicks);
             InsertSpans(connection, transaction, pendingSpans);
             InsertSpanDetails(connection, transaction, pendingSpans);
-            UpdateTraceResourceSummaries(
-                connection,
-                transaction,
-                pendingSpans,
-                ingestionState,
-                peerChangedTraceIds);
+            UpdateTraceResourceSummaries(connection, transaction, pendingSpans, traceResourceDeltas);
             MarkResourcesHaveTraces(connection, transaction, resourcesWithTraces);
             TrimTracesToCapacity(connection, transaction);
             transaction.Commit();
@@ -195,7 +200,7 @@ public sealed partial class SqliteTelemetryRepository
                     SELECT
                         s.trace_id AS TraceId,
                         s.span_id AS SpanId,
-                        s.resource_order_ticks AS ResourceOrderTicks,
+                        s.status AS Status,
                         s.uninstrumented_peer_resource_id AS UninstrumentedPeerResourceId
                     FROM telemetry_spans s
                     WHERE s.trace_id IN @TraceIds AND s.span_id IN @SpanIds;
@@ -297,6 +302,7 @@ public sealed partial class SqliteTelemetryRepository
     private PendingSpan PrepareSpan(
         Dictionary<string, OtlpTrace> traces,
         TraceIngestionState ingestionState,
+        Dictionary<string, long> latestReceivedTimestampTicks,
         long resourceId,
         long resourceViewId,
         OtlpResourceView resourceView,
@@ -315,6 +321,12 @@ public sealed partial class SqliteTelemetryRepository
             throw new InvalidOperationException($"Circular loop detected for span '{spanId}' with parent '{span.ParentSpanId.ToHexString()}'.");
         }
 
+        var previousReceivedTimestampTicks = latestReceivedTimestampTicks.GetValueOrDefault(
+            traceId,
+            ingestionState.ExistingTraces.GetValueOrDefault(traceId)?.LastUpdatedTimestampTicks ?? 0);
+        var receivedTimestampTicks = Math.Max(ReceiptTimeProvider.GetUtcNow().Ticks, previousReceivedTimestampTicks + 1);
+        latestReceivedTimestampTicks[traceId] = receivedTimestampTicks;
+
         var registerTrace = false;
         if (!traces.TryGetValue(traceId, out var trace))
         {
@@ -331,17 +343,21 @@ public sealed partial class SqliteTelemetryRepository
             traces.Add(traceId, trace);
         }
 
-        return new PendingSpan(resourceId, resourceViewId, scopeId, modelSpan);
+        return new PendingSpan(resourceId, resourceViewId, scopeId, receivedTimestampTicks, modelSpan);
     }
 
     private static void UpsertTraces(
         SqliteConnection connection,
         IDbTransaction transaction,
         IEnumerable<OtlpTrace> traces,
-        IReadOnlyDictionary<string, IngestionTraceRecord> existingTraces)
+        IReadOnlyDictionary<string, IngestionTraceRecord> existingTraces,
+        IReadOnlyDictionary<string, long> latestReceivedTimestampTicks)
     {
         foreach (var batch in traces
-            .Select(trace => CreateTraceUpsertRecord(trace, existingTraces.GetValueOrDefault(trace.TraceId)))
+            .Select(trace => CreateTraceUpsertRecord(
+                trace,
+                existingTraces.GetValueOrDefault(trace.TraceId),
+                latestReceivedTimestampTicks[trace.TraceId]))
             .Chunk(MaxTraceBatchSize))
         {
             var sql = new StringBuilder("""
@@ -384,16 +400,20 @@ public sealed partial class SqliteTelemetryRepository
         }
     }
 
-    private static TraceUpsertRecord CreateTraceUpsertRecord(OtlpTrace trace, IngestionTraceRecord? existingTrace)
+    private static TraceUpsertRecord CreateTraceUpsertRecord(
+        OtlpTrace trace,
+        IngestionTraceRecord? existingTrace,
+        long latestReceivedTimestampTicks)
     {
         var incomingPrimarySpan = GetPrimarySpan(trace);
+        var lastUpdatedTimestampTicks = Math.Max(trace.LastUpdatedDate.Ticks, latestReceivedTimestampTicks);
         if (existingTrace is null)
         {
             return new TraceUpsertRecord(
                 trace.TraceId,
                 trace.TimeStamp.Ticks,
                 trace.Spans.Max(span => span.EndTime.Ticks),
-                trace.LastUpdatedDate.Ticks,
+                lastUpdatedTimestampTicks,
                 trace.FullName,
                 incomingPrimarySpan.SpanId,
                 trace.Spans.Any(span => span.Status == OtlpSpanStatusCode.Error),
@@ -413,7 +433,7 @@ public sealed partial class SqliteTelemetryRepository
             trace.TraceId,
             Math.Min(existingTrace.FirstSpanTimestampTicks, trace.TimeStamp.Ticks),
             Math.Max(existingTrace.LastSpanEndTimestampTicks, trace.Spans.Max(span => span.EndTime.Ticks)),
-            trace.LastUpdatedDate.Ticks,
+            lastUpdatedTimestampTicks,
             useIncomingPrimary
                 ? $"{incomingPrimarySpan.Source.Resource.ResourceName}: {incomingPrimarySpan.Name}"
                 : existingTrace.FullName,
@@ -478,8 +498,7 @@ public sealed partial class SqliteTelemetryRepository
             "telemetry_spans",
             [
                 "trace_id", "span_id", "parent_span_id", "resource_id", "resource_view_id", "scope_id", "name", "kind",
-                "start_time_ticks", "end_time_ticks", "status", "status_message", "trace_state", "resource_order_ticks",
-                "uninstrumented_peer_resource_id"
+                "start_time_ticks", "end_time_ticks", "status", "status_message", "trace_state", "uninstrumented_peer_resource_id"
             ],
             static (pendingSpan, parameters) =>
             {
@@ -497,8 +516,7 @@ public sealed partial class SqliteTelemetryRepository
                 parameters[10].Value = (int)span.Status;
                 parameters[11].Value = span.StatusMessage ?? (object)DBNull.Value;
                 parameters[12].Value = span.State ?? (object)DBNull.Value;
-                parameters[13].Value = span.StartTime.Ticks;
-                parameters[14].Value = pendingSpan.PeerResourceId ?? (object)DBNull.Value;
+                parameters[13].Value = pendingSpan.PeerResourceId ?? (object)DBNull.Value;
             });
     }
 
@@ -518,7 +536,7 @@ public sealed partial class SqliteTelemetryRepository
         }
     }
 
-    private HashSet<string> PrepareUninstrumentedPeers(
+    private List<TraceResourceDelta> PrepareUninstrumentedPeers(
         SqliteConnection connection,
         IDbTransaction transaction,
         IReadOnlyList<PendingSpan> pendingSpans,
@@ -531,7 +549,8 @@ public sealed partial class SqliteTelemetryRepository
             .ToHashSet();
         var peerResourceIds = new HashSet<long>();
         var existingParentUpdates = new List<PeerSpanUpdateRecord>();
-        var peerChangedTraceIds = new HashSet<string>(StringComparer.Ordinal);
+        var updatedExistingParents = new HashSet<(string TraceId, string SpanId)>();
+        var traceResourceDeltas = new List<TraceResourceDelta>();
         foreach (var pendingSpan in pendingSpans)
         {
             var span = pendingSpan.Span;
@@ -553,7 +572,8 @@ public sealed partial class SqliteTelemetryRepository
 
             if (span.ParentSpanId is not null &&
                 ingestionState.ExistingSpans.TryGetValue((span.TraceId, span.ParentSpanId), out var existingParent) &&
-                existingParent.UninstrumentedPeerResourceId is not null)
+                existingParent.UninstrumentedPeerResourceId is { } peerResourceId &&
+                updatedExistingParents.Add((span.TraceId, span.ParentSpanId)))
             {
                 existingParentUpdates.Add(new PeerSpanUpdateRecord
                 {
@@ -561,7 +581,12 @@ public sealed partial class SqliteTelemetryRepository
                     TraceId = span.TraceId,
                     SpanId = span.ParentSpanId
                 });
-                peerChangedTraceIds.Add(span.TraceId);
+                traceResourceDeltas.Add(new TraceResourceDelta(
+                    span.TraceId,
+                    peerResourceId,
+                    long.MinValue,
+                    TotalSpans: -1,
+                    ErroredSpans: existingParent.Status == (int)OtlpSpanStatusCode.Error ? -1 : 0));
             }
         }
 
@@ -574,7 +599,7 @@ public sealed partial class SqliteTelemetryRepository
         }
 
         UpdatePeerSpans(connection, transaction, existingParentUpdates);
-        return peerChangedTraceIds;
+        return traceResourceDeltas;
     }
 
     private static void UpdatePeerSpans(SqliteConnection connection, IDbTransaction transaction, IReadOnlyList<PeerSpanUpdateRecord> spanUpdates)
@@ -613,160 +638,96 @@ public sealed partial class SqliteTelemetryRepository
         SqliteConnection connection,
         IDbTransaction transaction,
         IReadOnlyList<PendingSpan> pendingSpans,
-        TraceIngestionState ingestionState,
-        IReadOnlySet<string> peerChangedTraceIds)
+        List<TraceResourceDelta> traceResourceDeltas)
     {
-        var rebuildTraceIds = new HashSet<string>(peerChangedTraceIds, StringComparer.Ordinal);
         foreach (var pendingSpan in pendingSpans)
         {
             var span = pendingSpan.Span;
-            if (!ingestionState.ExistingTraces.ContainsKey(span.TraceId) ||
-                ingestionState.ExistingParentReferences.Contains((span.TraceId, span.SpanId)))
+            var resourceOrderTicks = GetResourceOrderTicks(span.ParentSpanId, span.StartTime.Ticks, pendingSpan.ReceivedTimestampTicks);
+            var erroredSpans = span.Status == OtlpSpanStatusCode.Error ? 1 : 0;
+            traceResourceDeltas.Add(new TraceResourceDelta(
+                span.TraceId,
+                pendingSpan.ResourceId,
+                resourceOrderTicks,
+                TotalSpans: 1,
+                ErroredSpans: erroredSpans));
+            if (pendingSpan.PeerResourceId is { } peerResourceId)
             {
-                rebuildTraceIds.Add(span.TraceId);
+                traceResourceDeltas.Add(new TraceResourceDelta(
+                    span.TraceId,
+                    peerResourceId,
+                    resourceOrderTicks,
+                    TotalSpans: 1,
+                    ErroredSpans: erroredSpans));
             }
         }
 
-        RebuildTraceResourceSummaries(connection, transaction, rebuildTraceIds, ingestionState.ExistingTraces);
+        ApplyTraceResourceDeltas(connection, transaction, traceResourceDeltas);
+    }
 
-        var incrementalSpans = pendingSpans
-            .Where(pendingSpan => !rebuildTraceIds.Contains(pendingSpan.Span.TraceId))
+    private static void ApplyTraceResourceDeltas(
+        SqliteConnection connection,
+        IDbTransaction transaction,
+        IEnumerable<TraceResourceDelta> deltas)
+    {
+        var aggregateDeltas = deltas
+            .GroupBy(delta => (delta.TraceId, delta.ResourceId))
+            .Select(group => new AggregateTraceResourceDelta(
+                group.Key.TraceId,
+                group.Key.ResourceId,
+                group.Max(delta => delta.ResourceOrderTicks),
+                group.Sum(delta => delta.TotalSpans),
+                group.Sum(delta => delta.ErroredSpans),
+                RequiresExistingRow: group.Any(delta => delta.TotalSpans < 0 || delta.ErroredSpans < 0)))
             .ToArray();
-        UpdateSpanOrders(
-            connection,
-            transaction,
-            incrementalSpans.Select(pendingSpan =>
-            {
-                var span = pendingSpan.Span;
-                var resourceOrderTicks = span.StartTime.Ticks;
-                var currentSpan = span;
-                while (currentSpan.ParentSpanId is { } parentSpanId)
-                {
-                    if (!currentSpan.Trace.Spans.TryGetValue(parentSpanId, out var parent))
-                    {
-                        if (ingestionState.ExistingSpans.TryGetValue((span.TraceId, parentSpanId), out var existingParent))
-                        {
-                            resourceOrderTicks = Math.Max(resourceOrderTicks, existingParent.ResourceOrderTicks);
-                        }
-                        break;
-                    }
 
-                    resourceOrderTicks = Math.Max(resourceOrderTicks, parent.StartTime.Ticks);
-                    currentSpan = parent;
-                }
-                return new SpanOrderUpdateRecord(span.TraceId, span.SpanId, resourceOrderTicks);
-            }));
-        AddTraceResourceAggregateDeltas(connection, transaction, incrementalSpans);
+        ApplyExistingTraceResourceDeltas(connection, transaction, aggregateDeltas.Where(delta => delta.RequiresExistingRow));
+        UpsertNewTraceResourceDeltas(connection, transaction, aggregateDeltas.Where(delta => !delta.RequiresExistingRow));
     }
 
-    private static void RebuildTraceResourceSummaries(
+    private static void ApplyExistingTraceResourceDeltas(
         SqliteConnection connection,
         IDbTransaction transaction,
-        IEnumerable<string> traceIds,
-        IReadOnlyDictionary<string, IngestionTraceRecord> existingTraces)
+        IEnumerable<AggregateTraceResourceDelta> deltas)
     {
-        foreach (var traceBatch in traceIds.Chunk(MaxTraceBatchSize))
+        foreach (var deltaBatch in deltas.Chunk(MaxSpanDetailBatchSize))
         {
-            connection.Execute("""
-                WITH RECURSIVE span_tree(trace_id, span_id, resource_order_ticks) AS (
-                    SELECT s.trace_id, s.span_id, s.start_time_ticks
-                    FROM telemetry_spans s
-                    WHERE s.trace_id IN @TraceIds
-                      AND (s.parent_span_id IS NULL OR NOT EXISTS (
-                          SELECT 1
-                          FROM telemetry_spans parent
-                          WHERE parent.trace_id = s.trace_id AND parent.span_id = s.parent_span_id))
-                    UNION ALL
-                    SELECT child.trace_id, child.span_id, MAX(child.start_time_ticks, parent.resource_order_ticks)
-                    FROM span_tree parent
-                    JOIN telemetry_spans child ON child.trace_id = parent.trace_id AND child.parent_span_id = parent.span_id
-                )
-                UPDATE telemetry_spans AS spans
-                SET resource_order_ticks = span_tree.resource_order_ticks
-                FROM span_tree
-                WHERE spans.trace_id = span_tree.trace_id AND spans.span_id = span_tree.span_id;
-                """, new { TraceIds = traceBatch }, transaction);
-
-            RebuildTraceResourceAggregates(connection, transaction, traceBatch, existingTraces);
-        }
-    }
-
-    private static void UpdateSpanOrders(
-        SqliteConnection connection,
-        IDbTransaction transaction,
-        IEnumerable<SpanOrderUpdateRecord> orderUpdates)
-    {
-        foreach (var orderBatch in orderUpdates.Chunk(MaxSpanDetailBatchSize))
-        {
-            var sql = new StringBuilder("WITH span_orders(trace_id, span_id, resource_order_ticks) AS (VALUES\n");
+            var sql = new StringBuilder("WITH resource_deltas(trace_id, resource_id, resource_order_ticks, total_spans, errored_spans) AS (VALUES\n");
             var parameters = new DynamicParameters();
-            for (var index = 0; index < orderBatch.Length; index++)
-            {
-                if (index > 0)
-                {
-                    sql.AppendLine(",");
-                }
-                sql.Append(CultureInfo.InvariantCulture, $"    (@TraceId{index}, @SpanId{index}, @ResourceOrderTicks{index})");
-                parameters.Add($"TraceId{index}", orderBatch[index].TraceId);
-                parameters.Add($"SpanId{index}", orderBatch[index].SpanId);
-                parameters.Add($"ResourceOrderTicks{index}", orderBatch[index].ResourceOrderTicks);
-            }
+            AppendTraceResourceDeltaValues(sql, parameters, deltaBatch);
             sql.Append("""
                 )
-                UPDATE telemetry_spans AS spans
-                SET resource_order_ticks = span_orders.resource_order_ticks
-                FROM span_orders
-                WHERE spans.trace_id = span_orders.trace_id
-                  AND spans.span_id = span_orders.span_id;
+                UPDATE telemetry_trace_resources AS resources
+                SET resource_order_ticks = MAX(resources.resource_order_ticks, resource_deltas.resource_order_ticks),
+                    total_spans = resources.total_spans + resource_deltas.total_spans,
+                    errored_spans = resources.errored_spans + resource_deltas.errored_spans
+                FROM resource_deltas
+                WHERE resources.trace_id = resource_deltas.trace_id
+                  AND resources.resource_id = resource_deltas.resource_id;
                 """);
             connection.Execute(sql.ToString(), parameters, transaction);
         }
     }
 
-    private static void AddTraceResourceAggregateDeltas(
+    private static void UpsertNewTraceResourceDeltas(
         SqliteConnection connection,
         IDbTransaction transaction,
-        IEnumerable<PendingSpan> pendingSpans)
+        IEnumerable<AggregateTraceResourceDelta> deltas)
     {
-        foreach (var spanBatch in pendingSpans.Chunk(MaxSpanDetailBatchSize))
+        foreach (var deltaBatch in deltas.Chunk(MaxSpanDetailBatchSize))
         {
-            var sql = new StringBuilder("WITH new_spans(trace_id, span_id) AS (VALUES\n");
+            var sql = new StringBuilder("WITH resource_deltas(trace_id, resource_id, resource_order_ticks, total_spans, errored_spans) AS (VALUES\n");
             var parameters = new DynamicParameters();
-            for (var index = 0; index < spanBatch.Length; index++)
-            {
-                if (index > 0)
-                {
-                    sql.AppendLine(",");
-                }
-                sql.Append(CultureInfo.InvariantCulture, $"    (@TraceId{index}, @SpanId{index})");
-                parameters.Add($"TraceId{index}", spanBatch[index].Span.TraceId);
-                parameters.Add($"SpanId{index}", spanBatch[index].Span.SpanId);
-            }
+            AppendTraceResourceDeltaValues(sql, parameters, deltaBatch);
             sql.Append("""
                 )
                 INSERT INTO telemetry_trace_resources (
                     trace_id, resource_id, resource_order_ticks, total_spans, errored_spans)
-                SELECT
-                    resources.trace_id,
-                    resources.resource_id,
-                    MIN(resources.resource_order_ticks),
-                    COUNT(*),
-                    SUM(CASE WHEN resources.status = 2 THEN 1 ELSE 0 END)
-                FROM (
-                    SELECT s.trace_id, s.resource_id, s.resource_order_ticks, s.status
-                    FROM telemetry_spans s
-                    JOIN new_spans n ON n.trace_id = s.trace_id AND n.span_id = s.span_id
-
-                    UNION ALL
-
-                    SELECT s.trace_id, s.uninstrumented_peer_resource_id, s.resource_order_ticks, s.status
-                    FROM telemetry_spans s
-                    JOIN new_spans n ON n.trace_id = s.trace_id AND n.span_id = s.span_id
-                    WHERE s.uninstrumented_peer_resource_id IS NOT NULL
-                ) resources
-                GROUP BY resources.trace_id, resources.resource_id
+                SELECT trace_id, resource_id, resource_order_ticks, total_spans, errored_spans
+                FROM resource_deltas
+                WHERE true
                 ON CONFLICT(trace_id, resource_id) DO UPDATE SET
-                    resource_order_ticks = MIN(telemetry_trace_resources.resource_order_ticks, excluded.resource_order_ticks),
+                    resource_order_ticks = MAX(telemetry_trace_resources.resource_order_ticks, excluded.resource_order_ticks),
                     total_spans = telemetry_trace_resources.total_spans + excluded.total_spans,
                     errored_spans = telemetry_trace_resources.errored_spans + excluded.errored_spans;
                 """);
@@ -774,58 +735,29 @@ public sealed partial class SqliteTelemetryRepository
         }
     }
 
-    private static void RebuildTraceResourceAggregates(
-        SqliteConnection connection,
-        IDbTransaction transaction,
-        IEnumerable<string> traceIds)
+    private static void AppendTraceResourceDeltaValues(
+        StringBuilder sql,
+        DynamicParameters parameters,
+        AggregateTraceResourceDelta[] deltaBatch)
     {
-        RebuildTraceResourceAggregates(connection, transaction, traceIds, existingTraces: null);
-    }
-
-    private static void RebuildTraceResourceAggregates(
-        SqliteConnection connection,
-        IDbTransaction transaction,
-        IEnumerable<string> traceIds,
-        IReadOnlyDictionary<string, IngestionTraceRecord>? existingTraces)
-    {
-        foreach (var traceIdBatch in traceIds.Chunk(MaxTraceBatchSize))
+        for (var index = 0; index < deltaBatch.Length; index++)
         {
-            var existingTraceIds = existingTraces is null
-                ? traceIdBatch
-                : traceIdBatch.Where(existingTraces.ContainsKey).ToArray();
-            if (existingTraceIds.Length > 0)
+            if (index > 0)
             {
-                connection.Execute("""
-                    DELETE FROM telemetry_trace_resources
-                    WHERE trace_id IN @TraceIds;
-                    """, new { TraceIds = existingTraceIds }, transaction);
+                sql.AppendLine(",");
             }
-
-            connection.Execute("""
-                INSERT INTO telemetry_trace_resources (
-                    trace_id, resource_id, resource_order_ticks, total_spans, errored_spans)
-                SELECT
-                    resources.trace_id,
-                    resources.resource_id,
-                    MIN(resources.resource_order_ticks),
-                    COUNT(*),
-                    SUM(CASE WHEN resources.status = 2 THEN 1 ELSE 0 END)
-                FROM (
-                    SELECT trace_id, resource_id, resource_order_ticks, status
-                    FROM telemetry_spans
-                    WHERE trace_id IN @TraceIds
-
-                    UNION ALL
-
-                    SELECT trace_id, uninstrumented_peer_resource_id, resource_order_ticks, status
-                    FROM telemetry_spans
-                    WHERE trace_id IN @TraceIds
-                      AND uninstrumented_peer_resource_id IS NOT NULL
-                ) resources
-                GROUP BY resources.trace_id, resources.resource_id;
-                """, new { TraceIds = traceIdBatch }, transaction);
+            var delta = deltaBatch[index];
+            sql.Append(CultureInfo.InvariantCulture, $"    (@TraceId{index}, @ResourceId{index}, @ResourceOrderTicks{index}, @TotalSpans{index}, @ErroredSpans{index})");
+            parameters.Add($"TraceId{index}", delta.TraceId);
+            parameters.Add($"ResourceId{index}", delta.ResourceId);
+            parameters.Add($"ResourceOrderTicks{index}", delta.ResourceOrderTicks);
+            parameters.Add($"TotalSpans{index}", delta.TotalSpans);
+            parameters.Add($"ErroredSpans{index}", delta.ErroredSpans);
         }
     }
+
+    private static long GetResourceOrderTicks(string? parentSpanId, long startTimeTicks, long receivedTimestampTicks) =>
+        string.IsNullOrEmpty(parentSpanId) ? long.MaxValue - receivedTimestampTicks : -startTimeTicks;
 
     private static void InsertSpanDetails(SqliteConnection connection, IDbTransaction transaction, List<PendingSpan> pendingSpans)
     {
@@ -1094,10 +1026,16 @@ public sealed partial class SqliteTelemetryRepository
                     spans.trace_id AS TraceId,
                     spans.span_id AS SpanId,
                     spans.kind AS Kind,
+                    spans.parent_span_id AS ParentSpanId,
+                    spans.start_time_ticks AS StartTimeTicks,
+                    spans.status AS Status,
+                    spans.uninstrumented_peer_resource_id AS UninstrumentedPeerResourceId,
+                    traces.last_updated_timestamp_ticks AS TraceLastUpdatedTimestampTicks,
                     parents.span_id IS NOT NULL AS HasChildren,
                     attributes.attribute_key AS AttributeKey,
                     attributes.attribute_value AS AttributeValue
                 FROM telemetry_spans AS spans
+                JOIN telemetry_traces AS traces ON traces.trace_id = spans.trace_id
                 LEFT JOIN parents
                     ON parents.trace_id = spans.trace_id
                    AND parents.span_id = spans.span_id
@@ -1107,6 +1045,8 @@ public sealed partial class SqliteTelemetryRepository
                 ORDER BY spans.trace_id, spans.span_id, attributes.ordinal;
                 """, buffered: false);
             var spanUpdates = new List<PeerSpanUpdateRecord>(MaxSpanDetailBatchSize);
+            var traceResourceDeltas = new List<TraceResourceDelta>(MaxSpanDetailBatchSize * 2);
+            var latestReceivedTimestampTicks = new Dictionary<string, long>(StringComparer.Ordinal);
             var spanAttributes = new List<KeyValuePair<string, string>>();
             PeerRecalculationRowRecord? currentSpan = null;
 
@@ -1131,10 +1071,6 @@ public sealed partial class SqliteTelemetryRepository
                 ProcessSpan(currentSpan, spanAttributes);
             }
             FlushSpanUpdates();
-            RebuildTraceResourceAggregates(
-                writeConnection,
-                transaction,
-                writeConnection.Query<string>("SELECT trace_id FROM telemetry_traces;", transaction: transaction));
 
             writeConnection.Execute("""
                 UPDATE telemetry_resources
@@ -1145,10 +1081,12 @@ public sealed partial class SqliteTelemetryRepository
                     WHERE uninstrumented_peer_resource_id IS NOT NULL
                 );
                 """, transaction: transaction);
-            var lastUpdatedTimestampTicks = DateTime.UtcNow.Ticks;
+            var lastUpdatedTimestampTicks = Math.Max(
+                ReceiptTimeProvider.GetUtcNow().Ticks,
+                latestReceivedTimestampTicks.Values.DefaultIfEmpty(0).Max());
             writeConnection.Execute("""
                 UPDATE telemetry_traces
-                SET last_updated_timestamp_ticks = @LastUpdatedTimestampTicks
+                SET last_updated_timestamp_ticks = MAX(last_updated_timestamp_ticks, @LastUpdatedTimestampTicks)
                 WHERE trace_id IN (SELECT trace_id FROM telemetry_spans);
                 """, new
             {
@@ -1172,12 +1110,37 @@ public sealed partial class SqliteTelemetryRepository
                     }
                 }
 
+                if (peerResourceId == span.UninstrumentedPeerResourceId)
+                {
+                    return;
+                }
+
                 spanUpdates.Add(new PeerSpanUpdateRecord
                 {
                     PeerResourceId = peerResourceId,
                     TraceId = span.TraceId,
                     SpanId = span.SpanId
                 });
+                var erroredSpans = span.Status == (int)OtlpSpanStatusCode.Error ? 1 : 0;
+                if (span.UninstrumentedPeerResourceId is { } previousPeerResourceId)
+                {
+                    traceResourceDeltas.Add(new TraceResourceDelta(
+                        span.TraceId,
+                        previousPeerResourceId,
+                        long.MinValue,
+                        TotalSpans: -1,
+                        ErroredSpans: -erroredSpans));
+                }
+                if (peerResourceId is { } newPeerResourceId)
+                {
+                    var receivedTimestampTicks = GetNextReceivedTimestampTicks(span);
+                    traceResourceDeltas.Add(new TraceResourceDelta(
+                        span.TraceId,
+                        newPeerResourceId,
+                        GetResourceOrderTicks(span.ParentSpanId, span.StartTimeTicks, receivedTimestampTicks),
+                        TotalSpans: 1,
+                        ErroredSpans: erroredSpans));
+                }
                 if (spanUpdates.Count == MaxSpanDetailBatchSize)
                 {
                     FlushSpanUpdates();
@@ -1192,7 +1155,19 @@ public sealed partial class SqliteTelemetryRepository
                 }
 
                 UpdatePeerSpans(writeConnection, transaction, spanUpdates);
+                ApplyTraceResourceDeltas(writeConnection, transaction, traceResourceDeltas);
                 spanUpdates.Clear();
+                traceResourceDeltas.Clear();
+            }
+
+            long GetNextReceivedTimestampTicks(PeerRecalculationRowRecord span)
+            {
+                var previousReceivedTimestampTicks = latestReceivedTimestampTicks.GetValueOrDefault(
+                    span.TraceId,
+                    span.TraceLastUpdatedTimestampTicks);
+                var receivedTimestampTicks = Math.Max(ReceiptTimeProvider.GetUtcNow().Ticks, previousReceivedTimestampTicks + 1);
+                latestReceivedTimestampTicks[span.TraceId] = receivedTimestampTicks;
+                return receivedTimestampTicks;
             }
         }
     }
@@ -1260,16 +1235,29 @@ public sealed partial class SqliteTelemetryRepository
         }
     }
 
-    private sealed record PendingSpan(long ResourceId, long ResourceViewId, long ScopeId, OtlpSpan Span)
+    private sealed record PendingSpan(long ResourceId, long ResourceViewId, long ScopeId, long ReceivedTimestampTicks, OtlpSpan Span)
     {
         public long? PeerResourceId { get; set; }
     }
 
     private readonly record struct IncomingSpanIdentity(string TraceId, string SpanId, string? ParentSpanId);
 
-    private sealed record SpanOrderUpdateRecord(string TraceId, string SpanId, long ResourceOrderTicks);
-
     private sealed record PendingSpanEvent(string EventId, string TraceId, string SpanId, int Ordinal, OtlpSpanEvent Event);
+
+    private sealed record TraceResourceDelta(
+        string TraceId,
+        long ResourceId,
+        long ResourceOrderTicks,
+        long TotalSpans,
+        long ErroredSpans);
+
+    private sealed record AggregateTraceResourceDelta(
+        string TraceId,
+        long ResourceId,
+        long ResourceOrderTicks,
+        long TotalSpans,
+        long ErroredSpans,
+        bool RequiresExistingRow);
 
     private sealed class TraceIngestionState
     {
@@ -1297,7 +1285,7 @@ public sealed partial class SqliteTelemetryRepository
     {
         public required string TraceId { get; init; }
         public required string SpanId { get; init; }
-        public required long ResourceOrderTicks { get; init; }
+        public required int Status { get; init; }
         public long? UninstrumentedPeerResourceId { get; init; }
     }
 
@@ -1335,6 +1323,11 @@ public sealed partial class SqliteTelemetryRepository
         public required string TraceId { get; init; }
         public required string SpanId { get; init; }
         public required int Kind { get; init; }
+        public string? ParentSpanId { get; init; }
+        public required long StartTimeTicks { get; init; }
+        public required int Status { get; init; }
+        public long? UninstrumentedPeerResourceId { get; init; }
+        public required long TraceLastUpdatedTimestampTicks { get; init; }
         public required bool HasChildren { get; init; }
         public string? AttributeKey { get; init; }
         public string? AttributeValue { get; init; }

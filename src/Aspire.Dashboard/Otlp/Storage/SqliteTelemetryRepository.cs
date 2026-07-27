@@ -42,6 +42,8 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
 
     internal ActivitySource SqlActivitySource => _database.ActivitySource;
 
+    internal TimeProvider ReceiptTimeProvider { get; set; } = TimeProvider.System;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="SqliteTelemetryRepository"/> class.
     /// </summary>
