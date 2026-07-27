@@ -1002,12 +1002,10 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                 return;
             }
 
-            await PublishConnectionStringAvailableEventAsync(modelResource, cancellationToken).ConfigureAwait(false);
-
             // For single-replica resources (e.g. containers), include the DCP resource name in the starting event.
             // For multi-replica resources (e.g. projects with replicas), the starting event applies to the group, so DcpResourceName is null.
             var startingDcpName = replicas.Length == 1 ? replicas[0].DcpResourceName : null;
-            await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, modelResource, startingDcpName)).ConfigureAwait(false);
+            await PublishResourceStartingEventsAsync(resourceType, modelResource, startingDcpName, cancellationToken).ConfigureAwait(false);
 
             foreach (var er in replicas)
             {
@@ -1219,14 +1217,12 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             {
                 // We need to handle explicit start persistent resources specially on first launch as they may already be running, so we need to register them with DCP to discover their status.
                 case RenderedModelResource<Container> { DcpResource.Spec.Start: false } cr when !DcpModelUtilities.ShouldDeferCreateForExplicitStart(cr.ModelResource, cr.DcpResource.Spec.Start):
-                    await PublishConnectionStringAvailableEventAsync(cr.ModelResource, cancellationToken).ConfigureAwait(false);
-                    await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, cr.ModelResource, cr.DcpResourceName)).ConfigureAwait(false);
+                    await PublishResourceStartingEventsAsync(resourceType, cr.ModelResource, cr.DcpResourceName, cancellationToken).ConfigureAwait(false);
                     await PatchDcpObjectAsync(cr.DcpResource, static c => c.Spec.Start = true, cancellationToken).ConfigureAwait(false);
                     break;
 
                 case RenderedModelResource<Executable> { DcpResource.Spec.Start: false } er when !DcpModelUtilities.ShouldDeferCreateForExplicitStart(er.ModelResource, er.DcpResource.Spec.Start):
-                    await PublishConnectionStringAvailableEventAsync(er.ModelResource, cancellationToken).ConfigureAwait(false);
-                    await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, er.ModelResource, er.DcpResourceName)).ConfigureAwait(false);
+                    await PublishResourceStartingEventsAsync(resourceType, er.ModelResource, er.DcpResourceName, cancellationToken).ConfigureAwait(false);
                     await PatchDcpObjectAsync(er.DcpResource, static e => e.Spec.Start = true, cancellationToken).ConfigureAwait(false);
                     break;
 
@@ -1236,8 +1232,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                     // Ensure we explicitly start the container even if original container was created in "delay-start" mode.
                     cr.DcpResource.Spec.Start = true;
 
-                    await PublishConnectionStringAvailableEventAsync(resourceReference.ModelResource, cancellationToken).ConfigureAwait(false);
-                    await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName)).ConfigureAwait(false);
+                    await PublishResourceStartingEventsAsync(resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName, cancellationToken).ConfigureAwait(false);
                     var cctx = await _containerContextSource.Task.ConfigureAwait(false);
                     await _containerCreator.CreateObjectAsync(cr, cctx, resourceLogger, this, cancellationToken).ConfigureAwait(false);
                     await PublishConnectionStringAvailableEventAsync(resourceReference.ModelResource, cancellationToken).ConfigureAwait(false);
@@ -1248,8 +1243,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                     // Ensure we explicitly start the executable even if original executable was created in "delay-start" mode.
                     er.DcpResource.Spec.Start = true;
 
-                    await PublishConnectionStringAvailableEventAsync(resourceReference.ModelResource, cancellationToken).ConfigureAwait(false);
-                    await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName)).ConfigureAwait(false);
+                    await PublishResourceStartingEventsAsync(resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName, cancellationToken).ConfigureAwait(false);
                     await _executableCreator.CreateObjectAsync(er, EmptyCreationContext.s_instance, resourceLogger, this, cancellationToken).ConfigureAwait(false);
                     await PublishConnectionStringAvailableEventAsync(resourceReference.ModelResource, cancellationToken).ConfigureAwait(false);
                     break;
@@ -1393,5 +1387,14 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         }
 
         await _executorEvents.PublishAsync(new OnConnectionStringAvailableContext(ct, resource)).ConfigureAwait(false);
+    }
+
+    private async Task PublishResourceStartingEventsAsync(string resourceType, IResource resource, string? dcpResourceName, CancellationToken cancellationToken)
+    {
+        // Publish the starting state before connection-string callbacks because evaluating a connection string
+        // can itself wait for an unresolved parameter. BeforeResourceStartedEvent remains after connection strings.
+        await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, resource, dcpResourceName)).ConfigureAwait(false);
+        await PublishConnectionStringAvailableEventAsync(resource, cancellationToken).ConfigureAwait(false);
+        await _executorEvents.PublishAsync(new OnResourceBeforeStartContext(cancellationToken, resource)).ConfigureAwait(false);
     }
 }

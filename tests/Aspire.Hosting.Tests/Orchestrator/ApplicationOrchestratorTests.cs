@@ -437,8 +437,9 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events, applicationEventing: applicationEventing);
         await appOrchestrator.RunApplicationAsync();
 
-        await events.PublishAsync(new OnConnectionStringAvailableContext(CancellationToken.None, resource.Resource));
         await events.PublishAsync(new OnResourceStartingContext(CancellationToken.None, KnownResourceTypes.Executable, resource.Resource, "test-resource-dcp"));
+        await events.PublishAsync(new OnConnectionStringAvailableContext(CancellationToken.None, resource.Resource));
+        await events.PublishAsync(new OnResourceBeforeStartContext(CancellationToken.None, resource.Resource));
 
         Assert.Collection(
             observedEvents,
@@ -628,6 +629,86 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         Assert.Null(configuration.Exception);
         Assert.Equal("first-value", configuration.EnvironmentVariables.Single(e => e.Key == "FIRST").Value);
         Assert.Equal("second-value", configuration.EnvironmentVariables.Single(e => e.Key == "SECOND").Value);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OnResourceStarting_WithUnresolvedParameterAndWaitFor_WaitsForBothBlockers(bool dependencyResolvesFirst)
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var parameter = builder.AddParameter("value", () => throw new MissingParameterValueException("Missing parameter."));
+        var dependency = builder.AddContainer("dependency", "test-image");
+        var container = builder.AddContainer("api", "test-image")
+            .WithEnvironment("VALUE", parameter)
+            .WaitFor(dependency);
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events);
+        await appOrchestrator.RunApplicationAsync();
+        await events.PublishAsync(new OnResourcesPreparedContext(CancellationToken.None));
+
+        var waitingForEventTask = resourceNotificationService.WaitForResourceAsync(
+            container.Resource.Name,
+            e => e.Snapshot.State?.Text == KnownResourceStates.UnresolvedParameters &&
+                e.Snapshot.Properties.SingleOrDefault(p => p.Name == KnownProperties.Resource.WaitingFor)?.Value is string[] waitingFor &&
+                waitingFor.SequenceEqual([dependency.Resource.Name]));
+        await events.PublishAsync(new OnResourceStartingContext(
+            CancellationToken.None,
+            KnownResourceTypes.Container,
+            container.Resource,
+            container.Resource.GetResolvedResourceNames()[0]));
+        var startingTask = events.PublishAsync(new OnResourceBeforeStartContext(CancellationToken.None, container.Resource));
+
+        var firstCompletedTask = await Task.WhenAny(startingTask, waitingForEventTask).DefaultTimeout();
+        Assert.Same(waitingForEventTask, firstCompletedTask);
+        _ = await waitingForEventTask.DefaultTimeout();
+
+        var remainingBlockerEventTask = resourceNotificationService.WaitForResourceAsync(
+            container.Resource.Name,
+            e => dependencyResolvesFirst
+                ? e.Snapshot.State?.Text == KnownResourceStates.UnresolvedParameters &&
+                    e.Snapshot.Properties.All(p => p.Name != KnownProperties.Resource.WaitingFor)
+                : e.Snapshot.State?.Text == KnownResourceStates.Waiting &&
+                    e.Snapshot.Properties.All(p => p.Name != KnownProperties.Resource.UnresolvedParameters));
+
+        if (dependencyResolvesFirst)
+        {
+            await resourceNotificationService.PublishUpdateAsync(dependency.Resource, s => s with
+            {
+                State = KnownResourceStates.Running,
+                ResourceReadyEvent = new EventSnapshot(Task.CompletedTask)
+            }).DefaultTimeout();
+        }
+        else
+        {
+            Assert.True(parameter.Resource.WaitForValueTcs!.TrySetResult("resolved-value"));
+        }
+
+        _ = await remainingBlockerEventTask.DefaultTimeout();
+        Assert.False(startingTask.IsCompleted);
+
+        if (dependencyResolvesFirst)
+        {
+            Assert.True(parameter.Resource.WaitForValueTcs!.TrySetResult("resolved-value"));
+        }
+        else
+        {
+            await resourceNotificationService.PublishUpdateAsync(dependency.Resource, s => s with
+            {
+                State = KnownResourceStates.Running,
+                ResourceReadyEvent = new EventSnapshot(Task.CompletedTask)
+            }).DefaultTimeout();
+        }
+
+        await startingTask.DefaultTimeout();
     }
 
     [Fact]

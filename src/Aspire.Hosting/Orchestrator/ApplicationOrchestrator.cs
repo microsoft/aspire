@@ -70,6 +70,7 @@ internal sealed class ApplicationOrchestrator
         dcpExecutorEvents.Subscribe<OnResourceChangedContext>(OnResourceChanged);
         dcpExecutorEvents.Subscribe<OnEndpointsAllocatedContext>(OnEndpointsAllocated);
         dcpExecutorEvents.Subscribe<OnResourceStartingContext>(OnResourceStarting);
+        dcpExecutorEvents.Subscribe<OnResourceBeforeStartContext>(OnResourceBeforeStart);
         dcpExecutorEvents.Subscribe<OnConnectionStringAvailableContext>(OnConnectionStringAvailable);
         dcpExecutorEvents.Subscribe<OnResourceFailedToStartContext>(OnResourceFailedToStart);
 
@@ -109,7 +110,8 @@ internal sealed class ApplicationOrchestrator
         // This happens when resource start command is run, which forces the status to "Starting".
         var waitForNonWaitingStateTask = _notificationService.WaitForResourceAsync(
             @event.Resource.Name,
-            e => e.Snapshot.State?.Text != KnownResourceStates.Waiting,
+            e => e.Snapshot.State?.Text != KnownResourceStates.Waiting &&
+                e.Snapshot.State?.Text != KnownResourceStates.UnresolvedParameters,
             cts.Token);
 
         try
@@ -210,16 +212,19 @@ internal sealed class ApplicationOrchestrator
         }
 
         await PublishUnresolvedParametersStateAsync(context).ConfigureAwait(false);
+    }
 
+    private Task OnResourceBeforeStart(OnResourceBeforeStartContext context)
+    {
         var beforeResourceStartedEvent = new BeforeResourceStartedEvent(context.Resource, _serviceProvider);
-        await _eventing.PublishAsync(beforeResourceStartedEvent, context.CancellationToken).ConfigureAwait(false);
+        return _eventing.PublishAsync(beforeResourceStartedEvent, context.CancellationToken);
+    }
 
-        static Task PublishUpdateAsync(ResourceNotificationService notificationService, IResource resource, string? resourceId, Func<CustomResourceSnapshot, CustomResourceSnapshot> stateFactory)
-        {
-            return resourceId != null
-                ? notificationService.PublishUpdateAsync(resource, resourceId, stateFactory)
-                : notificationService.PublishUpdateAsync(resource, stateFactory);
-        }
+    private static Task PublishUpdateAsync(ResourceNotificationService notificationService, IResource resource, string? resourceId, Func<CustomResourceSnapshot, CustomResourceSnapshot> stateFactory)
+    {
+        return resourceId != null
+            ? notificationService.PublishUpdateAsync(resource, resourceId, stateFactory)
+            : notificationService.PublishUpdateAsync(resource, stateFactory);
     }
 
     private async Task PublishUnresolvedParametersStateAsync(OnResourceStartingContext context)
@@ -330,11 +335,7 @@ internal sealed class ApplicationOrchestrator
             if (unresolvedParameters.Count == 0)
             {
                 // Parameter blocking is finished, but normal DCP startup is still in progress.
-                return snapshot with
-                {
-                    State = KnownResourceStates.Starting,
-                    Properties = snapshot.Properties.RemoveResourceProperty(KnownProperties.Resource.UnresolvedParameters)
-                };
+                return ResourceNotificationService.UpdateStartupBlocker(snapshot, KnownProperties.Resource.UnresolvedParameters, []);
             }
 
             var parameterNames = unresolvedParameters
@@ -342,11 +343,7 @@ internal sealed class ApplicationOrchestrator
                 .Order(StringComparers.ResourceName)
                 .ToArray();
 
-            return snapshot with
-            {
-                State = new(KnownResourceStates.UnresolvedParameters, KnownResourceStateStyles.Warn),
-                Properties = snapshot.Properties.SetResourceProperty(KnownProperties.Resource.UnresolvedParameters, parameterNames)
-            };
+            return ResourceNotificationService.UpdateStartupBlocker(snapshot, KnownProperties.Resource.UnresolvedParameters, parameterNames);
         }
 
         // Scope the update to the DCP resource instance when one is known; replicated/grouped starts publish

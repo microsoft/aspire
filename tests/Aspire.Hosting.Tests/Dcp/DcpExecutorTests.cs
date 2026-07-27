@@ -2358,8 +2358,51 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Collection(
             observedEvents,
             eventName => Assert.Equal(nameof(ResourceEndpointsAllocatedEvent), eventName),
-            eventName => Assert.Equal(nameof(OnConnectionStringAvailableContext), eventName),
-            eventName => Assert.Equal(nameof(OnResourceStartingContext), eventName));
+            eventName => Assert.Equal(nameof(OnResourceStartingContext), eventName),
+            eventName => Assert.Equal(nameof(OnConnectionStringAvailableContext), eventName));
+    }
+
+    [Fact]
+    public async Task ResourceStartingEventPublishesBeforeBlockingConnectionStringAvailableEvent()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        _ = builder.AddContainer("database", "image")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        var resourceStarting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var connectionStringAvailable = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseConnectionString = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceStartingContext>(context =>
+        {
+            if (context.Resource.Name == "database")
+            {
+                resourceStarting.TrySetResult();
+            }
+
+            return Task.CompletedTask;
+        });
+        events.Subscribe<OnConnectionStringAvailableContext>(async context =>
+        {
+            if (context.Resource.Name == "database")
+            {
+                connectionStringAvailable.TrySetResult();
+                await releaseConnectionString.Task;
+            }
+        });
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, events: events);
+
+        var runTask = appExecutor.RunApplicationAsync();
+        await connectionStringAvailable.Task.DefaultTimeout();
+
+        Assert.True(resourceStarting.Task.IsCompleted);
+
+        releaseConnectionString.TrySetResult();
+        await runTask.DefaultTimeout();
     }
 
     [Fact]
@@ -6106,7 +6149,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
 
         var events = new DcpExecutorEvents();
-        events.Subscribe<OnResourceStartingContext>(async context =>
+        events.Subscribe<OnResourceBeforeStartContext>(async context =>
         {
             if (context.Resource == waiting.Resource || context.Resource == waitingConsumingEndpoint.Resource)
             {
@@ -6167,7 +6210,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
 
         var events = new DcpExecutorEvents();
-        events.Subscribe<OnResourceStartingContext>(async context =>
+        events.Subscribe<OnResourceBeforeStartContext>(async context =>
         {
             if (context.Resource == tunnelDependentContainer.Resource)
             {
