@@ -26,12 +26,12 @@ which is what `LICENSE.txt` is for.
 
 ## How it's used
 
-The font is referenced via a `@font-face` rule in
-`Components/Controls/TerminalView.razor.css` under the family name
-`"Cascadia Mono NF"`, which is then passed to the xterm.js `Terminal`
-constructor's `fontFamily` option with system monospace fallbacks for
-the brief moment before the woff2 finishes loading and as a hard
-fallback if the asset is unavailable.
+The font is referenced via a `@font-face` rule injected by
+`Components/Controls/TerminalView.razor.js` (`ensureTerminalStyles()`)
+under the family name `"Cascadia Mono NF"`, which is then passed to
+the xterm.js `Terminal` constructor's `fontFamily` option with system
+monospace fallbacks for the brief moment before the woff2 finishes
+loading and as a hard fallback if the asset is unavailable.
 
 ## Updating
 
