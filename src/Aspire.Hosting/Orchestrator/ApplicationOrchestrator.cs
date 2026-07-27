@@ -63,6 +63,7 @@ internal sealed class ApplicationOrchestrator
         _serviceProvider = serviceProvider;
         _executionContext = executionContext;
         _parameterProcessor = parameterProcessor;
+        _parameterProcessor.ParameterBecameUnresolved += OnParameterBecameUnresolved;
         var dashboardUrl = dashboardOptions.Value.DashboardUrl?.Split(';', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
         Uri.TryCreate(dashboardUrl, UriKind.Absolute, out _dashboardUri);
 
@@ -117,10 +118,13 @@ internal sealed class ApplicationOrchestrator
         try
         {
             var completedTask = await Task.WhenAny(waitForDependenciesTask, waitForNonWaitingStateTask).ConfigureAwait(false);
-            if (completedTask.IsFaulted)
+            await completedTask.ConfigureAwait(false);
+
+            if (ReferenceEquals(completedTask, waitForDependenciesTask))
             {
-                // Make error visible from completed task.
-                await completedTask.ConfigureAwait(false);
+                // Normal dependency completion does not bypass parameter blocking. Wait until the startup
+                // blocker reducer moves the resource out of both informational waiting states.
+                await waitForNonWaitingStateTask.ConfigureAwait(false);
             }
         }
         catch (Exception ex)
@@ -258,19 +262,19 @@ internal sealed class ApplicationOrchestrator
 
     private static IEnumerable<ParameterResource> GetReferencedParameters(IResource resource)
     {
-        var parameters = new Dictionary<string, ParameterResource>(StringComparers.ResourceName);
+        var parameters = new HashSet<ParameterResource>(ReferenceEqualityComparer.Instance);
         var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
 
         foreach (var relationship in resource.Annotations.OfType<ResourceRelationshipAnnotation>())
         {
             if (relationship.Type == KnownRelationshipTypes.Reference && relationship.Resource is ParameterResource parameter)
             {
-                parameters.TryAdd(parameter.Name, parameter);
+                parameters.Add(parameter);
             }
         }
 
         Walk(resource);
-        return parameters.Values;
+        return parameters;
 
         void Walk(object? value)
         {
@@ -281,7 +285,7 @@ internal sealed class ApplicationOrchestrator
 
             if (value is ParameterResource parameter)
             {
-                parameters.TryAdd(parameter.Name, parameter);
+                parameters.Add(parameter);
             }
 
             if (value is IValueWithReferences valueWithReferences)
@@ -348,6 +352,23 @@ internal sealed class ApplicationOrchestrator
         }
     }
 
+    private async Task OnParameterBecameUnresolved(ParameterResource parameter)
+    {
+        foreach (var resource in _model.Resources)
+        {
+            var unresolvedParameters = GetReferencedParameters(resource)
+                .Where(_parameterProcessor.IsParameterUnresolved)
+                .ToArray();
+            if (!unresolvedParameters.Any(candidate => ReferenceEquals(candidate, parameter)))
+            {
+                continue;
+            }
+
+            await PublishUnresolvedParametersUpdateAsync(resource, resourceId: null, unresolvedParameters, allowStartingState: true).ConfigureAwait(false);
+            _ = MonitorUnresolvedParametersAsync(resource, resourceId: null, unresolvedParameters, _shutdownCancellation.Token);
+        }
+    }
+
     private Task PublishUnresolvedParametersUpdateAsync(
         IResource resource,
         string? resourceId,
@@ -360,7 +381,8 @@ internal sealed class ApplicationOrchestrator
             // still owns the state, preventing late parameter completion from regressing Running or terminal states.
             var isUnresolvedParametersState = string.Equals(snapshot.State?.Text, KnownResourceStates.UnresolvedParameters, StringComparisons.ResourceState);
             var canEnterUnresolvedParametersState = allowStartingState &&
-                string.Equals(snapshot.State?.Text, KnownResourceStates.Starting, StringComparisons.ResourceState);
+                (string.Equals(snapshot.State?.Text, KnownResourceStates.Starting, StringComparisons.ResourceState) ||
+                 string.Equals(snapshot.State?.Text, KnownResourceStates.Waiting, StringComparisons.ResourceState));
             if (!isUnresolvedParametersState && !canEnterUnresolvedParametersState)
             {
                 return snapshot;
@@ -374,6 +396,7 @@ internal sealed class ApplicationOrchestrator
 
             var parameterNames = unresolvedParameters
                 .Select(static parameter => parameter.Name)
+                .Distinct(StringComparers.ResourceName)
                 .Order(StringComparers.ResourceName)
                 .ToArray();
 
@@ -816,7 +839,7 @@ internal sealed class ApplicationOrchestrator
                 .Where(static relationship => relationship.Type == KnownRelationshipTypes.Reference)
                 .Select(static relationship => relationship.Resource)
                 .OfType<ParameterResource>())
-            .DistinctBy(static parameter => parameter.Name, StringComparers.ResourceName);
+            .Distinct<ParameterResource>(ReferenceEqualityComparer.Instance);
         await _parameterProcessor.InitializeParametersAsync(parameterResources, waitForResolution: false).ConfigureAwait(false);
 
         // Publish the initial state of the resources that have a snapshot annotation.

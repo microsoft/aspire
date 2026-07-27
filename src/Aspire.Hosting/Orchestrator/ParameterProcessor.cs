@@ -33,6 +33,8 @@ public sealed class ParameterProcessor(
     private CancellationTokenSource? _allParametersResolvedCts;
     private Task? _parameterResolutionTask;
 
+    internal event Func<ParameterResource, Task>? ParameterBecameUnresolved;
+
     internal bool HasUnresolvedParameters
     {
         get
@@ -478,17 +480,12 @@ public sealed class ParameterProcessor(
             }
 
             // Add the parameter back to unresolved parameters
-            if (AddUnresolvedParameter(parameterResource))
+            if (AddUnresolvedParameter(parameterResource, resetCompletedValueTask: true))
             {
-                // A completed task represents the deleted value and must be replaced. Preserve a pending task so
-                // callers that were already waiting receive the replacement value instead of being stranded.
-                if (parameterResource.WaitForValueTcs is null || parameterResource.WaitForValueTcs.Task.IsCompleted)
-                {
-                    parameterResource.WaitForValueTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
-                }
-
                 // Update the parameter's state to show it's missing a value
                 await UpdateParameterStateAsync(parameterResource, "Parameter value has been deleted", new(KnownResourceStates.ValueMissing, KnownResourceStateStyles.Warn)).ConfigureAwait(false);
+
+                await NotifyParameterBecameUnresolvedAsync(parameterResource).ConfigureAwait(false);
 
                 // Start the resolution task if it's not running
                 _ = EnsureParameterResolutionTaskRunningAsync();
@@ -682,7 +679,7 @@ public sealed class ParameterProcessor(
         allParametersResolvedCts?.Cancel();
     }
 
-    private bool AddUnresolvedParameter(ParameterResource parameterResource)
+    private bool AddUnresolvedParameter(ParameterResource parameterResource, bool resetCompletedValueTask = false)
     {
         lock (_resolutionTaskLock)
         {
@@ -691,8 +688,36 @@ public sealed class ParameterProcessor(
                 return false;
             }
 
+            // A completed task represents the deleted value and must be replaced before the parameter becomes
+            // visible as unresolved. Preserve a pending task so existing waiters receive the replacement value.
+            if (resetCompletedValueTask &&
+                (parameterResource.WaitForValueTcs is null || parameterResource.WaitForValueTcs.Task.IsCompleted))
+            {
+                parameterResource.WaitForValueTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+
             _unresolvedParameters.Add(parameterResource);
             return true;
+        }
+    }
+
+    private async Task NotifyParameterBecameUnresolvedAsync(ParameterResource parameterResource)
+    {
+        if (ParameterBecameUnresolved is not { } parameterBecameUnresolved)
+        {
+            return;
+        }
+
+        foreach (Func<ParameterResource, Task> handler in parameterBecameUnresolved.GetInvocationList())
+        {
+            try
+            {
+                await handler(parameterResource).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to publish unresolved state for parameter {ParameterName}.", parameterResource.Name);
+            }
         }
     }
 
@@ -740,6 +765,15 @@ public sealed class ParameterProcessor(
 
     private async Task UpdateParameterStateAsync(ParameterResource parameterResource, string value, ResourceStateSnapshot? state)
     {
+        // Referenced parameters do not have to be model resources, so distinct instances can share a name.
+        // The notification service has one snapshot per resource name; keep the first instance as its owner
+        // while still processing every instance's value task and unresolved state.
+        if (notificationService.TryGetCurrentState(parameterResource.Name, out var currentState) &&
+            !ReferenceEquals(currentState.Resource, parameterResource))
+        {
+            return;
+        }
+
         await notificationService.PublishUpdateAsync(parameterResource, s =>
         {
             return s with

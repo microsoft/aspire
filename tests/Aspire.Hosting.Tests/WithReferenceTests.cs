@@ -729,6 +729,43 @@ public class WithReferenceTests
         Assert.Contains(config, kvp => kvp.Key == "RESOURCE_PORT" && kvp.Value == "5432");
     }
 
+    [Theory]
+    [InlineData(ReferenceEnvironmentInjectionFlags.All, true, true)]
+    [InlineData(ReferenceEnvironmentInjectionFlags.ConnectionString, true, false)]
+    [InlineData(ReferenceEnvironmentInjectionFlags.ConnectionProperties, false, true)]
+    [InlineData(ReferenceEnvironmentInjectionFlags.None, false, false)]
+    public void ConnectionStringResourceRelationshipsRespectInjectionFlags(
+        ReferenceEnvironmentInjectionFlags flags,
+        bool expectConnectionStringParameter,
+        bool expectConnectionPropertyParameters)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var connectionStringParameter = builder.AddParameter("connectionStringParameter");
+        var connectionPropertyParameter = builder.AddParameter("connectionPropertyParameter");
+        var annotatedPropertyParameter = builder.AddParameter("annotatedPropertyParameter");
+        var resource = builder.AddResource(new TestResourceWithReferencedProperties(
+                "resource",
+                connectionStringParameter.Resource,
+                connectionPropertyParameter.Resource))
+            .WithConnectionProperty("annotated", ReferenceExpression.Create($"{annotatedPropertyParameter}"));
+        var consumer = builder.AddProject<ProjectB>("consumer")
+            .WithReferenceEnvironment(flags)
+            .WithReference(resource);
+
+        Assert.True(consumer.Resource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships));
+        Assert.Contains(relationships, relationship => ReferenceEquals(relationship.Resource, resource.Resource));
+        Assert.Equal(
+            expectConnectionStringParameter,
+            relationships.Any(relationship => ReferenceEquals(relationship.Resource, connectionStringParameter.Resource)));
+        Assert.Equal(
+            expectConnectionPropertyParameters,
+            relationships.Any(relationship => ReferenceEquals(relationship.Resource, connectionPropertyParameter.Resource)));
+        Assert.Equal(
+            expectConnectionPropertyParameters,
+            relationships.Any(relationship => ReferenceEquals(relationship.Resource, annotatedPropertyParameter.Resource)));
+    }
+
     [Fact]
     public async Task ResourceWithConnectionPropertiesExtensionOverridesDefault()
     {
@@ -812,6 +849,19 @@ public class WithReferenceTests
         {
             yield return new KeyValuePair<string, ReferenceExpression>("Host", ReferenceExpression.Create($"localhost"));
             yield return new KeyValuePair<string, ReferenceExpression>("Port", ReferenceExpression.Create($"5432"));
+        }
+    }
+
+    private sealed class TestResourceWithReferencedProperties(
+        string name,
+        ParameterResource connectionStringParameter,
+        ParameterResource connectionPropertyParameter) : Resource(name), IResourceWithConnectionString
+    {
+        public ReferenceExpression ConnectionStringExpression => ReferenceExpression.Create($"Value={connectionStringParameter}");
+
+        public IEnumerable<KeyValuePair<string, ReferenceExpression>> GetConnectionProperties()
+        {
+            yield return new("Property", ReferenceExpression.Create($"{connectionPropertyParameter}"));
         }
     }
 
