@@ -330,15 +330,30 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
                 DECLARE @name SYSNAME = '$principalName';
                 DECLARE @id UNIQUEIDENTIFIER = '$id';
                 
-                -- Convert the guid to the right type
-                DECLARE @castId NVARCHAR(MAX) = CONVERT(VARCHAR(MAX), CONVERT (VARBINARY(16), @id), 1);
+                -- The SID of an Entra principal is the raw bytes of its object id. @castId is that same
+                -- value rendered as the 0x... literal that CREATE USER ... WITH SID requires.
+                DECLARE @sid VARBINARY(16) = CONVERT(VARBINARY(16), @id);
+                DECLARE @castId NVARCHAR(MAX) = CONVERT(VARCHAR(MAX), @sid, 1);
+                
+                DECLARE @existingSid VARBINARY(85) = (SELECT sid FROM sys.database_principals WHERE name = @name);
+                
+                -- A user left over from an earlier deployment can carry a stale SID, because deleting and
+                -- recreating a managed identity keeps the name but changes the object id. Granting a role to
+                -- that principal would report success while the application still failed to log in, so drop
+                -- it and let it be recreated against the identity we were actually given.
+                IF @existingSid IS NOT NULL AND @existingSid <> @sid
+                BEGIN
+                    DECLARE @dropCmd NVARCHAR(MAX) = N'DROP USER [' + @name + N']';
+                    EXEC (@dropCmd);
+                    SET @existingSid = NULL;
+                END
                 
                 -- Only create the user when it is missing. This script is re-executed on redeploys, and the
                 -- retry loop below can also re-run this batch after a transient failure that occurred *after*
                 -- the user was already created. An unguarded CREATE USER would then fail with
                 -- 'Msg 15023: User already exists in current database', turning a transient error into a
                 -- permanent deployment failure.
-                IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = @name)
+                IF @existingSid IS NULL
                 BEGIN
                     -- Construct command: CREATE USER [@name] WITH SID = @castId, TYPE = E;
                     DECLARE @cmd NVARCHAR(MAX) = N'CREATE USER [' + @name + '] WITH SID = ' + @castId + ', TYPE = E;'
@@ -362,10 +377,15 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
                 # assembly and fail with:
                 #   System.MissingMethodException: Method not found: 'Void Microsoft.Extensions.Caching.Memory.MemoryCache..ctor(
                 #     Microsoft.Extensions.Options.IOptions`1<Microsoft.Extensions.Caching.Memory.MemoryCacheOptions>)'.
-                # Both published SqlServer module versions hit this (22.3.0 here, 22.4.5.1 in
-                # https://github.com/microsoft/aspire/issues/9926), so instead we use System.Data.SqlClient, which
-                # ships in-box with PowerShell 7 in the azuredeploymentscripts-powershell images, together with a
-                # managed identity access token. See https://github.com/microsoft/aspire/issues/18892.
+                # Both published SqlServer module versions have hit this class of conflict at some point, and
+                # upstream tracks the real fix - proper assembly load context isolation - in
+                # https://github.com/microsoft/SQLServerPSModule/issues/31, which is still open. Pinning a module
+                # version only works against one combination of Az module and .NET runtime versions in the image:
+                # 22.3.0 worked until this image bumped its Az modules, and 22.4.5.1 could not load on the older
+                # .NET 6 based images (https://github.com/microsoft/aspire/issues/9926). Rather than track that
+                # matrix, use System.Data.SqlClient, which ships in-box with PowerShell in the
+                # azuredeploymentscripts-powershell images, together with a managed identity access token.
+                # Nothing here needs Always Encrypted. See https://github.com/microsoft/aspire/issues/18892.
                 $tokenResponse = Get-AzAccessToken -ResourceUrl "https://database.windows.net/"
 
                 # Az.Accounts 5.x returns the token as a SecureString, earlier majors return a plain string.
