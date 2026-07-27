@@ -326,8 +326,13 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
                 $principalName = "$env:PRINCIPALNAME"
                 $id = "$env:ID"
 
+                # The principal name is interpolated into a T-SQL string literal below. For a user principal
+                # it is a UPN, which can legitimately contain an apostrophe (for example o'brien@contoso.com),
+                # so double it up to keep the literal well formed.
+                $escapedPrincipalName = $principalName.Replace("'", "''")
+
                 $sqlCmd = @"
-                DECLARE @name SYSNAME = '$principalName';
+                DECLARE @name SYSNAME = '$escapedPrincipalName';
                 DECLARE @id UNIQUEIDENTIFIER = '$id';
                 
                 -- The SID of an Entra principal is the raw bytes of its object id. @castId is that same
@@ -343,7 +348,8 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
                 -- it and let it be recreated against the identity we were actually given.
                 IF @existingSid IS NOT NULL AND @existingSid <> @sid
                 BEGIN
-                    DECLARE @dropCmd NVARCHAR(MAX) = N'DROP USER [' + @name + N']';
+                    -- QUOTENAME escapes any ']' in the identifier, which a raw '[' + @name + ']' would not.
+                    DECLARE @dropCmd NVARCHAR(MAX) = N'DROP USER ' + QUOTENAME(@name);
                     EXEC (@dropCmd);
                     SET @existingSid = NULL;
                 END
@@ -356,12 +362,12 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
                 IF @existingSid IS NULL
                 BEGIN
                     -- Construct command: CREATE USER [@name] WITH SID = @castId, TYPE = E;
-                    DECLARE @cmd NVARCHAR(MAX) = N'CREATE USER [' + @name + '] WITH SID = ' + @castId + ', TYPE = E;'
+                    DECLARE @cmd NVARCHAR(MAX) = N'CREATE USER ' + QUOTENAME(@name) + N' WITH SID = ' + @castId + N', TYPE = E;'
                     EXEC (@cmd);
                 END
                 
                 -- Assign roles to the user. ALTER ROLE ... ADD MEMBER is a no-op when the principal is already a member.
-                DECLARE @role1 NVARCHAR(MAX) = N'ALTER ROLE db_owner ADD MEMBER [' + @name + ']';
+                DECLARE @role1 NVARCHAR(MAX) = N'ALTER ROLE db_owner ADD MEMBER ' + QUOTENAME(@name);
                 EXEC (@role1);
                 
                 "@
@@ -386,14 +392,15 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
                 # matrix, use System.Data.SqlClient, which ships in-box with PowerShell in the
                 # azuredeploymentscripts-powershell images, together with a managed identity access token.
                 # Nothing here needs Always Encrypted. See https://github.com/microsoft/aspire/issues/18892.
-                $tokenResponse = Get-AzAccessToken -ResourceUrl "https://database.windows.net/"
-
-                # Az.Accounts 5.x returns the token as a SecureString, earlier majors return a plain string.
-                $accessToken = if ($tokenResponse.Token -is [System.Security.SecureString]) {
-                    [System.Net.NetworkCredential]::new("", $tokenResponse.Token).Password
-                } else {
-                    $tokenResponse.Token
+                # The token audience is cloud specific - US Gov uses database.usgovcloudapi.net and China uses
+                # database.chinacloudapi.cn - so derive it from the deployment script's Az context rather than
+                # assuming public cloud. The previous Invoke-Sqlcmd implementation used
+                # 'Authentication=Active Directory Default', which let the driver resolve this automatically.
+                $sqlDnsSuffix = (Get-AzContext).Environment.SqlDatabaseDnsSuffix
+                if ([string]::IsNullOrWhiteSpace($sqlDnsSuffix)) {
+                    $sqlDnsSuffix = ".database.windows.net"
                 }
+                $sqlAudience = "https://" + $sqlDnsSuffix.TrimStart('.') + "/"
 
                 $connectionString = "Server=tcp:${sqlServerFqdn},1433;Initial Catalog=${sqlDatabaseName};Encrypt=True;TrustServerCertificate=False;"
 
@@ -407,6 +414,17 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
                     Write-Host "Attempt $attempt of $maxRetries..."
                     $connection = $null
                     try {
+                        # Acquired inside the loop so a transient token failure is retried like any other
+                        # failure, rather than aborting the script before the first attempt.
+                        $tokenResponse = Get-AzAccessToken -ResourceUrl $sqlAudience
+
+                        # Az.Accounts 5.x returns the token as a SecureString, earlier majors return a plain string.
+                        $accessToken = if ($tokenResponse.Token -is [System.Security.SecureString]) {
+                            [System.Net.NetworkCredential]::new("", $tokenResponse.Token).Password
+                        } else {
+                            $tokenResponse.Token
+                        }
+
                         $connection = New-Object System.Data.SqlClient.SqlConnection
                         $connection.ConnectionString = $connectionString
                         $connection.AccessToken = $accessToken
