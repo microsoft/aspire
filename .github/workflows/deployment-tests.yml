@@ -422,7 +422,7 @@ jobs:
 
           # Read the current effective limit for a quota (works across providers). Shape of
           # 'az quota show':
-          #   { "name": "standardDASv5Family",
+          #   { "name": "standardDSv5Family",
           #     "properties": { "limit": { "value": 100 }, "unit": "Count", ... } }
           read_limit() {
             az quota show --resource-name "$2" --scope "$1" \

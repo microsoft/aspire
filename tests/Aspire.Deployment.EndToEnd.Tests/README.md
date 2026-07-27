@@ -8,7 +8,7 @@ These tests use the [Hex1b](https://github.com/hex1b/hex1b) terminal automation 
 
 ## Azure Subscription Quota Requirements
 
-The deployment tests require an Azure subscription with sufficient quota for the resources being deployed. Ensure the following quotas are available in the test region (currently `westus3`).
+The deployment tests require an Azure subscription with sufficient quota for the resources being deployed. Most scenarios deploy to `westus3`, but the AKS (Azure Kubernetes Service) scenarios deploy to `centralus`, and a couple of resource-specific tests use other regions (`australiaeast`, `eastus`). Ensure the quotas below are available in the region noted for each section.
 
 ### Container Apps
 
@@ -23,6 +23,20 @@ The deployment tests require an Azure subscription with sufficient quota for the
 |----------|---------------|-----------------|-------|
 | PremiumV3 vCPUs | 10+ | TBD | App Service Plans use PremiumV3 tier (P0V3). Each deployment needs ~1 vCPU. |
 | App Service Plans | 10+ | Default | Each deployment creates a new plan |
+
+### AKS / Kubernetes node pools
+
+The AKS scenarios deploy to `centralus`, where the subscription holds `Standard_D2s_v5` (DSv5) capacity. The CI workflow's quota self-healing (`QUOTA_TARGETS` in `.github/workflows/deployment-tests.yml`) requests these automatically:
+
+| Resource | Region | Quota Required | Notes |
+|----------|--------|----------------|-------|
+| `StandardDSv5Family` vCPUs (`Microsoft.Compute`) | `centralus` | 200 (dedicated) | System and workload node pools use `Standard_D2s_v5`. |
+| Managed Clusters (`Microsoft.ContainerService`) | `centralus` | 20 | Each AKS test creates a cluster; headroom covers concurrent runs and cleanup lag. |
+
+A few tests intentionally use other regions for capacity or feature reasons:
+
+- `AksBlazorRedisDeploymentTests` → `australiaeast` (`Standard_D2as_v4` / DASv4 family).
+- `AcaManagedRedisDeploymentTests` → `eastus` (Azure Managed Redis availability-zone support).
 
 ### Container Registry
 
@@ -47,11 +61,15 @@ To request quota increases:
 4. Filter by the resource type:
    - `Microsoft.App` for Container Apps
    - `Microsoft.Web` for App Service
+   - `Microsoft.Compute` for AKS node pool vCPUs
+   - `Microsoft.ContainerService` for AKS managed clusters
 5. Select the quota to increase and click **Request increase**
 
 Common quota increase requests:
 - **Container Apps Managed Environments**: Request 150+ in westus3
 - **App Service PremiumV3 vCPUs**: Request 10+ in westus3
+- **AKS `StandardDSv5Family` vCPUs**: Request 200 (dedicated) in centralus
+- **AKS Managed Clusters**: Request 20 in centralus
 
 ## Prerequisites
 
@@ -309,6 +327,7 @@ The test Azure tenant/subscription rotates approximately every 90 days per polic
 3. Grant Owner role on subscription (constrained - cannot create other Owner identities)
 4. Update GitHub secrets: `AZURE_DEPLOYMENT_TEST_CLIENT_ID`, `AZURE_DEPLOYMENT_TEST_TENANT_ID`
 5. Update GitHub variable: `AZURE_DEPLOYMENT_TEST_SUBSCRIPTION_ID`
+6. Ensure regional quotas per [Azure Subscription Quota Requirements](#azure-subscription-quota-requirements): Container Apps and App Service in `westus3`, and AKS (`StandardDSv5Family` vCPUs and managed clusters) in `centralus`. The CI workflow attempts to self-heal these, but a new subscription may still need a manual request.
 
 See [Deployment Testing Documentation](../../docs/deployment-testing.md) for detailed rotation procedures.
 
