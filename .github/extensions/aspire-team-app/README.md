@@ -45,6 +45,12 @@ card shows are driven by its lane and its signal pills:
 
 ![Card action split buttons](media/card-actions.png)
 
+**Clicking a card opens the PR in the built-in viewer.** A plain click on a github.com PR
+card opens that pull request in the app's built-in PR viewer (via `open_pr_session`, bridged
+through the agent), instead of a browser tab. The card's link is kept as an escape hatch:
+Ctrl/Cmd/Shift/Alt- and middle-clicks still open github.com in the browser, and GHES
+(self-hosted, non-github.com) cards — which have no in-app viewer — always open in the browser.
+
 ## What it does
 
 - **Review mode** — buckets every open PR across your watched repos into lanes:
@@ -78,7 +84,7 @@ card shows are driven by its lane and its signal pills:
 | `model.mjs` | Attention buckets, focus queue, core-team / community classification. |
 | `constants.mjs` | Configuration: core-team members, release milestone, personal picks. |
 | `render.mjs` | Iframe HTML / CSS / client JS, styled with Copilot theme tokens. |
-| `agent.mjs` | Card-action prompt/log builders (Test, Review, Resolve conflicts, Address review, Evaluate CI failures, Discuss review, Address feedback) with untrusted-PR hardening. |
+| `agent.mjs` | Card-action prompt/log builders (Test, Review, Resolve conflicts, Address review, Evaluate CI failures, Discuss review, Address feedback) plus the open-PR-viewer prompt/log builders, all with untrusted-PR hardening. |
 | `state.mjs` | Durable per-account preferences (watched repos, active flag, notifications). |
 
 The canvas reads each account's token from `GH_TOKEN` / `GITHUB_TOKEN`, the

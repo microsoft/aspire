@@ -296,6 +296,78 @@ test("cardActionBtn defaults a GHES/EMU card to the current session with no new-
   assert.doesNotMatch(ghes, /Open in new session/);
 });
 
+test("prCard marks a github.com card for the built-in viewer but leaves GHES cards on the browser path", () => {
+  const { api } = createRendererHarness();
+  const base = { title: "Add widget", author: "octo", authorAvatarUrl: null };
+
+  // A github.com PR card body carries the data-open-viewer marker plus the owner/repo + number +
+  // url the delegated handler needs to open it in-app. The anchor href is kept as an escape hatch.
+  const dotcom = api.prCard({ pr: { ...base, url: "https://github.com/microsoft/aspire/pull/123", number: 123, repository: "microsoft/aspire" } }, []);
+  assert.match(dotcom, /class="card-main"[^>]*data-open-viewer="1"/);
+  assert.match(dotcom, /data-pr-url="https:\/\/github\.com\/microsoft\/aspire\/pull\/123"/);
+  assert.match(dotcom, /data-pr-number="123"/);
+  assert.match(dotcom, /data-pr-repo="microsoft\/aspire"/);
+  assert.match(dotcom, /href="https:\/\/github\.com\/microsoft\/aspire\/pull\/123"[^>]*target="_blank"/);
+
+  // A GHES/EMU PR has no in-app viewer (open_pr_session is github.com-only), so it must NOT be
+  // marked — the handler ignores it and the anchor opens the enterprise host in the browser.
+  const ghes = api.prCard({ pr: { ...base, url: "https://ghe.example.com:8443/microsoft/aspire/pull/123", number: 123, repository: "microsoft/aspire" } }, []);
+  assert.doesNotMatch(ghes, /data-open-viewer/);
+  assert.match(ghes, /href="https:\/\/ghe\.example\.com:8443\/microsoft\/aspire\/pull\/123"/);
+});
+
+test("the card-open click handler intercepts only a plain click on a marked github.com card", () => {
+  // Source-level guard on the delegated handler (it can't be dispatched through the stubbed DOM).
+  // It must bail on a modified/aux click and on a card without the data-open-viewer marker, and only
+  // then preventDefault + open the in-app viewer — so "open in new tab", copy-link, and GHES cards
+  // all keep reaching the browser.
+  const handler = APP_JS.match(/if \(!cardOpenBound\) \{([\s\S]*?)\n  \}/);
+  assert.ok(handler, "expected a cardOpenBound-guarded delegated handler");
+  const body = handler[1];
+  assert.match(body, /e\.button !== 0/);
+  assert.match(body, /e\.metaKey \|\| e\.ctrlKey \|\| e\.shiftKey \|\| e\.altKey/);
+  assert.match(body, /a\.card-main\[data-open-viewer\]/);
+  assert.match(body, /e\.preventDefault\(\)/);
+  assert.match(body, /openPrViewer\(main\)/);
+});
+
+test("openPrViewer posts the PR descriptor to the open-pr bridge and never opens the browser on success", async () => {
+  let opened = null;
+  let posted = null;
+  const { api } = createRendererHarness({
+    windowOpen: (u) => { opened = u; },
+    fetch: async (path, opts) => {
+      if (String(path) === "api/agent/open-pr") { posted = { path: String(path), body: JSON.parse(opts.body) }; return jsonResponse({ ok: true, messageId: "m", queued: false }); }
+      return jsonResponse({ dashboard: null, prefs: null });
+    },
+  });
+  const main = fakeCardMain({ prUrl: "https://github.com/microsoft/aspire/pull/123", prNumber: "123", prRepo: "microsoft/aspire" });
+
+  await api.openPrViewer(main);
+  assert.equal(posted.path, "api/agent/open-pr");
+  assert.deepEqual(posted.body, { pr: { url: "https://github.com/microsoft/aspire/pull/123", number: 123, repository: "microsoft/aspire" } });
+  assert.equal(opened, null);
+  // The in-flight guard is set while the POST runs and cleared once it settles.
+  assert.equal(main.attrs["aria-busy"], undefined);
+});
+
+test("openPrViewer falls back to the PR url in the browser when the bridge fails", async () => {
+  let opened = null;
+  const { api } = createRendererHarness({
+    windowOpen: (u) => { opened = u; },
+    fetch: async (path) => {
+      // A 5xx (session not wired) makes postJSON/readJson throw; the click must still do something.
+      if (String(path) === "api/agent/open-pr") return jsonResponse({ error: "not ready" }, { ok: false, status: 503 });
+      return jsonResponse({ dashboard: null, prefs: null });
+    },
+  });
+  const main = fakeCardMain({ prUrl: "https://github.com/microsoft/aspire/pull/123", prNumber: "123", prRepo: "microsoft/aspire" });
+
+  await api.openPrViewer(main);
+  assert.equal(opened, "https://github.com/microsoft/aspire/pull/123");
+  assert.equal(main.attrs["aria-busy"], undefined);
+});
+
 test("withRefresh ignores a late older response so overlapping refreshes can't roll state back", async () => {
   // The module-init load() calls fetch("api/state"); a never-resolving fetch keeps it pending so it
   // can't clobber `state` mid-test. withRefresh takes its data from the fn argument, not fetch.
@@ -664,7 +736,7 @@ function createRendererHarness(overrides = {}) {
   };
   const sandbox = {
     document,
-    window: { CSS: { escape: cssEscape } },
+    window: { CSS: { escape: cssEscape }, open: overrides.windowOpen ?? (() => null) },
     CSS: { escape: cssEscape },
     EventSource: function () { throw new Error("disabled"); },
     ResizeObserver: undefined,
@@ -675,7 +747,7 @@ function createRendererHarness(overrides = {}) {
     console,
   };
 
-  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  withRefresh,\n  load,\n  rescanAccounts,\n  onCardAction,\n  onSseRefresh,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  focusCardActions,\n  laneCardActions,\n  signalActions,\n  mergeActions,\n  queuePanel,\n  cardActionBtn,\n  actionKey,\n  inflightActions,\n  setProgress,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  setPrefs(value) { prefs = value; },\n  setView(value) { view = value; },\n  setRefreshing(value) { refreshing = !!value; },\n  setRefreshInFlight(value) { refreshInFlight = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
+  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  withRefresh,\n  load,\n  rescanAccounts,\n  onCardAction,\n  onSseRefresh,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  focusCardActions,\n  laneCardActions,\n  signalActions,\n  mergeActions,\n  queuePanel,\n  cardActionBtn,\n  prCard,\n  openPrViewer,\n  actionKey,\n  inflightActions,\n  setProgress,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  setPrefs(value) { prefs = value; },\n  setView(value) { view = value; },\n  setRefreshing(value) { refreshing = !!value; },\n  setRefreshInFlight(value) { refreshInFlight = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
 
   return { app, api: sandbox.__test };
 }
@@ -712,6 +784,19 @@ function errorElement() {
       remove(name) { classes.delete(name); },
       has(name) { return classes.has(name); },
     },
+  };
+}
+
+// A stand-in for a rendered <a class="card-main"> node. openPrViewer reads owner/repo + number +
+// url off dataset and toggles aria-busy via setAttribute/removeAttribute; record both so tests can
+// assert the POST payload and that the in-flight guard is cleared once the request settles.
+function fakeCardMain(dataset) {
+  const attrs = {};
+  return {
+    dataset,
+    attrs,
+    setAttribute(name, value) { attrs[name] = value; },
+    removeAttribute(name) { delete attrs[name]; },
   };
 }
 

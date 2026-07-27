@@ -11,7 +11,7 @@ import { createServer } from "node:http";
 import { HTML, STYLES, APP_JS } from "./render.mjs";
 import { loadDashboard } from "./github.mjs";
 import { resolveAccounts } from "./accounts.mjs";
-import { buildAgentActionPrompt, buildAgentActionLog, resolveActionTarget, toActionPrNumber } from "./agent.mjs";
+import { buildAgentActionPrompt, buildAgentActionLog, buildOpenPrViewerPrompt, buildOpenPrViewerLog, resolveActionTarget, toActionPrNumber } from "./agent.mjs";
 import {
   loadPrefs,
   savePrefs,
@@ -585,6 +585,38 @@ async function handle(req, res, log, instanceId) {
       // would tell the client "Opened in a new session" when the work is really running in place.
       const effectiveTarget = resolveActionTarget(resolvedPr, target);
       return send(res, 200, { ok: true, kind, target: effectiveTarget, messageId, queued });
+    }
+    if (req.method === "POST" && path === "/api/agent/open-pr") {
+      // A plain click on a PR card posts { pr } here to open that pull request in the app's
+      // built-in PR viewer (open_pr_session), instead of navigating the iframe's anchor to the
+      // browser. Like /api/agent/action it hands a prompt to the main session via the bridge and
+      // does NOT touch the dashboard cache, so it neither refreshes nor broadcasts.
+      const { pr } = await readBody(req);
+      if (!agentSend) {
+        return send(res, 503, { error: "The Copilot session is not ready yet. Try again in a moment." });
+      }
+      // Resolve against the server-side cache so the agent opens THIS server's canonical PR, never
+      // a client-tampered url/host/number (see resolveActionPr / agent.mjs safePrUrl). A descriptor
+      // that doesn't resolve to a unique cached PR is rejected: we never reconstruct a target from
+      // the client's owner/repo/number, so a stale or tampered card can't open an arbitrary PR.
+      const resolvedPr = resolveActionPr(pr);
+      if (!resolvedPr) {
+        return send(res, 400, { error: "This pull request is no longer in view. Refresh and try again." });
+      }
+      let prompt;
+      try {
+        prompt = buildOpenPrViewerPrompt(resolvedPr);
+      } catch (e) {
+        // A non-github.com (GHES/EMU) PR has no in-app viewer; the client keeps those on the
+        // browser path, so this only trips on a tampered request. Answer 400 rather than misroute.
+        return send(res, 400, { error: e.message });
+      }
+      const log = buildOpenPrViewerLog(resolvedPr);
+      const result = await agentSend({ prompt, log });
+      // Tolerate a bare messageId string in case an older bridge is wired.
+      const messageId = typeof result === "string" ? result : (result && result.messageId) ?? null;
+      const queued = typeof result === "object" && result ? !!result.queued : false;
+      return send(res, 200, { ok: true, messageId, queued });
     }
     if (req.method === "POST" && path === "/api/notifications/dismiss") {
       const { id } = await readBody(req);

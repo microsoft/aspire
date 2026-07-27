@@ -336,6 +336,9 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 }
 .card:hover { border-color: var(--border-strong); background: var(--card-hover); }
 .card-main { display: flex; flex-direction: column; gap: 8px; }
+/* While a card's "open in built-in viewer" POST is in flight, dim it and swallow further clicks
+   so a double-click can't queue the open twice (see openPrViewer). */
+.card-main[aria-busy="true"] { opacity: .55; pointer-events: none; }
 .card-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 .card-btn {
   display: inline-flex; align-items: center; gap: 5px;
@@ -721,6 +724,9 @@ let prefs = null;
 let view = "queue";       // queue | settings | accounts | notifications
 let keysBound = false;
 let cbMenuBound = false;
+// Guards the one-time delegated click handler that opens a PR card in the app's built-in PR viewer
+// (see wireQueue). Like cbMenuBound, it must be bound exactly once across re-renders.
+let cardOpenBound = false;
 let prevRank = 0;
 let refreshing = false;
 // Count of overlapping withRefresh() calls in flight. The refresh button stays clickable and
@@ -1106,6 +1112,27 @@ async function onCardAction(split, target) {
     // and an unconditional render() there would rebuild the open form and discard text the user has
     // not committed yet. goView() re-renders the queue when they navigate back, so nothing stays stuck.
     if (!split.isConnected && view === "queue") { render(); }
+  }
+}
+
+// Open a PR card's pull request in the app's built-in PR viewer instead of the browser. Posts the
+// (untrusted) PR descriptor read off the card's data-* attributes to the loopback server, which
+// re-resolves it against its own cache and hands the main session an open_pr_session prompt — the
+// same bridge the action buttons use. Server-side resolution is authoritative; these fields are
+// only a lookup hint. On a hard failure (session not wired yet, or the card aged out of the cache
+// so the POST 4xx/5xx-throws) fall back to the anchor's github.com url so the click still does
+// something, rather than silently dropping it.
+async function openPrViewer(main) {
+  const url = main.dataset.prUrl || "";
+  main.setAttribute("aria-busy", "true");
+  try {
+    await postJSON("api/agent/open-pr", {
+      pr: { url, number: Number(main.dataset.prNumber), repository: main.dataset.prRepo },
+    });
+  } catch {
+    if (url) window.open(url, "_blank", "noreferrer");
+  } finally {
+    main.removeAttribute("aria-busy");
   }
 }
 
@@ -1497,7 +1524,21 @@ function isAuthorResponseItem(item) {
 
 function prCard(item, actions) {
   const pr = item.pr;
-  const main = '<a class="card-main" href="' + esc(pr.url) + '" target="_blank" rel="noreferrer">' +
+  // A plain left-click on a github.com PR card opens the PR in the app's built-in PR viewer (see
+  // the delegated card-open handler in wireQueue), NOT the browser. The <a href> stays so keyboard,
+  // middle-click, and modifier-click still reach github.com as an escape hatch. GHES/EMU PRs have no
+  // in-app viewer (open_pr_session is github.com-only), so they omit the data-open-viewer marker and
+  // the handler leaves them on the normal browser path. The handler reads owner/repo + number + url
+  // straight off these attributes; the server re-resolves them against its own cache, so they are
+  // only a lookup hint, never trusted.
+  const canView = /^https:\/\/github\.com\//i.test(pr.url || "");
+  const viewAttrs = canView
+    ? ' data-open-viewer="1"' +
+      ' data-pr-url="' + esc(pr.url || "") + '"' +
+      ' data-pr-number="' + esc(pr.number) + '"' +
+      ' data-pr-repo="' + esc(pr.repository || "") + '"'
+    : "";
+  const main = '<a class="card-main" href="' + esc(pr.url) + '" target="_blank" rel="noreferrer"' + viewAttrs + '>' +
     '<div class="card-top"><div class="card-title">' + esc(pr.title) + "</div></div>" +
     '<div class="card-sub">' +
       avatarTag(pr.authorAvatarUrl, pr.author, "avatar", 36) +
@@ -2438,6 +2479,23 @@ function wire() {
     if (typeof window !== "undefined" && window.addEventListener) {
       window.addEventListener("resize", () => closeCbMenus());
     }
+  }
+  // Intercept a plain left-click on a github.com PR card body so it opens in the app's built-in PR
+  // viewer instead of navigating the anchor to the browser (see openPrViewer). Bound once (like
+  // cbMenuBound) via event delegation on the document, so SSE re-renders that rebuild every card
+  // don't stack handlers or need re-binding. Only a plain primary click is treated as "open in
+  // app": modifier clicks (Ctrl/Cmd/Shift/Alt) and middle/aux clicks fall through to the anchor so
+  // "open in new tab/window" and copy-link keep working, and GHES/EMU cards (which omit
+  // data-open-viewer) are never intercepted.
+  if (!cardOpenBound) {
+    cardOpenBound = true;
+    document.addEventListener("click", (e) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const main = e.target.closest && e.target.closest("a.card-main[data-open-viewer]");
+      if (!main) return;
+      e.preventDefault();
+      openPrViewer(main);
+    });
   }
   const da = document.getElementById("dismiss-all"); if (da) da.addEventListener("click", dismissAll);
   const r1 = document.getElementById("restore-notifs"); if (r1) r1.addEventListener("click", restoreNotifs);

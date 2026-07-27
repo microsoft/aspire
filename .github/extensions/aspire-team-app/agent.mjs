@@ -226,6 +226,53 @@ export function buildAgentActionLog(kind, rawPr, target = "new-session") {
   return `${action} in ${where}`;
 }
 
+// ---- built-in PR viewer: open a PR in the app's native review/diff viewer ----
+
+// Build the prompt that opens a pull request in the app's built-in PR viewer. A plain click on a
+// PR card routes here (see server.mjs /api/agent/open-pr) instead of navigating the card's anchor
+// to the browser. Unlike the card ACTIONS above, this starts NO task: it asks the foreground agent
+// to open the PR session purely so the user can review it in-app, mirroring clicking a PR in the
+// Copilot app.
+//
+// open_pr_session addresses a PR by owner/repo + number with no host component, so it can only
+// reach github.com. A GitHub Enterprise (GHES/EMU) PR that shares an owner/repo/number with a
+// dotcom repo would otherwise open the WRONG same-slug repository, so a non-github.com URL is
+// rejected here (the client already keeps GHES cards on the browser path; this is defense in
+// depth). Throwing yields a 400 at the route rather than a misrouted open.
+export function buildOpenPrViewerPrompt(rawPr) {
+  const pr = normalizeActionPr(rawPr);
+  if (!isValidActionPr(pr)) {
+    throw new Error("A valid pull request (owner/repo and number) is required.");
+  }
+  const url = safePrUrl(pr);
+  if (!isGitHubComUrl(url)) {
+    throw new Error("The built-in pull request viewer can only open github.com pull requests.");
+  }
+  // Only the validated owner/repo, number, and reconstructed url reach the agent. The title and
+  // author are attacker-controlled display strings and are deliberately never interpolated (see
+  // buildAgentActionPrompt) so a crafted title can't smuggle instructions into a tool-enabled
+  // session.
+  return `Open pull request ${pr.repository}#${pr.number} in the built-in pull request viewer so I can review it: ${url}
+
+Use the open_pr_session tool with:
+- repo_full_name: ${JSON.stringify(pr.repository)}
+- pr_number: ${pr.number}
+- coordinate_with_creator: true
+
+Just open the pull request so I can view it \u2014 do not start any task, review, or other work. ${UNTRUSTED}`;
+}
+
+// Short, human-readable breadcrumb mirroring the open. The extension writes this to the session
+// timeline via session.log() the moment a PR card is clicked, so the open is visible immediately
+// even while the agent is mid-task and the prompt is still queued (mirrors buildAgentActionLog).
+// The title is display-only and collapsed to a single line; it never reaches the operational prompt.
+export function buildOpenPrViewerLog(rawPr) {
+  const pr = normalizeActionPr(rawPr);
+  const ref = isValidActionPr(pr) ? `${pr.repository}#${pr.number}` : (pr.repository || "the pull request");
+  const title = pr.title ? ` \u2014 "${sanitizeLine(pr.title)}"` : "";
+  return `Open PR ${ref}${title} in the built-in viewer`;
+}
+
 // ---- new-session prompts: spawn a sub-session in the PR's repo via open_pr_session ----
 
 function newSessionPrompt(kind, ctx) {
