@@ -1,0 +1,38 @@
+{
+  "run_id": 30226512643,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/30226512643",
+  "analyzed_at": "2026-07-27T01:51:17Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 18846,
+    "title": "Aspire Team App: card actions, per-repo skill routing, streaming UX",
+    "author": "IEvangelist",
+    "state": "closed",
+    "head_branch": "dapine/team-app-card-actions",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18846"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "id": 89862287871,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/30226512643/job/89862287871",
+      "classification": "flaky-test",
+      "reason": "The CosmosDB emulator container exited with code 1 due to 'The evaluation period has expired' and 'PAL initialization failed. Error: 104'. This is an infrastructure issue with the CosmosDB emulator image license, unrelated to PR changes which only touch .github/extensions/aspire-team-app/ JavaScript files.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureCosmosDBEmulatorFunctionalTests.VerifyWaitForOnCosmosDBEmulatorBlocksDependentResources(usePreview: False)",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "System.OperationCanceledException : Resource 'resource' failed to reach one of the target states: [Running] before the operation was cancelled.\n- Current State: Exited\n- Exit Code: 1\nThe evaluation period has expired.\n./cosmosdb-emulator: ERROR: PAL initialization failed. Error: 104",
+      "stack_trace": "at Aspire.Hosting.ApplicationModel.ResourceNotificationService.WaitForResourceCoreAsync(String resourceName, Func`2 predicate, String cancellationMessage, CancellationToken cancellationToken, String waitCondition)\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.WaitForResourceAsync(String resourceName, IEnumerable`1 targetStates, CancellationToken cancellationToken)\n   at Aspire.Hosting.Azure.Tests.AzureCosmosDBEmulatorFunctionalTests.VerifyWaitForOnCosmosDBEmulatorBlocksDependentResources(Boolean usePreview)",
+      "classification": "flaky",
+      "reason": "The CosmosDB emulator container image's evaluation period has expired, causing it to exit immediately with code 1. This is an environment/infrastructure issue unrelated to PR changes (which only modify .github/extensions/aspire-team-app/ JavaScript files)."
+    }
+  ],
+  "causes": ["cosmosdb-emulator-evaluation-period-expired"]
+}

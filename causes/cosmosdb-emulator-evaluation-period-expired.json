@@ -1,0 +1,17 @@
+{
+  "id": "cosmosdb-emulator-evaluation-period-expired",
+  "type": "flaky-test",
+  "title": "Flaky: AzureCosmosDBEmulatorFunctionalTests fails because CosmosDB emulator evaluation period has expired",
+  "test_name": "Aspire.Hosting.Azure.Tests.AzureCosmosDBEmulatorFunctionalTests.VerifyWaitForOnCosmosDBEmulatorBlocksDependentResources",
+  "error_pattern": "System.OperationCanceledException : Resource 'resource' failed to reach one of the target states: [Running] before the operation was cancelled.\n- Current State: Exited\n- Exit Code: 1\n[Aspire.Hosting.TestUtilities.Resources.resource Error: The evaluation period has expired.\n./cosmosdb-emulator: ERROR: PAL initialization failed. Error: 104",
+  "occurrences": [
+    {
+      "run_id": 30226512643,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/30226512643",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "pr_number": 18846,
+      "observed_at": "2026-07-27T01:51:17Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/18897"
+}
