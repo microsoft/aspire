@@ -964,6 +964,89 @@ suite('AppHost discovery', () => {
             }
         });
 
+        test('reprobes aspire ls with --stream after CLI path changes', async () => {
+            const watcherCallbacks = stubFileSystemWatchers(sandbox);
+            const candidate = {
+                path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
+                language: 'csharp',
+                status: 'buildable',
+            };
+            const observedCalls: { cliPath: string; args: string[] }[] = [];
+            let cliPath = 'old-aspire';
+            const terminalProvider = makeTerminalProvider();
+            sandbox.stub(terminalProvider, 'getAspireCliExecutablePath').callsFake(async () => cliPath);
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, command, args = [], options) => {
+                observedCalls.push({ cliPath: command, args });
+                if (command === 'old-aspire' && args.includes('--stream')) {
+                    options?.stderrCallback?.("Unrecognized command or argument '--stream'.");
+                    options?.exitCallback?.(1);
+                }
+                else {
+                    options?.stdoutCallback?.(JSON.stringify([candidate]));
+                    options?.exitCallback?.(0);
+                }
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(terminalProvider);
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+
+            try {
+                assert.deepStrictEqual(await service.discover(workspaceFolder), [candidate]);
+
+                cliPath = 'new-aspire';
+                watcherCallbacks[0]();
+                assert.deepStrictEqual(await service.discover(workspaceFolder), [candidate]);
+
+                assert.deepStrictEqual(observedCalls, [
+                    { cliPath: 'old-aspire', args: ['ls', '--format', 'json', '--nologo', '--stream'] },
+                    { cliPath: 'old-aspire', args: ['ls', '--format', 'json', '--nologo'] },
+                    { cliPath: 'new-aspire', args: ['ls', '--format', 'json', '--nologo', '--stream'] },
+                ]);
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
+        test('reprobes aspire ls with --stream after force refresh', async () => {
+            stubFileSystemWatchers(sandbox);
+            const candidate = {
+                path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
+                language: 'csharp',
+                status: 'buildable',
+            };
+            const observedArgs: string[][] = [];
+            let streamAttempt = 0;
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
+                observedArgs.push(args);
+                if (args.includes('--stream') && streamAttempt++ === 0) {
+                    options?.stderrCallback?.("Unrecognized command or argument '--stream'.");
+                    options?.exitCallback?.(1);
+                }
+                else {
+                    options?.stdoutCallback?.(JSON.stringify([candidate]));
+                    options?.exitCallback?.(0);
+                }
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+
+            try {
+                assert.deepStrictEqual(await service.discover(workspaceFolder), [candidate]);
+                assert.deepStrictEqual(await service.discover(workspaceFolder, true), [candidate]);
+
+                assert.deepStrictEqual(observedArgs, [
+                    ['ls', '--format', 'json', '--nologo', '--stream'],
+                    ['ls', '--format', 'json', '--nologo'],
+                    ['ls', '--format', 'json', '--nologo', '--stream'],
+                ]);
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
         test('retries aspire ls without nologo when an older CLI rejects it', async () => {
             stubFileSystemWatchers(sandbox);
             const appHostPath = buildPath('workspace', 'AppHost', 'AppHost.csproj');

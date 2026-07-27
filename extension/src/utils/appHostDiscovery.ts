@@ -82,7 +82,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
     private readonly _pendingInvalidationTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private readonly _activeCliProcesses = new Set<ChildProcessWithoutNullStreams>();
     private readonly _cancelActiveCliProcesses = new Set<(error: Error) => void>();
-    private _streamingLsSupported = true;
+    private _streamingLsUnsupportedCliPath: string | undefined;
     private _disposed = false;
     readonly onDidChangeCandidates = this._onDidChangeCandidates.event;
 
@@ -96,6 +96,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         const key = path.resolve(workspaceFolder.uri.fsPath);
         if (forceRefresh) {
             this._cache.delete(key);
+            this._streamingLsUnsupportedCliPath = undefined;
         }
 
         this._ensureWatchers(workspaceFolder, key);
@@ -291,7 +292,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
 
         const cliPath = await this._terminalProvider.getAspireCliExecutablePath();
 
-        if (this._streamingLsSupported) {
+        if (this._streamingLsUnsupportedCliPath !== cliPath) {
             const streamArgs = ['ls', '--format', 'json', noLogoOption, '--stream'];
             const candidates: CandidateAppHostDisplayInfo[] = [];
             const handleLine = (line: string) => {
@@ -342,7 +343,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                     throw error;
                 }
 
-                this._streamingLsSupported = false;
+                this._streamingLsUnsupportedCliPath = cliPath;
                 extensionLogOutputChannel.info('Installed Aspire CLI does not recognize --stream; retrying AppHost discovery without it.');
             }
         }
