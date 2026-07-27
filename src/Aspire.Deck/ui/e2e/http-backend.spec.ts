@@ -1291,6 +1291,11 @@ test(`${features("AOT-CONTRACT-001", "HTTP-STRUCTURED-LOG-CLEAR-001")} owns stru
 test(`${features("HTTP-CONFIG-001", "HTTP-RESOURCES-001", "HTTP-MOCK-ISOLATION-001")} loads the dashboard from the HTTP backend`, async ({ page }, testInfo: TestInfo) => {
   let configRequests = 0;
   let resourceRequests = 0;
+  await page.addInitScript(() => {
+    // Browser hosts can expose Tauri globals of their own. An explicit backend selection
+    // must still win so embedded previews connect to the requested dashboard.
+    Object.defineProperty(window, "__TAURI_INTERNALS__", { value: {} });
+  });
   await page.route("**/api/deck/config", async (route) => {
     configRequests++;
     await route.fulfill({ json: config });

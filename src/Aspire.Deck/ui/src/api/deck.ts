@@ -38,7 +38,9 @@ export type { MetricSeriesQuery } from "./types";
 type Unsubscribe = () => void;
 
 export function isTauri(): boolean {
-  return typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
+  return typeof window !== "undefined"
+    && getBackendMode() === null
+    && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
 }
 
 export function isHttpBackend(): boolean {
