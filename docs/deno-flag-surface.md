@@ -167,7 +167,7 @@ on Deno 2.9.0:
 | Managed flag | Emitted by | Conflict on 2.9.0 |
 | --- | --- | --- |
 | `--host`, `--port` | `WithDenoServe()` | `cannot be used multiple times` |
-| `--config` | `WithDenoConfig(...)` | `cannot be used multiple times` |
+| `--config`, `-c`, `--no-config` | `WithDenoConfig(...)` | `cannot be used multiple times` / `cannot be used with` |
 | `--import-map` | `WithDenoImportMap(...)` | `cannot be used multiple times` |
 | `--lock`, `--no-lock` | `WithDenoLock(...)` / `WithDenoNoLock()` | `cannot be used multiple times` / `cannot be used with` |
 | `--node-modules-dir` | `WithDenoNodeModulesDir(...)` | `cannot be used multiple times` |

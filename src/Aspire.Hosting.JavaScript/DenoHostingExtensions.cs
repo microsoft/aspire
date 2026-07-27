@@ -748,9 +748,9 @@ public static partial class JavaScriptHostingExtensions
     /// <remarks>
     /// Verified against Deno 2.9.0: single-occurrence options fail with
     /// <c>error: the argument '--config &lt;FILE&gt;' cannot be used multiple times</c>, and mutually exclusive
-    /// pairs (<c>--no-lock</c> with <c>--lock</c>, <c>--watch</c> with <c>--watch-hmr</c>) fail with
-    /// <c>cannot be used with</c>. Both are clap errors that never mention Aspire, so the resource simply fails
-    /// to start with nothing pointing at the knob that caused it.
+    /// pairs (<c>--config</c> with <c>--no-config</c>, <c>--no-lock</c> with <c>--lock</c>,
+    /// <c>--watch</c> with <c>--watch-hmr</c>) fail with <c>cannot be used with</c>. Both are clap errors that
+    /// never mention Aspire, so the resource simply fails to start with nothing pointing at the knob that caused it.
     /// <para>
     /// Repeatable options are deliberately absent from this check. Deno merges <c>--allow-read=/tmp</c> with
     /// <c>--allow-read=/var</c> and accepts <c>-A</c> alongside <c>--allow-all</c>, so layering extra grants
@@ -795,7 +795,11 @@ public static partial class JavaScriptHostingExtensions
             return ("--host and --port from the resource's endpoint", nameof(WithDenoServe), "Configure the endpoint instead, for example WithHttpEndpoint(port: 5005).");
         }
 
-        if (!string.IsNullOrEmpty(deno.ConfigFile) && name.Equals("--config", StringComparison.Ordinal))
+        // -c is an alias for --config, while --no-config is mutually exclusive with it.
+        if (!string.IsNullOrEmpty(deno.ConfigFile) &&
+            (name.Equals("--config", StringComparison.Ordinal) ||
+             name.Equals("-c", StringComparison.Ordinal) ||
+             name.Equals("--no-config", StringComparison.Ordinal)))
         {
             return ("--config", nameof(WithDenoConfig), $"Pass the configuration file to {nameof(WithDenoConfig)} instead.");
         }
@@ -984,13 +988,10 @@ public static partial class JavaScriptHostingExtensions
     /// Rejects a configured path that would resolve outside the generated Dockerfile's build context.
     /// </summary>
     /// <remarks>
-    /// Validation runs on the converted container path rather than the raw input, because
-    /// <see cref="ToDenoContainerPath"/> rewrites backslashes and can make a path rooted that
-    /// <see cref="Path.IsPathRooted(string)"/> considers relative on Linux (<c>\tmp\deno.json</c> becomes
-    /// <c>/tmp/deno.json</c>). Traversal is checked per segment rather than by prefix so an embedded escape
-    /// such as <c>config/../../outside.json</c> is caught, and segment comparison is used instead of
-    /// <see cref="Path.GetFullPath(string, string)"/> because these are virtual container paths whose
-    /// resolution must not vary by host platform.
+    /// Validation uses the same platform-independent normalizer as the generated Dockerfile. Both <c>/</c> and
+    /// <c>\</c> are treated as separators so Windows rooted and UNC paths cannot become absolute only after they
+    /// are emitted into the Linux container. Traversal is resolved by depth: <c>config/../deno.json</c> stays
+    /// inside the context and normalizes to <c>deno.json</c>, while <c>config/../../outside.json</c> escapes it.
     /// </remarks>
     private static void ThrowIfPathEscapesDenoBuildContext(string? path, string methodName)
     {
@@ -999,27 +1000,54 @@ public static partial class JavaScriptHostingExtensions
             return;
         }
 
-        var containerPath = ToDenoContainerPath(path);
-        if (Path.IsPathRooted(path) ||
-            IsWindowsFullyQualifiedPath(path) ||
-            containerPath.StartsWith('/') ||
-            ContainsTraversalSegment(containerPath))
+        if (!TryNormalizeDenoContainerRelativePath(path, out _))
         {
             throw new InvalidOperationException($"The path '{path}' configured with {methodName} is outside the Deno application directory, so it is not part of the generated Dockerfile's build context. Move the file inside the application directory or provide a custom Dockerfile.");
         }
     }
 
-    private static bool ContainsTraversalSegment(string containerPath)
+    private static bool TryNormalizeDenoContainerRelativePath(string path, out string normalizedPath)
     {
-        foreach (var segment in containerPath.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        var containerPath = path.Replace('\\', '/');
+        if (containerPath.StartsWith('/') || IsWindowsDriveQualifiedPath(containerPath))
         {
-            if (segment == "..")
-            {
-                return true;
-            }
+            normalizedPath = string.Empty;
+            return false;
         }
 
-        return false;
+        // Deno accepts remote import maps. They are not build-context paths and must retain the URI's double slash.
+        if (Uri.TryCreate(containerPath, UriKind.Absolute, out var uri) &&
+            (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+        {
+            normalizedPath = containerPath;
+            return true;
+        }
+
+        var normalizedSegments = new List<string>();
+        foreach (var segment in containerPath.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (segment == ".")
+            {
+                continue;
+            }
+
+            if (segment == "..")
+            {
+                if (normalizedSegments.Count == 0)
+                {
+                    normalizedPath = string.Empty;
+                    return false;
+                }
+
+                normalizedSegments.RemoveAt(normalizedSegments.Count - 1);
+                continue;
+            }
+
+            normalizedSegments.Add(segment);
+        }
+
+        normalizedPath = string.Join('/', normalizedSegments);
+        return true;
     }
 
     /// <summary>
@@ -1038,24 +1066,39 @@ public static partial class JavaScriptHostingExtensions
     }
 
     /// <summary>
-    /// Converts a host-relative path to the POSIX form used inside the generated Linux container stages.
+    /// Converts a host-relative path to normalized POSIX form for the generated Linux container stages.
     /// </summary>
     /// <remarks>
     /// AppHost-configured paths use the host separator, so on Windows a nested entrypoint is configured as
     /// <c>src\main.ts</c>. Emitting that verbatim into <c>deno cache</c> or <c>ENTRYPOINT</c> makes Linux treat
     /// the whole string as a single file name and the container fails to start.
     /// </remarks>
-    private static string ToDenoContainerPath(string path) => path.Replace('\\', '/');
+    private static string ToDenoContainerPath(string path)
+        => TryNormalizeDenoContainerRelativePath(path, out var normalizedPath)
+            ? normalizedPath
+            : path.Replace('\\', '/');
 
     // Deno options that Aspire emits as a separate flag/value pair where the value is a path that must be
     // rewritten to its container form.
-    private static readonly string[] s_denoContainerPathFlags = ["--config", "--import-map", "--lock"];
+    private static readonly string[] s_denoContainerPathFlags = ["--config", "-c", "--import-map", "--lock"];
 
     private static void NormalizeDenoContainerPathArguments(List<string> args)
     {
-        for (var index = 0; index < args.Count - 1; index++)
+        for (var index = 0; index < args.Count; index++)
         {
-            if (Array.IndexOf(s_denoContainerPathFlags, args[index]) >= 0)
+            var argument = args[index];
+            var separator = argument.IndexOf('=');
+            var flag = separator >= 0 ? argument[..separator] : argument;
+            if (Array.IndexOf(s_denoContainerPathFlags, flag) < 0)
+            {
+                continue;
+            }
+
+            if (separator >= 0)
+            {
+                args[index] = $"{flag}={ToDenoContainerPath(argument[(separator + 1)..])}";
+            }
+            else if (index + 1 < args.Count)
             {
                 args[index + 1] = ToDenoContainerPath(args[index + 1]);
                 index++;

@@ -1171,6 +1171,76 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
             GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
     }
 
+    [Fact]
+    public async Task VerifyDockerfile_NormalizesPathsThatStayWithinBuildContext()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+
+        var denoApp = builder.AddDenoApp("js", appDir, @"src\..\main.ts")
+            .WithDenoConfig("config/../deno.json")
+            .WithDenoImportMap(@"maps\..\import_map.json")
+            .WithDenoLock("locks/../deno.lock");
+
+        await ManifestUtils.GetManifest(denoApp.Resource, workspace.Path);
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
+        Assert.Equal(
+            "RUN deno cache --config deno.json --import-map import_map.json --lock deno.lock main.ts",
+            GetDockerfileLine(dockerfileContents, "RUN deno cache"));
+        Assert.Equal(
+            """ENTRYPOINT ["deno","run","-A","--config","deno.json","--import-map","import_map.json","--lock","deno.lock","--cached-only","main.ts"]""",
+            GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
+    }
+
+    [Theory]
+    [InlineData("-c", "config/../deno.json", "RUN deno cache -c deno.json main.ts", """ENTRYPOINT ["deno","run","-A","--cached-only","-c","deno.json","main.ts"]""")]
+    [InlineData("-c=config/../deno.json", null, "RUN deno cache -c=deno.json main.ts", """ENTRYPOINT ["deno","run","-A","--cached-only","-c=deno.json","main.ts"]""")]
+    public async Task VerifyDockerfile_NormalizesConfigAliasPath(string flag, string? value, string expectedCacheCommand, string expectedEntrypoint)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+        string[] runtimeArgs = value is null ? [flag] : [flag, value];
+
+        var denoApp = builder.AddDenoApp("js", appDir, "main.ts")
+            .WithDenoRuntimeArgs(runtimeArgs);
+
+        await ManifestUtils.GetManifest(denoApp.Resource, workspace.Path);
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
+        Assert.Equal(expectedCacheCommand, GetDockerfileLine(dockerfileContents, "RUN deno cache"));
+        Assert.Equal(expectedEntrypoint, GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
+    }
+
+    [Fact]
+    public async Task VerifyDockerfile_PreservesRemoteImportMapUrl()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+
+        var denoApp = builder.AddDenoApp("js", appDir, "main.ts")
+            .WithDenoImportMap("https://example.com/import_map.json");
+
+        await ManifestUtils.GetManifest(denoApp.Resource, workspace.Path);
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
+        Assert.Equal(
+            "RUN deno cache --import-map https://example.com/import_map.json main.ts",
+            GetDockerfileLine(dockerfileContents, "RUN deno cache"));
+        Assert.Equal(
+            """ENTRYPOINT ["deno","run","-A","--import-map","https://example.com/import_map.json","--cached-only","main.ts"]""",
+            GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
+    }
+
     [Theory]
     [InlineData("../shared/deno.json")]
     [InlineData("/etc/deno.json")]
@@ -1180,6 +1250,10 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
     // ToDenoContainerPath rewrites backslashes, so this becomes the absolute container path /tmp/deno.json
     // even though Path.IsPathRooted reports false for it on Linux and macOS.
     [InlineData("\\tmp\\deno.json")]
+    [InlineData("\\\\server\\share\\deno.json")]
+    [InlineData("C:\\temp\\deno.json")]
+    [InlineData("C:/temp/deno.json")]
+    [InlineData("C:temp\\deno.json")]
     public async Task VerifyDockerfile_RejectsConfigPathOutsideBuildContext(string configFile)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -1237,6 +1311,9 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("--config", "other.json")]
     [InlineData("--config=other.json", null)]
+    [InlineData("-c", "other.json")]
+    [InlineData("-c=other.json", null)]
+    [InlineData("--no-config", null)]
     [InlineData("--import-map", "other.json")]
     [InlineData("--import-map=other.json", null)]
     [InlineData("--lock", "other.lock")]
@@ -1266,16 +1343,23 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         Assert.EndsWith(" instead.", ex.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task WithDenoRuntimeArgs_DuplicatingConfig_ThrowsWithActionableGuidance()
+    [Theory]
+    [InlineData("--config", "other.json")]
+    [InlineData("--config=other.json", null)]
+    [InlineData("-c", "other.json")]
+    [InlineData("-c=other.json", null)]
+    [InlineData("--no-config", null)]
+    public async Task WithDenoRuntimeArgs_ConflictingConfigSpellingsThrowWithActionableGuidance(string flag, string? value)
     {
+        string[] runtimeArgs = value is null ? [flag] : [flag, value];
+
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => GetDenoArgsAsync(d => d
                 .WithDenoConfig("deno.json")
-                .WithDenoRuntimeArgs("--config", "other.json")));
+                .WithDenoRuntimeArgs(runtimeArgs)));
 
         Assert.Equal(
-            "The argument '--config' cannot be configured with WithDenoRuntimeArgs because WithDenoConfig already emits --config, and Deno rejects those arguments when they are combined. Pass the configuration file to WithDenoConfig instead.",
+            $"The argument '{flag}' cannot be configured with WithDenoRuntimeArgs because WithDenoConfig already emits --config, and Deno rejects those arguments when they are combined. Pass the configuration file to WithDenoConfig instead.",
             ex.Message);
     }
 
@@ -1791,7 +1875,11 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
     [InlineData("/tmp/main.ts")]
     [InlineData("../main.ts")]
     [InlineData("sub/../../main.ts")]
+    [InlineData("\\tmp\\main.ts")]
+    [InlineData("\\\\server\\share\\main.ts")]
     [InlineData("C:\\temp\\main.ts")]
+    [InlineData("C:/temp/main.ts")]
+    [InlineData("C:temp\\main.ts")]
     public void AddDenoApp_ThrowsForScriptPathOutsideAppDirectory(string scriptPath)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

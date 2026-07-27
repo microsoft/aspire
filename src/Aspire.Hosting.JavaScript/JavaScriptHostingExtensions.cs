@@ -840,7 +840,7 @@ public static partial class JavaScriptHostingExtensions
         ArgumentException.ThrowIfNullOrEmpty(scriptPath);
 
         appDirectory = Path.GetFullPath(appDirectory, builder.AppHostDirectory);
-        ValidateDenoScriptPath(scriptPath, appDirectory);
+        ValidateDenoScriptPath(scriptPath);
         var resource = new DenoAppResource(name, "deno", appDirectory);
 
         var resourceBuilder = builder.AddResource(resource)
@@ -1100,29 +1100,18 @@ public static partial class JavaScriptHostingExtensions
                 return Task.CompletedTask;
             });
 
-    private static void ValidateDenoScriptPath(string scriptPath, string appDirectory)
+    private static void ValidateDenoScriptPath(string scriptPath)
     {
-        if (Path.IsPathRooted(scriptPath) || IsWindowsFullyQualifiedPath(scriptPath))
-        {
-            throw new ArgumentException("The script path must be relative to the Deno application directory.", nameof(scriptPath));
-        }
-
-        var fullScriptPath = Path.GetFullPath(scriptPath, appDirectory);
-        var relativeScriptPath = Path.GetRelativePath(appDirectory, fullScriptPath);
-        if (relativeScriptPath == ".." ||
-            relativeScriptPath.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) ||
-            relativeScriptPath.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal) ||
-            Path.IsPathRooted(relativeScriptPath))
+        if (!TryNormalizeDenoContainerRelativePath(scriptPath, out _))
         {
             throw new ArgumentException("The script path must resolve inside the Deno application directory.", nameof(scriptPath));
         }
     }
 
-    private static bool IsWindowsFullyQualifiedPath(string path) =>
-        path.Length >= 3 &&
+    private static bool IsWindowsDriveQualifiedPath(string path) =>
+        path.Length >= 2 &&
         char.IsAsciiLetter(path[0]) &&
-        path[1] == ':' &&
-        (path[2] == '\\' || path[2] == '/');
+        path[1] == ':';
 
     /// <summary>
     /// Adds a JavaScript application resource to the distributed application using the specified app directory and
