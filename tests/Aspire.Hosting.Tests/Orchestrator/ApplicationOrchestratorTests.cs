@@ -704,6 +704,38 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             Assert.IsType<string[]>(Assert.Single(unresolvedEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters).Value));
     }
 
+    [Fact]
+    public async Task OnResourceStarting_WithReferencedOnlyParameterInReferencedConnectionString_PublishesParameterName()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var parameter = ParameterResourceBuilderExtensions.CreateParameter(builder, "value", secret: false);
+        var source = builder.AddResource(new ParameterConnectionStringResource("database", parameter));
+        var consumer = builder.AddContainer("api", "test-image")
+            .WithReference(source);
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        Assert.DoesNotContain(parameter, distributedAppModel.Resources);
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events);
+        await appOrchestrator.RunApplicationAsync();
+        await events.PublishAsync(new OnResourcesPreparedContext(CancellationToken.None));
+
+        Assert.NotNull(parameter.WaitForValueTcs);
+        await events.PublishAsync(new OnResourceStartingContext(CancellationToken.None, KnownResourceTypes.Container, consumer.Resource, "api-dcp"));
+
+        Assert.True(resourceNotificationService.TryGetCurrentState("api-dcp", out var unresolvedEvent));
+        Assert.Equal(KnownResourceStates.UnresolvedParameters, unresolvedEvent.Snapshot.State?.Text);
+        Assert.Equal(
+            ["value"],
+            Assert.IsType<string[]>(Assert.Single(unresolvedEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters).Value));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

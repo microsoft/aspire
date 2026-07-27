@@ -446,9 +446,22 @@ public class WithReferenceTests
         Assert.Equal("Endpoint=http://localhost:3452;Key=secretKey", config["ConnectionStrings__cs"]);
 
         Assert.True(projectB.Resource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships));
-        var r = Assert.Single(relationships);
-        Assert.Equal("Reference", r.Type);
-        Assert.Same(resource.Resource, r.Resource);
+        Assert.Collection(relationships,
+            r =>
+            {
+                Assert.Equal("Reference", r.Type);
+                Assert.Same(resource.Resource, r.Resource);
+            },
+            r =>
+            {
+                Assert.Equal("Reference", r.Type);
+                Assert.Same(endpoint.Resource, r.Resource);
+            },
+            r =>
+            {
+                Assert.Equal("Reference", r.Type);
+                Assert.Same(key.Resource, r.Resource);
+            });
         Assert.True(resource.Resource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var csRelationships));
         Assert.Collection(csRelationships,
             r =>
