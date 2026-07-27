@@ -184,7 +184,9 @@ builder.Build().Run();
             //   the rest of the AKS deployment tests).
             // - Set AZURE__RESOURCEGROUP to use our unique resource group name so the finally
             //   block can clean it up.
-            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=centralus && export AZURE__RESOURCEGROUP={resourceGroupName}");
+            // Unset the job-level Azure__Location=westus3 the CI workflow injects: on Linux it coexists
+            // with AZURE__LOCATION (case-sensitive env) and .NET config may bind the inherited westus3 instead.
+            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && unset Azure__Location && export AZURE__LOCATION=centralus && export AZURE__RESOURCEGROUP={resourceGroupName}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 

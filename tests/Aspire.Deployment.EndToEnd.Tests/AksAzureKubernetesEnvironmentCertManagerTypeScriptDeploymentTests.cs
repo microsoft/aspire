@@ -194,8 +194,10 @@ await builder.build().run();
             output.WriteLine("Modified apphost.mts with addCertManager + addIssuer + withGatewayTlsIssuer");
 
             output.WriteLine("Step 7: Setting deployment environment variables...");
+            // Unset the job-level Azure__Location=westus3 the CI workflow injects: on Linux it coexists
+            // with AZURE__LOCATION (case-sensitive env) and .NET config may bind the inherited westus3 instead.
             await auto.TypeAsync(
-                $"unset ASPIRE_PLAYGROUND && " +
+                $"unset ASPIRE_PLAYGROUND && unset Azure__Location && " +
                 $"export AZURE__LOCATION=centralus && " +
                 $"export AZURE__RESOURCEGROUP={resourceGroupName} && " +
                 $"export Parameters__acmeemail={acmeEmail}");

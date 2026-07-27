@@ -125,7 +125,9 @@ builder.Build().Run();
             }
 
             // Step 7: Set environment variables for deployment
-            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=centralus && export AZURE__RESOURCEGROUP={resourceGroupName}");
+            // Unset the job-level Azure__Location=westus3 the CI workflow injects: on Linux it coexists
+            // with AZURE__LOCATION (case-sensitive env) and .NET config may bind the inherited westus3 instead.
+            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && unset Azure__Location && export AZURE__LOCATION=centralus && export AZURE__RESOURCEGROUP={resourceGroupName}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 
