@@ -31,6 +31,13 @@
       "job": "Tests / Hosting.PostgreSQL / Hosting.PostgreSQL (windows-latest)",
       "pr_number": 18853,
       "observed_at": "2026-07-22T02:21:16Z"
+    },
+    {
+      "run_id": 30225781652,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/30225781652",
+      "job": "Tests / Hosting.Browsers / Hosting.Browsers (windows-latest)",
+      "pr_number": 18839,
+      "observed_at": "2026-07-27T00:49:00Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/18720"

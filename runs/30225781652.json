@@ -1,0 +1,29 @@
+{
+  "run_id": 30225781652,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/30225781652",
+  "analyzed_at": "2026-07-27T00:49:00Z",
+  "verdict": "transient-infra",
+  "pr": {
+    "number": 18839,
+    "title": "Retry transient Windows bundle directory moves",
+    "author": "danegsta",
+    "state": "closed",
+    "head_branch": "danegsta-retry-bundle-directory-move",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18839"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.Browsers / Hosting.Browsers (windows-latest)",
+      "id": 89855784235,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/30225781652/job/89855784235",
+      "classification": "transient-infra",
+      "reason": "All 90 tests passed successfully (0 failures), but post-test steps (upload logs, check for hang dumps, copy CLI E2E recordings) failed with exit code -1073741502 (0xC0000142 STATUS_DLL_INIT_FAILED). This is a known transient Windows runner process initialization failure unrelated to PR changes.",
+      "failed_steps": ["Check for hang dump files", "Upload logs, and test results", "Copy CLI E2E recordings for upload", "Upload CLI E2E recordings", "Generate test results summary", "Post Checkout code"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["windows-process-init-failure-0xc0000142"]
+}
