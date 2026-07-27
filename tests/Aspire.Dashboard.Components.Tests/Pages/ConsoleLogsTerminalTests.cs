@@ -186,6 +186,66 @@ public partial class ConsoleLogsTests
     }
 
     [Fact]
+    public async Task TerminalResource_NotLive_Selected_ThenGoesLive_StaysOnConsole()
+    {
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        // The Terminal default is latched at resource-selection time, not on
+        // every state update. A Waiting terminal resource the user has already
+        // selected (and is reading on Console) must stay on Console when it
+        // later transitions to Running via a resource-channel update — otherwise
+        // the view would yank out from under the user the moment the PTY comes
+        // up. This locks down the resetView gate in SubscribeAsync against a
+        // future change that re-defaults on state-update renders.
+        var terminalResource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1, state: KnownResourceState.Waiting);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [terminalResource]);
+
+        SetupConsoleLogsServices(dashboardClient);
+        SetupTerminalViewJsInterop();
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: "terminal-resource"));
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "terminal-resource");
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+
+        var instance = cut.Instance;
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == terminalResource.Name);
+        cut.WaitForState(() => cut.FindComponents<TerminalView>().Count > 0);
+
+        // The non-live resource starts on Console.
+        Assert.Equal(ConsoleLogs.ConsoleLogsView.Console, instance.ActiveViewForTest);
+
+        // The same resource transitions Waiting -> Running through the resource
+        // subscription — the production path that background-processes state
+        // changes. This is an Upsert of an already-selected resource, not a
+        // selection change, so it must not re-apply the selection-time default.
+        var runningResource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1, state: KnownResourceState.Running);
+        resourceChannel.Writer.TryWrite([
+            new ResourceViewModelChange(ResourceViewModelChangeType.Upsert, runningResource)
+        ]);
+
+        // Wait until the page has actually applied the Running snapshot so the
+        // assertion below can't pass just because the update hasn't arrived yet.
+        cut.WaitForState(() => instance.GetResourceSnapshotForTest("terminal-resource")?.KnownState == KnownResourceState.Running);
+
+        // The running default only applies on the initial selection, so the view
+        // must still be Console after the live transition.
+        Assert.Equal(ConsoleLogs.ConsoleLogsView.Console, instance.ActiveViewForTest);
+    }
+
+    [Fact]
     public async Task TerminalResource_Live_ManualConsoleSelection_SurvivesFilterChange()
     {
         var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();

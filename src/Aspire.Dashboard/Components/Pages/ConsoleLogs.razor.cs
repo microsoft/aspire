@@ -1416,6 +1416,12 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     internal ConsoleLogsView ActiveViewForTest => _activeView;
     internal Task HandleViewChangedForTestAsync(string? newView) => HandleViewChangedAsync(newView);
     internal IReadOnlyList<MenuButtonItem> LogsMenuItemsForTest => _logsMenuItems;
+    // Lets a test wait for a background resource-subscription update (a state
+    // transition delivered via the resource channel) to actually be applied
+    // before asserting, so a "view is unchanged" assertion can't pass simply
+    // because the update hasn't been processed yet.
+    internal ResourceViewModel? GetResourceSnapshotForTest(string resourceName) =>
+        _resourceByName.TryGetValue(resourceName, out var resource) ? resource : null;
 
     private Task TerminalFontMinusAsync()
     {
