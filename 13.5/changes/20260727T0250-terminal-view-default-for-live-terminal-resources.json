@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "When navigating to Console logs for a running resource with WithTerminal(), the dashboard now defaults to the Terminal view instead of the Console view, making the interactive terminal immediately visible for live resources.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🖥️",
+  "firstMergedAt": "2026-07-27T02:50:45Z",
+  "lastMergedAt": "2026-07-27T02:50:45Z",
+  "name": "Terminal view default for live terminal resources",
+  "owner": "mitchdenny",
+  "prs": [
+    18867
+  ]
+}

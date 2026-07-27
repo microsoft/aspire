@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed an HTML injection vulnerability in the Markdown renderer where crafted fenced code block language metadata could inject arbitrary HTML into dashboard pages.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔒",
+  "firstMergedAt": "2026-07-27T03:04:45Z",
+  "lastMergedAt": "2026-07-27T03:04:45Z",
+  "name": "Fix HTML injection in code block titles",
+  "owner": "JamesNK",
+  "prs": [
+    18866
+  ]
+}

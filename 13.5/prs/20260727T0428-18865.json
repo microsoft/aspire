@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Bug fix: histogram chart crash when points have different bucket count lengths",
+  "mergedAt": "2026-07-27T04:28:02Z",
+  "number": 18865,
+  "runDate": "2026-07-27T07:02:30Z",
+  "status": "included",
+  "title": "Reject histogram bucket count length changes"
+}

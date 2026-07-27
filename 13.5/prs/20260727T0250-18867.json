@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Improvement: defaults to Terminal view for running resources with WithTerminal()",
+  "mergedAt": "2026-07-27T02:50:45Z",
+  "number": 18867,
+  "runDate": "2026-07-27T07:02:30Z",
+  "status": "included",
+  "title": "Default to Terminal view for live terminal resources in dashboard console logs"
+}

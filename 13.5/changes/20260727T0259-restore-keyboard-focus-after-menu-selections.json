@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed an issue where selecting an item from a dashboard button menu left keyboard focus on the page body. Focus now correctly returns to the trigger button after selection, improving keyboard navigation and accessibility.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🎯",
+  "firstMergedAt": "2026-07-27T02:59:21Z",
+  "lastMergedAt": "2026-07-27T02:59:21Z",
+  "name": "Restore keyboard focus after menu selections",
+  "owner": "adamint",
+  "prs": [
+    18862
+  ]
+}

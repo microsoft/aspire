@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Security bug fix: HTML injection in code block titles",
+  "mergedAt": "2026-07-27T03:04:45Z",
+  "number": 18866,
+  "runDate": "2026-07-27T07:02:30Z",
+  "status": "included",
+  "title": "Fix HTML injection in code block titles"
+}

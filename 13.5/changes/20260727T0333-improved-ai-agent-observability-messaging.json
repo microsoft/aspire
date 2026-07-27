@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Updated the introductory text in the AI agents dialog to better explain how Aspire gives AI coding agents deep observability into your app, enabling faster issue diagnosis and fix verification.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🤖",
+  "firstMergedAt": "2026-07-27T03:33:59Z",
+  "lastMergedAt": "2026-07-27T03:33:59Z",
+  "name": "Improved AI agent observability messaging",
+  "owner": "JamesNK",
+  "prs": [
+    18868
+  ]
+}

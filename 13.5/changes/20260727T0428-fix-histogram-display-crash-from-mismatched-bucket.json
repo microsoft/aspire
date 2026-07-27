@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a crash when viewing metric charts for histogram instruments that received data points with different bucket layouts. The dashboard now rejects mismatched points instead of failing to render the chart.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📉",
+  "firstMergedAt": "2026-07-27T04:28:02Z",
+  "lastMergedAt": "2026-07-27T04:28:02Z",
+  "name": "Fix histogram display crash from mismatched bucket counts",
+  "owner": "JamesNK",
+  "prs": [
+    18865
+  ]
+}
