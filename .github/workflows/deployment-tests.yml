@@ -411,8 +411,8 @@ jobs:
           #   resourceType - optional; compute vCPU quotas need it (dedicated | lowPriority), omit otherwise
           # Add a line to cover a new provider, region, resource, or higher limit.
           QUOTA_TARGETS: |
-            Microsoft.Compute westus3 StandardDsv6Family 200 dedicated
-            Microsoft.ContainerService westus3 ManagedClusters 20
+            Microsoft.Compute centralus StandardDsv6Family 200 dedicated
+            Microsoft.ContainerService centralus ManagedClusters 20
         run: |
           sub="$ASPIRE_DEPLOYMENT_TEST_SUBSCRIPTION"
 

@@ -196,7 +196,7 @@ await builder.build().run();
             output.WriteLine("Step 7: Setting deployment environment variables...");
             await auto.TypeAsync(
                 $"unset ASPIRE_PLAYGROUND && " +
-                $"export AZURE__LOCATION=westus3 && " +
+                $"export AZURE__LOCATION=centralus && " +
                 $"export AZURE__RESOURCEGROUP={resourceGroupName} && " +
                 $"export Parameters__acmeemail={acmeEmail}");
             await auto.EnterAsync();

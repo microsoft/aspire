@@ -116,7 +116,7 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 // AKS environment provisioned by Aspire (Azure Kubernetes Service).
 // Pin both the system and workload pools to Dsv6 SKUs; the default pool SKUs (and the
-// older Dsv3/Dasv5 families) routinely hit vCPU quota in westus3, so we standardize on
+// older Dsv3/Dasv5 families) routinely hit vCPU quota in centralus, so we standardize on
 // StandardDsv6Family, where we hold quota.
 var aks = builder.AddAzureKubernetesEnvironment("aks")
     .WithSystemNodePool("Standard_D2s_v6");
@@ -144,7 +144,7 @@ aks.AddHelmChart("podinfo", "oci://ghcr.io/stefanprodan/charts/podinfo", "6.7.1"
             await auto.WaitForSuccessPromptAsync(counter);
 
             // Step 8: Set env vars for deployment
-            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
+            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=centralus && export AZURE__RESOURCEGROUP={resourceGroupName}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 

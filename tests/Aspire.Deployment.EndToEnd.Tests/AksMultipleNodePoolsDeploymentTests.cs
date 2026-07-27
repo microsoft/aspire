@@ -136,7 +136,7 @@ var workerPool = aks.AddNodePool("workers", "Standard_D2s_v6", 1, 3);
             await auto.WaitForSuccessPromptAsync(counter);
 
             // Step 8: Set environment variables for deployment
-            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
+            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=centralus && export AZURE__RESOURCEGROUP={resourceGroupName}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 
