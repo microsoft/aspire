@@ -18,6 +18,7 @@ import { AspireTerminalProvider, shellArg } from '../utils/AspireTerminalProvide
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 import { terminalCommandArgumentControlCharacters } from '../loc/strings';
 import { onDidInvokeCommand, withCommandTelemetry } from '../utils/telemetry';
+import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 
 function makeResource(overrides: Partial<ResourceJson> = {}): ResourceJson {
     const base: ResourceJson = {
@@ -1447,7 +1448,7 @@ suite('AppHostDataRepository', () => {
     });
 
     test('workspace apphost name uses all candidates to disambiguate duplicate filenames', async () => {
-        let emitCandidates: ((candidates: { path: string; language: string; status: string; selected?: boolean }[]) => void) | undefined;
+        let emitCandidates: ((candidates: CandidateAppHostDisplayInfo[]) => void) | undefined;
         let completeDiscovery: (() => void) | undefined;
         sandbox.stub(vscode.workspace, 'workspaceFolders').value([{
             uri: vscode.Uri.file('/workspace'),

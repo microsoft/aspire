@@ -41,7 +41,7 @@ class TestChildProcess extends EventEmitter {
     }
 }
 
-function createLsLineCallback(options: any): (line: string) => void {
+function createLsLineCallback(options: cliModule.SpawnProcessOptions | undefined): (line: string) => void {
     return line => {
         if (options?.lineCallback) {
             for (const candidate of toStreamCandidates(line)) {

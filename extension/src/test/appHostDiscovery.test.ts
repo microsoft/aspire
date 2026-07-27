@@ -876,7 +876,7 @@ suite('AppHost discovery', () => {
             const service = new AppHostDiscoveryService(makeTerminalProvider());
 
             try {
-                const observed: unknown[] = [];
+                const observed: CandidateAppHostDisplayInfo[] = [];
                 const result = await service.discover(makeWorkspaceFolder(buildPath('workspace')), false, undefined, candidate => {
                     observed.push(candidate);
                 });
@@ -920,7 +920,7 @@ suite('AppHost discovery', () => {
             const service = new AppHostDiscoveryService(makeTerminalProvider());
 
             try {
-                const observed: unknown[] = [];
+                const observed: CandidateAppHostDisplayInfo[] = [];
                 const result = await service.discover(makeWorkspaceFolder(buildPath('workspace')), false, undefined, candidate => {
                     observed.push(candidate);
                 });
