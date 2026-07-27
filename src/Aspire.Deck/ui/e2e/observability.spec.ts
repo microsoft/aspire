@@ -220,7 +220,10 @@ test(`${features("LOG-LIST-001", "LOG-FILTER-001", "LOG-SEVERITY-001", "LOG-LIVE
   await expect.poll(() => dataRows.count()).toBeGreaterThanOrEqual(4);
 
   const firstRow = dataRows.first();
-  await expect(firstRow.locator("td").nth(2)).toHaveText(/^\d{2}:\d{2}:\d{2}\.\d{3} (?:AM|PM)$/);
+  // The hour is unpadded in 12-hour cultures: en-US's LongTimePattern is "h:mm:ss tt", and the
+  // dashboard derives its format from that pattern (DateFormatStringsHelpers). Asserting \d{2}
+  // here would only pass between 10:00 and 12:59.
+  await expect(firstRow.locator("td").nth(2)).toHaveText(/^\d{1,2}:\d{2}:\d{2}\.\d{3} (?:AM|PM)$/);
   const firstMessage = (await firstRow.locator("td").nth(3).innerText()).trim();
   const firstSeverity = (await firstRow.locator("td").nth(1).innerText()).trim();
   expect(firstMessage).not.toBe("");
@@ -495,7 +498,7 @@ test(`${features("TRACE-LIST-001", "TRACE-LIVE-001", "TRACE-COLLAPSE-001", "TRAC
   const initialTraceCount = await traces.count();
   await expect.poll(() => traces.count()).toBeGreaterThan(initialTraceCount);
   const initialTrace = traces.first();
-  await expect(initialTrace.locator(".wf__head-time")).toHaveText(/^\d{2}:\d{2}:\d{2}\.\d{3} (?:AM|PM)$/);
+  await expect(initialTrace.locator(".wf__head-time")).toHaveText(/^\d{1,2}:\d{2}:\d{2}\.\d{3} (?:AM|PM)$/);
   const initialRedisSpan = initialTrace.locator(".wf__span").nth(1);
   await initialRedisSpan.locator(".wf__span-open").press("Enter");
   const keyboardDialog = page.getByRole("dialog", { name: "redis GET" });

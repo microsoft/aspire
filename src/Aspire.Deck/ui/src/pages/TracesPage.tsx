@@ -6,12 +6,14 @@ import { dateFromUnixNano, formatDurationNanos, formatTimeWithMillis } from "../
 import { buildResourceColorMap, colorFor } from "../lib/colors";
 import { matchesTelemetryFilters, parseTelemetryFilters, spanFilterFields, telemetryFieldNames, type TelemetryFilter } from "../lib/telemetryFilters";
 import { SPAN_TYPE_OPTIONS, spanMatchesType, type SpanTypeId } from "../lib/spans";
+import { orderedTraceResources, traceResourceTooltip } from "../lib/traceResources";
 import { SpanDetailDrawer } from "../components/SpanDetailDrawer";
 import { formatSpanJson } from "../components/SpanActions";
 import { GenAIVisualizerDialog, hasGenAIAttributes } from "../components/GenAIVisualizerDialog";
 import {
   ChevronIcon,
   CommandMenu,
+  ErrorIcon,
   NamedIcon,
   Page,
   PageBody,
@@ -627,6 +629,8 @@ function TraceBlock({
   onToggleSpan: (traceId: string, spanId: string) => void;
 }) {
   const headColor = colorFor(colorMap, trace.resourceName);
+  // Per-resource span breakdown, matching the Blazor traces grid's SPANS column.
+  const resourceSpans = orderedTraceResources(rows.map((row) => row.span));
   // Axis ticks at 0/25/50/75/100% of the trace duration.
   const ticks = [0, 1, 2, 3, 4].map((i) => ({
     pct: i * 25,
@@ -645,7 +649,19 @@ function TraceBlock({
           <time className="wf__head-time" dateTime={dateFromUnixNano(trace.startNano.toString()).toISOString()}>
             {formatTimeWithMillis(dateFromUnixNano(trace.startNano.toString()))}
           </time>
-          <span className="wf__head-meta">{trace.rows.length} spans</span>
+          <span className="wf__head-meta">
+            {resourceSpans.map((resource) => (
+              <span
+                key={resource.resourceName}
+                className={`trace-tag ${resource.erroredSpans > 0 ? "trace-tag--error" : ""}`}
+                style={{ borderLeftColor: colorFor(colorMap, resource.resourceName) }}
+                title={traceResourceTooltip(resource)}
+              >
+                {resource.erroredSpans > 0 ? <ErrorIcon size={12} className="trace-tag-icon" /> : null}
+                {resource.resourceName} ({resource.totalSpans})
+              </span>
+            ))}
+          </span>
           <span className="wf__head-dur">{formatDurationNanos(String(trace.durationNano))}</span>
         </button>
         <CommandMenu
