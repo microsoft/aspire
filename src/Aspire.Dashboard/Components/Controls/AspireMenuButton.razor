@@ -11,20 +11,24 @@
     };
 }
 
-<FluentButton Id="@MenuButtonId" Title="@Title" Appearance="@ButtonAppearance" IconStart="@IconStart" @onclick="ToggleMenu" Disabled="@_disabled" AdditionalAttributes="@additionalButtonAttributes" Class="@ButtonClass">
+<button id="@MenuButtonId" type="button" title="@Title" class="@TriggerClass" @onclick="ToggleMenu" disabled="@_disabled" @attributes="additionalButtonAttributes">
+    @if (IconStart is { } startIcon)
+    {
+        <DeckIcon Name="startIcon" Size="16" />
+    }
     @if (string.IsNullOrWhiteSpace(Text))
     {
-        <FluentIcon Value="@_icon" Color="@IconColor" CustomColor="@IconCustomColor" />
+        <DeckIcon Name="_icon" Size="16" Style="@IconStyle" />
     }
     else
     {
-        @Text
+        <span>@Text</span>
 
         @if (!HideIcon)
         {
-            <FluentIcon Value="@_icon" Color="@IconColor" CustomColor="@IconCustomColor" Slot="end" />
+            <DeckIcon Name="_icon" Size="16" Style="@IconStyle" />
         }
     }
-</FluentButton>
+</button>
 
 <AspireMenu Anchor="@MenuButtonId" @bind-Open="@_visible" Items="_items" RestoreFocusOnItemClick="@RestoreFocusOnItemClick" />

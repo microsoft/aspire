@@ -15,11 +15,69 @@
                             RowSize="DataGridRowSize.Medium">
                 <ChildContent>
                     <AspirePropertyColumn Tooltip="true" TooltipText="@(c => c.Name)" Property="@(c => c.Name)"/>
-                    <AspireTemplateColumn>
-                        <ChartFilterTags @key="context" Filter="context" OnSelectionChanged="OnDimensionValuesChanged" />
+                    <AspireTemplateColumn Tooltip="true" TooltipText="@(c => c.SelectedValues.Count == 0 ? Loc[nameof(ControlsStrings.LabelNone)] : string.Join(", ", c.SelectedValues.OrderBy(v => v.Text).Select(v => v.Text)))">
+                        <FluentOverflow Class="dimension-overflow">
+                            <ChildContent>
+                                @if (context.SelectedValues.Count == 0)
+                                {
+                                    <Badge>@Loc[nameof(ControlsStrings.LabelNone)]</Badge>
+                                }
+                                else
+                                {
+                                    var i = 0;
+                                    foreach (var item in context.SelectedValues.OrderBy(v => v.Text))
+                                    {
+                                        // Always display the first item by setting a fixed value.
+                                        <FluentOverflowItem Fixed="@((i == 0) ? OverflowItemFixed.Ellipsis : OverflowItemFixed.None)">
+                                            <span class="dimension-tag">@item.Text</span>
+                                        </FluentOverflowItem>
+                                        i++;
+                                    }
+                                }
+                            </ChildContent>
+                            <MoreButtonTemplate Context="overflow">
+                                @* Display must be inline block so the width is correctly calculated. *@
+                                <span class="dimension-tag" style="display:inline-block;">
+                                    @($"+{overflow.ItemsOverflow.Count()}")
+                                </span>
+                            </MoreButtonTemplate>
+                            <OverflowTemplate Context="overflow">
+                                @* Intentionally empty. Don't display an overflow template here. *@
+                            </OverflowTemplate>
+                        </FluentOverflow>
                     </AspireTemplateColumn>
                     <AspireTemplateColumn>
-                        <ChartFilterPopover @key="context" Filter="context" OnSelectionChanged="OnDimensionValuesChanged" />
+                        @{
+                            var id = $"typeFilterButton-{context.SanitizedHtmlId}-{Guid.NewGuid()}";
+                        }
+                        <button type="button"
+                                id="@id"
+                                class="icon-btn @(context.AreAllValuesSelected is true ? null : "icon-btn--active")"
+                                @onclick="() => context.PopupVisible = !context.PopupVisible"
+                                aria-label="@(context.AreAllValuesSelected is true ? Loc[nameof(ControlsStrings.ChartContainerAllTags)] : Loc[nameof(ControlsStrings.ChartContainerFilteredTags)])">
+                            <DeckIcon Name="DeckIconName.Filter" Size="20" />
+                        </button>
+                        @* Each item is approximately 36px tall, plus 48px for the header and container padding. Include the always-rendered "All" checkbox row. The popover body has a CSS max-height of 300px. *@
+                        <FluentPopover AnchorId="@id" @bind-Open="context.PopupVisible" VerticalThreshold="@(Math.Min((context.Values.Count + 1) * 36 + 48, 300))" AutoFocus="false">
+                            <Header>@context.Name</Header>
+                            <Body>
+                            <div class="deck-stack deck-stack--vertical dimension-popup">
+                                <Checkbox Label="@Loc[nameof(ControlsStrings.LabelAll)]"
+                                          Checked="@(context.AreAllValuesSelected == true)"
+                                          Indeterminate="@(context.AreAllValuesSelected is null)"
+                                          CheckedChanged="@(v => OnAllValuesSelectionChangedAsync(context, v))" />
+                                @foreach (var tag in context.Values.OrderBy(v => v.Text))
+                                {
+                                    var isChecked = context.SelectedValues.Contains(tag);
+                                    <Checkbox Label="@tag.Text"
+                                              Title="@tag.Text"
+                                              @key=tag
+                                              Checked="@isChecked"
+                                              CheckedChanged="@(c => OnTagSelectionChangedAsync(context, tag, c))" />
+                                }
+                            </div>
+                            </Body>
+                        </FluentPopover>
                     </AspireTemplateColumn>
                 </ChildContent>
             </FluentDataGrid>
@@ -30,10 +88,9 @@
         <div class="metrics-filters-section">
             <h5>@Loc[nameof(ControlsStrings.ChartContainerOptionsHeader)]</h5>
             <div>
-                <FluentSwitch Class="table-switch"
-                              Label="@Loc[nameof(ControlsStrings.ChartContainerShowCountLabel)]"
-                              @bind-Value="@ShowCounts"
-                              @bind-Value:after="ShowCountChanged"/>
+                <Checkbox Label="@Loc[nameof(ControlsStrings.ChartContainerShowCountLabel)]"
+                          @bind-Checked="@ShowCounts"
+                          @bind-Checked:after="ShowCountChanged"/>
             </div>
         </div>
     }

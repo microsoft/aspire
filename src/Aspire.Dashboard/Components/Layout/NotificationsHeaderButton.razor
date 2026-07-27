@@ -2,9 +2,9 @@
 
 @if (UnreadCount > 0)
 {
-    <FluentButton Class="header-button"
-                  Appearance="Appearance.Stealth" OnClick="@HandleClick"
-                  Title="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]">
+    <button type="button" class="icon-btn header-button"
+            @onclick="@HandleClick"
+            title="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]">
         <FluentCounterBadge Count="@UnreadCount"
                             Max="9"
                             ShowOverflow="true"
@@ -13,16 +13,16 @@
                             Appearance="Appearance.Accent"
                             Style="border: 0;">
             <ChildContent>
-                <FluentIcon Value="@(new Icons.Regular.Size24.Alert())" Color="Color.Neutral" Style="vertical-align: bottom;" />
+                <DeckIcon Name="DeckIconName.Bell" Size="24" />
             </ChildContent>
         </FluentCounterBadge>
-    </FluentButton>
+    </button>
 }
 else
 {
-    <FluentButton Class="header-button"
-                  Appearance="Appearance.Stealth" OnClick="@HandleClick"
-                  Title="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]">
-        <FluentIcon Value="@(new Icons.Regular.Size24.Alert())" Color="Color.Neutral" />
-    </FluentButton>
+    <button type="button" class="icon-btn header-button"
+            @onclick="@HandleClick"
+            title="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]">
+        <DeckIcon Name="DeckIconName.Bell" Size="24" />
+    </button>
 }

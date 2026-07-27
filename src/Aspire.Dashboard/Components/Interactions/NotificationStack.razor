@@ -1,0 +1,105 @@
+@*
+    Non-blocking notification toasts, ported from src/Aspire.Deck/ui/src/components/NotificationStack.tsx.
+    Renders notification-kind interactions as stacked Deck `.notif` toasts (errors, the
+    "parameters required" prompt, status messages). Each toast stays until the user acts on it or
+    dismisses it — there is no auto-dismiss — mirroring the dashboard's message-bar behavior.
+*@
+@namespace Aspire.Dashboard.Components.Interactions
+
+@if (Notifications.Count > 0)
+{
+    <div class="notif-stack" role="region" aria-label="Notifications">
+        @foreach (var n in Notifications)
+        {
+            <div class="notif notif--@n.Tone" role="alert" @key="n.InteractionId">
+                <span class="notif__icon" aria-hidden="true">
+                    @IntentGlyph(n.Tone)
+                </span>
+                <div class="notif__body">
+                    @if (!string.IsNullOrEmpty(n.Title))
+                    {
+                        <div class="notif__title">@n.Title</div>
+                    }
+                    @if (n.Message.Value is { Length: > 0 })
+                    {
+                        <div class="notif__message">@n.Message</div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(n.LinkUrl))
+                    {
+                        <a class="notif__link" href="@n.LinkUrl" target="_blank" rel="noreferrer noopener">
+                            @(string.IsNullOrEmpty(n.LinkText) ? n.LinkUrl : n.LinkText)
+                            <DeckIcon Name="DeckIconName.External" Size="13" />
+                        </a>
+                    }
+
+                    @if (!string.IsNullOrEmpty(n.PrimaryButtonText) || n.ShowSecondaryButton)
+                    {
+                        <div class="notif__actions">
+                            @if (n.ShowSecondaryButton && !string.IsNullOrEmpty(n.SecondaryButtonText))
+                            {
+                                <button class="btn btn--sm" type="button" @onclick="() => OnSecondary.InvokeAsync(n.InteractionId)">
+                                    @n.SecondaryButtonText
+                                </button>
+                            }
+                            @if (!string.IsNullOrEmpty(n.PrimaryButtonText))
+                            {
+                                <button class="btn btn--sm btn--primary" type="button" @onclick="() => OnPrimary.InvokeAsync(n.InteractionId)">
+                                    @n.PrimaryButtonText
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+
+                @if (n.ShowDismiss)
+                {
+                    <button class="icon-btn notif__dismiss" type="button" @onclick="() => OnDismiss.InvokeAsync(n.InteractionId)" aria-label="Dismiss notification">
+                        <DeckIcon Name="DeckIconName.Close" Size="15" />
+                    </button>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    /// <summary>The notifications to render as toasts.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<DeckNotification> Notifications { get; set; } = [];
+
+    /// <summary>Invoked with the interaction id when a toast's primary button is clicked.</summary>
+    [Parameter]
+    public EventCallback<int> OnPrimary { get; set; }
+
+    /// <summary>Invoked with the interaction id when a toast's secondary button is clicked.</summary>
+    [Parameter]
+    public EventCallback<int> OnSecondary { get; set; }
+
+    /// <summary>Invoked with the interaction id when a toast is dismissed.</summary>
+    [Parameter]
+    public EventCallback<int> OnDismiss { get; set; }
+
+    // Inline intent glyphs, matching Deck's NotificationStack IntentGlyph. Kept inline (rather than
+    // DeckIcon) so the toast icon set stays identical to Deck's.
+    private static RenderFragment IntentGlyph(string tone) => builder =>
+    {
+        builder.OpenElement(0, "svg");
+        builder.AddAttribute(1, "width", "16");
+        builder.AddAttribute(2, "height", "16");
+        builder.AddAttribute(3, "viewBox", "0 0 24 24");
+        builder.AddAttribute(4, "fill", "none");
+        builder.AddAttribute(5, "stroke", "currentColor");
+        builder.AddAttribute(6, "stroke-width", "2");
+        builder.AddAttribute(7, "stroke-linecap", "round");
+        builder.AddAttribute(8, "stroke-linejoin", "round");
+        builder.AddMarkupContent(9, tone switch
+        {
+            "success" => "<path d=\"M20 6 9 17l-5-5\" />",
+            "warning" => "<path d=\"M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z\" /><path d=\"M12 9v4\" /><path d=\"M12 17h.01\" />",
+            "error" => "<circle cx=\"12\" cy=\"12\" r=\"10\" /><path d=\"m15 9-6 6\" /><path d=\"m9 9 6 6\" />",
+            _ => "<circle cx=\"12\" cy=\"12\" r=\"10\" /><path d=\"M12 16v-4\" /><path d=\"M12 8h.01\" />"
+        });
+        builder.CloseElement();
+    };
+}

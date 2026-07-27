@@ -1,0 +1,124 @@
+# Aspire Dashboard backend
+
+This project is the separately runnable ASP.NET Core Native AOT backend for the React dashboard.
+`dotnet publish` builds the React production application, stores the complete `dist` directory in
+one embedded archive, and produces an executable that serves both the UI and versioned API.
+It is intentionally additive: `Aspire.Dashboard` remains the default Blazor dashboard and continues
+to host the existing `/api/deck` transport.
+
+The backend currently implements version discovery plus the `configuration`, complete authenticated
+`shell`, `culture`, `authentication`, `manage-data`, read-only `resources` snapshot, SignalR
+`resources-live`, resource `commands`, resource-scoped console backlog/live, structured-log
+backlog/live/clear, trace backlog/live/filter/clear, metric summary/series/clear, versioned
+interaction polling/response/file upload, and direct interactive terminal capabilities.
+Resources, commands, and interactions use one long-lived AppHost resource-service connection.
+Interaction state, response traffic, and file uploads are bounded, and the backend restores an
+optimistically removed prompt when delivery fails so the user can retry. In side-by-side mode,
+React reads those capabilities from this host. BrowserToken and OpenID Connect use the existing
+dashboard as one authoritative cookie/identity service while both processes coexist; the AOT host
+exposes only same-origin versioned shell, culture, and sign-out routes and authorization-gates its direct
+capabilities against that session. Versioned Manage Data operations stream to the existing
+telemetry repository without exposing its legacy routes to the browser. A version must not
+advertise a capability until its complete black-box behavior passes the 157-feature parity inventory in
+`src/Aspire.Deck/ui/e2e/parity`.
+
+The host targets .NET 10 because SignalR server trimming and Native AOT support begins in .NET 9.
+This project remains separately selectable and does not change the target framework or runtime of
+the existing Blazor dashboard.
+
+## Run
+
+Publish and run the self-contained dashboard without a Vite server:
+
+```bash
+dotnet publish src/Aspire.Dashboard.Backend/Aspire.Dashboard.Backend.csproj -c Release
+./artifacts/bin/Aspire.Dashboard.Backend/Release/net10.0/<rid>/publish/Aspire.Dashboard.Backend
+```
+
+The root route serves the bundled React application. Hashed JavaScript and CSS assets are immutable
+for one year; `index.html` and non-hashed assets use `no-cache`. Extensionless routes fall back to
+the SPA while unknown `/api/*` routes and missing file paths remain `404`. The hosted index selects
+the same-origin Native AOT adapter automatically; `?backend=aot` is only needed with the Vite
+development server.
+
+Vite remains available for frontend development. To run the production topology with unfinished
+capabilities delegated to the existing dashboard, bind this executable to a loopback address:
+
+```bash
+ASPNETCORE_URLS=http://127.0.0.1:18889 \
+DashboardBackend__ApplicationName=Stress \
+DashboardBackend__LegacyDashboardUrl=https://localhost:18888 \
+ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL=https://localhost:22000 \
+DASHBOARD__RESOURCESERVICECLIENT__AUTHMODE=ApiKey \
+DASHBOARD__RESOURCESERVICECLIENT__APIKEY=<apphost-resource-service-key> \
+  dotnet run --project src/Aspire.Dashboard.Backend/Aspire.Dashboard.Backend.csproj
+```
+
+Use the same resource-service endpoint and authentication settings supplied to the existing
+dashboard process. `Unsecured` authentication requires no API-key setting. `Certificate`
+authentication supports the existing `File` and `KeyStore` client-certificate sources under
+`Dashboard:ResourceServiceClient:ClientCertificate`.
+
+The host enforces loopback connections and loopback browser origins as defense in depth around the
+development resource API. When `DashboardBackend__LegacyDashboardUrl` is configured, the React
+root and every direct versioned data, command, interaction, SignalR, and terminal route also
+require the authoritative dashboard BrowserToken or OpenID Connect session. If the resource
+service cannot provide its first snapshot within 10 seconds, resource requests return `503 Service
+Unavailable` while the host keeps retrying. Set `DashboardBackend__InitialSnapshotTimeout` to a
+positive `TimeSpan` value to change that startup timeout.
+
+The host exposes:
+
+- `GET /api/dashboard` for version and capability discovery.
+- `GET /api/dashboard/v1/config` for the version 1 configuration capability.
+- `GET /api/dashboard/v1/shell` for complete authenticated shell configuration, including endpoint
+  warnings, user/profile, culture, and agent guidance.
+- `GET /api/dashboard/v1/culture` to apply a supported language and return its persisted culture
+  cookie to a local redirect.
+- `POST /api/dashboard/v1/authentication/logout` for same-origin sign-out.
+- `GET /api/dashboard/v1/manage-data` plus `POST` to `/export`, `/import`, and `/remove` for
+  authenticated inventory, binary export, bounded telemetry import, and destructive removal.
+- `GET /api/dashboard/v1/resources` for the current AppHost resource snapshot.
+- `/api/dashboard/v1/resources/live` for the SignalR `WatchResources` server stream. Each
+  subscription receives an authoritative snapshot followed by incremental upserts and deletes.
+- `POST /api/dashboard/v1/commands/execute` to execute a command from the current resource snapshot.
+- `GET /api/dashboard/v1/structured-logs` for a read-only OTLP structured-log backlog proxied from
+  the existing loopback dashboard.
+- `/api/dashboard/v1/structured-logs/live` for the SignalR `WatchStructuredLogs` server stream.
+- `DELETE /api/dashboard/v1/structured-logs` to clear all structured logs or an optional `resource`
+  group. The client replaces its identity state and restarts the stream after clearing.
+- `GET /api/dashboard/v1/traces` for filtered OTLP span snapshots, including exact totals and
+  bounded returned data.
+- `/api/dashboard/v1/traces/live` for the SignalR `WatchTraces` backlog/live server stream.
+- `DELETE /api/dashboard/v1/traces` to clear all traces or an optional `resource` group. The client
+  restarts its stream after clearing so buffered pre-clear spans cannot reappear.
+- `GET /api/dashboard/v1/metrics` for the resource, meter, and instrument summary inventory.
+- `GET /api/dashboard/v1/metrics/series` for exact windowed series, dimension filters, histogram
+  aggregations, exemplars, and overflow state.
+- `DELETE /api/dashboard/v1/metrics` to clear all metrics or an optional `resource` group.
+- `/api/dashboard/v1/console-logs/live` for the SignalR `WatchConsoleLogs(resourceName)` server
+  stream. The existing dashboard supplies the resource backlog before live stdout/stderr batches.
+- `/api/dashboard/v1/terminal` for an HMP1 WebSocket bridged directly to the AppHost-provided
+  terminal consumer socket. The browser supplies only display name and replica index; the
+  authoritative resource-service session resolves the socket path server-side, and that sensitive
+  path is omitted from resource JSON. The published executable also bundles the shared terminal,
+  xterm, and font assets so this capability does not request files from the legacy dashboard.
+- `GET /api/dashboard/v1/interactions`, `POST /api/dashboard/v1/interactions/respond`, and
+  `POST /api/dashboard/v1/interactions/{interactionId}/inputs/{inputName}/files` for command
+  inputs, bounded streaming file uploads, validation updates, message boxes, and notifications
+  owned directly through the shared AppHost resource-service session. File size is enforced while
+  streaming, successful uploads are capped at 100 per interaction, and at most four uploads run
+  concurrently.
+
+`DashboardBackend__LegacyDashboardUrl` must identify the existing dashboard's loopback base URL.
+Telemetry and console proxies forward the incoming dashboard cookie or authorization header so the
+legacy dashboard continues to own OTLP storage for unfinished capabilities during this migration
+slice. Shell, culture, Manage Data, login/token/OIDC callback, and logout proxy routes preserve the
+browser-facing Host; the resulting cookie is therefore shared by hostname without exposing the
+internal legacy port. Direct command, interaction, resource, SignalR, and terminal routes do not
+proxy their operation, but they validate the request against that authoritative identity session
+first.
+
+All HTTP and SignalR JSON uses camel-case names and an explicit `JsonSerializerContext`. New
+contract payloads must be registered with source generation so Native AOT never depends on
+reflection serialization.

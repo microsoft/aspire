@@ -1,0 +1,41 @@
+@*
+    Deck-styled notifications button with an unread-count badge. Replaces the Fluent
+    NotificationsHeaderButton; reuses INotificationService for the unread count.
+*@
+@namespace Aspire.Dashboard.Components.Layout
+@implements IDisposable
+@inject INotificationService NotificationService
+@inject IStringLocalizer<Resources.Layout> Loc
+
+<button class="icon-btn topbar__notif" @onclick="OnClickAsync"
+        title="@Loc[nameof(Resources.Layout.MainLayoutLaunchNotifications)]"
+        aria-label="@Loc[nameof(Resources.Layout.MainLayoutLaunchNotifications)]">
+    <DeckIcon Name="DeckIconName.Bell" Size="18" />
+    @if (NotificationService.UnreadCount > 0)
+    {
+        <span class="topbar__notif-badge">@(NotificationService.UnreadCount > 9 ? "9+" : NotificationService.UnreadCount.ToString())</span>
+    }
+</button>
+
+@code {
+    /// <summary>Invoked when the button is clicked.</summary>
+    [Parameter, EditorRequired]
+    public required Func<Task> OnClick { get; set; }
+
+    protected override void OnInitialized()
+    {
+        NotificationService.OnChange += HandleNotificationsChanged;
+    }
+
+    private Task OnClickAsync() => OnClick();
+
+    private void HandleNotificationsChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        NotificationService.OnChange -= HandleNotificationsChanged;
+    }
+}

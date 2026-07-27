@@ -5,6 +5,7 @@ namespace Aspire.Hosting;
 
 internal static class KnownConfigNames
 {
+    public const string AspNetCoreUrls = "ASPNETCORE_URLS";
     public const string AllowUnsecuredTransport = "ASPIRE_ALLOW_UNSECURED_TRANSPORT";
     public const string VersionCheckDisabled = "ASPIRE_VERSION_CHECK_DISABLED";
     public const string DashboardOtlpGrpcEndpointUrl = "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL";
@@ -18,6 +19,13 @@ internal static class KnownConfigNames
     public const string DashboardApiEnabled = "ASPIRE_DASHBOARD_API_ENABLED";
     public const string DashboardApiDisabled = "ASPIRE_DASHBOARD_API_DISABLED";
     public const string DashboardForwardedHeadersEnabled = "ASPIRE_DASHBOARD_FORWARDEDHEADERS_ENABLED";
+
+    // When set, the AppHost still hosts the resource service and configures resources to export
+    // OTLP telemetry, but it does NOT launch the built-in Aspire dashboard process. This lets an
+    // external dashboard (e.g. Aspire Deck) substitute for the dashboard: the external app hosts
+    // the OTLP endpoints (pointed at via DashboardOtlpGrpcEndpointUrl/DashboardOtlpHttpEndpointUrl)
+    // and connects to the resource service (ResourceServiceEndpointUrl).
+    public const string DashboardExternal = "ASPIRE_DASHBOARD_EXTERNAL";
 
     public const string ShowDashboardResources = "ASPIRE_SHOW_DASHBOARD_RESOURCES";
     public const string ResourceServiceEndpointUrl = "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL";
@@ -54,7 +62,6 @@ internal static class KnownConfigNames
     public const string SuppressCliRunHook = "ASPIRE_SUPPRESS_CLI_RUN_HOOK";
     public const string IntegrationLibsPath = "ASPIRE_INTEGRATION_LIBS_PATH";
     public const string IntegrationProbeManifestPath = "ASPIRE_INTEGRATION_PROBE_MANIFEST_PATH";
-
     public const string ForceRichConsole = "ASPIRE_FORCE_RICH_CONSOLE";
     public const string AppHostLogLevel = "ASPIRE_APPHOST_LOGLEVEL";
     public const string AspireLogLevel = "ASPIRE_LOGLEVEL";
@@ -126,6 +133,8 @@ internal static class KnownConfigNames
         public const string DashboardCorsAllowedOrigins = "DOTNET_DASHBOARD_CORS_ALLOWED_ORIGINS";
         public const string DashboardConfigFilePath = "DOTNET_DASHBOARD_CONFIG_FILE_PATH";
         public const string DashboardFileConfigDirectory = "DOTNET_DASHBOARD_FILE_CONFIG_DIRECTORY";
+
+        public const string DashboardExternal = "DOTNET_DASHBOARD_EXTERNAL";
 
         public const string ShowDashboardResources = "DOTNET_SHOW_DASHBOARD_RESOURCES";
         public const string ResourceServiceEndpointUrl = "DOTNET_RESOURCE_SERVICE_ENDPOINT_URL";

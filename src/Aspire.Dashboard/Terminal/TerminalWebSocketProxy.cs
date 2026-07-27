@@ -4,9 +4,15 @@
 using System.Buffers;
 using System.Diagnostics;
 using System.Net.WebSockets;
+#if !ASPIRE_DASHBOARD_BACKEND
 using Aspire.Dashboard.Configuration;
+#endif
 
+#if ASPIRE_DASHBOARD_BACKEND
+namespace Aspire.Dashboard.Backend;
+#else
 namespace Aspire.Dashboard.Terminal;
+#endif
 
 /// <summary>
 /// ASP.NET Core middleware that bridges a single browser WebSocket to the
@@ -46,9 +52,15 @@ internal static class TerminalWebSocketProxy
     /// </summary>
     public static void MapTerminalWebSocket(this WebApplication app)
     {
-        app.Map("/api/terminal", async (HttpContext context,
-                                       ITerminalConnectionResolver resolver,
-                                       ILoggerFactory loggerFactory) =>
+        var endpoint = app.Map(
+#if ASPIRE_DASHBOARD_BACKEND
+            DashboardApiContract.TerminalPath,
+#else
+            "/api/terminal",
+#endif
+            async (HttpContext context,
+                   ITerminalConnectionResolver resolver,
+                   ILoggerFactory loggerFactory) =>
         {
             var logger = loggerFactory.CreateLogger("Aspire.Dashboard.Terminal.TerminalWebSocketProxy");
 
@@ -85,7 +97,10 @@ internal static class TerminalWebSocketProxy
                     }
                 }
             }
-        }).RequireAuthorization(FrontendAuthorizationDefaults.PolicyName);
+        });
+#if !ASPIRE_DASHBOARD_BACKEND
+        endpoint.RequireAuthorization(FrontendAuthorizationDefaults.PolicyName);
+#endif
     }
 
     internal static async Task HandleAsync(HttpContext context,

@@ -1,4 +1,4 @@
-@using Aspire.Dashboard.Components.Controls.Chart
+﻿@using Aspire.Dashboard.Components.Controls.Chart
 @using Aspire.Dashboard.Model.Interaction
 @using Aspire.Dashboard.Resources
 @using Aspire.Dashboard.Components.Controls.Grid
@@ -8,11 +8,11 @@
 @implements IDialogContentComponent<InteractionsInputsDialogViewModel>
 
 <FluentDialogHeader ShowDismiss="@Dialog.Instance.Parameters.ShowDismiss">
-    <FluentStack VerticalAlignment="VerticalAlignment.Center">
+    <div class="deck-stack" style="align-items: center;">
         <FluentLabel Typo="Typography.PaneHeader">
             @Dialog.Instance.Parameters.Title
         </FluentLabel>
-    </FluentStack>
+    </div>
 </FluentDialogHeader>
 
 <FluentDialogBody Class="interaction-input-dialog">
@@ -24,7 +24,7 @@
     }
 
     <EditForm EditContext="@_editContext" OnValidSubmit="@SubmitAsync">
-        <FluentStack Orientation="Orientation.Vertical" VerticalGap="12">
+        <div class="deck-stack deck-stack--vertical" style="row-gap: 12px;">
             @foreach (var vm in _inputDialogInputViewModels)
             {
                 var localItem = vm;
@@ -32,55 +32,58 @@
                     @switch (vm.Input.InputType)
                     {
                         case InputType.Text:
-                            <InteractionInputField ForId="@_elementRefs[localItem]?.Id"
+                            <InteractionInputField ForId="@_fieldIds[localItem]"
                                                    InputViewModel="@localItem"
                                                    MarkdownProcessor="@_markdownProcessor"
                                                    Context="input">
                                 @*
-                                * Immediate value of true on text input ensures the value is set to the server token with every key press in textbox.
+                                * Binding on oninput ensures the value is set to the server token with every key press in the textbox.
                                 *@
-                                <FluentTextField @ref="@_elementRefs[input.ViewModel]"
-                                                 @bind-Value="input.ViewModel.Value"
-                                                 Placeholder="@input.ViewModel.Input.Placeholder"
-                                                 Required="input.ViewModel.Input.Required"
-                                                 Immediate="true"
-                                                 AutoComplete="off"
-                                                 Disabled="input.ViewModel.InputDisabled"
-                                                 aria-describedby="@input.DescriptionId"
-                                                 Maxlength="@InteractionHelpers.GetMaxLength(input.ViewModel.Input.MaxLength)" />
+                                <input id="@_fieldIds[input.ViewModel]"
+                                       type="text"
+                                       class="input"
+                                       value="@input.ViewModel.Value"
+                                       @oninput="@(e => OnStringValueChanged(input.ViewModel, e))"
+                                       placeholder="@input.ViewModel.Input.Placeholder"
+                                       required="@input.ViewModel.Input.Required"
+                                       autocomplete="off"
+                                       disabled="@input.ViewModel.InputDisabled"
+                                       aria-describedby="@input.DescriptionId"
+                                       maxlength="@InteractionHelpers.GetMaxLength(input.ViewModel.Input.MaxLength)" />
                             </InteractionInputField>
                             break;
                         case InputType.SecretText:
-                            <InteractionInputField ForId="@_elementRefs[localItem]?.Id"
+                            <InteractionInputField ForId="@_fieldIds[localItem]"
                                                    InputViewModel="@localItem"
                                                    MarkdownProcessor="@_markdownProcessor"
                                                    Context="input">
                                 @*
                                 * AutoComplete value of one-time-code on password input prevents the browser asking to save the value.
-                                * Immediate value of true on text input ensures the value is set to the server token with every key press in textbox.
+                                * Binding on oninput ensures the value is set to the server token with every key press in the textbox.
                                 *@
-                                <FluentTextField @ref="@_elementRefs[input.ViewModel]"
-                                                 @bind-Value="input.ViewModel.Value"
-                                                 Placeholder="@input.ViewModel.Input.Placeholder"
-                                                 Required="input.ViewModel.Input.Required"
-                                                 TextFieldType="TextFieldType.Password"
-                                                 AutoComplete="one-time-code"
-                                                 Immediate="true"
-                                                 Disabled="input.ViewModel.InputDisabled"
-                                                 aria-describedby="@input.DescriptionId"
-                                                 Maxlength="@InteractionHelpers.GetMaxLength(input.ViewModel.Input.MaxLength)">
-                                    <FluentButton Appearance="Appearance.Stealth"
-                                                  Title="@(input.ViewModel.IsSecretTextVisible ? ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskHideValue)] : ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskShowValue)])"
-                                                  OnClick="@(() => ToggleSecretTextVisibilityAsync(input.ViewModel))"
-                                                  class="secret-text-toggle-button"
-                                                  slot="end">
-                                        <FluentIcon Value="@GetSecretTextIcon(input.ViewModel)" />
-                                    </FluentButton>
-                                </FluentTextField>
+                                <div class="input-with-button">
+                                    <input id="@_fieldIds[input.ViewModel]"
+                                           type="password"
+                                           class="input"
+                                           value="@input.ViewModel.Value"
+                                           @oninput="@(e => OnStringValueChanged(input.ViewModel, e))"
+                                           placeholder="@input.ViewModel.Input.Placeholder"
+                                           required="@input.ViewModel.Input.Required"
+                                           autocomplete="one-time-code"
+                                           disabled="@input.ViewModel.InputDisabled"
+                                           aria-describedby="@input.DescriptionId"
+                                           maxlength="@InteractionHelpers.GetMaxLength(input.ViewModel.Input.MaxLength)" />
+                                    <button type="button"
+                                            class="icon-btn icon-btn--sm secret-text-toggle-button"
+                                            title="@(input.ViewModel.IsSecretTextVisible ? ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskHideValue)] : ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskShowValue)])"
+                                            @onclick="@(() => ToggleSecretTextVisibilityAsync(input.ViewModel))">
+                                        <DeckIcon Name="GetSecretTextIcon(input.ViewModel)" Size="16" />
+                                    </button>
+                                </div>
                             </InteractionInputField>
                             break;
                         case InputType.Choice:
-                            <InteractionInputField ForId="@_elementRefs[localItem]?.Id"
+                            <InteractionInputField ForId="@_fieldIds[localItem]"
                                                    InputViewModel="@localItem"
                                                    MarkdownProcessor="@_markdownProcessor"
                                                    Context="input">
@@ -90,27 +93,29 @@
                                 *@
                                 @if (!localItem.Input.AllowCustomChoice)
                                 {
-                                    <FluentSelect @key="input.ViewModel.InputKey"
-                                                  TOption="SelectViewModel<string>"
-                                                  @ref="@_elementRefs[input.ViewModel]"
-                                                  @bind-Value="input.ViewModel.Value"
-                                                  Placeholder="@input.ViewModel.Input.Placeholder"
-                                                  Required="input.ViewModel.Input.Required"
-                                                  Items="input.ViewModel.SelectOptions"
-                                                  OptionValue="@(vm => vm.Id)"
-                                                  OptionText="@(vm => vm.Name)"
-                                                  OptionTitle="@(vm => DashboardUIHelpers.ResolveTooltip(vm.Name))"
-                                                  Height="250px"
-                                                  Position="SelectPosition.Below"
-                                                  Disabled="input.ViewModel.InputDisabled"
-                                                  aria-describedby="@input.DescriptionId">
-                                    </FluentSelect>
+                                    <select id="@_fieldIds[input.ViewModel]"
+                                            @key="input.ViewModel.InputKey"
+                                            class="select"
+                                            @onchange="@(e => OnStringValueChanged(input.ViewModel, e))"
+                                            disabled="@input.ViewModel.InputDisabled"
+                                            aria-describedby="@input.DescriptionId">
+                                        @if (!string.IsNullOrEmpty(input.ViewModel.Input.Placeholder))
+                                        {
+                                            <option value="" disabled hidden selected="@string.IsNullOrEmpty(input.ViewModel.Value)">@input.ViewModel.Input.Placeholder</option>
+                                        }
+                                        @foreach (var option in input.ViewModel.SelectOptions)
+                                        {
+                                            <option value="@option.Id"
+                                                    selected="@(option.Id == input.ViewModel.Value)"
+                                                    title="@DashboardUIHelpers.ResolveTooltip(option.Name)">@option.Name</option>
+                                        }
+                                    </select>
                                 }
                                 else
                                 {
                                     <FluentCombobox @key="input.ViewModel.InputKey"
                                                     TOption="SelectViewModel<string>"
-                                                    @ref="@_elementRefs[input.ViewModel]"
+                                                    Id="@_fieldIds[input.ViewModel]"
                                                     @bind-Value="input.ViewModel.Value"
                                                     Placeholder="@input.ViewModel.Input.Placeholder"
                                                     Required="input.ViewModel.Input.Required"
@@ -125,50 +130,48 @@
                                                     ImmediateDelay="@FluentUIExtensions.InputDelay"
                                                     aria-describedby="@input.DescriptionId">
                                         <OptionTemplate Context="optionContext">
-                                            <FluentHighlighter Text="@optionContext.Name" HighlightedText="@input.ViewModel.Value" />
+                                            <Highlighter Text="@optionContext.Name" HighlightedText="@input.ViewModel.Value" />
                                         </OptionTemplate>
                                     </FluentCombobox>
                                 }
                             </InteractionInputField>
                             break;
                         case InputType.Boolean:
-                            <InteractionInputField ForId="@_elementRefs[localItem]?.Id"
+                            <InteractionInputField ForId="@_fieldIds[localItem]"
                                                    InputViewModel="@localItem"
                                                    MarkdownProcessor="@_markdownProcessor"
                                                    Context="input">
-                                <FluentCheckbox @ref="@_elementRefs[input.ViewModel]"
-                                                @bind-Value="input.ViewModel.IsChecked"
-                                                Label="@input.ViewModel.Input.Label"
-                                                Placeholder="@input.ViewModel.Input.Placeholder"
-                                                AriaLabel="@input.ViewModel.Input.Label"
-                                                Disabled="input.ViewModel.InputDisabled"
-                                                aria-describedby="@input.DescriptionId" />
+                                <Checkbox Checked="input.ViewModel.IsChecked"
+                                          CheckedChanged="@(value => OnCheckedChanged(input.ViewModel, value))"
+                                          Label="@input.ViewModel.Input.Label"
+                                          AriaLabel="@input.ViewModel.Input.Label"
+                                          Disabled="input.ViewModel.InputDisabled" />
                             </InteractionInputField>
                             break;
                         case InputType.Number:
-                            <InteractionInputField ForId="@_elementRefs[localItem]?.Id"
+                            <InteractionInputField ForId="@_fieldIds[localItem]"
                                                    InputViewModel="@localItem"
                                                    MarkdownProcessor="@_markdownProcessor"
                                                    Context="input">
-                                <FluentNumberField TValue="int?"
-                                                   @ref="@_elementRefs[input.ViewModel]"
-                                                   @bind-Value="input.ViewModel.NumberValue"
-                                                   Placeholder="@input.ViewModel.Input.Placeholder"
-                                                   AriaLabel="@input.ViewModel.Input.Description"
-                                                   Required="input.ViewModel.Input.Required"
-                                                   Immediate="true"
-                                                   Disabled="input.ViewModel.InputDisabled"
-                                                   aria-describedby="@input.DescriptionId" />
+                                <input id="@_fieldIds[input.ViewModel]"
+                                       type="number"
+                                       class="input"
+                                       value="@input.ViewModel.NumberValue"
+                                       @oninput="@(e => OnNumberValueChanged(input.ViewModel, e))"
+                                       placeholder="@input.ViewModel.Input.Placeholder"
+                                       aria-label="@input.ViewModel.Input.Description"
+                                       required="@input.ViewModel.Input.Required"
+                                       disabled="@input.ViewModel.InputDisabled"
+                                       aria-describedby="@input.DescriptionId" />
                             </InteractionInputField>
                             break;
                         case InputType.File:
-                            var inputId = $"{_elementRefs[localItem]?.Id}-FileUploadButton";
+                            var inputId = $"{_fieldIds[localItem]}-FileUploadButton";
                             <InteractionInputField ForId="@inputId"
                                                    InputViewModel="@localItem"
                                                    MarkdownProcessor="@_markdownProcessor"
                                                    Context="input">
-                                <FluentInputFile @ref="@_elementRefs[input.ViewModel]"
-                                                 DragDropZoneVisible="false"
+                                <FluentInputFile DragDropZoneVisible="false"
                                                  Mode="InputFileMode.Stream"
                                                  AnchorId="@inputId"
                                                  Accept="@input.ViewModel.Input.FileFilter"
@@ -178,18 +181,21 @@
                                 @if (input.ViewModel.FileReferences.Any(f => f.Id is not null))
                                 {
                                     <div class="uploaded-files-list">
-                                        @foreach (var fileRef in input.ViewModel.FileReferences.Where(f => f.Id is not null))
+                                        @foreach (var fileReference in input.ViewModel.FileReferences.Where(f => f.Id is not null))
                                         {
                                             <div class="uploaded-file-container">
-                                                <FluentIcon Icon="Icons.Filled.Size16.Document" Style="vertical-align: text-bottom;" Color="Color.Accent" />
-                                                <span>@fileRef.Name</span>
+                                                <FluentIcon Icon="Icons.Filled.Size16.Document"
+                                                            Style="vertical-align: text-bottom;"
+                                                            Color="Color.Accent" />
+                                                <span>@fileReference.Name</span>
                                             </div>
                                         }
                                     </div>
                                 }
                                 else
                                 {
-                                    <FluentButton Id="@inputId" Appearance="Appearance.Accent"
+                                    <FluentButton Id="@inputId"
+                                                  Appearance="Appearance.Accent"
                                                   IconStart="@(new Icons.Regular.Size16.FolderOpen())"
                                                   aria-label="@input.ViewModel.Input.Label">
                                         @GetFileButtonText(input.ViewModel)
@@ -203,7 +209,7 @@
                     }
                 </div>
             }
-        </FluentStack>
+        </div>
 
         @* Hidden submit is so the form is submitted when the user presses enter. *@
         <button type="submit" style="display:none"></button>
@@ -211,13 +217,13 @@
 </FluentDialogBody>
 
 <FluentDialogFooter>
-    <FluentButton Appearance="Appearance.Accent" OnClick="@SubmitAsync">
+    <button type="button" class="btn btn--primary" @onclick="@SubmitAsync">
         @Dialog.Instance.Parameters.PrimaryAction
-    </FluentButton>
+    </button>
     @if (!string.IsNullOrEmpty(Dialog.Instance.Parameters.SecondaryAction))
     {
-        <FluentButton Appearance="Appearance.Neutral" OnClick="@CancelAsync">
+        <button type="button" class="btn" @onclick="@CancelAsync">
             @Dialog.Instance.Parameters.SecondaryAction
-        </FluentButton>
+        </button>
     }
 </FluentDialogFooter>

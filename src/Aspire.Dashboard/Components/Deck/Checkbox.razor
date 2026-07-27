@@ -1,0 +1,85 @@
+@*
+    Labeled checkbox replacing FluentCheckbox during the Fluent-removal phase. Supports a
+    plain two-state bind (@bind-Checked) and an optional indeterminate ("mixed") display
+    state. The HTML indeterminate state is a DOM property with no attribute, so it is set
+    via a tiny JS module.
+*@
+@namespace Aspire.Dashboard.Components.Deck
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<label class="deck-checkbox @(Disabled ? "deck-checkbox--disabled" : null)" title="@Title">
+    <input @ref="_input"
+           type="checkbox"
+           checked="@Checked"
+           disabled="@Disabled"
+           aria-label="@AriaLabel"
+           @onchange="OnChangedAsync" />
+    @if (!string.IsNullOrEmpty(Label))
+    {
+        <span>@Label</span>
+    }
+</label>
+
+@code {
+    private ElementReference _input;
+    private bool? _appliedIndeterminate;
+    private IJSObjectReference? _module;
+
+    /// <summary>Whether the box is checked.</summary>
+    [Parameter]
+    public bool Checked { get; set; }
+
+    /// <summary>Raised when the checked state changes (enables <c>@bind-Checked</c>).</summary>
+    [Parameter]
+    public EventCallback<bool> CheckedChanged { get; set; }
+
+    /// <summary>When <c>true</c>, the box renders in the indeterminate ("mixed") state.</summary>
+    [Parameter]
+    public bool Indeterminate { get; set; }
+
+    /// <summary>Optional label rendered after the box.</summary>
+    [Parameter]
+    public string? Label { get; set; }
+
+    /// <summary>Optional tooltip on the label.</summary>
+    [Parameter]
+    public string? Title { get; set; }
+
+    /// <summary>Optional accessible name applied to the input.</summary>
+    [Parameter]
+    public string? AriaLabel { get; set; }
+
+    /// <summary>Whether the checkbox is disabled.</summary>
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    private async Task OnChangedAsync(ChangeEventArgs e)
+    {
+        var isChecked = e.Value is true;
+        Checked = isChecked;
+        if (CheckedChanged.HasDelegate)
+        {
+            await CheckedChanged.InvokeAsync(isChecked);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Only touch the DOM when the indeterminate value actually changes.
+        if (_appliedIndeterminate != Indeterminate)
+        {
+            _appliedIndeterminate = Indeterminate;
+            _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Deck/Checkbox.razor.js");
+            await _module.InvokeVoidAsync("setIndeterminate", _input, Indeterminate);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is not null)
+        {
+            await Aspire.Dashboard.Utils.JSInteropHelpers.SafeDisposeAsync(_module);
+        }
+    }
+}

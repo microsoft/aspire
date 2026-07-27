@@ -21,10 +21,5 @@ public enum DashboardConnectionState
     /// <summary>
     /// The dashboard has lost its connection to the resource service and is attempting to reconnect.
     /// </summary>
-    Disconnected,
-
-    /// <summary>
-    /// The dashboard is too old to support the connected AppHost.
-    /// </summary>
-    Unsupported
+    Disconnected
 }

@@ -1,0 +1,74 @@
+@*
+    Minimal inline icon set for the Deck-style UI, ported from
+    src/Aspire.Deck/ui/src/components/Icons.tsx. Stroke-based, currentColor, 24x24 viewBox,
+    so we avoid shipping an icon font/library.
+
+    The glyph markup lives in DeckIconData so the resource graph (which renders icons in JS, not
+    Blazor) can reuse the exact same paths. Emitting it via MarkupString inside an <svg> is the same
+    technique Fluent's own <FluentIcon> uses, so the children parse into the SVG namespace correctly.
+*@
+<svg width="@Size" height="@Size" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+     class="@Class" style="@Style" aria-hidden="@(Title is null ? "true" : null)" role="@(Title is null ? null : "img")">
+    @if (Title is not null)
+    {
+        <title>@Title</title>
+    }
+    @((MarkupString)DeckIconData.GetInnerMarkup(Resolve(Name)))
+</svg>
+
+@code {
+    /// <summary>The icon to render.</summary>
+    [Parameter, EditorRequired]
+    public DeckIconName Name { get; set; }
+
+    /// <summary>Pixel size (width and height) of the icon. Defaults to 18.</summary>
+    [Parameter]
+    public int Size { get; set; } = 18;
+
+    /// <summary>Optional CSS class applied to the root <c>svg</c>.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Optional inline style applied to the root <c>svg</c> (e.g. vertical alignment).</summary>
+    [Parameter]
+    public string? Style { get; set; }
+
+    /// <summary>
+    /// Optional accessible title/tooltip. When set, the icon is exposed as <c>role="img"</c> with a
+    /// <c>&lt;title&gt;</c>; otherwise it is decorative (<c>aria-hidden</c>).
+    /// </summary>
+    [Parameter]
+    public string? Title { get; set; }
+
+    /// <summary>
+    /// Optional resource type string. When <see cref="Name"/> is <see cref="DeckIconName.ResourceType"/>,
+    /// the type is mapped to a representative icon (project/container/executable), mirroring
+    /// Deck's <c>ResourceTypeIcon</c>.
+    /// </summary>
+    [Parameter]
+    public string? ResourceType { get; set; }
+
+    private DeckIconName Resolve(DeckIconName name)
+    {
+        if (name != DeckIconName.ResourceType)
+        {
+            return name;
+        }
+
+        var lower = (ResourceType ?? string.Empty).ToLowerInvariant();
+        if (lower.Contains("project"))
+        {
+            return DeckIconName.Project;
+        }
+        if (lower.Contains("container"))
+        {
+            return DeckIconName.Container;
+        }
+        if (lower.Contains("executable"))
+        {
+            return DeckIconName.Executable;
+        }
+        return DeckIconName.Resources;
+    }
+}

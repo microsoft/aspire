@@ -6,93 +6,20 @@ using Aspire.Dashboard.Resources;
 using Humanizer;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Localization;
-using Microsoft.FluentUI.AspNetCore.Components;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Model;
 
-internal class ResourceStateViewModel(string text, Icon icon, Color color)
+internal class ResourceStateViewModel(string text)
 {
     public string Text { get; } = text;
-    public Icon Icon { get; } = icon;
-    public Color Color { get; } = color;
 
     /// <summary>
-    /// Gets data needed to populate the content of the state column.
+    /// Gets the text for the state column. The accompanying status color/dot is sourced from
+    /// <see cref="Components.Deck.ResourceStateTone"/> (the single source of truth for state tone).
     /// </summary>
     internal static ResourceStateViewModel GetStateViewModel(ResourceViewModel resource, IStringLocalizer<Columns> loc)
     {
-        var (icon, color) = GetStateIcon(resource);
-        var text = GetStateText(resource, loc);
-
-        return new ResourceStateViewModel(text, icon, color);
-    }
-
-    private static (Icon icon, Color color) GetStateIcon(ResourceViewModel resource)
-    {
-        // Browse the icon library at: https://aka.ms/fluentui-system-icons
-        Icon icon;
-        Color color;
-
-        if (resource.IsStopped())
-        {
-            if (resource.TryGetExitCode(out var exitCode) && exitCode is not 0)
-            {
-                // Process completed unexpectedly, hence the non-zero code. This is almost certainly an error, so warn users.
-                icon = new Icons.Filled.Size16.ErrorCircle();
-                color = Color.Error;
-            }
-            else if (resource.IsFinishedState() || resource.IsExitedState())
-            {
-                // Process completed successfully.
-                icon = new Icons.Regular.Size16.RecordStop();
-                color = Color.Info;
-            }
-            else
-            {
-                // Process completed, which may not have been unexpected.
-                icon = new Icons.Filled.Size16.Warning();
-                color = Color.Warning;
-            }
-        }
-        else if (resource.IsUnusableTransitoryState() || resource.IsUnknownState() || resource.IsNotStarted())
-        {
-            icon = new Icons.Filled.Size16.CircleHint(); // A dashed, hollow circle.
-            color = Color.Info;
-        }
-        else if (resource.IsRuntimeUnhealthy())
-        {
-            icon = new Icons.Filled.Size16.Warning();
-            color = Color.Warning;
-        }
-        else if (resource.HasNoState())
-        {
-            icon = new Icons.Filled.Size16.Circle();
-            color = Color.Info;
-        }
-        else if (!string.IsNullOrEmpty(resource.StateStyle))
-        {
-            (icon, color) = resource.StateStyle switch
-            {
-                "warning" => ((Icon)new Icons.Filled.Size16.Warning(), Color.Warning),
-                "error" => (new Icons.Filled.Size16.ErrorCircle(), Color.Error),
-                "success" => (new Icons.Filled.Size16.CheckmarkCircle(), Color.Success),
-                "info" => (new Icons.Filled.Size16.Info(), Color.Info),
-                _ => (new Icons.Filled.Size16.Circle(), Color.Neutral)
-            };
-        }
-        else if (resource.HealthStatus is HealthStatus.Unhealthy or HealthStatus.Degraded)
-        {
-            icon = new Icons.Filled.Size16.CheckmarkCircleWarning();
-            color = Color.Warning;
-        }
-        else
-        {
-            icon = new Icons.Filled.Size16.CheckmarkCircle();
-            color = Color.Success;
-        }
-
-        return (icon, color);
+        return new ResourceStateViewModel(GetStateText(resource, loc));
     }
 
     /// <summary>

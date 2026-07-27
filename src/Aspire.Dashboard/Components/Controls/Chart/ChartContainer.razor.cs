@@ -3,13 +3,13 @@
 
 using System.Collections.Immutable;
 using System.Runtime.InteropServices;
+using Aspire.Dashboard.Components.Deck;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Model.MetricValues;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
 using Microsoft.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Components;
 
@@ -145,7 +145,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     private static bool MatchFilter(KeyValuePair<string, string>[] attributes, DimensionFilterViewModel filter)
     {
         // No filter selected.
-        if (filter.SelectedValues.Count == 0)
+        if (!filter.SelectedValues.Any())
         {
             return false;
         }
@@ -234,9 +234,9 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
                     return new DimensionValueViewModel
                     {
                         Text = text,
-                        Value = v,
+                        Value = v
                     };
-                }));
+                }).OrderBy(v => v.Text));
 
                 filters.Add(dimensionModel);
             }
@@ -284,7 +284,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
         return filters;
     }
 
-    private Task OnTabChangeAsync(FluentTab newTab)
+    private Task OnTabChangeAsync(DeckTab newTab)
     {
         var id = newTab.Id?.Substring("tab-".Length);
 

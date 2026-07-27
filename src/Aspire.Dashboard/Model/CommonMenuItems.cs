@@ -5,7 +5,7 @@ using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
+using Aspire.Dashboard.Components.Deck;
 
 namespace Aspire.Dashboard.Model;
 
@@ -27,7 +27,7 @@ public static class CommonMenuItems
                 IsDisabled = !areResourcesHidden,
                 OnClick = OnToggleShowHiddenResources,
                 Text = loc[nameof(ControlsStrings.ShowHiddenResources)],
-                Icon = new Icons.Regular.Size16.Eye()
+                Icon = DeckIconName.Eye
             });
         }
         else
@@ -36,7 +36,7 @@ public static class CommonMenuItems
             {
                 OnClick = OnToggleShowHiddenResources,
                 Text = loc[nameof(ControlsStrings.HideHiddenResources)],
-                Icon = new Icons.Regular.Size16.EyeOff()
+                Icon = DeckIconName.EyeOff
             });
         }
         async Task OnToggleShowHiddenResources()

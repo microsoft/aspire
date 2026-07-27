@@ -1,0 +1,57 @@
+@*
+    A single tab within a <DeckTabs>. Contributes a header (Icon + Label, or a Header
+    fragment) to the parent's tab bar and an optional content panel. The panel stays
+    mounted but is hidden when the tab is inactive, preserving child component state.
+*@
+@implements IDisposable
+
+@if (ChildContent is not null)
+{
+    <div role="tabpanel" class="deck-tab-panel" hidden="@(!Parent.IsActive(this))">
+        @ChildContent
+    </div>
+}
+
+@code {
+    /// <summary>The owning <see cref="DeckTabs"/> (set via cascading value).</summary>
+    [CascadingParameter]
+    public DeckTabs Parent { get; set; } = default!;
+
+    /// <summary>Unique tab id, compared against <see cref="DeckTabs.ActiveTabId"/>.</summary>
+    [Parameter, EditorRequired]
+    public string Id { get; set; } = default!;
+
+    /// <summary>Header label (ignored when <see cref="Header"/> is supplied).</summary>
+    [Parameter]
+    public string? Label { get; set; }
+
+    /// <summary>Optional leading icon glyph.</summary>
+    [Parameter]
+    public DeckIconName? Icon { get; set; }
+
+    /// <summary>Extra CSS classes applied to the tab header button.</summary>
+    [Parameter]
+    public string? LabelClass { get; set; }
+
+    /// <summary>Custom header content (e.g. label + count badge); overrides <see cref="Label"/>.</summary>
+    [Parameter]
+    public RenderFragment? Header { get; set; }
+
+    /// <summary>Optional panel content rendered below the tab bar when active.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Unmatched attributes (e.g. <c>aria-label</c>) splatted onto the tab header button.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IDictionary<string, object>? HeaderAttributes { get; set; }
+
+    protected override void OnInitialized()
+    {
+        Parent.AddTab(this);
+    }
+
+    public void Dispose()
+    {
+        Parent.RemoveTab(this);
+    }
+}

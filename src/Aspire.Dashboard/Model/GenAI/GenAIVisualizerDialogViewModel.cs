@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Deck;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
@@ -697,4 +698,4 @@ public enum ItemViewKind
     Toolcalls
 }
 
-public record BadgeDetail(string Text, string Class, Icon Icon);
+public record BadgeDetail(string Text, string Class, DeckIconName Icon);

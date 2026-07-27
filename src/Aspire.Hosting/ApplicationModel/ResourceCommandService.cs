@@ -347,6 +347,12 @@ public class ResourceCommandService
                     }
 
                     arguments = promptedArguments!;
+                    // Interactive prompts perform dynamic loading while the dialog is open, but the
+                    // returned collection does not carry the set used by final validation to distinguish
+                    // a deliberately disabled loaded value from an unprocessed dependent argument.
+                    // Reload against the submitted values so both interactive and supplied-argument
+                    // execution use the same validation state.
+                    loadedDynamicArgumentNames = await LoadDynamicCommandArgumentsAsync(arguments, cancellationToken).ConfigureAwait(false);
                 }
                 else
                 {
@@ -838,4 +844,3 @@ internal sealed class ResourceCommandExecutionOptions
 
     public bool NonInteractive { get; init; }
 }
-

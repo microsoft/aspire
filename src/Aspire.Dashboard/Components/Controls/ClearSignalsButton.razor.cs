@@ -2,20 +2,19 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using Aspire.Dashboard.Components.Deck;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
-using Microsoft.FluentUI.AspNetCore.Components;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Controls;
 
 public partial class ClearSignalsButton : ComponentBase
 {
-    private static readonly Icon s_clearSelectedResourceIcon = new Icons.Regular.Size16.SelectAllOn();
-    private static readonly Icon s_clearAllResourcesIcon = new Icons.Regular.Size16.Stack();
+    private const DeckIconName ClearSelectedResourceIcon = DeckIconName.CheckboxChecked;
+    private const DeckIconName ClearAllResourcesIcon = DeckIconName.Stack;
 
     [Inject]
     public required IStringLocalizer<ControlsStrings> ControlsStringsLoc { get; init; }
@@ -35,7 +34,7 @@ public partial class ClearSignalsButton : ComponentBase
         _clearMenuItems.Add(new()
         {
             Id = "clear-menu-all",
-            Icon = s_clearAllResourcesIcon,
+            Icon = ClearAllResourcesIcon,
             OnClick = () => HandleClearSignal(null),
             Text = ControlsStringsLoc[name: nameof(ControlsStrings.ClearAllResources)],
         });
@@ -43,7 +42,7 @@ public partial class ClearSignalsButton : ComponentBase
         _clearMenuItems.Add(new()
         {
             Id = "clear-menu-resource",
-            Icon = s_clearSelectedResourceIcon,
+            Icon = ClearSelectedResourceIcon,
             OnClick = () => HandleClearSignal(SelectedResource.Id?.GetResourceKey()),
             IsDisabled = SelectedResource.Id == null,
             Text = SelectedResource.Id == null

@@ -11,9 +11,9 @@ using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
+using Aspire.Dashboard.Components.Deck;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Controls;
 
@@ -312,13 +312,13 @@ public partial class MetricTable : ChartBase
         Constant
     }
 
-    private (Icon Icon, string Title)? GetIconAndTitleForDirection(ValueDirectionChange? directionChange)
+    private (DeckIconName Icon, string Tone, string Title)? GetIconAndTitleForDirection(ValueDirectionChange? directionChange)
     {
         return directionChange switch
         {
-            ValueDirectionChange.Up => (new Icons.Filled.Size16.ArrowCircleUp().WithColor(Color.Success), Loc[nameof(ControlsStrings.MetricTableValueIncreased)]),
-            ValueDirectionChange.Down => (new Icons.Filled.Size16.ArrowCircleDown().WithColor(Color.Warning), Loc[nameof(ControlsStrings.MetricTableValueDecreased)]),
-            ValueDirectionChange.Constant => (new Icons.Filled.Size16.ArrowCircleRight().WithColor(Color.Info), Loc[nameof(ControlsStrings.MetricTableValueNoChange)]),
+            ValueDirectionChange.Up => (DeckIconName.ArrowCircleUp, "icon-success", Loc[nameof(ControlsStrings.MetricTableValueIncreased)]),
+            ValueDirectionChange.Down => (DeckIconName.ArrowCircleDown, "icon-warning", Loc[nameof(ControlsStrings.MetricTableValueDecreased)]),
+            ValueDirectionChange.Constant => (DeckIconName.ArrowCircleRight, "icon-muted", Loc[nameof(ControlsStrings.MetricTableValueNoChange)]),
             _ => null
         };
     }

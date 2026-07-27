@@ -15,14 +15,18 @@
         @if (_contextSpans.Count > 1)
         {
             <div Style="grid-area: dialog-format;">
-                <FluentButton IconStart="new Icons.Regular.Size16.ArrowUp()"
-                              Appearance="Appearance.Stealth"
-                              Disabled="@NoPreviousGenAISpan"
-                              OnClick="OnPreviousGenAISpan">@Loc[nameof(Dialogs.GenAIPreviousButtonText)]</FluentButton>
-                <FluentButton IconStart="new Icons.Regular.Size16.ArrowDown()"
-                              Appearance="Appearance.Stealth"
-                              Disabled="@NoNextGenAISpan"
-                              OnClick="OnNextGenAISpan">@Loc[nameof(Dialogs.GenAINextButtonText)]</FluentButton>
+                <button type="button" class="btn btn--ghost"
+                        disabled="@NoPreviousGenAISpan"
+                        @onclick="OnPreviousGenAISpan">
+                    <DeckIcon Name="DeckIconName.ArrowUp" Size="16" />
+                    @Loc[nameof(Dialogs.GenAIPreviousButtonText)]
+                </button>
+                <button type="button" class="btn btn--ghost"
+                        disabled="@NoNextGenAISpan"
+                        @onclick="OnNextGenAISpan">
+                    <DeckIcon Name="DeckIconName.ArrowDown" Size="16" />
+                    @Loc[nameof(Dialogs.GenAINextButtonText)]
+                </button>
             </div>
         }
     </div>
@@ -53,40 +57,38 @@
                         <div>
                             <div class="message-header">
                                 <GenAIItemTitle Item="@selectedItem" ResourceName="@selectedItem.ResourceName" />
-                                <FluentButton Class="back-button"
-                                              Appearance="Appearance.Stealth"
-                                              OnClick="@GoBackAsync">
-                                    <FluentIcon Value="@(new Icons.Regular.Size16.ArrowHookUpLeft())" />
-                                </FluentButton>
+                                <button type="button" class="icon-btn back-button" @onclick="@GoBackAsync">
+                                    <DeckIcon Name="DeckIconName.Back" Size="16" />
+                                </button>
                             </div>
                             @*
-                                Tab content isn't nested inside FluentTab elements. The tab control is just used to display the tabs.
+                                Tab content isn't nested inside DeckTab elements. The tab control is just used to display the tabs.
                                 Content is located in manually created divs so they can be placed in their own CSS grid row.
                             *@
                             @if (selectedItem.Type != GenAIItemType.Error)
                             {
-                                <FluentTabs ActiveTabId="@($"tab-message-{selectedView}")" OnTabChange="@OnMessageTabChange" Size="null">
-                                    <FluentTab LabelClass="tab-label"
-                                               Id="@($"tab-message-{ItemViewKind.Preview}")"
-                                               Label="@Loc[nameof(Dialogs.GenAIPreviewTabText)]"
-                                               Icon="@(new Icons.Regular.Size24.PreviewLink())">
-                                    </FluentTab>
-                                    <FluentTab LabelClass="tab-label"
-                                               Id="@($"tab-message-{ItemViewKind.Raw}")"
-                                               Label="@Loc[nameof(Dialogs.GenAIRawTabText)]"
-                                               Icon="@(new Icons.Regular.Size24.Code())">
-                                    </FluentTab>
-                                </FluentTabs>
+                                <DeckTabs ActiveTabId="@($"tab-message-{selectedView}")" OnTabChange="@OnMessageTabChange">
+                                    <DeckTab LabelClass="tab-label"
+                                             Id="@($"tab-message-{ItemViewKind.Preview}")"
+                                             Label="@Loc[nameof(Dialogs.GenAIPreviewTabText)]"
+                                             Icon="DeckIconName.Eye">
+                                    </DeckTab>
+                                    <DeckTab LabelClass="tab-label"
+                                             Id="@($"tab-message-{ItemViewKind.Raw}")"
+                                             Label="@Loc[nameof(Dialogs.GenAIRawTabText)]"
+                                             Icon="DeckIconName.Braces">
+                                    </DeckTab>
+                                </DeckTabs>
                             }
                             else
                             {
-                                <FluentTabs ActiveTabId="@($"tab-message-{ItemViewKind.Raw}")" Size="null">
-                                    <FluentTab LabelClass="tab-label"
-                                               Id="@($"tab-message-{ItemViewKind.Raw}")"
-                                               Label="@Loc[nameof(Dialogs.GenAIRawTabText)]"
-                                               Icon="@(new Icons.Regular.Size24.Code())">
-                                    </FluentTab>
-                                </FluentTabs>
+                                <DeckTabs ActiveTabId="@($"tab-message-{ItemViewKind.Raw}")">
+                                    <DeckTab LabelClass="tab-label"
+                                             Id="@($"tab-message-{ItemViewKind.Raw}")"
+                                             Label="@Loc[nameof(Dialogs.GenAIRawTabText)]"
+                                             Icon="DeckIconName.Braces">
+                                    </DeckTab>
+                                </DeckTabs>
                             }
                         </div>
                         @if (selectedView == ItemViewKind.Preview)
@@ -126,20 +128,15 @@
                                     else if (itemPart.AdditionalProperties is { } additionalProperties && additionalProperties.Count > 0)
                                     {
                                         <div class="property-grid-container">
-                                            <FluentAccordion>
-                                                <FluentAccordionItem Heading="@(itemPart.MessagePart?.Type ?? "unknown")" Expanded="true">
-                                                    <div slot="end">
-                                                        <FluentBadge Appearance="Appearance.Neutral" Circular="true">
-                                                            @additionalProperties.Count
-                                                        </FluentBadge>
-                                                    </div>
+                                            <Accordion>
+                                                <AccordionItem Heading="@(itemPart.MessagePart?.Type ?? "unknown")" Expanded="true" Count="@additionalProperties.Count">
                                                     <PropertyGrid TItem="GenAIPartPropertyViewModel"
                                                                   Items="additionalProperties.AsQueryable()"
                                                                   IsNameSortable="false"
                                                                   IsValueSortable="false"
                                                                   GridTemplateColumns="1fr 2fr" />
-                                                </FluentAccordionItem>
-                                            </FluentAccordion>
+                                                </AccordionItem>
+                                            </Accordion>
                                         </div>
                                     }
                                     else if (itemPart.ErrorMessage == itemPart.TextVisualizerViewModel.Text)
@@ -166,10 +163,10 @@
                                             if (Content.ToolDefinitions.FirstOrDefault(d => d.ToolDefinition.Name == toolCallPart.Name) is { } toolVM)
                                             {
                                                 <div class="tool-button-container">
-                                                    <FluentButton OnClick="@(() => ViewToolDefinitionAsync(toolVM))">
-                                                        <FluentIcon Value="@s_wrenchIcon" Style="vertical-align: sub;" slot="start" />
+                                                    <button type="button" class="btn" @onclick="@(() => ViewToolDefinitionAsync(toolVM))">
+                                                        <DeckIcon Name="DeckIconName.Toolbox" Size="16" />
                                                         @Loc[nameof(Dialogs.GenAIToolDefinitionButtonText)]
-                                                    </FluentButton>
+                                                    </button>
                                                 </div>
                                             }
                                         }
@@ -178,10 +175,10 @@
                                             if (Content.ToolDefinitions.FirstOrDefault(d => d.ToolDefinition.Name == serverToolCallPart.Name) is { } toolVM)
                                             {
                                                 <div class="tool-button-container">
-                                                    <FluentButton OnClick="@(() => ViewToolDefinitionAsync(toolVM))">
-                                                        <FluentIcon Value="@s_wrenchIcon" Style="vertical-align: sub;" slot="start" />
+                                                    <button type="button" class="btn" @onclick="@(() => ViewToolDefinitionAsync(toolVM))">
+                                                        <DeckIcon Name="DeckIconName.Toolbox" Size="16" />
                                                         @Loc[nameof(Dialogs.GenAIToolDefinitionButtonText)]
-                                                    </FluentButton>
+                                                    </button>
                                                 </div>
                                             }
                                         }
@@ -190,17 +187,17 @@
                                             if (TryGetToolCall(toolCallResponsePart.Id, out var itemVM, out var toolCallRequestPart))
                                             {
                                                 <div class="tool-button-container">
-                                                    <FluentButton OnClick="@(() => OnViewItem(itemVM))">
-                                                        <FluentIcon Value="@s_toolIcon" Style="vertical-align: sub;" slot="start" />
+                                                    <button type="button" class="btn" @onclick="@(() => OnViewItem(itemVM))">
+                                                        <DeckIcon Name="DeckIconName.Braces" Size="16" />
                                                         @Loc[nameof(Dialogs.GenAIToolCallButtonText)]
-                                                    </FluentButton>
+                                                    </button>
 
                                                     @if (Content.ToolDefinitions.FirstOrDefault(d => d.ToolDefinition.Name == toolCallRequestPart.Name) is { } toolVM)
                                                     {
-                                                        <FluentButton OnClick="@(() => ViewToolDefinitionAsync(toolVM))">
-                                                            <FluentIcon Value="@s_wrenchIcon" Style="vertical-align: sub;" slot="start" />
+                                                        <button type="button" class="btn" @onclick="@(() => ViewToolDefinitionAsync(toolVM))">
+                                                            <DeckIcon Name="DeckIconName.Toolbox" Size="16" />
                                                             @Loc[nameof(Dialogs.GenAIToolDefinitionButtonText)]
-                                                        </FluentButton>
+                                                        </button>
                                                     }
                                                 </div>
                                             }
@@ -218,24 +215,11 @@
                                 }
                             </div>
                         }
-                        var copyButtonLabel = ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)];
-                        var copyButtonAttributes = FluentUIExtensions.GetClipboardCopyAdditionalAttributes(
-                            string.Join(Environment.NewLine + Environment.NewLine, selectedItem.ItemParts.Select(p => p.TextVisualizerViewModel?.FormattedText ?? string.Empty)),
-                            copyButtonLabel,
-                            ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)]);
-                        copyButtonAttributes["aria-label"] = copyButtonLabel;
-
-                        <FluentButton Id="@_copyButtonId"
-                                      Class="message-copy-button"
-                                      Appearance="Appearance.Stealth"
-                                      Title="@copyButtonLabel"
-                                      AdditionalAttributes="@copyButtonAttributes">
-                            <span slot="start">
-                                <FluentIcon Class="copy-icon" Style="display:inline; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Copy" Slot="start" />
-                                <FluentIcon Class="checkmark-icon" Style="display:none; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Checkmark" Slot="start" />
-                            </span>
+                        <DeckClipboardCopyButton Id="@_copyButtonId"
+                                                 Class="btn message-copy-button"
+                                                 AdditionalAttributes="@FluentUIExtensions.GetClipboardCopyAdditionalAttributes(string.Join(Environment.NewLine + Environment.NewLine, selectedItem.ItemParts.Select(p => p.TextVisualizerViewModel?.FormattedText ?? string.Empty)), ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)])">
                             @ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]
-                        </FluentButton>
+                        </DeckClipboardCopyButton>
                     }
                     else
                     {
@@ -267,43 +251,43 @@
                                 </div>
                             </div>
                             @*
-                                Tab content isn't nested inside FluentTab elements. The tab control is just used to display the tabs.
+                                Tab content isn't nested inside DeckTab elements. The tab control is just used to display the tabs.
                                 Content is located in manually created divs so they can be placed in their own CSS grid row.
                             *@
-                            <FluentTabs ActiveTabId="@($"tab-overview-{OverviewActiveView}")" OnTabChange="@OnOverviewTabChange" Size="null">
-                                <FluentTab LabelClass="tab-label"
-                                           Id="@($"tab-overview-{OverviewViewKind.InputOutput}")"
-                                           Label="@Loc[nameof(Dialogs.GenAIInputOutputTabText)]"
-                                           Icon="@(new Icons.Regular.Size24.Chat())">
-                                </FluentTab>
+                            <DeckTabs ActiveTabId="@($"tab-overview-{OverviewActiveView}")" OnTabChange="@OnOverviewTabChange">
+                                <DeckTab LabelClass="tab-label"
+                                         Id="@($"tab-overview-{OverviewViewKind.InputOutput}")"
+                                         Label="@Loc[nameof(Dialogs.GenAIInputOutputTabText)]"
+                                         Icon="DeckIconName.Mail">
+                                </DeckTab>
                                 @if (Content.ToolDefinitions.Count > 0)
                                 {
-                                    <FluentTab LabelClass="tab-label"
-                                               Id="@($"tab-overview-{OverviewViewKind.Tools}")"
-                                               Icon="@(new Icons.Regular.Size24.Wrench())">
+                                    <DeckTab LabelClass="tab-label"
+                                             Id="@($"tab-overview-{OverviewViewKind.Tools}")"
+                                             Icon="DeckIconName.Toolbox">
                                         <Header>
                                             <span class="tab-text">@Loc[nameof(Dialogs.GenAIToolsTabText)]</span>
-                                            <FluentBadge Appearance="Appearance.Neutral" Circular="true">@Content.ToolDefinitions.Count</FluentBadge>
+                                            <Badge>@Content.ToolDefinitions.Count</Badge>
                                         </Header>
-                                    </FluentTab>
+                                    </DeckTab>
                                 }
                                 @if (Content.Evaluations.Count > 0)
                                 {
-                                    <FluentTab LabelClass="tab-label"
-                                               Id="@($"tab-overview-{OverviewViewKind.Evaluations}")"
-                                               Icon="@(new Icons.Regular.Size24.Scales())">
+                                    <DeckTab LabelClass="tab-label"
+                                             Id="@($"tab-overview-{OverviewViewKind.Evaluations}")"
+                                             Icon="DeckIconName.Gauge">
                                         <Header>
                                             <span class="tab-text">@Loc[nameof(Dialogs.GenAIEvaluationsTabText)]</span>
-                                            <FluentBadge Appearance="Appearance.Neutral" Circular="true">@Content.Evaluations.Count</FluentBadge>
+                                            <Badge>@Content.Evaluations.Count</Badge>
                                         </Header>
-                                    </FluentTab>
+                                    </DeckTab>
                                 }
-                                <FluentTab LabelClass="tab-label"
-                                           Id="@($"tab-overview-{OverviewViewKind.Details}")"
-                                           Label="@Loc[nameof(Dialogs.GenAIDetailsTabText)]"
-                                           Icon="@(new Icons.Regular.Size24.Info())">
-                                </FluentTab>
-                            </FluentTabs>
+                                <DeckTab LabelClass="tab-label"
+                                         Id="@($"tab-overview-{OverviewViewKind.Details}")"
+                                         Label="@Loc[nameof(Dialogs.GenAIDetailsTabText)]"
+                                         Icon="DeckIconName.Info">
+                                </DeckTab>
+                            </DeckTabs>
                         </div>
                         @if (OverviewActiveView == OverviewViewKind.InputOutput)
                         {
@@ -345,15 +329,15 @@
                             <div class="tab-container">
                                 @if (Content.ToolDefinitions.Count > 0)
                                 {
-                                    <FluentAccordion Class="tools-list">
+                                    <Accordion Class="tools-list">
                                         @foreach (var toolVM in Content.ToolDefinitions.Where(t => t.ToolDefinition.Type == "function").OrderBy(t => t.ToolDefinition.Name, StringComparer.OrdinalIgnoreCase))
                                         {
-                                            <FluentAccordionItem Id="@toolVM.ElementId" Class="@(toolVM.Highlighted ? "tool-highlighted" : null)" @bind-Expanded="toolVM.Expanded" HeadingTooltip="@GetToolHeadingTooltip(toolVM)">
+                                            <AccordionItem Id="@toolVM.ElementId" Class="@(toolVM.Highlighted ? "tool-highlighted" : null)" @bind-Expanded="toolVM.Expanded" HeadingTooltip="@GetToolHeadingTooltip(toolVM)">
                                                 <HeadingTemplate>
                                                     <div class="tool-heading">
-                                                        <FluentBadge Appearance="Appearance.Accent" Style="min-width: 80px; text-align: center;">
+                                                        <Badge Tone="accent" style="min-width: 80px; text-align: center;">
                                                             @toolVM.ToolDefinition.Type
-                                                        </FluentBadge>
+                                                        </Badge>
                                                         <span class="tool-name">@toolVM.ToolDefinition.Name</span>
                                                     </div>
                                                 </HeadingTemplate>
@@ -431,9 +415,9 @@
                                                         <div class="tool-footer">@Loc[nameof(Dialogs.GenAIToolNoParameters)]</div>
                                                     }
                                                 </ChildContent>
-                                            </FluentAccordionItem>
+                                            </AccordionItem>
                                         }
-                                    </FluentAccordion>
+                                    </Accordion>
                                 }
                                 else
                                 {
@@ -450,9 +434,9 @@
                                     <div class="evaluation-container">
                                         <div class="evaluation-header">
                                             @evaluation.Name
-                                            <FluentDivider Orientation="Orientation.Vertical" Class="evaluation-divider" />
+                                            <Divider Class="evaluation-divider" />
                                             @(evaluation.ScoreValue is { } value ? FormatHelpers.FormatNumberWithOptionalDecimalPlaces(value, maxDecimalPlaces: 3) : Loc[nameof(Dialogs.GenAINAText)])
-                                            <FluentDivider Orientation="Orientation.Vertical" Class="evaluation-divider" />
+                                            <Divider Class="evaluation-divider" />
                                             @(evaluation.ScoreLabel is { Length: > 0 } label ? label : Loc[nameof(Dialogs.GenAINAText)])
                                         </div>
                                         @if (evaluation.Explanation is { Length: > 0 } explanation)
@@ -499,9 +483,9 @@
                             </div>
                         }
                         <span class="defaultHidden">
-                            <FluentButton Appearance="Appearance.Lightweight" OnClick="@(() => OnViewItem(item))">
-                                <FluentIcon Icon="Icons.Regular.Size16.SlideSearch" />
-                            </FluentButton>
+                            <button type="button" class="icon-btn" @onclick="@(() => OnViewItem(item))">
+                                <DeckIcon Name="DeckIconName.SlideSearch" Size="16" />
+                            </button>
                         </span>
                         @if (itemParts.Count > 0)
                         {

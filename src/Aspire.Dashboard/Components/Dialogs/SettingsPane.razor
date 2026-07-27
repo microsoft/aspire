@@ -1,0 +1,88 @@
+@*
+    Deck-style settings pane (right-side drawer), replacing the Fluent SettingsDialog panel.
+    Logic in SettingsPane.razor.cs. Theme/language/time-format/manage-data behavior is unchanged.
+*@
+@namespace Aspire.Dashboard.Components.Dialogs
+@using Aspire.Dashboard.Resources
+@using Aspire.Dashboard.Model
+@using Humanizer
+@inject IStringLocalizer<Dialogs> Loc
+@inject IStringLocalizer<Layout> LayoutLoc
+
+<Drawer Class="settings-pane" Title="@LayoutLoc[nameof(Layout.MainLayoutSettingsDialogTitle)]" OnClose="OnClose">
+    <ChildContent>
+        <section class="settings-section">
+            <div class="settings-label">@Loc[nameof(Dialogs.SettingsDialogTheme)]</div>
+            <div class="settings-radio-group">
+                @foreach (var (value, text) in ThemeOptions())
+                {
+                    <label class="deck-radio">
+                        <input type="radio" name="deck-settings-theme" value="@value"
+                               checked="@(_currentSetting == value)"
+                               @onchange="@(() => SetThemeAsync(value))" />
+                        <span>@text</span>
+                    </label>
+                }
+            </div>
+        </section>
+
+        <section class="settings-section">
+            <div class="settings-label">@Loc[nameof(Dialogs.SettingsDialogLanguage)]</div>
+            <select class="select settings-select" value="@_selectedUiCulture?.Name" @onchange="OnLanguageChanged">
+                @foreach (var culture in _languageOptions)
+                {
+                    <option value="@culture.Name">@culture.NativeName.Humanize()</option>
+                }
+            </select>
+            <div class="settings-subtext">@Loc[nameof(Dialogs.SettingsDialogLanguagePageReloads)]</div>
+        </section>
+
+        <section class="settings-section">
+            <div class="settings-label">@Loc[nameof(Dialogs.SettingsDialogTimeFormat)]</div>
+            <div class="settings-radio-group">
+                @foreach (var format in Enum.GetValues<TimeFormat>())
+                {
+                    <label class="deck-radio">
+                        <input type="radio" name="deck-settings-timeformat"
+                               checked="@(_timeFormat == format)"
+                               @onchange="@(() => SetTimeFormatAsync(format))" />
+                        <span>@FormatTimeFormatOption(format)</span>
+                    </label>
+                }
+            </div>
+        </section>
+
+        <section class="settings-section">
+            <div class="settings-label">@Loc[nameof(Dialogs.SettingsDialogDashboardLogsAndTelemetry)]</div>
+            <button class="btn" type="button" @onclick="LaunchManageDataAsync"
+                    title="@Loc[nameof(Dialogs.ManageDataManageButtonText)]">
+                <DeckIcon Name="DeckIconName.Settings" Size="15" />
+                @Loc[nameof(Dialogs.ManageDataManageButtonText)]
+            </button>
+        </section>
+
+        @if (TelemetryService is { IsTelemetryInitialized: true, IsTelemetryEnabled: true })
+        {
+            <div class="settings-subtext">
+                @Loc[nameof(Dialogs.SettingsDialogTelemetryEnabledInfo)]
+                <a target="_blank" rel="noreferrer noopener"
+                   href="https://aka.ms/aspire/dashboard-microsoft-collected-telemetry"
+                   title="@Loc[nameof(Dialogs.SettingsDialogTelemetryInfoLinkTooltip)]">@Loc[nameof(Dialogs.SettingsDialogTelemetryInfoLinkText)]</a>
+            </div>
+        }
+
+        <div class="settings-version">
+            <div>@string.Format(Loc[nameof(Dialogs.SettingsDialogVersion)], VersionHelpers.DashboardDisplayVersion)</div>
+            <div>@string.Format(Loc[nameof(Dialogs.SettingsDialogDotNetRuntimeVersion)], System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription)</div>
+        </div>
+    </ChildContent>
+</Drawer>
+
+@code {
+    private (string Value, string Text)[] ThemeOptions() =>
+    [
+        (ThemeManager.ThemeSettingSystem, Loc[nameof(Dialogs.SettingsDialogSystemTheme)]),
+        (ThemeManager.ThemeSettingLight, Loc[nameof(Dialogs.SettingsDialogLightTheme)]),
+        (ThemeManager.ThemeSettingDark, Loc[nameof(Dialogs.SettingsDialogDarkTheme)]),
+    ];
+}

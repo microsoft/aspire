@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Microsoft.FluentUI.AspNetCore.Components;
+using Aspire.Dashboard.Components.Deck;
 
 namespace Aspire.Dashboard.Model.ManageData;
 
@@ -18,7 +18,7 @@ public sealed class TelemetryDataRow
     /// <summary>
     /// The icon representing this data type.
     /// </summary>
-    public required Icon Icon { get; init; }
+    public required DeckIconName Icon { get; init; }
 
     /// <summary>
     /// The URL to navigate to when clicking on this data row.

@@ -6,7 +6,7 @@ using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Globalization;
 using System.Threading.Channels;
-using Aspire.Dashboard.Components.Layout;
+using Aspire.Dashboard.Components.Deck;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
@@ -21,6 +21,7 @@ using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using Microsoft.JSInterop;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
+using IconVariant = Microsoft.FluentUI.AspNetCore.Components.IconVariant;
 using MenuItemRole = Microsoft.FluentUI.AspNetCore.Components.MenuItemRole;
 
 namespace Aspire.Dashboard.Components.Pages;
@@ -184,7 +185,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
     // UI
     private SelectViewModel<ResourceTypeDetails> _allResource = null!;
-    private AspirePageContentLayout? _contentLayout;
     private readonly List<CommandViewModel> _highlightedCommands = new();
     private readonly List<MenuButtonItem> _logsMenuItems = new();
     private readonly List<MenuButtonItem> _resourceMenuItems = new();
@@ -657,7 +657,8 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             {
                 OnClick = TerminalFontMinusAsync,
                 Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarDecreaseFontSize)],
-                Icon = new Icons.Regular.Size16.Subtract(),
+                FluentIconName = nameof(Icons.Regular.Size16.Subtract),
+                FluentIconVariant = IconVariant.Regular,
                 IsDisabled = !fontControlsEnabled || fontPx <= TerminalFontMin,
             });
 
@@ -665,7 +666,8 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             {
                 OnClick = TerminalFontPlusAsync,
                 Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarIncreaseFontSize)],
-                Icon = new Icons.Regular.Size16.Add(),
+                FluentIconName = nameof(Icons.Regular.Size16.Add),
+                FluentIconVariant = IconVariant.Regular,
                 IsDisabled = !fontControlsEnabled || fontPx >= TerminalFontMax,
             });
 
@@ -686,7 +688,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                 _logsMenuItems.Add(new()
                 {
                     Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarGridSize)],
-                    Icon = new Icons.Regular.Size16.ArrowExpand(),
+                    Icon = DeckIconName.ArrowExpand,
                     NestedMenuItems = nested,
                 });
             }
@@ -699,7 +701,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                 IsDisabled = PageViewModel.SelectedResource is null && !_isSubscribedToAll,
                 OnClick = DownloadLogsAsync,
                 Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.DownloadLogs)],
-                Icon = new Icons.Regular.Size16.ArrowDownload()
+                Icon = DeckIconName.Download
             });
 
             _logsMenuItems.Add(new()
@@ -725,7 +727,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                         UpdateResourcesList();
                         UpdateMenuButtons();
 
-                        await this.RefreshIfMobileAsync(_contentLayout);
+                        await this.RefreshIfMobileAsync(layout: null);
                     }));
             }
 
@@ -733,14 +735,14 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             {
                 OnClick = () => ToggleTimestampAsync(showTimestamp: !_showTimestamp, isTimestampUtc: _isTimestampUtc),
                 Text = _showTimestamp ? Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTimestampHide)] : Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTimestampShow)],
-                Icon = new Icons.Regular.Size16.CalendarClock()
+                Icon = DeckIconName.Clock
             });
 
             _logsMenuItems.Add(new()
             {
                 OnClick = () => ToggleTimestampAsync(showTimestamp: _showTimestamp, isTimestampUtc: !_isTimestampUtc),
                 Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTimestampShowUtc)],
-                Icon = _isTimestampUtc ? new Icons.Regular.Size16.CheckboxChecked() : new Icons.Regular.Size16.CheckboxUnchecked(),
+                Icon = _isTimestampUtc ? DeckIconName.CheckboxChecked : DeckIconName.CheckboxUnchecked,
                 IsDisabled = !_showTimestamp
             });
 
@@ -748,7 +750,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             {
                 OnClick = () => ToggleWrapLogsAsync(noWrapLogs: !_noWrapLogs),
                 Text = _noWrapLogs ? Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsWrapLogs)] : Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsNoWrapLogs)],
-                Icon = _noWrapLogs ? new Icons.Regular.Size16.TextWrap() : new Icons.Regular.Size16.TextWrapOff()
+                Icon = DeckIconName.TextWrap
             });
         }
 
@@ -805,7 +807,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.ConsoleLogConsoleSettings, new ConsoleLogConsoleSettings(_showTimestamp, _isTimestampUtc, _noWrapLogs));
         UpdateMenuButtons();
         StateHasChanged();
-        await this.RefreshIfMobileAsync(_contentLayout);
+        await this.RefreshIfMobileAsync(layout: null);
     }
 
     private async Task ExecuteResourceCommandAsync(CommandViewModel command)
@@ -1138,7 +1140,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
     private async Task HandleSelectedOptionChangedAsync()
     {
-        await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false);
+        await this.AfterViewModelChangedAsync(layout: null, waitToApplyMobileChange: false);
     }
 
     private async Task OnResourceChanged(ResourceViewModelChangeType changeType, ResourceViewModel resource)
@@ -1300,7 +1302,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             {
                 // If there is no resource selected and there is only one resource available, select it.
                 viewModel.SelectedResource = _resources.GetResource(Logger, r.Name, canSelectGrouping: false, fallbackViewModel: _allResource);
-                return this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false);
+                return this.AfterViewModelChangedAsync(layout: null, waitToApplyMobileChange: false);
             }
         }
 
@@ -1423,6 +1425,16 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     internal ResourceViewModel? GetResourceSnapshotForTest(string resourceName) =>
         _resourceByName.TryGetValue(resourceName, out var resource) ? resource : null;
 
+    private Task TerminalTakeControlAsync()
+        => _terminalViewRef?.TakePrimaryAsync() ?? Task.CompletedTask;
+
+    private Task HandleLogFilterChangedAsync(string? value)
+    {
+        _logFilter = value ?? string.Empty;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
     private Task TerminalFontMinusAsync()
     {
         if (_terminalToolbarState is not { } s || _terminalViewRef is null)
@@ -1449,6 +1461,28 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         }
         return _terminalViewRef.SetSizeModeAsync(newKey);
     }
+
+    private static string TerminalPrimaryButtonClass(string status) => status switch
+    {
+        "primary" => "btn btn--primary",
+        _ => "btn",
+    };
+
+    private string TerminalPrimaryButtonLabel(string status) => status switch
+    {
+        "primary" => Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarPrimaryLabel)],
+        "connecting" => Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarConnectingLabel)],
+        _ => Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarTakeControlLabel)],
+    };
+
+    private string TerminalPrimaryButtonTitle(string status) => status switch
+    {
+        "primary" => Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarPrimaryTitle)],
+        "no-primary" => Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarNoPrimaryTitle)],
+        "viewer" => Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarViewerTitle)],
+        "connecting" => Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarConnectingTitle)],
+        _ => status,
+    };
 
     // IComponentWithTelemetry impl
     public ComponentTelemetryContext TelemetryContext { get; } = new(ComponentType.Page, TelemetryComponentIds.ConsoleLogs);

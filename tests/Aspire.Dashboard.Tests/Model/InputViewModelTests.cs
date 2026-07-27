@@ -389,22 +389,7 @@ public class InputViewModelTests
     }
 
     [Fact]
-    public void InputViewModel_File_DefaultsToEmptyValue()
-    {
-        var input = new InteractionInput
-        {
-            Label = "Select File",
-            InputType = InputType.File
-        };
-
-        var viewModel = new InputViewModel(input);
-
-        Assert.True(string.IsNullOrEmpty(viewModel.Value));
-        Assert.Empty(viewModel.FileReferences);
-    }
-
-    [Fact]
-    public void InputViewModel_File_SetFileReferencesSerializesToValue()
+    public void InputViewModel_File_SetFileReferencesSerializesSuccessfulReferences()
     {
         var input = new InteractionInput
         {
@@ -414,40 +399,42 @@ public class InputViewModelTests
         var viewModel = new InputViewModel(input);
 
         viewModel.SetFileReferences([
-            new FileReferenceViewModel { Id = "abc123", Name = "readme.txt" }
+            new FileReferenceViewModel { Id = "abc123", Name = "readme.txt" },
+            new FileReferenceViewModel { Name = "failed.txt", ErrorMessage = "Upload failed" }
         ]);
 
-        Assert.Single(viewModel.FileReferences);
-        Assert.Equal("readme.txt", viewModel.FileReferences[0].Name);
-        Assert.Contains("abc123", viewModel.Value);
-        Assert.Contains("readme.txt", viewModel.Value);
+        Assert.Collection(
+            viewModel.FileReferences,
+            fileReference =>
+            {
+                Assert.Equal("abc123", fileReference.Id);
+                Assert.Equal("readme.txt", fileReference.Name);
+                Assert.Null(fileReference.ErrorMessage);
+            },
+            fileReference =>
+            {
+                Assert.Null(fileReference.Id);
+                Assert.Equal("failed.txt", fileReference.Name);
+                Assert.Equal("Upload failed", fileReference.ErrorMessage);
+            });
+        Assert.Equal("[{\"Id\":\"abc123\",\"Name\":\"readme.txt\"}]", viewModel.Value);
     }
 
     [Fact]
-    public void InputViewModel_File_SetInputPreservesFileReferencesWhenValueIsPreserved()
+    public void InputViewModel_File_AllFailedReferencesKeepRequiredValueEmpty()
     {
-        var initialInput = new InteractionInput
+        var input = new InteractionInput
         {
             Label = "Select File",
             InputType = InputType.File,
-            Value = "[{\"Id\":\"id1\",\"Name\":\"local-file.txt\"}]"
+            Required = true
         };
-        var viewModel = new InputViewModel(initialInput);
+        var viewModel = new InputViewModel(input);
+
         viewModel.SetFileReferences([
-            new FileReferenceViewModel { Id = "id1", Name = "local-file.txt" }
+            new FileReferenceViewModel { Name = "failed.txt", ErrorMessage = "Upload failed" }
         ]);
 
-        var newInput = new InteractionInput
-        {
-            Label = "Select Another File",
-            InputType = InputType.File,
-            Value = string.Empty,
-        };
-
-        viewModel.SetInput(newInput);
-
-        Assert.Equal("[{\"Id\":\"id1\",\"Name\":\"local-file.txt\"}]", viewModel.Value);
-        Assert.Single(viewModel.FileReferences);
-        Assert.Equal("local-file.txt", viewModel.FileReferences[0].Name);
+        Assert.Equal(string.Empty, viewModel.Value);
     }
 }

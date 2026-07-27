@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
+using Aspire.Dashboard.Components.Deck;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.GenAI;
@@ -15,15 +16,11 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Dialogs;
 
 public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTelemetry, IDisposable
 {
-    private static readonly Icon s_wrenchIcon = new Icons.Regular.Size16.Wrench();
-    private static readonly Icon s_toolIcon = new Icons.Regular.Size16.Code();
-
     private readonly string _copyButtonId = $"copy-{Guid.NewGuid():N}";
 
     private MarkdownProcessor _markdownProcess = default!;
@@ -194,7 +191,7 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
         return Task.CompletedTask;
     }
 
-    private void OnOverviewTabChange(FluentTab newTab)
+    private void OnOverviewTabChange(DeckTab newTab)
     {
         var id = newTab.Id?.Substring("tab-overview-".Length);
 
@@ -213,7 +210,7 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
         OverviewActiveView = viewKind;
     }
 
-    private void OnMessageTabChange(FluentTab newTab)
+    private void OnMessageTabChange(DeckTab newTab)
     {
         var id = newTab.Id?.Substring("tab-message-".Length);
 

@@ -18,7 +18,6 @@ using Grpc.Net.Client;
 using Grpc.Net.Client.Configuration;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
-using Semver;
 using DashboardResources = Aspire.Dashboard.Resources.Resources;
 using ResourceCommandResponseKind = Aspire.Dashboard.Model.ResourceCommandResponseKind;
 
@@ -46,10 +45,6 @@ internal sealed class DashboardClient : IDashboardClient
     private const string ApiKeyHeaderName = "x-resource-service-api-key";
     private const string TroubleshootingUrl = "https://aka.ms/aspire/dashboard-apphost-connection-failed";
 
-    // The dashboard's own version, extracted from its assembly at startup. Used to compare against
-    // the minimum version required by the AppHost.
-    private static readonly SemVersion? s_dashboardVersion = GetDashboardVersion();
-
     private readonly Dictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
     private readonly InteractionCollection _pendingInteractionCollection = new();
     private readonly CancellationTokenSource _cts = new();
@@ -70,7 +65,6 @@ internal sealed class DashboardClient : IDashboardClient
     private ImmutableHashSet<Channel<IReadOnlyList<ResourceViewModelChange>>> _outgoingResourceChannels = [];
     private ImmutableHashSet<Channel<WatchInteractionsResponseUpdate>> _outgoingInteractionChannels = [];
     private string? _applicationName;
-    private string? _minRequiredVersion;
 
     private DashboardConnectionState _connectionState;
     private readonly object _connectionStateLock = new();
@@ -288,7 +282,7 @@ internal sealed class DashboardClient : IDashboardClient
                 // This handles both initial connection and reconnection after a disconnect.
                 _whenConnectedTcs.TrySetResult();
             }
-            else if (state is DashboardConnectionState.Disconnected or DashboardConnectionState.Connecting or DashboardConnectionState.Unsupported)
+            else if (state is DashboardConnectionState.Disconnected or DashboardConnectionState.Connecting)
             {
                 // Reset the WhenConnected TCS when disconnecting so that callers can re-await it.
                 if (_whenConnectedTcs.Task.IsCompleted)
@@ -331,10 +325,7 @@ internal sealed class DashboardClient : IDashboardClient
     {
         try
         {
-            if (!await ConnectWithRetryAsync(cancellationToken).ConfigureAwait(false))
-            {
-                return;
-            }
+            await ConnectWithRetryAsync(cancellationToken).ConfigureAwait(false);
 
             await Task.WhenAll(
                 Task.Run(async () =>
@@ -364,7 +355,7 @@ internal sealed class DashboardClient : IDashboardClient
     /// On failure, transitions to Disconnected and waits before retrying. The delay can be
     /// cancelled by <see cref="ReconnectAsync"/> for immediate retry.
     /// </summary>
-    private async Task<bool> ConnectWithRetryAsync(CancellationToken cancellationToken)
+    private async Task ConnectWithRetryAsync(CancellationToken cancellationToken)
     {
         var errorCount = 0;
 
@@ -412,22 +403,12 @@ internal sealed class DashboardClient : IDashboardClient
 
             try
             {
-                var request = new ApplicationInformationRequest();
-                var response = await _client!.GetApplicationInformationAsync(request, headers: _headers, cancellationToken: cancellationToken);
+                var response = await _client!.GetApplicationInformationAsync(new(), headers: _headers, cancellationToken: cancellationToken);
 
                 _applicationName = response.ApplicationName;
-                _minRequiredVersion = string.IsNullOrEmpty(response.MinDashboardVersion) ? null : response.MinDashboardVersion;
-
-                // MinDashboardVersion is empty when the server predates this field or hasn't set it,
-                // which means the dashboard is always considered supported.
-                if (!IsDashboardVersionSufficient(s_dashboardVersion, _minRequiredVersion))
-                {
-                    SetConnectionState(DashboardConnectionState.Unsupported);
-                    return false;
-                }
 
                 SetConnectionState(DashboardConnectionState.Connected);
-                return true;
+                return;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -777,8 +758,6 @@ internal sealed class DashboardClient : IDashboardClient
             ?? "Aspire";
     }
 
-    public string? MinRequiredVersion => _minRequiredVersion;
-
     public ResourceViewModel? GetResource(string resourceName)
     {
         EnsureInitialized();
@@ -1042,7 +1021,7 @@ internal sealed class DashboardClient : IDashboardClient
         using var combinedTokens = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
         using var call = _client!.UploadFile(headers: _headers, cancellationToken: combinedTokens.Token);
 
-        const int chunkSize = 64 * 1024; // 64 KB chunks
+        const int chunkSize = 64 * 1024;
         var buffer = new byte[chunkSize];
         var isFirst = true;
         long totalBytesRead = 0;
@@ -1070,7 +1049,7 @@ internal sealed class DashboardClient : IDashboardClient
             isFirst = false;
         }
 
-        // Handle case where the file was empty — still send filename.
+        // An empty file still needs a first chunk so the AppHost receives its filename.
         if (isFirst)
         {
             await call.RequestStream.WriteAsync(new UploadFileChunk { FileName = fileName }, combinedTokens.Token).ConfigureAwait(false);
@@ -1128,51 +1107,5 @@ internal sealed class DashboardClient : IDashboardClient
     {
         Retry,
         DoNotRetry
-    }
-
-    private static SemVersion? GetDashboardVersion()
-    {
-        // The informational version contains the full semver string stamped at build time
-        // (e.g. "13.5.0-preview.1.26307.2+commitHash").
-        var informationalVersion = Shared.AssemblyVersionHelper.GetInformationalVersion(typeof(DashboardClient).Assembly);
-        if (informationalVersion is not { Length: > 0 })
-        {
-            return null;
-        }
-
-        return SemVersion.TryParse(informationalVersion, SemVersionStyles.Any, out var version) ? version : null;
-    }
-
-    /// <summary>
-    /// Compares the dashboard version against the required version, ignoring pre-release labels.
-    /// A dashboard version of "13.5.0-dev" is considered sufficient for a requirement of "13.5.0".
-    /// Returns <see langword="true"/> when no version requirement is specified or the dashboard meets it.
-    /// </summary>
-    internal static bool IsDashboardVersionSufficient(SemVersion? dashboardVersion, string? requiredVersionText)
-    {
-        // No requirement specified — always sufficient.
-        if (string.IsNullOrEmpty(requiredVersionText))
-        {
-            return true;
-        }
-
-        // Can't parse the requirement — treat as sufficient to avoid blocking users.
-        if (!SemVersion.TryParse(requiredVersionText, SemVersionStyles.Any, out var requiredVersion))
-        {
-            return true;
-        }
-
-        // Dashboard version unknown — can't verify, treat as insufficient.
-        if (dashboardVersion is null)
-        {
-            return false;
-        }
-
-        // Strip pre-release from both versions so that dev/preview builds
-        // are treated as equivalent to their release counterpart.
-        var dashboardRelease = new SemVersion(dashboardVersion.Major, dashboardVersion.Minor, dashboardVersion.Patch);
-        var requiredRelease = new SemVersion(requiredVersion.Major, requiredVersion.Minor, requiredVersion.Patch);
-
-        return SemVersion.ComparePrecedence(dashboardRelease, requiredRelease) >= 0;
     }
 }

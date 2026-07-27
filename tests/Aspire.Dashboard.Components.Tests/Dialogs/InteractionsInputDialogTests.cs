@@ -64,6 +64,7 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
 
         var module = JSInterop.SetupModule("./Components/Dialogs/InteractionsInputDialog.razor.js");
         module.SetupVoid("togglePasswordVisibility", _ => true);
+        module.SetupVoid("focusElement", _ => true);
 
         var cut = FluentUISetupHelpers.RenderDialogProvider(this);
 

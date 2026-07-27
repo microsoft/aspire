@@ -7,8 +7,7 @@ using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
-using Microsoft.FluentUI.AspNetCore.Components;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
+using Aspire.Dashboard.Components.Deck;
 
 namespace Aspire.Dashboard.Model;
 
@@ -17,9 +16,9 @@ namespace Aspire.Dashboard.Model;
 /// </summary>
 public sealed class StructuredLogMenuBuilder
 {
-    private static readonly Icon s_viewDetailsIcon = new Icons.Regular.Size16.Info();
-    private static readonly Icon s_messageOpenIcon = new Icons.Regular.Size16.Open();
-    private static readonly Icon s_bracesIcon = new Icons.Regular.Size16.Braces();
+    private const DeckIconName ViewDetailsIcon = DeckIconName.Info;
+    private const DeckIconName MessageOpenIcon = DeckIconName.External;
+    private const DeckIconName BracesIcon = DeckIconName.Braces;
 
     private readonly IStringLocalizer<StructuredLogs> _loc;
     private readonly IStringLocalizer<ControlsStrings> _controlsLoc;
@@ -56,7 +55,7 @@ public sealed class StructuredLogMenuBuilder
             menuItems.Add(new MenuButtonItem
             {
                 Text = _controlsLoc[nameof(ControlsStrings.ActionViewDetailsText)],
-                Icon = s_viewDetailsIcon,
+                Icon = ViewDetailsIcon,
                 OnClick = onViewDetails.InvokeAsync
             });
         }
@@ -64,7 +63,7 @@ public sealed class StructuredLogMenuBuilder
         menuItems.Add(new MenuButtonItem
         {
             Text = _loc[nameof(StructuredLogs.ActionLogMessageText)],
-            Icon = s_messageOpenIcon,
+            Icon = MessageOpenIcon,
             OnClick = async () =>
             {
                 var header = _loc[nameof(StructuredLogs.StructuredLogsMessageColumnHeader)];
@@ -80,7 +79,7 @@ public sealed class StructuredLogMenuBuilder
         menuItems.Add(new MenuButtonItem
         {
             Text = _controlsLoc[nameof(ControlsStrings.ViewJson)],
-            Icon = s_bracesIcon,
+            Icon = BracesIcon,
             OnClick = async () =>
             {
                 var result = ExportHelpers.GetLogEntryAsJson(logEntry);
@@ -94,5 +93,6 @@ public sealed class StructuredLogMenuBuilder
                 }).ConfigureAwait(false);
             }
         });
+
     }
 }

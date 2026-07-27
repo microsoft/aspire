@@ -9,75 +9,53 @@
         <div>
             @Loc[nameof(ControlsStrings.StructuredLogsDetailsResourceLabel)] <strong>@ViewModel.LogEntry.ResourceView.Resource.ResourceName</strong>
         </div>
-        <FluentDivider Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />
+        <Divider />
         <div title="@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, ViewModel.LogEntry.TimeStamp, MillisecondsDisplay.Full)">
             @Loc[nameof(ControlsStrings.StructuredLogsDetailsTimestampLabel)] <strong>@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, ViewModel.LogEntry.TimeStamp, MillisecondsDisplay.Truncated)</strong>
         </div>
-        <FluentSearch Placeholder="@Loc[nameof(ControlsStrings.FilterPlaceholder)]"
-                      Immediate="true"
-                      Autofocus="true"
-                      AutoComplete="off"
-                      @bind-Value="_filter"
-                      slot="end" />
-        <FluentDivider slot="end" Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />
+        <SearchBox Placeholder="@Loc[nameof(ControlsStrings.FilterPlaceholder)]"
+                   Autofocus="true"
+                   @bind-Value="_filter"
+                   slot="end" />
+        <Divider slot="end" />
         <AspireMenuButton ButtonAppearance="Appearance.Lightweight"
-                          Icon="@(new Icons.Regular.Size20.Options())"
+                          Icon="DeckIconName.Options"
                           Items="@_logActionsMenuItems"
                           Title="@Loc[nameof(ControlsStrings.ActionsButtonText)]"
                           slot="end" />
     </FluentToolbar>
     <div class="property-grid-container">
-        <FluentAccordion>
-            <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.StructuredLogsDetailsLogEntryHeader)]" Expanded="true">
-                <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
-                        @FilteredItems.Count()
-                    </FluentBadge>
-                </div>
+        <Accordion>
+            <AccordionItem Heading="@Loc[nameof(ControlsStrings.StructuredLogsDetailsLogEntryHeader)]" Expanded="true" Count="@FilteredItems.Count()">
                 <PropertyGrid TItem="TelemetryPropertyViewModel"
                               Items="@FilteredItems"
                               GridTemplateColumns="1fr 2fr"
                               HighlightText="@_filter"
                               ValueComponents="@_valueComponents" />
-            </FluentAccordionItem>
-            <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.StructuredLogsDetailsContextHeader)]" Expanded="true">
-                <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
-                        @FilteredContextItems.Count()
-                    </FluentBadge>
-                </div>
+            </AccordionItem>
+            <AccordionItem Heading="@Loc[nameof(ControlsStrings.StructuredLogsDetailsContextHeader)]" Expanded="true" Count="@FilteredContextItems.Count()">
                 <PropertyGrid TItem="TelemetryPropertyViewModel"
                               Items="@FilteredContextItems"
                               GridTemplateColumns="1fr 2fr"
                               HighlightText="@_filter"
                               ValueComponents="@_valueComponents" />
-            </FluentAccordionItem>
+            </AccordionItem>
             @if (_exceptionAttributes.Count > 0)
             {
-                <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.StructuredLogsDetailsExceptionHeader)]" Expanded="true">
-                    <div slot="end">
-                        <FluentBadge Appearance="Appearance.Neutral" Circular="true">
-                            @FilteredExceptionItems.Count()
-                        </FluentBadge>
-                    </div>
+                <AccordionItem Heading="@Loc[nameof(ControlsStrings.StructuredLogsDetailsExceptionHeader)]" Expanded="true" Count="@FilteredExceptionItems.Count()">
                     <PropertyGrid TItem="TelemetryPropertyViewModel"
                                   Items="@FilteredExceptionItems"
                                   GridTemplateColumns="1fr 2fr"
                                   HighlightText="@_filter" />
-                </FluentAccordionItem>
+                </AccordionItem>
             }
-            <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.StructuredLogsDetailsResourceHeader)]" Expanded="true">
-                <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
-                        @FilteredResourceItems.Count()
-                    </FluentBadge>
-                </div>
+            <AccordionItem Heading="@Loc[nameof(ControlsStrings.StructuredLogsDetailsResourceHeader)]" Expanded="true" Count="@FilteredResourceItems.Count()">
                 <PropertyGrid TItem="TelemetryPropertyViewModel"
                               Items="@FilteredResourceItems"
                               GridTemplateColumns="1fr 2fr"
                               HighlightText="@_filter"
                               ValueComponents="@_valueComponents" />
-            </FluentAccordionItem>
-        </FluentAccordion>
+            </AccordionItem>
+        </Accordion>
     </div>
 </div>

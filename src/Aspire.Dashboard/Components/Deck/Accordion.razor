@@ -1,0 +1,22 @@
+@*
+    Groups a set of Deck AccordionItem disclosures, replacing FluentAccordion during the
+    Fluent-removal phase. This is a thin styled container; each item manages its own expand state.
+*@
+@namespace Aspire.Dashboard.Components.Deck
+
+<div class="deck-accordion @Class" @attributes="AdditionalAttributes">
+    @ChildContent
+</div>
+
+@code {
+    /// <summary>The accordion items.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Additional CSS classes appended to the <c>.deck-accordion</c> class.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+}

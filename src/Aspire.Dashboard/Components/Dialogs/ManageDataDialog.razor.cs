@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using Aspire.Dashboard.Components.Deck;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.ManageData;
@@ -14,7 +15,6 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Dialogs;
 
@@ -143,9 +143,8 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
             }
         }
 
-        // Signals can be cleared outside this dialog. Remove selections that no longer
-        // correspond to a displayed row so hidden selections can't enable actions.
-        _selectedRows.RemoveWhere(selection => !IsSelectionAvailable(selection));
+        // Remove selections for resources that no longer exist
+        _selectedRows.RemoveWhere(r => !_resourceDataRows.ContainsKey(r.ResourceName));
     }
 
     private async Task SubscribeResourcesAsync()
@@ -264,11 +263,11 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
     {
         return dataType switch
         {
-            AspireDataType.ResourceDetails => new TelemetryDataRow { DataType = AspireDataType.ResourceDetails, Icon = new Icons.Regular.Size16.ContentView(), Url = DashboardUrls.ResourcesUrl(resource: resourceName) },
-            AspireDataType.ConsoleLogs => new TelemetryDataRow { DataType = AspireDataType.ConsoleLogs, Icon = new Icons.Regular.Size16.SlideText(), Url = DashboardUrls.ConsoleLogsUrl(resource: resourceName) },
-            AspireDataType.StructuredLogs => new TelemetryDataRow { DataType = AspireDataType.StructuredLogs, Icon = new Icons.Regular.Size16.SlideTextSparkle(), Url = DashboardUrls.StructuredLogsUrl(resource: resourceName) },
-            AspireDataType.Traces => new TelemetryDataRow { DataType = AspireDataType.Traces, Icon = new Icons.Regular.Size16.GanttChart(), Url = DashboardUrls.TracesUrl(resource: resourceName) },
-            AspireDataType.Metrics => new TelemetryDataRow { DataType = AspireDataType.Metrics, Icon = new Icons.Regular.Size16.ChartMultiple(), Url = DashboardUrls.MetricsUrl(resource: resourceName) },
+            AspireDataType.ResourceDetails => new TelemetryDataRow { DataType = AspireDataType.ResourceDetails, Icon = DeckIconName.Resources, Url = DashboardUrls.ResourcesUrl(resource: resourceName) },
+            AspireDataType.ConsoleLogs => new TelemetryDataRow { DataType = AspireDataType.ConsoleLogs, Icon = DeckIconName.Console, Url = DashboardUrls.ConsoleLogsUrl(resource: resourceName) },
+            AspireDataType.StructuredLogs => new TelemetryDataRow { DataType = AspireDataType.StructuredLogs, Icon = DeckIconName.Logs, Url = DashboardUrls.StructuredLogsUrl(resource: resourceName) },
+            AspireDataType.Traces => new TelemetryDataRow { DataType = AspireDataType.Traces, Icon = DeckIconName.Traces, Url = DashboardUrls.TracesUrl(resource: resourceName) },
+            AspireDataType.Metrics => new TelemetryDataRow { DataType = AspireDataType.Metrics, Icon = DeckIconName.Metrics, Url = DashboardUrls.MetricsUrl(resource: resourceName) },
             _ => throw new ArgumentOutOfRangeException(nameof(dataType), dataType, null)
         };
     }
@@ -444,9 +443,12 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
     {
         foreach (var row in _resourceDataRows.Values)
         {
-            if (!AreAllDataRowsSelected(row))
+            foreach (var dataRow in row.TelemetryData)
             {
-                return false;
+                if (!_selectedRows.Contains((row.Name, dataRow.DataType)))
+                {
+                    return false;
+                }
             }
         }
         return _resourceDataRows.Count > 0;
@@ -460,21 +462,11 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
         return _selectedRows.Count == 0;
     }
 
-    private bool AreNoneExportableSelected()
-    {
-        return !_selectedRows.Any(r => r.DataType is not AspireDataType.Resource);
-    }
-
     /// <summary>
     /// Returns true if all data rows for a resource are selected.
     /// </summary>
     private bool AreAllDataRowsSelected(ResourceDataRow row)
     {
-        if (row.TelemetryData.Count == 0)
-        {
-            return _selectedRows.Contains((row.Name, AspireDataType.Resource));
-        }
-
         foreach (var dataRow in row.TelemetryData)
         {
             if (!_selectedRows.Contains((row.Name, dataRow.DataType)))
@@ -490,11 +482,6 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
     /// </summary>
     private bool AreNoDataRowsSelected(ResourceDataRow row)
     {
-        if (row.TelemetryData.Count == 0)
-        {
-            return !_selectedRows.Contains((row.Name, AspireDataType.Resource));
-        }
-
         foreach (var dataRow in row.TelemetryData)
         {
             if (_selectedRows.Contains((row.Name, dataRow.DataType)))
@@ -511,18 +498,6 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
 
     private IconCheckboxState GetDataRowCheckboxState(string resourceName, AspireDataType dataType) =>
         IsDataRowSelected(resourceName, dataType) ? IconCheckboxState.Checked : IconCheckboxState.Unchecked;
-
-    private bool IsSelectionAvailable((string ResourceName, AspireDataType DataType) selection)
-    {
-        if (!_resourceDataRows.TryGetValue(selection.ResourceName, out var row))
-        {
-            return false;
-        }
-
-        return row.TelemetryData.Count == 0
-            ? selection.DataType is AspireDataType.Resource
-            : row.TelemetryData.Any(dataRow => dataRow.DataType == selection.DataType);
-    }
 
     private static IconCheckboxState GetCheckboxState(bool isChecked, bool isUnchecked) => (isChecked, isUnchecked) switch
     {
@@ -687,14 +662,6 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
 
     private void SelectAllDataTypesForResource(string resourceName, List<TelemetryDataRow> dataRows)
     {
-        _selectedRows.Remove((resourceName, AspireDataType.Resource));
-
-        if (dataRows.Count == 0)
-        {
-            _selectedRows.Add((resourceName, AspireDataType.Resource));
-            return;
-        }
-
         foreach (var dataRow in dataRows)
         {
             _selectedRows.Add((resourceName, dataRow.DataType));

@@ -1,8 +1,7 @@
 @namespace Aspire.Dashboard.Components
-@using Microsoft.FluentUI.AspNetCore.Components
 
-@* FluentButton exposes a shadow-DOM button with role=button, so the checkbox semantics
-   and Space-key handling live on this focusable span instead. *@
+@* The checkbox semantics live on this focusable span (role=checkbox) so the icon glyph
+   fully controls the rendered appearance; Space-key handling is wired up in JS. *@
 <span @ref="_element"
       class="icon-checkbox @CssClass"
       tabindex="@TabIndex"
@@ -13,5 +12,5 @@
       aria-label="@AccessibleLabel"
       @onclick="HandleClickAsync"
       @onclick:stopPropagation="@StopPropagation">
-    <FluentIcon Value="@CurrentIcon" aria-hidden="true" />
+    <DeckIcon Name="@CurrentIcon" Size="20" />
 </span>

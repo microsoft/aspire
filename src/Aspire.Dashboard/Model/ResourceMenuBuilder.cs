@@ -1,14 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Deck;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
-using Microsoft.FluentUI.AspNetCore.Components;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Model;
 
@@ -17,22 +16,21 @@ namespace Aspire.Dashboard.Model;
 /// </summary>
 public sealed class ResourceMenuBuilder
 {
-    private static readonly Icon s_viewDetailsIcon = new Icons.Regular.Size16.Info();
-    private static readonly Icon s_consoleLogsIcon = new Icons.Regular.Size16.SlideText();
-    private static readonly Icon s_structuredLogsIcon = new Icons.Regular.Size16.SlideTextSparkle();
-    private static readonly Icon s_tracesIcon = new Icons.Regular.Size16.GanttChart();
-    private static readonly Icon s_metricsIcon = new Icons.Regular.Size16.ChartMultiple();
-    private static readonly Icon s_linkIcon = new Icons.Regular.Size16.Link();
-    private static readonly Icon s_toolboxIcon = new Icons.Regular.Size16.Toolbox();
-    private static readonly Icon s_linkMultipleIcon = new Icons.Regular.Size16.LinkMultiple();
-    private static readonly Icon s_bracesIcon = new Icons.Regular.Size16.Braces();
-    private static readonly Icon s_exportEnvIcon = new Icons.Regular.Size16.DocumentText();
+    private const DeckIconName ViewDetailsIcon = DeckIconName.Info;
+    private const DeckIconName ConsoleLogsIcon = DeckIconName.Console;
+    private const DeckIconName StructuredLogsIcon = DeckIconName.Logs;
+    private const DeckIconName TracesIcon = DeckIconName.Traces;
+    private const DeckIconName MetricsIcon = DeckIconName.Metrics;
+    private const DeckIconName LinkIcon = DeckIconName.Link;
+    private const DeckIconName ToolboxIcon = DeckIconName.Toolbox;
+    private const DeckIconName LinkMultipleIcon = DeckIconName.Link;
+    private const DeckIconName BracesIcon = DeckIconName.Braces;
+    private const DeckIconName ExportEnvIcon = DeckIconName.DocumentText;
 
     private readonly NavigationManager _navigationManager;
     private readonly TelemetryRepository _telemetryRepository;
     private readonly IStringLocalizer<ControlsStrings> _controlLoc;
     private readonly IStringLocalizer<Resources.Resources> _loc;
-    private readonly IconResolver _iconResolver;
     private readonly DashboardDialogService _dialogService;
 
     /// <summary>
@@ -43,14 +41,12 @@ public sealed class ResourceMenuBuilder
         TelemetryRepository telemetryRepository,
         IStringLocalizer<ControlsStrings> controlLoc,
         IStringLocalizer<Resources.Resources> loc,
-        IconResolver iconResolver,
         DashboardDialogService dialogService)
     {
         _navigationManager = navigationManager;
         _telemetryRepository = telemetryRepository;
         _controlLoc = controlLoc;
         _loc = loc;
-        _iconResolver = iconResolver;
         _dialogService = dialogService;
     }
 
@@ -73,7 +69,7 @@ public sealed class ResourceMenuBuilder
             menuItems.Add(new MenuButtonItem
             {
                 Text = _controlLoc[nameof(ControlsStrings.ActionViewDetailsText)],
-                Icon = s_viewDetailsIcon,
+                Icon = ViewDetailsIcon,
                 OnClick = onViewDetails.InvokeAsync
             });
         }
@@ -83,7 +79,7 @@ public sealed class ResourceMenuBuilder
             menuItems.Add(new MenuButtonItem
             {
                 Text = _loc[nameof(Resources.Resources.ResourceActionConsoleLogsText)],
-                Icon = s_consoleLogsIcon,
+                Icon = ConsoleLogsIcon,
                 OnClick = () =>
                 {
                     _navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: ResourceViewModel.GetResourceName(resource, resourceByName)));
@@ -95,7 +91,7 @@ public sealed class ResourceMenuBuilder
         menuItems.Add(new MenuButtonItem
         {
             Text = _controlLoc[nameof(ControlsStrings.ViewJson)],
-            Icon = s_bracesIcon,
+            Icon = BracesIcon,
             OnClick = async () =>
             {
                 var result = ExportHelpers.GetResourceAsJson(resource, resourceByName);
@@ -116,7 +112,7 @@ public sealed class ResourceMenuBuilder
             menuItems.Add(new MenuButtonItem
             {
                 Text = _controlLoc[nameof(ControlsStrings.ExportEnv)],
-                Icon = s_exportEnvIcon,
+                Icon = ExportEnvIcon,
                 OnClick = async () =>
                 {
                     var result = ExportHelpers.GetEnvironmentVariablesAsEnvFile(resource, resourceByName);
@@ -169,7 +165,7 @@ public sealed class ResourceMenuBuilder
             {
                 Text = _loc[nameof(Resources.Resources.ResourceActionUrlsText)],
                 Tooltip = "", // No tooltip for the commands menu item.
-                Icon = s_linkMultipleIcon,
+                Icon = LinkMultipleIcon,
                 NestedMenuItems = urlItems
             });
         }
@@ -190,7 +186,7 @@ public sealed class ResourceMenuBuilder
         {
             Text = url.Text,
             Tooltip = url.Url,
-            Icon = s_linkIcon,
+            Icon = LinkIcon,
             AdditionalAttributes = new Dictionary<string, object>
             {
                 ["data-openbutton"] = "true",
@@ -214,7 +210,7 @@ public sealed class ResourceMenuBuilder
                 {
                     Text = _loc[nameof(Resources.Resources.ResourceActionStructuredLogsText)],
                     Tooltip = _loc[nameof(Resources.Resources.ResourceActionStructuredLogsText)],
-                    Icon = s_structuredLogsIcon,
+                    Icon = StructuredLogsIcon,
                     OnClick = () =>
                     {
                         _navigationManager.NavigateTo(DashboardUrls.StructuredLogsUrl(resource: ResourceViewModel.GetResourceName(resource, resourceByName)));
@@ -227,7 +223,7 @@ public sealed class ResourceMenuBuilder
             {
                 Text = _loc[nameof(Resources.Resources.ResourceActionTracesText)],
                 Tooltip = _loc[nameof(Resources.Resources.ResourceActionTracesText)],
-                Icon = s_tracesIcon,
+                Icon = TracesIcon,
                 OnClick = () =>
                 {
                     _navigationManager.NavigateTo(DashboardUrls.TracesUrl(resource: ResourceViewModel.GetResourceName(resource, resourceByName)));
@@ -241,7 +237,7 @@ public sealed class ResourceMenuBuilder
                 {
                     Text = _loc[nameof(Resources.Resources.ResourceActionMetricsText)],
                     Tooltip = _loc[nameof(Resources.Resources.ResourceActionMetricsText)],
-                    Icon = s_metricsIcon,
+                    Icon = MetricsIcon,
                     OnClick = () =>
                     {
                         _navigationManager.NavigateTo(DashboardUrls.MetricsUrl(resource: ResourceViewModel.GetResourceName(resource, resourceByName)));
@@ -289,7 +285,7 @@ public sealed class ResourceMenuBuilder
             {
                 Text = _loc[nameof(Resources.Resources.ResourceActionCommandsText)],
                 Tooltip = "", // No tooltip for the commands menu item.
-                Icon = s_toolboxIcon,
+                Icon = ToolboxIcon,
                 NestedMenuItems = commands
             });
         }
@@ -307,7 +303,8 @@ public sealed class ResourceMenuBuilder
             {
                 Text = command.GetDisplayName(),
                 Tooltip = command.GetDisplayDescription(),
-                Icon = _iconResolver.ResolveCommandIcon(command.IconName, command.IconVariant),
+                FluentIconName = command.IconName,
+                FluentIconVariant = command.IconVariant,
                 OnClick = () => commandSelected.InvokeAsync(command),
                 IsDisabled = command.State == CommandViewModelState.Disabled || isCommandExecuting(resource, command)
             };

@@ -152,6 +152,36 @@
         <target state="translated">.env 내보내기</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceDetailsHealthHeader">
+        <source>Health</source>
+        <target state="new">Health</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceDetailsOverviewHeader">
+        <source>Overview</source>
+        <target state="new">Overview</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceDetailsPropertiesHeader">
+        <source>Properties</source>
+        <target state="new">Properties</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceDetailsRelationshipsHeader">
+        <source>Relationships</source>
+        <target state="new">Relationships</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceDetailsStoppedHeader">
+        <source>Stopped</source>
+        <target state="new">Stopped</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceDetailsUidHeader">
+        <source>UID</source>
+        <target state="new">UID</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourcesContainerGraphAccessibleLabel">
         <source>Graph. For an accessible view please navigate to the Resources tab</source>
         <target state="new">Graph. For an accessible view please navigate to the Resources tab</target>

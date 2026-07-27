@@ -11,15 +11,8 @@ using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Layout;
 
-public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
+public partial class MobileNavMenu : ComponentBase
 {
-    internal const string MobileNavMenuId = "dashboard-mobile-nav-menu";
-
-    private IJSObjectReference? _keyboardNavigation;
-    private DotNetObjectReference<MobileNavMenu>? _mobileNavMenuReference;
-    private bool _keyboardNavigationInitializing;
-    private bool _disposed;
-
     [Inject]
     public required NavigationManager NavigationManager { get; init; }
 
@@ -36,80 +29,6 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
     {
         NavigationManager.NavigateTo(url);
         return Task.CompletedTask;
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (!_disposed && IsNavMenuOpen && _keyboardNavigation is null && !_keyboardNavigationInitializing)
-        {
-            _keyboardNavigationInitializing = true;
-            try
-            {
-                _mobileNavMenuReference ??= DotNetObjectReference.Create(this);
-                var keyboardNavigation = await JS.InvokeAsync<IJSObjectReference>("initializeMobileNavMenuKeyboardNavigation", _mobileNavMenuReference, MobileNavMenuId);
-                if (_disposed || !IsNavMenuOpen)
-                {
-                    await DisposeKeyboardNavigationAsync(keyboardNavigation);
-                }
-                else
-                {
-                    _keyboardNavigation = keyboardNavigation;
-                }
-            }
-            finally
-            {
-                _keyboardNavigationInitializing = false;
-            }
-        }
-        else if (!IsNavMenuOpen && _keyboardNavigation is not null)
-        {
-            await DisposeKeyboardNavigationAsync();
-        }
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        _disposed = true;
-        await DisposeKeyboardNavigationAsync();
-        _mobileNavMenuReference?.Dispose();
-    }
-
-    [JSInvokable]
-    public async Task CloseMobileNavMenuFromKeyboardAsync()
-    {
-        CloseNavMenu();
-        await JS.InvokeVoidAsync("focusElement", MainLayout.NavigationButtonId);
-    }
-
-    [JSInvokable]
-    public Task CloseMobileNavMenuFromFocusLossAsync()
-    {
-        CloseNavMenu();
-        return Task.CompletedTask;
-    }
-
-    private async ValueTask DisposeKeyboardNavigationAsync()
-    {
-        if (_keyboardNavigation is { } keyboardNavigation)
-        {
-            _keyboardNavigation = null;
-            await DisposeKeyboardNavigationAsync(keyboardNavigation);
-        }
-    }
-
-    private async ValueTask DisposeKeyboardNavigationAsync(IJSObjectReference keyboardNavigation)
-    {
-        try
-        {
-            await JS.InvokeVoidAsync("disposeMobileNavMenuKeyboardNavigation", keyboardNavigation);
-        }
-        catch (JSDisconnectedException)
-        {
-            // The Blazor circuit can disconnect while the layout is being disposed.
-            // In that case the browser listener is already gone with the page.
-        }
-
-        await JSInteropHelpers.SafeDisposeAsync(keyboardNavigation);
     }
 
     private IEnumerable<MobileNavMenuEntry> GetMobileNavMenuEntries()

@@ -11,9 +11,9 @@ else
 {
     <FluentLabel>@ControlsStringsLoc[nameof(ControlsStrings.ResourceActions)]</FluentLabel>
 
-    <FluentStack Orientation="Orientation.Horizontal">
+    <div class="deck-stack">
         <PauseIncomingDataSwitch IsPaused="@IsPaused" IsPausedChanged="@OnPausedChanged" />
         <ClearSignalsButton SelectedResource="@SelectedResource"
                             HandleClearSignal="@HandleClearSignal"/>
-    </FluentStack>
+    </div>
 }

@@ -22,6 +22,7 @@ internal static class MetricsSetupHelpers
     {
         _ = context.JSInterop.SetupModule("/Components/Controls/Chart/MetricTable.razor.js");
 
+        FluentUISetupHelpers.SetupDeckCheckbox(context);
         FluentUISetupHelpers.SetupFluentTab(context);
         FluentUISetupHelpers.SetupFluentOverflow(context);
 

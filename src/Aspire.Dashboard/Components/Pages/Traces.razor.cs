@@ -3,7 +3,6 @@
 
 using System.Globalization;
 using Aspire.Dashboard.Components.Dialogs;
-using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
@@ -15,6 +14,7 @@ using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web.Virtualization;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
@@ -24,29 +24,18 @@ namespace Aspire.Dashboard.Components.Pages;
 public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlState<Traces.TracesPageViewModel, Traces.TracesPageState>
 {
     private const string ScrollContainerId = "tracesScrollContainer";
-    private const string TimestampColumn = nameof(TimestampColumn);
-    private const string NameColumn = nameof(NameColumn);
-    private const string SpansColumn = nameof(SpansColumn);
-    private const string DurationColumn = nameof(DurationColumn);
-    private const string ActionsColumn = nameof(ActionsColumn);
-    private IList<GridColumn> _gridColumns = null!;
+
     private SelectViewModel<ResourceTypeDetails> _allResource = null!;
 
-    private TotalItemsFooter _totalItemsFooter = default!;
     private int _totalItemsCount;
+    private bool _hasLoaded;
     private List<SelectViewModel<SpanType>> _spanTypes = default!;
     private List<OtlpResource> _resources = default!;
     private List<SelectViewModel<ResourceTypeDetails>> _resourceViewModels = default!;
     private Subscription? _resourcesSubscription;
     private Subscription? _tracesSubscription;
-    private bool _resourceChanged;
     private string _filter = string.Empty;
-    private AspirePageContentLayout? _contentLayout;
-    private FluentDataGrid<OtlpTrace> _dataGrid = null!;
-    private GridColumnManager _manager = null!;
-
-    private ColumnResizeLabels _resizeLabels = ColumnResizeLabels.Default;
-    private ColumnSortLabels _sortLabels = ColumnSortLabels.Default;
+    private Virtualize<OtlpTrace>? _tracesList;
 
     public string SessionStorageKey => BrowserStorageKeys.TracesPageState;
     public string BasePath => DashboardUrls.TracesBasePath;
@@ -83,9 +72,6 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     public required ISessionStorage SessionStorage { get; set; }
 
     [Inject]
-    public required DimensionManager DimensionManager { get; init; }
-
-    [Inject]
     public required PauseManager PauseManager { get; init; }
 
     [Inject]
@@ -93,6 +79,9 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
 
     [Inject]
     public required ITelemetryErrorRecorder ErrorRecorder { get; init; }
+
+    [Inject]
+    public required IJSRuntime JS { get; init; }
 
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
@@ -104,6 +93,16 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     [Parameter]
     [SupplyParameterFromQuery(Name = "filters")]
     public string? SerializedFilters { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Focus the scroll container without showing the focus ring. The container is a large
+            // content area where a visible focus indicator would be visually noisy on initial load.
+            await JS.InvokeVoidAsync("focusElement", ScrollContainerId, true);
+        }
+    }
 
     private string GetNameTooltip(OtlpTrace trace)
     {
@@ -128,10 +127,13 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
         return tooltip;
     }
 
-    private async ValueTask<GridItemsProviderResult<OtlpTrace>> GetData(GridItemsProviderRequest<OtlpTrace> request)
+    // Bridges Blazor's Virtualize with the telemetry repository's paged trace data. The repository
+    // streams traces lazily (up to the configured max), so the provider is invoked as the user
+    // scrolls. Side effects (limit message and total count) mirror the previous data grid.
+    private async ValueTask<ItemsProviderResult<OtlpTrace>> GetVirtualizedData(ItemsProviderRequest request)
     {
         TracesViewModel.StartIndex = request.StartIndex;
-        TracesViewModel.Count = request.Count ?? DashboardUIHelpers.DefaultDataGridResultCount;
+        TracesViewModel.Count = request.Count;
         var traces = TracesViewModel.GetTraces();
 
         if (traces.IsFull && !TelemetryRepository.HasDisplayedMaxTraceLimitMessage)
@@ -150,27 +152,36 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
             message.Close();
         }
 
-        // Updating the total item count as a field doesn't work because it isn't updated with the grid.
-        // The workaround is to explicitly update and refresh the control.
-        _totalItemsCount = traces.TotalItemCount;
-        _totalItemsFooter.UpdateDisplayedCount(_totalItemsCount);
+        // Refresh the header subtitle and empty state once the count is known. Done via InvokeAsync
+        // because the provider runs during Virtualize's render pass.
+        if (!_hasLoaded || _totalItemsCount != traces.TotalItemCount)
+        {
+            _hasLoaded = true;
+            _totalItemsCount = traces.TotalItemCount;
+            _ = InvokeAsync(StateHasChanged);
+        }
 
-        return GridItemsProviderResult.From(traces.Items, traces.TotalItemCount);
+        return new ItemsProviderResult<OtlpTrace>(traces.Items, traces.TotalItemCount);
+    }
+
+    private Task RefreshDataAsync()
+    {
+        // Always hop to the renderer's dispatcher: this is invoked both from dispatcher contexts
+        // (UI events) and from background continuations (telemetry subscriptions, session-state
+        // initialization), and Virtualize.RefreshDataAsync triggers a render that requires it.
+        return InvokeAsync(async () =>
+        {
+            if (_tracesList is not null)
+            {
+                await _tracesList.RefreshDataAsync();
+                StateHasChanged();
+            }
+        });
     }
 
     protected override void OnInitialized()
     {
         TelemetryContextProvider.Initialize(TelemetryContext);
-
-        (_resizeLabels, _sortLabels) = DashboardUIHelpers.CreateGridLabels(ControlsStringsLoc);
-
-        _gridColumns = [
-            new GridColumn(Name: TimestampColumn, DesktopWidth: "0.8fr", MobileWidth: "0.8fr"),
-            new GridColumn(Name: NameColumn, DesktopWidth: "2fr", MobileWidth: "2fr"),
-            new GridColumn(Name: SpansColumn, DesktopWidth: "3fr"),
-            new GridColumn(Name: DurationColumn, DesktopWidth: "0.8fr"),
-            new GridColumn(Name: ActionsColumn, DesktopWidth: "0.5fr", MobileWidth: "1fr")
-        ];
 
         _allResource = new SelectViewModel<ResourceTypeDetails> { Id = null, Name = ControlsStringsLoc[name: nameof(ControlsStrings.LabelAll)] };
         _spanTypes = SpanType.CreateKnownSpanTypes(ControlsStringsLoc);
@@ -193,6 +204,7 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
 
         TracesViewModel.ResourceKey = PageViewModel.SelectedResource.Id?.GetResourceKey();
         UpdateSubscription();
+
     }
 
     private void UpdateResources()
@@ -206,15 +218,13 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
 
     private Task HandleSelectedResourceChanged()
     {
-        _resourceChanged = true;
-
-        return this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
+        return this.AfterViewModelChangedAsync(null, waitToApplyMobileChange: true);
     }
 
     private async Task HandleSelectedSpanTypeChangedAsync()
     {
-        //await ClearSelectedLogEntryAsync();
-        await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
+        await this.AfterViewModelChangedAsync(null, waitToApplyMobileChange: true);
+        await RefreshDataAsync();
     }
 
     private void UpdateSubscription()
@@ -228,61 +238,33 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
             _tracesSubscription = TelemetryRepository.OnNewTraces(selectedResourceKey, SubscriptionType.Read, async () =>
             {
                 TracesViewModel.ClearData();
-                await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+                await RefreshDataAsync();
             });
         }
     }
 
-    private async Task HandleAfterFilterBindAsync()
+    private async Task OnFilterChangedAsync(string value)
     {
-        TracesViewModel.FilterText = _filter;
-        await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+        _filter = value;
+        TracesViewModel.FilterText = value;
+        await RefreshDataAsync();
     }
 
     private string GetResourceName(OtlpResource app) => OtlpHelpers.GetResourceName(app, _resources);
     private string GetResourceName(OtlpResourceView app) => OtlpHelpers.GetResourceName(app.Resource, _resources);
 
-    private static string GetRowClass(OtlpTrace entry)
+    // Fraction (0-100) of the longest trace's duration, used to size the inline duration bar so
+    // traces are visually comparable at a glance.
+    private double GetDurationPercent(OtlpTrace trace)
     {
-        if (entry.Spans.Any(span => span.Status == OtlpSpanStatusCode.Error))
+        var maxMs = DashboardUIHelpers.SafeConvertToMilliseconds(TracesViewModel.MaxDuration);
+        if (maxMs <= 0)
         {
-            return "trace-row-error";
+            return 0;
         }
 
-        return string.Empty;
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        // Check to see whether max item count should be set on every render.
-        // This is required because the data grid's virtualize component can be recreated on data change.
-        if (_dataGrid != null && FluentDataGridHelper<OtlpTrace>.TrySetMaxItemCount(_dataGrid, 10_000))
-        {
-            StateHasChanged();
-        }
-
-        if (_resourceChanged)
-        {
-            await JS.InvokeVoidAsync("resetContinuousScrollPosition");
-            _resourceChanged = false;
-        }
-        if (firstRender)
-        {
-            await JS.InvokeVoidAsync("initializeContinuousScroll");
-            // Focus the scroll container without showing the focus ring. The container is a large
-            // content area where a visible focus indicator would be visually noisy on initial load.
-            await JS.InvokeVoidAsync("focusElement", ScrollContainerId, true);
-            DimensionManager.OnViewportInformationChanged += OnBrowserResize;
-        }
-    }
-
-    private void OnBrowserResize(object? o, EventArgs args)
-    {
-        InvokeAsync(async () =>
-        {
-            await JS.InvokeVoidAsync("resetContinuousScrollPosition");
-            await JS.InvokeVoidAsync("initializeContinuousScroll");
-        });
+        var ms = DashboardUIHelpers.SafeConvertToMilliseconds(trace.Duration);
+        return Math.Clamp((double)ms / maxMs * 100, 0, 100);
     }
 
     private string? PauseText => PauseManager.AreTracesPaused(out var startTime)
@@ -296,7 +278,6 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     {
         _resourcesSubscription?.Dispose();
         _tracesSubscription?.Dispose();
-        DimensionManager.OnViewportInformationChanged -= OnBrowserResize;
     }
 
     public async Task UpdateViewModelFromQueryAsync(TracesPageViewModel viewModel)
@@ -321,7 +302,7 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
             }
         }
 
-        await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+        await RefreshDataAsync();
     }
 
     public string GetUrlFromSerializableViewModel(TracesPageState serializable)
@@ -346,11 +327,6 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
 
     private async Task OpenFilterAsync(FieldTelemetryFilter? entry)
     {
-        if (_contentLayout is not null)
-        {
-            await _contentLayout.CloseMobileToolbarAsync();
-        }
-
         await FilterHelpers.OpenFilterAsync(
             entry,
             DialogService,
@@ -383,7 +359,8 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
             }
         }
 
-        await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false);
+        await this.AfterViewModelChangedAsync(null, waitToApplyMobileChange: false);
+        await RefreshDataAsync();
     }
 
     private Task ClearTraces(ResourceKey? key)
@@ -398,7 +375,11 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
             TracesViewModel.Filters,
             clearFilters: TracesViewModel.ClearFilters,
             openFilterAsync: OpenFilterAsync,
-            afterChangeAsync: () => this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false),
+            afterChangeAsync: async () =>
+            {
+                await this.AfterViewModelChangedAsync(null, waitToApplyMobileChange: false);
+                await RefreshDataAsync();
+            },
             filterLoc: FilterLoc,
             dialogsLoc: DialogsLoc);
     }

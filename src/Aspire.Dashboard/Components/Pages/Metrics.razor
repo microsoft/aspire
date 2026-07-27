@@ -28,151 +28,136 @@
         Loc="@Loc"/>
 </PageTitle>
 
-<div class="page-content-container">
-    <AspirePageContentLayout
-        AddNewlineOnToolbar="true"
-        @ref="_contentLayout"
-        HeaderStyle="margin-bottom: calc(var(--design-unit) * 2px);"
-        MobileToolbarButtonText="@Loc[nameof(Dashboard.Resources.Metrics.MetricsViewAttributesToolbar)]">
-        <PageTitleSection>
-            <h1 class="page-header">@Loc[nameof(Dashboard.Resources.Metrics.MetricsHeader)]</h1>
-        </PageTitleSection>
-        <ToolbarSection>
-            <ResourceSelect Resources="_resourceViewModels"
-                            AriaLabel="@ControlsStringsLoc[nameof(ControlsStrings.SelectAResource)]"
-                            @bind-SelectedResource="PageViewModel.SelectedResource"
-                            @bind-SelectedResource:after="HandleSelectedResourceChangedAsync"
-                            CanSelectGrouping="true"
-                            LabelClass="toolbar-left" />
+@{
+    var paused = PauseManager.AreMetricsPaused(out _);
+    var pauseTitle = paused
+        ? ControlsStringsLoc[nameof(ControlsStrings.ResumeButtonTitle)].Value
+        : ControlsStringsLoc[nameof(ControlsStrings.PauseButtonTitle)].Value;
+    string subtitle;
+    if (PageViewModel.SelectedResource.Id is null)
+    {
+        subtitle = Loc[nameof(Dashboard.Resources.Metrics.MetricsSelectAResource)].Value;
+    }
+    else if (PageViewModel.Instruments is { Count: > 0 } instruments)
+    {
+        subtitle = string.Format(System.Globalization.CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Metrics.MetricsInstrumentsCount)].Value, instruments.Count);
+    }
+    else
+    {
+        subtitle = Loc[nameof(Dashboard.Resources.Metrics.MetricsNoMetricsForResource)].Value;
+    }
+}
 
-            <SignalsActionsDisplay IsPaused="@PauseManager.AreMetricsPaused(out _)"
-                                  OnPausedChanged="@PauseManager.SetMetricsPaused"
-                                  HandleClearSignal="ClearMetrics"
-                                  SelectedResource="@PageViewModel.SelectedResource"/>
+<div class="page">
+    <div class="page__header">
+        <div>
+            <div class="page__title">@Loc[nameof(Dashboard.Resources.Metrics.MetricsHeader)]</div>
+            <div class="page__subtitle">@subtitle</div>
+        </div>
+        <div class="page__header-spacer"></div>
 
-            <FluentInputLabel slot="end"
-                              Label="@ControlsStringsLoc[nameof(ControlsStrings.DurationColumnHeader)]"
-                              ForId="@_selectDurationId"
-                              Orientation="Orientation.Horizontal" />
+        <button type="button"
+                class="icon-btn @(paused ? "icon-btn--active" : string.Empty)"
+                @onclick="TogglePause"
+                title="@pauseTitle"
+                aria-label="@pauseTitle">
+            <DeckIcon Name="@(paused ? DeckIconName.Play : DeckIconName.Pause)" Size="16" />
+        </button>
 
-            <DesktopToolbarDivider />
+        <ClearSignalsButton SelectedResource="@PageViewModel.SelectedResource"
+                            HandleClearSignal="ClearMetrics" />
+    </div>
 
-            <FluentSelect slot="end" TOption="SelectViewModel<TimeSpan>"
-                          Id="@_selectDurationId"
-                          Items="@_durations"
-                          OptionText="@(c => c.Name)"
-                          @bind-SelectedOption="PageViewModel.SelectedDuration"
-                          @bind-SelectedOption:after="HandleSelectedDurationChangedAsync"
-                          AriaLabel="@ControlsStringsLoc[nameof(ControlsStrings.DurationColumnHeader)]"/>
+    <div class="page__toolbar">
+        <ResourceSelect Resources="_resourceViewModels"
+                        AriaLabel="@ControlsStringsLoc[nameof(ControlsStrings.SelectAResource)]"
+                        @bind-SelectedResource="PageViewModel.SelectedResource"
+                        @bind-SelectedResource:after="HandleSelectedResourceChangedAsync"
+                        CanSelectGrouping="true"
+                        LabelClass="toolbar-left" />
 
-            @if (!ViewportInformation.IsDesktop)
+        <div class="page__header-spacer"></div>
+
+        <div class="seg" role="group" aria-label="@ControlsStringsLoc[nameof(ControlsStrings.DurationColumnHeader)]">
+            @foreach (var duration in _durations)
             {
-                // Show metric selector in the toolbar for mobile, since we don't have enough room to show both
-                // panels on a mobile viewport.
-                <TreeMetricSelector
-                    @ref="_treeMetricSelector"
-                    PageViewModel="@PageViewModel"
-                    IncludeLabel="true"
-                    HandleSelectedTreeItemChangedAsync="@HandleSelectedTreeItemChangedAsync"/>
+                var isActive = duration.Id == PageViewModel.SelectedDuration.Id;
+                <button type="button"
+                        class="seg__btn @(isActive ? "active" : string.Empty)"
+                        aria-pressed="@isActive"
+                        title="@duration.Name"
+                        @onclick="() => HandleDurationClickedAsync(duration)">
+                    @GetShortDurationLabel(duration.Id)
+                </button>
             }
-        </ToolbarSection>
-        <MainSection>
-            <div style="width: 100%; height: 100%; overflow: auto;">
-                @if (PageViewModel.Instruments?.Count > 0)
-                {
-                    // Collapsed property only allows us to show Panel1 (which is the metric selector)
-                    // but we want to only show Panel2 on mobile. So, hide the bar handle and reduce width to 0
-                    // on mobile.
-                    <FluentSplitter BarHandle="@ViewportInformation.IsDesktop"
-                                    Style="height:100%"
-                                    Panel1Size="@(ViewportInformation.IsDesktop ? "2fr" : "0")"
-                                    Panel2Size="8fr"
-                                    BarSize="@(ViewportInformation.IsDesktop ? 5 : 0)">
-                        <Panel1>
-                            @if (ViewportInformation.IsDesktop)
-                            {
-                                <TreeMetricSelector
-                                    @ref="_treeMetricSelector"
-                                    PageViewModel="@PageViewModel"
-                                    HandleSelectedTreeItemChangedAsync="@HandleSelectedTreeItemChangedAsync"/>
-                            }
-                        </Panel1>
-                        <Panel2>
-                            <div>
-                                <div class="metrics-content">
-                                    @if (PageViewModel.SelectedResource.Id?.ReplicaSetName != null && PageViewModel is { SelectedMeter: not null, SelectedInstrument: not null })
+        </div>
+    </div>
+
+    <div class="page__body">
+        @if (PageViewModel.Instruments?.Count > 0)
+        {
+            <div class="metrics-layout">
+                <div class="metric-list">
+                    <TreeMetricSelector
+                        @ref="_treeMetricSelector"
+                        PageViewModel="@PageViewModel"
+                        HandleSelectedTreeItemChangedAsync="@HandleSelectedTreeItemChangedAsync"/>
+                </div>
+                <div class="metric-detail">
+                    @if (PageViewModel.SelectedResource.Id?.ReplicaSetName != null && PageViewModel is { SelectedMeter: not null, SelectedInstrument: not null })
+                    {
+                        <ChartContainer
+                            ResourceKey="@(PageViewModel.SelectedResource.Id.GetResourceKey())"
+                            MeterName="@(PageViewModel.SelectedMeter)"
+                            InstrumentName="@(PageViewModel.SelectedInstrument.Name)"
+                            Duration="PageViewModel.SelectedDuration.Id"
+                            ActiveView="@(PageViewModel.SelectedViewKind ?? Metrics.MetricViewKind.Graph)"
+                            OnViewChangedAsync="@OnViewChangedAsync"
+                            Resources="@_resources"
+                            PauseText="@PauseText" />
+                    }
+                    else if (PageViewModel.SelectedMeter != null)
+                    {
+                        <h3 class="meter-name-title">@PageViewModel.SelectedMeter</h3>
+                        <div class="table-wrap">
+                            <table class="data">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 38%;">@Loc[nameof(Dashboard.Resources.Metrics.MetricsInsturementNameGridNameColumnHeader)]</th>
+                                        <th>@Loc[nameof(Dashboard.Resources.Metrics.MetricsInsturementDescriptionGridNameColumnHeader)]</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var instrument in PageViewModel.Instruments.Where(i => i.Parent.Name == PageViewModel.SelectedMeter).OrderBy(i => i.Name))
                                     {
-                                        <ChartContainer
-                                            ResourceKey="@(PageViewModel.SelectedResource.Id.GetResourceKey())"
-                                            MeterName="@(PageViewModel.SelectedMeter)"
-                                            InstrumentName="@(PageViewModel.SelectedInstrument.Name)"
-                                            Duration="PageViewModel.SelectedDuration.Id"
-                                            ActiveView="@(PageViewModel.SelectedViewKind ?? Metrics.MetricViewKind.Graph)"
-                                            OnViewChangedAsync="@OnViewChangedAsync"
-                                            Resources="@_resources"
-                                            PauseText="@PauseText" />
+                                        <tr @key="instrument">
+                                            <td>
+                                                <a class="metric-instrument-link cell-mono"
+                                                   href="@DashboardUrls.MetricsUrl(resource: PageViewModel.SelectedResource.Name, meter: instrument.Parent.Name, instrument: instrument.Name, duration: DurationMinutes, view: ViewKindName)">
+                                                    @instrument.Name
+                                                </a>
+                                            </td>
+                                            <td><span class="cell-muted" title="@instrument.Description">@instrument.Description</span></td>
+                                        </tr>
                                     }
-                                    else if (PageViewModel.SelectedMeter != null)
-                                    {
-                                        <h3 class="meter-name-title">@PageViewModel.SelectedMeter</h3>
-                                        <FluentDataGrid
-                                            Style="max-width:1100px;"
-                                            Items="@PageViewModel.Instruments.Where(i => i.Parent.Name == PageViewModel.SelectedMeter).OrderBy(i => i.Name).AsQueryable()"
-                                            GridTemplateColumns="3fr 5fr"
-                                            RowSize="DataGridRowSize.Medium"
-                                            TGridItem="OtlpInstrumentSummary">
-                                            <ChildContent>
-                                                <TemplateColumn Title="@Loc[nameof(Dashboard.Resources.Metrics.MetricsInsturementNameGridNameColumnHeader)]">
-                                                    <FluentAnchor Class="button-hyperlink-no-icon" Href="@DashboardUrls.MetricsUrl(resource: PageViewModel.SelectedResource.Name, meter: context.Parent.Name, instrument: context.Name, duration: DurationMinutes, view: ViewKindName)" Appearance="Appearance.Lightweight">
-                                                        @context.Name
-                                                    </FluentAnchor>
-                                                </TemplateColumn>
-                                                <PropertyColumn Title="@Loc[nameof(Dashboard.Resources.Metrics.MetricsInsturementDescriptionGridNameColumnHeader)]" Property="@(c => c.Description)" Tooltip="true" TooltipText="@(c => c.Description)" />
-                                            </ChildContent>
-                                        </FluentDataGrid>
-                                    }
-                                    else
-                                    {
-                                        @if (ViewportInformation.IsDesktop)
-                                        {
-                                            <p>@Loc[nameof(Dashboard.Resources.Metrics.MetricsSelectInstrument)]</p>
-                                        }
-                                        else
-                                        {
-                                            <div class="empty-content">
-                                                <FluentAnchor Href="#" Appearance="Appearance.Hypertext" OnClick="@(async () => await _contentLayout!.OpenMobileToolbarAsync())">
-                                                    @Loc[nameof(Dashboard.Resources.Metrics.MetricsSelectInstrument)]
-                                                </FluentAnchor>
-                                            </div>
-                                        }
-                                    }
-                                </div>
-                            </div>
-                        </Panel2>
-                    </FluentSplitter>
-                }
-                else if (PageViewModel.Instruments == null)
-                {
-                    <div class="empty-content">
-                        @if (ViewportInformation.IsDesktop)
-                        {
-                            <FluentIcon Icon="Icons.Regular.Size24.ChartMultiple"/>@:&nbsp;
-                            @Loc[nameof(Dashboard.Resources.Metrics.MetricsSelectAResource)]
-                        }
-                        else
-                        {
-                            <FluentIcon Icon="Icons.Regular.Size24.ChartMultiple"/>@:&nbsp;
-                            <FluentAnchor Href="#" Appearance="Appearance.Hypertext" OnClick="@(async () => await _contentLayout!.OpenMobileToolbarAsync())">@Loc[nameof(Dashboard.Resources.Metrics.MetricsSelectAResource)]</FluentAnchor>
-                        }
-                    </div>
-                }
-                else
-                {
-                    <div class="empty-content">
-                        <FluentIcon Icon="Icons.Regular.Size24.ChartMultiple"/>&nbsp;@Loc[nameof(Dashboard.Resources.Metrics.MetricsNoMetricsForResource)]
-                    </div>
-                }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="center-fill cell-muted">@Loc[nameof(Dashboard.Resources.Metrics.MetricsSelectInstrument)]</div>
+                    }
+                </div>
             </div>
-        </MainSection>
-    </AspirePageContentLayout>
+        }
+        else
+        {
+            <EmptyState Title="@(PageViewModel.Instruments is null ? Loc[nameof(Dashboard.Resources.Metrics.MetricsSelectAResource)].Value : Loc[nameof(Dashboard.Resources.Metrics.MetricsNoMetricsForResource)].Value)">
+                <IconContent>
+                    <DeckIcon Name="DeckIconName.Metrics" Size="26" />
+                </IconContent>
+            </EmptyState>
+        }
+    </div>
 </div>

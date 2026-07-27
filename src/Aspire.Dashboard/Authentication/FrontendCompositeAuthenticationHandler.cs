@@ -37,7 +37,10 @@ public sealed class FrontendCompositeAuthenticationHandler(
         var scheme = GetRelevantAuthenticationScheme();
         if (scheme != null)
         {
-            await Context.ChallengeAsync(scheme).ConfigureAwait(false);
+            // Preserve an explicit return location when a reverse-hosted dashboard delegates
+            // authentication to this authority. Cookie and OIDC handlers both use these
+            // properties to return the browser to its original same-origin route.
+            await Context.ChallengeAsync(scheme, properties).ConfigureAwait(false);
         }
     }
 

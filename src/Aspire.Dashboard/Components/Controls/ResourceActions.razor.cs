@@ -2,18 +2,17 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using Aspire.Dashboard.Components.Deck;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Resources;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
-using Microsoft.FluentUI.AspNetCore.Components;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components;
 
 public partial class ResourceActions : ComponentBase
 {
-    private static readonly Icon s_consoleLogsIcon = new Icons.Regular.Size16.SlideText();
+    private const DeckIconName ConsoleLogsIcon = DeckIconName.Console;
 
     private AspireMenuButton? _menuButton;
 
@@ -28,9 +27,6 @@ public partial class ResourceActions : ComponentBase
 
     [Inject]
     public required NavigationManager NavigationManager { get; init; }
-
-    [Inject]
-    public required IconResolver IconResolver { get; init; }
 
     [Parameter]
     public required EventCallback<CommandViewModel> CommandSelected { get; set; }

@@ -69,11 +69,11 @@
 
                 @if (ToolbarSection is not null)
                 {
-                    <FluentButton Class="mobile-toolbar"
-                                  Appearance="@Appearance.Accent"
-                                  OnClick="@OpenMobileToolbarAsync">
+                    <button type="button"
+                            class="btn btn--primary mobile-toolbar"
+                            @onclick="@OpenMobileToolbarAsync">
                         @(MobileToolbarButtonText ?? LayoutLoc[nameof(Layout.PageLayoutViewFilters)])
-                    </FluentButton>
+                    </button>
                 }
             </footer>
         }

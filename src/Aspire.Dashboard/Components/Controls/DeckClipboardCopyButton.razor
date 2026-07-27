@@ -1,0 +1,46 @@
+@namespace Aspire.Dashboard.Components
+@using Aspire.Dashboard.Components.Deck
+
+@*
+    Native clipboard-copy button for the Deck UI. The copy behaviour is driven by the global
+    document click handler in wwwroot/js/app.js, which matches any <button data-copybutton> (the
+    data-* attributes come from FluentUIExtensions.GetClipboardCopyAdditionalAttributes, splatted
+    via AdditionalAttributes) and, on click, copies data-text and toggles the .copy-icon /
+    .checkmark-icon children.
+
+    The two glyphs are wrapped in <div>s — matching the markdown code-copy button in
+    HighlightedCodeBlockRenderer — so a click on the inner <svg> or <path> still resolves to the
+    host <button>: app.js walks parentElement.parentElement from the SVG, which lands on the button
+    only when there is exactly one wrapper element between them.
+*@
+<button type="button" id="@Id" class="@Class" @attributes="AdditionalAttributes">
+    <div class="copy-icon"><DeckIcon Name="DeckIconName.Copy" Size="@IconSize" /></div>
+    <div class="checkmark-icon" style="display:none"><DeckIcon Name="DeckIconName.Checkmark" Size="@IconSize" /></div>
+    @ChildContent
+</button>
+
+@code {
+    /// <summary>The button's <c>id</c>; app.js uses it to locate the button when toggling icons.</summary>
+    [Parameter, EditorRequired]
+    public required string Id { get; set; }
+
+    /// <summary>CSS classes applied to the button (e.g. <c>btn</c> or <c>icon-btn icon-btn--sm</c>).</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Pixel size of the copy/checkmark glyphs. Defaults to 16.</summary>
+    [Parameter]
+    public int IconSize { get; set; } = 16;
+
+    /// <summary>
+    /// Attributes splatted onto the button, typically the dictionary returned by
+    /// <see cref="Extensions.FluentUIExtensions.GetClipboardCopyAdditionalAttributes"/> (which carries the
+    /// <c>data-copybutton</c>/<c>data-text</c>/<c>data-precopy</c>/<c>data-postcopy</c> hooks read by app.js).
+    /// </summary>
+    [Parameter]
+    public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    /// <summary>Optional content rendered after the icons, e.g. a text label.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

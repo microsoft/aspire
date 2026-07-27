@@ -57,6 +57,35 @@ public class FrontendOpenIdConnectAuthTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task AuthenticateBridge_UnauthenticatedChallengeUsesBrowserFacingHost()
+    {
+        await using var authority = await MockOpenIdAuthority.CreateAsync().DefaultTimeout();
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(
+            testOutputHelper,
+            additionalConfiguration: config =>
+            {
+                ConfigureOpenIdConnect(config, authority);
+            });
+        await app.StartAsync().DefaultTimeout();
+
+        using var handler = new HttpClientHandler { AllowAutoRedirect = false };
+        using var client = new HttpClient(handler)
+        {
+            BaseAddress = new Uri($"http://{app.FrontendSingleEndPointAccessor().EndPoint}")
+        };
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            "/api/dashboard/authenticate?returnUrl=%2Fapi%2Fdashboard%2Fv1%2Fresources");
+        request.Headers.Host = "aot.dev.localhost:18889";
+        using var response = await client.SendAsync(request).DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var redirectedTo = Assert.IsType<Uri>(response.Headers.Location);
+        var query = HttpUtility.ParseQueryString(redirectedTo.Query);
+        Assert.Equal("http://aot.dev.localhost:18889/", query.Get("redirect_uri"));
+    }
+
+    [Fact]
     public async Task Get_Unauthenticated_OtlpHttpConnection_Denied()
     {
         await using var authority = await MockOpenIdAuthority.CreateAsync().DefaultTimeout();

@@ -124,15 +124,16 @@ app.MapGet("/big-trace", async () =>
     return "Big trace created";
 });
 
-app.MapGet("/trace-limit", async () =>
-{
-    const int TraceCount = 20_000;
+app.MapGet("/trace-limit", (int? count) => CreateTracesAsync(Math.Clamp(count ?? 20_000, 1, 20_000)));
+app.MapGet("/trace-virtualization", () => CreateTracesAsync(500));
 
+static async Task<string> CreateTracesAsync(int traceCount)
+{
     var current = Activity.Current;
     Activity.Current = null;
     var traceCreator = new TraceCreator();
 
-    for (var i = 0; i < TraceCount; i++)
+    for (var i = 0; i < traceCount; i++)
     {
         // Delay so OTEL has the opportunity to send traces.
         if (i % 1000 == 0)
@@ -145,8 +146,8 @@ app.MapGet("/trace-limit", async () =>
 
     Activity.Current = current;
 
-    return $"Created {TraceCount} traces.";
-});
+    return $"Created {traceCount} traces.";
+}
 
 app.MapGet("/http-client-requests", async (HttpClient client) =>
 {
@@ -391,6 +392,54 @@ app.MapGet("/multiple-traces-linked", async () =>
     Activity.Current = current;
 
     return $"Created {TraceCount} traces.";
+});
+
+app.MapGet("/trace-details", async () =>
+{
+    var current = Activity.Current;
+    Activity.Current = null;
+    ActivitySource source = new("Services.Api", "1.0.0");
+
+    using var linkedTarget = source.StartActivity("trace-fixture-linked-target", ActivityKind.Internal);
+    Debug.Assert(linkedTarget is not null);
+    var linkedContext = linkedTarget.Context;
+    linkedTarget.Stop();
+
+    var linkTags = new ActivityTagsCollection
+    {
+        ["fixture.link"] = "linked-target"
+    };
+    var links = new[] { new ActivityLink(linkedContext, linkTags) };
+    using var errorActivity = source.StartActivity(
+        "trace-fixture-error",
+        ActivityKind.Internal,
+        default(ActivityContext),
+        tags: null,
+        links: links);
+    Debug.Assert(errorActivity is not null);
+    errorActivity.SetStatus(ActivityStatusCode.Error, "Fixture failure");
+    errorActivity.SetTag("fixture.error", true);
+    errorActivity.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
+    {
+        ["exception.type"] = "FixtureException",
+        ["exception.message"] = "Deterministic trace fixture failure"
+    }));
+    await Task.Delay(50);
+    errorActivity.Stop();
+
+    Activity.Current = current;
+    return "Created deterministic trace details";
+});
+
+app.MapGet("/error-telemetry", (ILogger<Program> logger) =>
+{
+    logger.LogError("Deterministic structured log fixture failure");
+
+    using var source = new ActivitySource("Services.Api", "1.0.0");
+    using var activity = source.StartActivity("error-telemetry-fixture", ActivityKind.Internal);
+    activity?.SetStatus(ActivityStatusCode.Error, "Deterministic trace fixture failure");
+
+    return "Created deterministic error telemetry";
 });
 
 app.MapGet("/nested-trace-spans", async () =>
@@ -744,6 +793,7 @@ app.MapGet("/genai-trace", async () =>
     }
 
     // Avoid zero seconds span.
+    app.Logger.LogInformation("GenAI conversation completed.");
     await Task.Delay(100);
 
     activity?.Stop();

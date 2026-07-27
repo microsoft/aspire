@@ -188,8 +188,6 @@ public partial class MainLayoutTests : DashboardTestContext
     }
 
     [Theory]
-    [InlineData(true, "dashboard-help-button", "HelpDialog", "dashboard-help-button")]
-    [InlineData(true, "dashboard-settings-button", "SettingsDialog", "dashboard-settings-button")]
     [InlineData(false, "dashboard-navigation-button", "HelpDialog", "dashboard-navigation-button")]
     [InlineData(false, "dashboard-navigation-button", "SettingsDialog", "dashboard-navigation-button")]
     public async Task HeaderDialogClose_RestoresFocusToLaunchButton(bool isDesktop, string launchButtonId, string expectedDialogId, string expectedFocusId)
@@ -239,8 +237,6 @@ public partial class MainLayoutTests : DashboardTestContext
     }
 
     [Theory]
-    [InlineData(true, false, "dashboard-help-button", "HelpDialog", "dashboard-navigation-button")]
-    [InlineData(true, false, "dashboard-settings-button", "SettingsDialog", "dashboard-navigation-button")]
     [InlineData(false, true, "dashboard-navigation-button", "HelpDialog", "dashboard-help-button")]
     [InlineData(false, true, "dashboard-navigation-button", "SettingsDialog", "dashboard-settings-button")]
     public async Task HeaderDialogClose_AfterViewportChange_RestoresFocusToVisibleLaunchButton(
@@ -302,10 +298,12 @@ public partial class MainLayoutTests : DashboardTestContext
     }
 
     [Theory]
-    [InlineData(AspireKeyboardShortcut.Help, "dashboard-help-button", "HelpDialog")]
-    [InlineData(AspireKeyboardShortcut.Settings, "dashboard-settings-button", "SettingsDialog")]
-    public async Task HeaderDialogShortcutClose_RestoresFocusToLaunchButton(AspireKeyboardShortcut shortcut, string launchButtonId, string expectedDialogId)
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Help_Desktop_OpensDeckPaneNotFluentDialog(bool viaShortcut)
     {
+        // On desktop the help button and the Help keyboard shortcut both open the Deck help pane
+        // (HelpPane), not the Fluent HelpDialog. (Mobile still uses the dialog.)
         DialogParameters? capturedParameters = null;
         TestDialogService? dialogService = null;
         dialogService = new TestDialogService(onShowDialog: (_, parameters) =>
@@ -322,20 +320,53 @@ public partial class MainLayoutTests : DashboardTestContext
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
 
-        await cut.InvokeAsync(() => cut.Instance.OnPageKeyDownAsync(shortcut));
-
-        Assert.NotNull(capturedParameters);
-        Assert.Equal(expectedDialogId, capturedParameters.Id);
-
-        await cut.InvokeAsync(() => capturedParameters.OnDialogClosing.InvokeAsync(null!));
-
-        cut.WaitForAssertion(() =>
+        if (viaShortcut)
         {
-            Assert.Contains(JSInterop.Invocations, invocation =>
-                invocation.Identifier == "focusElement" &&
-                invocation.Arguments.Count == 1 &&
-                string.Equals((string?)invocation.Arguments[0], launchButtonId, StringComparison.Ordinal));
+            await cut.InvokeAsync(() => cut.Instance.OnPageKeyDownAsync(AspireKeyboardShortcut.Help));
+        }
+        else
+        {
+            await cut.InvokeAsync(() => cut.Find("#dashboard-help-button").Click());
+        }
+
+        cut.WaitForAssertion(() => Assert.True(cut.Instance._showHelpPane));
+        Assert.Null(capturedParameters);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Settings_Desktop_OpensDeckPaneNotFluentDialog(bool viaShortcut)
+    {
+        // On desktop the settings button and the Settings keyboard shortcut both open the Deck
+        // settings pane (SettingsPane), not the Fluent SettingsDialog. (Mobile still uses the dialog.)
+        DialogParameters? capturedParameters = null;
+        TestDialogService? dialogService = null;
+        dialogService = new TestDialogService(onShowDialog: (_, parameters) =>
+        {
+            capturedParameters = parameters;
+            return Task.FromResult<IDialogReference>(new DialogReference(parameters.Id, dialogService!));
         });
+
+        SetupMainLayoutServices(dialogService: dialogService);
+        JSInterop.SetupVoid("focusElement", _ => true);
+
+        var cut = RenderComponent<MainLayout>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        if (viaShortcut)
+        {
+            await cut.InvokeAsync(() => cut.Instance.OnPageKeyDownAsync(AspireKeyboardShortcut.Settings));
+        }
+        else
+        {
+            await cut.InvokeAsync(() => cut.Find("#dashboard-settings-button").Click());
+        }
+
+        cut.WaitForAssertion(() => Assert.True(cut.Instance._showSettingsPane));
+        Assert.Null(capturedParameters);
     }
 
     private void SetupMainLayoutServices(
@@ -378,9 +409,15 @@ public partial class MainLayoutTests : DashboardTestContext
 
         JSInterop.SetupModule("window.registerGlobalKeydownListener", _ => true);
         JSInterop.SetupModule("window.registerOpenTextVisualizerOnClick", _ => true);
-        LayoutSetupHelpers.SetupMobileNavMenuKeyboardNavigation(this);
 
         JSInterop.Setup<BrowserInfo>("window.getBrowserInfo").SetResult(new BrowserInfo { TimeZone = "abc", UserAgent = "mozilla" });
+
+        // The Deck Drawer (used by SettingsPane / HelpPane / the interaction pane) imports a JS
+        // module to wire Escape-to-close. Set it up so those panes can render under bUnit's strict
+        // JSInterop without throwing on the module import.
+        var drawerModule = JSInterop.SetupModule("./Components/Deck/Drawer.razor.js");
+        drawerModule.SetupVoid("registerDrawerEscape", _ => true);
+        drawerModule.SetupVoid("disposeDrawerEscape", _ => true);
     }
 
     private sealed class RecordingJSRuntime : IJSRuntime

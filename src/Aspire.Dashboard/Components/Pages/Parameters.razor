@@ -1,0 +1,97 @@
+@page "/parameters"
+@using Aspire.Dashboard.Resources
+@using Humanizer
+@inject IStringLocalizer<Dashboard.Resources.Resources> Loc
+@inject IStringLocalizer<ControlsStrings> ControlsStringsLoc
+
+<PageTitle><ApplicationName ResourceName="@nameof(ControlsStrings.ResourcesContainerParametersTab)" Loc="@ControlsStringsLoc" /></PageTitle>
+
+@{
+    var parameters = GetFilteredParameters();
+}
+
+<div class="page">
+    <div class="page__header">
+        <div>
+            <div class="page__title">@ControlsStringsLoc[nameof(ControlsStrings.ResourcesContainerParametersTab)]</div>
+            <div class="page__subtitle">
+                @(_loaded ? $"{parameters.Count} {ControlsStringsLoc[nameof(ControlsStrings.ResourcesContainerParametersTab)].Value.ToLowerInvariant()}" : ControlsStringsLoc[nameof(ControlsStrings.Loading)].Value)
+            </div>
+        </div>
+    </div>
+
+    <div class="page__toolbar">
+        <SearchBox @bind-Value="_filter" Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]" />
+    </div>
+
+    <div class="page__body">
+        <div class="table-wrap">
+            <table class="data">
+                <thead>
+                    <tr>
+                        <th style="width: 200px;">@Loc[nameof(Dashboard.Resources.Resources.ResourcesStateColumnHeader)]</th>
+                        <th>@ControlsStringsLoc[nameof(ControlsStrings.NameColumnHeader)]</th>
+                        <th>@ControlsStringsLoc[nameof(ControlsStrings.PropertyGridValueColumnHeader)]</th>
+                        <th style="width: 140px;">@Loc[nameof(Dashboard.Resources.Resources.ResourcesStartTimeColumnHeader)]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (parameters.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="4" class="cell-muted" style="text-align: center; padding: 28px;">
+                                @Loc[nameof(Dashboard.Resources.Resources.ResourcesNoParameters)]
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var p in parameters)
+                        {
+                            var value = GetParameterValue(p);
+                            <tr @key="p.Name">
+                                <td>
+                                    <StateDot Tone="@ResourceStateTone.Get(p)" Text="@GetStateText(p)" Health="@p.HealthStatus?.Humanize()" />
+                                </td>
+                                <td>
+                                    <span class="cell-name">
+                                        <DeckIcon Name="DeckIconName.Parameters" Size="16" Class="cell-type-icon" />
+                                        @p.DisplayName
+                                    </span>
+                                </td>
+                                <td>
+                                    @if (value.Value is not null)
+                                    {
+                                        <span class="param-value @(value.IsSensitive ? "param-value--secret" : "")">
+                                            @if (value.IsSensitive)
+                                            {
+                                                <SecretValue Value="@value.Value"
+                                                             Reveal="@ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskShowValue)]"
+                                                             Hide="@ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskHideValue)]" />
+                                            }
+                                            else
+                                            {
+                                                <span class="secret">@value.Value</span>
+                                            }
+                                        </span>
+                                    }
+                                    else if (value.IsUnresolved)
+                                    {
+                                        <Badge Tone="warning">@ControlsStringsLoc[nameof(ControlsStrings.ParameterValueNotSet)]</Badge>
+                                    }
+                                    else
+                                    {
+                                        <span class="cell-muted">—</span>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="cell-muted">@FormatStarted(p)</span>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

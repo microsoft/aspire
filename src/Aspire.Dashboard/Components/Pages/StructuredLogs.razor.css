@@ -1,38 +1,8 @@
-::deep table.main-grid {
-    margin-bottom: 1px !important; /* make bottom table row border visible when scrolling */
-}
+/* Severity row tinting and Deck table styling live in the appended StructuredLogs block of
+   wwwroot/css/deck.css (alongside the other Deck page styles). This scoped sheet keeps only
+   the rules that must target markup rendered inside this component's render tree. */
 
-::deep .log-row-critical,
-::deep .log-row-critical fluent-button[appearance=lightweight]:not(:hover)::part(control) {
-    background-color: var(--log-critical);
-}
-
-::deep .log-row-error,
-::deep .log-row-error fluent-button[appearance=lightweight]:not(:hover)::part(control) {
-    background-color: var(--log-error);
-}
-
-::deep .log-row-warning,
-::deep .log-row-warning fluent-button[appearance=lightweight]:not(:hover)::part(control){
-    background-color: var(--log-warning);
-}
-
-::deep .logs-summary-layout {
-    display: grid;
-    grid-template-rows: 1fr auto;
-    height: 100%;
-    width: 100%;
-    grid-template-areas:
-        "main"
-        "foot";
-}
-
-::deep .logs-summary-layout > .logs-grid-container {
-    grid-area: main;
-    overflow: auto;
-}
-
-::deep .wrap {
-    text-wrap: wrap;
+::deep .deck-log-message {
     white-space: pre-line;
+    word-break: break-word;
 }

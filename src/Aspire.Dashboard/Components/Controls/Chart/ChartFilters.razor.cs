@@ -37,4 +37,16 @@ public partial class ChartFilters
     {
         InstrumentViewModel.ShowCount = ShowCounts;
     }
+
+    private async Task OnTagSelectionChangedAsync(DimensionFilterViewModel context, DimensionValueViewModel tag, bool isChecked)
+    {
+        context.OnTagSelectionChanged(tag, isChecked);
+        await OnDimensionValuesChanged.InvokeAsync(context);
+    }
+
+    private async Task OnAllValuesSelectionChangedAsync(DimensionFilterViewModel context, bool? isChecked)
+    {
+        context.AreAllValuesSelected = isChecked;
+        await OnDimensionValuesChanged.InvokeAsync(context);
+    }
 }

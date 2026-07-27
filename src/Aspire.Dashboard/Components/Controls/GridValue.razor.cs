@@ -7,9 +7,7 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Resources;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Controls;
 
@@ -102,8 +100,6 @@ public partial class GridValue
     [Inject]
     public required DashboardDialogService DialogService { get; init; }
 
-    private readonly Icon _maskIcon = new Icons.Regular.Size16.EyeOff();
-    private readonly Icon _unmaskIcon = new Icons.Regular.Size16.Eye();
     private readonly string _cellTextId = $"celltext-{Guid.NewGuid():N}";
     private string? _value;
     private string? _formattedValue;

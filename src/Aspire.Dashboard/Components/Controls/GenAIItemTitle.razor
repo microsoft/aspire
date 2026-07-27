@@ -5,7 +5,7 @@
     <span class="message-name">
         @if (ShowIcon)
         {
-            <FluentIcon Value="@titleBadge.Icon" Width="18px" Color="Color.Custom" CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(ResourceName)" />
+            <DeckIcon Name="titleBadge.Icon" Size="18" Style="@($"color: {ColorGenerator.Instance.GetColorVariableByKey(ResourceName)};")" />
         }
         @titleBadge.Text
     </span>
@@ -14,7 +14,7 @@
 @if (_categoryBadge is { } categoryBadge)
 {
     <span class="category-badge category-@categoryBadge.Class">
-        <FluentIcon Value="@categoryBadge.Icon" Width="16px" Color="Color.Custom" CustomColor="var(--icon-color)" />
+        <DeckIcon Name="categoryBadge.Icon" Size="16" Style="color: var(--icon-color);" />
         @categoryBadge.Text
     </span>
 }

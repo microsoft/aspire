@@ -18,12 +18,10 @@ namespace Aspire.Dashboard.Components;
 /// </summary>
 public sealed partial class LogViewer
 {
-    private const string ScrollContainerId = "logScrollContainer";
     private static readonly MarkupString s_spaceMarkup = new MarkupString("&#32;");
 
     private LogEntries? _logEntries;
     private bool _logsChanged;
-
     private IList<LogEntry>? _visibleEntriesCache;
     private string? _appliedFilterText;
     private bool _appliedShowTimestamp;
@@ -78,10 +76,7 @@ public sealed partial class LogViewer
 
     public async Task RefreshDataAsync()
     {
-        // Entries may have been appended or evicted (circular buffer) since the last render, so drop
-        // the cached filtered view before Virtualize re-queries through GetItems.
         _visibleEntriesCache = null;
-
         await RefreshVirtualizeAsync();
     }
 
@@ -121,15 +116,6 @@ public sealed partial class LogViewer
         if (filterChanged || (searchableFieldsChanged && !string.IsNullOrWhiteSpace(FilterText)))
         {
             _visibleEntriesCache = null;
-
-            // Virtualize only re-queries GetItems on an explicit RefreshDataAsync call.
-            // We can't call it here (OnParametersSet) because Virtualize.RefreshDataAsync()
-            // triggers a child-component re-render mid-lifecycle, which creates re-entrant
-            // rendering in Blazor Server. Additionally, OnParametersSetAsync would cause a
-            // double-render (sync portion renders stale items, then re-renders after await).
-            // Deferring to OnAfterRenderAsync guarantees the full component tree has rendered
-            // with the new state, and the cache is already warm from the razor markup's call
-            // to GetVisibleEntries() (for the "no logs match" message).
             _visibleEntriesChanged = true;
         }
 
@@ -178,10 +164,8 @@ public sealed partial class LogViewer
     {
         var builder = new StringBuilder();
 
-        // Keep this in sync with the row markup in LogViewer.razor. Filtering should match only text
-        // users can see: optional/display-formatted timestamps, optional resource prefixes, the stderr
-        // badge, and the ANSI-stripped log message. RawContent is not enough because it contains hidden
-        // ISO timestamps and raw ANSI escape sequences.
+        // Keep filtering aligned with the visible row text rather than raw log content, which can
+        // contain hidden timestamps and ANSI escape sequences.
         if (ShowTimestamp && entry.Timestamp is { } timestamp)
         {
             AppendSearchablePart(builder, GetDisplayTimestamp(timestamp));
@@ -230,11 +214,6 @@ public sealed partial class LogViewer
         if (_visibleEntriesChanged)
         {
             _visibleEntriesChanged = false;
-
-            // The filtered view was already rebuilt for the new parameters during this render pass
-            // (GetVisibleEntries runs from the markup to decide the "no logs match" message), so just
-            // re-query Virtualize. Calling the public RefreshDataAsync here would null the cache and
-            // force a second full scan of the log buffer.
             await RefreshVirtualizeAsync();
         }
         if (firstRender)
@@ -242,9 +221,6 @@ public sealed partial class LogViewer
             Logger.LogDebug("Initializing log viewer.");
 
             await JS.InvokeVoidAsync("initializeContinuousScroll");
-            // Focus the scroll container without showing the focus ring. The container is a large
-            // content area where a visible focus indicator would be visually noisy on initial load.
-            await JS.InvokeVoidAsync("focusElement", ScrollContainerId, true);
             DimensionManager.OnViewportInformationChanged += OnBrowserResize;
         }
     }

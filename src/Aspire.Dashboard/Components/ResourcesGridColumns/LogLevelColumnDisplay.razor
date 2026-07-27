@@ -5,11 +5,11 @@
 
 @if (LogEntry.IsError)
 {
-    <FluentIcon Icon="Icons.Filled.Size16.ErrorCircle" Color="Color.Error" Class="severity-icon"/>
+    <DeckIcon Name="DeckIconName.ErrorCircle" Size="16" Class="severity-icon icon-error" />
 }
 else if (LogEntry.IsWarning)
 {
-    <FluentIcon Icon="Icons.Filled.Size16.Warning" Color="Color.Warning" Class="severity-icon"/>
+    <DeckIcon Name="DeckIconName.Warning" Size="16" Class="severity-icon icon-warning" />
 }
 
 @LogEntry.Severity

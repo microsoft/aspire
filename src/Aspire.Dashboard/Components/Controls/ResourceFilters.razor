@@ -2,7 +2,7 @@
 
 @inject IStringLocalizer<Dashboard.Resources.Resources> Loc
 
-<FluentStack Orientation="Orientation.Vertical" VerticalGap="15">
+<div class="deck-stack deck-stack--vertical" style="row-gap: 15px;">
     <fieldset class="filter-group">
         <legend>@Loc[nameof(Resources.Resources.ResourcesResourceTypesHeader)]</legend>
         <SelectResourceOptions
@@ -27,7 +27,7 @@
             OnAllValuesCheckedChangedAsync="OnAllFilterVisibilityCheckedChangedAsync"
             OnValueVisibilityChangedAsync="OnResourceFilterVisibilityChangedAsync"/>
     </fieldset>
-</FluentStack>
+</div>
 
 @code {
 

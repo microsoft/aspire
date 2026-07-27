@@ -57,6 +57,12 @@ namespace Aspire.Dashboard.Resources {
             }
         }
         
+        public static string MetricsInstrumentsCount {
+            get {
+                return ResourceManager.GetString("MetricsInstrumentsCount", resourceCulture);
+            }
+        }
+        
         public static string MetricsSelectInstrument {
             get {
                 return ResourceManager.GetString("MetricsSelectInstrument", resourceCulture);

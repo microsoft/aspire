@@ -327,6 +327,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string DeckArgumentDescription {
+            get {
+                return ResourceManager.GetString("DeckArgumentDescription", resourceCulture);
+            }
+        }
+
         public static string NoBuildNotSupportedWithWatchMode {
             get {
                 return ResourceManager.GetString("NoBuildNotSupportedWithWatchMode", resourceCulture);

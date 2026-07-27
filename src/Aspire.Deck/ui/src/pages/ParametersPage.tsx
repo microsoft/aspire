@@ -1,0 +1,165 @@
+import { useMemo, useState } from "react";
+import type { Resource } from "../api/types";
+import { PARAMETER_RESOURCE_TYPE, PARAMETER_VALUE_PROPERTY } from "../api/types";
+import { useCommandExecution } from "../components/useCommandExecution";
+import { useResources } from "../lib/useDeckEvent";
+import { DetailsDrawer } from "../components/DetailsDrawer";
+import {
+  ConfirmDialog,
+  DataTable,
+  Page,
+  PageBody,
+  PageHeader,
+  PageHeading,
+  PageSubtitle,
+  PageTitle,
+  PageToolbar,
+  ParametersIcon,
+  SearchBox,
+  SecretValue,
+  StateDot,
+  type Column,
+  type ConfirmRequest,
+  type SortDirection,
+} from "../toolkit";
+
+// A parameter is "unset" when its value couldn't be resolved (no value in config,
+// user secrets, or a default). Aspire reports this as the ValueMissing state.
+function isUnset(resource: Resource): boolean {
+  return resource.state === "ValueMissing";
+}
+
+function valueProperty(resource: Resource) {
+  return resource.properties.find((p) => p.name === PARAMETER_VALUE_PROPERTY) ?? null;
+}
+
+export interface ParametersRouteState {
+  resourceName: string | null;
+  query: string;
+  sortColumn: string;
+  sortDirection: SortDirection;
+}
+
+export function ParametersPage({
+  route,
+  onRouteChange,
+}: {
+  route: ParametersRouteState;
+  onRouteChange: (route: ParametersRouteState) => void;
+}) {
+  const { resources, ready } = useResources();
+  const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
+  const { runCommand, feedbackUi } = useCommandExecution();
+
+  const changeRoute = (change: Partial<ParametersRouteState>): void => {
+    onRouteChange({ ...route, ...change });
+  };
+
+  const visible = useMemo(() => {
+    const list = resources.filter((r) => !r.isHidden && r.resourceType === PARAMETER_RESOURCE_TYPE);
+    const trimmed = route.query.trim().toLowerCase();
+    const filtered = trimmed
+      ? list.filter(
+          (r) =>
+            r.displayName.toLowerCase().includes(trimmed) ||
+            (r.state ?? "").toLowerCase().includes(trimmed),
+        )
+      : list;
+    return filtered;
+  }, [resources, route.query]);
+
+  const selected = useMemo(
+    () => resources.find((r) => r.name === route.resourceName) ?? null,
+    [resources, route.resourceName],
+  );
+
+  const columns: Column<Resource>[] = [
+    {
+      key: "state",
+      header: "State",
+      width: "170px",
+      render: (r) => <StateDot state={r.state} stateStyle={r.stateStyle} health={r.health} />,
+      compare: (left, right) => (left.state ?? "").localeCompare(right.state ?? ""),
+    },
+    {
+      key: "name",
+      header: "Name",
+      width: "260px",
+      render: (r) => (
+        <span className="cell-name">
+          <ParametersIcon size={15} className="cell-type-icon" />
+          {r.displayName}
+        </span>
+      ),
+      compare: (left, right) => left.displayName.localeCompare(right.displayName),
+    },
+    {
+      key: "value",
+      header: "Value",
+      render: (r) => <ValueCell resource={r} />,
+    },
+  ];
+
+  return (
+    <Page aria-labelledby="deck-page-parameters-title">
+      <PageHeader>
+        <PageHeading>
+          <PageTitle id="deck-page-parameters-title">Parameters</PageTitle>
+          <PageSubtitle>
+            {ready ? `${visible.length} parameter${visible.length === 1 ? "" : "s"}` : "Loading…"}
+          </PageSubtitle>
+        </PageHeading>
+      </PageHeader>
+
+      <PageToolbar ariaLabel="Parameter tools">
+        <SearchBox value={route.query} onChange={(query) => changeRoute({ query })} placeholder="Filter by name or state…" />
+      </PageToolbar>
+
+      <PageBody>
+        <DataTable
+          columns={columns}
+          rows={visible}
+          rowKey={(r) => r.name}
+          onRowClick={(r) => changeRoute({ resourceName: r.name })}
+          isSelected={(r) => r.name === route.resourceName}
+          sort={{ columnKey: route.sortColumn, direction: route.sortDirection }}
+          onSortChange={(sort) => changeRoute({ sortColumn: sort.columnKey, sortDirection: sort.direction })}
+          emptyMessage={ready ? "This AppHost has no parameters." : "Connecting to resource service…"}
+        />
+      </PageBody>
+
+      {selected ? (
+        <DetailsDrawer
+          resource={selected}
+          onClose={() => changeRoute({ resourceName: null })}
+          onExecuteCommand={(resource, command) => void runCommand(resource, command)}
+          requestConfirm={setConfirm}
+        />
+      ) : null}
+
+      <ConfirmDialog request={confirm} onClose={() => setConfirm(null)} />
+
+      {feedbackUi}
+    </Page>
+  );
+}
+
+// Shows the parameter's value: a muted "Not set" when unresolved, the value when
+// plain, or a reveal-on-demand mask when the parameter is a secret.
+function ValueCell({ resource }: { resource: Resource }) {
+  const prop = valueProperty(resource);
+
+  if (isUnset(resource) || !prop || prop.value.length === 0) {
+    return <span className="cell-muted">Not set</span>;
+  }
+
+  if (!prop.isSensitive) {
+    return <span className="param-value">{prop.value}</span>;
+  }
+
+  return (
+    <span className="param-value param-value--secret">
+      <SecretValue value={prop.value} />
+    </span>
+  );
+}

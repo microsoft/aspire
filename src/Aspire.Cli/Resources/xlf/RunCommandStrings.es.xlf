@@ -77,6 +77,11 @@
         <target state="needs-review-translation">No se pudo iniciar el panel de Aspire.</target>
         <note />
       </trans-unit>
+      <trans-unit id="DeckArgumentDescription">
+        <source>(Preview) Use Aspire Deck, a native dashboard, instead of the built-in dashboard for this run</source>
+        <target state="new">(Preview) Use Aspire Deck, a native dashboard, instead of the built-in dashboard for this run</target>
+        <note />
+      </trans-unit>
       <trans-unit id="Description">
         <source>Run an Aspire AppHost interactively for development</source>
         <target state="needs-review-translation">Ejecutar un apphost de Aspire en modo de desarrollo.</target>

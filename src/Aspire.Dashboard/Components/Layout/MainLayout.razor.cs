@@ -18,6 +18,10 @@ namespace Aspire.Dashboard.Components.Layout;
 public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 {
     private bool _isNavMenuOpen;
+    // Internal for testing: whether the desktop Deck settings pane is open.
+    internal bool _showSettingsPane;
+    internal bool _showHelpPane;
+    internal bool _showManageDataPane;
 
     private IDisposable? _themeChangedSubscription;
     private IDisposable? _locationChangingRegistration;
@@ -309,6 +313,57 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     public Task LaunchSettingsAsync() => LaunchSettingsAsync(GetDefaultReturnFocusElementId(SettingsButtonId));
 
+    // Desktop renders settings as a Deck right-side pane (SettingsPane) instead of the Fluent panel.
+    // Toggled from the top bar; mobile still uses LaunchSettingsAsync (Fluent dialog).
+    private async Task ToggleSettingsPaneAsync()
+    {
+        if (!_showSettingsPane)
+        {
+            // Ensure the current theme is available before the pane renders its theme options.
+            await ThemeManager.EnsureInitializedAsync();
+        }
+
+        _showSettingsPane = !_showSettingsPane;
+        StateHasChanged();
+    }
+
+    private void CloseSettingsPane()
+    {
+        _showSettingsPane = false;
+        StateHasChanged();
+    }
+
+    // Desktop renders help as a Deck right-side pane (HelpPane) instead of the Fluent dialog.
+    // Toggled from the top bar; mobile still uses LaunchHelpAsync (Fluent dialog).
+    private Task ToggleHelpPaneAsync()
+    {
+        _showHelpPane = !_showHelpPane;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private void CloseHelpPane()
+    {
+        _showHelpPane = false;
+        StateHasChanged();
+    }
+
+    // Desktop renders "Manage data" as a Deck right-side pane (ManageDataPane) instead of the Fluent
+    // dialog. Opened from the settings pane's "Manage data" action, which closes settings first to
+    // avoid stacking two panes / competing focus traps.
+    private void OpenManageDataPane()
+    {
+        _showSettingsPane = false;
+        _showManageDataPane = true;
+        StateHasChanged();
+    }
+
+    private void CloseManageDataPane()
+    {
+        _showManageDataPane = false;
+        StateHasChanged();
+    }
+
     private async Task LaunchSettingsAsync(string? returnFocusElementId)
     {
         var parameters = new DialogParameters
@@ -390,10 +445,26 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         switch (shortcut)
         {
             case AspireKeyboardShortcut.Help:
-                await LaunchHelpAsync();
+                // Desktop uses the Deck help pane; mobile keeps the Fluent help dialog.
+                if (ViewportInformation.IsDesktop)
+                {
+                    await ToggleHelpPaneAsync();
+                }
+                else
+                {
+                    await LaunchHelpAsync();
+                }
                 break;
             case AspireKeyboardShortcut.Settings:
-                await LaunchSettingsAsync();
+                // Desktop uses the Deck settings pane; mobile keeps the Fluent settings dialog.
+                if (ViewportInformation.IsDesktop)
+                {
+                    await ToggleSettingsPaneAsync();
+                }
+                else
+                {
+                    await LaunchSettingsAsync();
+                }
                 break;
             case AspireKeyboardShortcut.GoToResources:
                 NavigationManager.NavigateTo(DashboardUrls.ResourcesUrl());

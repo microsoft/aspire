@@ -1,6 +1,6 @@
 ::deep .unread-logs-errors-link {
     vertical-align: super;
-    --unread-logs-badge-color: #ffffff;
+    margin-left: 5px;
 }
 
 ::deep .value-not-set-link {
@@ -16,13 +16,6 @@
 
 ::deep .value-not-set-link:hover {
     color: var(--accent-fill-hover);
-}
-
-::deep .unread-logs-errors-link::part(control) {
-    margin-left: 5px;
-    padding: 0;
-    flex-grow: 0;
-    color: #ffffff;
 }
 
 ::deep .error-counter-badge {
@@ -81,18 +74,6 @@
 
 ::deep .resource-tabs fluent-tabs {
     margin-left: calc(var(--design-unit) * 3px);
-}
-
-::deep .resources-tab-header {
-    max-width: 100%;
-    min-width: 0;
-}
-
-/* FluentTabs keeps its horizontal tab list at max-content width. Constrain the host so
-   focus can scroll the selected tab into view when space is limited above ultra-low width. */
-::deep .resources-tab-header[orientation="horizontal"] {
-    overflow-x: auto;
-    overflow-y: hidden;
 }
 
 ::deep .resources-grid-container {

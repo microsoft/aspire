@@ -136,6 +136,16 @@
   <data name="TraceDetailTotalSpansHeader" xml:space="preserve">
     <value>Total spans</value>
   </data>
+  <data name="TraceDetailMinDurationLabel" xml:space="preserve">
+    <value>Min duration</value>
+  </data>
+  <data name="TraceDetailMinDurationAll" xml:space="preserve">
+    <value>All durations</value>
+  </data>
+  <data name="TraceDetailMinDurationOptionFormat" xml:space="preserve">
+    <value>≥ {0}</value>
+    <comment>{0} is a formatted duration, e.g. "5ms". The ≥ sign means spans at least this long.</comment>
+  </data>
   <data name="TraceDetailTraceNotFound" xml:space="preserve">
     <value>Trace "{0}" not found</value>
     <comment>{0} is an identifier</comment>

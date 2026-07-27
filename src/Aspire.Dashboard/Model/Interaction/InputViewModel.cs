@@ -14,12 +14,12 @@ public sealed class InputViewModel
     // Fallback maximum upload size matching the server's default (100 MB).
     // In practice the server always sends a MaxFileSize value for file inputs,
     // so this constant is only used as a defensive safety net.
-    internal const long DefaultMaxUploadedFileBytes = 100 * 1024 * 1024; // 100 MB
+    internal const long DefaultMaxUploadedFileBytes = 100 * 1024 * 1024;
 
-    private static readonly JsonSerializerOptions s_jsonSerializerOptions = new()
+    private static readonly InteractionJsonSerializerContext s_jsonSerializerContext = new(new JsonSerializerOptions
     {
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-    };
+    });
 
     public InteractionInput Input { get; private set; } = default!;
 
@@ -34,10 +34,10 @@ public sealed class InputViewModel
         // local values by default so an update for a dependent choice does not clobber text the user is
         // typing elsewhere in the dialog. ShouldUseIncomingValue captures the cases where the server is
         // authoritative because the field is being dynamically loaded or is not currently editable.
-        if (Input is not null && !ShouldUseIncomingValue(Input, input))
-        {
-            input.Value = Input.Value;
-        }
+        var value = Input is null || ShouldUseIncomingValue(Input, input)
+            ? input.Value
+            : Input.Value;
+        input.Value = value;
 
         Input = input;
         if (input.InputType == InputType.Choice && input.Options != null)
@@ -122,18 +122,20 @@ public sealed class InputViewModel
     // Used to track secret text visibility state
     public bool IsSecretTextVisible { get; set; }
 
-    // Tracks the uploaded file references for File inputs.
-    // When set, serializes successful references (Id != null) to JSON on the underlying Input.Value.
+    // Successful uploads are serialized into Input.Value because the AppHost resolves these opaque
+    // IDs on the same resource-service session that owns the interaction response.
     public List<FileReferenceViewModel> FileReferences { get; } = [];
 
     public void SetFileReferences(IEnumerable<FileReferenceViewModel> files)
     {
         FileReferences.Clear();
         FileReferences.AddRange(files);
-        var successfulRefs = FileReferences.Where(f => f.Id is not null).ToList();
-        // Use empty string (not "[]") when no files were accepted, so required-field checks work correctly.
-        Input.Value = successfulRefs.Count > 0
-            ? JsonSerializer.Serialize(successfulRefs, s_jsonSerializerOptions)
+        var successfulReferences = FileReferences.Where(f => f.Id is not null).ToList();
+
+        // Use an empty string rather than "[]" so required-field validation rejects an upload where
+        // every selected file failed.
+        Input.Value = successfulReferences.Count > 0
+            ? JsonSerializer.Serialize(successfulReferences, s_jsonSerializerContext.ListFileReferenceViewModel)
             : string.Empty;
     }
 
@@ -175,3 +177,6 @@ public sealed class FileReferenceViewModel
     [JsonIgnore]
     public string? ErrorMessage { get; set; }
 }
+
+[JsonSerializable(typeof(List<FileReferenceViewModel>))]
+internal sealed partial class InteractionJsonSerializerContext : JsonSerializerContext;

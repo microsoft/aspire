@@ -31,6 +31,7 @@ internal static class KnownFeatures
     public static string NuGetSignatureVerificationEnabled => "nugetSignatureVerificationEnabled";
     public static string AspireSkillsRemoteFetchEnabled => "aspireSkillsRemoteFetchEnabled";
     public static string TerminalCommandsEnabled => "terminalCommandsEnabled";
+    public static string DeckCommandEnabled => "deckCommandEnabled";
 
     private static readonly Dictionary<string, FeatureMetadata> s_featureMetadata = new()
     {
@@ -92,6 +93,11 @@ internal static class KnownFeatures
         [TerminalCommandsEnabled] = new(
             TerminalCommandsEnabled,
             "(Experimental) Enable the 'aspire terminal' command group ('aspire terminal ps', 'aspire terminal attach'). Used in conjunction with the experimental WithTerminal() API (ASPIRETERMINAL001). Hidden by default while the API surface is in preview.",
+            DefaultValue: false),
+
+        [DeckCommandEnabled] = new(
+            DeckCommandEnabled,
+            "(Preview) Enable the 'aspire deck' command, which launches Aspire Deck — a native (Tauri-based) preview alternative to the Blazor dashboard. Hidden by default while in preview.",
             DefaultValue: false)
     };
 

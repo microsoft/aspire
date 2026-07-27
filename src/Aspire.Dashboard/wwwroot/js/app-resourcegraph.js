@@ -35,6 +35,7 @@ class ResourceGraph {
 
         this.nodes = [];
         this.links = [];
+        this.initialFitDone = false;
 
         this.svg = d3.select('.resource-graph');
         this.baseGroup = this.svg.append("g");
@@ -146,6 +147,56 @@ class ResourceGraph {
         this.svg.transition().call(this.zoom.transform, d3.zoomIdentity);
     }
 
+    // Fit the whole graph within the viewport and center it. The viewBox is centered
+    // on the origin ([-w/2,-h/2,w,h]), so fitting means scaling the node bounding box
+    // (plus padding) to fit the viewport, then translating its center to the origin.
+    // Returns false (without changing the view) when the viewport or layout isn't
+    // measurable yet, so the caller can retry on a later render.
+    zoomToFit(padding = 60) {
+        if (!this.nodes || this.nodes.length === 0) {
+            return false;
+        }
+
+        var container = document.querySelector(".resources-summary-layout");
+        if (!container) {
+            return false;
+        }
+
+        var width = container.clientWidth;
+        var height = Math.max(container.clientHeight - 50, 0);
+        if (width === 0 || height === 0) {
+            return false;
+        }
+
+        // Nodes are drawn as circles around their (x,y); pad by an approximate node
+        // radius so the outermost nodes and their labels aren't clipped at the edge.
+        var nodeRadius = 48;
+        var minX = d3.min(this.nodes, d => d.x) - nodeRadius;
+        var maxX = d3.max(this.nodes, d => d.x) + nodeRadius;
+        var minY = d3.min(this.nodes, d => d.y) - nodeRadius;
+        var maxY = d3.max(this.nodes, d => d.y) + nodeRadius;
+
+        var boxWidth = maxX - minX;
+        var boxHeight = maxY - minY;
+        if (boxWidth === 0 || boxHeight === 0) {
+            return false;
+        }
+
+        var midX = (minX + maxX) / 2;
+        var midY = (minY + maxY) / 2;
+
+        // Clamp to the zoom scaleExtent ([0.2, 4]) and avoid magnifying a tiny graph
+        // past 1:1, which would look unnaturally zoomed-in on first display.
+        var scale = Math.min((width - padding * 2) / boxWidth, (height - padding * 2) / boxHeight);
+        scale = Math.max(0.2, Math.min(scale, 1));
+
+        // d3.zoomIdentity.scale(s).translate(-midX,-midY) maps the box center to (0,0),
+        // which is the viewport center given the origin-centered viewBox.
+        var transform = d3.zoomIdentity.scale(scale).translate(-midX, -midY);
+        this.svg.call(this.zoom.transform, transform);
+        return true;
+    }
+
     zoomIn() {
         this.svg.transition().call(this.zoom.scaleBy, 1.5);
     }
@@ -207,6 +258,12 @@ class ResourceGraph {
 
     iconEqual(i1, i2) {
         if (i1.path !== i2.path) {
+            return false;
+        }
+        if (i1.svg !== i2.svg) {
+            return false;
+        }
+        if (i1.usesFill !== i2.usesFill || i1.name !== i2.name || i1.variant !== i2.variant) {
             return false;
         }
         if (i1.color !== i2.color) {
@@ -285,6 +342,10 @@ class ResourceGraph {
         function createIcon(resourceIcon) {
             return {
                 path: resourceIcon.path,
+                svg: resourceIcon.svg,
+                usesFill: resourceIcon.usesFill,
+                name: resourceIcon.name,
+                variant: resourceIcon.variant,
                 color: resourceIcon.color,
                 tooltip: resourceIcon.tooltip
             };
@@ -359,20 +420,29 @@ class ResourceGraph {
         var iconTransform = newNodesContainer
             .append("g")
             .attr("transform", n => n.endpointText ? "translate(-24,-37)" : "translate(-24,-24)")
-        var iconPath = iconTransform
-            .append("path");
-        iconPath
-            .attr("fill", n => n.resourceIcon.color)
-            .attr("d", n => n.resourceIcon.path)
+        // Deck resource-type icons are multi-element, stroke-based SVGs (unlike the single filled path
+        // used for the state icon), so render their inner markup into a group via innerHTML and stroke it.
+        var iconGroup = iconTransform
+            .append("g")
+            .attr("fill", n => n.resourceIcon.usesFill ? n.resourceIcon.color : "none")
+            .attr("stroke-linecap", "round")
+            .attr("stroke-linejoin", "round")
+            .attr("data-icon-name", n => n.resourceIcon.name)
+            .attr("data-icon-variant", n => n.resourceIcon.variant);
+        iconGroup
+            .html(n => n.resourceIcon.svg)
+            .attr("stroke", n => n.resourceIcon.usesFill ? "none" : n.resourceIcon.color);
+        iconGroup
             .append("title")
             .text(n => n.resourceIcon.tooltip);
 
-        // Icon paths could be mixed size. We need to transform icons to always be displayed at a consistent size.
-        iconPath.each(function (d) {
+        // Icon viewBoxes could be mixed size. Scale each icon to a consistent display size, and divide
+        // the stroke width back out by the scale so every icon keeps a uniform ~2px stroke weight.
+        iconGroup.each(function (d) {
             const iconSize = 48;
 
-            const path = d3.select(this);
-            const node = path.node();
+            const group = d3.select(this);
+            const node = group.node();
             const bbox = node.getBBox();
 
             const available = Math.max(1, iconSize - 2);
@@ -382,8 +452,9 @@ class ResourceGraph {
             const cy = bbox.y + bbox.height / 2;
 
             // apply scaling & centering inside this group
-            path.attr("transform",
+            group.attr("transform",
                 `translate(${iconSize / 2},${iconSize / 2}) scale(${scale}) translate(${-cx},${-cy})`);
+            group.attr("stroke-width", 2 / scale);
         });
 
         var endpointGroup = newNodesContainer
@@ -404,10 +475,6 @@ class ResourceGraph {
             .attr("cy", 8)
             .attr("cx", 8)
             .attr("class", "resource-status-circle")
-            .append("title");
-        statusGroup
-            .append("path")
-            .attr("class", "resource-status-path")
             .append("title");
 
         var resourceNameGroup = newNodesContainer
@@ -441,13 +508,8 @@ class ResourceGraph {
         this.nodeElementsG
             .selectAll(".resource-group")
             .select(".resource-status-circle")
-            .select("title")
-            .text(n => n.stateIcon.tooltip);
-        this.nodeElementsG
-            .selectAll(".resource-group")
-            .select(".resource-status-path")
-            .attr("d", n => n.stateIcon.path)
-            .attr("fill", n => n.stateIcon.color)
+            // Inline style (not attr) so it wins over the .resource-status-circle CSS fill rule.
+            .style("fill", n => n.stateIcon.color)
             .select("title")
             .text(n => n.stateIcon.tooltip);
 
@@ -489,6 +551,15 @@ class ResourceGraph {
         }
 
         this.simulation.restart();
+
+        // On first display, fit the whole graph within the viewport and center it,
+        // rather than showing it at 1:1 scale where larger graphs overflow or sit
+        // off-center until the user manually zooms/pans. Only auto-fit once so we
+        // don't fight the user's own zoom/pan on later updates; zoomToFit reports
+        // whether it could measure the viewport so we retry on a subsequent render.
+        if (!this.initialFitDone && this.zoomToFit()) {
+            this.initialFitDone = true;
+        }
 
         function trimText(text, maxLength) {
             if (!text) {

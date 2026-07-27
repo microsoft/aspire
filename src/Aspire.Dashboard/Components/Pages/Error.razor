@@ -5,24 +5,23 @@
 
 <PageTitle>@Loc[nameof(Dashboard.Resources.Routes.ErrorHandlerPageTitle)]</PageTitle>
 
-<div class="error-backdrop">
-    <div class="error-container">
-        <div class="error-logo">
-            <AspireLogo Height="128" Width="128" />
+<div class="auth-backdrop">
+    <div class="auth-card">
+        <div class="auth-brand">
+            <AspireLogo Height="64" Width="64" />
         </div>
-        <div class="error-entry-container">
-            <h1>@Loc[nameof(Dashboard.Resources.Routes.ErrorHandlerPageTitle)]</h1>
-            <h5>@Loc[nameof(Dashboard.Resources.Routes.ErrorHandlerPageSubtitle)]</h5>
+        <h1 class="auth-title">@Loc[nameof(Dashboard.Resources.Routes.ErrorHandlerPageTitle)]</h1>
+        <p class="auth-subtitle">@Loc[nameof(Dashboard.Resources.Routes.ErrorHandlerPageSubtitle)]</p>
 
-            @if (ShowRequestId)
-            {
-                <p>
-                    <strong>@Loc[nameof(Dashboard.Resources.Routes.ErrorHandlerPageRequestId)]</strong> <code>@RequestId</code>
-                </p>
-            }
-        </div>
+        @if (ShowRequestId)
+        {
+            <div class="auth-meta">
+                <span class="auth-meta-label">@Loc[nameof(Dashboard.Resources.Routes.ErrorHandlerPageRequestId)]</span>
+                <code class="auth-meta-value">@RequestId</code>
+            </div>
+        }
     </div>
-    <div class="version-info">
+    <div class="auth-version">
         @VersionHelpers.DashboardDisplayVersion
     </div>
 </div>

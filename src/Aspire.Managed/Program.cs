@@ -38,6 +38,7 @@ static async Task<int> RunDashboard(string[] args)
     };
 
     var app = new DashboardWebApplication(options: options);
+    await using var _ = app.ConfigureAwait(false);
 
     // Tear the dashboard down if the launching CLI dies so a hard-killed `aspire dashboard run` (or the
     // profiling collector, which also launches aspire-managed dashboard) cannot leave an orphaned
@@ -48,7 +49,14 @@ static async Task<int> RunDashboard(string[] args)
     var parentWatchdog = Aspire.Managed.ParentProcessWatchdog.Start(shutdownCts);
     try
     {
-        return await app.RunAsync(shutdownCts.Token).ConfigureAwait(false);
+        await app.StartAsync(shutdownCts.Token).ConfigureAwait(false);
+        await Task.Delay(Timeout.Infinite, shutdownCts.Token).ConfigureAwait(false);
+        return 0;
+    }
+    catch (OperationCanceledException) when (shutdownCts.IsCancellationRequested)
+    {
+        await app.StopAsync(CancellationToken.None).ConfigureAwait(false);
+        return 0;
     }
     finally
     {

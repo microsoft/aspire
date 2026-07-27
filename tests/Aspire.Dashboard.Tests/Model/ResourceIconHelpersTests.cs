@@ -1,164 +1,74 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Deck;
 using Aspire.Dashboard.Model;
 using Aspire.Tests.Shared.DashboardModel;
-using Google.Protobuf.WellKnownTypes;
-using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
 namespace Aspire.Dashboard.Tests.Model;
 
 public sealed class ResourceIconHelpersTests
 {
-    private readonly IconResolver _iconResolver = new IconResolver(NullLogger<IconResolver>.Instance);
-
-    [Fact]
-    public void GetIconForResource_WithCustomIcon_ReturnsCustomIcon()
+    [Theory]
+    [InlineData("Database", DeckIconName.Database)]
+    [InlineData("CloudArrowUp", DeckIconName.External)]
+    [InlineData("CodeCsRectangle", DeckIconName.Executable)]
+    [InlineData("PlugConnectedSettings", DeckIconName.Link)]
+    public void GetDeckIconForResource_WithMappedCustomIcon_ReturnsMappedIcon(string iconName, DeckIconName expected)
     {
-        // Arrange
-        var resource = ModelTestHelpers.CreateResource(iconName: "Database", iconVariant: IconVariant.Filled);
+        var resource = ModelTestHelpers.CreateResource(iconName: iconName);
 
-        // Act
-        var icon = ResourceIconHelpers.GetIconForResource(_iconResolver, resource, IconSize.Size20);
+        var icon = ResourceIconHelpers.GetDeckIconForResource(resource);
 
-        // Assert
-        Assert.NotNull(icon);
-        // The actual icon resolution depends on the IconResolver, so we just verify it doesn't throw
-        // and returns a non-null result
+        Assert.Equal(expected, icon);
     }
 
     [Fact]
-    public void GetIconForResource_WithCustomIconRegularVariant_ReturnsCustomIcon()
+    public void GetDeckIconForResource_WithUnknownCustomIcon_FallsBackToResourceType()
     {
-        // Arrange
-        var resource = ModelTestHelpers.CreateResource(iconName: "CloudArrowUp", iconVariant: IconVariant.Regular);
+        var resource = ModelTestHelpers.CreateResource(resourceType: KnownResourceTypes.Container, iconName: "NonExistentIcon");
 
-        // Act
-        var icon = ResourceIconHelpers.GetIconForResource(_iconResolver, resource, IconSize.Size16);
+        var icon = ResourceIconHelpers.GetDeckIconForResource(resource);
 
-        // Assert
-        Assert.NotNull(icon);
-    }
-
-    [Fact]
-    public void GetIconForResource_WithoutCustomIcon_ReturnsDefaultIcon()
-    {
-        // Arrange
-        var resource = ModelTestHelpers.CreateResource(resourceType: KnownResourceTypes.Container);
-
-        // Act
-        var icon = ResourceIconHelpers.GetIconForResource(_iconResolver, resource, IconSize.Size20);
-
-        // Assert
-        Assert.NotNull(icon);
-        // Should fall back to the default container icon (Box)
-    }
-
-    [Fact]
-    public void GetIconForResource_WithInvalidCustomIcon_FallsBackToDefault()
-    {
-        // Arrange
-        var resource = ModelTestHelpers.CreateResource(resourceType: KnownResourceTypes.Project, iconName: "NonExistentIcon", iconVariant: IconVariant.Filled);
-
-        // Act
-        var icon = ResourceIconHelpers.GetIconForResource(_iconResolver, resource, IconSize.Size20);
-
-        // Assert
-        Assert.NotNull(icon);
-        // Should fall back to the default project icon even if custom icon doesn't exist
+        Assert.Equal(DeckIconName.Container, icon);
     }
 
     [Theory]
-    [InlineData(KnownResourceTypes.Executable)]
-    [InlineData(KnownResourceTypes.Project)]
-    [InlineData(KnownResourceTypes.Container)]
-    [InlineData(KnownResourceTypes.Parameter)]
-    [InlineData(KnownResourceTypes.ConnectionString)]
-    [InlineData(KnownResourceTypes.ExternalService)]
-    public void GetIconForResource_WithKnownResourceTypes_ReturnsIcon(string resourceType)
+    [InlineData(KnownResourceTypes.Executable, DeckIconName.Executable)]
+    [InlineData(KnownResourceTypes.Project, DeckIconName.Project)]
+    [InlineData(KnownResourceTypes.Container, DeckIconName.Container)]
+    [InlineData(KnownResourceTypes.Parameter, DeckIconName.Parameters)]
+    [InlineData(KnownResourceTypes.ConnectionString, DeckIconName.Link)]
+    [InlineData(KnownResourceTypes.ExternalService, DeckIconName.External)]
+    [InlineData("postgres-database", DeckIconName.Database)]
+    [InlineData("custom-resource", DeckIconName.Resources)]
+    public void GetDeckIconForResource_WithResourceType_ReturnsExpectedIcon(string resourceType, DeckIconName expected)
     {
-        // Arrange
         var resource = ModelTestHelpers.CreateResource(resourceType: resourceType);
 
-        // Act
-        var icon = ResourceIconHelpers.GetIconForResource(_iconResolver, resource, IconSize.Size20);
+        var icon = ResourceIconHelpers.GetDeckIconForResource(resource);
 
-        // Assert
-        Assert.NotNull(icon);
-    }
-
-    [Fact]
-    public void GetIconForResource_WithDatabaseInResourceType_ReturnsDatabaseIcon()
-    {
-        // Arrange
-        var resource = ModelTestHelpers.CreateResource(resourceType: "postgres-database");
-
-        // Act
-        var icon = ResourceIconHelpers.GetIconForResource(_iconResolver, resource, IconSize.Size20);
-
-        // Assert
-        Assert.NotNull(icon);
-        Assert.Equal("Database", icon.Name);
+        Assert.Equal(expected, icon);
     }
 
     [Theory]
-    [InlineData(".cs", "CodeCsRectangle")]
-    [InlineData(".CS", "CodeCsRectangle")]
-    [InlineData(".csproj", "CodeCsRectangle")]
-    [InlineData(".CSPROJ", "CodeCsRectangle")]
-    [InlineData(".fsproj", "CodeFsRectangle")]
-    [InlineData(".vbproj", "CodeVbRectangle")]
-    [InlineData(".xyz", "CodeCircle")]
-    public void GetIconForResource_WithSpecificProjectType_ReturnsLanguageSpecificIcon(string extension, string name)
+    [InlineData("DATABASE", DeckIconName.Database)]
+    [InlineData("AgentsAdd", DeckIconName.Sparkle)]
+    [InlineData("GlobeDesktop", DeckIconName.External)]
+    public void TryGetDeckIcon_IsCaseInsensitive(string iconName, DeckIconName expected)
     {
-        // Arrange
-        var projectPath = $"/path/to/project{extension}";
-        var properties = new Dictionary<string, ResourcePropertyViewModel>
-        {
-            [KnownProperties.Project.Path] = new ResourcePropertyViewModel(KnownProperties.Project.Path, Value.ForString(projectPath), isValueSensitive: false, knownProperty: null, sortOrder: 0, displayName: null, isHighlighted: false)
-        };
-        var resource = ModelTestHelpers.CreateResource(
-            resourceType: KnownResourceTypes.Project,
-            properties: properties);
+        var resolved = ResourceIconHelpers.TryGetDeckIcon(iconName, out var icon);
 
-        // Act
-        var icon = ResourceIconHelpers.GetIconForResource(_iconResolver, resource, IconSize.Size20);
-
-        // Assert
-        Assert.NotNull(icon);
-        Assert.Equal(name, icon.Name);
+        Assert.True(resolved);
+        Assert.Equal(expected, icon);
     }
 
     [Fact]
-    public void GetIconForResource_WithProjectButNoPath_ReturnsGenericCodeIcon()
+    public void TryGetDeckIcon_WithUnknownIcon_ReturnsFalse()
     {
-        // Arrange
-        var resource = ModelTestHelpers.CreateResource(resourceType: KnownResourceTypes.Project);
+        var resolved = ResourceIconHelpers.TryGetDeckIcon("NonExistentIcon", out _);
 
-        // Act
-        var icon = ResourceIconHelpers.GetIconForResource(_iconResolver, resource, IconSize.Size20);
-
-        // Assert
-        Assert.NotNull(icon);
-        Assert.Equal("CodeCircle", icon.Name);
-    }
-
-    [Theory]
-    [InlineData(IconSize.Size16)]
-    [InlineData(IconSize.Size20)]
-    [InlineData(IconSize.Size24)]
-    public void GetIconForResource_WithDifferentSizes_ReturnsIconOfDesiredSize(IconSize size)
-    {
-        // Arrange
-        var resource = ModelTestHelpers.CreateResource(resourceType: KnownResourceTypes.Container);
-
-        // Act
-        var icon = ResourceIconHelpers.GetIconForResource(_iconResolver, resource, size);
-
-        // Assert
-        Assert.NotNull(icon);
-        Assert.Equal(size, icon.Size);
+        Assert.False(resolved);
     }
 }

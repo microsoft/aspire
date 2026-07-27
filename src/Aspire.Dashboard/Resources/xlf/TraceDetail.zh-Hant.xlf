@@ -12,6 +12,21 @@
         <target state="translated">期間</target>
         <note />
       </trans-unit>
+      <trans-unit id="TraceDetailMinDurationAll">
+        <source>All durations</source>
+        <target state="new">All durations</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TraceDetailMinDurationLabel">
+        <source>Min duration</source>
+        <target state="new">Min duration</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TraceDetailMinDurationOptionFormat">
+        <source>≥ {0}</source>
+        <target state="new">≥ {0}</target>
+        <note>{0} is a formatted duration, e.g. "5ms". The ≥ sign means spans at least this long.</note>
+      </trans-unit>
       <trans-unit id="TraceDetailMobileToolbarButtonText">
         <source>Trace details</source>
         <target state="translated">追蹤詳細資料</target>

@@ -8,7 +8,7 @@
 @implements IAsyncDisposable
 
 @* Console logs always have a dark background. Set data-theme="dark" so dark theme accent colors are used *@
-<div id="@ScrollContainerId" class="log-overflow console-overflow continuous-scroll-overflow" tabindex="0" role="region" aria-label="@Loc[nameof(ConsoleLogs.ConsoleLogsHeader)]" data-theme="dark">
+<div class="log-overflow console-overflow continuous-scroll-overflow" data-theme="dark">
     <div class="@GetLogContainerClass()" id="logContainer">
         @if (LogEntries is { } logEntries)
         {
@@ -26,7 +26,7 @@
                     <span>@Loc[nameof(ConsoleLogs.ConsoleLogsNoLogsMatchFilter)]</span>
                 </div>
             }
-            <Virtualize @ref="VirtualizeRef" ItemsProvider="@GetItems" ItemSize="20" OverscanCount="200" TItem="LogEntry">
+            <Virtualize @key="FilterText" @ref="VirtualizeRef" ItemsProvider="@GetItems" ItemSize="20" OverscanCount="200" TItem="LogEntry">
                 @if (context.Pause is { } pause)
                 {
                     // If this is a previous pause but no logs were obtained during the pause, we don't need to show anything.

@@ -63,6 +63,40 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ExternalDashboardModeDoesNotAddDashboardResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.DisableDashboard = false,
+            testOutputHelper: testOutputHelper);
+
+        // External dashboard mode: an external app (e.g. Aspire Deck) substitutes for the built-in
+        // dashboard. The dashboard process should not be added, but the resource service must still
+        // be hosted so the external app can connect.
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [KnownConfigNames.DashboardExternal] = "true"
+        });
+
+        builder.Services.Configure<DcpOptions>(o =>
+        {
+            o.DashboardPath = Path.GetFullPath("dashboard");
+        });
+
+        using var app = builder.Build();
+
+        await app.ExecuteBeforeStartHooksAsync(default).DefaultTimeout();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // The dashboard is the only executable resource the AppHost adds automatically, so in
+        // external mode there should be none.
+        Assert.Empty(model.Resources.OfType<ExecutableResource>());
+
+        // The resource service host is still registered so an external dashboard can connect.
+        Assert.NotNull(app.Services.GetService<DashboardServiceHost>());
+    }
+
+    [Fact]
     public async Task DashboardIsAddedFirst()
     {
         using var builder = TestDistributedApplicationBuilder.Create(

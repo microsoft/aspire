@@ -1,0 +1,262 @@
+import type {
+  Resource,
+  ResourceCommand,
+  EnvVar,
+  ResourceProperty,
+} from "../api/types";
+import { openExternal } from "../api/deck";
+import { formatTime } from "../lib/format";
+import { partitionResourceCommands } from "../lib/resourceCommands";
+import {
+  Badge,
+  Button,
+  CommandMenu,
+  CopyValueButton,
+  Drawer,
+  ExternalIcon,
+  LinkIcon,
+  MoreIcon,
+  NamedIcon,
+  ResourceTypeIcon,
+  SecretValue,
+  StateDot,
+  type ConfirmRequest,
+} from "../toolkit";
+
+function commandIcon(command: ResourceCommand) {
+  const fallbackName = command.name.includes("start")
+    ? "Play"
+    : command.name.includes("stop")
+      ? "Stop"
+      : command.name.includes("restart")
+        ? "ArrowCounterclockwise"
+        : null;
+  return <NamedIcon name={command.iconName ?? fallbackName} variant={command.iconVariant} size={15} />;
+}
+
+function PropertyRow({ prop }: { prop: ResourceProperty }) {
+  return (
+    <>
+      <div className="kv__key">{prop.displayName ?? prop.name}</div>
+      <div className={`kv__val ${prop.isHighlighted ? "highlight" : ""}`}>
+        {prop.isSensitive ? (
+          <SecretValue value={prop.value} copyable copyLabel={prop.displayName ?? prop.name} />
+        ) : (
+          <span className="resource-value"><span className="secret">{prop.value}</span><CopyValueButton value={prop.value} label={prop.displayName ?? prop.name} /></span>
+        )}
+      </div>
+    </>
+  );
+}
+
+// The resource-service environment payload does not carry sensitivity metadata.
+// Default every value closed so a newly named credential cannot leak by accident.
+function EnvRow({ env }: { env: EnvVar }) {
+  const value = env.value ?? "";
+  return (
+    <>
+      <div className="kv__key">{env.name}</div>
+      <div className="kv__val">
+        {value.length > 0 ? <SecretValue value={value} copyable copyLabel={env.name} /> : <span className="secret">—</span>}
+      </div>
+    </>
+  );
+}
+
+export function DetailsDrawer({
+  resource,
+  onClose,
+  onExecuteCommand,
+  requestConfirm,
+}: {
+  resource: Resource;
+  onClose: () => void;
+  onExecuteCommand: (resource: Resource, command: ResourceCommand) => void;
+  requestConfirm: (request: ConfirmRequest) => void;
+}) {
+  const handleCommand = (command: ResourceCommand): void => {
+    if (command.confirmationMessage) {
+      requestConfirm({
+        title: command.displayName,
+        message: command.confirmationMessage,
+        confirmLabel: command.displayName,
+        danger: command.name.includes("stop"),
+        onConfirm: () => onExecuteCommand(resource, command),
+      });
+    } else {
+      onExecuteCommand(resource, command);
+    }
+  };
+
+  const properties = [...resource.properties].sort(
+    (left, right) => (left.sortOrder ?? 999) - (right.sortOrder ?? 999),
+  );
+  const urls = [...resource.urls]
+    .filter((url) => !url.isInactive)
+    .sort((left, right) => left.sortOrder - right.sortOrder);
+  const { highlightedCommands, menuCommands } = partitionResourceCommands(resource.commands);
+  const footer = highlightedCommands.length > 0 || menuCommands.length > 0
+    ? (
+        <>
+          {highlightedCommands.map((command) => (
+            <Button
+              key={command.name}
+              size="small"
+              variant={command.name.includes("stop") ? "danger" : "primary"}
+              disabled={command.state === "disabled"}
+              title={command.displayDescription ?? command.displayName}
+              onClick={() => handleCommand(command)}
+            >
+              {commandIcon(command)}
+              {command.displayName}
+            </Button>
+          ))}
+          {menuCommands.length > 0 ? (
+            <CommandMenu
+              ariaLabel="Resource commands"
+              triggerContent={null}
+              triggerIcon={<MoreIcon size={16} />}
+              triggerSize="small"
+              placement="above-start"
+              entries={menuCommands.map((command) => ({
+                id: command.name,
+                label: command.displayName,
+                description: command.displayDescription ?? undefined,
+                icon: commandIcon(command),
+                disabled: command.state === "disabled",
+                tone: command.name.includes("stop") ? "danger" : "default",
+                onSelect: () => handleCommand(command),
+              }))}
+            />
+          ) : null}
+        </>
+      )
+    : undefined;
+
+  return (
+    <Drawer
+      title={resource.displayName}
+      leading={(
+        <ResourceTypeIcon
+          type={resource.resourceType}
+          iconName={resource.iconName}
+          iconVariant={resource.iconVariant}
+          size={18}
+        />
+      )}
+      subtitle={<StateDot state={resource.state} stateStyle={resource.stateStyle} health={resource.health} />}
+      onClose={onClose}
+      footer={footer}
+    >
+      <section className="drawer__section">
+        <div className="drawer__section-title">Overview</div>
+        <div className="kv">
+          <div className="kv__key">Type</div>
+          <div className="kv__val">{resource.resourceType}</div>
+          <div className="kv__key">State</div>
+          <div className="kv__val">{resource.state ?? "Unknown"}</div>
+          <div className="kv__key">Health</div>
+          <div className="kv__val">{resource.health ?? "—"}</div>
+          <div className="kv__key">Started</div>
+          <div className="kv__val" data-testid="resource-started-time">{formatTime(resource.startedAt)}</div>
+          {resource.stoppedAt ? (
+            <>
+              <div className="kv__key">Stopped</div>
+              <div className="kv__val">{formatTime(resource.stoppedAt)}</div>
+            </>
+          ) : null}
+          <div className="kv__key">UID</div>
+          <div className="kv__val">{resource.uid}</div>
+        </div>
+      </section>
+
+      {urls.length > 0 ? (
+        <section className="drawer__section">
+          <div className="drawer__section-title">Endpoints</div>
+          <div className="url-list">
+            {urls.map((url) => (
+              <a
+                key={`${url.name}-${url.url}`}
+                className="url-chip"
+                href={url.url}
+                title={url.url}
+                onClick={(event) => {
+                  event.preventDefault();
+                  void openExternal(url.url);
+                }}
+              >
+                <ExternalIcon size={12} />
+                {url.displayName ?? url.name ?? url.url}
+              </a>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {properties.length > 0 ? (
+        <section className="drawer__section">
+          <div className="drawer__section-title">Properties</div>
+          <div className="kv">
+            {properties.map((prop) => (
+              <PropertyRow key={prop.name} prop={prop} />
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {resource.environment.length > 0 ? (
+        <section className="drawer__section">
+          <div className="drawer__section-title">Environment variables</div>
+          <div className="kv">
+            {resource.environment.map((env) => (
+              <EnvRow key={env.name} env={env} />
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {resource.healthReports.length > 0 ? (
+        <section className="drawer__section">
+          <div className="drawer__section-title">Health reports</div>
+          {resource.healthReports.map((report) => (
+            <div className="health-report" key={report.key}>
+              <Badge tone={healthTone(report.status)}>{report.status ?? "Unknown"}</Badge>
+              <div className="health-report__body">
+                <div className="health-report__key">{report.key}</div>
+                <div className="health-report__desc">{report.description}</div>
+              </div>
+            </div>
+          ))}
+        </section>
+      ) : null}
+
+      {resource.relationships.length > 0 ? (
+        <section className="drawer__section">
+          <div className="drawer__section-title">Relationships</div>
+          <div className="rel-list">
+            {resource.relationships.map((relationship) => (
+              <div className="rel-item" key={`${relationship.type}-${relationship.resourceName}`}>
+                <LinkIcon size={14} />
+                <span>{relationship.resourceName}</span>
+                <Badge tone="accent">{relationship.type}</Badge>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+    </Drawer>
+  );
+}
+
+function healthTone(status: string | null): "success" | "warning" | "error" | "neutral" {
+  switch (status) {
+    case "Healthy":
+      return "success";
+    case "Degraded":
+      return "warning";
+    case "Unhealthy":
+      return "error";
+    default:
+      return "neutral";
+  }
+}

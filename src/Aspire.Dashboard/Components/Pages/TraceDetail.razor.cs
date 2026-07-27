@@ -1,10 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Deck;
 using System.Diagnostics;
 using System.Globalization;
 using Aspire.Dashboard.Components.Dialogs;
-using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.GenAI;
@@ -14,17 +14,16 @@ using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
+using Aspire.Shared;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Pages;
 
 public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisposable
 {
-    private const string ScrollContainerId = "traceDetailScrollContainer";
     private const string NameColumn = nameof(NameColumn);
     private const string ResourceColumn = nameof(ResourceColumn);
     private const string TicksColumn = nameof(TicksColumn);
@@ -40,13 +39,17 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     private List<OtlpResource> _resources = default!;
     private readonly List<string> _collapsedSpanIds = [];
     private string? _elementIdBeforeDetailsViewOpened;
-    private string? _pendingFocusElementId;
     private FluentDataGrid<SpanWaterfallViewModel> _dataGrid = null!;
     private GridColumnManager _manager = null!;
     private IList<GridColumn> _gridColumns = null!;
     private readonly List<MenuButtonItem> _traceActionsMenuItems = [];
-    private AspirePageContentLayout? _layout;
     private List<SelectViewModel<SpanType>> _spanTypes = default!;
+
+    // Minimum span-duration filter (ms). Spans shorter than this are hidden from the waterfall so
+    // insignificant work doesn't clutter the view. Mirrors Aspire Deck's TracesPage min-duration
+    // dropdown (src/Aspire.Deck/ui/src/pages/TracesPage.tsx). 0 == show all.
+    private int _minDurationMs;
+    private static readonly int[] s_minDurationOptionsMs = [0, 1, 5, 10, 25, 50, 100, 250, 500, 1000];
 
     public TraceDetailPageViewModel PageViewModel { get; set; } = new();
 
@@ -139,7 +142,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         _traceActionsMenuItems.Add(new MenuButtonItem
         {
             Text = ControlStringsLoc[nameof(ControlsStrings.ExpandAllSpansText)],
-            Icon = new Icons.Regular.Size16.ArrowExpandAll(),
+            Icon = DeckIconName.ExpandAll,
             OnClick = ExpandAllSpansAsync,
             IsDisabled = !HasCollapsedSpans()
         });
@@ -147,7 +150,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         _traceActionsMenuItems.Add(new MenuButtonItem
         {
             Text = ControlStringsLoc[nameof(ControlsStrings.CollapseAllSpansText)],
-            Icon = new Icons.Regular.Size16.ArrowCollapseAll(),
+            Icon = DeckIconName.CollapseAll,
             OnClick = CollapseAllSpansAsync,
             IsDisabled = !HasExpandedSpans()
         });
@@ -183,7 +186,37 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     {
         Debug.Assert(PageViewModel.SpanWaterfallViewModels != null);
 
-        return TraceDetailPageViewModel.ApplySpanFilters(PageViewModel.SpanWaterfallViewModels, PageViewModel.Filter, PageViewModel.SelectedSpanType.Id?.Filter, PageViewModel.Filters, GetResourceName);
+        var visible = TraceDetailPageViewModel.ApplySpanFilters(PageViewModel.SpanWaterfallViewModels, PageViewModel.Filter, PageViewModel.SelectedSpanType.Id?.Filter, PageViewModel.Filters, GetResourceName);
+
+        if (_minDurationMs > 0)
+        {
+            // Hide spans shorter than the threshold. The flat visible list is filtered (rather than
+            // re-rooting the tree) so collapse/expand state on the underlying spans is preserved.
+            var threshold = TimeSpan.FromMilliseconds(_minDurationMs);
+            visible = visible.Where(vm => vm.Span.Duration >= threshold);
+        }
+
+        return visible;
+    }
+
+    private string GetMinDurationLabel(int ms)
+    {
+        if (ms <= 0)
+        {
+            return Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailMinDurationAll)];
+        }
+
+        var formatted = DurationFormatter.FormatDuration(TimeSpan.FromMilliseconds(ms), CultureInfo.CurrentCulture);
+        return string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailMinDurationOptionFormat)], formatted);
+    }
+
+    private async Task OnMinDurationChangedAsync(ChangeEventArgs e)
+    {
+        _minDurationMs = int.TryParse(e.Value?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var ms) ? ms : 0;
+
+        ClearSelectedDataIfNotVisible();
+        await InvokeAsync(StateHasChanged);
+        await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
     }
 
     private string? GetPageTitle()
@@ -211,6 +244,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
             // If parameters change after render then the grid is automatically updated.
             // Explicitly update data grid to support navigating between traces via span links.
             await _dataGrid.SafeRefreshDataAsync();
+
         }
 
         if (SpanId is not null && PageViewModel.SpanWaterfallViewModels is not null)
@@ -218,7 +252,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
             var spanVm = PageViewModel.SpanWaterfallViewModels.SingleOrDefault(vm => vm.Span.SpanId == SpanId);
             if (spanVm != null)
             {
-                await OnShowPropertiesAsync(spanVm, focusElementId: null);
+                await OnShowPropertiesAsync(spanVm, buttonId: null);
             }
 
             // Navigate to remove ?spanId=xxx in the URL. A small delay is required here, otherwise the page rendering breaks.
@@ -228,26 +262,13 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         }
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    protected override void OnAfterRender(bool firstRender)
     {
         // Check to see whether max item count should be set on every render.
         // This is required because the data grid's virtualize component can be recreated on data change.
         if (_dataGrid != null && FluentDataGridHelper<SpanWaterfallViewModel>.TrySetMaxItemCount(_dataGrid, 10_000))
         {
             StateHasChanged();
-        }
-
-        if (firstRender)
-        {
-            // Focus the scroll container without showing the focus ring. The container is a large
-            // content area where a visible focus indicator would be visually noisy on initial load.
-            await JS.InvokeVoidAsync("focusElement", ScrollContainerId, true);
-        }
-
-        if (_pendingFocusElementId is { } pendingFocusElementId)
-        {
-            _pendingFocusElementId = null;
-            await JS.InvokeVoidAsync("focusElement", pendingFocusElementId);
         }
     }
 
@@ -301,6 +322,12 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         await InvokeAsync(StateHasChanged);
 
         await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+    }
+
+    private async Task OnFilterChangedAsync(string value)
+    {
+        PageViewModel.Filter = value;
+        await HandleAfterFilterBindAsync();
     }
 
     private async Task HandleSelectedSpanTypeChangedAsync()
@@ -389,15 +416,11 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         await _dataGrid.SafeRefreshDataAsync();
 
         await InvokeAsync(StateHasChanged);
-
-        // Close mobile toolbar if open, as the content has changed.
-        Debug.Assert(_layout is not null);
-        await _layout.CloseMobileToolbarAsync();
     }
 
-    private async Task OnShowPropertiesAsync(SpanWaterfallViewModel viewModel, string? focusElementId)
+    private async Task OnShowPropertiesAsync(SpanWaterfallViewModel viewModel, string? buttonId)
     {
-        _elementIdBeforeDetailsViewOpened = focusElementId;
+        _elementIdBeforeDetailsViewOpened = buttonId;
 
         if (PageViewModel.SelectedData?.SpanViewModel?.Span.SpanId == viewModel.Span.SpanId)
         {
@@ -414,18 +437,16 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         }
     }
 
-    private Task ClearSelectedSpanAsync(bool causedByUserAction = false)
+    private async Task ClearSelectedSpanAsync(bool causedByUserAction = false)
     {
         PageViewModel.SelectedData = null;
 
         if (_elementIdBeforeDetailsViewOpened is not null && causedByUserAction)
         {
-            _pendingFocusElementId = _elementIdBeforeDetailsViewOpened;
+            await JS.InvokeVoidAsync("focusElement", _elementIdBeforeDetailsViewOpened);
         }
 
         _elementIdBeforeDetailsViewOpened = null;
-
-        return Task.CompletedTask;
     }
 
     private bool HasCollapsedSpans()
@@ -531,11 +552,6 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
     private async Task OpenFilterAsync(FieldTelemetryFilter? entry)
     {
-        if (_layout is not null)
-        {
-            await _layout.CloseMobileToolbarAsync();
-        }
-
         await FilterHelpers.OpenFilterAsync(
             entry,
             DialogService,

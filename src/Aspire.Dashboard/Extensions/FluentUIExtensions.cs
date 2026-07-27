@@ -17,7 +17,8 @@ internal static class FluentUIExtensions
             { "data-text", text ?? string.Empty },
             { "data-precopy", precopy ?? string.Empty },
             { "data-postcopy", postcopy ?? string.Empty },
-            { "data-copybutton", "true" }
+            { "data-copybutton", "true" },
+            { "aria-label", precopy ?? string.Empty }
         };
 
         foreach (var (attribute, value) in additionalAttributes)

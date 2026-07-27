@@ -129,7 +129,7 @@ public sealed class DashboardClientAuthTests
             configuration: new ConfigurationManager(),
             dashboardOptions: Options.Create(options),
             knownPropertyLookup: new MockKnownPropertyLookup(),
-            loc: new Aspire.Dashboard.Tests.TestStringLocalizer<Dashboard.Resources.Resources>(),
+            loc: new TestStringLocalizer<Aspire.Dashboard.Resources.Resources>(),
             configureHttpHandler: handler => handler.SslOptions.RemoteCertificateValidationCallback = (sender, cert, chain, sslPolicyErrors) => true);
 
         var iClient = (IDashboardClient)client;

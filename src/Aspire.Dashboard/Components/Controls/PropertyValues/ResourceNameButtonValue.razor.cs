@@ -6,7 +6,6 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Components.Controls.PropertyValues;
 
@@ -27,23 +26,14 @@ public partial class ResourceNameButtonValue
     [Inject]
     public required IDashboardClient DashboardClient { get; init; }
 
-    [Inject]
-    public required IconResolver IconResolver { get; init; }
-
     private ResourceViewModel? _resource;
-    private Icon? _resourceIcon;
-
     protected override void OnParametersSet()
     {
-        _resourceIcon = null;
+        _resource = null;
 
         if (DashboardClient.IsEnabled)
         {
             _resource = DashboardClient.GetResource(Resource.ResourceKey.ToString());
-            if (_resource != null)
-            {
-                _resourceIcon = ResourceIconHelpers.GetIconForResource(IconResolver, _resource, IconSize.Size16, IconVariant.Regular);
-            }
         }
     }
 

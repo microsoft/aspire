@@ -38,6 +38,5 @@
 .markdown-content {
     max-height: 60vh;
     overflow-y: auto;
-    overflow-wrap: anywhere;
     margin-bottom: 16px;
 }
