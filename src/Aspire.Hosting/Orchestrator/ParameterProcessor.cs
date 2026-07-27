@@ -674,6 +674,8 @@ public sealed class ParameterProcessor(
             if (_unresolvedParameters.Count == 0)
             {
                 allParametersResolvedCts = _allParametersResolvedCts;
+                _allParametersResolvedCts = null;
+                _parameterResolutionTask = null;
             }
         }
 

@@ -1536,6 +1536,40 @@ public class ParameterProcessorTests
     }
 
     [Fact]
+    public async Task DeleteParameterCoreAsync_DuringResolutionCancellationStartsNewResolutionTask()
+    {
+        var testInteractionService = new TestInteractionService { IsAvailable = true };
+        var parameterProcessor = CreateParameterProcessor(interactionService: testInteractionService);
+        var parameter = CreateParameterWithMissingValue("testParam");
+
+        await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
+
+        var notificationInteraction = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
+        notificationInteraction.CompletionTcs.SetResult(InteractionResult.Ok(true));
+
+        var inputsInteraction = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
+        var deleteTaskSource = new TaskCompletionSource<Task<ExecuteCommandResult>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var registration = inputsInteraction.CancellationToken.Register(() =>
+        {
+            deleteTaskSource.SetResult(parameterProcessor.DeleteParameterCoreAsync(parameter, CreateDeleteParameterArguments(), CancellationToken.None));
+        });
+
+        inputsInteraction.Inputs[parameter.Name].Value = "firstValue";
+        inputsInteraction.CompletionTcs.SetResult(InteractionResult.Ok(inputsInteraction.Inputs));
+
+        var deleteTask = await deleteTaskSource.Task.DefaultTimeout();
+        var deleteResult = await deleteTask.DefaultTimeout();
+        Assert.True(deleteResult.Success);
+
+        var replacementNotification = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
+        Assert.Equal(InteractionStrings.ParametersBarTitle, replacementNotification.Title);
+        Assert.False(replacementNotification.CancellationToken.IsCancellationRequested);
+
+        await parameterProcessor.SetParameterCoreAsync(parameter, CreateSetParameterArguments("finalValue"), CancellationToken.None).DefaultTimeout();
+        replacementNotification.CompletionTcs.SetResult(InteractionResult.Ok(false));
+    }
+
+    [Fact]
     public async Task DeleteParameterCoreAsync_PreservesExistingPendingValueTask()
     {
         var testInteractionService = new TestInteractionService { IsAvailable = true };
