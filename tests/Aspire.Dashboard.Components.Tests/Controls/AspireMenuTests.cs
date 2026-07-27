@@ -149,4 +149,50 @@ public class AspireMenuTests : DashboardTestContext
         Assert.Empty(focusElementInvocations);
     }
 
+    [Fact]
+    public void CheckableItems_RenderAccessibleRoleAndCheckedStateInDom()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+        FluentUISetupHelpers.SetupFluentButton(this);
+
+        var anchor = "view-options-button";
+        var items = new List<MenuButtonItem>
+        {
+            new() { Text = "Console", Role = MenuItemRole.MenuItemCheckbox, Checked = false },
+            new() { Text = "Terminal", Role = MenuItemRole.MenuItemCheckbox, Checked = true },
+        };
+
+        var cut = Render(builder =>
+        {
+            builder.OpenComponent<FluentMenuProvider>(0);
+            builder.CloseComponent();
+            builder.OpenComponent<AspireMenuButton>(1);
+            builder.AddAttribute(2, nameof(AspireMenuButton.MenuButtonId), anchor);
+            builder.AddAttribute(3, nameof(AspireMenuButton.Title), "View options");
+            builder.AddAttribute(4, nameof(AspireMenuButton.Items), items);
+            builder.CloseComponent();
+        });
+
+        cut.Find($"#{anchor}").Click();
+        cut.WaitForElement("fluent-menu-item");
+
+        var menuItems = cut.FindAll("fluent-menu-item");
+        Assert.Equal(2, menuItems.Count);
+
+        // Both options must carry the checkable role so assistive technology announces
+        // them as a selectable set. Asserting on the rendered element (not the backing
+        // MenuButtonItem) guards the Role passthrough through AspireMenu -> FluentMenuItem:
+        // the unchecked item only gets role="menuitemcheckbox" from an explicit Role, since
+        // FluentMenuItem otherwise infers that role solely from a checked item.
+        Assert.Equal("menuitemcheckbox", menuItems[0].GetAttribute("role"));
+        Assert.Equal("menuitemcheckbox", menuItems[1].GetAttribute("role"));
+
+        // Only the active option reflects the checked state in the DOM. This guards the
+        // Checked passthrough; without it the rendered items would lose their checked state.
+        Assert.False(menuItems[0].HasAttribute("checked"));
+        Assert.True(menuItems[1].HasAttribute("checked"));
+    }
 }
