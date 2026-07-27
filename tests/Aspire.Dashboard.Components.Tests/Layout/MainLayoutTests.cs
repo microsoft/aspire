@@ -334,7 +334,7 @@ public partial class MainLayoutTests : DashboardTestContext
         var expectedHistoricalRunText = FormatHelpers.FormatTimeWithOptionalDate(
             Services.GetRequiredService<BrowserTimeProvider>(),
             historicalRun.StartedAtUtc.UtcDateTime);
-        JSInterop.SetupVoid("focusElement", _ => true);
+        JSInterop.SetupVoid("focusElement", _ => true).SetVoidResult();
         var initializedCount = 0;
         var disposedCount = 0;
         var cut = RenderComponent<MainLayout>(builder =>
@@ -550,7 +550,7 @@ public partial class MainLayoutTests : DashboardTestContext
             OnSetAsync = (_, value) => storedRunId = Assert.IsType<string>(value)
         };
         SetupMainLayoutServices(dashboardRunStore: runStore, sessionStorage: sessionStorage);
-        JSInterop.SetupVoid("focusElement", _ => true);
+        JSInterop.SetupVoid("focusElement", _ => true).SetVoidResult();
 
         var cut = RenderComponent<MainLayout>(builder =>
         {
