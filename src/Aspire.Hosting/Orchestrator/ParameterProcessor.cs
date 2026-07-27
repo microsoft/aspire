@@ -32,6 +32,9 @@ public sealed class ParameterProcessor(
     private readonly object _resolutionTaskLock = new();
     private CancellationTokenSource? _allParametersResolvedCts;
     private Task? _parameterResolutionTask;
+    private volatile bool _hasUnresolvedParameters;
+
+    internal bool HasUnresolvedParameters => _hasUnresolvedParameters;
 
     /// <summary>
     /// Initializes parameter resources and handles unresolved parameters if interaction service is available.
@@ -163,6 +166,7 @@ public sealed class ParameterProcessor(
                 // If interaction service is available, we can prompt the user to provide a value.
                 // Add the parameter to unresolved parameters list.
                 _unresolvedParameters.Add(parameterResource);
+                _hasUnresolvedParameters = true;
 
                 loggerService.GetLogger(parameterResource)
                     .LogWarning("Parameter resource {ResourceName} could not be initialized. Waiting for user input.", parameterResource.Name);
@@ -462,6 +466,7 @@ public sealed class ParameterProcessor(
             if (!_unresolvedParameters.Contains(parameterResource))
             {
                 _unresolvedParameters.Add(parameterResource);
+                _hasUnresolvedParameters = true;
 
                 // Reset the WaitForValueTcs so the parameter can be resolved again
                 var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -627,6 +632,11 @@ public sealed class ParameterProcessor(
 
         if (unresolvedParameters.Count == 0)
         {
+            if (ReferenceEquals(unresolvedParameters, _unresolvedParameters))
+            {
+                _hasUnresolvedParameters = false;
+            }
+
             _allParametersResolvedCts?.Cancel();
         }
     }
