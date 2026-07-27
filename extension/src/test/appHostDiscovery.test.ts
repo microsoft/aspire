@@ -765,6 +765,62 @@ suite('AppHost discovery', () => {
             }
         });
 
+        test('does not time out an active aspire ls --stream discovery that emits stderr', async () => {
+            stubFileSystemWatchers(sandbox);
+            sandbox.stub(vscode.workspace, 'getConfiguration').returns({
+                get: <T>(key: string, defaultValue: T) => key === 'appHostDiscoveryTimeoutMs' ? 5000 as T : defaultValue,
+            } as vscode.WorkspaceConfiguration);
+            const clock = sandbox.useFakeTimers();
+            const killedArgs: string[][] = [];
+            let streamOptions: cliModule.SpawnProcessOptions | undefined;
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
+                const childProcess = {
+                    killed: false,
+                    kill: sandbox.stub().callsFake(() => {
+                        childProcess.killed = true;
+                        killedArgs.push(args);
+                        return true;
+                    }),
+                };
+
+                if (args.includes('--stream')) {
+                    streamOptions = options;
+                }
+                else {
+                    options?.stderrCallback?.('legacy discovery unavailable');
+                    options?.exitCallback?.(1);
+                }
+
+                return childProcess as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+            const candidate = {
+                path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
+                language: 'csharp',
+                status: 'buildable',
+            };
+
+            try {
+                const discovery = service.discover(workspaceFolder);
+                await waitForMicrotasks();
+                assert.ok(streamOptions);
+
+                await clock.tickAsync(4_000);
+                streamOptions.stderrCallback?.('still discovering projects');
+                await clock.tickAsync(2_000);
+                streamOptions.lineCallback?.(JSON.stringify(candidate));
+                streamOptions.exitCallback?.(0);
+
+                assert.deepStrictEqual(await discovery, [candidate]);
+                assert.deepStrictEqual(killedArgs, []);
+            }
+            finally {
+                service.dispose();
+                clock.restore();
+            }
+        });
+
         test('keeps valid aspire ls candidates when future entries have unexpected shape', async () => {
             stubFileSystemWatchers(sandbox);
             sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
@@ -839,6 +895,38 @@ suite('AppHost discovery', () => {
                 ];
                 assert.deepStrictEqual(observed, expected);
                 assert.deepStrictEqual(result, expected);
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
+        test('keeps streamed candidate callbacks in arrival order while returning sorted discovery results', async () => {
+            stubFileSystemWatchers(sandbox);
+            const zetaCandidate = {
+                path: buildPath('workspace', 'Zeta', 'AppHost.csproj'),
+                language: 'csharp',
+                status: 'buildable',
+            };
+            const alphaCandidate = {
+                path: buildPath('workspace', 'Alpha', 'AppHost.csproj'),
+                language: 'csharp',
+                status: 'buildable',
+            };
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                emitLsStream(options, [zetaCandidate, alphaCandidate]);
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+            try {
+                const observed: unknown[] = [];
+                const result = await service.discover(makeWorkspaceFolder(buildPath('workspace')), false, undefined, candidate => {
+                    observed.push(candidate);
+                });
+
+                assert.deepStrictEqual(observed, [zetaCandidate, alphaCandidate]);
+                assert.deepStrictEqual(result, [alphaCandidate, zetaCandidate]);
             }
             finally {
                 service.dispose();
@@ -922,7 +1010,7 @@ suite('AppHost discovery', () => {
         });
 
         test('retries buffered aspire ls and disables streaming when an older CLI rejects --stream', async () => {
-            stubFileSystemWatchers(sandbox);
+            const watcherCallbacks = stubFileSystemWatchers(sandbox);
             const candidate = {
                 path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
                 language: 'csharp',
@@ -951,7 +1039,8 @@ suite('AppHost discovery', () => {
                 assert.deepStrictEqual(firstResult, [candidate]);
                 assert.deepStrictEqual(observedCandidates, []);
 
-                const secondResult = await service.discover(workspaceFolder, true);
+                watcherCallbacks[0]();
+                const secondResult = await service.discover(workspaceFolder);
                 assert.deepStrictEqual(secondResult, [candidate]);
                 assert.deepStrictEqual(observedArgs, [
                     ['ls', '--format', 'json', '--nologo', '--stream'],

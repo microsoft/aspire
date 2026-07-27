@@ -129,7 +129,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                     let candidates = discovery.candidates;
                     try {
                         candidates = await this._includeConfiguredAppHostCandidate(workspaceFolder, candidates);
-                        candidates = this._filterExcludedCandidates(workspaceFolder, candidates);
+                        candidates = sortCandidatesByPath(this._filterExcludedCandidates(workspaceFolder, candidates));
                         emitAppHostDiscoveryTelemetry(discovery.source, 'success', candidates, startTime);
                     }
                     catch (error) {
@@ -541,7 +541,10 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                             options.lineCallback!(line);
                         }
                         : undefined,
-                    stderrCallback: data => { stderr += data; },
+                    stderrCallback: data => {
+                        onActivity?.();
+                        stderr += data;
+                    },
                     exitCallback: code => {
                         settle(() => {
                             if (code === 0) {
@@ -755,6 +758,10 @@ function toConfiguredAppHostCandidate(workspaceFolder: vscode.WorkspaceFolder, a
         language: '',
         status: 'buildable',
     };
+}
+
+function sortCandidatesByPath(candidates: readonly CandidateAppHostDisplayInfo[]): CandidateAppHostDisplayInfo[] {
+    return [...candidates].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
 }
 
 function parseCandidateOutput(output: string, commandName: string): CandidateAppHostDisplayInfo[] {
