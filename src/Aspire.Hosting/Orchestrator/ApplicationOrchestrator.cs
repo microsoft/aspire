@@ -229,22 +229,18 @@ internal sealed class ApplicationOrchestrator
 
     private async Task PublishUnresolvedParametersStateAsync(OnResourceStartingContext context)
     {
-        // Dependency discovery invokes environment-variable and argument callbacks, so avoid that work
-        // unless parameter processing found at least one value that is still waiting for user input.
+        // Avoid walking references unless parameter processing found at least one value that is still
+        // waiting for user input.
         if (!_parameterProcessor.HasUnresolvedParameters)
         {
             return;
         }
 
-        // Inspect only values resolved by this resource's launch configuration. Recursive discovery would
-        // also include parameters used by referenced resources even though they do not block this resource.
-        var dependencies = await context.Resource.GetResourceDependenciesAsync(
-            _executionContext,
-            ResourceDependencyDiscoveryMode.DirectOnly,
-            context.CancellationToken).ConfigureAwait(false);
-        var unresolvedParameters = dependencies
-            .OfType<ParameterResource>()
-            .Where(static parameter => parameter.WaitForValueTcs?.Task.IsCompleted is false)
+        // Launch callbacks must run after BeforeResourceStartedEvent and only once per start. Declarative
+        // references and the resource's own value expression provide the dependencies needed here without
+        // evaluating those callbacks early.
+        var unresolvedParameters = GetReferencedParameters(context.Resource)
+            .Where(_parameterProcessor.IsParameterUnresolved)
             .OrderBy(static parameter => parameter.Name, StringComparers.ResourceName)
             .ToArray();
 
@@ -258,6 +254,44 @@ internal sealed class ApplicationOrchestrator
         // The launch configuration remains the authoritative startup gate and awaits these same parameter
         // tasks. This monitor only keeps the informational state and parameter-name list up to date.
         _ = MonitorUnresolvedParametersAsync(context.Resource, context.DcpResourceName, unresolvedParameters, context.CancellationToken);
+    }
+
+    private static IEnumerable<ParameterResource> GetReferencedParameters(IResource resource)
+    {
+        var parameters = new Dictionary<string, ParameterResource>(StringComparers.ResourceName);
+        var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
+
+        foreach (var relationship in resource.Annotations.OfType<ResourceRelationshipAnnotation>())
+        {
+            if (relationship.Type == KnownRelationshipTypes.Reference && relationship.Resource is ParameterResource parameter)
+            {
+                parameters.TryAdd(parameter.Name, parameter);
+            }
+        }
+
+        Walk(resource);
+        return parameters.Values;
+
+        void Walk(object? value)
+        {
+            if (value is null || !visited.Add(value))
+            {
+                return;
+            }
+
+            if (value is ParameterResource parameter)
+            {
+                parameters.TryAdd(parameter.Name, parameter);
+            }
+
+            if (value is IValueWithReferences valueWithReferences)
+            {
+                foreach (var reference in valueWithReferences.References)
+                {
+                    Walk(reference);
+                }
+            }
+        }
     }
 
     private async Task MonitorUnresolvedParametersAsync(

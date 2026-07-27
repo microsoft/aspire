@@ -13,10 +13,10 @@ public enum KnownResourceState
     Building,
     Hidden,
     Waiting,
-    UnresolvedParameters,
     Stopping,
     ValueMissing,
     Unknown,
     RuntimeUnhealthy,
-    NotStarted
+    NotStarted,
+    UnresolvedParameters
 }
