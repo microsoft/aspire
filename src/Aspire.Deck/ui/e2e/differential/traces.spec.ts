@@ -27,10 +27,10 @@ async function login(page: Page, origin: string): Promise<void> {
 
 /** Normalizes a resource tag ("stress-telemetryservice (2)") for comparison across UIs. */
 function normalizeTags(raw: string[]): string[] {
-  return raw
-    .map((tag) => tag.replace(/\s+/g, " ").trim())
-    .filter((tag) => tag !== "")
-    .sort();
+  // Deliberately not sorted: GetOrderedResources orders resources by first appearance in the trace's
+  // span tree, grouping an uninstrumented peer directly after the caller that reached it. That order
+  // is part of what the two UIs must agree on.
+  return raw.map((tag) => tag.replace(/\s+/g, " ").trim()).filter((tag) => tag !== "");
 }
 
 /**
@@ -97,18 +97,15 @@ test.describe("traces differential", () => {
     const shared = [...deck.keys()].filter((name) => blazor.has(name));
     expect(shared.length, `no trace name was rendered by both UIs (blazor=${[...blazor.keys()].length}, deck=${[...deck.keys()].length})`).toBeGreaterThan(0);
 
-    // Blazor additionally attributes spans to *uninstrumented peers* -- a resource inferred from a
-    // client span's peer.service/server.address attributes when the callee emits no spans of its own
-    // (TelemetryRepository.CalculateTraceUninstrumentedPeers). Deck has no peer resolution yet, so it
-    // can render a strict subset of Blazor's tags. We assert that every tag Deck *does* render agrees
-    // exactly with Blazor's, which is what the per-resource breakdown fix is responsible for.
+    // The breakdown includes *uninstrumented peers* -- a resource inferred from a client span's
+    // peer.service/server.address attributes when the callee emits no spans of its own
+    // (TelemetryRepository.CalculateTraceUninstrumentedPeers). Both UIs resolve them, so the tag
+    // lists must agree exactly rather than one being a subset of the other. Order is compared too:
+    // GetOrderedResources groups a peer directly after the caller that reached it.
     let compared = 0;
     for (const name of shared) {
-      const blazorTags = new Set(blazor.get(name)!);
-      for (const tag of deck.get(name)!) {
-        expect(blazorTags, `trace "${name}": deck rendered ${tag}, blazor rendered ${[...blazorTags].join(", ")}`).toContain(tag);
-        compared++;
-      }
+      expect(deck.get(name), `trace "${name}" resource breakdown`).toEqual(blazor.get(name));
+      compared += deck.get(name)!.length;
     }
 
     expect(compared, "no resource tags were compared").toBeGreaterThan(0);

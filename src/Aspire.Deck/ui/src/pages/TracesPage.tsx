@@ -7,6 +7,7 @@ import { buildResourceColorMap, colorFor } from "../lib/colors";
 import { matchesTelemetryFilters, parseTelemetryFilters, spanFilterFields, telemetryFieldNames, type TelemetryFilter } from "../lib/telemetryFilters";
 import { SPAN_TYPE_OPTIONS, spanMatchesType, type SpanTypeId } from "../lib/spans";
 import { orderedTraceResources, traceResourceTooltip } from "../lib/traceResources";
+import { uninstrumentedPeers } from "../lib/peerResolver";
 import { SpanDetailDrawer } from "../components/SpanDetailDrawer";
 import { formatSpanJson } from "../components/SpanActions";
 import { GenAIVisualizerDialog, hasGenAIAttributes } from "../components/GenAIVisualizerDialog";
@@ -61,6 +62,9 @@ interface WaterfallRow {
   widthPct: number;
   labelRight: boolean;
 }
+
+// Shared so traces without peers keep a stable prop identity across renders.
+const emptyPeers: ReadonlyMap<string, string> = new Map();
 
 interface TraceGroup {
   traceId: string;
@@ -356,6 +360,21 @@ export function TracesPage({
     );
   }, [filters, routeQuery, routeTraceId, selectedMinDurationMs, selectedResource, selectedType, spans]);
 
+  // Spans that call a service which emits no telemetry of its own are attributed to the callee as a
+  // second resource, matching `TelemetryRepository.CalculateTraceUninstrumentedPeers`. Resolution
+  // needs the app's published endpoints, so it is done here rather than in the API layer.
+  const peersByTrace = useMemo(() => {
+    const byTrace = new Map<string, ReadonlyMap<string, string>>();
+    for (const trace of traces) {
+      const peers = uninstrumentedPeers(trace.rows.map((row) => row.span), resources);
+      if (peers.size > 0) {
+        byTrace.set(trace.traceId, peers);
+      }
+    }
+
+    return byTrace;
+  }, [traces, resources]);
+
   const toggle = (traceId: string) => {
     setCollapsed((prev) => {
       const next = new Set(prev);
@@ -553,6 +572,7 @@ export function TracesPage({
                     rows={rows}
                     collapsedSpanKeys={collapsedSpanKeys}
                     onToggleSpan={toggleSpan}
+                    peers={peersByTrace.get(trace.traceId) ?? emptyPeers}
                   />
                 </div>
               ))}
@@ -567,6 +587,7 @@ export function TracesPage({
               onSelect={onSelectSpan}
               onViewLogs={onNavigateToLogs}
               onViewJson={(trace) => setTextViewer({ title: `${trace.traceId}.json`, value: formatTraceJson(trace), format: "json" })}
+              peers={peersByTrace.get(trace.traceId) ?? emptyPeers}
               rows={visibleTraceRows(trace, collapsedSpanKeys)}
               collapsedSpanKeys={collapsedSpanKeys}
               onToggleSpan={toggleSpan}
@@ -616,6 +637,7 @@ function TraceBlock({
   rows,
   collapsedSpanKeys,
   onToggleSpan,
+  peers,
 }: {
   trace: TraceGroup;
   colorMap: Map<string, string>;
@@ -627,10 +649,16 @@ function TraceBlock({
   rows: WaterfallRow[];
   collapsedSpanKeys: Set<string>;
   onToggleSpan: (traceId: string, spanId: string) => void;
+  peers: ReadonlyMap<string, string>;
 }) {
   const headColor = colorFor(colorMap, trace.resourceName);
   // Per-resource span breakdown, matching the Blazor traces grid's SPANS column.
-  const resourceSpans = orderedTraceResources(rows.map((row) => row.span));
+  // `trace.rows` rather than the visible `rows`: `GetOrderedResources` walks the whole trace, so
+  // collapsing a span in the waterfall must not change the counts reported in the header.
+  const resourceSpans = orderedTraceResources(
+    trace.rows.map((row) => row.span),
+    peers,
+  );
   // Axis ticks at 0/25/50/75/100% of the trace duration.
   const ticks = [0, 1, 2, 3, 4].map((i) => ({
     pct: i * 25,

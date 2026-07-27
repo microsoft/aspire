@@ -9,6 +9,7 @@ export interface TraceResourceSpans {
 }
 
 interface TraceResourceSpanInput {
+  spanId: string;
   resourceName: string | null;
   statusCode: string | null;
 }
@@ -24,13 +25,15 @@ interface TraceResourceSpanInput {
  * first-appearance order, which is what we do here. Callers must pass the spans already
  * flattened in tree order (parents before children), which is how the waterfall orders them.
  */
-export function orderedTraceResources(spans: readonly TraceResourceSpanInput[]): TraceResourceSpans[] {
+export function orderedTraceResources(
+  spans: readonly TraceResourceSpanInput[],
+  uninstrumentedPeers?: ReadonlyMap<string, string>,
+): TraceResourceSpans[] {
   const byResource = new Map<string, TraceResourceSpans>();
 
-  for (const span of spans) {
-    const resourceName = span.resourceName;
+  const record = (resourceName: string | null, statusCode: string | null): void => {
     if (resourceName === null || resourceName === "") {
-      continue;
+      return;
     }
 
     let entry = byResource.get(resourceName);
@@ -40,8 +43,20 @@ export function orderedTraceResources(spans: readonly TraceResourceSpanInput[]):
     }
 
     entry.totalSpans++;
-    if (span.statusCode === "Error") {
+    if (statusCode === "Error") {
       entry.erroredSpans++;
+    }
+  };
+
+  for (const span of spans) {
+    record(span.resourceName, span.statusCode);
+
+    // `GetOrderedResources` processes a span's uninstrumented peer immediately after the span's own
+    // resource and with the same timestamp, so the callee is grouped directly after its caller and
+    // the span is counted against both ends of the call.
+    const peer = uninstrumentedPeers?.get(span.spanId);
+    if (peer !== undefined) {
+      record(peer, span.statusCode);
     }
   }
 
