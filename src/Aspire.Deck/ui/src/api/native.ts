@@ -64,6 +64,13 @@ const terminalCapability = "terminal";
 const interactionsCapability = "interactions";
 const maximumStructuredLogDedupeKeys = 10_000;
 const maximumTraceDedupeKeys = 10_000;
+// Mirror the dashboard's server-side retention limits so the client never discards telemetry the
+// backend is still willing to serve. See TelemetryLimitOptions.MaxLogCount / MaxTraceCount in
+// src/Aspire.Dashboard/Configuration/DashboardOptions.cs, both of which default to 10,000.
+// Retaining fewer records than the backend causes low-volume resources to disappear entirely from
+// the grid (and therefore from the resource filter) whenever a chatty resource floods the buffer.
+const maximumRetainedStructuredLogs = 10_000;
+const maximumRetainedSpans = 10_000;
 const supportedVersions = new Set([1]);
 
 let negotiatedVersion: Promise<DashboardApiVersion> | null = null;
@@ -194,7 +201,7 @@ async function refreshStructuredLogs(): Promise<void> {
   for (const record of records) rememberStructuredLogKey(record.recordKey);
   structuredLogs = {
     logCount: snapshot.totalCount,
-    recentLogs: records.map(withoutRecordKey).sort(compareNewestFirst),
+    recentLogs: records.map(withoutRecordKey).sort(compareNewestFirst).slice(0, maximumRetainedStructuredLogs),
   };
   notifyStructuredLogs();
 }
@@ -212,7 +219,7 @@ function appendStructuredLogEvent(event: DashboardStructuredLogsEvent, generatio
   if (additions.length === 0) return;
   structuredLogs = {
     logCount: structuredLogs.logCount + additions.length,
-    recentLogs: [...additions, ...structuredLogs.recentLogs].sort(compareNewestFirst).slice(0, 5_000),
+    recentLogs: [...additions, ...structuredLogs.recentLogs].sort(compareNewestFirst).slice(0, maximumRetainedStructuredLogs),
   };
   notifyStructuredLogs();
 }
@@ -255,7 +262,7 @@ async function refreshTraces(): Promise<void> {
     recentSpans: records
       .map(withoutSpanRecordKey)
       .sort(compareSpansNewestFirst)
-      .slice(0, 5_000),
+      .slice(0, maximumRetainedSpans),
   };
   notifyTraces();
 }
@@ -308,7 +315,7 @@ function appendTraceEvent(event: DashboardTraceEvent, generation: number): void 
     spanCount: traces.spanCount + additions.length,
     recentSpans: [...additions, ...traces.recentSpans]
       .sort(compareSpansNewestFirst)
-      .slice(0, 5_000),
+      .slice(0, maximumRetainedSpans),
   };
   notifyTraces();
 }

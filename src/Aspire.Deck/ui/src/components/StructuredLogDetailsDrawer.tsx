@@ -1,6 +1,6 @@
 import { useMemo, type ReactNode } from "react";
 import type { LogRecordSummary, TelemetryAttribute } from "../api/types";
-import { dateFromUnixNano, formatDateTime, formatTimeWithMillis } from "../lib/format";
+import { dateFromUnixNano, formatDateTime, formatTimeWithOptionalDate } from "../lib/format";
 import {
   Divider,
   Drawer,
@@ -131,7 +131,7 @@ export function StructuredLogDetailsDrawer({
             </span>
             <Divider label="Log metadata" />
             <span className="structured-log-details__meta" title={formatDateTime(timestamp)}>
-              Timestamp <strong>{formatTimeWithMillis(timestamp)}</strong>
+              Timestamp <strong>{formatTimeWithOptionalDate(timestamp, 3)}</strong>
             </span>
           </div>
         )}

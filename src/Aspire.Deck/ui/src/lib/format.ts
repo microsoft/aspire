@@ -188,18 +188,24 @@ export function formatTimeWithMillis(value: Date | string | null): string {
  * pattern as `ShortDatePattern + " " + LongTimePattern` (DateFormatStringsHelpers.cs), joining with
  * a literal space. `toLocaleString` instead uses the locale's own date/time connector, which adds a
  * comma in en-US ("7/25/2026, 3:09:04 PM"), so compose the two halves explicitly.
+ *
+ * `fractionalSecondDigits` maps onto `MillisecondsDisplay`: omitted is `None` and 3 is `Truncated`,
+ * which the dashboard renders as the fixed-width `fff` rather than `FFF` so column widths stay put.
  */
-export function formatDateTime(value: Date): string {
-  return `${value.toLocaleDateString(undefined)} ${value.toLocaleTimeString(undefined, timeOptions())}`;
+export function formatDateTime(value: Date, fractionalSecondDigits?: 3): string {
+  return `${value.toLocaleDateString(undefined)} ${value.toLocaleTimeString(undefined, timeOptions(fractionalSecondDigits))}`;
 }
 
 /**
  * Mirrors `FormatHelpers.FormatTimeWithOptionalDate` in src/Shared/FormatHelpers.cs: render the
  * time alone while the timestamp is from today, and prefix the date once it is not, so a value
- * that scrolls past midnight stays unambiguous. Seconds are included but milliseconds are not,
- * because the resource service reports start times at second precision.
+ * that scrolls past midnight stays unambiguous.
+ *
+ * Callers pass `fractionalSecondDigits` through to both branches exactly as the dashboard passes
+ * `millisecondsDisplay`. It defaults to none because the resource service reports start times at
+ * second precision; telemetry grids opt in to 3 digits.
  */
-export function formatTimeWithOptionalDate(value: Date | string | null): string {
+export function formatTimeWithOptionalDate(value: Date | string | null, fractionalSecondDigits?: 3): string {
   if (value === null) {
     return "—";
   }
@@ -213,7 +219,9 @@ export function formatTimeWithOptionalDate(value: Date | string | null): string 
     && date.getMonth() === now.getMonth()
     && date.getDate() === now.getDate();
 
-  return isToday ? formatTime(date) : formatDateTime(date);
+  return isToday
+    ? date.toLocaleTimeString(undefined, timeOptions(fractionalSecondDigits))
+    : formatDateTime(date, fractionalSecondDigits);
 }
 
 export function formatRelativeTime(value: string | null): string {

@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { clearTraces } from "../api/deck";
 import type { SpanSummary, TelemetrySummary } from "../api/types";
 import { useResources, useTelemetry } from "../lib/useDeckEvent";
-import { dateFromUnixNano, formatDurationNanos, formatTimeWithMillis } from "../lib/format";
+import { dateFromUnixNano, formatDurationNanos, formatTimeWithOptionalDate } from "../lib/format";
 import { buildResourceColorMap, colorFor } from "../lib/colors";
 import { matchesTelemetryFilters, parseTelemetryFilters, spanFilterFields, telemetryFieldNames, type TelemetryFilter } from "../lib/telemetryFilters";
 import { SPAN_TYPE_OPTIONS, spanMatchesType, type SpanTypeId } from "../lib/spans";
@@ -647,7 +647,7 @@ function TraceBlock({
           {trace.resourceName ? <span className="wf__head-res">{trace.resourceName}</span> : null}
           <span className="wf__head-spacer" />
           <time className="wf__head-time" dateTime={dateFromUnixNano(trace.startNano.toString()).toISOString()}>
-            {formatTimeWithMillis(dateFromUnixNano(trace.startNano.toString()))}
+            {formatTimeWithOptionalDate(dateFromUnixNano(trace.startNano.toString()), 3)}
           </time>
           <span className="wf__head-meta">
             {resourceSpans.map((resource) => (

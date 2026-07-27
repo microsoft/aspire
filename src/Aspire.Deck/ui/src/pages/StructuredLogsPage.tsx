@@ -5,8 +5,9 @@ import { StructuredLogActions, formatStructuredLogJson } from "../components/Str
 import { StructuredLogDetailsDrawer } from "../components/StructuredLogDetailsDrawer";
 import { GenAIVisualizerDialog, hasGenAIAttributes } from "../components/GenAIVisualizerDialog";
 import { TraceLink } from "../components/TraceLink";
-import { useTelemetry } from "../lib/useDeckEvent";
-import { dateFromUnixNano, formatTimeWithMillis, shortId } from "../lib/format";
+import { useResources, useTelemetry } from "../lib/useDeckEvent";
+import { resolveResourceByName } from "../lib/resourceNames";
+import { dateFromUnixNano, formatTimeWithOptionalDate, shortId } from "../lib/format";
 import { logFilterFields, matchesTelemetryFilters, parseTelemetryFilters, telemetryFieldNames, type TelemetryFilter } from "../lib/telemetryFilters";
 import {
   Badge,
@@ -111,15 +112,38 @@ export function StructuredLogsPage({
     () => new Set((displayedTelemetry?.recentSpans ?? []).map((span) => span.traceId)),
     [displayedTelemetry?.recentSpans],
   );
-  const resourceOptions = useMemo(() => [
-    { value: "all", label: "All resources" },
-    ...[...new Set(logs.flatMap((log) => log.resourceName === null ? [] : [log.resourceName]))]
-      .sort((left, right) => left.localeCompare(right))
-      .map((value) => ({ value, label: value })),
-  ], [logs]);
-  const selectedResource = routeResourceName === null || resourceOptions.some((option) => option.value === routeResourceName)
-    ? routeResourceName ?? "all"
-    : "all";
+  const { resources } = useResources();
+  const resourceOptions = useMemo(() => {
+    // Mirror the dashboard, whose selector is populated from TelemetryRepository.GetResources() --
+    // every resource that has sent *any* telemetry, not just the rows currently on screen. Deriving
+    // the options from `logs` alone drops resources whose telemetry is traces or metrics only, and
+    // drops log-producing resources whose records have aged out of the retained window.
+    const names = new Set<string>();
+    for (const log of logs) if (log.resourceName !== null) names.add(log.resourceName);
+    for (const span of displayedTelemetry?.recentSpans ?? []) {
+      if (span.resourceName !== null) names.add(span.resourceName);
+    }
+    for (const metric of displayedTelemetry?.metrics ?? []) {
+      if (metric.resourceName !== null) names.add(metric.resourceName);
+    }
+    return [
+      { value: "all", label: "All resources" },
+      ...[...names]
+        .sort((left, right) => left.localeCompare(right))
+        .map((value) => ({ value, label: value })),
+    ];
+  }, [logs, displayedTelemetry?.recentSpans, displayedTelemetry?.metrics]);
+  const selectedResource = useMemo(() => {
+    if (routeResourceName === null) return "all";
+    if (resourceOptions.some((option) => option.value === routeResourceName)) return routeResourceName;
+    // Deep links carry the logical resource name while a running resource is keyed by its DCP
+    // instance name, so fall back to the same resolution the dashboard performs before giving up.
+    const resolved = resolveResourceByName(resources, routeResourceName);
+    if (resolved === null) return "all";
+    return resourceOptions.some((option) => option.value === resolved.displayName)
+      ? resolved.displayName
+      : "all";
+  }, [resourceOptions, resources, routeResourceName]);
   const selectedSeverity = SEVERITIES.includes(routeSeverity) ? routeSeverity : "All";
   const effectiveQuery = routeSpanId ?? routeQuery;
 
@@ -197,7 +221,7 @@ export function StructuredLogsPage({
       header: "Timestamp",
       width: "140px",
       render: (log) => (
-        <span className="cell-mono cell-muted cell-time">{formatTimeWithMillis(dateFromUnixNano(log.timeUnixNano))}</span>
+        <span className="cell-mono cell-muted cell-time">{formatTimeWithOptionalDate(dateFromUnixNano(log.timeUnixNano), 3)}</span>
       ),
     },
     {
