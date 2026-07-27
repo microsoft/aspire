@@ -25,6 +25,7 @@ using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.UserSecrets;
 using k8s.Models;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
@@ -3542,6 +3543,118 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void PlainExecutableCertificateDirectoriesPath_IncludesExistingWellKnownDirectoriesForAppendWhenSslCertDirIsUnsetOnLinux()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "OpenSSL default certificate directories are only inferred on Linux.");
+
+        var options = new RemoteInvokeOptions();
+        options.StartInfo.Environment.Remove("SSL_CERT_DIR");
+
+        RemoteExecutor.Invoke(static async () =>
+        {
+            Environment.SetEnvironmentVariable("SSL_CERT_DIR", null);
+
+            var expectedWellKnownCertificateDirectories = ContainerCertificatePathsAnnotation.DefaultCertificateDirectoriesPaths
+                .Where(Directory.Exists)
+                .ToArray();
+            Assert.NotEmpty(expectedWellKnownCertificateDirectories);
+
+            var builder = DistributedApplication.CreateBuilder();
+            using var certificate = CreateTestCertificate();
+            var certificateAuthorities = builder.AddCertificateAuthorityCollection("certificates")
+                .WithCertificate(certificate);
+
+            var executable = new TestExecutableResource("test-working-directory");
+            builder.AddResource(executable)
+                .WithCertificateAuthorityCollection(certificateAuthorities);
+
+            var kubernetesService = new TestKubernetesService();
+            using var app = builder.Build();
+            var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+            var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+
+            await appExecutor.RunApplicationAsync();
+
+            var exe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>(), e => e.AppModelResourceName == "TestExecutable");
+            var sslCertDir = Assert.Single(exe.Spec.Env!, e => e.Name == "SSL_CERT_DIR").Value;
+
+            Assert.NotNull(sslCertDir);
+            var sslCertDirs = sslCertDir.Split(Path.PathSeparator);
+            Assert.EndsWith($"{Path.DirectorySeparatorChar}certs", sslCertDirs[0]);
+            Assert.Equal(expectedWellKnownCertificateDirectories, sslCertDirs.Skip(1));
+        }, options).Dispose();
+    }
+
+    [Fact]
+    public void PlainExecutableCertificateDirectoriesPath_PreservesAppHostSslCertDirForAppend()
+    {
+        var expectedExistingSslCertDirs = new[] { "/custom/certs", "/home/me/.aspnet/dev-certs/trust" };
+        var options = new RemoteInvokeOptions();
+        options.StartInfo.Environment["SSL_CERT_DIR"] = string.Join(Path.PathSeparator, expectedExistingSslCertDirs);
+
+        RemoteExecutor.Invoke(static expectedExistingSslCertDir =>
+        {
+            Environment.SetEnvironmentVariable("SSL_CERT_DIR", expectedExistingSslCertDir);
+
+            var sslCertDir = GetPlainExecutableSslCertDirAsync().GetAwaiter().GetResult();
+
+            Assert.NotNull(sslCertDir);
+            var sslCertDirs = sslCertDir.Split(Path.PathSeparator);
+            Assert.EndsWith($"{Path.DirectorySeparatorChar}certs", sslCertDirs[0]);
+            Assert.Equal(expectedExistingSslCertDir.Split(Path.PathSeparator), sslCertDirs.Skip(1));
+        }, string.Join(Path.PathSeparator, expectedExistingSslCertDirs), options).Dispose();
+    }
+
+    [Fact]
+    public void PlainExecutableCertificateDirectoriesPath_PreservesEmptyAppHostSslCertDirForAppend()
+    {
+        var options = new RemoteInvokeOptions();
+        options.StartInfo.Environment["SSL_CERT_DIR"] = string.Empty;
+
+        RemoteExecutor.Invoke(static () =>
+        {
+            var sslCertDir = GetPlainExecutableSslCertDirAsync().GetAwaiter().GetResult();
+
+            Assert.NotNull(sslCertDir);
+            var sslCertDirs = sslCertDir.Split(Path.PathSeparator);
+            Assert.Single(sslCertDirs);
+            Assert.EndsWith($"{Path.DirectorySeparatorChar}certs", sslCertDirs[0]);
+        }, options).Dispose();
+    }
+
+    [Fact]
+    public void PlainExecutableCertificateDirectoriesPath_DoesNotIncludeAppHostSslCertDirForOverride()
+    {
+        var options = new RemoteInvokeOptions();
+        options.StartInfo.Environment["SSL_CERT_DIR"] = "/custom/certs";
+
+        RemoteExecutor.Invoke(static () =>
+        {
+            Environment.SetEnvironmentVariable("SSL_CERT_DIR", "/custom/certs");
+
+            var sslCertDir = GetPlainExecutableSslCertDirAsync(builder => builder.WithCertificateTrustScope(CertificateTrustScope.Override)).GetAwaiter().GetResult();
+
+            Assert.NotNull(sslCertDir);
+            var sslCertDirs = sslCertDir.Split(Path.PathSeparator);
+            Assert.Single(sslCertDirs);
+            Assert.EndsWith($"{Path.DirectorySeparatorChar}certs", sslCertDirs[0]);
+        }, options).Dispose();
+    }
+
+    [Fact]
+    public async Task PlainExecutableCertificateDirectoriesPath_IgnoresResourceSslCertDirForAppend()
+    {
+        var customSslCertDir = $"/resource-certs-{Guid.NewGuid():N}";
+
+        var sslCertDir = await GetPlainExecutableSslCertDirAsync(builder => builder.WithEnvironment("SSL_CERT_DIR", customSslCertDir));
+
+        Assert.NotNull(sslCertDir);
+        var sslCertDirs = sslCertDir.Split(Path.PathSeparator);
+        Assert.EndsWith($"{Path.DirectorySeparatorChar}certs", sslCertDirs[0]);
+        Assert.All(sslCertDirs, dir => Assert.NotEqual(customSslCertDir, dir));
+    }
+
+    [Fact]
     public async Task SessionScopedExplicitStartPlainExecutable_DefersDcpObjectCreationUntilManualStart()
     {
         var builder = DistributedApplication.CreateBuilder();
@@ -6711,6 +6824,29 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             new ProfilingTelemetry(configuration),
             proxylessEndpointPortAllocator,
             userSecretsManager ?? NoopUserSecretsManager.Instance);
+    }
+
+    private static async Task<string?> GetPlainExecutableSslCertDirAsync(Action<IResourceBuilder<TestExecutableResource>>? configure = null)
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        using var certificate = CreateTestCertificate();
+        var certificateAuthorities = builder.AddCertificateAuthorityCollection("certificates")
+            .WithCertificate(certificate);
+
+        var executable = new TestExecutableResource("test-working-directory");
+        var executableBuilder = builder.AddResource(executable)
+            .WithCertificateAuthorityCollection(certificateAuthorities);
+        configure?.Invoke(executableBuilder);
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>(), e => e.AppModelResourceName == "TestExecutable");
+        return Assert.Single(exe.Spec.Env!, e => e.Name == "SSL_CERT_DIR").Value;
     }
 
     private static void AssertPortAllocatedFromProxylessEndpointAllocatorRange(int port)

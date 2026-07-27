@@ -191,6 +191,8 @@ internal sealed class TestProcessExecution : IProcessExecution
 
     public bool StartReturnValue { get; init; } = true;
 
+    public Exception? StartException { get; init; }
+
     public bool ThrowOnHasExitedBeforeStart { get; init; }
 
     public Func<ProcessInvocationOptions, CancellationToken, Task<int>>? WaitForExitAsyncCallback { get; init; }
@@ -208,6 +210,11 @@ internal sealed class TestProcessExecution : IProcessExecution
     public Task<bool> StartAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
+        if (StartException is not null)
+        {
+            throw StartException;
+        }
 
         if (!StartReturnValue)
         {

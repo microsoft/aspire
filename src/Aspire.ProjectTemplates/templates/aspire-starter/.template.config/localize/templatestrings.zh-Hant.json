@@ -6,6 +6,7 @@
   "symbols/Framework/choices/net8.0/description": "目標 net8.0",
   "symbols/Framework/choices/net9.0/description": "目標 net9.0",
   "symbols/Framework/choices/net10.0/description": "目標 net10.0",
+  "symbols/Framework/choices/net11.0/description": "Target net11.0",
   "symbols/UseRedisCache/displayName": "使用 Redis 進行快取 (需要支援的容器執行階段)(_U)",
   "symbols/UseRedisCache/description": "設定是否要將應用程式設為使用 Redis 進行快取。需要支援的容器執行階段，才能在本機執行，如需詳細資料，請參閱 https://aka.ms/aspire/containers。",
   "symbols/TestFx/displayName": "建立 _test 專案",

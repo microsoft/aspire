@@ -319,6 +319,15 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsCleanAndTrustFixFormat", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Install {0}, run &apos;{1}&apos; to remove all certificates, then run &apos;{2}&apos; to create and trust a new one..
+        /// </summary>
+        public static string DevCertsInstallOpenSslCleanAndTrustFixFormat {
+            get {
+                return ResourceManager.GetString("DevCertsInstallOpenSslCleanAndTrustFixFormat", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Multiple HTTPS development certificates found ({0} certificates), but none are trusted.
@@ -452,6 +461,60 @@ namespace Aspire.Cli.Resources {
         public static string DevCertsMissingCertUtilFix {
             get {
                 return ResourceManager.GetString("DevCertsMissingCertUtilFix", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to OpenSSL HTTPS development certificate cache is missing the current certificate.
+        /// </summary>
+        public static string DevCertsOpenSslCacheMissingCurrentCertificateMessage {
+            get {
+                return ResourceManager.GetString("DevCertsOpenSslCacheMissingCurrentCertificateMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The OpenSSL certificate cache at '{0}' does not contain certificate {1} from the .NET current user certificate store. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates..
+        /// </summary>
+        public static string DevCertsOpenSslCacheMissingDetailsFormat {
+            get {
+                return ResourceManager.GetString("DevCertsOpenSslCacheMissingDetailsFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to OpenSSL HTTPS development certificate cache contains unreadable certificate files.
+        /// </summary>
+        public static string DevCertsOpenSslCacheUnreadableMessage {
+            get {
+                return ResourceManager.GetString("DevCertsOpenSslCacheUnreadableMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Could not read certificate files under '{0}': {1}. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates..
+        /// </summary>
+        public static string DevCertsOpenSslCacheUnreadableFilesDetailsFormat {
+            get {
+                return ResourceManager.GetString("DevCertsOpenSslCacheUnreadableFilesDetailsFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to OpenSSL HTTPS development certificate cache is missing subject-hash links.
+        /// </summary>
+        public static string DevCertsOpenSslCacheMissingHashLinkMessage {
+            get {
+                return ResourceManager.GetString("DevCertsOpenSslCacheMissingHashLinkMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The OpenSSL certificate cache at '{0}' contains certificate {1}, but no subject-hash entry points to it. OpenSSL workloads use subject-hash entries when loading CA directories..
+        /// </summary>
+        public static string DevCertsOpenSslCacheMissingHashLinkDetailsFormat {
+            get {
+                return ResourceManager.GetString("DevCertsOpenSslCacheMissingHashLinkDetailsFormat", resourceCulture);
             }
         }
 

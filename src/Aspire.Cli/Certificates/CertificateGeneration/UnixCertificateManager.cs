@@ -5,6 +5,7 @@
 
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.RegularExpressions;
 using Aspire.Cli;
@@ -116,11 +117,19 @@ internal sealed partial class UnixCertificateManager : CertificateManager
                 var certPath = Path.Combine(sslCertDir, certificateNickname + ".pem");
                 if (File.Exists(certPath))
                 {
-                    using var candidate = X509CertificateLoader.LoadCertificateFromFile(certPath);
-                    if (AreCertificatesEqual(certificate, candidate))
+                    try
                     {
-                        foundCert = true;
-                        break;
+                        using var candidate = X509CertificateLoader.LoadCertificateFromFile(certPath);
+                        if (AreCertificatesEqual(certificate, candidate))
+                        {
+                            foundCert = true;
+                            break;
+                        }
+                    }
+                    catch (Exception ex) when (ex is CryptographicException or IOException or UnauthorizedAccessException)
+                    {
+                        // Treat unreadable entries as a miss. A later SSL_CERT_DIR entry may still contain
+                        // the expected certificate, so only report OpenSSL as untrusted after the full search.
                     }
                 }
             }
@@ -476,17 +485,19 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         if (File.Exists(certPath))
         {
             var openSslUntrustSucceeded = false;
+            var certificateFileDeleted = TryDeleteCertificateFile(certPath);
 
-            if (IsCommandAvailable(OpenSslCommand))
+            if (certificateFileDeleted)
             {
-                if (TryDeleteCertificateFile(certPath) && TryRehashOpenSslCertificates(certDir))
+                if (IsCommandAvailable(OpenSslCommand))
                 {
+                    openSslUntrustSucceeded = TryRehashOpenSslCertificates(certDir);
+                }
+                else
+                {
+                    Log.UnixMissingOpenSslCommand(OpenSslCommand);
                     openSslUntrustSucceeded = true;
                 }
-            }
-            else
-            {
-                Log.UnixMissingOpenSslCommand(OpenSslCommand);
             }
 
             if (openSslUntrustSucceeded)

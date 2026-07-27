@@ -124,7 +124,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     {
         var connection = new TestAppHostAuxiliaryBackchannel();
 
-        var ready = await AppHostLauncher.WaitForAppHostReadyAsync(connection, CancellationToken.None);
+        var ready = await AppHostLauncher.WaitForAppHostReadyAsync(connection, CancellationToken.None).DefaultTimeout();
 
         Assert.Null(ready);
     }
@@ -138,7 +138,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             WaitForAppHostReadyHandler = _ => throw new IOException("connection lost")
         };
 
-        var exception = await Assert.ThrowsAsync<IOException>(() => AppHostLauncher.WaitForAppHostReadyAsync(connection, CancellationToken.None));
+        var exception = await Assert.ThrowsAsync<IOException>(() => AppHostLauncher.WaitForAppHostReadyAsync(connection, CancellationToken.None)).DefaultTimeout();
         Assert.Equal("connection lost", exception.Message);
     }
 
@@ -150,7 +150,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             Task.CompletedTask,
             TimeSpan.FromSeconds(120),
             TimeProvider.System,
-            CancellationToken.None);
+            CancellationToken.None).DefaultTimeout();
 
         Assert.False(stable);
     }
@@ -165,7 +165,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             childExitTask,
             TimeSpan.FromMilliseconds(1),
             TimeProvider.System,
-            CancellationToken.None);
+            CancellationToken.None).DefaultTimeout();
 
         Assert.True(stable);
     }
@@ -195,12 +195,12 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             stopAfterLaunchDelay: null,
             CancellationToken.None);
 
-        await harness.ProcessFactory.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
-        Assert.NotSame(launchTask, await Task.WhenAny(launchTask, Task.Delay(TimeSpan.FromMilliseconds(100))));
+        await harness.ProcessFactory.Started.Task.DefaultTimeout();
+        Assert.NotSame(launchTask, await Task.WhenAny(launchTask, Task.Delay(TimeSpan.FromMilliseconds(100))).DefaultTimeout());
 
         readiness.SetResult(new WaitForAppHostReadyResponse { IsReady = true });
 
-        var result = await launchTask.WaitAsync(TimeSpan.FromSeconds(10));
+        var result = await launchTask.DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
         Assert.Contains(RunCommandStrings.StartingAppHostInBackground, harness.InteractionService.DynamicStatusTexts);
@@ -230,7 +230,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             globalArgs: [],
             additionalArgs: [],
             stopAfterLaunchDelay: null,
-            CancellationToken.None);
+            CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
         Assert.False(File.Exists(socketPath));
@@ -267,7 +267,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             globalArgs: [],
             additionalArgs: [],
             stopAfterLaunchDelay: null,
-            CancellationToken.None);
+            CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, result.ExitCode);
         Assert.Contains(RunCommandStrings.FailedToStartAppHost, harness.InteractionService.DisplayedErrors);
@@ -312,11 +312,11 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             stopAfterLaunchDelay: null,
             CancellationToken.None);
 
-        await connectionLostStatusDisplayed.Task.WaitAsync(TimeSpan.FromSeconds(10));
-        Assert.NotSame(launchTask, await Task.WhenAny(launchTask, Task.Delay(TimeSpan.FromMilliseconds(100))));
+        await connectionLostStatusDisplayed.Task.DefaultTimeout();
+        Assert.NotSame(launchTask, await Task.WhenAny(launchTask, Task.Delay(TimeSpan.FromMilliseconds(100))).DefaultTimeout());
 
         harness.ProcessFactory.StopStartedProcess();
-        var result = await launchTask.WaitAsync(TimeSpan.FromSeconds(10));
+        var result = await launchTask.DefaultTimeout();
 
         Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, result.ExitCode);
         Assert.Contains(RunCommandStrings.StartingAppHostInBackground, harness.InteractionService.DynamicStatusTexts);
@@ -346,7 +346,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             childExitTask,
             TimeSpan.FromSeconds(120),
             TimeProvider.System,
-            CancellationToken.None);
+            CancellationToken.None).DefaultTimeout();
 
         Assert.True(stable);
         Assert.Equal(1, probeCount);
@@ -378,7 +378,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             childExitTcs.Task,
             TimeSpan.FromSeconds(120),
             timeProvider,
-            CancellationToken.None);
+            CancellationToken.None).DefaultTimeout();
 
         Assert.False(stable);
         Assert.True(probeCount > 0);
@@ -412,7 +412,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             globalArgs: [],
             additionalArgs: [],
             stopAfterLaunchDelay: null,
-            CancellationToken.None);
+            CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
         Assert.Empty(harness.InteractionService.DisplayedErrors);
@@ -448,7 +448,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             globalArgs: [],
             additionalArgs: [],
             stopAfterLaunchDelay: null,
-            CancellationToken.None);
+            CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, result.ExitCode);
         Assert.Contains(RunCommandStrings.FailedToStartAppHost, harness.InteractionService.DisplayedErrors);
@@ -472,18 +472,23 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             {
                 FileName = "/bin/sh",
                 UseShellExecute = false,
-                ArgumentList = { "-c", "exit 11" }
+                RedirectStandardInput = true,
+                ArgumentList = { "-c", "read value; exit 11" }
             }) ?? throw new InvalidOperationException("Failed to start test child process.");
+
+            detachedHandle = Process.GetProcessById(startedProcess.Id);
 
             forkProcess = Process.Start(new ProcessStartInfo
             {
                 FileName = "/bin/sh",
                 UseShellExecute = false,
-                ArgumentList = { "-c", "sleep 0.2; exit 11" }
+                RedirectStandardInput = true,
+                ArgumentList = { "-c", "read value; exit 11" }
             }) ?? throw new InvalidOperationException("Failed to start test DCP monitor process.");
 
-            detachedHandle = Process.GetProcessById(startedProcess.Id);
+            startedProcess.StandardInput.Close();
             await startedProcess.WaitForExitAsync(cancellationToken).DefaultTimeout();
+            forkProcess.StandardInput.Close();
 
             return new MonitoredProcessExecutionAdapter(detachedHandle, forkProcess, startTime: null, useSuppliedStartTime: true);
         };
@@ -500,7 +505,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 globalArgs: [],
                 additionalArgs: [],
                 stopAfterLaunchDelay: null,
-                CancellationToken.None);
+                CancellationToken.None).DefaultTimeout();
 
             Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, result.ExitCode);
             Assert.Collection(harness.InteractionService.DisplayedErrors,
@@ -532,7 +537,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     {
         using var harness = AppHostLauncherHarness.Create(outputHelper);
         using var cts = new CancellationTokenSource();
-        await cts.CancelAsync();
+        await cts.CancelAsync().DefaultTimeout();
 
         var launcherCalled = false;
         var observedToken = default(CancellationToken);
@@ -555,7 +560,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             globalArgs: [],
             additionalArgs: [],
             stopAfterLaunchDelay: null,
-            cts.Token);
+            cts.Token).DefaultTimeout();
 
         Assert.True(launcherCalled);
         Assert.Equal(cts.Token, observedToken);
@@ -584,7 +589,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             globalArgs: [],
             additionalArgs: [],
             stopAfterLaunchDelay: null,
-            CancellationToken.None);
+            CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, result.ExitCode);
         Assert.Contains(RunCommandStrings.FailedToStartAppHost, harness.InteractionService.DisplayedErrors);
@@ -609,18 +614,19 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             stopAfterLaunchDelay: null,
             cts.Token);
 
-        await harness.ProcessFactory.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await harness.ProcessFactory.Started.Task.DefaultTimeout();
         var startedProcess = harness.ProcessFactory.StartedProcess ?? throw new InvalidOperationException("Expected child process to start.");
 
         try
         {
             Assert.False(startedProcess.HasExited);
 
-            await cts.CancelAsync();
-            var result = await launchTask.WaitAsync(TimeSpan.FromSeconds(10));
+            await cts.CancelAsync().DefaultTimeout();
+            var result = await launchTask.DefaultTimeout();
 
             Assert.Equal(CliExitCodes.Success, result.ExitCode);
             Assert.Empty(harness.InteractionService.DisplayedErrors);
+            await startedProcess.WaitForExitAsync().DefaultTimeout();
             Assert.True(startedProcess.HasExited);
         }
         finally
@@ -647,7 +653,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             globalArgs: [],
             additionalArgs: [],
             stopAfterLaunchDelay: null,
-            cts.Token);
+            cts.Token).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, result.ExitCode);
         Assert.Equal(1, execution.WaitForExitCallCount);
@@ -779,7 +785,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             "System.InvalidOperationException: The TypeScript (Node.js) apphost failed.",
             "[2026-05-15 17:07:30.534] [INFO] [Stdout] An unexpected error occurred: The TypeScript (Node.js) apphost failed.",
             "[2026-05-15 17:07:30.540] [INFO] [Stdout] See logs at /tmp/child.log"
-        ]);
+        ]).DefaultTimeout();
 
         var lines = AppHostLauncher.ReadChildLogTail(childLogFile, maxLines: 5);
 
@@ -799,7 +805,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             "[2026-05-16 19:07:52.383] [INFO] [Build] /work/BrokenAppHost/Program.cs(3,41): error CS1002: ; expected [/work/BrokenAppHost/BrokenAppHost.csproj]",
             "[2026-05-16 19:07:52.392] [INFO] [Build] Build FAILED.",
             "[2026-05-16 19:07:52.392] [INFO] [Build]     1 Error(s)"
-        ]);
+        ]).DefaultTimeout();
 
         var lines = AppHostLauncher.ReadChildLogTail(childLogFile, maxLines: 4);
 
@@ -830,7 +836,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             "System.InvalidOperationException: The TypeScript (Node.js) apphost failed.",
             "[2026-05-15 17:07:30.534] [INFO] [Stdout] An unexpected error occurred: The TypeScript (Node.js) apphost failed.",
             "[2026-05-15 17:07:30.540] [INFO] [Stdout] See logs at /tmp/child.log"
-        ]);
+        ]).DefaultTimeout();
 
         var entries = AppHostLauncher.ReadChildLogReplayTail(childLogFile, maxLines: 6);
 
@@ -882,7 +888,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             "[2026-05-16 19:07:51.709] [INFO] [Build]   Determining projects to restore...",
             "[2026-05-16 19:07:52.383] [INFO] [Build] /work/BrokenAppHost/Program.cs(3,41): error CS1002: ; expected [/work/BrokenAppHost/BrokenAppHost.csproj]",
             "[2026-05-16 19:07:52.392] [INFO] [Build] Build FAILED."
-        ]);
+        ]).DefaultTimeout();
 
         var entries = AppHostLauncher.ReadChildLogReplayTail(childLogFile, maxLines: 3);
 

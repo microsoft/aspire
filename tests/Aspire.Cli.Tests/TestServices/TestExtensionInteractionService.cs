@@ -146,7 +146,7 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
         DisplayedLines.AddRange(lines);
     }
 
-    public void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null)
+    public void DisplayCancellationMessage(string? message = null, ConsoleOutput? consoleOverride = null)
     {
     }
 

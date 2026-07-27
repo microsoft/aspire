@@ -239,8 +239,9 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
         // add catches OperationCanceledException and returns CommandResult.Cancelled() (exit code 130)
         Assert.Equal(CliExitCodes.Cancelled, exitCode);
 
-        var cancellationOverride = Assert.Single(testInteractionService.DisplayedCancellations);
-        Assert.Equal(ConsoleOutput.Error, cancellationOverride);
+        var cancellation = Assert.Single(testInteractionService.DisplayedCancellations);
+        Assert.Null(cancellation.Message);
+        Assert.Equal(ConsoleOutput.Error, cancellation.ConsoleOverride);
     }
 
     [Fact]
@@ -272,8 +273,9 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
 
-        var cancellationOverride = Assert.Single(testInteractionService.DisplayedCancellations);
-        Assert.Null(cancellationOverride);
+        var cancellation = Assert.Single(testInteractionService.DisplayedCancellations);
+        Assert.Null(cancellation.Message);
+        Assert.Null(cancellation.ConsoleOverride);
     }
 
     [Fact]

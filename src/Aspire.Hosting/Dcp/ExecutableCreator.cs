@@ -501,10 +501,17 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 var dirs = new List<string> { certificatesOutputPath };
                 if (scope == CertificateTrustScope.Append)
                 {
-                    var existing = Environment.GetEnvironmentVariable("SSL_CERT_DIR");
-                    if (!string.IsNullOrEmpty(existing))
+                    var existingSslCertDir = Environment.GetEnvironmentVariable(CertificateTrustExecutionConfigurationGatherer.SslCertDirEnvironmentVariable);
+                    if (existingSslCertDir is not null)
                     {
-                        dirs.AddRange(existing.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries));
+                        dirs.AddRange(existingSslCertDir.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries));
+                    }
+                    else if (OperatingSystem.IsLinux())
+                    {
+                        // Do not invoke the openssl CLI here. This fallback is only for dotnet-run AppHosts
+                        // where Aspire CLI did not already materialize OpenSSL's default directory into
+                        // SSL_CERT_DIR, so reuse the same well-known certificate directories used for containers.
+                        dirs.AddRange(ContainerCertificatePathsAnnotation.DefaultCertificateDirectoriesPaths.Where(Directory.Exists));
                     }
                 }
 
