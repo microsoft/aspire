@@ -1053,6 +1053,71 @@ suite('AppHost discovery', () => {
             }
         });
 
+        test('does not disable streaming when aspire ls echoes --stream in a generic error', async () => {
+            const watcherCallbacks = stubFileSystemWatchers(sandbox);
+            const legacyCandidatePath = buildPath('workspace', 'Legacy', 'AppHost.csproj');
+            const streamCandidate = {
+                path: buildPath('workspace', 'Stream', 'AppHost.csproj'),
+                language: 'csharp',
+                status: 'buildable',
+            };
+            const bufferedCandidate = {
+                path: buildPath('workspace', 'Buffered', 'AppHost.csproj'),
+                language: 'csharp',
+                status: 'buildable',
+            };
+            const observedArgs: string[][] = [];
+            let streamAttempt = 0;
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
+                observedArgs.push(args);
+                if (args[0] === 'ls' && args.includes('--stream')) {
+                    if (streamAttempt++ === 0) {
+                        options?.stderrCallback?.('ls --format json --stream failed');
+                        options?.exitCallback?.(1);
+                    }
+                    else {
+                        options?.lineCallback?.(JSON.stringify(streamCandidate));
+                        options?.exitCallback?.(0);
+                    }
+                }
+                else if (args[0] === 'ls') {
+                    options?.stdoutCallback?.(JSON.stringify([bufferedCandidate]));
+                    options?.exitCallback?.(0);
+                }
+                else {
+                    options?.stdoutCallback?.(JSON.stringify({
+                        selected_project_file: legacyCandidatePath,
+                        all_project_file_candidates: [legacyCandidatePath],
+                    }));
+                    options?.exitCallback?.(0);
+                }
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+
+            try {
+                assert.deepStrictEqual(await service.discover(workspaceFolder), [{
+                    path: legacyCandidatePath,
+                    language: 'csharp',
+                    status: 'buildable',
+                    selected: true,
+                }]);
+
+                watcherCallbacks[0]();
+                assert.deepStrictEqual(await service.discover(workspaceFolder), [streamCandidate]);
+
+                assert.deepStrictEqual(observedArgs, [
+                    ['ls', '--format', 'json', '--nologo', '--stream'],
+                    ['extension', 'get-apphosts', '--nologo'],
+                    ['ls', '--format', 'json', '--nologo', '--stream'],
+                ]);
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
         test('reprobes aspire ls with --stream after CLI path changes', async () => {
             const watcherCallbacks = stubFileSystemWatchers(sandbox);
             const candidate = {
@@ -1360,7 +1425,7 @@ suite('AppHost discovery', () => {
             try {
                 await assert.rejects(
                     service.discover(makeWorkspaceFolder(buildPath('workspace'))),
-                    /aspire ls discovery failed: ls --format json failed\naspire extension get-apphosts fallback failed: extension get-apphosts failed/);
+                    /aspire ls discovery failed: ls --format json --stream failed\naspire extension get-apphosts fallback failed: extension get-apphosts failed/);
             }
             finally {
                 service.dispose();

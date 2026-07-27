@@ -1448,6 +1448,7 @@ suite('AppHostDataRepository', () => {
 
     test('workspace apphost name uses all candidates to disambiguate duplicate filenames', async () => {
         let emitCandidates: ((candidates: { path: string; language: string; status: string; selected?: boolean }[]) => void) | undefined;
+        let completeDiscovery: (() => void) | undefined;
         sandbox.stub(vscode.workspace, 'workspaceFolders').value([{
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
@@ -1462,8 +1463,8 @@ suite('AppHostDataRepository', () => {
                 for (const candidate of candidates) {
                     options?.lineCallback?.(JSON.stringify(candidate));
                 }
-                options?.exitCallback?.(0);
             };
+            completeDiscovery = () => options?.exitCallback?.(0);
             return { kill: () => { } } as any;
         });
         const repository = new AppHostDataRepository(makeTerminalProvider());
@@ -1471,6 +1472,7 @@ suite('AppHostDataRepository', () => {
         try {
             await flushPromises();
             assert.ok(emitCandidates);
+            assert.ok(completeDiscovery);
 
             emitCandidates([
                 {
@@ -1488,11 +1490,23 @@ suite('AppHostDataRepository', () => {
             ]);
             await flushPromises();
             await waitForCondition(
+                () => repository.workspaceAppHostCandidatePaths.length === 2,
+                'streamed workspace AppHost candidate paths were not updated');
+
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, [
+                '/workspace/apps/Store/AppHost.csproj',
+                '/workspace/samples/Store/AppHost.csproj',
+            ]);
+            assert.strictEqual(repository.workspaceAppHostName, undefined);
+
+            completeDiscovery();
+            await waitForCondition(
                 () => repository.workspaceAppHostName === 'apps/Store/AppHost.csproj',
                 'workspace AppHost name was not updated');
 
             assert.strictEqual(repository.workspaceAppHostName, 'apps/Store/AppHost.csproj');
         } finally {
+            completeDiscovery?.();
             repository.dispose();
         }
     });

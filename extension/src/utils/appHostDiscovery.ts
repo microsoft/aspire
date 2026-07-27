@@ -606,7 +606,7 @@ function isLsStreamUnsupportedError(error: unknown): boolean {
     // Older CLIs localize the unsupported-option message, but System.CommandLine preserves the
     // rejected option token in diagnostics, e.g. "Unrecognized command or argument '--stream'."
     // Scope the check to failed invocations where we actually passed --stream.
-    return containsQuotedCliToken(output, '--stream') || output.includes('--stream');
+    return containsQuotedCliToken(output, '--stream');
 }
 
 export function findCandidateForEditorFile(filePath: string, candidates: readonly CandidateAppHostDisplayInfo[]): CandidateAppHostDisplayInfo | undefined {
