@@ -4,9 +4,6 @@
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECERTIFICATES001 // HTTPS certificate APIs are experimental
 
-using System.Diagnostics.CodeAnalysis;
-using System.Globalization;
-using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.CosmosDB;
@@ -15,7 +12,6 @@ using Azure.Provisioning.CosmosDB;
 using Azure.Provisioning.Expressions;
 using Azure.Provisioning.KeyVault;
 using Microsoft.Azure.Cosmos;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting;
 
@@ -47,8 +43,8 @@ public static class AzureCosmosExtensions
     }
 
     /// <summary>
-    /// Configures an Azure Cosmos DB resource to be emulated using the Azure Cosmos DB emulator with the NoSQL API. This resource requires an <see cref="AzureCosmosDBResource"/> to be added to the application model.
-    /// For more information on the Azure Cosmos DB emulator, see <a href="https://learn.microsoft.com/azure/cosmos-db/emulator#authentication"></a>.
+    /// Configures an Azure Cosmos DB resource to be emulated using the Azure Cosmos DB Linux-based (vNext) emulator with the NoSQL API. This resource requires an <see cref="AzureCosmosDBResource"/> to be added to the application model.
+    /// For more information on the Azure Cosmos DB emulator, see <a href="https://learn.microsoft.com/azure/cosmos-db/emulator-linux"></a>.
     /// </summary>
     /// <ats-summary>Configures the Azure Cosmos DB resource to run using the local emulator</ats-summary>
     /// <param name="builder">The Azure Cosmos DB resource builder.</param>
@@ -56,32 +52,12 @@ public static class AzureCosmosExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
-    /// When using the Azure Cosmos DB emulator, the container requires a TLS/SSL certificate.
-    /// For more information, see <a href="https://learn.microsoft.com/azure/cosmos-db/how-to-develop-emulator?tabs=docker-linux#export-the-emulators-tlsssl-certificate"></a>.
     /// This version of the package defaults to the <inheritdoc cref="CosmosDBEmulatorContainerImageTags.Tag"/> tag of the <inheritdoc cref="CosmosDBEmulatorContainerImageTags.Registry"/>/<inheritdoc cref="CosmosDBEmulatorContainerImageTags.Image"/> container image.
+    /// The emulator starts on HTTP and is switched to HTTPS using an Aspire-managed developer certificate, because the .NET and Java SDKs do not support the emulator's HTTP mode.
+    /// The emulator only supports the API for NoSQL in gateway mode; stored procedures, triggers, user-defined functions and request unit enforcement are not available.
     /// </remarks>
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureCosmosDBResource> RunAsEmulator(this IResourceBuilder<AzureCosmosDBResource> builder, Action<IResourceBuilder<AzureCosmosDBEmulatorResource>>? configureContainer = null)
-        => RunAsEmulator(builder, configureContainer, useVNext: false);
-
-    /// <summary>
-    /// Configures an Azure Cosmos DB resource to be emulated using the Azure Cosmos DB Linux-based (vNext) emulator with the NoSQL API. This resource requires an <see cref="AzureCosmosDBResource"/> to be added to the application model.
-    /// For more information on the Azure Cosmos DB emulator, see <a href="https://learn.microsoft.com/azure/cosmos-db/emulator-linux"></a>.
-    /// </summary>
-    /// <ats-summary>Configures the Azure Cosmos DB resource to run using the Linux-based (vNext) emulator</ats-summary>
-    /// <param name="builder">The Azure Cosmos DB resource builder.</param>
-    /// <param name="configureContainer">Callback that exposes underlying container used for emulation to allow for customization.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-returns>The resource builder.</ats-returns>
-    /// <remarks>
-    /// This version of the package defaults to the <inheritdoc cref="CosmosDBEmulatorContainerImageTags.TagVNextLatest"/> tag of the <inheritdoc cref="CosmosDBEmulatorContainerImageTags.Registry"/>/<inheritdoc cref="CosmosDBEmulatorContainerImageTags.Image"/> container image.
-    /// </remarks>
-    [AspireExport(RunSyncOnBackgroundThread = true)]
-    [Experimental("ASPIRECOSMOSDB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public static IResourceBuilder<AzureCosmosDBResource> RunAsPreviewEmulator(this IResourceBuilder<AzureCosmosDBResource> builder, Action<IResourceBuilder<AzureCosmosDBEmulatorResource>>? configureContainer = null)
-        => RunAsEmulator(builder, configureContainer, useVNext: true);
-
-    private static IResourceBuilder<AzureCosmosDBResource> RunAsEmulator(this IResourceBuilder<AzureCosmosDBResource> builder, Action<IResourceBuilder<AzureCosmosDBEmulatorResource>>? configureContainer, bool useVNext)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
@@ -90,18 +66,15 @@ public static class AzureCosmosExtensions
             return builder;
         }
 
-        builder.Resource.IsVNextEmulator = useVNext;
-
         // Mark this resource as an emulator for consistent resource identification and tooling support
         builder.WithAnnotation(new EmulatorResourceAnnotation());
 
-        var scheme = useVNext ? "http" : null;
-        builder.WithEndpoint(name: "emulator", scheme: scheme, targetPort: 8081)
+        builder.WithEndpoint(name: "emulator", scheme: "http", targetPort: 8081)
                .WithAnnotation(new ContainerImageAnnotation
                {
                    Registry = CosmosDBEmulatorContainerImageTags.Registry,
                    Image = CosmosDBEmulatorContainerImageTags.Image,
-                   Tag = useVNext ? CosmosDBEmulatorContainerImageTags.TagVNextLatest : CosmosDBEmulatorContainerImageTags.Tag
+                   Tag = CosmosDBEmulatorContainerImageTags.Tag
                });
 
         CosmosClient? cosmosClient = null;
@@ -138,77 +111,64 @@ public static class AzureCosmosExtensions
             }
         });
 
-        if (useVNext)
+        builder.WithHttpEndpoint(name: EmulatorHealthEndpointName, targetPort: 8080)
+            .WithEndpoint(EmulatorHealthEndpointName, e => e.ExcludeReferenceEndpoint = true)
+            .WithHttpHealthCheck(endpointName: EmulatorHealthEndpointName, path: "/ready")
+            .WithUrlForEndpoint(EmulatorHealthEndpointName, u => u.DisplayLocation = UrlDisplayLocation.DetailsOnly);
+
+        // Configure the emulator to use an Aspire-managed HTTPS certificate.
+        // Use a surrogate builder since AzureCosmosDBResource doesn't implement IResourceWithEnvironment/IResourceWithArgs
+        // but AzureCosmosDBEmulatorResource (which extends ContainerResource) does. The surrogate's Annotations
+        // delegate to the inner resource, so the annotation ends up on the correct resource.
+        var emulatorSurrogate = new AzureCosmosDBEmulatorResource(builder.Resource);
+        var emulatorSurrogateBuilder = builder.ApplicationBuilder.CreateResourceBuilder(emulatorSurrogate);
+
+        // The image enables the Data Explorer by default (ENABLE_EXPLORER=true). That runs an
+        // otherwise-unused Node process and, because the emulator's readiness probe is
+        // "ready = postgres && gateway && (explorer || !ENABLE_EXPLORER)" (the emulator uses
+        // PostgreSQL internally as its storage engine), it makes /ready wait on the explorer even when
+        // it is never exposed. Disable it by default; WithDataExplorer re-enables it later through
+        // configureContainer (environment callbacks are last-write-wins).
+        emulatorSurrogateBuilder.WithEnvironment("ENABLE_EXPLORER", "false");
+
+        // The emulator sets a default CERT_SECRET environment variable for the default emulator certificate and we can't
+        // remove it, so we need to provide "some" secret value to avoid issues with our provided certificate. This simply sets the
+        // dev cert used by cosmos to have a stable passphrase. Users can override by calling `WithHttpsDeveloperCertificate` again
+        // with a custom passphrase (or with a passphrase omitted).
+        var password = ParameterResourceBuilderExtensions.CreateDefaultPasswordParameter(builder.ApplicationBuilder, $"{builder.Resource.Name}-certificate-passphrase");
+        emulatorSurrogateBuilder.WithHttpsDeveloperCertificate(password: builder.ApplicationBuilder.CreateResourceBuilder(password));
+
+        emulatorSurrogateBuilder.WithHttpsCertificateConfiguration(ctx =>
         {
-            builder.WithHttpEndpoint(name: EmulatorHealthEndpointName, targetPort: 8080)
-                .WithEndpoint(EmulatorHealthEndpointName, e => e.ExcludeReferenceEndpoint = true)
-                .WithHttpHealthCheck(endpointName: EmulatorHealthEndpointName, path: "/ready")
-                .WithUrlForEndpoint(EmulatorHealthEndpointName, u => u.DisplayLocation = UrlDisplayLocation.DetailsOnly);
-
-            // Configure the vNext emulator to use an Aspire-managed HTTPS certificate.
-            // Use a surrogate builder since AzureCosmosDBResource doesn't implement IResourceWithEnvironment/IResourceWithArgs
-            // but AzureCosmosDBEmulatorResource (which extends ContainerResource) does. The surrogate's Annotations
-            // delegate to the inner resource, so the annotation ends up on the correct resource.
-            var emulatorSurrogate = new AzureCosmosDBEmulatorResource(builder.Resource);
-            var emulatorSurrogateBuilder = builder.ApplicationBuilder.CreateResourceBuilder(emulatorSurrogate);
-
-            // The vNext image enables the Data Explorer by default (ENABLE_EXPLORER=true). That runs an
-            // otherwise-unused Node process and, because the emulator's readiness probe is
-            // "ready = postgres && gateway && (explorer || !ENABLE_EXPLORER)" (the vNext emulator uses
-            // PostgreSQL internally as its storage engine), it makes /ready wait on the explorer even when
-            // it is never exposed. Disable it by default; WithDataExplorer re-enables it later through
-            // configureContainer (environment callbacks are last-write-wins).
-            emulatorSurrogateBuilder.WithEnvironment("ENABLE_EXPLORER", "false");
-
-            // VNext cosmosdb sets a default CERT_SECRET environment variable for the default emulator certificate and we can't
-            // remove it, so we need to provide "some" secret value to avoid issues with our provided certificate. This simply sets the
-            // dev cert used by cosmos to have a stable passphrase. Users can override by calling `WithHttpsDeveloperCertificate` again
-            // with a custom passphrase (or with a passphrase omitted).
-            var password = ParameterResourceBuilderExtensions.CreateDefaultPasswordParameter(builder.ApplicationBuilder, $"{builder.Resource.Name}-certificate-passphrase");
-            emulatorSurrogateBuilder.WithHttpsDeveloperCertificate(password: builder.ApplicationBuilder.CreateResourceBuilder(password));
-
-            emulatorSurrogateBuilder.WithHttpsCertificateConfiguration(ctx =>
+            // Enable HTTPS for both the emulator endpoint and the data explorer endpoint (if enabled) by setting environment variables used by the emulator to configure its certificate.
+            ctx.EnvironmentVariables["PROTOCOL"] = "https";
+            ctx.EnvironmentVariables["EXPLORER_PROTOCOL"] = "https";
+            ctx.EnvironmentVariables["CERT_PATH"] = ctx.PfxPath;
+            if (ctx.Password is not null)
             {
-                // Enable HTTPS for both the emulator endpoint and the data explorer endpoint (if enabled) by setting environment variables used by the emulator to configure its certificate.
-                ctx.EnvironmentVariables["PROTOCOL"] = "https";
-                ctx.EnvironmentVariables["EXPLORER_PROTOCOL"] = "https";
-                ctx.EnvironmentVariables["CERT_PATH"] = ctx.PfxPath;
-                if (ctx.Password is not null)
-                {
-                    ctx.EnvironmentVariables["CERT_SECRET"] = ctx.Password;
-                }
+                ctx.EnvironmentVariables["CERT_SECRET"] = ctx.Password;
+            }
 
-                return Task.CompletedTask;
-            });
+            return Task.CompletedTask;
+        });
 
-            emulatorSurrogateBuilder.WithCertificateTrustConfiguration(ctx =>
-            {
-                ctx.EnvironmentVariables["NODE_EXTRA_CA_CERTS"] = ctx.CertificateBundlePath;
-
-                return Task.CompletedTask;
-            });
-
-            // Switch the emulator endpoint from HTTP to HTTPS when a certificate is available.
-            // The connection string and URI expressions use EndpointProperty.Url which will
-            // automatically reflect the updated scheme.
-            builder.SubscribeHttpsEndpointsUpdate(ctx =>
-            {
-                builder.WithEndpoint("emulator", ep =>
-                {
-                    ep.UriScheme = "https";
-                });
-            });
-        }
-        else
+        emulatorSurrogateBuilder.WithCertificateTrustConfiguration(ctx =>
         {
-            var healthCheckKey = $"{builder.Resource.Name}_check";
-            builder.ApplicationBuilder.Services.AddHealthChecks().AddAzureCosmosDB(
-                sp => cosmosClient ?? throw new InvalidOperationException("CosmosClient is not initialized."),
-                name: healthCheckKey
-            );
+            ctx.EnvironmentVariables["NODE_EXTRA_CA_CERTS"] = ctx.CertificateBundlePath;
 
-            builder.WithHealthCheck(healthCheckKey);
-        }
+            return Task.CompletedTask;
+        });
+
+        // Switch the emulator endpoint from HTTP to HTTPS when a certificate is available.
+        // The connection string and URI expressions use EndpointProperty.Url which will
+        // automatically reflect the updated scheme.
+        builder.SubscribeHttpsEndpointsUpdate(ctx =>
+        {
+            builder.WithEndpoint("emulator", ep =>
+            {
+                ep.UriScheme = "https";
+            });
+        });
 
         if (configureContainer != null)
         {
@@ -219,6 +179,19 @@ public static class AzureCosmosExtensions
 
         return builder;
     }
+
+    /// <summary>
+    /// Configures an Azure Cosmos DB resource to be emulated using the Azure Cosmos DB Linux-based (vNext) emulator with the NoSQL API. This resource requires an <see cref="AzureCosmosDBResource"/> to be added to the application model.
+    /// For more information on the Azure Cosmos DB emulator, see <a href="https://learn.microsoft.com/azure/cosmos-db/emulator-linux"></a>.
+    /// </summary>
+    /// <param name="builder">The Azure Cosmos DB resource builder.</param>
+    /// <param name="configureContainer">Callback that exposes underlying container used for emulation to allow for customization.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>This method is not available in polyglot app hosts. Use <see cref="RunAsEmulator"/> instead.</remarks>
+    [AspireExportIgnore(Reason = "Obsolete API. The Linux-based (vNext) emulator is now the only emulator, so RunAsEmulator does the same thing.")]
+    [Obsolete($"The Linux-based (vNext) emulator is now the only Azure Cosmos DB emulator, so this method is redundant and will be removed in a future version. Use {nameof(RunAsEmulator)} instead.")]
+    public static IResourceBuilder<AzureCosmosDBResource> RunAsPreviewEmulator(this IResourceBuilder<AzureCosmosDBResource> builder, Action<IResourceBuilder<AzureCosmosDBEmulatorResource>>? configureContainer = null)
+        => RunAsEmulator(builder, configureContainer);
 
     // Creates a CosmosClient from a connection string or an absolute account endpoint URI.
     // Internal (rather than a local function) so it can be unit-tested directly: the emulator code path
@@ -256,19 +229,9 @@ public static class AzureCosmosExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        var isVNext = builder.Resource.InnerResource.IsVNextEmulator;
-
-        // The vNext (Linux-based) emulator persists to /data and turns on persistence implicitly when a
-        // volume is mounted there; it does not read AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE (that
-        // variable is only honored by the classic emulator, which persists to /tmp/cosmos/appdata).
-        var dataPath = isVNext ? "/data" : "/tmp/cosmos/appdata";
-
-        if (!isVNext)
-        {
-            builder.WithEnvironment("AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE", "true");
-        }
-
-        return builder.WithVolume(name ?? VolumeNameGenerator.Generate(builder, "data"), dataPath, isReadOnly: false);
+        // The emulator persists to /data and turns on persistence implicitly when a volume is mounted
+        // there; there is no environment variable to opt in.
+        return builder.WithVolume(name ?? VolumeNameGenerator.Generate(builder, "data"), "/data", isReadOnly: false);
     }
 
     /// <summary>
@@ -294,25 +257,25 @@ public static class AzureCosmosExtensions
     /// <param name="builder">Builder for the Cosmos emulator container</param>
     /// <param name="count">Desired partition count.</param>
     /// <returns>Cosmos emulator resource builder.</returns>
-    /// <remarks>Not calling this method will result in the default of 10 partitions. The actual started partitions is always one more than specified.
-    /// See <a href="https://learn.microsoft.com/azure/cosmos-db/emulator-windows-arguments#change-the-number-of-default-containers">this documentation</a> about setting the partition count.
+    /// <remarks>
+    /// This method no longer has any effect. Partition count was a tuning knob of the original Windows-based
+    /// emulator, which pre-created a fixed pool of physical partitions on startup. The Linux-based emulator
+    /// does not pre-create partitions and exposes no equivalent setting, so the call is ignored rather than
+    /// throwing, to avoid breaking app hosts that still carry it.
+    /// This method is not available in polyglot app hosts.
     /// </remarks>
-    [AspireExport]
+    [AspireExportIgnore(Reason = "Obsolete API. Partition count is not supported by the Linux-based emulator and the method is a no-op.")]
+    [Obsolete("This method is obsolete because the Linux-based Azure Cosmos DB emulator does not support configuring the partition count. It has no effect and will be removed in a future version.")]
     public static IResourceBuilder<AzureCosmosDBEmulatorResource> WithPartitionCount(this IResourceBuilder<AzureCosmosDBEmulatorResource> builder, int count)
     {
         ArgumentNullException.ThrowIfNull(builder);
-
-        if (builder.Resource.InnerResource.IsVNextEmulator)
-        {
-            throw new NotSupportedException($"'{nameof(WithPartitionCount)}' does not work when using the Linux-based (vNext) Azure Cosmos DB emulator.");
-        }
 
         if (count < 1 || count > 250)
         {
             throw new ArgumentOutOfRangeException(nameof(count), count, "Count must be between 1 and 250.");
         }
 
-        return builder.WithEnvironment("AZURE_COSMOS_EMULATOR_PARTITION_COUNT", count.ToString(CultureInfo.InvariantCulture));
+        return builder;
     }
 
     /// <summary>
@@ -452,26 +415,17 @@ public static class AzureCosmosExtensions
     }
 
     /// <summary>
-    /// Configures the Azure Cosmos DB Linux-based (vNext) emulator to expose the Data Explorer endpoint.
+    /// Configures the Azure Cosmos DB emulator to expose the Data Explorer endpoint.
     /// </summary>
     /// <param name="builder">Builder for the Cosmos emulator container</param>
     /// <param name="port">Optional host port to bind the Data Explorer to.</param>
     /// <returns>Cosmos emulator resource builder.</returns>
-    /// <remarks>
-    /// The Data Explorer is only available with <see cref="RunAsPreviewEmulator"/>.
-    /// </remarks>
     [AspireExport]
-    [Experimental("ASPIRECOSMOSDB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureCosmosDBEmulatorResource> WithDataExplorer(this IResourceBuilder<AzureCosmosDBEmulatorResource> builder, int? port = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        if (!builder.Resource.InnerResource.IsVNextEmulator)
-        {
-            throw new NotSupportedException($"The Data Explorer endpoint is only available when using the Linux-based (vNext) Azure Cosmos DB emulator. Call '{nameof(RunAsPreviewEmulator)}' instead.");
-        }
-
-        // The vNext image enables the Data Explorer by default, but set ENABLE_EXPLORER explicitly so that
+        // The image enables the Data Explorer by default, but set ENABLE_EXPLORER explicitly so that
         // exposing this endpoint does not silently depend on the image's default remaining "true".
         builder.WithEnvironment("ENABLE_EXPLORER", "true");
 

@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 
@@ -316,7 +315,7 @@ public class CosmosDBPublicApiTests
     }
 
     [Fact]
-    [Experimental("ASPIRECOSMOSDB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [Obsolete($"{nameof(AzureCosmosExtensions.RunAsPreviewEmulator)} is obsolete but its argument validation is still covered.")]
     public void RunAsPreviewEmulatorShouldThrowWhenBuilderIsNull()
     {
         IResourceBuilder<AzureCosmosDBResource> builder = null!;
@@ -352,6 +351,7 @@ public class CosmosDBPublicApiTests
     }
 
     [Fact]
+    [Obsolete($"{nameof(AzureCosmosExtensions.WithPartitionCount)} is obsolete but its argument validation is still covered.")]
     public void WithPartitionCountShouldThrowWhenBuilderIsNull()
     {
         IResourceBuilder<AzureCosmosDBEmulatorResource> builder = null!;
@@ -513,7 +513,6 @@ public class CosmosDBPublicApiTests
     }
 
     [Fact]
-    [Experimental("ASPIRECOSMOSDB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public void WithDataExplorerShouldThrowWhenBuilderIsNull()
     {
         IResourceBuilder<AzureCosmosDBEmulatorResource> builder = null!;

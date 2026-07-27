@@ -88,15 +88,6 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
     public bool IsEmulator => this.IsContainer();
 
     /// <summary>
-    /// Is this instance running the Linux-based (vNext) emulator?
-    /// </summary>
-    internal bool IsVNextEmulator
-    {
-        get => IsEmulator && field;
-        set => field = value;
-    }
-
-    /// <summary>
     /// Gets the account endpoint URI expression for the Cosmos DB account.
     /// </summary>
     /// <remarks>
@@ -125,7 +116,7 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
     /// </summary>
     public ReferenceExpression ConnectionStringExpression =>
         IsEmulator ?
-            AzureCosmosDBEmulatorConnectionString.Create(EmulatorEndpoint, IsVNextEmulator) :
+            AzureCosmosDBEmulatorConnectionString.Create(EmulatorEndpoint) :
             UseAccessKeyAuthentication ?
                 ReferenceExpression.Create($"{ConnectionStringSecretOutput}") :
                 ReferenceExpression.Create($"{ConnectionStringOutput}");
