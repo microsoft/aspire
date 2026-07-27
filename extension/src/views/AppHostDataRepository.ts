@@ -280,6 +280,9 @@ export class AppHostDataRepository {
         this._appHostDiscoveryChangeDisposable = this._appHostDiscoveryService.onDidChangeCandidates(workspaceFolder => {
             const rootFolder = vscode.workspace.workspaceFolders?.[0];
             if (rootFolder?.uri.toString() === workspaceFolder.uri.toString()) {
+                this._workspaceAppHostDiscoveryComplete = false;
+                this._clearWorkspaceAppHostDiscovery();
+                this._updateWorkspaceContext();
                 this._fetchWorkspaceAppHost();
             }
         });

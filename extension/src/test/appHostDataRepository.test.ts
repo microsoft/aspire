@@ -3260,6 +3260,70 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('workspace discovery change clears stale selection before streaming replacement candidates', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discoveryChanges = new vscode.EventEmitter<vscode.WorkspaceFolder>();
+        const oldCandidate = {
+            path: '/workspace/old/AppHost.csproj',
+            language: 'csharp',
+            status: 'buildable',
+        };
+        const newCandidate = {
+            path: '/workspace/new/AppHost.csproj',
+            language: 'csharp',
+            status: 'buildable',
+        };
+        const secondDiscovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        let secondDiscoveryCallback: ((candidate: CandidateAppHostDisplayInfo) => void) | undefined;
+        const discoverStub = sinon.stub();
+        discoverStub.onFirstCall().resolves([oldCandidate]);
+        discoverStub.onSecondCall().callsFake((_folder: vscode.WorkspaceFolder, _forceRefresh?: boolean, _cancellationToken?: vscode.CancellationToken, onCandidate?: (candidate: CandidateAppHostDisplayInfo) => void) => {
+            secondDiscoveryCallback = onCandidate;
+            return secondDiscovery.promise;
+        });
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: discoveryChanges.event,
+            discover: discoverStub,
+            dispose: () => { },
+        };
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            await waitForCondition(() => repository.workspaceAppHostPath === oldCandidate.path, 'initial workspace discovery did not apply');
+            assert.strictEqual(repository.workspaceAppHostName, 'AppHost.csproj');
+
+            discoveryChanges.fire(workspaceFolder);
+            await waitForCondition(() => discoverStub.callCount === 2, 'workspace rediscovery did not start');
+
+            assert.strictEqual(repository.workspaceAppHostPath, undefined);
+            assert.strictEqual(repository.workspaceAppHostName, undefined);
+            assert.strictEqual(repository.workspaceAppHostDescription, undefined);
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, []);
+            assert.ok(secondDiscoveryCallback);
+
+            secondDiscoveryCallback(newCandidate);
+            await waitForMicrotasks();
+
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, [newCandidate.path]);
+            assert.strictEqual(repository.workspaceAppHostPath, undefined);
+            assert.strictEqual(repository.workspaceAppHostName, undefined);
+
+            secondDiscovery.resolve([newCandidate]);
+            await waitForCondition(() => repository.workspaceAppHostPath === newCandidate.path, 'replacement workspace discovery did not apply');
+
+            assert.strictEqual(repository.workspaceAppHostName, 'AppHost.csproj');
+        } finally {
+            repository.dispose();
+            discoveryChanges.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
     test('queues forced workspace discovery refresh without starting overlapping discovery', async () => {
         const workspaceFolder = {
             uri: vscode.Uri.file('/workspace'),
