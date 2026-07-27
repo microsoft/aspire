@@ -24,6 +24,7 @@ public abstract class TelemetryRepositoryTestBase
         TimeSpan? subscriptionMinExecuteInterval = null,
         ILoggerFactory? loggerFactory = null,
         global::Aspire.Dashboard.Model.PauseManager? pauseManager = null,
+        TimeProvider? timeProvider = null,
         global::Aspire.Dashboard.Model.IOutgoingPeerResolver[]? outgoingPeerResolvers = null)
     {
         var telemetryLimits = new global::Aspire.Dashboard.Configuration.TelemetryLimitOptions();
@@ -52,6 +53,7 @@ public abstract class TelemetryRepositoryTestBase
                     loggerFactory: loggerFactory,
                     dashboardOptions: options,
                     pauseManager: pauseManager,
+                    timeProvider: timeProvider,
                     outgoingPeerResolvers: outgoingPeerResolvers);
             }
             catch

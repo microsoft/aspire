@@ -4175,9 +4175,10 @@ public sealed class SqliteTraceTests : TraceTests
     {
         var testTime = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         using var outgoingPeerResolver = new TestOutgoingPeerResolver(onResolve: _ => (null, null));
-        using var repositoryContext = await CreateRepositoryAsync(outgoingPeerResolvers: [outgoingPeerResolver]);
+        using var repositoryContext = await CreateRepositoryAsync(
+            timeProvider: new FixedTimeProvider(DateTimeOffset.MaxValue.AddTicks(-100)),
+            outgoingPeerResolvers: [outgoingPeerResolver]);
         var repository = Assert.IsType<SqliteTelemetryRepository>(repositoryContext.Repository);
-        repository.ReceiptTimeProvider = new FixedTimeProvider(DateTimeOffset.MaxValue.AddTicks(-100));
         await repository.AsWriter().AddTracesAsync(new AddContext(),
         [
             CreateRootResourceSpans("first", "1-1", testTime),

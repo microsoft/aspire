@@ -166,6 +166,7 @@ internal static class FluentUISetupHelpers
             loggerFactory,
             options,
             new PauseManager(),
+            context.Services.GetRequiredService<TimeProvider>(),
             outgoingPeerResolvers);
         await seed(writer);
     }
@@ -181,6 +182,7 @@ internal static class FluentUISetupHelpers
     {
         context.Services.AddLocalization();
         context.Services.AddSingleton<BrowserTimeProvider>(browserTimeProvider ?? new TestTimeProvider());
+        context.Services.AddSingleton(TimeProvider.System);
         context.Services.AddSingleton(_ => TemporaryWorkspace.Create(
             global::Xunit.TestContext.Current.TestOutputHelper ?? throw new InvalidOperationException("An active test output helper is required.")));
         context.Services.AddSingleton(services =>
@@ -206,6 +208,7 @@ internal static class FluentUISetupHelpers
                 loggerFactory,
                 options,
                 pauseManager,
+                services.GetRequiredService<TimeProvider>(),
                 outgoingPeerResolvers);
         });
         context.Services.AddSingleton<ITelemetryRepository>(services => services.GetRequiredService<SqliteTelemetryRepository>());

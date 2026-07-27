@@ -176,6 +176,7 @@ public class SqliteTraceBenchmarks
                 TelemetryLimits = new TelemetryLimitOptions { MaxTraceCount = 1_000 }
             }),
             new PauseManager(),
+            TimeProvider.System,
             []);
     }
 

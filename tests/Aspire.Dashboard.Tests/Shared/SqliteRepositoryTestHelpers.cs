@@ -19,6 +19,7 @@ internal static class SqliteRepositoryTestHelpers
         ILoggerFactory? loggerFactory = null,
         IOptions<DashboardOptions>? dashboardOptions = null,
         PauseManager? pauseManager = null,
+        TimeProvider? timeProvider = null,
         IEnumerable<IOutgoingPeerResolver>? outgoingPeerResolvers = null)
     {
         var database = new DashboardSqliteDatabase(databasePath, readOnly, pooling);
@@ -34,6 +35,7 @@ internal static class SqliteRepositoryTestHelpers
                 loggerFactory ?? NullLoggerFactory.Instance,
                 dashboardOptions ?? Options.Create(new DashboardOptions()),
                 pauseManager ?? new PauseManager(),
+                timeProvider ?? TimeProvider.System,
                 outgoingPeerResolvers ?? []);
             return new SqliteRepositoryTestContext<SqliteTelemetryRepository>(database, repository);
         }

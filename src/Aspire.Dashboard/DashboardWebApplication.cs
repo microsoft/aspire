@@ -319,7 +319,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddGrpc();
         builder.Services.AddSingleton<DashboardRunStore>();
         builder.Services.AddSingleton<IDashboardRunStore>(services => services.GetRequiredService<DashboardRunStore>());
-        builder.Services.AddSingleton<IRepositoryFactory>(services => new RepositoryFactory(services));
+        builder.Services.AddSingleton<IRepositoryFactory, RepositoryFactory>();
         builder.Services.AddSingleton(services => services.GetRequiredService<DashboardDataSourcePool>().Current.TelemetryRepository);
         builder.Services.AddSingleton<ITelemetryRepositoryWriter>(services =>
             (ITelemetryRepositoryWriter)services.GetRequiredService<ITelemetryRepository>());

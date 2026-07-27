@@ -185,6 +185,7 @@ public class TelemetryRepositoryMetricsBenchmarks
             NullLoggerFactory.Instance,
             Options.Create(new DashboardOptions()),
             new PauseManager(),
+            TimeProvider.System,
             []);
     }
 

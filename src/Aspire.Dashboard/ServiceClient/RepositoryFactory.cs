@@ -21,6 +21,7 @@ internal sealed class RepositoryFactory(IServiceProvider serviceProvider) : IRep
             serviceProvider.GetRequiredService<ILoggerFactory>(),
             serviceProvider.GetRequiredService<IOptions<DashboardOptions>>(),
             serviceProvider.GetRequiredService<PauseManager>(),
+            serviceProvider.GetRequiredService<TimeProvider>(),
             serviceProvider.GetServices<IOutgoingPeerResolver>());
 
     public IResourceRepository CreateResourceRepository(DashboardSqliteDatabase database) =>

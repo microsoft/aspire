@@ -964,6 +964,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
             .AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance)
             .AddSingleton(options)
             .AddSingleton<PauseManager>()
+            .AddSingleton(TimeProvider.System)
             .AddSingleton<IKnownPropertyLookup, MockKnownPropertyLookup>()
             .BuildServiceProvider();
         _serviceProviders.Add(serviceProvider);

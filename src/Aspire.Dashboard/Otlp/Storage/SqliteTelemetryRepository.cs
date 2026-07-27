@@ -22,6 +22,7 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
     private readonly DashboardSqliteDatabase _database;
     private readonly OtlpContext _otlpContext;
     private readonly PauseManager _pauseManager;
+    private readonly TimeProvider _timeProvider;
     private readonly IReadOnlyList<IOutgoingPeerResolver> _outgoingPeerResolvers;
     private readonly List<IDisposable> _outgoingPeerSubscriptions = [];
     private int _disposed;
@@ -42,8 +43,6 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
 
     internal ActivitySource SqlActivitySource => _database.ActivitySource;
 
-    internal TimeProvider ReceiptTimeProvider { get; set; } = TimeProvider.System;
-
     /// <summary>
     /// Initializes a new instance of the <see cref="SqliteTelemetryRepository"/> class.
     /// </summary>
@@ -51,16 +50,19 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
     /// <param name="loggerFactory">The logger factory.</param>
     /// <param name="dashboardOptions">The dashboard options.</param>
     /// <param name="pauseManager">The telemetry pause manager.</param>
+    /// <param name="timeProvider">The time provider.</param>
     /// <param name="outgoingPeerResolvers">The resolvers used to identify outgoing peer resources.</param>
     public SqliteTelemetryRepository(
         DashboardSqliteDatabase database,
         ILoggerFactory loggerFactory,
         IOptions<DashboardOptions> dashboardOptions,
         PauseManager pauseManager,
+        TimeProvider timeProvider,
         IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers)
     {
         _database = database;
         _pauseManager = pauseManager;
+        _timeProvider = timeProvider;
         _outgoingPeerResolvers = outgoingPeerResolvers.ToList();
         _otlpContext = new OtlpContext
         {

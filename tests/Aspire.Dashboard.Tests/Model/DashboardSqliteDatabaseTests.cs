@@ -49,6 +49,7 @@ public sealed class DashboardSqliteDatabaseTests(ITestOutputHelper testOutputHel
             NullLoggerFactory.Instance,
             Options.Create(new DashboardOptions()),
             new PauseManager(),
+            TimeProvider.System,
             []);
         using var resourceRepository = new SqliteResourceRepository(database, new MockKnownPropertyLookup(), NullLoggerFactory.Instance);
 

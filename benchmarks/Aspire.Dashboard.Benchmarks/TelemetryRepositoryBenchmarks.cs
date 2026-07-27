@@ -174,6 +174,7 @@ public class TelemetryRepositoryBenchmarks
                 }
             }),
             new PauseManager(),
+            TimeProvider.System,
             []);
     }
 

@@ -324,7 +324,7 @@ public sealed partial class SqliteTelemetryRepository
         var previousReceivedTimestampTicks = latestReceivedTimestampTicks.GetValueOrDefault(
             traceId,
             ingestionState.ExistingTraces.GetValueOrDefault(traceId)?.LastUpdatedTimestampTicks ?? 0);
-        var receivedTimestampTicks = Math.Max(ReceiptTimeProvider.GetUtcNow().Ticks, previousReceivedTimestampTicks + 1);
+        var receivedTimestampTicks = Math.Max(_timeProvider.GetUtcNow().Ticks, previousReceivedTimestampTicks + 1);
         latestReceivedTimestampTicks[traceId] = receivedTimestampTicks;
 
         var registerTrace = false;
@@ -1082,7 +1082,7 @@ public sealed partial class SqliteTelemetryRepository
                 );
                 """, transaction: transaction);
             var lastUpdatedTimestampTicks = Math.Max(
-                ReceiptTimeProvider.GetUtcNow().Ticks,
+                _timeProvider.GetUtcNow().Ticks,
                 latestReceivedTimestampTicks.Values.DefaultIfEmpty(0).Max());
             writeConnection.Execute("""
                 UPDATE telemetry_traces
@@ -1165,7 +1165,7 @@ public sealed partial class SqliteTelemetryRepository
                 var previousReceivedTimestampTicks = latestReceivedTimestampTicks.GetValueOrDefault(
                     span.TraceId,
                     span.TraceLastUpdatedTimestampTicks);
-                var receivedTimestampTicks = Math.Max(ReceiptTimeProvider.GetUtcNow().Ticks, previousReceivedTimestampTicks + 1);
+                var receivedTimestampTicks = Math.Max(_timeProvider.GetUtcNow().Ticks, previousReceivedTimestampTicks + 1);
                 latestReceivedTimestampTicks[span.TraceId] = receivedTimestampTicks;
                 return receivedTimestampTicks;
             }
