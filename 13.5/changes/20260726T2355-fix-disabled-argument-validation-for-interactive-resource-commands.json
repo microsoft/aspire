@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Interactive resource commands with disabled dynamic inputs no longer fail with \"Argument is disabled.\" when arguments are accepted via an interactive prompt.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔧",
+  "firstMergedAt": "2026-07-26T23:55:08Z",
+  "lastMergedAt": "2026-07-26T23:55:08Z",
+  "name": "Fix disabled argument validation for interactive resource commands",
+  "owner": "JamesNK",
+  "prs": [
+    18889
+  ]
+}

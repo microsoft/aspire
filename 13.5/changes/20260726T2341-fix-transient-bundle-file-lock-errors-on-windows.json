@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "CLI bundle promotion on Windows now retries when antivirus or indexing software temporarily locks freshly extracted files, preventing spurious access-denied errors during bundle updates.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔄",
+  "firstMergedAt": "2026-07-26T23:41:25Z",
+  "lastMergedAt": "2026-07-26T23:41:25Z",
+  "name": "Fix transient bundle file lock errors on Windows",
+  "owner": "danegsta",
+  "prs": [
+    18839
+  ]
+}

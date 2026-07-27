@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Bug fix: retry transient Windows file lock errors during bundle promotion",
+  "mergedAt": "2026-07-26T23:41:25Z",
+  "number": 18839,
+  "runDate": "2026-07-27T00:22:19Z",
+  "status": "included",
+  "title": "Retry transient Windows bundle directory moves"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Bug fix: interactive resource commands with disabled dynamic inputs incorrectly failed argument validation",
+  "mergedAt": "2026-07-26T23:55:08Z",
+  "number": 18889,
+  "runDate": "2026-07-27T00:22:19Z",
+  "status": "included",
+  "title": "Fix disabled argument validation for interactive resource commands"
+}
