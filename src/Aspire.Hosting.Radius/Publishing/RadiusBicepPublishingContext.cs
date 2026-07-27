@@ -164,6 +164,18 @@ internal sealed class RadiusBicepPublishingContext
     // Missing manifests were already rejected at build time (ASPIRERADIUS044).
     private static void CopySealedSecretManifests(RadiusInfrastructureOptions options, string outputDir, ILogger logger)
     {
+        // The pipeline output directory is persistent and is NOT cleaned by PipelineOutputService, so
+        // a prior publish's manifests for stores that were since removed or renamed would linger and
+        // keep obsolete (encrypted) credential material in the published artifact. The `sealed-secrets`
+        // subtree is owned entirely by this integration, so clear it wholesale before writing the
+        // current set — this runs even when there are no manifests now, so removing the last store also
+        // prunes its stale artifact.
+        var root = Secrets.SealedSecretArtifact.RootPath(outputDir);
+        if (Directory.Exists(root))
+        {
+            Directory.Delete(root, recursive: true);
+        }
+
         foreach (var (storeName, manifest) in options.SealedSecretManifests)
         {
             var destination = Secrets.SealedSecretArtifact.ResolvePath(outputDir, storeName, manifest.SourcePath);

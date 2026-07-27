@@ -615,8 +615,23 @@ internal sealed class SealedSecretApplyStep
 
     private static async Task<bool> SecretExistsAsync(string ns, string name, string? kubeContext, CancellationToken cancellationToken)
     {
+        return await SecretExistsAsync(
+            ns,
+            name,
+            kubeContext,
+            cancellationToken,
+            (args, ct) => RunKubectlAsync(args, logger: null, cancellationToken: ct)).ConfigureAwait(false);
+    }
+
+    internal static async Task<bool> SecretExistsAsync(
+        string ns,
+        string name,
+        string? kubeContext,
+        CancellationToken cancellationToken,
+        Func<IReadOnlyList<string>, CancellationToken, Task<(int ExitCode, string StdOut, string StdErr)>> runKubectl)
+    {
         var args = BuildGetSecretArgs(ns, name, kubeContext);
-        var (exitCode, _, stderr) = await RunKubectlAsync(args, logger: null, cancellationToken).ConfigureAwait(false);
+        var (exitCode, _, stderr) = await runKubectl(args, cancellationToken).ConfigureAwait(false);
         if (exitCode == 0)
         {
             return true;
@@ -624,11 +639,14 @@ internal sealed class SealedSecretApplyStep
 
         // `kubectl get secret <name>` exits non-zero both when the Secret does not (yet) exist and
         // when the command itself fails (cluster unreachable, auth/RBAC denied, bad context, missing
-        // auth-plugin executable). Only a genuine NotFound for THIS Secret means "keep polling"; any
-        // other failure will never resolve by waiting, so surface it immediately instead of burning
-        // the whole materialization timeout. NotFound stderr:
+        // auth-plugin executable). A genuine NotFound for THIS Secret means "keep polling"; so does a
+        // transient connectivity/apiserver failure — the status poll above deliberately waits those
+        // out via IsTransientKubectlFailure, and the shared materialization deadline bounds the retry,
+        // so a brief connection blip after Synced=True must not abort an otherwise healthy deploy.
+        // Any other failure will never resolve by waiting, so surface it immediately instead of
+        // burning the whole materialization timeout. NotFound stderr:
         //   Error from server (NotFound): secrets "my-secret" not found
-        if (IsNotFound(stderr, name))
+        if (IsNotFound(stderr, name) || IsTransientKubectlFailure(stderr))
         {
             return false;
         }
@@ -911,25 +929,28 @@ internal sealed class SealedSecretApplyStep
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
-        // Stream the validated manifest bytes to `kubectl apply -f -` over stdin, then close the
-        // pipe so kubectl sees EOF. Writing before draining stdout/stderr is safe here because the
-        // apply payload is small (a single SealedSecret) and both output pipes are already being
-        // pumped by the async readers above.
-        if (standardInput is { } input)
-        {
-            try
-            {
-                await process.StandardInput.BaseStream.WriteAsync(input, cancellationToken).ConfigureAwait(false);
-                await process.StandardInput.BaseStream.FlushAsync(cancellationToken).ConfigureAwait(false);
-            }
-            finally
-            {
-                process.StandardInput.Close();
-            }
-        }
-
         try
         {
+            // Stream the validated manifest bytes to `kubectl apply -f -` over stdin, then close the
+            // pipe so kubectl sees EOF. Writing before draining stdout/stderr is safe here because the
+            // apply payload is small (a single SealedSecret) and both output pipes are already being
+            // pumped by the async readers above. This runs inside the same try as WaitForExitAsync so
+            // that a cancellation while writing/flushing stdin (e.g. kubectl stopped consuming it and
+            // the pipe buffer filled) still terminates the process tree in the catch below rather than
+            // disposing the handle and leaking an orphaned kubectl.
+            if (standardInput is { } input)
+            {
+                try
+                {
+                    await process.StandardInput.BaseStream.WriteAsync(input, cancellationToken).ConfigureAwait(false);
+                    await process.StandardInput.BaseStream.FlushAsync(cancellationToken).ConfigureAwait(false);
+                }
+                finally
+                {
+                    process.StandardInput.Close();
+                }
+            }
+
             await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
             process.WaitForExit();
         }

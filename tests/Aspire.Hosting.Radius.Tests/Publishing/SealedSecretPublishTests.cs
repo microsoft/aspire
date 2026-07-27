@@ -140,4 +140,50 @@ public class SealedSecretPublishTests : IDisposable
             Directory.Delete(outputDir, recursive: true);
         }
     }
+
+    [Fact]
+    public void CopySealedSecretManifests_Republish_RemovesManifestsForStoresNoLongerDeclared()
+    {
+        // The pipeline output directory is persistent, so republishing after a store is removed or
+        // renamed must not leave the old store's (encrypted) manifest behind in the artifact.
+        var manifestA = WriteManifest("db-creds", "app");
+        var manifestB = WriteManifest("cache-creds", "app");
+
+        var copyMethod = typeof(RadiusBicepPublishingContext).GetMethod(
+            "CopySealedSecretManifests",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(copyMethod);
+
+        var outputDir = Directory.CreateTempSubdirectory("sealed-secret-output").FullName;
+        try
+        {
+            copyMethod.Invoke(null, [BuildOptionsForStore("db-creds", manifestA), outputDir, NullLogger.Instance]);
+            var destinationA = SealedSecretArtifact.ResolvePath(outputDir, "db-creds", manifestA);
+            Assert.True(File.Exists(destinationA));
+
+            copyMethod.Invoke(null, [BuildOptionsForStore("cache-creds", manifestB), outputDir, NullLogger.Instance]);
+            var destinationB = SealedSecretArtifact.ResolvePath(outputDir, "cache-creds", manifestB);
+
+            Assert.True(File.Exists(destinationB));
+            Assert.False(File.Exists(destinationA), "The obsolete store's manifest must be pruned on republish.");
+        }
+        finally
+        {
+            Directory.Delete(outputDir, recursive: true);
+        }
+    }
+
+    private static RadiusInfrastructureOptions BuildOptionsForStore(string storeName, string manifest)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var env = builder.AddRadiusEnvironment("radius");
+        env.WithSecretStore(storeName, RadiusSecretStoreType.BasicAuthentication, s =>
+            s.WithSealedSecret(manifest, "username", "password"));
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
+        return new RadiusBicepPublishingContext(radiusEnv).BuildOptions(model);
+    }
 }

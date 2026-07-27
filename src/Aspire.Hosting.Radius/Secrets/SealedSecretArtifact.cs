@@ -25,6 +25,14 @@ internal static class SealedSecretArtifact
         Path.Combine(RootDirectoryName, storeName, Path.GetFileName(sourceManifestPath));
 
     /// <summary>
+    /// The absolute root directory (<c>&lt;outputDirectory&gt;/sealed-secrets</c>) that holds every
+    /// store's copied manifest. This subtree is owned entirely by this integration, so it can be
+    /// cleared and rewritten wholesale on each publish.
+    /// </summary>
+    internal static string RootPath(string outputDirectory) =>
+        Path.Combine(outputDirectory, RootDirectoryName);
+
+    /// <summary>
     /// The absolute copy/read location under <paramref name="outputDirectory"/> (the directory
     /// that holds the emitted <c>app.bicep</c>) for <paramref name="storeName"/>'s manifest.
     /// </summary>

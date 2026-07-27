@@ -315,6 +315,55 @@ public class SealedSecretApplyStepTests
         Assert.Empty(snapshot.Conditions);
     }
 
+    [Fact]
+    public async Task SecretExists_ExitZero_ReturnsTrue()
+    {
+        var exists = await SealedSecretApplyStep.SecretExistsAsync(
+            "app",
+            "db-creds",
+            "kind-radius",
+            default,
+            (_, _) => Task.FromResult((ExitCode: 0, StdOut: "{}", StdErr: "")));
+
+        Assert.True(exists);
+    }
+
+    [Theory]
+    [InlineData("Error from server (NotFound): secrets \"db-creds\" not found")]
+    [InlineData("Unable to connect to the server: dial tcp 127.0.0.1:6443: connect: connection refused")]
+    [InlineData("Unable to connect to the server: net/http: TLS handshake timeout")]
+    [InlineData("Error from server: etcdserver: request timed out")]
+    public async Task SecretExists_NotFoundOrTransientFailure_ReturnsFalseForRetry(string stderr)
+    {
+        // A genuine NotFound and a transient connectivity/apiserver blip must both keep the sync poll
+        // waiting within the bounded deadline instead of aborting an otherwise healthy deploy — the
+        // status probe already retries these same IsTransientKubectlFailure cases.
+        var exists = await SealedSecretApplyStep.SecretExistsAsync(
+            "app",
+            "db-creds",
+            "kind-radius",
+            default,
+            (_, _) => Task.FromResult((ExitCode: 1, StdOut: "", StdErr: stderr)));
+
+        Assert.False(exists);
+    }
+
+    [Theory]
+    [InlineData("Error from server (Forbidden): secrets \"db-creds\" is forbidden")]
+    [InlineData("error: You must be logged in to the server (Unauthorized)")]
+    [InlineData("error: exec plugin: invalid apiVersion; kubelogin not found")]
+    public async Task SecretExists_PermanentFailure_Throws(string stderr)
+    {
+        // Permanent failures (RBAC, unauthorized, missing auth plugin) never resolve by waiting, so
+        // they surface immediately rather than burning the whole materialization timeout.
+        await Assert.ThrowsAsync<InvalidOperationException>(() => SealedSecretApplyStep.SecretExistsAsync(
+            "app",
+            "db-creds",
+            "kind-radius",
+            default,
+            (_, _) => Task.FromResult((ExitCode: 1, StdOut: "", StdErr: stderr))));
+    }
+
     [Theory]
     [InlineData("Error from server (NotFound): sealedsecrets.bitnami.com \"db-creds\" not found", "db-creds", true)]
     [InlineData("Error from server (NotFound): sealedsecrets.bitnami.com \"other\" not found", "db-creds", false)]
