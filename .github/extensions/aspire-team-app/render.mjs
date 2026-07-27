@@ -2489,13 +2489,20 @@ function wire() {
   // data-open-viewer) are never intercepted.
   if (!cardOpenBound) {
     cardOpenBound = true;
+    // Capture phase (useCapture=true) is deliberate: this canvas runs inside a desktop webview
+    // (Tauri/WebView2) that intercepts target="_blank" anchor activation to open the system browser.
+    // A bubble-phase listener can run too late to stop that, so we preventDefault during capture —
+    // before the anchor's default navigation (and the webview's new-window handling) fires.
+    // A plain "click" only fires for primary activation (middle-click is auxclick, which we don't
+    // handle, so it still reaches the anchor as a browser escape hatch), and its button is 0 or, in
+    // some webviews, undefined — so only bail on a genuine non-primary button, never on 0/undefined.
     document.addEventListener("click", (e) => {
-      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-      const main = e.target.closest && e.target.closest("a.card-main[data-open-viewer]");
+      if (e.defaultPrevented || (e.button && e.button !== 0) || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const main = e.target && e.target.closest && e.target.closest("a.card-main[data-open-viewer]");
       if (!main) return;
       e.preventDefault();
       openPrViewer(main);
-    });
+    }, true);
   }
   const da = document.getElementById("dismiss-all"); if (da) da.addEventListener("click", dismissAll);
   const r1 = document.getElementById("restore-notifs"); if (r1) r1.addEventListener("click", restoreNotifs);

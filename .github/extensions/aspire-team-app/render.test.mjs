@@ -324,11 +324,16 @@ test("the card-open click handler intercepts only a plain click on a marked gith
   const handler = APP_JS.match(/if \(!cardOpenBound\) \{([\s\S]*?)\n  \}/);
   assert.ok(handler, "expected a cardOpenBound-guarded delegated handler");
   const body = handler[1];
-  assert.match(body, /e\.button !== 0/);
+  // Relaxed button guard: bail only on a genuine non-primary button, never on 0/undefined (some
+  // webviews report button as undefined for a primary click).
+  assert.match(body, /e\.button && e\.button !== 0/);
   assert.match(body, /e\.metaKey \|\| e\.ctrlKey \|\| e\.shiftKey \|\| e\.altKey/);
   assert.match(body, /a\.card-main\[data-open-viewer\]/);
   assert.match(body, /e\.preventDefault\(\)/);
   assert.match(body, /openPrViewer\(main\)/);
+  // Registered in the capture phase (useCapture=true) so preventDefault lands before the desktop
+  // webview's target="_blank" new-window handling — a bubble-phase listener runs too late to stop it.
+  assert.match(body, /addEventListener\("click",[\s\S]*\},\s*true\);/);
 });
 
 test("openPrViewer posts the PR descriptor to the open-pr bridge and never opens the browser on success", async () => {
