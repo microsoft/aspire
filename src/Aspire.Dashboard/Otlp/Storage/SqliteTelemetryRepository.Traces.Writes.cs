@@ -105,10 +105,10 @@ public sealed partial class SqliteTelemetryRepository
 
             }
 
+            var peerChangedTraceIds = PrepareUninstrumentedPeers(connection, transaction, pendingSpans, ingestionState);
             UpsertTraces(connection, transaction, traces.Values, ingestionState.ExistingTraces);
             InsertSpans(connection, transaction, pendingSpans);
             InsertSpanDetails(connection, transaction, pendingSpans);
-            var peerChangedTraceIds = UpdateUninstrumentedPeers(connection, transaction, traces.Values, ingestionState);
             UpdateTraceResourceSummaries(
                 connection,
                 transaction,
@@ -478,7 +478,8 @@ public sealed partial class SqliteTelemetryRepository
             "telemetry_spans",
             [
                 "trace_id", "span_id", "parent_span_id", "resource_id", "resource_view_id", "scope_id", "name", "kind",
-                "start_time_ticks", "end_time_ticks", "status", "status_message", "trace_state", "resource_order_ticks"
+                "start_time_ticks", "end_time_ticks", "status", "status_message", "trace_state", "resource_order_ticks",
+                "uninstrumented_peer_resource_id"
             ],
             static (pendingSpan, parameters) =>
             {
@@ -497,6 +498,7 @@ public sealed partial class SqliteTelemetryRepository
                 parameters[11].Value = span.StatusMessage ?? (object)DBNull.Value;
                 parameters[12].Value = span.State ?? (object)DBNull.Value;
                 parameters[13].Value = span.StartTime.Ticks;
+                parameters[14].Value = pendingSpan.PeerResourceId ?? (object)DBNull.Value;
             });
     }
 
@@ -516,64 +518,50 @@ public sealed partial class SqliteTelemetryRepository
         }
     }
 
-    private HashSet<string> UpdateUninstrumentedPeers(
+    private HashSet<string> PrepareUninstrumentedPeers(
         SqliteConnection connection,
         IDbTransaction transaction,
-        IEnumerable<OtlpTrace> traces,
+        IReadOnlyList<PendingSpan> pendingSpans,
         TraceIngestionState ingestionState)
     {
-        var traceList = traces.ToList();
-        var incomingParentReferences = traceList
-            .SelectMany(trace => trace.Spans)
+        var incomingParentReferences = pendingSpans
+            .Select(pendingSpan => pendingSpan.Span)
             .Where(span => span.ParentSpanId is not null)
             .Select(span => (span.TraceId, ParentSpanId: span.ParentSpanId!))
             .ToHashSet();
         var peerResourceIds = new HashSet<long>();
-        var spanUpdates = new List<PeerSpanUpdateRecord>();
+        var existingParentUpdates = new List<PeerSpanUpdateRecord>();
         var peerChangedTraceIds = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var trace in traceList)
+        foreach (var pendingSpan in pendingSpans)
         {
-            foreach (var span in trace.Spans)
+            var span = pendingSpan.Span;
+            OtlpResource? peer = null;
+            var hasPeerAddress = OtlpHelpers.GetPeerAddress(span.Attributes) is not null;
+            var hasChildren = incomingParentReferences.Contains((span.TraceId, span.SpanId)) ||
+                ingestionState.ExistingParentReferences.Contains((span.TraceId, span.SpanId));
+            if (hasPeerAddress && span.Kind is OtlpSpanKind.Client or OtlpSpanKind.Producer && !hasChildren)
             {
-                OtlpResource? peer = null;
-                long? peerResourceId = null;
-                var hasPeerAddress = OtlpHelpers.GetPeerAddress(span.Attributes) is not null;
-                var hasChildren = incomingParentReferences.Contains((span.TraceId, span.SpanId)) ||
-                    ingestionState.ExistingParentReferences.Contains((span.TraceId, span.SpanId));
-                if (hasPeerAddress && span.Kind is OtlpSpanKind.Client or OtlpSpanKind.Producer && !hasChildren)
+                if (TryResolvePeerResourceKey(span.Attributes, out var peerKey))
                 {
-                    if (TryResolvePeerResourceKey(span.Attributes, out var peerKey))
-                    {
-                        var cachedPeerResource = GetOrAddCachedResource(connection, transaction, peerKey, uninstrumentedPeer: true);
-                        peerResourceId = cachedPeerResource.ResourceId;
-                        peerResourceIds.Add(cachedPeerResource.ResourceId);
-                        peer = cachedPeerResource.Resource;
-                    }
+                    var cachedPeerResource = GetOrAddCachedResource(connection, transaction, peerKey, uninstrumentedPeer: true);
+                    pendingSpan.PeerResourceId = cachedPeerResource.ResourceId;
+                    peerResourceIds.Add(cachedPeerResource.ResourceId);
+                    peer = cachedPeerResource.Resource;
                 }
-
-                trace.SetSpanUninstrumentedPeer(span, peer);
-                spanUpdates.Add(new PeerSpanUpdateRecord
-                {
-                    PeerResourceId = peerResourceId,
-                    TraceId = span.TraceId,
-                    SpanId = span.SpanId
-                });
             }
+            span.SetUninstrumentedPeer(peer);
 
-            foreach (var span in trace.Spans)
+            if (span.ParentSpanId is not null &&
+                ingestionState.ExistingSpans.TryGetValue((span.TraceId, span.ParentSpanId), out var existingParent) &&
+                existingParent.UninstrumentedPeerResourceId is not null)
             {
-                if (span.ParentSpanId is not null &&
-                    ingestionState.ExistingSpans.TryGetValue((trace.TraceId, span.ParentSpanId), out var existingParent) &&
-                    existingParent.UninstrumentedPeerResourceId is not null)
+                existingParentUpdates.Add(new PeerSpanUpdateRecord
                 {
-                    spanUpdates.Add(new PeerSpanUpdateRecord
-                    {
-                        PeerResourceId = null,
-                        TraceId = trace.TraceId,
-                        SpanId = span.ParentSpanId!
-                    });
-                    peerChangedTraceIds.Add(trace.TraceId);
-                }
+                    PeerResourceId = null,
+                    TraceId = span.TraceId,
+                    SpanId = span.ParentSpanId
+                });
+                peerChangedTraceIds.Add(span.TraceId);
             }
         }
 
@@ -585,7 +573,7 @@ public sealed partial class SqliteTelemetryRepository
                 transaction);
         }
 
-        UpdatePeerSpans(connection, transaction, spanUpdates);
+        UpdatePeerSpans(connection, transaction, existingParentUpdates);
         return peerChangedTraceIds;
     }
 
@@ -1248,7 +1236,10 @@ public sealed partial class SqliteTelemetryRepository
         }
     }
 
-    private sealed record PendingSpan(long ResourceId, long ResourceViewId, long ScopeId, OtlpSpan Span);
+    private sealed record PendingSpan(long ResourceId, long ResourceViewId, long ScopeId, OtlpSpan Span)
+    {
+        public long? PeerResourceId { get; set; }
+    }
 
     private readonly record struct IncomingSpanIdentity(string TraceId, string SpanId, string? ParentSpanId);
 

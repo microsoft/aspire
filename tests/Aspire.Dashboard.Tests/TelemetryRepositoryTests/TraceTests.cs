@@ -2592,6 +2592,74 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
+    public async Task AddTraces_ChildAddedLater_UpdatesUninstrumentedPeers()
+    {
+        using var repositoryContext = await CreateRepositoryAsync(
+            outgoingPeerResolvers: [new TestOutgoingPeerResolver()]);
+        var writer = repositoryContext.Repository.AsWriter();
+
+        await writer.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-1",
+                                startTime: s_testTime.AddMinutes(1),
+                                endTime: s_testTime.AddMinutes(10),
+                                attributes: [KeyValuePair.Create(OtlpSpan.PeerServiceAttributeKey, "value-1")],
+                                kind: Span.Types.SpanKind.Client)
+                        }
+                    }
+                }
+            }
+        });
+
+        var trace = Assert.IsType<OtlpTrace>(repositoryContext.Repository.GetTrace(GetHexId("1")));
+        Assert.NotNull(Assert.Single(trace.Spans).UninstrumentedPeer);
+
+        await writer.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-2",
+                                parentSpanId: "1-1",
+                                startTime: s_testTime.AddMinutes(5),
+                                endTime: s_testTime.AddMinutes(10),
+                                attributes: [KeyValuePair.Create(OtlpSpan.PeerServiceAttributeKey, "value-2")],
+                                kind: Span.Types.SpanKind.Client)
+                        }
+                    }
+                }
+            }
+        });
+
+        trace = Assert.IsType<OtlpTrace>(repositoryContext.Repository.GetTrace(GetHexId("1")));
+        Assert.Collection(
+            trace.Spans,
+            span => Assert.Null(span.UninstrumentedPeer),
+            span => Assert.Equal("TestPeer", span.UninstrumentedPeer?.ResourceName));
+    }
+
+    [Fact]
     public async Task AddTraces_OnPeerUpdated_HaveUninstrumentedPeers()
     {
         // Arrange
@@ -4311,7 +4379,7 @@ public sealed class SqliteTraceTests : TraceTests
         Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_span_event_attributes", StringComparison.Ordinal));
         Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_span_links", StringComparison.Ordinal));
         Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_span_link_attributes", StringComparison.Ordinal));
-        Assert.Single(queries, query => query.StartsWith("WITH peer_updates", StringComparison.Ordinal));
+        Assert.DoesNotContain(queries, query => query.StartsWith("WITH peer_updates", StringComparison.Ordinal));
         Assert.Single(queries, query => query.StartsWith("WITH span_orders", StringComparison.Ordinal));
         Assert.Single(queries, query => query.StartsWith("WITH new_spans", StringComparison.Ordinal));
         Assert.DoesNotContain(queries, query => query.StartsWith("DELETE FROM telemetry_trace_resources", StringComparison.Ordinal));

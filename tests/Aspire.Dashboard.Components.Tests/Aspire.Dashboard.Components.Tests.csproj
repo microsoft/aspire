@@ -12,6 +12,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj" />
     <PackageReference Include="Microsoft.DotNet.XUnitV3Extensions" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="bUnit" />
   </ItemGroup>
 

@@ -32,6 +32,7 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
     private const int LargeTraceBatchSize = 1_000;
     private const int LogBatchSize = 1_000;
     private const int MetricSecondsPerBatch = 100;
+    private const int ProgressInterval = 10_000;
     private static readonly double[] s_histogramValues = [5, 25, 75, 150];
     private readonly SemaphoreSlim _runLock = new(1, 1);
 
@@ -79,9 +80,11 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
             if (options.GenerateConsoleLogs)
             {
                 logger.LogInformation("Writing {LogCount} console logs through ILogger.", options.ConsoleLogCount);
+                var nextProgressCount = ProgressInterval;
                 for (var logIndex = 0; logIndex < options.ConsoleLogCount; logIndex++)
                 {
                     logger.LogInformation("Large console log {LogIndex}.", logIndex + 1);
+                    LogProgress(logIndex + 1, ref nextProgressCount, "console logs");
                     if ((logIndex + 1) % LogBatchSize == 0)
                     {
                         await Task.Yield();
@@ -116,7 +119,7 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
         }
     }
 
-    private static async Task ExportTracesAsync(
+    private async Task ExportTracesAsync(
         TraceService.TraceServiceClient client,
         Metadata metadata,
         int totalTraceCount,
@@ -124,6 +127,7 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
         CancellationToken cancellationToken)
     {
         var finalTraceTime = DateTime.UtcNow;
+        var nextProgressCount = ProgressInterval;
         for (var firstTraceIndex = 0; firstTraceIndex < totalTraceCount; firstTraceIndex += TraceBatchSize)
         {
             var scopeSpans = CreateScopeSpans("LargeTelemetry.ManyTraces");
@@ -147,10 +151,11 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
             }
 
             await ExportTraceBatchAsync(client, metadata, scopeSpans, cancellationToken);
+            LogProgress(firstTraceIndex + traceCount, ref nextProgressCount, "traces");
         }
     }
 
-    private static async Task ExportLargeTraceAsync(
+    private async Task ExportLargeTraceAsync(
         TraceService.TraceServiceClient client,
         Metadata metadata,
         int totalSpanCount,
@@ -158,6 +163,7 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
     {
         var traceId = CreateTraceId(discriminator: 2, value: 1);
         var traceStart = DateTime.UtcNow.AddMinutes(-1);
+        var nextProgressCount = ProgressInterval;
         for (var firstSpanIndex = 0; firstSpanIndex < totalSpanCount; firstSpanIndex += LargeTraceBatchSize)
         {
             var scopeSpans = CreateScopeSpans("LargeTelemetry.LargeTrace");
@@ -176,6 +182,7 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
             }
 
             await ExportTraceBatchAsync(client, metadata, scopeSpans, cancellationToken);
+            LogProgress(firstSpanIndex + spanCount, ref nextProgressCount, "large trace spans");
         }
     }
 
@@ -205,13 +212,14 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
         }
     }
 
-    private static async Task ExportStructuredLogsAsync(
+    private async Task ExportStructuredLogsAsync(
         LogsService.LogsServiceClient client,
         Metadata metadata,
         int totalLogCount,
         CancellationToken cancellationToken)
     {
         var finalLogTime = DateTime.UtcNow;
+        var nextProgressCount = ProgressInterval;
         for (var firstLogIndex = 0; firstLogIndex < totalLogCount; firstLogIndex += LogBatchSize)
         {
             var scopeLogs = new ScopeLogs
@@ -255,10 +263,12 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
             {
                 throw new InvalidOperationException($"Dashboard rejected {partialSuccess.RejectedLogRecords} logs: {partialSuccess.ErrorMessage}");
             }
+
+            LogProgress(firstLogIndex + logCount, ref nextProgressCount, "structured logs");
         }
     }
 
-    private static async Task ExportMetricsAsync(
+    private async Task ExportMetricsAsync(
         MetricsService.MetricsServiceClient client,
         Metadata metadata,
         int durationHours,
@@ -269,6 +279,8 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
     {
         var durationSeconds = checked(durationHours * 60 * 60);
         var startTime = DateTime.UtcNow.AddSeconds(-durationSeconds);
+        var addedMetricCount = 0L;
+        var nextProgressCount = ProgressInterval;
         for (var firstSecond = 0; firstSecond < durationSeconds; firstSecond += MetricSecondsPerBatch)
         {
             var counter = new Metric
@@ -367,6 +379,18 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
             {
                 throw new InvalidOperationException($"Dashboard rejected {partialSuccess.RejectedDataPoints} metric points: {partialSuccess.ErrorMessage}");
             }
+
+            addedMetricCount += (long)secondCount * dimensionCount * 2;
+            LogProgress(addedMetricCount, ref nextProgressCount, "metric data points");
+        }
+    }
+
+    private void LogProgress(long addedCount, ref int nextProgressCount, string telemetryKind)
+    {
+        while (addedCount >= nextProgressCount)
+        {
+            logger.LogInformation("{TelemetryCount} {TelemetryKind} added.", nextProgressCount, telemetryKind);
+            nextProgressCount += ProgressInterval;
         }
     }
 

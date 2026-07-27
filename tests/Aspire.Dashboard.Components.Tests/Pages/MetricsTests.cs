@@ -20,6 +20,7 @@ using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Metrics.V1;
 using Aspire.Tests;
@@ -177,10 +178,12 @@ public partial class MetricsTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task ChartContainer_TickUpdate_FetchesDataAfterInterval()
+    public async Task ChartContainer_TickUpdate_FetchesDataAfterIntervalAndStopsOnDispose()
     {
         JSInterop.Mode = JSRuntimeMode.Loose;
         MetricsSetupHelpers.SetupMetricsPage(this);
+        var timeProvider = new SignalingFakeTimeProvider();
+        Services.AddSingleton<TimeProvider>(timeProvider);
 
         var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
@@ -204,7 +207,8 @@ public partial class MetricsTests : DashboardTestContext
         var resource = telemetryRepository.GetResources().Single();
 
         var activitySource = Services.GetRequiredService<DashboardActivitySource>();
-        var activityStarted = new TaskCompletionSource<(Activity Activity, long Timestamp)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tickActivityCount = 0;
+        var activityStarted = new TaskCompletionSource<Activity>(TaskCreationOptions.RunContinuationsAsynchronously);
         var activityStopped = new TaskCompletionSource<Activity>(TaskCreationOptions.RunContinuationsAsynchronously);
         using var listener = ActivityListenerHelper.Create(
             activitySource.ActivitySource,
@@ -212,7 +216,8 @@ public partial class MetricsTests : DashboardTestContext
             {
                 if (activity.OperationName == "Update metric chart data from tick")
                 {
-                    activityStarted.TrySetResult((activity, Stopwatch.GetTimestamp()));
+                    Interlocked.Increment(ref tickActivityCount);
+                    activityStarted.TrySetResult(activity);
                 }
             },
             onActivityStopped: activity =>
@@ -223,7 +228,6 @@ public partial class MetricsTests : DashboardTestContext
                 }
             });
 
-        var renderStartedTimestamp = Stopwatch.GetTimestamp();
         var cut = RenderComponent<ChartContainer>(builder =>
         {
             builder.Add(component => component.ResourceKey, resource.ResourceKey);
@@ -236,14 +240,21 @@ public partial class MetricsTests : DashboardTestContext
             builder.Add(component => component.PauseText, null);
         });
 
+        await timeProvider.TimerCreated.Task.DefaultTimeout();
+        timeProvider.Advance(TimeSpan.FromSeconds(1));
+
         var started = await activityStarted.Task.WaitAsync(DefaultWaitTimeout);
         var activity = await activityStopped.Task.WaitAsync(DefaultWaitTimeout);
-        var elapsed = Stopwatch.GetElapsedTime(renderStartedTimestamp, started.Timestamp);
 
-        Assert.Same(started.Activity, activity);
-        Assert.InRange(elapsed, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5));
+        Assert.Same(started, activity);
         Assert.Equal(ActivityKind.Internal, activity.Kind);
         Assert.Null(activity.ParentId);
+
+        DisposeComponents();
+        var activityCountAfterDispose = Volatile.Read(ref tickActivityCount);
+        timeProvider.Advance(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(activityCountAfterDispose, Volatile.Read(ref tickActivityCount));
     }
 
     [Fact]
@@ -601,5 +612,17 @@ public partial class MetricsTests : DashboardTestContext
 
         Assert.Equal(MetricViewKind.Table, viewModel.SelectedViewKind);
         Assert.Equal(TimeSpan.FromMinutes(720), viewModel.SelectedDuration.Id);
+    }
+
+    private sealed class SignalingFakeTimeProvider : FakeTimeProvider
+    {
+        public TaskCompletionSource TimerCreated { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = base.CreateTimer(callback, state, dueTime, period);
+            TimerCreated.TrySetResult();
+            return timer;
+        }
     }
 }

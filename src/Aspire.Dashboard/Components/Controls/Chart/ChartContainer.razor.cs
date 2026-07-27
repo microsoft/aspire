@@ -19,14 +19,15 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     private static readonly TimeSpan s_dataFetchInterval = TimeSpan.FromSeconds(1);
 
     private OtlpInstrumentData? _instrument;
-    private PeriodicTimer? _tickTimer;
+    private readonly CancellationTokenSource _disposeCts = new();
     private Task? _tickTask;
     private IDisposable? _themeChangedSubscription;
     private readonly InstrumentViewModel _instrumentViewModel = new InstrumentViewModel();
     private (ResourceKey ResourceKey, string MeterName, string InstrumentName)? _dataEndTimeKey;
     private (ResourceKey ResourceKey, string MeterName, string InstrumentName, TimeSpan Duration)? _instrumentRequestKey;
     private DateTimeOffset? _dataEndTime;
-    private long _lastDataFetchTimestamp;
+    private long _lastDataFetchTimestamp = -1;
+    private int _disposed;
 
     [Parameter, EditorRequired]
     public required ResourceKey ResourceKey { get; set; }
@@ -69,6 +70,9 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     [Inject]
     public required DashboardActivitySource DashboardActivitySource { get; init; }
 
+    [Inject]
+    public required TimeProvider TimeProvider { get; init; }
+
     public ImmutableList<DimensionFilterViewModel> DimensionFilters { get; set; } = [];
     public string? PreviousMeterName { get; set; }
     public string? PreviousInstrumentName { get; set; }
@@ -80,10 +84,10 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
         if (!TelemetryRepository.IsReadOnly)
         {
             // Update the graph every 200ms. This displays the latest data and moves time forward.
-            _tickTimer = new PeriodicTimer(s_chartUpdateInterval);
+            var cancellationToken = _disposeCts.Token;
             using (ExecutionContext.SuppressFlow())
             {
-                _tickTask = Task.Run(UpdateDataAsync);
+                _tickTask = Task.Run(() => UpdateDataAsync(cancellationToken));
             }
         }
         _themeChangedSubscription = ThemeManager.OnThemeChanged(async () =>
@@ -95,44 +99,57 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
+
         _themeChangedSubscription?.Dispose();
-        _tickTimer?.Dispose();
+        _disposeCts.Cancel();
 
         // Wait for UpdateData to complete.
         if (_tickTask is { } t)
         {
             await t;
         }
+
+        _disposeCts.Dispose();
     }
 
-    private async Task UpdateDataAsync()
+    private async Task UpdateDataAsync(CancellationToken cancellationToken)
     {
-        var timer = _tickTimer;
-        while (await timer!.WaitForNextTickAsync())
+        using var timer = new PeriodicTimer(s_chartUpdateInterval, TimeProvider);
+        try
         {
-            var lastDataFetchTimestamp = Volatile.Read(ref _lastDataFetchTimestamp);
-            if (lastDataFetchTimestamp == 0 || Stopwatch.GetElapsedTime(lastDataFetchTimestamp) >= s_dataFetchInterval)
+            while (await timer.WaitForNextTickAsync(cancellationToken))
             {
-                using var activity = DashboardActivitySource.ActivitySource.StartActivity("Update metric chart data from tick");
-
-                _instrument = GetInstrument(useIncrementalCache: true);
-
-                if (_instrument is not null && HaveDimensionFilterValuesChanged(_instrument))
+                var lastDataFetchTimestamp = Volatile.Read(ref _lastDataFetchTimestamp);
+                if (lastDataFetchTimestamp < 0 || TimeProvider.GetElapsedTime(lastDataFetchTimestamp) >= s_dataFetchInterval)
                 {
-                    await InvokeAsync(() =>
+                    using var activity = DashboardActivitySource.ActivitySource.StartActivity("Update metric chart data from tick");
+
+                    _instrument = GetInstrument(useIncrementalCache: true);
+
+                    if (_instrument is not null && HaveDimensionFilterValuesChanged(_instrument))
                     {
-                        UpdateDimensionFilters(hasInstrumentChanged: false);
-                        StateHasChanged();
-                    });
+                        await InvokeAsync(() =>
+                        {
+                            UpdateDimensionFilters(hasInstrumentChanged: false);
+                            StateHasChanged();
+                        });
+                    }
                 }
-            }
 
-            if (_instrument == null || PauseManager.AreMetricsPaused(out _))
-            {
-                continue;
-            }
+                if (_instrument == null || PauseManager.AreMetricsPaused(out _))
+                {
+                    continue;
+                }
 
-            await UpdateInstrumentDataAsync(_instrument);
+                await UpdateInstrumentDataAsync(_instrument);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
         }
     }
 
@@ -249,7 +266,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
                 filter => (IReadOnlyList<string?>)filter.SelectedValues.Select(value => value.Value).ToArray())
         });
         Debug.Assert(refreshedInstrument is not null);
-        Volatile.Write(ref _lastDataFetchTimestamp, Stopwatch.GetTimestamp());
+        Volatile.Write(ref _lastDataFetchTimestamp, TimeProvider.GetTimestamp());
 
         return _instrument is not null && cursors.Count > 0
             ? MetricInstrumentDataCache.Merge(_instrument, refreshedInstrument, cursors, startDate)
