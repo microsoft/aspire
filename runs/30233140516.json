@@ -1,0 +1,38 @@
+{
+  "run_id": 30233140516,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/30233140516",
+  "analyzed_at": "2026-07-27T03:18:27Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 18867,
+    "title": "Default to Terminal view for live terminal resources in dashboard console logs",
+    "author": "mitchdenny",
+    "state": "closed",
+    "head_branch": "mitchdenny-mitchdenny-terminal-default-console-view",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18867"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "id": 89875857262,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/30233140516/job/89875857262",
+      "classification": "flaky-test",
+      "reason": "CosmosDB emulator container exited with exit code 1 and error 'The evaluation period has expired'. This is a known recurring CI issue unrelated to the PR's dashboard changes.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureCosmosDBEmulatorFunctionalTests.VerifyWaitForOnCosmosDBEmulatorBlocksDependentResources(usePreview: False)",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "System.OperationCanceledException : Resource 'resource' failed to reach one of the target states: [Running] before the operation was cancelled.\n- Current State: Exited\n- Exit Code: 1\nCosmosDB emulator error: The evaluation period has expired.\n./cosmosdb-emulator: ERROR: PAL initialization failed. Error: 104",
+      "stack_trace": "at Aspire.Hosting.ApplicationModel.ResourceNotificationService.WaitForResourceCoreAsync(String resourceName, Func`2 predicate, String cancellationMessage, CancellationToken cancellationToken, String waitCondition)\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.WaitForResourceAsync(String resourceName, IEnumerable`1 targetStates, CancellationToken cancellationToken)\n   at Aspire.Hosting.Azure.Tests.AzureCosmosDBEmulatorFunctionalTests.VerifyWaitForOnCosmosDBEmulatorBlocksDependentResources(Boolean usePreview)",
+      "classification": "flaky",
+      "reason": "CosmosDB emulator evaluation period expired on the CI runner. The PR only modifies Dashboard components and tests - not Azure CosmosDB emulator code. This matches known prior cause 'cosmosdb-emulator-evaluation-period-expired'."
+    }
+  ],
+  "causes": ["cosmosdb-emulator-evaluation-period-expired"]
+}

@@ -11,6 +11,13 @@
       "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
       "pr_number": 18846,
       "observed_at": "2026-07-27T01:51:17Z"
+    },
+    {
+      "run_id": 30233140516,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/30233140516",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "pr_number": 18867,
+      "observed_at": "2026-07-27T03:18:27Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/18897"
