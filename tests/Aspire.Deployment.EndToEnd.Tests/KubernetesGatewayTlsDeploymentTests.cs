@@ -138,7 +138,7 @@ public sealed class KubernetesGatewayTlsDeploymentTests(ITestOutputHelper output
                 $"--name {clusterName} " +
                 $"--location centralus " +
                 $"--node-count 1 " +
-                $"--node-vm-size Standard_D2s_v6 " +
+                $"--node-vm-size Standard_D2s_v5 " +
                 $"--network-plugin azure " +
                 $"--generate-ssh-keys " +
                 $"--attach-acr {acrName} " +
