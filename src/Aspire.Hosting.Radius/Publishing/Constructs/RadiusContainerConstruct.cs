@@ -108,8 +108,11 @@ public sealed class RadiusContainerConstruct : ProvisionableResource
     /// </param>
     /// <param name="containerName">
     /// The Radius container resource name as it should appear in the deployed manifest.
-    /// This value is used as the map key under <c>properties.containers</c>, which the
-    /// Radius container v2 schema requires to match the resource <c>name</c> field.
+    /// This value is used as the map key under <c>properties.containers</c>. The Radius v2
+    /// schema does not require this map key to equal the top-level <c>name:</c>, but Aspire
+    /// keys both by the resource name and requires them to match so the service discovery it
+    /// derives from that name resolves to the Service the recipe creates (see
+    /// <see cref="ContainerMapKey"/>).
     /// It must be the unsanitized resource name (hyphens preserved); using
     /// <c>BicepIdentifier</c> here would emit a key that does not match the <c>name</c>
     /// when the resource name contains characters that get sanitized.
