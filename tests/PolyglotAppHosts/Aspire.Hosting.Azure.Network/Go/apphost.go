@@ -36,7 +36,7 @@ func main() {
 	})
 
 	aciSubnet := delegationVnet.AddSubnet("aci-subnet", "10.2.0.0/23", nil)
-	aciSubnet.WithContainerInstanceDelegation()
+	aciSubnet.WithServiceDelegation("Microsoft.ContainerInstance/containerGroups", nil)
 
 	appEnvSubnet := delegationVnet.AddSubnet("app-subnet", "10.2.2.0/23", nil)
 	appEnvSubnet.WithServiceDelegation("Microsoft.App/environments", nil)

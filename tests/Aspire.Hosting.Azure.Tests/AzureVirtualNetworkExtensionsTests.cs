@@ -190,18 +190,27 @@ public class AzureVirtualNetworkExtensionsTests
     }
 
     [Fact]
-    public void WithContainerInstanceDelegation_DelegatesToContainerGroups()
+    public void WithServiceDelegation_ContainerInstancesConstant_DelegatesToContainerGroups()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23")
-            .WithContainerInstanceDelegation();
+            .WithServiceDelegation(AzureSubnetServiceDelegations.ContainerInstances);
 
         var delegationAnnotation = subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>().SingleOrDefault();
         Assert.NotNull(delegationAnnotation);
         Assert.Equal("Microsoft.ContainerInstance/containerGroups", delegationAnnotation.ServiceName);
         Assert.Equal("Microsoft.ContainerInstance/containerGroups", delegationAnnotation.Name);
+    }
+
+    [Fact]
+    public void AzureSubnetServiceDelegations_HaveExpectedServiceIdentifiers()
+    {
+        Assert.Equal("Microsoft.ContainerInstance/containerGroups", AzureSubnetServiceDelegations.ContainerInstances);
+        Assert.Equal("Microsoft.App/environments", AzureSubnetServiceDelegations.ContainerAppEnvironments);
+        Assert.Equal("Microsoft.Web/serverFarms", AzureSubnetServiceDelegations.AppServiceEnvironments);
+        Assert.Equal("Microsoft.ServiceNetworking/trafficControllers", AzureSubnetServiceDelegations.ApplicationGatewayForContainers);
     }
 
     [Fact]

@@ -14,12 +14,6 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class AzureVirtualNetworkExtensions
 {
-    // Azure resource provider service identifier for Azure Container Instances (ACI).
-    // Used as the subnet service-delegation service name so container groups can be
-    // deployed into the delegated subnet.
-    // See: https://learn.microsoft.com/azure/virtual-network/subnet-delegation-overview
-    private const string ContainerInstanceServiceName = "Microsoft.ContainerInstance/containerGroups";
-
     /// <summary>
     /// Adds an Azure Virtual Network resource to the application model.
     /// </summary>
@@ -359,7 +353,7 @@ public static class AzureVirtualNetworkExtensions
     /// Delegates the subnet to the specified Azure service.
     /// </summary>
     /// <param name="builder">The subnet resource builder.</param>
-    /// <param name="serviceName">The service name to delegate the subnet to (e.g., "Microsoft.App/environments").</param>
+    /// <param name="serviceName">The service name to delegate the subnet to (e.g., "Microsoft.App/environments"). See <see cref="AzureSubnetServiceDelegations"/> for well-known values.</param>
     /// <param name="name">The name of the service delegation. If not specified, defaults to <paramref name="serviceName"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureSubnetResource}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
@@ -371,11 +365,12 @@ public static class AzureVirtualNetworkExtensions
     /// configured delegation with the latest value (last-write-wins).
     /// </remarks>
     /// <example>
-    /// This example delegates a subnet to Azure Container Apps:
+    /// This example delegates a subnet to Azure Container Instances using a well-known value from
+    /// <see cref="AzureSubnetServiceDelegations"/>:
     /// <code>
     /// var vnet = builder.AddAzureVirtualNetwork("vnet");
-    /// var subnet = vnet.AddSubnet("aca-subnet", "10.0.0.0/23")
-    ///     .WithServiceDelegation("Microsoft.App/environments");
+    /// var subnet = vnet.AddSubnet("aci-subnet", "10.0.0.0/23")
+    ///     .WithServiceDelegation(AzureSubnetServiceDelegations.ContainerInstances);
     /// </code>
     /// </example>
     [AspireExport]
@@ -406,34 +401,6 @@ public static class AzureVirtualNetworkExtensions
         }
 
         return builder.WithAnnotation(new AzureSubnetServiceDelegationAnnotation(name, serviceName));
-    }
-
-    /// <summary>
-    /// Delegates the subnet to Azure Container Instances (ACI).
-    /// </summary>
-    /// <param name="builder">The subnet resource builder.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{AzureSubnetResource}"/> for chaining.</returns>
-    /// <ats-returns>The resource builder.</ats-returns>
-    /// <remarks>
-    /// This is a convenience wrapper over <see cref="WithServiceDelegation"/> that delegates the subnet
-    /// to the "Microsoft.ContainerInstance/containerGroups" service, which is required to deploy
-    /// container groups into the subnet.
-    /// </remarks>
-    /// <example>
-    /// This example delegates a subnet to Azure Container Instances:
-    /// <code>
-    /// var vnet = builder.AddAzureVirtualNetwork("vnet");
-    /// var subnet = vnet.AddSubnet("aci-subnet", "10.0.0.0/23")
-    ///     .WithContainerInstanceDelegation();
-    /// </code>
-    /// </example>
-    [AspireExport]
-    public static IResourceBuilder<AzureSubnetResource> WithContainerInstanceDelegation(
-        this IResourceBuilder<AzureSubnetResource> builder)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-
-        return builder.WithServiceDelegation(ContainerInstanceServiceName);
     }
 
     /// <summary>

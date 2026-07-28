@@ -16,7 +16,7 @@ with create_builder() as builder:
     delegation_vnet = builder.add_azure_virtual_network("vnet-delegation", address_prefix="10.2.0.0/16")
 
     aci_subnet = delegation_vnet.add_subnet("aci-subnet", "10.2.0.0/23")
-    aci_subnet.with_container_instance_delegation()
+    aci_subnet.with_service_delegation("Microsoft.ContainerInstance/containerGroups")
 
     app_env_subnet = delegation_vnet.add_subnet("app-subnet", "10.2.2.0/23")
     app_env_subnet.with_service_delegation("Microsoft.App/environments")

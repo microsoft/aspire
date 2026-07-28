@@ -19,7 +19,7 @@ await parameterVnet.addSubnet('parameter-subnet', subnetPrefix, { subnetName: 'p
 const delegationVnet = await builder.addAzureVirtualNetwork('vnet-delegation', { addressPrefix: '10.2.0.0/16' });
 
 const aciSubnet = await delegationVnet.addSubnet('aci-subnet', '10.2.0.0/23');
-await aciSubnet.withContainerInstanceDelegation();
+await aciSubnet.withServiceDelegation('Microsoft.ContainerInstance/containerGroups');
 
 const appEnvSubnet = await delegationVnet.addSubnet('app-subnet', '10.2.2.0/23');
 await appEnvSubnet.withServiceDelegation('Microsoft.App/environments');

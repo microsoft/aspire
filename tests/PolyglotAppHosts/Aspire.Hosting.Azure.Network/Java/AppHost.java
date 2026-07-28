@@ -17,7 +17,7 @@ void main() throws Exception {
     var delegationVnet = builder.addAzureVirtualNetwork("vnet-delegation", "10.2.0.0/16");
 
     var aciSubnet = delegationVnet.addSubnet("aci-subnet", "10.2.0.0/23", null);
-    aciSubnet.withContainerInstanceDelegation();
+    aciSubnet.withServiceDelegation("Microsoft.ContainerInstance/containerGroups", null);
 
     var appEnvSubnet = delegationVnet.addSubnet("app-subnet", "10.2.2.0/23", null);
     appEnvSubnet.withServiceDelegation("Microsoft.App/environments", null);

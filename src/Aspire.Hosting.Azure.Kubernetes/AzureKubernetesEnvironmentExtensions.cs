@@ -443,13 +443,13 @@ public static class AzureKubernetesEnvironmentExtensions
         var existingDelegation = subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>().LastOrDefault();
         var displacedDelegationServiceName =
             existingDelegation is not null
-            && !string.Equals(existingDelegation.ServiceName, "Microsoft.ServiceNetworking/trafficControllers", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(existingDelegation.ServiceName, AzureSubnetServiceDelegations.ApplicationGatewayForContainers, StringComparison.OrdinalIgnoreCase)
                 ? existingDelegation.ServiceName
                 : null;
 
         // Route through WithServiceDelegation so repeated AddLoadBalancer calls sharing a subnet
         // stay idempotent and any existing delegations are collapsed to a single annotation.
-        subnet.WithServiceDelegation("Microsoft.ServiceNetworking/trafficControllers");
+        subnet.WithServiceDelegation(AzureSubnetServiceDelegations.ApplicationGatewayForContainers);
 
         var lb = new AzureKubernetesLoadBalancerResource(
             name,

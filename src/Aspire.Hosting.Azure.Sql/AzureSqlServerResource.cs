@@ -29,8 +29,6 @@ namespace Aspire.Hosting.Azure;
 [AspireExport(ExposeProperties = true)]
 public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithConnectionString, IAzurePrivateEndpointTarget, IAzurePrivateEndpointTargetNotification, IAzureNspAssociationTarget
 {
-    private const string AciSubnetDelegationServiceId = "Microsoft.ContainerInstance/containerGroups";
-
     private readonly Dictionary<string, AzureSqlDatabaseResource> _databases = new Dictionary<string, AzureSqlDatabaseResource>(StringComparers.ResourceName);
     private readonly bool _createdWithInnerResource;
 
@@ -628,7 +626,7 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
         // single effective delegation. ACI must replace a caller's previous delegation for the admin
         // deployment script to run in that subnet.
         builder.CreateResourceBuilder(aciSubnetResource)
-            .WithServiceDelegation(AciSubnetDelegationServiceId);
+            .WithServiceDelegation(AzureSubnetServiceDelegations.ContainerInstances);
     }
 
     private sealed class FakeBuilder<T>(T resource, IDistributedApplicationBuilder applicationBuilder) : IResourceBuilder<T> where T : IResource
