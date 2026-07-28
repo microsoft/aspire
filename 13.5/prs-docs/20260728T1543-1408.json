@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Revises IInteractionService API documentation page; matched to interaction-service-promoted-to-stable changelog entry",
+  "mergedAt": "2026-07-28T15:43:02Z",
+  "number": 1408,
+  "runDate": "2026-07-28T18:31:39Z",
+  "status": "included",
+  "title": "Revise interaction service API documentation"
+}

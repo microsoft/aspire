@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Frontend dependency security remediation for aspire.dev website (astro, pnpm, typescript). Not product feature documentation.",
+  "mergedAt": "2026-07-28T15:43:56Z",
+  "number": 1392,
+  "runDate": "2026-07-28T18:31:39Z",
+  "status": "excluded",
+  "title": "[auto-sec] Consolidate aspire.dev frontend dependency security remediations"
+}
