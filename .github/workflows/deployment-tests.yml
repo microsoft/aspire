@@ -184,76 +184,27 @@ jobs:
           path: ${{ github.workspace }}/cli-artifacts/
           retention-days: 1
 
-  # Run each test class in parallel
-  deploy-test:
-    name: Deploy (${{ matrix.shortname }})
-    needs: [enumerate, build]
+  # Prepare the target subscription once, before the test matrix fans out: register the resource
+  # providers the suite needs and self-heal the configured quotas. Doing this in a single
+  # prerequisite job (rather than inside every matrix entry) avoids dozens of jobs issuing the
+  # same subscription-level registration writes and Microsoft.Quota requests at once — which
+  # throttle each other on a cold subscription — and it keeps each matrix job's Azure token
+  # freshly minted right before that job deploys. Best-effort: continue-on-error plus the
+  # deploy-test `if:` below mean a hiccup here never blocks the tests; a test that genuinely
+  # needs a still-missing provider or quota surfaces its own clear error.
+  provision-subscription:
+    name: Provision subscription
+    needs: [enumerate]
     if: ${{ needs.enumerate.outputs.matrix != '{"include":[]}' && needs.enumerate.outputs.matrix != '' }}
-    runs-on: 8-core-ubuntu-latest
+    runs-on: ubuntu-latest
     environment: deployment-testing
+    continue-on-error: true  # Best-effort subscription prep must never fail the overall run
     permissions:
       id-token: write  # For OIDC Azure login
       contents: read
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.enumerate.outputs.matrix) }}
     env:
       ASPIRE_DEPLOYMENT_TEST_SUBSCRIPTION: ${{ secrets.AZURE_DEPLOYMENT_TEST_SUBSCRIPTION_ID }}
-      ASPIRE_DEPLOYMENT_TEST_RG_PREFIX: ${{ vars.ASPIRE_DEPLOYMENT_TEST_RG_PREFIX || 'aspire-e2e' }}
-
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
-        with:
-          global-json-file: global.json
-
-      - name: Restore and build test project
-        run: |
-          ./restore.sh
-          ./build.sh -restore -ci -build -projects ${{ github.workspace }}/tests/Aspire.Deployment.EndToEnd.Tests/Aspire.Deployment.EndToEnd.Tests.csproj -c Release
-        env:
-          SkipNativeBuild: true
-
-      - name: Download CLI artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: aspire-cli-artifacts
-          path: ${{ github.workspace }}/cli-artifacts
-
-      - name: Install Aspire CLI from artifacts
-        run: |
-          ASPIRE_HOME="$HOME/.aspire"
-          mkdir -p "$ASPIRE_HOME/bin"
-
-          # Install the self-extracting native CLI binary, exactly as a real install does.
-          cp "${{ github.workspace }}/cli-artifacts/bin/aspire" "$ASPIRE_HOME/bin/aspire"
-          chmod +x "$ASPIRE_HOME/bin/aspire"
-
-          # Add to PATH for this job
-          echo "$ASPIRE_HOME/bin" >> $GITHUB_PATH
-
-          # Set up NuGet hive for local packages
-          HIVE_DIR="$ASPIRE_HOME/hives/local/packages"
-          mkdir -p "$HIVE_DIR"
-          cp "${{ github.workspace }}/cli-artifacts/packages/"*.nupkg "$HIVE_DIR/" 2>/dev/null || true
-
-          # Configure CLI to use local channel
-          "$ASPIRE_HOME/bin/aspire" config set channel local --global || true
-
-          # Extract the embedded bundle (managed + dcp) up front. This is the same step
-          # install scripts run; it lays the bundle down at ~/.aspire/versions/<id>/ so
-          # C# AppHost builds (AspireUseCliBundle=true, #18188) resolve DCP/dashboard and
-          # do not fail with ASPIRE009. Without this the first deploy would extract lazily,
-          # but doing it here makes the layout deterministic and fails fast if it can't.
-          "$ASPIRE_HOME/bin/aspire" setup --force
-
-          echo "✅ Aspire CLI installed:"
-          "$ASPIRE_HOME/bin/aspire" --version
-          echo "Extracted bundle layout:"
-          ls -la "$ASPIRE_HOME/versions/"*/ 2>/dev/null || { echo "❌ No extracted bundle under $ASPIRE_HOME/versions/"; exit 1; }
-
       - name: Azure Login (OIDC)
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
@@ -484,6 +435,107 @@ jobs:
               echo "⚠ Quota request for $provider/$name in $location was not accepted (may need manual approval); continuing."
             fi
           done <<< "$QUOTA_TARGETS"
+
+  # Run each test class in parallel
+  deploy-test:
+    name: Deploy (${{ matrix.shortname }})
+    needs: [enumerate, build, provision-subscription]
+    if: ${{ !cancelled() && needs.enumerate.result == 'success' && needs.build.result == 'success' && needs.enumerate.outputs.matrix != '{"include":[]}' && needs.enumerate.outputs.matrix != '' }}
+    runs-on: 8-core-ubuntu-latest
+    environment: deployment-testing
+    permissions:
+      id-token: write  # For OIDC Azure login
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.enumerate.outputs.matrix) }}
+    env:
+      ASPIRE_DEPLOYMENT_TEST_SUBSCRIPTION: ${{ secrets.AZURE_DEPLOYMENT_TEST_SUBSCRIPTION_ID }}
+      ASPIRE_DEPLOYMENT_TEST_RG_PREFIX: ${{ vars.ASPIRE_DEPLOYMENT_TEST_RG_PREFIX || 'aspire-e2e' }}
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore and build test project
+        run: |
+          ./restore.sh
+          ./build.sh -restore -ci -build -projects ${{ github.workspace }}/tests/Aspire.Deployment.EndToEnd.Tests/Aspire.Deployment.EndToEnd.Tests.csproj -c Release
+        env:
+          SkipNativeBuild: true
+
+      - name: Download CLI artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: aspire-cli-artifacts
+          path: ${{ github.workspace }}/cli-artifacts
+
+      - name: Install Aspire CLI from artifacts
+        run: |
+          ASPIRE_HOME="$HOME/.aspire"
+          mkdir -p "$ASPIRE_HOME/bin"
+
+          # Install the self-extracting native CLI binary, exactly as a real install does.
+          cp "${{ github.workspace }}/cli-artifacts/bin/aspire" "$ASPIRE_HOME/bin/aspire"
+          chmod +x "$ASPIRE_HOME/bin/aspire"
+
+          # Add to PATH for this job
+          echo "$ASPIRE_HOME/bin" >> $GITHUB_PATH
+
+          # Set up NuGet hive for local packages
+          HIVE_DIR="$ASPIRE_HOME/hives/local/packages"
+          mkdir -p "$HIVE_DIR"
+          cp "${{ github.workspace }}/cli-artifacts/packages/"*.nupkg "$HIVE_DIR/" 2>/dev/null || true
+
+          # Configure CLI to use local channel
+          "$ASPIRE_HOME/bin/aspire" config set channel local --global || true
+
+          # Extract the embedded bundle (managed + dcp) up front. This is the same step
+          # install scripts run; it lays the bundle down at ~/.aspire/versions/<id>/ so
+          # C# AppHost builds (AspireUseCliBundle=true, #18188) resolve DCP/dashboard and
+          # do not fail with ASPIRE009. Without this the first deploy would extract lazily,
+          # but doing it here makes the layout deterministic and fails fast if it can't.
+          "$ASPIRE_HOME/bin/aspire" setup --force
+
+          echo "✅ Aspire CLI installed:"
+          "$ASPIRE_HOME/bin/aspire" --version
+          echo "Extracted bundle layout:"
+          ls -la "$ASPIRE_HOME/versions/"*/ 2>/dev/null || { echo "❌ No extracted bundle under $ASPIRE_HOME/versions/"; exit 1; }
+
+      - name: Azure Login (OIDC)
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_DEPLOYMENT_TEST_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_DEPLOYMENT_TEST_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_DEPLOYMENT_TEST_SUBSCRIPTION_ID }}
+        with:
+          script: |
+            const token = await core.getIDToken('api://AzureADTokenExchange');
+            core.setSecret(token);
+
+            // Login directly - token never leaves this step
+            await exec.exec('az', [
+              'login', '--service-principal',
+              '--username', process.env.AZURE_CLIENT_ID,
+              '--tenant', process.env.AZURE_TENANT_ID,
+              '--federated-token', token,
+              '--allow-no-subscriptions'
+            ]);
+
+            await exec.exec('az', [
+              'account', 'set',
+              '--subscription', process.env.AZURE_SUBSCRIPTION_ID
+            ]);
+
+      - name: Verify Azure authentication
+        run: |
+          echo "Verifying Azure authentication..."
+          az account show --query "{subscriptionId:id, tenantId:tenantId, user:user.name}" -o table
+          echo "✅ Azure authentication successful"
 
       - name: Verify Docker is running
         run: |
