@@ -24,21 +24,18 @@ using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 
 namespace Aspire.Dashboard.Tests.Model;
 
-public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper) : IDisposable
+public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
 {
-    private readonly TemporaryWorkspace _workspace = TemporaryWorkspace.Create(testOutputHelper);
-    private readonly List<ServiceProvider> _serviceProviders = [];
-    private readonly List<DashboardDataSourcePool> _databasePools = [];
-
     [Fact]
     public void RunDirectory_IsNestedUnderApplicationDirectoryAndRuns()
     {
-        var options = CreateOptions("My Dashboard");
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace, "My Dashboard");
 
         using var runStore = CreateRunStore(options);
 
         var applicationDirectoryName = DashboardRunStore.GetApplicationDirectoryName("My Dashboard");
-        var expectedRunsDirectory = Path.Combine(_workspace.Path, applicationDirectoryName, "runs");
+        var expectedRunsDirectory = Path.Combine(workspace.Path, applicationDirectoryName, "runs");
         Assert.Equal(expectedRunsDirectory, Directory.GetParent(runStore.RunDirectory)!.FullName);
     }
 
@@ -57,9 +54,10 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public void RunId_IsUtcTimestampWithMillisecondPrecision()
     {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var timeProvider = new FixedTimeProvider(new DateTimeOffset(2026, 7, 20, 12, 34, 56, 789, TimeSpan.Zero));
 
-        using var runStore = CreateRunStore(CreateOptions(), timeProvider);
+        using var runStore = CreateRunStore(CreateOptions(workspace), timeProvider);
 
         Assert.Equal("20260720T123456789Z", runStore.RunId);
         Assert.Equal(runStore.RunId, Path.GetFileName(runStore.RunDirectory));
@@ -68,8 +66,9 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public void RunMode_RejectsConcurrentTimestampCollision()
     {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var timeProvider = new FixedTimeProvider(new DateTimeOffset(2026, 7, 20, 12, 34, 56, 789, TimeSpan.Zero));
-        var options = CreateOptions();
+        var options = CreateOptions(workspace);
         using var firstRunStore = CreateRunStore(options, timeProvider);
 
         var exception = Assert.Throws<InvalidOperationException>(() => CreateRunStore(options, timeProvider));
@@ -80,7 +79,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public void RunMetadata_IncludesSchemaVersion()
     {
-        using var runStore = CreateRunStore(CreateOptions());
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var runStore = CreateRunStore(CreateOptions(workspace));
         using var metadata = JsonDocument.Parse(File.ReadAllText(Path.Combine(runStore.RunDirectory, "run.json")));
 
         Assert.Equal(DashboardRunStore.SchemaVersion, metadata.RootElement.GetProperty("SchemaVersion").GetInt32());
@@ -90,6 +90,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public void ConstructionAndGetRuns_LogResolvedStorageAndDiscoveredRuns()
     {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var testSink = new TestSink();
         using var loggerFactory = LoggerFactory.Create(builder =>
         {
@@ -97,7 +98,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
             builder.AddProvider(new TestLoggerProvider(testSink));
         });
         using var runStore = new DashboardRunStore(
-            CreateOptions(),
+            CreateOptions(workspace),
             loggerFactory.CreateLogger<DashboardRunStore>(),
             TimeProvider.System);
 
@@ -124,7 +125,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task NoneMode_UsesTemporaryDatabaseAndDeletesItOnDispose()
     {
-        var options = CreateOptions(persistenceMode: DashboardPersistenceMode.None);
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace, persistenceMode: DashboardPersistenceMode.None);
         string runDirectory;
         string databasePath;
 
@@ -136,7 +138,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
             await database.InitializeSchemaAsync();
 
             Assert.False(runStore.SupportsRunSelection);
-            Assert.False(runDirectory.StartsWith(_workspace.Path, StringComparison.OrdinalIgnoreCase));
+            Assert.False(runDirectory.StartsWith(workspace.Path, StringComparison.OrdinalIgnoreCase));
             Assert.Collection(runStore.GetRuns(), run => Assert.True(run.IsCurrent));
             Assert.True(File.Exists(databasePath));
         }
@@ -151,7 +153,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [InlineData(DashboardPersistenceMode.Resume)]
     public async Task ServiceProviderDisposal_ReleasesDatabaseAndDeletesTemporaryRunDirectory(DashboardPersistenceMode persistenceMode)
     {
-        var options = CreateOptions($"Dispose-{Guid.NewGuid():N}", persistenceMode);
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace, $"Dispose-{Guid.NewGuid():N}", persistenceMode);
         var services = new ServiceCollection()
             .AddSingleton(options)
             .AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance)
@@ -198,12 +201,13 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public void NoneMode_DeletesAbandonedTemporaryDirectories()
     {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var abandonedDirectory = Directory.CreateTempSubdirectory("aspire-dashboard-").FullName;
         File.WriteAllText(Path.Combine(abandonedDirectory, "dashboard.db"), string.Empty);
 
         try
         {
-            using var runStore = CreateRunStore(CreateOptions(persistenceMode: DashboardPersistenceMode.None));
+            using var runStore = CreateRunStore(CreateOptions(workspace, persistenceMode: DashboardPersistenceMode.None));
 
             Assert.False(Directory.Exists(abandonedDirectory));
         }
@@ -219,7 +223,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task NoneMode_DoesNotDeleteActiveTemporaryDirectories()
     {
-        var options = CreateOptions(persistenceMode: DashboardPersistenceMode.None);
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace, persistenceMode: DashboardPersistenceMode.None);
         using var activeRunStore = CreateRunStore(options);
         using var database = new DashboardSqliteDatabase(activeRunStore.DatabasePath, pooling: false);
         await database.InitializeSchemaAsync();
@@ -233,12 +238,13 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public void NoneMode_DoesNotDeleteTemporaryDirectoriesWithOtherNames()
     {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var otherDirectory = Directory.CreateTempSubdirectory("unrelated-").FullName;
         File.WriteAllText(Path.Combine(otherDirectory, "dashboard.db"), string.Empty);
 
         try
         {
-            using var runStore = CreateRunStore(CreateOptions(persistenceMode: DashboardPersistenceMode.None));
+            using var runStore = CreateRunStore(CreateOptions(workspace, persistenceMode: DashboardPersistenceMode.None));
 
             Assert.True(Directory.Exists(otherDirectory));
         }
@@ -254,11 +260,12 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public void ResumeMode_LogsCreatingDatabase()
     {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var testSink = new TestSink();
         var logger = new TestLogger<DashboardRunStore>(new TestLoggerFactory(testSink, enabled: true));
 
         using var runStore = new DashboardRunStore(
-            CreateOptions($"Create-{Guid.NewGuid():N}", DashboardPersistenceMode.Resume),
+            CreateOptions(workspace, $"Create-{Guid.NewGuid():N}", DashboardPersistenceMode.Resume),
             logger,
             TimeProvider.System);
 
@@ -271,7 +278,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task ResumeMode_ReusesApplicationDatabaseWithoutRunSelection()
     {
-        var options = CreateOptions("My Dashboard", DashboardPersistenceMode.Resume);
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace, "My Dashboard", DashboardPersistenceMode.Resume);
         string firstDatabasePath;
 
         using (var firstRunStore = CreateRunStore(options))
@@ -298,7 +306,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public void ResumeMode_RejectsConcurrentDashboardForApplication()
     {
-        var options = CreateOptions("My Dashboard", DashboardPersistenceMode.Resume);
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace, "My Dashboard", DashboardPersistenceMode.Resume);
         using var firstRunStore = CreateRunStore(options);
 
         var exception = Assert.Throws<InvalidOperationException>(() => CreateRunStore(options));
@@ -311,7 +320,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task ResumeMode_DeletesIncompatibleDatabase()
     {
-        var options = CreateOptions(persistenceMode: DashboardPersistenceMode.Resume);
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace, persistenceMode: DashboardPersistenceMode.Resume);
         string databasePath;
 
         using (var firstRunStore = CreateRunStore(options))
@@ -342,7 +352,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public void IsCompatible_ReturnsFalseForMultipleSchemaVersions()
     {
-        var databasePath = Path.Combine(_workspace.Path, $"malformed-{Guid.NewGuid():N}.db");
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var databasePath = Path.Combine(workspace.Path, $"malformed-{Guid.NewGuid():N}.db");
         using (var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False"))
         {
             connection.Open();
@@ -374,7 +385,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task GetRuns_ReturnsCurrentThenCompletedHistoricalRun()
     {
-        var options = CreateOptions();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
         string historicalRunId;
 
         using (var historicalRunStore = CreateRunStore(options))
@@ -405,7 +417,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public void GetRuns_ReusesLazySnapshot()
     {
-        using var runStore = CreateRunStore(CreateOptions());
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var runStore = CreateRunStore(CreateOptions(workspace));
 
         var first = runStore.GetRuns();
         var second = runStore.GetRuns();
@@ -416,7 +429,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task GetRuns_ExcludesRunOwnedByAnotherDashboard()
     {
-        var options = CreateOptions();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
         string historicalRunId;
 
         using (var historicalRunStore = CreateRunStore(options))
@@ -448,7 +462,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public void RunMode_DeletesOldestRunWhenLimitIsExceeded()
     {
-        var applicationDirectory = Path.Combine(_workspace.Path, DashboardRunStore.GetApplicationDirectoryName("TestApp"));
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var applicationDirectory = Path.Combine(workspace.Path, DashboardRunStore.GetApplicationDirectoryName("TestApp"));
         var runsDirectory = Path.Combine(applicationDirectory, "runs");
         var historicalRunDirectories = Enumerable.Range(1, DashboardRunStore.MaxRuns)
             .Select(index => Path.Combine(
@@ -461,7 +476,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
             Directory.CreateDirectory(directory);
         }
 
-        using var currentRunStore = CreateRunStore(CreateOptions());
+        using var currentRunStore = CreateRunStore(CreateOptions(workspace));
 
         Assert.Equal(DashboardRunStore.MaxRuns, Directory.GetDirectories(runsDirectory).Length);
         Assert.False(Directory.Exists(historicalRunDirectories[^1]));
@@ -472,7 +487,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public void RunMode_DoesNotDeleteActiveExpiredRun()
     {
-        var applicationDirectory = Path.Combine(_workspace.Path, DashboardRunStore.GetApplicationDirectoryName("TestApp"));
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var applicationDirectory = Path.Combine(workspace.Path, DashboardRunStore.GetApplicationDirectoryName("TestApp"));
         var runsDirectory = Path.Combine(applicationDirectory, "runs");
         var historicalRunDirectories = Enumerable.Range(1, DashboardRunStore.MaxRuns)
             .Select(index => Path.Combine(
@@ -492,7 +508,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
             FileAccess.ReadWrite,
             FileShare.None);
 
-        using var currentRunStore = CreateRunStore(CreateOptions());
+        using var currentRunStore = CreateRunStore(CreateOptions(workspace));
 
         Assert.True(Directory.Exists(activeExpiredRun));
         Assert.Equal(DashboardRunStore.MaxRuns + 1, Directory.GetDirectories(runsDirectory).Length);
@@ -501,7 +517,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task SelectedHistoricalRun_HoldsLeaseUntilSelectionChanges()
     {
-        var options = CreateOptions();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
         var startedAt = new DateTimeOffset(2026, 7, 26, 12, 34, 56, TimeSpan.Zero);
         string historicalRunId;
         string historicalRunDirectory;
@@ -515,7 +532,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
 
         using var currentRunStore = CreateRunStore(options, new FixedTimeProvider(startedAt.AddMilliseconds(1)));
         var repositoryFactory = CreateRepositoryFactory(options);
-        using var dataSource = CreateDataSource(currentRunStore, repositoryFactory);
+        using var dataSourcePool = new DashboardDataSourcePool(currentRunStore, repositoryFactory);
+        using var dataSource = CreateDataSource(currentRunStore, dataSourcePool);
         dataSource.SelectRun(historicalRunId);
 
         var runsDirectory = Path.GetDirectoryName(historicalRunDirectory)!;
@@ -549,7 +567,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task SelectedHistoricalRun_SharesDatabaseAcrossDataSources()
     {
-        var options = CreateOptions();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
         string historicalRunId;
 
         using (var historicalRunStore = CreateRunStore(options))
@@ -563,14 +582,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         var innerRepositoryFactory = CreateRepositoryFactory(options);
         var repositoryFactory = new RecordingRepositoryFactory(innerRepositoryFactory);
         using var dataSourcePool = new DashboardDataSourcePool(currentRunStore, repositoryFactory);
-        using var firstDataSource = CreateDataSource(
-            currentRunStore,
-            repositoryFactory,
-            dataSourcePool: dataSourcePool);
-        using var secondDataSource = CreateDataSource(
-            currentRunStore,
-            repositoryFactory,
-            dataSourcePool: dataSourcePool);
+        using var firstDataSource = CreateDataSource(currentRunStore, dataSourcePool);
+        using var secondDataSource = CreateDataSource(currentRunStore, dataSourcePool);
 
         firstDataSource.SelectRun(historicalRunId);
         secondDataSource.SelectRun(historicalRunId);
@@ -596,7 +609,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public void RunMode_DeleteExpiredRunFails_LogsWarningAndContinues()
     {
-        var applicationDirectory = Path.Combine(_workspace.Path, DashboardRunStore.GetApplicationDirectoryName("TestApp"));
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var applicationDirectory = Path.Combine(workspace.Path, DashboardRunStore.GetApplicationDirectoryName("TestApp"));
         var runsDirectory = Path.Combine(applicationDirectory, "runs");
         var historicalRunDirectories = Enumerable.Range(1, DashboardRunStore.MaxRuns)
             .Select(index => Path.Combine(
@@ -615,7 +629,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         var expiredRunDirectory = historicalRunDirectories[^1];
 
         using var currentRunStore = new DashboardRunStore(
-            CreateOptions(),
+            CreateOptions(workspace),
             logger,
             TimeProvider.System,
             directory => throw new IOException($"The directory '{directory}' is in use."));
@@ -632,7 +646,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public void GetRuns_DoesNotReadDatabaseSchemaUntilRunIsSelected()
     {
-        var options = CreateOptions();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
         string incompatibleDatabasePath;
         string incompatibleRunId;
 
@@ -662,7 +677,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         var repositoryFactory = CreateRepositoryFactory(options);
         var testSink = new TestSink();
         var logger = new TestLogger<DashboardDataSource>(new TestLoggerFactory(testSink, enabled: true));
-        using var dataSource = CreateDataSource(currentRunStore, repositoryFactory, logger);
+        using var dataSourcePool = new DashboardDataSourcePool(currentRunStore, repositoryFactory);
+        using var dataSource = CreateDataSource(currentRunStore, dataSourcePool, logger);
 
         var exception = Assert.Throws<InvalidOperationException>(() => dataSource.SelectRun(incompatibleRunId));
         Assert.Equal(
@@ -683,7 +699,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public void SelectedHistoricalRun_SchemaValidationThrows_ReleasesRunLease()
     {
-        var options = CreateOptions();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
         string malformedDatabasePath;
         string malformedRunId;
 
@@ -701,7 +718,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         using var currentRunStore = CreateRunStore(options);
         var malformedRun = currentRunStore.GetRuns().Single(run => run.RunId == malformedRunId);
         var repositoryFactory = CreateRepositoryFactory(options);
-        using var dataSource = CreateDataSource(currentRunStore, repositoryFactory);
+        using var dataSourcePool = new DashboardDataSourcePool(currentRunStore, repositoryFactory);
+        using var dataSource = CreateDataSource(currentRunStore, dataSourcePool);
 
         var exception = Assert.Throws<SqliteException>(() => dataSource.SelectRun(malformedRunId));
         Assert.Contains("no such table: dashboard_schema", exception.Message, StringComparison.Ordinal);
@@ -719,7 +737,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public void SqliteDatabase_ConfiguresLikeAndForeignKeys()
     {
-        var database = new DashboardSqliteDatabase(Path.Combine(_workspace.Path, "connection.db"));
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var database = new DashboardSqliteDatabase(Path.Combine(workspace.Path, "connection.db"));
         using (var connection = database.OpenConnection())
         using (var command = connection.CreateCommand())
         {
@@ -749,7 +768,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task SelectedHistoricalRun_ReplaysDataAndRejectsMutation()
     {
-        var options = CreateOptions();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
         string historicalRunId;
 
         using (var historicalRunStore = CreateRunStore(options))
@@ -785,9 +805,10 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         var repositoryFactory = CreateRepositoryFactory(options);
         var testSink = new TestSink();
         var logger = new TestLogger<DashboardDataSource>(new TestLoggerFactory(testSink, enabled: true));
-    using var dataSource = CreateDataSource(currentRunStore, repositoryFactory, logger);
-    var currentTelemetryRepository = dataSource.TelemetryRepository;
-    var currentResourceRepository = dataSource.ResourceRepository;
+        using var dataSourcePool = new DashboardDataSourcePool(currentRunStore, repositoryFactory);
+        using var dataSource = CreateDataSource(currentRunStore, dataSourcePool, logger);
+        var currentTelemetryRepository = dataSource.TelemetryRepository;
+        var currentResourceRepository = dataSource.ResourceRepository;
         Assert.Empty(dataSource.TelemetryRepository.GetResources());
         Assert.False(dataSource.TelemetryRepository.IsReadOnly);
 
@@ -837,7 +858,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
 
         Assert.Empty(dataSource.TelemetryRepository.GetResources());
         Assert.False(dataSource.IsReadOnly);
-    Assert.False(dataSource.TelemetryRepository.IsReadOnly);
+        Assert.False(dataSource.TelemetryRepository.IsReadOnly);
 
         Action<DashboardConnectionState> handler = _ => connectionStateChangedCount++;
         selectedClient.ConnectionStateChanged += handler;
@@ -851,10 +872,12 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public void UnknownRunId_SelectsCurrentRun()
     {
-        var options = CreateOptions();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
         using var currentRunStore = CreateRunStore(options);
         var repositoryFactory = CreateRepositoryFactory(options);
-        using var dataSource = CreateDataSource(currentRunStore, repositoryFactory);
+        using var dataSourcePool = new DashboardDataSourcePool(currentRunStore, repositoryFactory);
+        using var dataSource = CreateDataSource(currentRunStore, dataSourcePool);
         var currentTelemetryRepository = dataSource.TelemetryRepository;
         var currentResourceRepository = dataSource.ResourceRepository;
         dataSource.SelectRun("missing");
@@ -869,20 +892,23 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public void UnavailableHistoricalRun_SelectsCurrentRun()
     {
-        var options = CreateOptions();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
+        var historicalRunTime = new DateTimeOffset(2026, 7, 20, 12, 34, 56, TimeSpan.Zero);
         string historicalRunId;
 
-        using (var historicalRunStore = CreateRunStore(options))
+        using (var historicalRunStore = CreateRunStore(options, new FixedTimeProvider(historicalRunTime)))
         {
             historicalRunId = historicalRunStore.RunId;
         }
 
-        using var currentRunStore = CreateRunStore(options);
+        using var currentRunStore = CreateRunStore(options, new FixedTimeProvider(historicalRunTime.AddMilliseconds(1)));
         var runStore = new TestDashboardRunStore(currentRunStore.GetRuns(), tryAcquireRunLease: _ => null);
         var repositoryFactory = CreateRepositoryFactory(options);
         var testSink = new TestSink();
         var logger = new TestLogger<DashboardDataSource>(new TestLoggerFactory(testSink, enabled: true));
-        using var dataSource = CreateDataSource(runStore, repositoryFactory, logger);
+        using var dataSourcePool = new DashboardDataSourcePool(runStore, repositoryFactory);
+        using var dataSource = CreateDataSource(runStore, dataSourcePool, logger);
         var currentTelemetryRepository = dataSource.TelemetryRepository;
         var currentResourceRepository = dataSource.ResourceRepository;
 
@@ -898,7 +924,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal($"Failed to switch to dashboard run '{historicalRunId}' because it is no longer available.", failureLog.Message);
     }
 
-    private IOptions<DashboardOptions> CreateOptions(
+    private static IOptions<DashboardOptions> CreateOptions(
+        TemporaryWorkspace workspace,
         string applicationName = "TestApp",
         DashboardPersistenceMode persistenceMode = DashboardPersistenceMode.Run)
     {
@@ -907,7 +934,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
             ApplicationName = applicationName,
             Data = new DashboardDataOptions
             {
-                Directory = _workspace.Path,
+                Directory = workspace.Path,
                 PersistenceMode = persistenceMode
             }
         });
@@ -939,18 +966,11 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         return new DashboardRunStore(options, NullLogger<DashboardRunStore>.Instance, timeProvider ?? TimeProvider.System);
     }
 
-    private DashboardDataSource CreateDataSource(
+    private static DashboardDataSource CreateDataSource(
         IDashboardRunStore runStore,
-        IRepositoryFactory repositoryFactory,
-        ILogger<DashboardDataSource>? logger = null,
-        DashboardDataSourcePool? dataSourcePool = null)
+        DashboardDataSourcePool dataSourcePool,
+        ILogger<DashboardDataSource>? logger = null)
     {
-        if (dataSourcePool is null)
-        {
-            dataSourcePool = new DashboardDataSourcePool(runStore, repositoryFactory);
-            _databasePools.Add(dataSourcePool);
-        }
-
         dataSourcePool.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult();
         return new DashboardDataSource(
             runStore,
@@ -958,7 +978,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
             dataSourcePool);
     }
 
-    private RepositoryFactory CreateRepositoryFactory(IOptions<DashboardOptions> options)
+    private static RepositoryFactory CreateRepositoryFactory(IOptions<DashboardOptions> options)
     {
         var serviceProvider = new ServiceCollection()
             .AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance)
@@ -967,24 +987,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
             .AddSingleton(TimeProvider.System)
             .AddSingleton<IKnownPropertyLookup, MockKnownPropertyLookup>()
             .BuildServiceProvider();
-        _serviceProviders.Add(serviceProvider);
 
         return new RepositoryFactory(serviceProvider);
-    }
-
-    public void Dispose()
-    {
-        foreach (var serviceProvider in _serviceProviders)
-        {
-            serviceProvider.Dispose();
-        }
-
-        foreach (var databasePool in _databasePools)
-        {
-            databasePool.Dispose();
-        }
-
-        _workspace.Dispose();
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
