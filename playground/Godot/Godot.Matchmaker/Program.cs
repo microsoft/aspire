@@ -11,6 +11,11 @@ app.MapGet("/health", () => Results.Ok());
 // When running outside of Aspire, these variables are absent and the response reflects that.
 app.MapGet("/servers", (IConfiguration config) =>
 {
+    // Aspire injects the referenced endpoint as an environment variable named
+    // `services__godot-server__game__0`, but the .NET environment-variable configuration
+    // provider rewrites `__` to `:` when building IConfiguration. So the configuration key
+    // is `services:godot-server:game:0` (the double-underscore form never matches and is
+    // always null). See playground/BlazorStandalone/README.md for the same convention.
     var serverEndpoint = config["services:godot-server:game:0"];
     var serverPort = Uri.TryCreate(serverEndpoint, UriKind.Absolute, out var endpointUri)
         ? endpointUri.Port
