@@ -300,6 +300,10 @@ jobs:
             Microsoft.Authorization
             Microsoft.Quota
             Microsoft.ManagedIdentity
+            # AKS node pools are Microsoft.Compute VMSS, and reading/requesting the compute vCPU
+            # quota (StandardDSv5Family, in QUOTA_TARGETS below) needs this provider registered on a
+            # fresh subscription; without it the quota self-heal step silently skips that target.
+            Microsoft.Compute
             Microsoft.ContainerInstance
             Microsoft.OperationalInsights
             Microsoft.Insights
@@ -388,19 +392,22 @@ jobs:
             echo "✅ All required resource providers registered."
           fi
 
-      # Ensure the target subscription has enough quota for the resources the deployment tests
-      # provision. Like provider registration above, this is per-subscription setup rather than a
-      # test concern: a fresh subscription starts with low quotas, so tests fail with QuotaExceeded
+      # Ensure the target subscription has enough quota for the resources listed in QUOTA_TARGETS
+      # below. Like provider registration above, this is per-subscription setup rather than a test
+      # concern: a fresh subscription starts with low quotas, so tests fail with QuotaExceeded
       # (observed: a fresh subscription reports 0 dedicated vCPUs for the target compute family in
-      # westus3). For each requested quota, read the current limit via the provider-agnostic
+      # centralus). For each requested quota, read the current limit via the provider-agnostic
       # Microsoft.Quota service and only when it is below the desired value submit an increase
-      # request, so pointing the workflow at a new subscription self-heals. Best-effort and never
-      # fails the job: quota requests can route to manual review (self-service auto-approves only
-      # small increases; larger asks need a support ticket) and are not guaranteed to be granted
-      # synchronously, so a still-short quota surfaces its own QuotaExceeded error in the test that
-      # needs it. Each request is time-bounded so a request that routes to manual review — or that
-      # throttles when every matrix job hits Microsoft.Quota at once — degrades to a fast warning
-      # instead of stalling the job.
+      # request. Best-effort and never fails the job: quota requests can route to manual review
+      # (self-service auto-approves only small increases; larger asks need a support ticket) and are
+      # not guaranteed to be granted synchronously, so a still-short quota surfaces its own
+      # QuotaExceeded error in the test that needs it.
+      #
+      # Scope: this self-heals only the quotas configured in QUOTA_TARGETS (currently the centralus
+      # AKS node-pool vCPUs and managed clusters). Other regions the suite uses are NOT covered here
+      # — westus3 Container Apps / App Service and australiaeast DASv4 (AksBlazorRedis) remain
+      # documented manual quota requests (see the E2E README's quota section). Requests are submitted
+      # asynchronously (--no-wait, below), so extending QUOTA_TARGETS does not lengthen this step.
       - name: Ensure Azure quotas
         env:
           # Quotas to ensure, one per line: "provider location resourceName desiredLimit [resourceType]".
@@ -457,16 +464,22 @@ jobs:
             # request to Microsoft.Quota that may auto-approve or route to manual review; neither is
             # allowed to fail the job.
             #
-            # Bound each call with `timeout`: a request that routes to manual review (ContactSupport)
-            # can block for many minutes, and with every matrix job calling Microsoft.Quota at once
-            # they throttle each other into long backoffs. Without a bound this step has stalled whole
-            # jobs for 30+ minutes. On timeout `timeout` exits non-zero, so the `||`/else path below
-            # still records the request as not-accepted and the job continues.
-            if timeout 60 az quota create --resource-name "$name" --scope "$scope" \
-                 --limit-object value="$desired" "${rt_args[@]}" --only-show-errors >/dev/null 2>&1 \
-               || timeout 60 az quota update --resource-name "$name" --scope "$scope" \
-                 --limit-object value="$desired" "${rt_args[@]}" --only-show-errors >/dev/null 2>&1; then
-              echo "  Request submitted for $provider/$name in $location (limit now: $(read_limit "$scope" "$name" || echo unknown))."
+            # Submit with --no-wait: the request is queued and the CLI returns as soon as it is
+            # accepted instead of polling the long-running operation to a terminal state. A
+            # synchronous call blocks for minutes when the request routes to manual review, and with
+            # every matrix job hitting Microsoft.Quota at once they throttle each other into long
+            # backoffs; that pre-test delay can outlive the CI OIDC token window and make the tests'
+            # own auth gate (AzureAuthenticationHelpers.IsAzureAuthAvailable) fail matrix-wide before
+            # they deploy. A short `timeout` still guards a pathological network/throttle hang;
+            # because --no-wait returns once the request is accepted, that bound no longer risks
+            # killing an already-accepted request and re-submitting it via the `||` fallback. A
+            # request that is not granted in time surfaces later as a normal QuotaExceeded error in
+            # the test that needs it.
+            if timeout 30 az quota create --resource-name "$name" --scope "$scope" \
+                 --limit-object value="$desired" "${rt_args[@]}" --no-wait --only-show-errors >/dev/null 2>&1 \
+               || timeout 30 az quota update --resource-name "$name" --scope "$scope" \
+                 --limit-object value="$desired" "${rt_args[@]}" --no-wait --only-show-errors >/dev/null 2>&1; then
+              echo "  Request submitted for $provider/$name in $location (asynchronous; may await manual approval)."
             else
               echo "⚠ Quota request for $provider/$name in $location was not accepted (may need manual approval); continuing."
             fi
