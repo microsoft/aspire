@@ -1544,8 +1544,6 @@ ResourceCommandState = typing.Literal["Enabled", "Disabled", "Hidden"]
 
 ResourceCommandVisibility = typing.Literal["None", "UI", "Api"]
 
-RunSubMode = typing.Literal["Normal", "Watch"]
-
 TestPersistenceMode = typing.Literal["None", "Volume", "Bind"]
 
 TestResourceStatus = typing.Literal["Pending", "Running", "Stopped", "Failed"]
@@ -2015,6 +2013,9 @@ class ResourceUrlAnnotation(typing.TypedDict, total=False):
     DisplayText: str | None
     Endpoint: EndpointReference
     DisplayLocation: UrlDisplayLocation
+
+class RunConfiguration(typing.TypedDict, total=False):
+    WatchEnabled: bool
 
 class TestConfigDto(typing.TypedDict, total=False):
     Name: str
@@ -4412,13 +4413,13 @@ class DistributedApplicationExecutionContext:
         return typing.cast(DistributedApplicationOperation, result)
 
     @_cached_property
-    def run_sub_mode(self) -> RunSubMode:
-        """The run sub-mode the AppHost is running under. Only meaningful when `Operation` is `Run`; otherwise `Normal`."""
+    def run_config(self) -> RunConfiguration:
+        """Describes how the AppHost is being run. Only meaningful when `Operation` is `Run`; otherwise every aspect holds its default value."""
         result = self._client.invoke_capability(
-            'Aspire.Hosting/DistributedApplicationExecutionContext.runSubMode',
+            'Aspire.Hosting/DistributedApplicationExecutionContext.runConfiguration',
             {'context': self._handle}
         )
-        return typing.cast(RunSubMode, result)
+        return typing.cast(RunConfiguration, result)
 
     @_cached_property
     def service_provider(self) -> AbstractServiceProvider:

@@ -58,9 +58,10 @@ public class DistributedApplicationExecutionContextOptions
     public string? PublisherName { get; }
 
     /// <summary>
-    /// The run sub-mode the AppHost is running under. Only meaningful when <see cref="Operation"/> is
-    /// <see cref="DistributedApplicationOperation.Run"/>; defaults to <see cref="RunSubMode.Normal"/>.
+    /// Describes how the AppHost is being run. Only meaningful when <see cref="Operation"/> is
+    /// <see cref="DistributedApplicationOperation.Run"/>; for any other operation the execution context
+    /// reports defaults regardless of what is set here.
     /// </summary>
     [Experimental("ASPIREWATCH001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public RunSubMode RunSubMode { get; init; } = RunSubMode.Normal;
+    public RunConfiguration RunConfiguration { get; init; } = RunConfiguration.Default;
 }

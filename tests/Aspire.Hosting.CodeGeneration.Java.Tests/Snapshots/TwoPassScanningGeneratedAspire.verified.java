@@ -7947,12 +7947,12 @@ public class DistributedApplicationExecutionContext extends HandleWrapperBase {
         return DistributedApplicationOperation.fromValue((String) result);
     }
 
-    /** The run sub-mode the AppHost is running under. Only meaningful when `Operation` is `Run`; otherwise `Normal`. */
-    public RunSubMode runSubMode() {
+    /** Describes how the AppHost is being run. Only meaningful when `Operation` is `Run`; otherwise every aspect holds its default value. */
+    public RunConfiguration runConfiguration() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        var result = getClient().invokeCapability("Aspire.Hosting/DistributedApplicationExecutionContext.runSubMode", reqArgs);
-        return RunSubMode.fromValue((String) result);
+        var result = getClient().invokeCapability("Aspire.Hosting/DistributedApplicationExecutionContext.runConfiguration", reqArgs);
+        return RunConfiguration.fromMap((Map<String, Object>) result);
     }
 
     /** The `IServiceProvider` for the AppHost. */
@@ -21671,32 +21671,33 @@ public class ResourceUrlsEditor extends HandleWrapperBase {
 
 }
 
-// ===== RunSubMode.java =====
-// RunSubMode.java - GENERATED CODE - DO NOT EDIT
+// ===== RunConfiguration.java =====
+// RunConfiguration.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
 import java.util.*;
 import java.util.function.*;
 
-/** RunSubMode enum. */
-public enum RunSubMode implements WireValueEnum {
-    NORMAL("Normal"),
-    WATCH("Watch");
+/** RunConfiguration DTO. */
+public class RunConfiguration implements JsonSerializable {
+    private Boolean watchEnabled;
 
-    private final String value;
+    public Boolean getWatchEnabled() { return watchEnabled; }
+    public void setWatchEnabled(Boolean value) { this.watchEnabled = value; }
 
-    RunSubMode(String value) {
-        this.value = value;
+    @SuppressWarnings("unchecked")
+    public static RunConfiguration fromMap(Map<String, Object> map) {
+        var value = new RunConfiguration();
+        var watchEnabledValue = map.get("WatchEnabled");
+        value.setWatchEnabled(watchEnabledValue == null ? null : (Boolean) watchEnabledValue);
+        return value;
     }
 
-    public String getValue() { return value; }
-
-    public static RunSubMode fromValue(String value) {
-        for (RunSubMode e : values()) {
-            if (e.value.equals(value)) return e;
-        }
-        throw new IllegalArgumentException("Unknown value: " + value);
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("WatchEnabled", AspireClient.serializeValue(watchEnabled));
+        return map;
     }
 }
 
@@ -29318,7 +29319,7 @@ public final class WithVolumeOptions {
 .aspire/modules/ResourceUrlAnnotation.java
 .aspire/modules/ResourceUrlsCallbackContext.java
 .aspire/modules/ResourceUrlsEditor.java
-.aspire/modules/RunSubMode.java
+.aspire/modules/RunConfiguration.java
 .aspire/modules/TestCallbackContext.java
 .aspire/modules/TestCollectionContext.java
 .aspire/modules/TestConfigDto.java

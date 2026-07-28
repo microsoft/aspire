@@ -102,25 +102,6 @@ impl std::fmt::Display for DistributedApplicationOperation {
     }
 }
 
-/// RunSubMode
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum RunSubMode {
-    #[default]
-    #[serde(rename = "Normal")]
-    Normal,
-    #[serde(rename = "Watch")]
-    Watch,
-}
-
-impl std::fmt::Display for RunSubMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Normal => write!(f, "Normal"),
-            Self::Watch => write!(f, "Watch"),
-        }
-    }
-}
-
 /// OtlpProtocol
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OtlpProtocol {
@@ -742,6 +723,23 @@ impl InteractionInput {
         }
         if let Some(ref v) = self.max_file_size {
             map.insert("MaxFileSize".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        map
+    }
+}
+
+/// RunConfiguration
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RunConfiguration {
+    #[serde(rename = "WatchEnabled", skip_serializing_if = "Option::is_none")]
+    pub watch_enabled: Option<bool>,
+}
+
+impl RunConfiguration {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        if let Some(ref v) = self.watch_enabled {
+            map.insert("WatchEnabled".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         map
     }
@@ -6457,11 +6455,11 @@ impl DistributedApplicationExecutionContext {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// The run sub-mode the AppHost is running under. Only meaningful when `Operation` is `Run`; otherwise `Normal`.
-    pub fn run_sub_mode(&self) -> Result<RunSubMode, Box<dyn std::error::Error>> {
+    /// Describes how the AppHost is being run. Only meaningful when `Operation` is `Run`; otherwise every aspect holds its default value.
+    pub fn run_configuration(&self) -> Result<RunConfiguration, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting/DistributedApplicationExecutionContext.runSubMode", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting/DistributedApplicationExecutionContext.runConfiguration", args)?;
         Ok(serde_json::from_value(result)?)
     }
 

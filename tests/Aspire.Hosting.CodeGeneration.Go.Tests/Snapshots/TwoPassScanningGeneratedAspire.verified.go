@@ -59,14 +59,6 @@ const (
 	DistributedApplicationOperationPublish DistributedApplicationOperation = "Publish"
 )
 
-// RunSubMode represents RunSubMode.
-type RunSubMode string
-
-const (
-	RunSubModeNormal RunSubMode = "Normal"
-	RunSubModeWatch RunSubMode = "Watch"
-)
-
 // OtlpProtocol represents OtlpProtocol.
 type OtlpProtocol string
 
@@ -323,6 +315,18 @@ func (d *InteractionInput) ToMap() map[string]any {
 	if d.AllowMultipleFiles != nil { m["AllowMultipleFiles"] = serializeValue(d.AllowMultipleFiles) }
 	if d.FileFilter != nil { m["FileFilter"] = serializeValue(d.FileFilter) }
 	if d.MaxFileSize != nil { m["MaxFileSize"] = serializeValue(d.MaxFileSize) }
+	return m
+}
+
+// RunConfiguration represents RunConfiguration.
+type RunConfiguration struct {
+	WatchEnabled *bool `json:"WatchEnabled,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *RunConfiguration) ToMap() map[string]any {
+	m := map[string]any{}
+	if d.WatchEnabled != nil { m["WatchEnabled"] = serializeValue(d.WatchEnabled) }
 	return m
 }
 
@@ -10439,7 +10443,7 @@ type DistributedApplicationExecutionContext interface {
 	IsRunMode() (bool, error)
 	Operation() (DistributedApplicationOperation, error)
 	PublisherName() (string, error)
-	RunSubMode() (RunSubMode, error)
+	RunConfiguration() (*RunConfiguration, error)
 	ServiceProvider() ServiceProvider
 	Services() ServiceProvider
 	SetPublisherName(value string) DistributedApplicationExecutionContext
@@ -10516,19 +10520,19 @@ func (s *distributedApplicationExecutionContext) PublisherName() (string, error)
 	return decodeAs[string](result)
 }
 
-// RunSubMode the run sub-mode the AppHost is running under. Only meaningful when `Operation` is `Run`; otherwise `Normal`.
-func (s *distributedApplicationExecutionContext) RunSubMode() (RunSubMode, error) {
-	if s.err != nil { var zero RunSubMode; return zero, s.err }
+// RunConfiguration describes how the AppHost is being run. Only meaningful when `Operation` is `Run`; otherwise every aspect holds its default value.
+func (s *distributedApplicationExecutionContext) RunConfiguration() (*RunConfiguration, error) {
+	if s.err != nil { var zero *RunConfiguration; return zero, s.err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/DistributedApplicationExecutionContext.runSubMode", reqArgs)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/DistributedApplicationExecutionContext.runConfiguration", reqArgs)
 	if err != nil {
-		var zero RunSubMode
+		var zero *RunConfiguration
 		return zero, err
 	}
-	return decodeAs[RunSubMode](result)
+	return decodeAs[*RunConfiguration](result)
 }
 
 // ServiceProvider the `IServiceProvider` for the AppHost.

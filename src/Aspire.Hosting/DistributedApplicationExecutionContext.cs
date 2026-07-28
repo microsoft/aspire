@@ -50,8 +50,10 @@ public class DistributedApplicationExecutionContext
     public DistributedApplicationExecutionContext(DistributedApplicationExecutionContextOptions options) : this(options.Operation, options.PublisherName ?? "manifest")
     {
         _options = options;
-#pragma warning disable ASPIREWATCH001 // RunSubMode is experimental; core populates it from the options.
-        RunSubMode = options.Operation == DistributedApplicationOperation.Run ? options.RunSubMode : RunSubMode.Normal;
+#pragma warning disable ASPIREWATCH001 // RunConfiguration is experimental; core populates it from the options.
+        // Publish never runs resources, so the run configuration is meaningless there. Reporting defaults
+        // instead of whatever the caller supplied keeps integrations from acting on a run-only signal.
+        RunConfiguration = options.Operation == DistributedApplicationOperation.Run ? options.RunConfiguration : RunConfiguration.Default;
 #pragma warning restore ASPIREWATCH001
     }
 
@@ -61,11 +63,11 @@ public class DistributedApplicationExecutionContext
     public DistributedApplicationOperation Operation { get; }
 
     /// <summary>
-    /// The run sub-mode the AppHost is running under. Only meaningful when <see cref="Operation"/> is
-    /// <see cref="DistributedApplicationOperation.Run"/>; otherwise <see cref="RunSubMode.Normal"/>.
+    /// Describes how the AppHost is being run. Only meaningful when <see cref="Operation"/> is
+    /// <see cref="DistributedApplicationOperation.Run"/>; otherwise every aspect holds its default value.
     /// </summary>
     [Experimental("ASPIREWATCH001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public RunSubMode RunSubMode { get; }
+    public RunConfiguration RunConfiguration { get; } = RunConfiguration.Default;
 
     /// <summary>
     /// The <see cref="IServiceProvider"/> for the AppHost.

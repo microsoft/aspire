@@ -142,111 +142,107 @@ public class OperationModesTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void RunSubModeDefaultsToNormalInRunMode()
+    public void WatchIsDisabledByDefaultInRunMode()
     {
-        // Without any run sub-mode configuration the AppHost runs in the Normal sub-mode.
+        // Without any watch configuration the AppHost runs without watch.
 
         using var builder = TestDistributedApplicationBuilder
             .Create()
             .WithTestAndResourceLogging(outputHelper);
 
         Assert.True(builder.ExecutionContext.IsRunMode);
-        Assert.Equal(RunSubMode.Normal, builder.ExecutionContext.RunSubMode);
+        Assert.False(builder.ExecutionContext.RunConfiguration.WatchEnabled);
     }
 
     [Fact]
-    public void RunSubModeIsWatchWhenConfigured()
+    public void WatchIsEnabledWhenConfigured()
     {
-        // The "AppHost:RunSubMode" configuration key selects the run sub-mode, mirroring "AppHost:Operation".
+        // The "AppHost:Run:WatchEnabled" configuration key enables watch.
 
         using var builder = TestDistributedApplicationBuilder
-            .Create(["AppHost:RunSubMode=Watch"])
+            .Create(["AppHost:Run:WatchEnabled=true"])
             .WithTestAndResourceLogging(outputHelper);
 
         Assert.True(builder.ExecutionContext.IsRunMode);
-        Assert.Equal(RunSubMode.Watch, builder.ExecutionContext.RunSubMode);
+        Assert.True(builder.ExecutionContext.RunConfiguration.WatchEnabled);
     }
 
     [Fact]
-    public void RunSubModeParsingIsCaseInsensitive()
+    public void WatchConfigurationIsCaseInsensitive()
     {
-        // The value is parsed case-insensitively so callers do not have to match the enum casing exactly.
+        // The value is parsed case-insensitively so callers do not have to match a particular casing.
 
         using var builder = TestDistributedApplicationBuilder
-            .Create(["AppHost:RunSubMode=watch"])
+            .Create(["AppHost:Run:WatchEnabled=TRUE"])
             .WithTestAndResourceLogging(outputHelper);
 
-        Assert.Equal(RunSubMode.Watch, builder.ExecutionContext.RunSubMode);
+        Assert.True(builder.ExecutionContext.RunConfiguration.WatchEnabled);
     }
 
     [Fact]
-    public void RunSubModeFallsBackToNormalForUnknownValue()
+    public void WatchIsDisabledForUnparseableValue()
     {
-        // An unrecognized value must never fail the run; it falls back to Normal.
+        // An unrecognized value must never fail the run; watch stays disabled.
 
         using var builder = TestDistributedApplicationBuilder
-            .Create(["AppHost:RunSubMode=bogus"])
+            .Create(["AppHost:Run:WatchEnabled=bogus"])
             .WithTestAndResourceLogging(outputHelper);
 
         Assert.True(builder.ExecutionContext.IsRunMode);
-        Assert.Equal(RunSubMode.Normal, builder.ExecutionContext.RunSubMode);
+        Assert.False(builder.ExecutionContext.RunConfiguration.WatchEnabled);
     }
 
     [Fact]
-    public void RunSubModeIsNormalInPublishModeEvenWhenConfigured()
+    public void WatchIsDisabledForNumericValue()
     {
-        // The run sub-mode is only meaningful in run mode; publish mode always reports Normal.
+        // Some configuration sources emit "1" for booleans. bool.TryParse rejects it, so watch stays
+        // disabled rather than being silently enabled by a value the AppHost does not accept.
 
         using var builder = TestDistributedApplicationBuilder
-            .Create(["--operation", "publish", "--publisher", "manifest", "--output-path", "test-output-path", "AppHost:RunSubMode=Watch"])
+            .Create(["AppHost:Run:WatchEnabled=1"])
+            .WithTestAndResourceLogging(outputHelper);
+
+        Assert.True(builder.ExecutionContext.IsRunMode);
+        Assert.False(builder.ExecutionContext.RunConfiguration.WatchEnabled);
+    }
+
+    [Fact]
+    public void WatchIsDisabledInPublishModeEvenWhenConfigured()
+    {
+        // The run configuration is only meaningful in run mode; publish mode always reports defaults.
+
+        using var builder = TestDistributedApplicationBuilder
+            .Create(["--operation", "publish", "--publisher", "manifest", "--output-path", "test-output-path", "AppHost:Run:WatchEnabled=true"])
             .WithTestAndResourceLogging(outputHelper);
 
         Assert.True(builder.ExecutionContext.IsPublishMode);
-        Assert.Equal(RunSubMode.Normal, builder.ExecutionContext.RunSubMode);
+        Assert.False(builder.ExecutionContext.RunConfiguration.WatchEnabled);
     }
 
     [Fact]
-    public void RunSubModeFallsBackToNormalForNumericValue()
+    public void RunConfigurationIsDefaultWhenExecutionContextConstructedForPublish()
     {
-        // A numeric string is not a declared sub-mode name and must fall back to Normal. This guards against
-        // Enum.TryParse's behavior of accepting any numeric value (for example "42" => (RunSubMode)42).
-
-        using var builder = TestDistributedApplicationBuilder
-            .Create(["AppHost:RunSubMode=42"])
-            .WithTestAndResourceLogging(outputHelper);
-
-        Assert.True(builder.ExecutionContext.IsRunMode);
-        Assert.Equal(RunSubMode.Normal, builder.ExecutionContext.RunSubMode);
-    }
-
-    [Fact]
-    public void RunSubModeFallsBackToNormalForCompoundValue()
-    {
-        // A comma-separated value is not a declared sub-mode name and must fall back to Normal. This guards
-        // against Enum.TryParse accepting "Normal,Watch" as Watch even though RunSubMode is not [Flags].
-
-        using var builder = TestDistributedApplicationBuilder
-            .Create(["AppHost:RunSubMode=Normal,Watch"])
-            .WithTestAndResourceLogging(outputHelper);
-
-        Assert.True(builder.ExecutionContext.IsRunMode);
-        Assert.Equal(RunSubMode.Normal, builder.ExecutionContext.RunSubMode);
-    }
-
-    [Fact]
-    public void RunSubModeIsNormalWhenExecutionContextConstructedForPublish()
-    {
-        // The run sub-mode only applies to run mode. Even if a caller constructs options with a Watch
-        // sub-mode and a Publish operation, the execution context must report Normal (publish never watches).
+        // The run configuration only applies to run mode. Even if a caller constructs options with watch
+        // enabled and a Publish operation, the execution context must report defaults (publish never watches).
 
         var options = new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Publish)
         {
-            RunSubMode = RunSubMode.Watch
+            RunConfiguration = new RunConfiguration { WatchEnabled = true }
         };
 
         var context = new DistributedApplicationExecutionContext(options);
 
         Assert.True(context.IsPublishMode);
-        Assert.Equal(RunSubMode.Normal, context.RunSubMode);
+        Assert.False(context.RunConfiguration.WatchEnabled);
+    }
+
+    [Fact]
+    public void RunConfigurationIsNeverNull()
+    {
+        // Every constructor must produce a usable run configuration so integrations never have to null-check it.
+
+        Assert.NotNull(new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run).RunConfiguration);
+        Assert.NotNull(new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish, "manifest").RunConfiguration);
+        Assert.NotNull(new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)).RunConfiguration);
     }
 }

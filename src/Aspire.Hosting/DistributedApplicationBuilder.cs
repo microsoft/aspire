@@ -142,7 +142,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             return _innerBuilder.Configuration["Publishing:Publisher"] switch
             {
                 { } publisher => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Publish, publisher),
-                _ => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { RunSubMode = ParseRunSubMode() }
+                _ => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { RunConfiguration = BuildRunConfiguration() }
             };
         }
 
@@ -155,20 +155,21 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         return operation switch
         {
-            DistributedApplicationOperation.Run => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { RunSubMode = ParseRunSubMode() },
+            DistributedApplicationOperation.Run => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { RunConfiguration = BuildRunConfiguration() },
             DistributedApplicationOperation.Publish => new DistributedApplicationExecutionContextOptions(operation, _innerBuilder.Configuration["Publishing:Publisher"] ?? "manifest"),
             _ => throw new DistributedApplicationException("Invalid operation specified. Valid operations are 'publish' or 'run'.")
         };
     }
 
-    private RunSubMode ParseRunSubMode()
+    private RunConfiguration BuildRunConfiguration()
     {
-        // Match only the declared enum names, case-insensitively. Enum.TryParse is intentionally avoided
-        // because it also succeeds for inputs that are not declared members, which would bypass the
-        // documented unknown-value -> Normal fallback and leak an unsupported sub-mode to integrations.
-        return string.Equals(_innerBuilder.Configuration["AppHost:RunSubMode"], nameof(RunSubMode.Watch), StringComparison.OrdinalIgnoreCase)
-            ? RunSubMode.Watch
-            : RunSubMode.Normal;
+        // Only "true" and "false" (case-insensitively) are accepted. bool.TryParse rejects everything else,
+        // including values some configuration sources emit for booleans such as "1" or "yes". An unusable
+        // value must never fail an otherwise valid run, so anything unrecognized falls back to the default.
+        return new RunConfiguration
+        {
+            WatchEnabled = bool.TryParse(_innerBuilder.Configuration["AppHost:Run:WatchEnabled"], out var watchEnabled) && watchEnabled
+        };
     }
 
     /// <summary>
