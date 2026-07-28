@@ -5018,31 +5018,25 @@ suite('AppHostDataRepository global polling', () => {
         }
     });
 
-    test('global stop refresh survives workspace discovery polling restart', async () => {
-        const clock = sinon.useFakeTimers();
-        const workspaceFolder = {
-            uri: vscode.Uri.file('/workspace'),
-            name: 'workspace',
-            index: 0,
-        };
-        const discoveryChanges = new vscode.EventEmitter<vscode.WorkspaceFolder>();
-        const discoveryService = {
-            discover: async () => [{
-                path: '/workspace/AppHost.csproj',
-                language: 'csharp' as const,
-                status: 'buildable' as const,
-                selected: true,
-            }],
-            onDidChangeCandidates: discoveryChanges.event,
-            dispose: () => discoveryChanges.dispose(),
-        } as unknown as AppHostDiscoveryService;
+    test('global stop refresh survives a polling interval restart', async () => {
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const configChange = new vscode.EventEmitter<vscode.ConfigurationChangeEvent>();
+        const onDidChangeConfigurationStub = sinon.stub(vscode.workspace, 'onDidChangeConfiguration')
+            .callsFake(listener => configChange.event(listener));
+        const inspect = sinon.stub();
+        inspect.withArgs('appHostsPollingInterval').returns({ globalValue: 2000 });
+        inspect.withArgs('globalAppHostsPollingInterval').returns({ globalValue: 9000 });
+        const getConfigurationStub = sinon.stub(vscode.workspace, 'getConfiguration');
+        getConfigurationStub.withArgs('aspire').returns({
+            inspect,
+            get: sinon.stub().withArgs('appHostsPollingInterval', 30000).returns(30000),
+        } as unknown as vscode.WorkspaceConfiguration);
         const spawned: { args: string[]; options: any }[] = [];
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             spawned.push({ args, options });
             return new TestChildProcess();
         });
-        const workspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').value([workspaceFolder]);
-        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+        const repository = new AppHostDataRepository(terminalProvider);
 
         try {
             repository.activate();
@@ -5050,10 +5044,11 @@ suite('AppHostDataRepository global polling', () => {
             repository.setPanelVisible(true);
             await waitForMicrotasks();
 
-            const followArgs = JSON.stringify(['ps', '--follow', '--format', 'json']);
-            const snapshotArgs = JSON.stringify(['ps', '--format', 'json']);
-            const initialFollowCall = spawned.filter(call => JSON.stringify(call.args) === followArgs).at(-1);
-            assert.ok(initialFollowCall, 'expected initial ps --follow call');
+            const followArgs = JSON.stringify(['ps', '--follow', '--format', 'json', '--nologo']);
+            const snapshotArgs = JSON.stringify(['ps', '--format', 'json', '--nologo']);
+
+            await waitForCondition(() => spawned.some(call => JSON.stringify(call.args) === followArgs), 'expected initial ps --follow call');
+            const initialFollowCall = spawned.filter(call => JSON.stringify(call.args) === followArgs).at(-1)!;
             initialFollowCall.options.lineCallback(JSON.stringify({
                 appHostPath: '/workspace/AppHost.csproj',
                 appHostPid: 1234,
@@ -5062,18 +5057,22 @@ suite('AppHostDataRepository global polling', () => {
             }));
             await waitForCondition(() => repository.appHosts.length === 1, 'global AppHost ps delta was not applied');
 
+            // Changing the polling interval is the remaining path that restarts `ps` polling underneath a
+            // pending post-stop refresh. The refresh is the only authoritative signal that clears a stale
+            // global AppHost row, so a routine restart must not cancel it.
             repository.requestAppHostStopRefresh('/workspace/AppHost.csproj');
-            discoveryChanges.fire(workspaceFolder);
+            const snapshotCallsBeforeTimer = spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).length;
+            inspect.withArgs('appHostsPollingInterval').returns({ globalValue: 4000 });
+            configChange.fire({ affectsConfiguration: section => section === 'aspire.appHostsPollingInterval' });
             await waitForMicrotasks();
 
-            const snapshotCallsBeforeTimer = spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).length;
             await clock.tickAsync(400);
             await waitForMicrotasks();
 
             assert.strictEqual(
                 spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).length,
                 snapshotCallsBeforeTimer + 1,
-                'expected stop refresh snapshot after workspace discovery restarted ps polling'
+                'expected stop refresh snapshot after the polling interval change restarted ps polling'
             );
 
             const postStopSnapshot = spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).at(-1);
@@ -5085,12 +5084,12 @@ suite('AppHostDataRepository global polling', () => {
             assert.strictEqual(repository.appHosts.length, 0);
         } finally {
             repository.dispose();
-            workspaceFoldersStub.restore();
+            getConfigurationStub.restore();
+            onDidChangeConfigurationStub.restore();
+            configChange.dispose();
             clock.restore();
-            discoveryChanges.dispose();
         }
     });
-
     test('hiding global panel before cli path resolves prevents ps from starting', async () => {
         const cliPath = createDeferred<string>();
         getCliPathStub.returns(cliPath.promise);
