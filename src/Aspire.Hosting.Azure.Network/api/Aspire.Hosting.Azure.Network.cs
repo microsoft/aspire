@@ -78,7 +78,7 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> DenyOutbound(this ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> builder, string? port = null, string? from = null, string? to = null, global::Azure.Provisioning.Network.SecurityRuleProtocol? protocol = null, int? priority = null, string? name = null) { throw null; }
 
         [AspireExport]
-        public static ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> WithContainerInstanceDelegation(this ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> subnet) { throw null; }
+        public static ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> WithContainerInstanceDelegation(this ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> builder) { throw null; }
 
         [AspireExport("withSubnetDelegatedSubnet", MethodName = "withDelegatedSubnet")]
         public static ApplicationModel.IResourceBuilder<T> WithDelegatedSubnet<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> subnet)
@@ -91,7 +91,7 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> WithNetworkSecurityGroup(this ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureNetworkSecurityGroupResource> nsg) { throw null; }
 
         [AspireExport]
-        public static ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> WithServiceDelegation(this ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> subnet, string serviceName, string? name = null) { throw null; }
+        public static ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> WithServiceDelegation(this ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> builder, string serviceName, string? name = null) { throw null; }
     }
 }
 

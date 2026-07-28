@@ -358,7 +358,7 @@ public static class AzureVirtualNetworkExtensions
     /// <summary>
     /// Delegates the subnet to the specified Azure service.
     /// </summary>
-    /// <param name="subnet">The subnet resource builder.</param>
+    /// <param name="builder">The subnet resource builder.</param>
     /// <param name="serviceName">The service name to delegate the subnet to (e.g., "Microsoft.App/environments").</param>
     /// <param name="name">The name of the service delegation. If not specified, defaults to <paramref name="serviceName"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureSubnetResource}"/> for chaining.</returns>
@@ -380,11 +380,11 @@ public static class AzureVirtualNetworkExtensions
     /// </example>
     [AspireExport]
     public static IResourceBuilder<AzureSubnetResource> WithServiceDelegation(
-        this IResourceBuilder<AzureSubnetResource> subnet,
+        this IResourceBuilder<AzureSubnetResource> builder,
         string serviceName,
         string? name = null)
     {
-        ArgumentNullException.ThrowIfNull(subnet);
+        ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(serviceName);
 
         // The delegation name defaults to the service name so callers don't have to repeat the
@@ -400,18 +400,18 @@ public static class AzureVirtualNetworkExtensions
         // used here. Collapse any pre-existing delegations first, then append the replacement so the
         // subnet ends with exactly one delegation (last-write-wins), matching AzureSubnetResource, which
         // emits only the last delegation.
-        foreach (var existing in subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>().ToArray())
+        foreach (var existing in builder.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>().ToArray())
         {
-            subnet.Resource.Annotations.Remove(existing);
+            builder.Resource.Annotations.Remove(existing);
         }
 
-        return subnet.WithAnnotation(new AzureSubnetServiceDelegationAnnotation(name, serviceName));
+        return builder.WithAnnotation(new AzureSubnetServiceDelegationAnnotation(name, serviceName));
     }
 
     /// <summary>
     /// Delegates the subnet to Azure Container Instances (ACI).
     /// </summary>
-    /// <param name="subnet">The subnet resource builder.</param>
+    /// <param name="builder">The subnet resource builder.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureSubnetResource}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
@@ -429,11 +429,11 @@ public static class AzureVirtualNetworkExtensions
     /// </example>
     [AspireExport]
     public static IResourceBuilder<AzureSubnetResource> WithContainerInstanceDelegation(
-        this IResourceBuilder<AzureSubnetResource> subnet)
+        this IResourceBuilder<AzureSubnetResource> builder)
     {
-        ArgumentNullException.ThrowIfNull(subnet);
+        ArgumentNullException.ThrowIfNull(builder);
 
-        return subnet.WithServiceDelegation(ContainerInstanceServiceName);
+        return builder.WithServiceDelegation(ContainerInstanceServiceName);
     }
 
     /// <summary>

@@ -180,8 +180,9 @@ public class AzureSqlDeploymentScriptTests
 
         // The user supplies their own admin deployment-script subnet and pre-delegates it to a
         // different service. The admin deployment script requires the subnet be delegated to ACI, so
-        // the delegation must be replaced (not appended). Otherwise the subnet would carry two
-        // AzureSubnetServiceDelegationAnnotations, which later makes WithServiceDelegation throw.
+        // the delegation must be replaced (not appended). Appending would leave the subnet carrying
+        // both the user's original delegation and the ACI delegation — a conflicting, invalid state
+        // that Azure rejects; WithServiceDelegation instead collapses to a single ACI delegation.
         var aciSubnet = vnet.AddSubnet("acisubnet", "10.0.2.0/29")
             .WithServiceDelegation("Microsoft.Netapp/volumes");
 
