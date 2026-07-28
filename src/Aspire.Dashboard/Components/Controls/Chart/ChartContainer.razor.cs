@@ -151,6 +151,10 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
         }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Unexpected error in UpdateDataAsync");
+        }
     }
 
     public async Task DimensionValuesChangedAsync(DimensionFilterViewModel dimensionViewModel)
