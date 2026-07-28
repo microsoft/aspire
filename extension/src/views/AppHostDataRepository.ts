@@ -894,7 +894,9 @@ export class AppHostDataRepository {
     }
 
     private _setWorkspaceAppHostCandidatePaths(appHostCandidates: readonly AppHostCandidate[]): void {
-        this._workspaceAppHostCandidatePaths = appHostCandidates.map(candidate => candidate.path);
+        this._workspaceAppHostCandidatePaths = appHostCandidates
+            .map(candidate => candidate.path)
+            .sort((left, right) => left < right ? -1 : left > right ? 1 : 0);
     }
 
     private _clearWorkspaceAppHostSelection(): void {

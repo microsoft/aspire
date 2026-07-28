@@ -13,6 +13,7 @@ import {
     selectDashboardPlaceholder,
     workspaceAppHostLabel,
     workspaceAppHostsGroupLabel,
+    appHostDiscoveryInProgressLabel,
     runningAppHostsGroupLabel,
     appHostOpenSourceActionLabel,
     appHostRunActionLabel,
@@ -58,7 +59,7 @@ import { executeResourceCommand as executeResourceCommandWithUi, type ResourceCo
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 import { isCommandCancellation } from '../utils/telemetry';
 
-type TreeElement = AppHostItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | WorkspaceAppHostItem | WorkspaceAppHostsGroupItem | RunningAppHostsGroupItem | WorkspaceAppHostActionItem | WorkspaceAppHostPathItem | HealthChecksGroupItem | HealthCheckItem | LogFileItem | CommandsGroupItem | ResourceCommandItem;
+type TreeElement = AppHostItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | WorkspaceAppHostItem | WorkspaceAppHostsGroupItem | WorkspaceAppHostDiscoveryItem | RunningAppHostsGroupItem | WorkspaceAppHostActionItem | WorkspaceAppHostPathItem | HealthChecksGroupItem | HealthCheckItem | LogFileItem | CommandsGroupItem | ResourceCommandItem;
 
 const integratedBrowserOpenCommand = 'workbench.action.browser.open';
 const terminalEnabledPropertyName = 'terminal.enabled';
@@ -256,6 +257,15 @@ class WorkspaceAppHostsGroupItem extends vscode.TreeItem {
         this.iconPath = new vscode.ThemeIcon('folder');
         this.contextValue = 'workspaceAppHostsGroup';
         this.description = `(${appHosts.length})`;
+    }
+}
+
+class WorkspaceAppHostDiscoveryItem extends vscode.TreeItem {
+    constructor() {
+        super(appHostDiscoveryInProgressLabel, vscode.TreeItemCollapsibleState.None);
+        this.id = 'workspace-apphost-discovery';
+        this.iconPath = new vscode.ThemeIcon('loading~spin');
+        this.contextValue = 'workspaceAppHostDiscovery';
     }
 }
 
@@ -979,7 +989,14 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
     getChildren(element?: TreeElement): TreeElement[] {
         if (this._repository.viewMode === 'workspace') {
-            return this._getWorkspaceChildren(element);
+            const children = this._getWorkspaceChildren(element);
+            if (!element
+                && this._repository.isWorkspaceAppHostDiscoveryComplete === false
+                && this._repository.workspaceAppHostCandidatePaths.length > 0) {
+                children.push(new WorkspaceAppHostDiscoveryItem());
+            }
+
+            return children;
         }
         return this._getGlobalChildren(element);
     }

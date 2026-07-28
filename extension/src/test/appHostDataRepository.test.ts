@@ -3390,6 +3390,59 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('keeps streamed workspace candidate order stable when discovery completes', async () => {
+        const clock = sinon.useFakeTimers();
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        let incrementalCandidateCallback: ((candidate: CandidateAppHostDisplayInfo) => void) | undefined;
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: (_folder: vscode.WorkspaceFolder, _forceRefresh?: boolean, _cancellationToken?: vscode.CancellationToken, onIncrementalCandidate?: (candidate: CandidateAppHostDisplayInfo) => void) => {
+                incrementalCandidateCallback = onIncrementalCandidate;
+                return discovery.promise;
+            },
+            dispose: () => { },
+        };
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+        const zetaCandidate = {
+            path: '/workspace/Zeta/AppHost.csproj',
+            language: 'csharp',
+            status: 'buildable',
+        };
+        const alphaCandidate = {
+            path: '/workspace/Alpha/AppHost.csproj',
+            language: 'csharp',
+            status: 'buildable',
+        };
+        const expectedPaths = [alphaCandidate.path, zetaCandidate.path];
+
+        try {
+            await waitForMicrotasks();
+            assert.ok(incrementalCandidateCallback);
+
+            incrementalCandidateCallback(zetaCandidate);
+            incrementalCandidateCallback(alphaCandidate);
+            await clock.tickAsync(50);
+
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, expectedPaths);
+
+            discovery.resolve([alphaCandidate, zetaCandidate]);
+            await waitForMicrotasks();
+
+            assert.strictEqual(repository.isWorkspaceAppHostDiscoveryComplete, true);
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, expectedPaths);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+            clock.restore();
+        }
+    });
+
     test('queues forced workspace discovery refresh without starting overlapping discovery', async () => {
         const workspaceFolder = {
             uri: vscode.Uri.file('/workspace'),
