@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Test-only changes adding E2E coverage for EF Core deployment",
+  "mergedAt": "2026-07-20T04:57:47Z",
+  "number": 18825,
+  "runDate": "2026-07-28T06:51:16Z",
+  "status": "excluded",
+  "title": "Add EF Core deployment E2E coverage"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "New WithUniqueResourceNaming() API for collision-free Azure Container App environment naming",
+  "mergedAt": "2026-07-19T22:55:02Z",
+  "number": 18737,
+  "runDate": "2026-07-28T06:51:16Z",
+  "status": "included",
+  "title": "Add WithUniqueResourceNaming to opt into collision-free managed environment names"
+}

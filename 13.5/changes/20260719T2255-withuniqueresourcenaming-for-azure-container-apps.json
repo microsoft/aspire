@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "A new WithUniqueResourceNaming() extension method lets AppHost authors opt into digit-preserving managed environment names for Azure Container App environments, preventing name collisions when multiple environments are deployed to the same resource group. Aspire now also validates and fails fast with actionable guidance when legacy names would collide.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🏷️",
+  "firstMergedAt": "2026-07-19T22:55:02Z",
+  "lastMergedAt": "2026-07-19T22:55:02Z",
+  "name": "Collision-free Azure Container App environment naming with WithUniqueResourceNaming()",
+  "owner": "mitchdenny",
+  "prs": [
+    18737
+  ]
+}
