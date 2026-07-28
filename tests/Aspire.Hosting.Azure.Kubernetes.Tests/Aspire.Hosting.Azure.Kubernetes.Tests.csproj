@@ -5,6 +5,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Using Include="Aspire.Tests.Utils" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.Kubernetes\Aspire.Hosting.Azure.Kubernetes.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.Azure.Tests\Aspire.Hosting.Azure.Tests.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.TestUtilities\Aspire.Hosting.TestUtilities.csproj" />

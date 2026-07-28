@@ -15,7 +15,6 @@ internal static class KnownConfigNames
     public const string DashboardCorsAllowedOrigins = "ASPIRE_DASHBOARD_CORS_ALLOWED_ORIGINS";
     public const string DashboardConfigFilePath = "ASPIRE_DASHBOARD_CONFIG_FILE_PATH";
     public const string DashboardFileConfigDirectory = "ASPIRE_DASHBOARD_FILE_CONFIG_DIRECTORY";
-    public const string DashboardAIDisabled = "ASPIRE_DASHBOARD_AI_DISABLED";
     public const string DashboardApiEnabled = "ASPIRE_DASHBOARD_API_ENABLED";
     public const string DashboardApiDisabled = "ASPIRE_DASHBOARD_API_DISABLED";
     public const string DashboardForwardedHeadersEnabled = "ASPIRE_DASHBOARD_FORWARDEDHEADERS_ENABLED";
@@ -31,14 +30,31 @@ internal static class KnownConfigNames
     public const string WaitForDebuggerTimeout = "ASPIRE_DEBUGGER_TIMEOUT";
     public const string UnixSocketPath = "ASPIRE_BACKCHANNEL_PATH";
     public const string RemoteAppHostToken = "ASPIRE_REMOTE_APPHOST_TOKEN";
+
+    // Identifies the RemoteHost server's parent (the CLI process that launched aspire-managed server).
+    // Paired with RemoteAppHostProcessStarted so the RemoteHost orphan detector can verify PID + start
+    // time and avoid acting on a recycled PID.
+    public const string RemoteAppHostProcessId = "REMOTE_APP_HOST_PID";
+    public const string RemoteAppHostProcessStarted = "REMOTE_APP_HOST_STARTED";
+
     public const string CliProcessId = "ASPIRE_CLI_PID";
     public const string CliProcessStarted = "ASPIRE_CLI_STARTED";
+    public const string CliProcessStartedStable = "ASPIRE_CLI_STARTED_STABLE";
+
+    // Identity (PID + start time) of the foreground CLI that spawned a detached `aspire start` /
+    // `aspire run --detach` child. The detached child watches this during startup and tears the
+    // AppHost tree down if the launcher dies before the app reaches readiness, preventing leaked
+    // aspire-managed processes when the foreground is killed mid-start.
+    public const string CliLauncherProcessId = "ASPIRE_LAUNCHER_PID";
+    public const string CliLauncherProcessStarted = "ASPIRE_LAUNCHER_STARTED";
+
     public const string CliLogFilePath = "ASPIRE_CLI_LOG_FILE";
     public const string CliRunDetached = "ASPIRE_CLI_RUN_DETACHED";
     public const string CliGenerateHttpsCertificate = "ASPIRE_CLI_GENERATE_HTTPS_CERTIFICATE";
     public const string SuppressCliRunHook = "ASPIRE_SUPPRESS_CLI_RUN_HOOK";
     public const string IntegrationLibsPath = "ASPIRE_INTEGRATION_LIBS_PATH";
     public const string IntegrationProbeManifestPath = "ASPIRE_INTEGRATION_PROBE_MANIFEST_PATH";
+
     public const string ForceRichConsole = "ASPIRE_FORCE_RICH_CONSOLE";
     public const string AppHostLogLevel = "ASPIRE_APPHOST_LOGLEVEL";
     public const string AspireLogLevel = "ASPIRE_LOGLEVEL";
@@ -46,6 +62,7 @@ internal static class KnownConfigNames
     public const string InteractivityEnabled = "ASPIRE_INTERACTIVITY_ENABLED";
     public const string EnableContainerTunnel = "ASPIRE_ENABLE_CONTAINER_TUNNEL";
     public const string AspireUserSecretsId = "ASPIRE_USER_SECRETS_ID";
+    public const string MaxFileUploadSize = "ASPIRE_MAX_FILE_UPLOAD_SIZE";
 
     public const string LocaleOverride = "ASPIRE_LOCALE_OVERRIDE";
     public const string DotnetCliUiLanguage = "DOTNET_CLI_UI_LANGUAGE";
@@ -97,6 +114,7 @@ internal static class KnownConfigNames
     public const string DebugSessionToken = "DEBUG_SESSION_TOKEN";
     public const string DebugSessionServerCertificate = "DEBUG_SESSION_SERVER_CERTIFICATE";
     public const string DcpInstanceIdPrefix = "DCP_INSTANCE_ID_PREFIX";
+    public const string DcpWorkloadId = "DCP_WORKLOAD_ID";
 
     public static class Legacy
     {

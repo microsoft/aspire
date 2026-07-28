@@ -11,7 +11,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithSimpleFiles_CopiesAllFiles()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceDir = workspace.CreateDirectory("source");
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "destination");
 
@@ -38,7 +38,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithSubdirectories_CopiesRecursively()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceDir = workspace.CreateDirectory("source");
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "destination");
 
@@ -70,7 +70,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithEmptyDirectory_CreatesDestination()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceDir = workspace.CreateDirectory("empty_source");
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "empty_destination");
 
@@ -87,7 +87,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithNonExistentSource_ThrowsDirectoryNotFoundException()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var nonExistentSource = Path.Combine(workspace.WorkspaceRoot.FullName, "nonexistent");
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "destination");
 
@@ -100,7 +100,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithNullSource_ThrowsArgumentNullException()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "destination");
 
         // Act & Assert
@@ -112,7 +112,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithNullDestination_ThrowsArgumentNullException()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceDir = workspace.CreateDirectory("source");
 
         // Act & Assert
@@ -124,7 +124,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithEmptySource_ThrowsArgumentException()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "destination");
 
         // Act & Assert
@@ -136,7 +136,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithEmptyDestination_ThrowsArgumentException()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceDir = workspace.CreateDirectory("source");
 
         // Act & Assert
@@ -148,7 +148,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_PreservesFileContent_WithBinaryFiles()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceDir = workspace.CreateDirectory("source");
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "destination");
 
@@ -173,7 +173,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithMultipleLevelsOfSubdirectories_CopiesAll()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceDir = workspace.CreateDirectory("source");
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "destination");
 
@@ -204,7 +204,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithExistingDestinationFiles_OverwritesThem()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceDir = workspace.CreateDirectory("source");
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "destination");
 
@@ -239,7 +239,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithExistingDestinationFilesAndOverwriteFalse_ThrowsIOException()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceDir = workspace.CreateDirectory("source");
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "destination");
 

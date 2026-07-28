@@ -646,8 +646,8 @@ suite('AppHost discovery', () => {
 
                 await assert.rejects(discovery, /timed out after 5 seconds/);
                 assert.deepStrictEqual(killedArgs, [
-                    ['ls', '--format', 'json'],
-                    ['extension', 'get-apphosts'],
+                    ['ls', '--format', 'json', '--nologo'],
+                    ['extension', 'get-apphosts', '--nologo'],
                 ]);
 
                 hangCli = false;
@@ -687,6 +687,41 @@ suite('AppHost discovery', () => {
 
                 assert.deepStrictEqual(result, [{
                     path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
+                    language: 'csharp',
+                    status: 'buildable',
+                }]);
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
+        test('retries aspire ls without nologo when an older CLI rejects it', async () => {
+            stubFileSystemWatchers(sandbox);
+            const appHostPath = buildPath('workspace', 'AppHost', 'AppHost.csproj');
+            const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
+                if (args.includes('--nologo')) {
+                    options?.stderrCallback?.("Unrecognized command or argument '--nologo'.");
+                    options?.exitCallback?.(1);
+                } else {
+                    options?.stdoutCallback?.(JSON.stringify([{
+                        path: appHostPath,
+                        language: 'csharp',
+                        status: 'buildable',
+                    }]));
+                    options?.exitCallback?.(0);
+                }
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+            try {
+                const result = await service.discover(makeWorkspaceFolder(buildPath('workspace')));
+
+                assert.deepStrictEqual(spawnStub.firstCall.args[2], ['ls', '--format', 'json', '--nologo']);
+                assert.deepStrictEqual(spawnStub.secondCall.args[2], ['ls', '--format', 'json']);
+                assert.deepStrictEqual(result, [{
+                    path: appHostPath,
                     language: 'csharp',
                     status: 'buildable',
                 }]);
@@ -886,6 +921,44 @@ suite('AppHost discovery', () => {
                 await assert.rejects(
                     service.discover(makeWorkspaceFolder(buildPath('workspace'))),
                     /aspire ls discovery failed: ls --format json failed\naspire extension get-apphosts fallback failed: extension get-apphosts failed/);
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
+        test('retries legacy fallback without nologo when an older CLI rejects it', async () => {
+            stubFileSystemWatchers(sandbox);
+            const appHostPath = buildPath('workspace', 'AppHost', 'AppHost.csproj');
+            const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
+                if (args[0] === 'ls') {
+                    options?.stderrCallback?.('aspire ls failed');
+                    options?.exitCallback?.(1);
+                } else if (args.includes('--nologo')) {
+                    options?.stderrCallback?.("Unrecognized command or argument '--nologo'.");
+                    options?.exitCallback?.(1);
+                } else {
+                    options?.stdoutCallback?.(JSON.stringify({
+                        selected_project_file: appHostPath,
+                        all_project_file_candidates: [appHostPath],
+                    }));
+                    options?.exitCallback?.(0);
+                }
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+            try {
+                const result = await service.discover(makeWorkspaceFolder(buildPath('workspace')));
+
+                assert.deepStrictEqual(spawnStub.getCall(1).args[2], ['extension', 'get-apphosts', '--nologo']);
+                assert.deepStrictEqual(spawnStub.getCall(2).args[2], ['extension', 'get-apphosts']);
+                assert.deepStrictEqual(result, [{
+                    path: appHostPath,
+                    language: 'csharp',
+                    status: 'buildable',
+                    selected: true,
+                }]);
             }
             finally {
                 service.dispose();

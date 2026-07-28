@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // DockerfileBuilder is experimental
 #pragma warning disable ASPIRECSHARPAPPS001 // AddCSharpApp is experimental
+#pragma warning disable ASPIREDOTNETPROJECT001 // AddDotnetProject is experimental
 
 namespace Aspire.Hosting;
 
@@ -68,6 +69,41 @@ public static class BlazorGatewayExtensions
         }
 
         return gateway;
+    }
+
+    /// <summary>
+    /// Registers the built-in Blazor Gateway backed by an experimental <see cref="DotnetProjectResource"/>
+    /// from <c>Aspire.Hosting.Dotnet</c> (the run/watch-capable .NET resource), rather than the
+    /// <see cref="ProjectResource"/> used by <see cref="AddBlazorGateway"/>. The gateway is shipped as
+    /// Gateway.cs alongside this library and launched via <c>AddDotnetProject</c>. No separate project is needed.
+    /// </summary>
+    /// <remarks>
+    /// Publishing is not yet supported for the <see cref="DotnetProjectResource"/>-backed gateway because the
+    /// resource does not implement the container-files destination pipeline that the publish path relies on to
+    /// merge each WASM client's static assets into the gateway image. Use <see cref="AddBlazorGateway"/> for
+    /// publish scenarios. This restriction is expected to be lifted once container execution lands for
+    /// <see cref="DotnetProjectResource"/>.
+    /// </remarks>
+    [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "The DotnetProjectResource-backed Blazor gateway is experimental and not yet stable for ATS export.")]
+    public static IResourceBuilder<DotnetProjectResource> AddDotnetProjectBlazorGateway(
+        this IDistributedApplicationBuilder builder,
+        [ResourceName] string name)
+    {
+        if (builder.ExecutionContext.IsPublishMode)
+        {
+            // A DotnetProjectResource is an ExecutableResource and is not an IContainerFilesDestinationResource,
+            // so the WASM static-asset merge that the publish path performs (via ContainerFilesDestinationAnnotation)
+            // would silently produce a gateway image missing the client apps. Fail fast instead of emitting a
+            // broken deployment until container execution is implemented for DotnetProjectResource.
+            throw new NotSupportedException(
+                $"Publishing a {nameof(DotnetProjectResource)}-backed Blazor gateway is not supported yet. Use {nameof(AddBlazorGateway)} for publish scenarios.");
+        }
+
+        var gatewayPath = GetScriptPath("Gateway.cs");
+        return builder.AddDotnetProject(name, gatewayPath)
+            .WithHttpEndpoint()
+            .WithHttpsEndpoint();
     }
 
     /// <summary>
@@ -140,6 +176,35 @@ public static class BlazorGatewayExtensions
         string apiPrefix = GatewayConfigurationBuilder.DefaultApiPrefix,
         string otlpPrefix = GatewayConfigurationBuilder.DefaultOtlpPrefix,
         bool proxyTelemetry = true)
+        => gateway.WithBlazorClientAppCore(wasmApp, apiPrefix, otlpPrefix, proxyTelemetry);
+
+    /// <summary>
+    /// Attaches a Blazor WebAssembly app to a <see cref="DotnetProjectResource"/>-backed Gateway created via
+    /// <see cref="AddDotnetProjectBlazorGateway"/>. Behaves identically to
+    /// <see cref="WithBlazorClientApp(IResourceBuilder{ProjectResource}, IResourceBuilder{BlazorWasmAppResource}, string, string, bool)"/>.
+    /// </summary>
+    /// <param name="gateway">The gateway resource builder.</param>
+    /// <param name="wasmApp">The Blazor WebAssembly app to attach to the gateway.</param>
+    /// <param name="apiPrefix">The URL path prefix for API proxy routes. Defaults to <c>"_api"</c>.</param>
+    /// <param name="otlpPrefix">The URL path prefix for OTLP proxy routes. Defaults to <c>"_otlp"</c>.</param>
+    /// <param name="proxyTelemetry"><see langword="true"/> to expose the OTLP proxy for the client app; otherwise, <see langword="false"/>.</param>
+    [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "The DotnetProjectResource-backed Blazor gateway is experimental and not yet stable for ATS export.")]
+    public static IResourceBuilder<DotnetProjectResource> WithBlazorClientApp(
+        this IResourceBuilder<DotnetProjectResource> gateway,
+        IResourceBuilder<BlazorWasmAppResource> wasmApp,
+        string apiPrefix = GatewayConfigurationBuilder.DefaultApiPrefix,
+        string otlpPrefix = GatewayConfigurationBuilder.DefaultOtlpPrefix,
+        bool proxyTelemetry = true)
+        => gateway.WithBlazorClientAppCore(wasmApp, apiPrefix, otlpPrefix, proxyTelemetry);
+
+    private static IResourceBuilder<TGateway> WithBlazorClientAppCore<TGateway>(
+        this IResourceBuilder<TGateway> gateway,
+        IResourceBuilder<BlazorWasmAppResource> wasmApp,
+        string apiPrefix,
+        string otlpPrefix,
+        bool proxyTelemetry)
+        where TGateway : class, IResourceWithServiceDiscovery, IResourceWithEnvironment
     {
         var pathPrefix = wasmApp.Resource.Name;
 
@@ -181,14 +246,15 @@ public static class BlazorGatewayExtensions
     /// into the Gateway as environment variables.
     /// </summary>
     [AspireExportIgnore(Reason = "Blazor gateway APIs are not yet stable for ATS export.")]
-    internal static IResourceBuilder<ProjectResource> WithBlazorApp(
-        this IResourceBuilder<ProjectResource> gateway,
+    internal static IResourceBuilder<TGateway> WithBlazorApp<TGateway>(
+        this IResourceBuilder<TGateway> gateway,
         IResourceBuilder<BlazorWasmAppResource> wasmApp,
         string pathPrefix,
         GatewayAppService[] services,
         string apiPrefix = GatewayConfigurationBuilder.DefaultApiPrefix,
         string otlpPrefix = GatewayConfigurationBuilder.DefaultOtlpPrefix,
         bool proxyTelemetry = true)
+        where TGateway : class, IResourceWithServiceDiscovery, IResourceWithEnvironment
     {
         var registration = new GatewayAppRegistration(wasmApp, pathPrefix, services, apiPrefix, otlpPrefix, proxyTelemetry);
 
@@ -278,13 +344,14 @@ public static class BlazorGatewayExtensions
         return new ProjectInfo(solutionRoot, relativeProjectPath);
     }
 
-    private static void MirrorGatewayStateToClients(IResourceBuilder<ProjectResource> gateway)
+    private static void MirrorGatewayStateToClients<TGateway>(IResourceBuilder<TGateway> gateway)
+        where TGateway : class, IResource
     {
         // Subscribe to the gateway's InitializeResourceEvent to start a background watcher
         // that mirrors state changes from the gateway to all registered WASM app resources.
         // This mirrors the pattern used by ApplicationOrchestrator.SetChildResourceAsync for
         // container children, but uses ResourceNotificationService.WatchAsync since the
-        // orchestrator does not propagate state for ProjectResource parents.
+        // orchestrator does not propagate state for the gateway resource's parents.
         gateway.ApplicationBuilder.Eventing.Subscribe<InitializeResourceEvent>(gateway.Resource, (e, ct) =>
         {
             var notificationService = e.Notifications;
@@ -293,10 +360,11 @@ public static class BlazorGatewayExtensions
         });
     }
 
-    private static async Task WatchGatewayStateAsync(
-        ProjectResource gateway,
+    private static async Task WatchGatewayStateAsync<TGateway>(
+        TGateway gateway,
         ResourceNotificationService notificationService,
         CancellationToken cancellationToken)
+        where TGateway : class, IResource
     {
         await foreach (var resourceEvent in notificationService.WatchAsync(cancellationToken).ConfigureAwait(false))
         {
@@ -403,10 +471,11 @@ public static class BlazorGatewayExtensions
         return true;
     }
 
-    private static void CreatePublishCompanion(
-        IResourceBuilder<ProjectResource> gateway,
+    private static void CreatePublishCompanion<TGateway>(
+        IResourceBuilder<TGateway> gateway,
         IResourceBuilder<BlazorWasmAppResource> wasmApp,
         string pathPrefix)
+        where TGateway : class, IResource
     {
         var publishResourceName = $"{wasmApp.Resource.Name}publish";
         var project = GetProjectInfo(wasmApp.Resource.ProjectPath, gateway.ApplicationBuilder.AppHostDirectory);
@@ -530,9 +599,10 @@ public static class BlazorGatewayExtensions
     /// <c>https+http://_endpointName.serviceName</c>). When all endpoints are referenced,
     /// all endpoints are forwarded so YARP can resolve by scheme.
     /// </summary>
-    private static void ForwardEndpointReference(
-        IResourceBuilder<ProjectResource> gateway,
+    private static void ForwardEndpointReference<TGateway>(
+        IResourceBuilder<TGateway> gateway,
         EndpointReferenceAnnotation endpointRef)
+        where TGateway : class, IResourceWithEnvironment
     {
         var svcResource = (IResourceWithServiceDiscovery)endpointRef.Resource;
 

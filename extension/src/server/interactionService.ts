@@ -402,8 +402,12 @@ export class InteractionService implements IInteractionService {
             this.writeDebugSessionMessage(codespacesUrl, true, AnsiColors.Blue);
         }
 
-        // Refresh the Aspire panel so it picks up dashboard URLs for the running app host
-        vscode.commands.executeCommand('aspire-vscode.refreshAppHosts');
+        // Refresh live AppHost state without re-running full workspace discovery. Startup already
+        // resolved the AppHost path, and re-discovering here can add another `aspire ls` after the
+        // dashboard is ready.
+        void Promise.resolve(vscode.commands.executeCommand('aspire-vscode.refreshAppHostRuntimeState')).then(undefined, error => {
+            extensionLogOutputChannel.warn(`Failed to refresh AppHost runtime state after dashboard URL display: ${error}`);
+        });
 
         const aspireConfig = vscode.workspace.getConfiguration('aspire');
         const dashboardLaunchBehavior = this.getDashboardLaunchBehavior(aspireConfig);

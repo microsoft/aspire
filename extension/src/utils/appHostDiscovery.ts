@@ -5,6 +5,7 @@ import type { ChildProcessWithoutNullStreams } from 'child_process';
 import { spawnCliProcess } from '../debugger/languages/cli';
 import { AspireTerminalProvider } from './AspireTerminalProvider';
 import { aspireConfigFileName, getAppHostPathFromConfig, readJsonFile } from './cliTypes';
+import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from './cliCompatibility';
 import { EnvironmentVariables } from './environment';
 import { extensionLogOutputChannel } from './logging';
 import { getAppHostDiscoveryTimeoutMs } from './settings';
@@ -212,7 +213,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         this._throwIfDisposed();
 
         const cliPath = await this._terminalProvider.getAspireCliExecutablePath();
-        const args = ['ls', '--format', 'json'];
+        const args = ['ls', '--format', 'json', noLogoOption];
         if (process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true') {
             args.push('--cli-wait-for-debugger');
         }
@@ -225,7 +226,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         this._throwIfDisposed();
 
         const cliPath = await this._terminalProvider.getAspireCliExecutablePath();
-        const args = ['extension', 'get-apphosts'];
+        const args = ['extension', 'get-apphosts', noLogoOption];
         if (process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true') {
             args.push('--cli-wait-for-debugger');
         }
@@ -389,6 +390,10 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                         settle(() => {
                             if (code === 0) {
                                 resolve(stdout);
+                            }
+                            else if (isNoLogoUnsupportedOutput(args, stdout, stderr)) {
+                                extensionLogOutputChannel.info(`Installed Aspire CLI does not recognize ${noLogoOption}; retrying AppHost discovery without it.`);
+                                this._runCliForStdout(cliPath, removeRootNoLogoOption(args), workingDirectory).then(resolve, reject);
                             }
                             else {
                                 reject(new Error(stderr || `exit code ${code ?? 1}`));

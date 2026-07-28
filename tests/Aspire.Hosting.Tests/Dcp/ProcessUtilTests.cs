@@ -8,16 +8,16 @@ using Aspire.Hosting.Tests.Utils;
 namespace Aspire.Hosting.Tests.Dcp;
 
 [Trait("Partition", "4")]
-public class ProcessUtilTests
+public class ProcessUtilTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task Run_WaitsForOutputCallbacksToFinishBeforeCompleting()
     {
-        using var scripts = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
         var callbackStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseCallback = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        var spec = CreateSingleLineOutputProcessSpec(scripts, output =>
+        var spec = CreateSingleLineOutputProcessSpec(workspace, output =>
         {
             Assert.Equal("final-line", output);
             callbackStarted.TrySetResult();
@@ -43,8 +43,8 @@ public class ProcessUtilTests
     [Fact]
     public async Task Run_IncludesCapturedOutputInNonZeroExitException()
     {
-        using var scripts = new TestTempDirectory();
-        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(CreateFailingProcessSpec(scripts, ["stdout-final-line", "stderr-final-line"], emitSecondLineToStderr: true));
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(CreateFailingProcessSpec(workspace, ["stdout-final-line", "stderr-final-line"], emitSecondLineToStderr: true));
 
         await using (processDisposable)
         {
@@ -59,9 +59,9 @@ public class ProcessUtilTests
     [Fact]
     public async Task Run_ReturnsCapturedOutputInProcessResult_WhenRetentionEnabled()
     {
-        using var scripts = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
         var spec = CreateFailingProcessSpec(
-            scripts,
+            workspace,
             ["stdout-final-line", "stderr-final-line"],
             emitSecondLineToStderr: true,
             throwOnNonZeroReturnCode: false,
@@ -85,8 +85,8 @@ public class ProcessUtilTests
     [Fact]
     public async Task Run_PassesArgumentListToProcess()
     {
-        using var scripts = new TestTempDirectory();
-        var appPath = DotnetFileAppProcess.WriteApp(scripts, "argument-list.cs", """
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appPath = DotnetFileAppProcess.WriteApp(workspace.WorkspaceRoot.FullName, "argument-list.cs", """
             #:sdk Microsoft.NET.Sdk
             Console.WriteLine(args[0]);
             """);
@@ -107,8 +107,8 @@ public class ProcessUtilTests
     [Fact]
     public async Task Run_IncludesArgumentListInNonZeroExitException()
     {
-        using var scripts = new TestTempDirectory();
-        var appPath = DotnetFileAppProcess.WriteApp(scripts, "argument-list-failure.cs", """
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appPath = DotnetFileAppProcess.WriteApp(workspace.WorkspaceRoot.FullName, "argument-list-failure.cs", """
             #:sdk Microsoft.NET.Sdk
             Environment.Exit(7);
             """);
@@ -132,8 +132,8 @@ public class ProcessUtilTests
     [Fact]
     public async Task Run_ResolvesExecutableNameFromPathBeforeStartingProcess()
     {
-        using var scripts = new TestTempDirectory();
-        var appPath = DotnetFileAppProcess.WriteApp(scripts, "path-executable.cs", """
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appPath = DotnetFileAppProcess.WriteApp(workspace.WorkspaceRoot.FullName, "path-executable.cs", """
             #:sdk Microsoft.NET.Sdk
             Console.WriteLine("path-executable-output");
             """);
@@ -183,9 +183,9 @@ public class ProcessUtilTests
     [Fact]
     public async Task Run_TruncatesCapturedOutputToLast50LinesInNonZeroExitException()
     {
-        using var scripts = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
         var lines = Enumerable.Range(1, 52).Select(i => $"line-{i}").ToArray();
-        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(CreateFailingProcessSpec(scripts, lines));
+        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(CreateFailingProcessSpec(workspace, lines));
 
         await using (processDisposable)
         {
@@ -201,9 +201,9 @@ public class ProcessUtilTests
         }
     }
 
-    private static ProcessSpec CreateSingleLineOutputProcessSpec(TestTempDirectory scripts, Action<string> onOutputData)
+    private static ProcessSpec CreateSingleLineOutputProcessSpec(TemporaryWorkspace workspace, Action<string> onOutputData)
     {
-        var appPath = DotnetFileAppProcess.WriteApp(scripts, "single-line.cs", """
+        var appPath = DotnetFileAppProcess.WriteApp(workspace.WorkspaceRoot.FullName, "single-line.cs", """
             #:sdk Microsoft.NET.Sdk
             Console.WriteLine("final-line");
             """);
@@ -212,13 +212,13 @@ public class ProcessUtilTests
     }
 
     private static ProcessSpec CreateFailingProcessSpec(
-        TestTempDirectory scripts,
+        TemporaryWorkspace workspace,
         string[] lines,
         bool emitSecondLineToStderr = false,
         bool throwOnNonZeroReturnCode = true,
         int? retainedOutputLineCount = null)
     {
-        var appPath = DotnetFileAppProcess.WriteApp(scripts, "failing.cs", $$"""
+        var appPath = DotnetFileAppProcess.WriteApp(workspace.WorkspaceRoot.FullName, "failing.cs", $$"""
             #:sdk Microsoft.NET.Sdk
             var lines = new[] { {{string.Join(", ", lines.Select(static line => JsonSerializer.Serialize(line)))}} };
             var emitSecondLineToStderr = {{JsonSerializer.Serialize(emitSecondLineToStderr)}};

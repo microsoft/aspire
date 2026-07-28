@@ -1,0 +1,11 @@
+﻿{
+  "type": "azure.bicep.v1",
+  "path": "env-mi-roles-registry.module.bicep",
+  "params": {
+    "principalId": "{env-mi.outputs.principalId}"
+  },
+  "scope": {
+    "resourceGroup": "my-existing-resource-group",
+    "subscription": "00000000-0000-0000-0000-000000000001"
+  }
+}

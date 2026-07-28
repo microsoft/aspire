@@ -18,7 +18,7 @@ public class CertificatesCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CertificatesCommand_Help_ShowsCertificatesSubcommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -33,7 +33,7 @@ public class CertificatesCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CertificatesCommand_CleanSubcommand_ShowsInHelp()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -48,7 +48,7 @@ public class CertificatesCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CertificatesCommand_TrustSubcommand_ShowsInHelp()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -63,7 +63,7 @@ public class CertificatesCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CertificatesCommand_TrustSubcommand_ReturnsSuccessForNonInteractiveLinuxPartialTrust()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
         var toolRunner = new TestCertificateToolRunner
         {

@@ -31,11 +31,22 @@ def _pr(body: str = "", labels: list[str] | None = None, number: int = 1) -> dic
     }
 
 
-def _file(filename: str, status: str = "modified", patch: str | None = None) -> dict:
-    """Build a single 'files' entry. `patch` of None means GitHub omitted it."""
+def _file(
+    filename: str,
+    status: str = "modified",
+    patch: str | None = None,
+    previous_filename: str | None = None,
+) -> dict:
+    """Build a single 'files' entry. `patch` of None means GitHub omitted it.
+
+    `previous_filename` is set by GitHub only for renamed entries; pass it to
+    model a rename (also set status="renamed").
+    """
     out: dict = {"filename": filename, "status": status}
     if patch is not None:
         out["patch"] = patch
+    if previous_filename is not None:
+        out["previous_filename"] = previous_filename
     return out
 
 
@@ -256,6 +267,92 @@ class CatalogScenarioTests(unittest.TestCase):
         self.assertEqual(result["recommendation"], "docs_required")
         self.assertTrue(result["signals"]["defaults_or_constants_file_changed"])
 
+    def test_polyglot_code_generator_change(self) -> None:
+        # Reproduces microsoft/aspire#18698: the Go generator flattened a
+        # single optional `options` DTO so it is passed directly, changing
+        # the generated Go method signature (a user-facing, breaking
+        # surface for polyglot AppHost authors). The RPC payload was
+        # byte-identical and the PR body said as much, with only an area
+        # label — so Groups B/C/D all stayed silent. The new Group A path
+        # signal is what rescues the classification. The shared helper
+        # here is added as `internal`, so `new_public_type` must NOT fire;
+        # this proves the path signal alone is responsible.
+        pr = _pr(
+            body=(
+                "Flatten the single optional options DTO in the Go generator. "
+                "The RPC payload is unchanged — byte-identical to the previous "
+                "wrapped form."
+            ),
+            labels=["area-integrations"],
+        )
+        files = [
+            _file(
+                "src/Aspire.Hosting.CodeGeneration.Go/AtsGoCodeGenerator.cs",
+                patch="@@ +0,0 @@\n+        // emit the DTO type directly\n",
+            ),
+            _file(
+                "src/Shared/CodeGeneration/AtsOptionsFlattening.cs",
+                status="added",
+                patch=(
+                    "@@ +0,0 @@\n"
+                    "+internal static class AtsOptionsFlattening { }\n"
+                ),
+            ),
+        ]
+        result = compute_signals.compute_signals(pr, files)
+        self.assertEqual(result["recommendation"], "docs_required")
+        self.assertEqual(
+            result["triggered_signals"], ["polyglot_code_generator_changed"]
+        )
+        # The surfaces that genuinely stayed silent for this PR must stay
+        # silent — the point is that the path signal is the sole rescue.
+        self.assertFalse(result["signals"]["pr_label_breaking_change"])
+        self.assertFalse(result["signals"]["pr_body_has_breaking_change_marker"])
+        self.assertFalse(result["signals"]["new_public_type"])
+
+    def test_typescript_generator_change_also_fires(self) -> None:
+        # The signal covers every per-language generator, not just Go.
+        pr = _pr(body="Tweak TypeScript emitter output shape.")
+        files = [
+            _file(
+                "src/Aspire.Hosting.CodeGeneration.TypeScript/"
+                "AtsTypeScriptCodeGenerator.cs",
+                patch="@@ +0,0 @@\n+        // change the emitted call shape\n",
+            ),
+        ]
+        result = compute_signals.compute_signals(pr, files)
+        self.assertEqual(result["recommendation"], "docs_required")
+        self.assertTrue(result["signals"]["polyglot_code_generator_changed"])
+
+    def test_outbound_rename_of_generator_file_still_fires(self) -> None:
+        # GitHub reports a rename with the destination in `filename` and the
+        # source in `previous_filename` (status == "renamed"). Relocating a
+        # generator source OUT of the watched tree leaves only
+        # `previous_filename` under src/Aspire.Hosting.CodeGeneration.*, so the
+        # Group A loop matching `filename` alone would miss it and produce
+        # signal_count == 0 — despite the signal's "any" status filter being
+        # meant to include renames. The destination here is deliberately
+        # outside src/ (untracked by every signal) so this test isolates the
+        # source-path match: the polyglot signal must be the sole trigger, and
+        # its evidence must cite the watched source path, not the destination.
+        pr = _pr(body="Relocate the Go generator entry point.")
+        source = "src/Aspire.Hosting.CodeGeneration.Go/AtsGoCodeGenerator.cs"
+        files = [
+            _file(
+                "eng/codegen/AtsGoCodeGenerator.cs",
+                status="renamed",
+                previous_filename=source,
+            ),
+        ]
+        result = compute_signals.compute_signals(pr, files)
+        self.assertTrue(result["signals"]["polyglot_code_generator_changed"])
+        self.assertEqual(
+            result["triggered_signals"], ["polyglot_code_generator_changed"]
+        )
+        self.assertEqual(result["recommendation"], "docs_required")
+        evidence = result["evidence"]["polyglot_code_generator_changed"]
+        self.assertEqual(evidence[0]["file"], source)
+
 
 class DirectionAwareDiffScanTests(unittest.TestCase):
     """Tests covering direction-aware diff scanning.
@@ -388,6 +485,23 @@ class PathTriggerHygieneTests(unittest.TestCase):
         ]
         result = compute_signals.compute_signals(pr, files)
         self.assertFalse(result["signals"]["new_package_added"])
+        self.assertEqual(result["recommendation"], "docs_optional")
+
+    def test_codegen_tests_and_fixtures_do_not_trigger_polyglot_signal(self) -> None:
+        # The generator projects have sibling test projects and generated
+        # `apphost.*` fixtures under tests/. Both are advisory-only (tests
+        # never gate), so a change confined to them must NOT fire the
+        # polyglot code-generator path signal, which is scoped to `^src/`.
+        pr = _pr()
+        files = [
+            _file(
+                "tests/Aspire.Hosting.CodeGeneration.Go.Tests/"
+                "AtsGoCodeGeneratorTests.cs",
+            ),
+            _file("tests/PolyglotAppHosts/Aspire.Hosting/Go/apphost.go"),
+        ]
+        result = compute_signals.compute_signals(pr, files)
+        self.assertFalse(result["signals"]["polyglot_code_generator_changed"])
         self.assertEqual(result["recommendation"], "docs_optional")
 
 

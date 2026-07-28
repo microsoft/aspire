@@ -61,6 +61,8 @@ internal sealed class CopilotCliAgentEnvironmentScanner : IAgentEnvironmentScann
         {
             _logger.LogDebug("Detected VSCode terminal environment. Assuming GitHub Copilot CLI is available to avoid potential hangs from interactive installation prompts.");
 
+            context.AddDetectedClient(AgentClientKind.CopilotCli);
+
             // Check if the aspire server is already configured in the global config
             _logger.LogDebug("Checking if Aspire MCP server is already configured in Copilot CLI global config...");
             if (!HasAspireServerConfigured(homeDirectory))
@@ -92,6 +94,8 @@ internal sealed class CopilotCliAgentEnvironmentScanner : IAgentEnvironmentScann
         }
 
         _logger.LogDebug("Found GitHub Copilot CLI version: {Version}", copilotVersion);
+
+        context.AddDetectedClient(AgentClientKind.CopilotCli);
 
         // Check if the aspire server is already configured in the global config
         _logger.LogDebug("Checking if Aspire MCP server is already configured in Copilot CLI global config...");

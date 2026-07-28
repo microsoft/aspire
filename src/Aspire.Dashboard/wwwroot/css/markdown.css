@@ -30,7 +30,7 @@
 
 .markdown-container .code-block {
     border: 1px solid var(--neutral-stroke-rest);
-    background-color: var(--chat-codeblock-background-color);
+    background-color: var(--codeblock-background-color);
     border-radius: .375rem;
     position: relative;
 }

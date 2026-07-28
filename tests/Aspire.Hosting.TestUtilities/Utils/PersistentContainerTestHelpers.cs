@@ -59,7 +59,7 @@ public static class PersistentContainerTestHelpers
         TimeSpan? timeout = null)
     {
         using var cts = new CancellationTokenSource(timeout ?? TimeSpan.FromMinutes(10));
-        using var aspireStore = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var userSecretsId = Guid.NewGuid().ToString("N");
 
         try
@@ -100,7 +100,7 @@ public static class PersistentContainerTestHelpers
             using var builder = (useTestContainerRegistry
                     ? TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper, args)
                     : TestDistributedApplicationBuilder.Create(testOutputHelper, args))
-                .WithTempAspireStore(aspireStore.Path)
+                .WithTempAspireStore(workspace.WorkspaceRoot.FullName)
                 .WithResourceCleanUp(false);
 
             Assert.True(builder.UserSecretsManager.IsAvailable);

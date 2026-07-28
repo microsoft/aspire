@@ -4,8 +4,11 @@ const builder = await createBuilder();
 
 const deploymentSlot = await builder.addParameter('deploymentSlot');
 const existingApplicationInsights = await builder.addAzureApplicationInsights('existingApplicationInsights');
+const vnet = await builder.addAzureVirtualNetwork('vnet');
+const subnet = await vnet.addSubnet('app-service-subnet', '10.0.0.0/24');
 
 const environment = await builder.addAzureAppServiceEnvironment('appservice-environment')
+    .withDelegatedSubnet(subnet)
     .withDashboard()
     .withDashboard({ enable: false })
     .withAzureApplicationInsights()

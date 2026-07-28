@@ -7,6 +7,7 @@ import { DcpServerConnectionInfo } from '../dcp/types';
 import { getRunSessionInfo, getSupportedCapabilities } from '../capabilities';
 import { EnvironmentVariables, getEnvironmentWithoutE2EBridgeVariables } from './environment';
 import { resolveCliPath } from './cliPath';
+import { ASPIRE_CLI_PATH_ENV_VAR, getForwardableAspireCliPath } from './cliPathEnvironment';
 import path from 'path';
 
 export const enum AnsiColors {
@@ -306,6 +307,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
                 ASPIRE_LOCALE_OVERRIDE: vscode.env.language,
             };
 
+            addForwardableAspireCliPath(env);
             scrubNoExtensionVariablesEnvironment(env);
 
             return env;
@@ -313,7 +315,11 @@ export class AspireTerminalProvider implements vscode.Disposable {
 
         const env: any = {
             ...getEnvironmentWithoutE2EBridgeVariables(),
+        };
 
+        addForwardableAspireCliPath(env);
+
+        Object.assign(env, {
             // Extension connection information
             ASPIRE_EXTENSION_ENDPOINT: this.rpcServerConnectionInfo.address,
             ASPIRE_EXTENSION_TOKEN: this.rpcServerConnectionInfo.token,
@@ -327,7 +333,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
             DEBUG_SESSION_PORT: this.dcpServerConnectionInfo.address,
             DEBUG_SESSION_TOKEN: this.dcpServerConnectionInfo.token,
             DEBUG_SESSION_SERVER_CERTIFICATE: this.dcpServerConnectionInfo.certificate,
-        };
+        });
 
         if (debugSessionId) {
             this.addDcpRunSessionEnvironment(env, debugSessionId, noDebug);
@@ -458,6 +464,24 @@ function isPowerShell7Available(): boolean {
     });
 
     return result.status === 0 && result.error === undefined;
+}
+
+function addForwardableAspireCliPath(env: Record<string, string | undefined>): void {
+    // Forward aspire.aspireCliExecutablePath as AspireCliPath so MSBuild's
+    // ResolveAspireCliBundle task — which `dotnet build` evaluates whenever
+    // the AppHost is built (including from this CLI process and from VS
+    // Code's auto-build / language server) — resolves the bundle layout
+    // relative to the configured CLI instead of probing PATH. PATH-resolved
+    // bundle paths get baked into the AppHost assembly as
+    // [AssemblyMetadata("aspireterminalhostpath", …)] and can outlive a
+    // dev-loop CLI swap (see https://github.com/microsoft/aspire/issues/18073).
+    // Only forward values that pass the task's File.Exists guard; stale
+    // absolute paths make the task produce no bundle outputs instead of
+    // falling back, and the AppHost targets can then fail with ASPIRE009.
+    const configuredCliPath = getForwardableAspireCliPath();
+    if (configuredCliPath) {
+        env[ASPIRE_CLI_PATH_ENV_VAR] = configuredCliPath;
+    }
 }
 
 function hasConfiguredEnvironmentVariable(env: Record<string, string | undefined>, name: string): boolean {

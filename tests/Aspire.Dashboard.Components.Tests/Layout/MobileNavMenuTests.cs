@@ -8,6 +8,7 @@ using Aspire.Dashboard.Utils;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.JSInterop;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Layout;
@@ -50,9 +51,51 @@ public class MobileNavMenuTests : DashboardTestContext
         Assert.DoesNotContain("height: 100vh", style);
         Assert.Contains("margin-top: var(--mobile-nav-menu-offset)", style);
         Assert.Contains("overflow-y: auto", style);
+        Assert.Contains("padding-block: var(--mobile-nav-menu-focus-padding)", style);
+        Assert.Contains("scroll-padding-block: var(--mobile-nav-menu-focus-padding)", style);
+        Assert.Contains("mobile-nav-menu", cut.Find("fluent-menu").ClassList);
     }
 
-    private IRenderedComponent<MobileNavMenu> RenderMobileNavMenu(string currentUrl)
+    [Fact]
+    public void Render_OpenMenu_InitializesKeyboardNavigationWithComponentReferenceAndMenuId()
+    {
+        _ = RenderMobileNavMenu(DashboardUrls.ResourcesUrl());
+
+        var invocation = Assert.Single(JSInterop.Invocations, i => i.Identifier == "initializeMobileNavMenuKeyboardNavigation");
+        Assert.Collection(
+            invocation.Arguments,
+            argument => Assert.IsAssignableFrom<DotNetObjectReference<MobileNavMenu>>(argument),
+            argument => Assert.Equal(MobileNavMenu.MobileNavMenuId, argument));
+    }
+
+    [Fact]
+    public async Task CloseMobileNavMenuFromFocusLossAsync_ClosesMenuWithoutRestoringFocus()
+    {
+        var closeNavMenuCalled = false;
+        var cut = RenderMobileNavMenu(DashboardUrls.ResourcesUrl(), () => closeNavMenuCalled = true, isNavMenuOpen: false);
+
+        await cut.InvokeAsync(cut.Instance.CloseMobileNavMenuFromFocusLossAsync);
+
+        Assert.True(closeNavMenuCalled);
+        Assert.DoesNotContain(JSInterop.Invocations, invocation => invocation.Identifier == "focusElement");
+    }
+
+    [Fact]
+    public async Task CloseMobileNavMenuFromKeyboardAsync_ClosesMenuAndRestoresFocus()
+    {
+        JSInterop.SetupVoid("focusElement", _ => true).SetVoidResult();
+        var closeNavMenuCalled = false;
+        var cut = RenderMobileNavMenu(DashboardUrls.ResourcesUrl(), () => closeNavMenuCalled = true, isNavMenuOpen: false);
+
+        await cut.InvokeAsync(cut.Instance.CloseMobileNavMenuFromKeyboardAsync);
+
+        Assert.True(closeNavMenuCalled);
+        var invocation = Assert.Single(JSInterop.Invocations, invocation => invocation.Identifier == "focusElement");
+        var argument = Assert.Single(invocation.Arguments);
+        Assert.Equal(MainLayout.NavigationButtonId, argument);
+    }
+
+    private IRenderedComponent<MobileNavMenu> RenderMobileNavMenu(string currentUrl, Action? closeNavMenu = null, bool isNavMenuOpen = true)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isEnabled: true));
@@ -60,19 +103,18 @@ public class MobileNavMenuTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentMenu(this);
         FluentUISetupHelpers.SetupFluentDivider(this);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+        LayoutSetupHelpers.SetupMobileNavMenuKeyboardNavigation(this);
 
         var navigationManager = Services.GetRequiredService<NavigationManager>();
         navigationManager.NavigateTo(currentUrl);
 
         return RenderComponent<MobileNavMenu>(builder =>
         {
-            builder.Add(p => p.IsNavMenuOpen, true);
-            builder.Add(p => p.IsAIEnabled, false);
-            builder.Add(p => p.CloseNavMenu, () => { });
+            builder.Add(p => p.IsNavMenuOpen, isNavMenuOpen);
+            builder.Add(p => p.CloseNavMenu, closeNavMenu ?? (() => { }));
             builder.Add(p => p.LaunchHelpAsync, () => Task.CompletedTask);
             builder.Add(p => p.LaunchAIAgentsAsync, () => Task.CompletedTask);
             builder.Add(p => p.IsAgentHelpEnabled, false);
-            builder.Add(p => p.LaunchAIAssistantAsync, () => Task.CompletedTask);
             builder.Add(p => p.LaunchNotificationsAsync, () => Task.CompletedTask);
             builder.Add(p => p.LaunchSettingsAsync, () => Task.CompletedTask);
         });

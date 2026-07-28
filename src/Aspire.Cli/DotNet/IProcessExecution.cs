@@ -29,13 +29,19 @@ internal interface IProcessExecution : IAsyncDisposable
     /// <summary>
     /// Starts the execution.
     /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns><c>true</c> if the process was started successfully; otherwise, <c>false</c>.</returns>
-    bool Start();
+    Task<bool> StartAsync(CancellationToken cancellationToken);
 
     /// <summary>
-    /// Gets the process ID. Only valid after <see cref="Start"/> returns <c>true</c>.
+    /// Gets the process ID. Only valid after <see cref="StartAsync"/> returns <c>true</c>.
     /// </summary>
     int ProcessId { get; }
+
+    /// <summary>
+    /// Gets the process start time, when available. Only valid after <see cref="StartAsync"/> returns <c>true</c>.
+    /// </summary>
+    DateTimeOffset? StartTime { get; }
 
     /// <summary>
     /// Waits for the process to exit asynchronously.
@@ -45,7 +51,7 @@ internal interface IProcessExecution : IAsyncDisposable
     Task<int> WaitForExitAsync(CancellationToken cancellationToken);
 
     /// <summary>
-    /// Gets a value indicating whether the process has exited. Only valid after <see cref="Start"/> returns <c>true</c>.
+    /// Gets a value indicating whether the process has exited. Only valid after <see cref="StartAsync"/> returns <c>true</c>.
     /// </summary>
     bool HasExited { get; }
 

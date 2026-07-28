@@ -107,36 +107,6 @@
         <target state="translated">Filtreleri görüntüle</target>
         <note />
       </trans-unit>
-      <trans-unit id="ReconnectFailedText">
-        <source>Failed to rejoin.&lt;br /&gt;Please retry or reload the page.</source>
-        <target state="translated">Yeniden katılma başarısız oldu.&lt;br /&gt; Lütfen yeniden deneyin veya sayfayı yeniden yükleyin.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ReconnectFirstAttemptText">
-        <source>Rejoining the server...</source>
-        <target state="translated">Sunucuya yeniden bağlanılıyor...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ReconnectRepeatedAttemptText">
-        <source>Rejoin failed... trying again in &lt;span id="components-seconds-to-next-attempt"&gt;&lt;/span&gt; seconds.</source>
-        <target state="translated">Yeniden katılma başarısız oldu... &lt;span id="components-seconds-to-next-attempt"&gt;&lt;/span&gt; saniye içinde tekrar deneniyor.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ReconnectRetryButtonText">
-        <source>Retry</source>
-        <target state="translated">Yeniden dene</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourceServiceReconnectDisconnectedText">
-        <source>Lost connection to the AppHost. Attempting to reconnect...</source>
-        <target state="new">Lost connection to the AppHost. Attempting to reconnect...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourceServiceReconnectRetryButtonText">
-        <source>Retry</source>
-        <target state="new">Retry</target>
-        <note />
-      </trans-unit>
     </body>
   </file>
 </xliff>

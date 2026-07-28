@@ -6,7 +6,6 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
-using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -107,7 +106,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetIntegrationPackagesAsync_WithPinnedLocalSource_ReturnsOnlyPinnedLocalIntegrationPackages()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var packagesDirectory = workspace.CreateDirectory("packages");
         const string pinnedVersion = "13.4.0-pr.16820.gabcdef";
 
@@ -178,7 +177,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetPolyglotCompatiblePackageIdsAsync_WithPinnedLocalSource_ReturnsOnlyTaggedIntegrationPackageIds()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var packagesDirectory = workspace.CreateDirectory("packages");
         const string pinnedVersion = "13.4.0-pr.16820.gabcdef";
 
@@ -209,7 +208,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetIntegrationPackagesAsync_WithStableLocalSource_ReturnsOnlyStablePackages()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var packagesDirectory = workspace.CreateDirectory("packages");
 
         File.WriteAllText(Path.Combine(packagesDirectory.FullName, "Aspire.Hosting.Redis.13.4.0.nupkg"), string.Empty);
@@ -228,7 +227,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetIntegrationPackagesAsync_WithPrereleaseLocalSource_ReturnsOnlyPrereleasePackages()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var packagesDirectory = workspace.CreateDirectory("packages");
 
         File.WriteAllText(Path.Combine(packagesDirectory.FullName, "Aspire.Hosting.Redis.13.4.0.nupkg"), string.Empty);
@@ -250,7 +249,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
         // Mirrors the feed-based behavior in NuGetPackageCache: when the
         // ShowDeprecatedPackages feature flag is off (the default), deprecated
         // integration package ids must be hidden from local-hive / PR-hive listings.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var packagesDirectory = workspace.CreateDirectory("packages");
 
         File.WriteAllText(Path.Combine(packagesDirectory.FullName, "Aspire.Hosting.Dapr.13.4.0.nupkg"), string.Empty);
@@ -270,7 +269,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
         // When ShowDeprecatedPackages is enabled, deprecated ids must appear in
         // local-hive listings just as they do on the feed-based path; without this,
         // a user who flipped the flag silently sees nothing change on PR/local hives.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var packagesDirectory = workspace.CreateDirectory("packages");
 
         File.WriteAllText(Path.Combine(packagesDirectory.FullName, "Aspire.Hosting.Dapr.13.4.0.nupkg"), string.Empty);
@@ -385,7 +384,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
         // whose Aspire* mapping points at a local directory of .nupkg files. The name-based
         // VersionHelper.IsLocalBuildChannel("stable") would call this remote, so resolution must
         // instead recognize the local directory from the mapping.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var packagesDirectory = workspace.CreateDirectory("packages");
         var cache = new FakeNuGetPackageCache();
         var mappings = new[]

@@ -43,6 +43,13 @@ internal abstract class BaseCommand : Command
 
     protected AspireCliTelemetry Telemetry { get; }
 
+    protected virtual string? CancellationMessage => null;
+
+    private void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null)
+    {
+        InteractionService.DisplayCancellationMessage(CancellationMessage, consoleOverride);
+    }
+
     protected BaseCommand(string name, string description, CommonCommandServices services) : base(name, description)
     {
         _executionContext = services.ExecutionContext;
@@ -130,7 +137,7 @@ internal abstract class BaseCommand : Command
                 {
                     // 200ms elapsed after cancellation — show stopping message and continue waiting.
                     stoppingMessageShown = true;
-                    InteractionService.DisplayCancellationMessage();
+                    DisplayCancellationMessage();
                     tasksToAwait.Remove(stoppingMessageTcs.Task);
                 }
             }
@@ -166,7 +173,7 @@ internal abstract class BaseCommand : Command
 
         if (result.ShouldDisplayCancellationMessage && !stoppingMessageShown)
         {
-            InteractionService.DisplayCancellationMessage(isErrorExitCode ? ConsoleOutput.Error : null);
+            DisplayCancellationMessage(isErrorExitCode ? ConsoleOutput.Error : null);
         }
 
         // Display the CLI log file path on non-zero exit codes so the user knows

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { spawnCliProcess } from '../debugger/languages/cli';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
+import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from '../utils/cliCompatibility';
 import {
     resourceCommandDynamicInputsFailed,
     resourceCommandLoadingDynamicInputs,
@@ -46,57 +47,71 @@ async function loadResourceCommandArgumentInputs(
         async () => {
             try {
                 const cliPath = await context.cliExecutionProvider.getAspireCliExecutablePath();
-                const args = ['resource', context.resourceName, context.commandName, '--load-arguments', '--non-interactive', '--apphost', context.appHostPath!];
+                const args = ['resource', context.resourceName, context.commandName, '--load-arguments', '--non-interactive', '--apphost', context.appHostPath!, noLogoOption];
                 args.push(...buildResourceCommandCliArgs(values));
 
-                const loadedInputs = await new Promise<ResourceCommandArgumentInputJson[] | undefined>((resolve) => {
-                    let settled = false;
-                    let stdout = '';
-                    const finish = (value: ResourceCommandArgumentInputJson[] | undefined) => {
-                        if (!settled) {
-                            settled = true;
-                            resolve(value);
-                        }
-                    };
-
-                    const child = spawnCliProcess(context.cliExecutionProvider, cliPath, args, {
-                        noExtensionVariables: true,
-                        env: nonInteractiveCliEnvironment,
-                        stdoutCallback: data => {
-                            stdout += data;
-                        },
-                        errorCallback: error => {
-                            extensionLogOutputChannel.warn(`Failed to load resource command arguments: ${error.message}`);
-                            finish(undefined);
-                        },
-                        exitCallback: code => {
-                            if (code !== 0) {
-                                extensionLogOutputChannel.warn(`aspire resource --load-arguments exited with code ${code}.`);
-                                finish(undefined);
-                                return;
+                const loadInputs = (runArgs: string[], allowNoLogoRetry: boolean): Promise<ResourceCommandArgumentInputJson[] | undefined> => {
+                    return new Promise<ResourceCommandArgumentInputJson[] | undefined>((resolve) => {
+                        let settled = false;
+                        let stdout = '';
+                        let stderr = '';
+                        const finish = (value: ResourceCommandArgumentInputJson[] | undefined) => {
+                            if (!settled) {
+                                settled = true;
+                                resolve(value);
                             }
+                        };
 
-                            try {
-                                const parsed = JSON.parse(stdout.trim());
-                                if (isResourceCommandArgumentInputArray(parsed)) {
-                                    finish(parsed);
+                        const child = spawnCliProcess(context.cliExecutionProvider, cliPath, runArgs, {
+                            noExtensionVariables: true,
+                            env: nonInteractiveCliEnvironment,
+                            stdoutCallback: data => {
+                                stdout += data;
+                            },
+                            stderrCallback: data => {
+                                stderr += data;
+                            },
+                            errorCallback: error => {
+                                extensionLogOutputChannel.warn(`Failed to load resource command arguments: ${error.message}`);
+                                finish(undefined);
+                            },
+                            exitCallback: code => {
+                                if (code !== 0) {
+                                    if (allowNoLogoRetry && isNoLogoUnsupportedOutput(runArgs, stdout, stderr)) {
+                                        extensionLogOutputChannel.info(`Installed Aspire CLI does not recognize ${noLogoOption}; retrying resource command argument load without it.`);
+                                        loadInputs(removeRootNoLogoOption(runArgs), false).then(finish);
+                                        return;
+                                    }
+
+                                    extensionLogOutputChannel.warn(`aspire resource --load-arguments exited with code ${code}.`);
+                                    finish(undefined);
                                     return;
                                 }
 
-                                extensionLogOutputChannel.warn('aspire resource --load-arguments returned JSON that was not resource command argument metadata.');
-                            } catch (error) {
-                                // This hidden command is a machine-readable contract: stdout must be only
-                                // the JSON metadata payload. If it is not, fail the load so the CLI bug is
-                                // visible instead of silently accepting a partial parse.
-                                extensionLogOutputChannel.warn(`aspire resource --load-arguments returned invalid JSON stdout: ${error}`);
-                            }
+                                try {
+                                    const parsed = JSON.parse(stdout.trim());
+                                    if (isResourceCommandArgumentInputArray(parsed)) {
+                                        finish(parsed);
+                                        return;
+                                    }
 
-                            finish(undefined);
-                        },
+                                    extensionLogOutputChannel.warn('aspire resource --load-arguments returned JSON that was not resource command argument metadata.');
+                                } catch (error) {
+                                    // This hidden command is a machine-readable contract: stdout must be only
+                                    // the JSON metadata payload. If it is not, fail the load so the CLI bug is
+                                    // visible instead of silently accepting a partial parse.
+                                    extensionLogOutputChannel.warn(`aspire resource --load-arguments returned invalid JSON stdout: ${error}`);
+                                }
+
+                                finish(undefined);
+                            },
+                        });
+
+                        child.stdin.end();
                     });
+                };
 
-                    child.stdin.end();
-                });
+                const loadedInputs = await loadInputs(args, true);
 
                 if (!loadedInputs) {
                     await vscode.window.showWarningMessage(resourceCommandDynamicInputsFailed, { modal: true });

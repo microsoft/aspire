@@ -1,7 +1,5 @@
 ﻿@using Aspire.Dashboard.Components.CustomIcons
 @using Aspire.Dashboard.Components.Interactions
-@using Aspire.Dashboard.Components.Dialogs
-@using Aspire.Dashboard.Model.Assistant
 @using Aspire.Dashboard.Resources
 @inject IStringLocalizer<Dialogs> DialogsLoc
 @inherits LayoutComponentBase
@@ -42,15 +40,6 @@
                     <FluentIcon Value="@(new Icons.Regular.Size24.BotSparkle())" Color="Color.Neutral"/>
                 </FluentButton>
             }
-            @if (AIContextProvider.Enabled)
-            {
-                <FluentButton Class="@("header-button" + ((AIContextProvider.AssistantChatViewModel is {} vm && AIContextProvider.ShowAssistantSidebarDialog) ? " header-button-selected" : ""))"
-                              Id="@AssistantButtonId"
-                              Appearance="Appearance.Stealth" OnClick="@(() => LaunchAssistantAsync(AssistantButtonId))"
-                              Title="@AIAssistantLoc[nameof(AIAssistant.AIAssistantLaunchButtonText)]" aria-label="@AIAssistantLoc[nameof(AIAssistant.AIAssistantLaunchButtonText)]">
-                    <FluentIcon Value="@(new AspireIcons.Size24.GitHubCopilot())" Color="Color.Neutral" />
-                </FluentButton>
-            }
             <NotificationsHeaderButton OnClick="@LaunchNotificationsAsync" />
             <FluentButton Class="header-button"
                           Id="@SettingsButtonId"
@@ -61,10 +50,6 @@
             <UserProfile/>
         </FluentHeader>
 
-        @if (AIContextProvider.AssistantChatViewModel is {} vm && AIContextProvider.ShowAssistantSidebarDialog)
-        {
-            <Aspire.Dashboard.Components.Dialogs.AssistantSidebarDialog Content="@(new AssistantDialogViewModel { Chat = vm, ReturnFocusElementId = _assistantReturnFocusElementId })" />
-        }
         <DesktopNavMenu/>
     }
     else
@@ -88,32 +73,22 @@
 
         <MobileNavMenu
             IsNavMenuOpen="_isNavMenuOpen"
-            IsAIEnabled="@AIContextProvider.Enabled"
             CloseNavMenu="@CloseMobileNavMenu"
             LaunchHelpAsync="@LaunchHelpAsync"
             LaunchAIAgentsAsync="@LaunchAIAgentsAsync"
             IsAgentHelpEnabled="@(Options.CurrentValue.UI.DisableAgentHelp != true)"
-            LaunchAIAssistantAsync="@LaunchAssistantAsync"
             LaunchNotificationsAsync="@LaunchNotificationsAsync"
             LaunchSettingsAsync="@LaunchSettingsAsync" />
     }
 
     <div class="messagebar-container">
         <FluentMessageBarProvider Section="@DashboardUIHelpers.MessageBarSection" Class="top-messagebar" MaxMessageCount="null" NewestOnTop="true" />
-        @if (AIContextProvider.AssistantChatViewModel is not null && AIContextProvider.ShowAssistantSidebarDialog)
-        {
-            <div class="layout-sidebar-spacer"></div>
-        }
     </div>
     <div class="layout-body-container">
         <FluentBodyContent Class="custom-body-content body-content">
             <FluentToastProvider MaxToastCount="3" Timeout="5000" />
             @Body
         </FluentBodyContent>
-        @if (AIContextProvider.AssistantChatViewModel is not null && AIContextProvider.ShowAssistantSidebarDialog)
-        {
-            <div class="layout-sidebar-spacer"></div>
-        }
     </div>
 
     <FluentDialogProvider/>

@@ -75,6 +75,7 @@ internal sealed class ExecutableSpec
     /// Optional parent process identity timestamp used with <see cref="MonitorPid"/> to guard against PID reuse.
     /// </summary>
     [JsonPropertyName("monitorTimestamp")]
+    [JsonConverter(typeof(KubernetesMicroTimeJsonConverter))]
     public DateTime? MonitorTimestamp { get; set; }
 
     /// <summary>

@@ -298,6 +298,8 @@ public sealed class InteractionInput
 
     internal void SetRequired(bool required) => _required = required;
 
+    internal void SetFiles(IReadOnlyList<InteractionFile>? files) => Files = files;
+
     internal void SetDynamicLoading(InputLoadOptions? dynamicLoading) => _dynamicLoading = dynamicLoading;
 
     /// <summary>
@@ -396,6 +398,88 @@ public sealed class InteractionInput
             field = value;
         }
     }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether multiple files can be selected. Only used by <see cref="InputType.File"/> inputs.
+    /// </summary>
+    public bool AllowMultipleFiles { get; init; }
+
+    /// <summary>
+    /// Gets or sets the file type filter for <see cref="InputType.File"/> inputs.
+    /// Uses the same format as the HTML <c>accept</c> attribute, e.g. <c>".pem,.pfx,.crt"</c> or <c>"image/*"</c>.
+    /// When set, the file picker restricts selectable files and the CLI validates that chosen files match.
+    /// </summary>
+    public string? FileFilter { get; init; }
+
+    /// <summary>
+    /// Gets or sets the maximum file size in bytes for <see cref="InputType.File"/> inputs.
+    /// If not specified, the server applies the configured upload limit (default 100 MB).
+    /// When specified, the value is capped at the server-side upload limit.
+    /// </summary>
+    public long? MaxFileSize
+    {
+        get => field;
+        init
+        {
+            if (value is { } v)
+            {
+                ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(v, 0);
+            }
+
+            field = value;
+        }
+    }
+
+    /// <summary>
+    /// Gets the files associated with this <see cref="InputType.File"/> input.
+    /// Populated after the user selects file(s) and the interaction completes.
+    /// </summary>
+    // Excluded from the ATS surface: InteractionFile holds non-serializable methods (OpenRead, ReadAllBytesAsync)
+    // and refers to server-local file paths. Polyglot app hosts receive file metadata through the manually defined
+    // InteractionInputFile interface in base.mts, populated by ToResultInput.
+    [AspireExportIgnore(Reason = "InteractionFile contains non-serializable methods and server-local paths; polyglot callers use InteractionInputFile from base.mts.")]
+    public IReadOnlyList<InteractionFile>? Files { get; private set; }
+}
+
+/// <summary>
+/// Represents a file selected by the user for an <see cref="InputType.File"/> input.
+/// </summary>
+public sealed class InteractionFile
+{
+    internal InteractionFile(string id, string name, string filePath)
+    {
+        Id = id;
+        Name = name;
+        FilePath = filePath;
+    }
+
+    /// <summary>
+    /// Gets the unique identifier for the uploaded file.
+    /// </summary>
+    public string Id { get; }
+
+    /// <summary>
+    /// Gets the original file name as provided by the user (e.g. "readme.txt").
+    /// </summary>
+    public string Name { get; }
+
+    /// <summary>
+    /// Gets the full path to the uploaded file on disk.
+    /// </summary>
+    public string FilePath { get; }
+
+    /// <summary>
+    /// Opens a read-only stream for the file content.
+    /// </summary>
+    /// <returns>A <see cref="Stream"/> for reading the file.</returns>
+    public Stream OpenRead() => new FileStream(FilePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 4096, useAsync: true);
+
+    /// <summary>
+    /// Reads all bytes of the file asynchronously.
+    /// </summary>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A byte array containing the file content.</returns>
+    public Task<byte[]> ReadAllBytesAsync(CancellationToken cancellationToken = default) => File.ReadAllBytesAsync(FilePath, cancellationToken);
 }
 
 /// <summary>
@@ -599,7 +683,11 @@ public enum InputType
     /// <summary>
     /// A numeric input.
     /// </summary>
-    Number
+    Number,
+    /// <summary>
+    /// A file input. Allows the user to select a file using the OS/browser file picker.
+    /// </summary>
+    File
 }
 
 /// <summary>

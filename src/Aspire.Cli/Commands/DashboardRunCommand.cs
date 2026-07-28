@@ -25,6 +25,8 @@ internal sealed class DashboardRunCommand : BaseCommand
 
     protected override bool UpdateNotificationsEnabled => true;
 
+    protected override string CancellationMessage => DashboardCommandStrings.StoppingDashboard;
+
     private readonly IBundleService _bundleService;
     private readonly LayoutProcessRunner _layoutProcessRunner;
     private readonly FileLoggerProvider _fileLoggerProvider;
@@ -374,7 +376,10 @@ internal sealed class DashboardRunCommand : BaseCommand
         IProcessExecution process;
         try
         {
-            process = await _layoutProcessRunner.StartAsync(managedPath, dashboardArgs, environmentVariables: environmentVariables, options: options).ConfigureAwait(false);
+            // Foreground `aspire dashboard run`: the dashboard is a child of this CLI and must not
+            // outlive it, so bind it to the Windows kill-on-close job as an OS-level backstop on top of
+            // the cross-platform parent-liveness watchdog. No-op on non-Windows hosts.
+            process = await _layoutProcessRunner.StartAsync(managedPath, dashboardArgs, environmentVariables: environmentVariables, options: options, killOnParentExit: true).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -409,8 +414,6 @@ internal sealed class DashboardRunCommand : BaseCommand
 
         if (cancellationToken.IsCancellationRequested)
         {
-            InteractionService.DisplayMessage(KnownEmojis.StopSign, $"[teal bold]{DashboardCommandStrings.StoppingDashboard}[/]", allowMarkup: true);
-
             if (!process.HasExited)
             {
                 process.Kill(entireProcessTree: true);
@@ -461,8 +464,6 @@ internal sealed class DashboardRunCommand : BaseCommand
         }
         catch (OperationCanceledException)
         {
-            InteractionService.DisplayMessage(KnownEmojis.StopSign, $"[teal bold]{DashboardCommandStrings.StoppingDashboard}[/]", allowMarkup: true);
-
             if (!process.HasExited)
             {
                 process.Kill(entireProcessTree: true);

@@ -7,17 +7,17 @@ using Xunit;
 
 namespace Aspire.Managed.Tests.NuGet;
 
-public class RestoreCommandTests : IDisposable
+public class RestoreCommandTests(ITestOutputHelper outputHelper) : IDisposable
 {
-    private readonly TestTempDirectory _tempDir = new();
+    private readonly TemporaryWorkspace _workspace = TemporaryWorkspace.Create(outputHelper);
 
-    public void Dispose() => _tempDir.Dispose();
+    public void Dispose() => _workspace.Dispose();
 
     [Fact]
     public void RestoreCommand_RespectsNuGetConfigGlobalPackagesFolder()
     {
-        var customPackagesDir = Path.GetFullPath(Path.Combine(_tempDir.Path, "custom-packages"));
-        var nugetConfigPath = Path.Combine(_tempDir.Path, "NuGet.config");
+        var customPackagesDir = Path.GetFullPath(Path.Combine(_workspace.Path, "custom-packages"));
+        var nugetConfigPath = Path.Combine(_workspace.Path, "NuGet.config");
 
         File.WriteAllText(nugetConfigPath, $"""
             <?xml version="1.0" encoding="utf-8"?>
@@ -40,17 +40,17 @@ public class RestoreCommandTests : IDisposable
             var outputDir = Path.Combine(tempDirPath, "obj");
 
             await command.Parse(["--package", "Fake.Package,1.0.0", "--no-nuget-org", "--output", outputDir, "--working-dir", tempDirPath]).InvokeAsync();
-        }, _tempDir.Path, options).Dispose();
+        }, _workspace.Path, options).Dispose();
 
         // NuGet writes packageFolders into project.assets.json with the resolved packages directory.
-        var assetsContent = File.ReadAllText(Path.Combine(_tempDir.Path, "obj", "project.assets.json"));
+        var assetsContent = File.ReadAllText(Path.Combine(_workspace.Path, "obj", "project.assets.json"));
         Assert.Contains(JsonEncodedPath(customPackagesDir), assetsContent);
     }
 
     [Fact]
     public void RestoreCommand_RespectsNuGetPackagesEnvironmentVariable()
     {
-        var customPackagesDir = Path.GetFullPath(Path.Combine(_tempDir.Path, "env-packages"));
+        var customPackagesDir = Path.GetFullPath(Path.Combine(_workspace.Path, "env-packages"));
 
         // Run in a separate process with NUGET_PACKAGES set to the custom directory.
         // The env var takes priority over all config file settings.
@@ -63,19 +63,19 @@ public class RestoreCommandTests : IDisposable
             var outputDir = Path.Combine(tempDirPath, "obj");
 
             await command.Parse(["--package", "Fake.Package,1.0.0", "--no-nuget-org", "--output", outputDir, "--working-dir", tempDirPath]).InvokeAsync();
-        }, _tempDir.Path, options).Dispose();
+        }, _workspace.Path, options).Dispose();
 
         // NuGet writes packageFolders into project.assets.json with the resolved packages directory.
-        var assetsContent = File.ReadAllText(Path.Combine(_tempDir.Path, "obj", "project.assets.json"));
+        var assetsContent = File.ReadAllText(Path.Combine(_workspace.Path, "obj", "project.assets.json"));
         Assert.Contains(JsonEncodedPath(customPackagesDir), assetsContent);
     }
 
     [Fact]
     public void RestoreCommand_CliSourcesAreAppendedToConfigSources()
     {
-        var nugetConfigPath = Path.Combine(_tempDir.Path, "NuGet.config");
-        var configSourcePath = Path.Combine(_tempDir.Path, "config-source");
-        var cliSourcePath = Path.Combine(_tempDir.Path, "cli-source");
+        var nugetConfigPath = Path.Combine(_workspace.Path, "NuGet.config");
+        var configSourcePath = Path.Combine(_workspace.Path, "config-source");
+        var cliSourcePath = Path.Combine(_workspace.Path, "cli-source");
 
         File.WriteAllText(nugetConfigPath, $"""
             <?xml version="1.0" encoding="utf-8"?>
@@ -104,11 +104,11 @@ public class RestoreCommandTests : IDisposable
                 "--source", cliSourcePath,
                 "--output", outputDir,
                 "--working-dir", tempDirPath]).InvokeAsync();
-        }, nugetConfigPath, cliSourcePath, _tempDir.Path, options).Dispose();
+        }, nugetConfigPath, cliSourcePath, _workspace.Path, options).Dispose();
 
         // NuGet writes the resolved sources into project.assets.json regardless of
         // whether the restore succeeds. Verify both sources are present.
-        var assetsContent = File.ReadAllText(Path.Combine(_tempDir.Path, "obj", "project.assets.json"));
+        var assetsContent = File.ReadAllText(Path.Combine(_workspace.Path, "obj", "project.assets.json"));
         Assert.Contains(JsonEncodedPath(configSourcePath), assetsContent);
         Assert.Contains(JsonEncodedPath(cliSourcePath), assetsContent);
     }

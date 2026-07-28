@@ -8,23 +8,24 @@ namespace Infrastructure.Tests;
 
 public class WriteClassModeTestPropsTests : IDisposable
 {
-    private readonly TestTempDirectory _tempDir = new();
+    private readonly TemporaryWorkspace _workspace;
     private readonly string _scriptPath;
     private readonly ITestOutputHelper _output;
 
     public WriteClassModeTestPropsTests(ITestOutputHelper output)
     {
         _output = output;
+        _workspace = TemporaryWorkspace.Create(output);
         _scriptPath = Path.Combine(RepoRoot.Path, "eng", "scripts", "write-class-mode-test-props.ps1");
     }
 
-    public void Dispose() => _tempDir.Dispose();
+    public void Dispose() => _workspace.Dispose();
 
     [Fact]
     [RequiresTools(["pwsh"])]
     public async Task WritesOverrideProjectToBuildForSplitProjectsWithoutPartitions()
     {
-        var artifactsDir = Path.Combine(_tempDir.Path, "artifacts");
+        var artifactsDir = Path.Combine(_workspace.Path, "artifacts");
         Directory.CreateDirectory(artifactsDir);
 
         TestDataBuilder.CreateTestsMetadataJson(
@@ -46,7 +47,7 @@ public class WriteClassModeTestPropsTests : IDisposable
             projectName: "ClassSplitProject",
             testProjectPath: "tests/ClassSplitProject/ClassSplitProject.csproj");
 
-        var outputPropsPath = Path.Combine(_tempDir.Path, "ClassModeProjects.props");
+        var outputPropsPath = Path.Combine(_workspace.Path, "ClassModeProjects.props");
 
         var result = await RunScript(artifactsDir, outputPropsPath);
 
@@ -63,7 +64,7 @@ public class WriteClassModeTestPropsTests : IDisposable
     [RequiresTools(["pwsh"])]
     public async Task WritesZeroCountWhenEverySplitProjectAlreadyHasPartitions()
     {
-        var artifactsDir = Path.Combine(_tempDir.Path, "artifacts");
+        var artifactsDir = Path.Combine(_workspace.Path, "artifacts");
         Directory.CreateDirectory(artifactsDir);
 
         TestDataBuilder.CreateSplitTestsMetadataJson(
@@ -75,7 +76,7 @@ public class WriteClassModeTestPropsTests : IDisposable
             Path.Combine(artifactsDir, "PartitionSplitProject.tests-partitions.json"),
             "1");
 
-        var outputPropsPath = Path.Combine(_tempDir.Path, "ClassModeProjects.props");
+        var outputPropsPath = Path.Combine(_workspace.Path, "ClassModeProjects.props");
 
         var result = await RunScript(artifactsDir, outputPropsPath);
 
@@ -90,7 +91,7 @@ public class WriteClassModeTestPropsTests : IDisposable
     [RequiresTools(["pwsh"])]
     public async Task FailsWhenClassModeMetadataDoesNotContainProjectPath()
     {
-        var artifactsDir = Path.Combine(_tempDir.Path, "artifacts");
+        var artifactsDir = Path.Combine(_workspace.Path, "artifacts");
         Directory.CreateDirectory(artifactsDir);
 
         File.WriteAllText(
@@ -102,7 +103,7 @@ public class WriteClassModeTestPropsTests : IDisposable
             }
             """);
 
-        var outputPropsPath = Path.Combine(_tempDir.Path, "ClassModeProjects.props");
+        var outputPropsPath = Path.Combine(_workspace.Path, "ClassModeProjects.props");
 
         var result = await RunScript(artifactsDir, outputPropsPath);
 

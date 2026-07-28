@@ -51,6 +51,15 @@ public partial class AspireMenuButton : FluentComponentBase
     [Parameter]
     public bool HideIcon { get; set; }
 
+    /// <summary>
+    /// Gets or sets a value indicating whether focus should return to this menu button after a menu item is clicked.
+    /// </summary>
+    /// <remarks>
+    /// Focus restoration is enabled by default because the underlying menu anchor is the button that opened the menu.
+    /// </remarks>
+    [Parameter]
+    public bool RestoreFocusOnItemClick { get; set; } = true;
+
     protected override void OnParametersSet()
     {
         _icon = Icon ?? s_defaultIcon;

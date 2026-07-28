@@ -21,7 +21,14 @@
     line-height: 1;
 }
 
+::deep .summary-container {
+    display: flex;
+    flex-direction: column;
+}
+
 ::deep .tracedetails-grid-container {
+    flex: 1;
+    min-height: 0;
     overflow: auto;
 }
 

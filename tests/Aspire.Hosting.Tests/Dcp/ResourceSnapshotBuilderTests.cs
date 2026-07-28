@@ -85,6 +85,38 @@ public class ResourceSnapshotBuilderTests
     }
 
     [Fact]
+    public void ExecutableWithProjectMetadataSnapshotAddsProjectPropertiesAndPreservesCustomResourceType()
+    {
+        // A plain ExecutableResource that carries IProjectMetadata (e.g. DotnetProjectResource, an
+        // ExecutableResource launched via `dotnet run --project`) should render like a project in the
+        // dashboard — with the project path + launch profile — for parity with AddProject.
+        var resource = new TestDotnetProjectResource("proj");
+        resource.Annotations.Add(new TestProjectMetadata());
+        resource.Annotations.Add(new LaunchProfileAnnotation("https"));
+
+        var executable = Executable.Create("proj", "dotnet");
+        executable.Annotate(DcpCustomResource.ResourceNameAnnotation, resource.Name);
+        executable.Spec.WorkingDirectory = "/app";
+        executable.Status = new ExecutableStatus
+        {
+            EffectiveArgs = ["run"],
+            ProcessId = 1234
+        };
+
+        var snapshotBuilder = CreateSnapshotBuilder(new Dictionary<string, IResource>
+        {
+            [resource.Name] = resource
+        });
+        var projectSnapshot = snapshotBuilder.ToSnapshot(executable, CreatePreviousSnapshot(KnownResourceTypes.Project));
+
+        AssertHighlightedProperty(projectSnapshot, KnownProperties.Project.Path, "Project path", isSensitive: false, sortOrder: 0);
+        AssertHighlightedProperty(projectSnapshot, KnownProperties.Project.LaunchProfile, "Launch profile", isSensitive: false, sortOrder: 1);
+
+        var customSnapshot = snapshotBuilder.ToSnapshot(executable, CreatePreviousSnapshot("custom-type"));
+        Assert.Equal("custom-type", customSnapshot.ResourceType);
+    }
+
+    [Fact]
     public void ExecutableSnapshotPreservesLaunchArgumentSensitivityWhenUsingEffectiveArgs()
     {
         var executable = CreateExecutable(
@@ -195,11 +227,11 @@ public class ResourceSnapshotBuilderTests
         return new(new DcpResourceState(applicationModel ?? new Dictionary<string, IResource>(), []));
     }
 
-    private static CustomResourceSnapshot CreatePreviousSnapshot()
+    private static CustomResourceSnapshot CreatePreviousSnapshot(string resourceType = "resource")
     {
         return new()
         {
-            ResourceType = "resource",
+            ResourceType = resourceType,
             Properties = []
         };
     }
@@ -248,4 +280,6 @@ public class ResourceSnapshotBuilderTests
             }
         };
     }
+
+    private sealed class TestDotnetProjectResource(string name) : ExecutableResource(name, "dotnet", "/app");
 }

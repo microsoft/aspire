@@ -45,6 +45,12 @@ internal sealed class TelemetryManager : IDisposable
 #endif
     private const int ProfilingForceFlushTimeoutMilliseconds = 5000;
 
+    // The agent telemetry command runs fire-and-forget from an agent hook and exits immediately,
+    // so the short Release shutdown flush (200ms) is not enough to reliably export the single
+    // just-created span. The command path force-flushes the reported provider with this larger
+    // bound before exit so the event is not silently dropped.
+    private const int ReportedForceFlushTimeoutMilliseconds = 3000;
+
     private readonly TracerProvider? _azureMonitorProvider;
     private readonly TracerProvider? _profilingProvider;
     private readonly TracerProvider? _debugDiagnosticProvider;
@@ -92,6 +98,18 @@ internal sealed class TelemetryManager : IDisposable
                     o.ConnectionString = ApplicationInsightsConnectionString;
                     o.EnableLiveMetrics = false;
                     o.StorageDirectory = GetTelemetryStoragePath();
+
+                    // Capture 100% of reported telemetry. The exporter defaults to a RateLimitedSampler
+                    // (TracesPerSecond = 5), which keeps a span with probability
+                    // min(elapsed_since_provider_built * tracesPerSecond, 1). That model assumes a
+                    // long-lived, high-volume process; the CLI is the opposite (fire-and-forget, often a
+                    // single span per process), so every span is judged at cold-start probability and
+                    // ~half are silently dropped as a startup-timing artifact rather than a deliberate
+                    // policy. Reported volume is a handful of spans per run, so full capture is cheap and
+                    // is what adoption analytics needs. TracesPerSecond takes precedence over SamplingRatio
+                    // in the exporter, so it must be nulled for the 100% ratio to take effect.
+                    o.TracesPerSecond = null;
+                    o.SamplingRatio = 1.0f;
                 });
 
 #if DEBUG
@@ -178,6 +196,24 @@ internal sealed class TelemetryManager : IDisposable
         return Task.Run(() =>
         {
             _profilingProvider?.ForceFlush(ProfilingForceFlushTimeoutMilliseconds);
+        });
+    }
+
+    /// <summary>
+    /// Flushes reported telemetry without shutting down other telemetry providers.
+    /// </summary>
+    /// <remarks>
+    /// Used by the <c>aspire agent telemetry</c> command, which is invoked fire-and-forget from an
+    /// agent hook and exits immediately. The normal shutdown flush window is too short to reliably
+    /// drain a single just-created span, so this bounded flush ensures the event leaves the process.
+    /// </remarks>
+    public Task ForceFlushReportedAsync()
+    {
+        // See ForceFlushProfilingAsync for why this runs the synchronous, bounded
+        // ForceFlush(int) on the thread pool rather than taking a CancellationToken.
+        return Task.Run(() =>
+        {
+            _azureMonitorProvider?.ForceFlush(ReportedForceFlushTimeoutMilliseconds);
         });
     }
 

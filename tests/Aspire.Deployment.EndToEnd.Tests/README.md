@@ -158,10 +158,42 @@ Aspire.Deployment.EndToEnd.Tests/
 ├── AzureServiceBusDeploymentTests.cs      # Azure Service Bus resource
 ├── AzureStorageDeploymentTests.cs         # Azure Storage resource
 ├── PythonFastApiDeploymentTests.cs        # Python FastAPI to Azure Container Apps
+├── RadiusStarterDeploymentTests.cs        # Starter template to Radius on AKS (rad deploy)
 ├── TypeScriptAzureContainerAppJobDeploymentTests.cs # TypeScript AppHost ACA jobs
 ├── xunit.runner.json                  # Test runner config
 └── README.md                          # This file
 ```
+
+## Radius deployment coverage
+
+`RadiusStarterDeploymentTests.DeployStarterTemplateToRadiusOnAks` is the live counterpart to the
+`Aspire.Hosting.Radius` unit/snapshot tests. Those prove the Bicep serializer output; this test
+proves that `aspire publish` + `rad deploy app.bicep` produce a working deployment. It provisions an
+AKS cluster + ACR, installs the Radius control plane onto the cluster, deploys the starter app
+(`AddRadiusEnvironment`), and verifies the workloads become ready and serve HTTP traffic.
+
+Radius-specific notes:
+
+- **`rad` CLI installation.** `aspire deploy` against a Radius environment shells out to `rad`.
+  `RadiusStarterDeploymentTests.DeployStarterTemplateToRadiusOnAks` installs the pinned rad CLI
+  version into the test workspace's `radbin` directory and prepends it to `PATH`, so CI and local
+  runs do not require a machine-wide `rad` installation.
+- **Images must be pre-pushed.** The Radius publisher does not build or push images for project
+  resources yet (<https://github.com/microsoft/aspire/issues/16844>). The test builds/pushes the
+  starter images to ACR and attaches them with `WithContainerImage` (Experimental
+  `ASPIRERADIUS057`) so the generated `app.bicep` references pullable images.
+- **Verifies the Radius.Core UDT app, not just Redis.** Graph validation uses
+  `rad app graph -a app --preview` (the legacy `rad app graph` routes to Applications.Core, which
+  the Redis-only legacy `app` satisfies on its own) and asserts the graph names both project
+  containers. Each container is then probed on its own HTTP endpoint via `kubectl port-forward`:
+  `apiservice`'s `/weatherforecast` and `webfrontend`'s home page (`/`).
+- **Cross-container connectivity is not asserted (current Radius limitation).** The `webfrontend`
+  `/weather` page fans out to `apiservice` through the Redis output cache, but Radius 0.59 does not
+  synthesize a Kubernetes `Service` for a `Radius.Compute/containers` workload, so the
+  service-discovery hostname Aspire emits for `apiservice`
+  (`apiservice.<namespace>.svc.cluster.local`) does not resolve in-cluster (`rad app graph` shows
+  `webfrontend` wired only to the cache). The test therefore validates each container in isolation
+  rather than the `/weather` end-to-end path until that connectivity is supported.
 
 ## TypeScript deployment coverage
 

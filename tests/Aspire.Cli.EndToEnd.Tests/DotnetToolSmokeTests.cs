@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Hex1b.Input;
 using Xunit;
@@ -81,8 +80,10 @@ public sealed class DotnetToolSmokeTests(ITestOutputHelper output)
         // Create a new project using aspire new
         await auto.AspireNewAsync("AspireToolApp", counter);
 
-        // Run the project with aspire run
-        await auto.TypeAsync("aspire run");
+        // Run the project with aspire run. Use an explicit AppHost startup budget so a cold daily-feed
+        // restore + build doesn't trip the CLI's default 120s timeout under CI contention. (Older published
+        // CLIs simply ignore the env var, so this stays safe across the versions these tests target.)
+        await auto.TypeAsync(CliE2EAutomatorHelpers.GetAspireRunCommand());
         await auto.EnterAsync();
 
         await auto.WaitUntilAsync(s =>
@@ -96,7 +97,7 @@ public sealed class DotnetToolSmokeTests(ITestOutputHelper output)
 
             // Dotnet tool smoke tests can run against older published packages that used different AppHost casing.
             return s.GetScreenText().Contains("Press CTRL+C to stop the AppHost and exit.", StringComparison.OrdinalIgnoreCase);
-        }, timeout: TimeSpan.FromMinutes(2), description: "Press CTRL+C message (aspire run started)");
+        }, timeout: CliE2EAutomatorHelpers.AspireRunReadyTimeout, description: "Press CTRL+C message (aspire run started)");
 
         // Stop the running apphost with Ctrl+C
         await auto.Ctrl().KeyAsync(Hex1bKey.C);

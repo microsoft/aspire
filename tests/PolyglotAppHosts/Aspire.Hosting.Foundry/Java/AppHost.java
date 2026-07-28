@@ -113,7 +113,7 @@ server.listen(port, '127.0.0.1');
         hostedAgentOptions.setMemory(2.0);
         hostedAgentOptions.setMetadata(Map.of("scenario", "validation"));
         hostedAgentOptions.setEnvironmentVariables(Map.of("VALIDATION_MODE", "true"));
-        hostedAgent.asHostedAgent(project, hostedAgentOptions);
+        hostedAgent.asHostedAgent(project, HostedAgentProtocol.RESPONSES, "2.0.0", hostedAgentOptions);
 
         var api = builder.addContainer("api", "nginx");
         foundry.withContainerRegistryRoleAssignments(registry, new AzureContainerRegistryRole[] {

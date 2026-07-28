@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECERTIFICATES001
@@ -2080,9 +2080,10 @@ public class DistributedApplicationTests
         using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.ExtraLongTimeoutDuration);
         var token = cts.Token;
 
-        using var aspireStore = new TestTempDirectory();
-        using var executableDirectory = new TestTempDirectory();
-        var executableAppPath = DotnetFileAppProcess.WriteApp(executableDirectory, "worker.cs", """
+        using var workspace = TemporaryWorkspace.Create(_testOutputHelper);
+        var aspireStoreDir = workspace.CreateDirectory("aspire-store");
+        var executableDir = workspace.CreateDirectory("executable");
+        var executableAppPath = DotnetFileAppProcess.WriteApp(executableDir.FullName, "worker.cs", """
             using System.Threading;
             using System.Threading.Tasks;
 
@@ -2134,14 +2135,14 @@ public class DistributedApplicationTests
         async Task<ParentScopedResourcesRun> StartParentScopedResourcesAsync(int parentProcessId, CancellationToken cancellationToken)
         {
             var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(_testOutputHelper)
-                .WithTempAspireStore(aspireStore.Path)
+                .WithTempAspireStore(aspireStoreDir.FullName)
                 .WithResourceCleanUp(false);
 
             AddRedisContainer(builder, containerResourceName)
                 .WithContainerName(containerResourceName)
                 .WithParentProcessLifetime(parentProcessId);
 
-            builder.AddExecutable(executableResourceName, DotnetFileAppProcess.ExecutablePath, executableDirectory.Path, DotnetFileAppProcess.CreateArguments(executableAppPath))
+            builder.AddExecutable(executableResourceName, DotnetFileAppProcess.ExecutablePath, executableDir.FullName, DotnetFileAppProcess.CreateArguments(executableAppPath))
                 .WithParentProcessLifetime(parentProcessId);
 
             var app = builder.Build();
@@ -2377,20 +2378,9 @@ public class DistributedApplicationTests
         return resourceEvent.Snapshot.Properties.FirstOrDefault(p => p.Name == propertyName)?.Value;
     }
 
-    private static Process StartLongRunningProcess()
-    {
-        var startInfo = OperatingSystem.IsWindows()
-            ? new ProcessStartInfo("ping", "-t localhost") { CreateNoWindow = true }
-            : new ProcessStartInfo("tail", "-f /dev/null");
-
-        startInfo.RedirectStandardOutput = true;
-        startInfo.RedirectStandardError = true;
-
-        var process = Process.Start(startInfo);
-        Assert.NotNull(process);
-
-        return process;
-    }
+    // Delegates to the shared bounded, self-terminating helper so an aborted test host can't leak
+    // this child on a CI agent.
+    private static Process StartLongRunningProcess() => TestProcesses.StartLongRunning();
 
     private static async Task KillProcessAsync(Process process, CancellationToken cancellationToken)
     {

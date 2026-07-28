@@ -15,7 +15,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 {
     private static readonly JsonSerializerOptions s_jsonOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly TestTempDirectory _tempDir = new();
+    private readonly TemporaryWorkspace _workspace;
     private readonly string _repoRoot;
     private readonly string _harnessPath;
     private readonly ITestOutputHelper _output;
@@ -23,11 +23,12 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
     public AutoRerunTransientCiFailuresTests(ITestOutputHelper output)
     {
         _output = output;
+        _workspace = TemporaryWorkspace.Create(output);
         _repoRoot = RepoRoot.Path;
         _harnessPath = Path.Combine(_repoRoot, "tests", "Infrastructure.Tests", "WorkflowScripts", "auto-rerun-transient-ci-failures.harness.js");
     }
 
-    public void Dispose() => _tempDir.Dispose();
+    public void Dispose() => _workspace.Dispose();
 
     [Fact]
     [RequiresTools(["node"])]
@@ -2217,7 +2218,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 
     private async Task<T> InvokeHarnessAsync<T>(string operation, object payload)
     {
-        string inputPath = Path.Combine(_tempDir.Path, $"{Guid.NewGuid():N}.json");
+        string inputPath = Path.Combine(_workspace.Path, $"{Guid.NewGuid():N}.json");
         string requestJson = JsonSerializer.Serialize(new HarnessRequest
         {
             Operation = operation,
