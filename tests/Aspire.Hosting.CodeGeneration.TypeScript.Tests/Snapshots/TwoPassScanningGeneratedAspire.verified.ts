@@ -1299,19 +1299,17 @@ export interface ResourceUrlAnnotation {
 }
 
 /**
- * Describes how the AppHost is being run when `Operation` is `Run`.
+ * Holds settings applicable to the AppHost run mode (when `Operation` is `Run`).
  *
- * Each property describes an independent aspect of the run, so additional run behaviors can be introduced
- * over time without collapsing them into a single mutually exclusive mode.
  * Integrations use it to vary how their resources are launched without changing the core hosting behavior.
  * In `Publish` mode every property holds its default value.
  */
 export interface RunConfiguration {
     /**
-     * Indicates that the AppHost was started in watch mode.
+     * Indicates that resources should start in watch mode if able.
      *
      * Integrations that support watch can launch their resources so that source changes are hot-reloaded.
-     * This is a hint: integrations that cannot watch their resources are free to ignore it.
+     * This is a hint: integrations that cannot watch their resources should start them in normal fashion.
      */
     watchEnabled?: boolean;
 }
