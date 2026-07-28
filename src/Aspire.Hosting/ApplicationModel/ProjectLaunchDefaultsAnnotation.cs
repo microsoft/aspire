@@ -4,38 +4,46 @@
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
-/// Internal abstraction shared by .NET-based resources that are launched via the SDK
-/// (<see cref="ProjectResource"/> in core and <c>DotnetProjectResource</c> in
-/// <c>Aspire.Hosting.Dotnet</c>) and reuse the project-defaults wiring in
-/// <c>WithProjectDefaults</c>: launch-profile / Kestrel endpoint materialization,
-/// <c>ASPNETCORE_URLS</c> / <c>HTTP(S)_PORTS</c> environment, Kestrel URL overrides, and the
-/// run-mode rebuilder + Rebuild command.
+/// Marks a resource as launched through the .NET SDK with the project defaults applied by
+/// <see cref="ProjectResourceBuilderExtensions.WithProjectDefaults{T}"/>, and carries the per-endpoint
+/// state that wiring needs.
 /// </summary>
-internal interface IProjectLaunchDefaultsResource : IResourceWithEnvironment, IResourceWithEndpoints, IResourceWithArgs
+/// <remarks>
+/// This is an annotation rather than an interface so resources in other assemblies (for example
+/// <c>DotnetProjectResource</c> in <c>Aspire.Hosting.Dotnet</c>) can opt into the project-defaults
+/// behavior without implementing a type-level contract that would have to be public and versioned in
+/// lockstep. Presence of the annotation is also how core recognizes ".NET-launched" resources for the
+/// Restart description and the Rebuild command.
+/// </remarks>
+internal sealed class ProjectLaunchDefaultsAnnotation : IResourceAnnotation
 {
     /// <summary>
     /// The config host for each endpoint that originated from Kestrel configuration. Used when
     /// rebuilding the <c>Kestrel__Endpoints__*__Url</c> override environment variables.
     /// </summary>
-    Dictionary<EndpointAnnotation, string> KestrelEndpointAnnotationHosts { get; }
+    public Dictionary<EndpointAnnotation, string> KestrelEndpointAnnotationHosts { get; } = [];
 
     /// <summary>
     /// The https endpoint that was added as a default. It is excluded from the port and Kestrel
     /// override environment because the target (e.g. a container) likely won't listen on https.
     /// </summary>
-    EndpointAnnotation? DefaultHttpsEndpoint { get; set; }
+    public EndpointAnnotation? DefaultHttpsEndpoint { get; set; }
 
     /// <summary>
     /// Whether any endpoints originated from Kestrel configuration.
     /// </summary>
-    bool HasKestrelEndpoints => KestrelEndpointAnnotationHosts.Count > 0;
+    public bool HasKestrelEndpoints => KestrelEndpointAnnotationHosts.Count > 0;
+}
 
+internal static class ProjectLaunchDefaultsExtensions
+{
     /// <summary>
     /// Determines whether endpoint environment variables should be injected for the given endpoint.
     /// Only http/https endpoints without an explicit target-port environment variable are eligible,
     /// and any <see cref="EndpointEnvironmentInjectionFilterAnnotation"/> may further exclude them.
     /// </summary>
-    bool ShouldInjectEndpointEnvironment(EndpointReference e)
+    [AspireExportIgnore(Reason = "Endpoint environment injection filtering is internal .NET launch wiring and is not part of the ATS surface.")]
+    public static bool ShouldInjectEndpointEnvironment(this IResource resource, EndpointReference e)
     {
         var endpoint = e.EndpointAnnotation;
 
@@ -46,7 +54,7 @@ internal interface IProjectLaunchDefaultsResource : IResourceWithEnvironment, IR
         }
 
         // If any filter rejects the endpoint, skip it
-        return !Annotations.OfType<EndpointEnvironmentInjectionFilterAnnotation>()
+        return !resource.Annotations.OfType<EndpointEnvironmentInjectionFilterAnnotation>()
             .Select(a => a.Filter)
             .Any(f => !f(endpoint));
     }

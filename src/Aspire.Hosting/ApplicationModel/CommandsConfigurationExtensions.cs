@@ -88,7 +88,7 @@ internal static class CommandsConfigurationExtensions
 
         // Use a more detailed description for .NET projects to help AI understand
         // that source code changes won't take effect until rebuilding the project.
-        var restartDescription = resource is IProjectLaunchDefaultsResource
+        var restartDescription = resource.HasAnnotationOfType<ProjectLaunchDefaultsAnnotation>()
             ? CommandStrings.RestartProjectDescription
             : CommandStrings.RestartDescription;
 
@@ -122,12 +122,12 @@ internal static class CommandsConfigurationExtensions
             iconVariant: IconVariant.Regular,
             isHighlighted: false));
 
-        if (resource is IProjectLaunchDefaultsResource projectResource)
+        if (resource.HasAnnotationOfType<ProjectLaunchDefaultsAnnotation>())
         {
-            var projectMetadata = projectResource.Annotations.OfType<IProjectMetadata>().SingleOrDefault();
+            var projectMetadata = resource.Annotations.OfType<IProjectMetadata>().SingleOrDefault();
             if (projectMetadata is null || !projectMetadata.IsFileBasedApp)
             {
-                AddRebuildCommand(projectResource);
+                AddRebuildCommand(resource);
             }
         }
 
@@ -142,7 +142,7 @@ internal static class CommandsConfigurationExtensions
         static bool HasNoState(string? state) => string.IsNullOrEmpty(state);
     }
 
-    private static void AddRebuildCommand(IProjectLaunchDefaultsResource projectResource)
+    private static void AddRebuildCommand(IResource projectResource)
     {
         // When a resource has replicas, the command framework invokes the handler
         // once per replica in parallel. We use a shared task so only a single build
@@ -191,7 +191,7 @@ internal static class CommandsConfigurationExtensions
         }
     }
 
-    private static async Task<ExecuteCommandResult> ExecuteRebuildAsync(ExecuteCommandContext context, IProjectLaunchDefaultsResource projectResource)
+    private static async Task<ExecuteCommandResult> ExecuteRebuildAsync(ExecuteCommandContext context, IResource projectResource)
     {
         var orchestrator = context.Services.GetRequiredService<ApplicationOrchestrator>();
         var resourceNotificationService = context.Services.GetRequiredService<ResourceNotificationService>();

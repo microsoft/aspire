@@ -21,19 +21,6 @@ namespace Aspire.Hosting.Dotnet;
 [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 [AspireExport(ExposeProperties = true)]
 public class DotnetProjectResource(string name, string workingDirectory)
-    : ExecutableResource(name, "dotnet", workingDirectory), IResourceWithServiceDiscovery, IProjectLaunchDefaultsResource
+    : ExecutableResource(name, "dotnet", workingDirectory), IResourceWithServiceDiscovery
 {
-    // The project-defaults wiring lives in Aspire.Hosting core (WithProjectDefaults) and operates against
-    // IProjectLaunchDefaultsResource. These members supply the small amount of per-endpoint state it
-    // needs; they are implemented explicitly so they don't leak into the public/polyglot surface.
-    private readonly Dictionary<EndpointAnnotation, string> _kestrelEndpointAnnotationHosts = new();
-    private EndpointAnnotation? _defaultHttpsEndpoint;
-
-    Dictionary<EndpointAnnotation, string> IProjectLaunchDefaultsResource.KestrelEndpointAnnotationHosts => _kestrelEndpointAnnotationHosts;
-
-    EndpointAnnotation? IProjectLaunchDefaultsResource.DefaultHttpsEndpoint
-    {
-        get => _defaultHttpsEndpoint;
-        set => _defaultHttpsEndpoint = value;
-    }
 }

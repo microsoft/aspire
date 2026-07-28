@@ -8,21 +8,54 @@ using Aspire.Hosting.Dcp.Model;
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
-/// Represents an annotation that specifies that the resource can be debugged by the Aspire Extension.
+/// Indicates that a resource can be launched by an IDE or extension host so it can be debugged,
+/// instead of being started as a plain process by Aspire.
 /// </summary>
+/// <remarks>
+/// Added by <see cref="ResourceBuilderExtensions.WithDebugSupport{T, TLaunchConfiguration}"/>. The
+/// annotation is only honored while a debug session is active; use
+/// <see cref="DebugSupportExtensions.SupportsDebugging"/> to test for that, and
+/// <see cref="DebugSupportExtensions.CreateLaunchConfiguration"/> to inspect the launch configuration
+/// the resource will send.
+/// </remarks>
 [DebuggerDisplay("Type = {GetType().Name,nq}, RequiredExtensionId = {LaunchConfigurationType,nq}")]
 [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-internal sealed class SupportsDebuggingAnnotation : IResourceAnnotation
+public sealed class SupportsDebuggingAnnotation : IResourceAnnotation
 {
-    private SupportsDebuggingAnnotation(string launchConfigurationType, Action<Executable, string> launchConfigurationAnnotator, bool rewritesArgumentsForDebugging)
+    private SupportsDebuggingAnnotation(
+        string launchConfigurationType,
+        Action<Executable, string> launchConfigurationAnnotator,
+        Func<string, object> launchConfigurationProducer,
+        bool rewritesArgumentsForDebugging)
     {
         LaunchConfigurationType = launchConfigurationType;
         LaunchConfigurationAnnotator = launchConfigurationAnnotator;
+        LaunchConfigurationProducer = launchConfigurationProducer;
         RewritesArgumentsForDebugging = rewritesArgumentsForDebugging;
     }
 
+    /// <summary>
+    /// Gets the launch configuration type identifier, for example <see cref="KnownLaunchConfigurationTypes.Project"/>.
+    /// </summary>
+    /// <remarks>
+    /// The IDE advertises the launch configuration types it can handle; a resource whose type is not
+    /// advertised is started as a plain process instead. 
+    /// <para>
+    /// Exception: when the active debug session does not
+    /// advertise any launch configuration types at all (for example Visual Studio, which does not send a
+    /// capability list), <see cref="KnownLaunchConfigurationTypes.Project"/> is treated as implicitly
+    /// supported rather than falling back to plain process execution.
+    /// </para>
+    /// </remarks>
     public string LaunchConfigurationType { get; }
-    public Action<Executable, string> LaunchConfigurationAnnotator { get; }
+
+    // Takes the internal DCP Executable object, so it stays internal even though the annotation is public.
+    internal Action<Executable, string> LaunchConfigurationAnnotator { get; }
+
+    // The producer callback passed to WithDebugSupport, with the launch configuration boxed as object.
+    // Internal because it hands out an untyped object; DebugSupportExtensions.CreateLaunchConfiguration is
+    // the supported way to reach it.
+    internal Func<string, object> LaunchConfigurationProducer { get; }
 
     /// <summary>
     /// Indicates that the debug support rewrites the resource's command-line arguments while a debug
@@ -48,9 +81,12 @@ internal sealed class SupportsDebuggingAnnotation : IResourceAnnotation
 
     internal static SupportsDebuggingAnnotation Create<T>(string launchConfigurationType, Func<string, T> launchProfileProducer, bool rewritesArgumentsForDebugging = false)
     {
-        return new SupportsDebuggingAnnotation(launchConfigurationType, (exe, mode) =>
-        {
-            exe.AnnotateAsObjectList(Executable.LaunchConfigurationsAnnotation, launchProfileProducer(mode));
-        }, rewritesArgumentsForDebugging);
+        // The annotator stays generic over T so the DCP annotation is serialized against the concrete
+        // launch configuration type rather than a boxed object, which would change the emitted JSON.
+        return new SupportsDebuggingAnnotation(
+            launchConfigurationType,
+            (exe, mode) => exe.AnnotateAsObjectList(Executable.LaunchConfigurationsAnnotation, launchProfileProducer(mode)),
+            mode => launchProfileProducer(mode)!,
+            rewritesArgumentsForDebugging);
     }
 }

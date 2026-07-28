@@ -2864,6 +2864,8 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ProjectLaunchConfiguration_UsesProjectDebugSupportProducer_InDebugSession()
     {
+        // The producer owns the whole launch configuration: nothing downstream overwrites what it returns,
+        // not even the project path, which differs here from the one on the resource's project metadata.
         var builder = DistributedApplication.CreateBuilder();
         var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
         var annotationToRemove = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
@@ -2875,6 +2877,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         projectBuilder.WithDebugSupport(_ => new ProjectLaunchConfiguration
         {
             Mode = ExecutableLaunchMode.NoDebug,
+            ProjectPath = "ProducerSuppliedPath",
             DisableLaunchProfile = true
         }, "project");
 
@@ -2897,7 +2900,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var exe = GetCreatedExecutableForResource(kubernetes, "proj");
         Assert.True(exe.TryGetProjectLaunchConfiguration(out var plc));
         Assert.NotNull(plc);
-        Assert.Equal("TestProject", plc!.ProjectPath);
+        Assert.Equal("ProducerSuppliedPath", plc!.ProjectPath);
         Assert.Equal(ExecutableLaunchMode.NoDebug, plc.Mode);
         Assert.True(plc.DisableLaunchProfile);
     }
@@ -5148,7 +5151,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         builder.AddResource(resource)
             .WithAnnotation(new TestProjectWithLaunchSettings())
             .WithAnnotation(new LaunchProfileAnnotation("http"))
-            .WithDebugSupport(mode => new ProjectLaunchConfiguration { ProjectPath = "TestProjectWithLaunchSettings", Mode = mode }, "project");
+            .WithDebugSupport(mode => ProjectLaunchConfigurationFactory.Create(resource, mode), KnownLaunchConfigurationTypes.Project);
 
         var configDict = new Dictionary<string, string?>
         {

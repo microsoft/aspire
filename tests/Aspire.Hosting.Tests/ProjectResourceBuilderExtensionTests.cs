@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
 #pragma warning disable ASPIRECERTIFICATES001
+#pragma warning disable ASPIREPROJECTS001 // WithProjectDefaults is experimental.
 
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -24,6 +25,25 @@ public class ProjectResourceBuilderExtensionTests
 
         var annotation = project.Resource.Annotations.OfType<PersistenceAnnotation>().Single();
         Assert.Equal(PersistenceMode.Persistent, annotation.Mode);
+    }
+
+    [Fact]
+    public void WithProjectDefaultsThrowsClearExceptionWhenResourceHasNoProjectMetadata()
+    {
+        // WithProjectDefaults is public and only constrained to IResourceWithEnvironment /
+        // IResourceWithEndpoints / IResourceWithArgs, so nothing stops a caller from invoking it on a
+        // resource that never received an IProjectMetadata annotation. Without this guard, the first
+        // internal .Single() over that annotation type throws a generic, unhelpful
+        // "Sequence contains no elements" exception instead.
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var executable = builder.AddExecutable("exe", "dotnet", ".", "run");
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => executable.WithProjectDefaults(new ProjectResourceOptions { ExcludeLaunchProfile = true }));
+
+        Assert.Contains(nameof(IProjectMetadata), exception.Message);
+        Assert.Contains(executable.Resource.Name, exception.Message);
     }
 
     [Fact]

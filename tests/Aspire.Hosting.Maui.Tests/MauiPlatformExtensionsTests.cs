@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREEXTENSION001 // Debug support APIs are experimental.
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Maui;
@@ -159,16 +161,10 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
 
         var platform = config.AddPlatformWithDefaultName(maui);
 
-        var debugSupport = Assert.Single(platform.Resource.Annotations, annotation => annotation.GetType().FullName == "Aspire.Hosting.ApplicationModel.SupportsDebuggingAnnotation");
-        Assert.Equal("maui", GetPropertyValue(debugSupport, "LaunchConfigurationType"));
+        var debugSupport = Assert.Single(platform.Resource.Annotations.OfType<SupportsDebuggingAnnotation>());
+        Assert.Equal("maui", debugSupport.LaunchConfigurationType);
 
-        var exe = CreateExecutableForDebugTest();
-        var annotator = Assert.IsAssignableFrom<Delegate>(GetPropertyValue(debugSupport, "LaunchConfigurationAnnotator"));
-        annotator.DynamicInvoke(exe, "Debug");
-
-        var launchConfigurations = GetLaunchConfigurations<SerializedMauiLaunchConfiguration>(exe);
-
-        var launchConfiguration = Assert.Single(launchConfigurations);
+        var launchConfiguration = DeserializeLaunchConfiguration(platform.Resource);
         Assert.Equal("maui", launchConfiguration.Type);
         Assert.Equal("Debug", launchConfiguration.Mode);
         Assert.Equal(tempFile, launchConfiguration.ProjectPath);
@@ -460,8 +456,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
         var simulator = maui.AddiOSSimulator("my-simulator", "E25BBE37-69BA-4720-B6FD-D54C97791E79");
 
-        var debugSupport = Assert.Single(simulator.Resource.Annotations, annotation => annotation.GetType().FullName == "Aspire.Hosting.ApplicationModel.SupportsDebuggingAnnotation");
-        Assert.Equal("maui", GetPropertyValue(debugSupport, "LaunchConfigurationType"));
+        var debugSupport = Assert.Single(simulator.Resource.Annotations.OfType<SupportsDebuggingAnnotation>());
+        Assert.Equal("maui", debugSupport.LaunchConfigurationType);
 
         var args = new List<object>();
         var argsContext = new CommandLineArgsCallbackContext(args, simulator.Resource);
@@ -880,53 +876,25 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
             """;
     }
 
-    private static object? GetPropertyValue(object target, string propertyName)
-    {
-        var property = target.GetType().GetProperty(propertyName);
-        Assert.NotNull(property);
-
-        return property.GetValue(target);
-    }
-
-    private static object CreateExecutableForDebugTest()
-    {
-        var executableType = typeof(DistributedApplication).Assembly.GetType("Aspire.Hosting.Dcp.Model.Executable");
-        Assert.NotNull(executableType);
-
-        var createMethod = executableType.GetMethod("Create", BindingFlags.Public | BindingFlags.Static);
-        Assert.NotNull(createMethod);
-
-        return createMethod.Invoke(null, ["test", "dotnet"])!;
-    }
-
     private static string? GetTestAssemblyConfiguration() =>
         typeof(MauiPlatformExtensionsTests).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration;
 
-    private static List<T> GetLaunchConfigurations<T>(object executable)
-    {
-        var metadata = GetPropertyValue(executable, "Metadata");
-        Assert.NotNull(metadata);
-
-        var annotations = Assert.IsAssignableFrom<IDictionary<string, string>>(
-            GetPropertyValue(metadata, "Annotations"));
-
-        Assert.True(annotations.TryGetValue("executable.usvc-dev.developer.microsoft.com/launch-configurations", out var json));
-        Assert.False(string.IsNullOrWhiteSpace(json));
-
-        var launchConfigurations = JsonSerializer.Deserialize<List<T>>(json);
-        Assert.NotNull(launchConfigurations);
-
-        return launchConfigurations;
-    }
-
     private static SerializedMauiLaunchConfiguration GetSingleMauiLaunchConfiguration(IResource resource)
     {
-        var debugSupport = Assert.Single(resource.Annotations, annotation => annotation.GetType().FullName == "Aspire.Hosting.ApplicationModel.SupportsDebuggingAnnotation");
-        var executable = CreateExecutableForDebugTest();
-        var annotator = Assert.IsAssignableFrom<Delegate>(GetPropertyValue(debugSupport, "LaunchConfigurationAnnotator"));
-        annotator.DynamicInvoke(executable, "Debug");
+        return DeserializeLaunchConfiguration(resource);
+    }
 
-        return Assert.Single(GetLaunchConfigurations<SerializedMauiLaunchConfiguration>(executable));
+    /// <summary>
+    /// Round-trips the launch configuration through JSON so assertions run against the wire shape the
+    /// IDE receives (snake_case property names), not the in-memory type.
+    /// </summary>
+    private static SerializedMauiLaunchConfiguration DeserializeLaunchConfiguration(IResource resource)
+    {
+        var json = JsonSerializer.Serialize(resource.CreateLaunchConfiguration(ExecutableLaunchMode.Debug));
+        var launchConfiguration = JsonSerializer.Deserialize<SerializedMauiLaunchConfiguration>(json);
+        Assert.NotNull(launchConfiguration);
+
+        return launchConfiguration;
     }
 
     private static void ClearDashboardOtlpEndpointConfiguration(ConfigurationManager configuration)

@@ -9,6 +9,7 @@ using Aspire.Hosting.Dotnet;
 using Aspire.Hosting.Utils;
 
 #pragma warning disable ASPIREEXTENSION001 // WithDebugSupport is experimental
+#pragma warning disable ASPIREPROJECTS001 // WithProjectDefaults is experimental
 
 namespace Aspire.Hosting;
 
@@ -107,7 +108,7 @@ public static class DotnetProjectHostingExtensions
         configure(options);
 
         path = PathNormalizer.NormalizePathForCurrentPlatform(Path.Combine(builder.AppHostDirectory, path));
-        var projectMetadata = new ProjectMetadata(path);
+        var projectMetadata = new DotnetProjectMetadata(path);
 
         // ExecutableResource requires a working directory. Use the project/app directory so the process
         // launches from the same place a ProjectResource would (DCP used Path.GetDirectoryName(ProjectPath)).
@@ -124,7 +125,6 @@ public static class DotnetProjectHostingExtensions
 
         var resource = builder.AddResource(app)
                               .WithAnnotation(projectMetadata)
-                              .WithDebugSupport(mode => new ProjectLaunchConfiguration { ProjectPath = projectMetadata.ProjectPath, Mode = mode }, "project")
                               .WithProjectDefaults(options);
 
         // Build the `dotnet run` command line for a non-debug launch of a DotnetProjectResource:
@@ -137,7 +137,7 @@ public static class DotnetProjectHostingExtensions
             // the launch configuration is "project", OR the configuration rewrites the arguments for debugging. 
             // For any other active annotation a fallback IS offered and we need to construct the args here.
             if (ctx.Resource.SupportsDebugging(builder.Configuration, out var debugAnnotation)
-                && (debugAnnotation.LaunchConfigurationType is "project" || debugAnnotation.RewritesArgumentsForDebugging))
+                && (debugAnnotation.LaunchConfigurationType is KnownLaunchConfigurationTypes.Project || debugAnnotation.RewritesArgumentsForDebugging))
             {
                 return;
             }
@@ -189,7 +189,7 @@ public static class DotnetProjectHostingExtensions
             }
         });
 
-        resource.OnBeforeResourceStarted(async (r, e, ct) =>
+        resource.OnBeforeResourceStarted((r, e, ct) =>
         {
             var projectPath = projectMetadata.ProjectPath;
 
@@ -203,14 +203,8 @@ public static class DotnetProjectHostingExtensions
                 throw new DistributedApplicationException(message);
             }
 
-            // Validate .NET version
-            if (((IProjectMetadata)projectMetadata).IsFileBasedApp
-                && await DotnetSdkUtils.TryGetVersionAsync(Path.GetDirectoryName(projectPath)).ConfigureAwait(false) is { } version
-                && version.Major < 10)
-            {
-                // File-based apps are only supported on .NET 10 or later
-                throw new DistributedApplicationException($"File-based apps are only supported on .NET 10 or later. The version active in '{Path.GetDirectoryName(projectPath)}' is {version}.");
-            }
+            // The minimum-SDK check for file-based apps is applied by WithProjectDefaults.
+            return Task.CompletedTask;
         });
 
         return resource;
