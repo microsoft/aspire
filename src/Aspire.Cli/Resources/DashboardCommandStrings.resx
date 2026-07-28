@@ -157,7 +157,7 @@
     <value>Allow anonymous access to the dashboard</value>
   </data>
   <data name="ApplicationNameOptionDescription" xml:space="preserve">
-    <value>The application name displayed in the dashboard</value>
+    <value>The application name displayed in the dashboard and used to scope persisted dashboard data</value>
   </data>
   <data name="PersistenceModeOptionDescription" xml:space="preserve">
     <value>The dashboard data persistence mode: None, Run, or Resume</value>

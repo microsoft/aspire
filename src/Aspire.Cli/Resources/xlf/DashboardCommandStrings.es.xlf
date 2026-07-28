@@ -8,8 +8,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ApplicationNameOptionDescription">
-        <source>The application name displayed in the dashboard</source>
-        <target state="new">The application name displayed in the dashboard</target>
+        <source>The application name displayed in the dashboard and used to scope persisted dashboard data</source>
+        <target state="new">The application name displayed in the dashboard and used to scope persisted dashboard data</target>
         <note />
       </trans-unit>
       <trans-unit id="BundleLayoutNotFound">
