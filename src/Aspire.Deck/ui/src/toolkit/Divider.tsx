@@ -15,16 +15,14 @@ export function Divider({
     .filter(Boolean)
     .join(" ");
 
-  if (orientation === "horizontal") {
-    return <hr className={classes} aria-orientation="horizontal" aria-label={label} />;
-  }
-
   return (
-    <div
+    <Separator
       className={classes}
-      role="separator"
-      aria-orientation="vertical"
+      orientation={orientation}
+      decorative={!label}
       aria-label={label}
+      aria-orientation={orientation}
     />
   );
 }
+import { Separator } from "@/components/ui/separator";

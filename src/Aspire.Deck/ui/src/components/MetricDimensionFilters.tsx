@@ -1,5 +1,6 @@
+import { useState } from "react";
 import type { MetricDimensionFilter } from "../api/types";
-import { Checkbox } from "../toolkit";
+import { Accordion, Checkbox } from "../toolkit";
 
 function valueLabel(value: string | null): string {
   if (value === null) {
@@ -17,6 +18,8 @@ export function MetricDimensionFilters({
   selected: Record<string, Array<string | null>>;
   onChange: (selected: Record<string, Array<string | null>>) => void;
 }) {
+  const [openItems, setOpenItems] = useState<string[]>([]);
+
   if (filters.length === 0) {
     return null;
   }
@@ -35,16 +38,17 @@ export function MetricDimensionFilters({
   return (
     <section className="metric-filters" aria-label="Metric dimension filters">
       <h3>Dimensions</h3>
-      {filters.map((filter) => {
-        const values = selectedValues(filter);
-        const allSelected = values.length === filter.values.length && filter.values.every((value) => values.includes(value));
-        return (
-          <details key={filter.name} className="metric-filter">
-            <summary>
-              <span className="cell-mono">{filter.name}</span>
-              <span className="cell-muted">{allSelected ? "All" : `${values.length} of ${filter.values.length}`}</span>
-            </summary>
-            <div className="metric-filter__values">
+      <Accordion
+        openItems={openItems}
+        onOpenItemsChange={setOpenItems}
+        items={filters.map((filter) => {
+          const values = selectedValues(filter);
+          const allSelected = values.length === filter.values.length && filter.values.every((value) => values.includes(value));
+          return {
+            id: filter.name,
+            heading: <span className="cell-mono">{filter.name}</span>,
+            count: allSelected ? "All" : `${values.length} of ${filter.values.length}`,
+            content: <div className="metric-filter__values">
               <Checkbox
                 checked={allSelected}
                 indeterminate={!allSelected && values.length > 0}
@@ -63,10 +67,11 @@ export function MetricDimensionFilters({
                   )}
                 />
               ))}
-            </div>
-          </details>
-        );
-      })}
+            </div>,
+          };
+        })}
+        className="metric-filter"
+      />
     </section>
   );
 }

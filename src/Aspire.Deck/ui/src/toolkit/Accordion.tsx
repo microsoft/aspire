@@ -1,11 +1,17 @@
-import type { MouseEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
+import {
+  Accordion as ShadcnAccordion,
+  AccordionContent,
+  AccordionItem as ShadcnAccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Badge } from "./Badge";
 
 export interface AccordionItem {
   id: string;
   heading: ReactNode;
   content: ReactNode;
-  count?: number;
+  count?: ReactNode;
   disabled?: boolean;
 }
 
@@ -24,51 +30,34 @@ export function Accordion({
   collapsible?: boolean;
   className?: string;
 }) {
+  const content = items.map((item) => (
+    <ShadcnAccordionItem key={item.id} value={item.id} className="deck-accordion-item">
+      <AccordionTrigger className="deck-accordion-item__header" disabled={item.disabled}>
+        <span className="deck-accordion-item__heading">{item.heading}</span>
+        {item.count === undefined ? null : (
+          <span className="deck-accordion-item__end">
+            <Badge>{item.count}</Badge>
+          </span>
+        )}
+      </AccordionTrigger>
+      <AccordionContent className="deck-accordion-item__body">{item.content}</AccordionContent>
+    </ShadcnAccordionItem>
+  ));
+
   const classes = ["deck-accordion", className].filter(Boolean).join(" ");
-
-  const toggle = (event: MouseEvent<HTMLElement>, item: AccordionItem): void => {
-    // Native details/summary preserves browser disclosure and keyboard semantics while
-    // controlled state keeps single/multiple and collapsible behavior consistent.
-    event.preventDefault();
-    if (item.disabled) {
-      return;
-    }
-
-    const isOpen = openItems.includes(item.id);
-    if (isOpen) {
-      if (collapsible) {
-        onOpenItemsChange(openItems.filter((id) => id !== item.id));
-      }
-      return;
-    }
-
-    onOpenItemsChange(multiple ? [...openItems, item.id] : [item.id]);
-  };
-
-  return (
-    <div className={classes}>
-      {items.map((item) => {
-        const isOpen = openItems.includes(item.id);
-        return (
-          <details key={item.id} className="deck-accordion-item" open={isOpen}>
-            <summary
-              className="deck-accordion-item__header"
-              role="button"
-              aria-expanded={isOpen}
-              aria-disabled={item.disabled || undefined}
-              onClick={(event) => toggle(event, item)}
-            >
-              <span className="deck-accordion-item__heading">{item.heading}</span>
-              {item.count === undefined ? null : (
-                <span className="deck-accordion-item__end">
-                  <Badge>{item.count}</Badge>
-                </span>
-              )}
-            </summary>
-            <div className="deck-accordion-item__body">{item.content}</div>
-          </details>
-        );
-      })}
-    </div>
+  return multiple ? (
+    <ShadcnAccordion type="multiple" value={[...openItems]} onValueChange={onOpenItemsChange} className={classes}>
+      {content}
+    </ShadcnAccordion>
+  ) : (
+    <ShadcnAccordion
+      type="single"
+      value={openItems[0] ?? ""}
+      collapsible={collapsible}
+      onValueChange={(id) => onOpenItemsChange(id ? [id] : [])}
+      className={classes}
+    >
+      {content}
+    </ShadcnAccordion>
   );
 }

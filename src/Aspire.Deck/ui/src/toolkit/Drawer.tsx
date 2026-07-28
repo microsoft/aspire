@@ -1,4 +1,10 @@
-import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { IconButton } from "./Button";
 import { CloseIcon } from "./Icons";
 
@@ -11,6 +17,8 @@ export interface DrawerProps {
   children: ReactNode;
   footer?: ReactNode;
   headerActions?: ReactNode;
+  showCloseButton?: boolean;
+  intent?: string;
   className?: string;
   size?: number;
   onClose: () => void;
@@ -25,27 +33,30 @@ export function Drawer({
   children,
   footer,
   headerActions,
+  showCloseButton = true,
+  intent,
   className,
   size = 560,
   onClose,
 }: DrawerProps) {
-  const titleId = useId();
-  const panelRef = useRef<HTMLElement | null>(null);
   const [panelSize, setPanelSize] = useState(size);
   const [orientation, setOrientation] = useState<"right" | "bottom">("right");
+  const contentRef = useRef<HTMLDivElement>(null);
+  const returnFocusRef = useRef(document.activeElement instanceof HTMLElement ? document.activeElement : null);
 
   useEffect(() => setPanelSize(size), [size]);
 
+  useEffect(() => () => {
+    const returnFocus = returnFocusRef.current;
+    requestAnimationFrame(() => returnFocus?.focus());
+  }, []);
+
   useEffect(() => {
-    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const frame = requestAnimationFrame(() => {
-      const firstControl = panelRef.current?.querySelector<HTMLElement>("button, a[href], input, textarea, select, [tabindex]:not([tabindex='-1'])");
-      (firstControl ?? panelRef.current)?.focus();
+    requestAnimationFrame(() => {
+      contentRef.current?.querySelector<HTMLElement>(
+        "button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex='-1'])",
+      )?.focus();
     });
-    return () => {
-      cancelAnimationFrame(frame);
-      previouslyFocused?.focus();
-    };
   }, []);
 
   useEffect(() => {
@@ -53,23 +64,16 @@ export function Drawer({
       const target = event.target as HTMLElement | null;
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (event.key === "Tab") {
-        const focusable = [...(panelRef.current?.querySelectorAll<HTMLElement>("button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex='-1'])") ?? [])];
-        if (focusable.length === 0) {
-          event.preventDefault();
-          panelRef.current?.focus();
-        } else {
-          const first = focusable[0]!;
-          const last = focusable[focusable.length - 1]!;
-          if (event.shiftKey && document.activeElement === first) {
-            event.preventDefault();
-            last.focus();
-          } else if (!event.shiftKey && document.activeElement === last) {
-            event.preventDefault();
-            first.focus();
-          }
-        }
-      } else if (event.key === "Escape") {
-        onClose();
+        const focusable = Array.from(contentRef.current?.querySelectorAll<HTMLElement>(
+          "button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex='-1'])",
+        ) ?? []);
+        if (focusable.length === 0) return;
+        const currentIndex = focusable.indexOf(document.activeElement as HTMLElement);
+        const nextIndex = event.shiftKey
+          ? (currentIndex <= 0 ? focusable.length - 1 : currentIndex - 1)
+          : (currentIndex >= focusable.length - 1 ? 0 : currentIndex + 1);
+        event.preventDefault();
+        focusable[nextIndex]?.focus();
       } else if (target?.closest("input, textarea, select, [contenteditable='true']")) {
         return;
       } else if (event.shiftKey && event.key.toLowerCase() === "x") {
@@ -96,34 +100,38 @@ export function Drawer({
   const panelStyle = { "--drawer-size": `${panelSize}px` } as CSSProperties;
 
   return (
-    <>
-      <div className="drawer-overlay" onClick={onClose} />
-      <aside
-        ref={panelRef}
+    <Sheet open modal={false} onOpenChange={(open) => {
+      if (!open) onClose();
+    }}>
+      <SheetContent
+        ref={contentRef}
+        side={orientation === "right" ? "right" : "bottom"}
+        showOverlay={false}
         className={["drawer", `drawer--${orientation}`, className].filter(Boolean).join(" ")}
         style={panelStyle}
-        role="dialog"
-        aria-modal="true"
         aria-label={ariaLabel}
-        aria-labelledby={ariaLabel ? undefined : titleId}
-        tabIndex={-1}
+        data-intent={intent}
+        onInteractOutside={(event) => event.preventDefault()}
       >
         <div className="drawer__header">
           <div className="drawer__heading">
             {leading}
             <div>
-              <div className="drawer__title" id={titleId}>{title}</div>
-              {subtitle ? <div className="drawer__subtitle">{subtitle}</div> : null}
+              <SheetTitle className="drawer__title">
+                {ariaLabel ? <span className="sr-only">{ariaLabel}</span> : null}
+                <span aria-hidden={ariaLabel ? "true" : undefined}>{title}</span>
+              </SheetTitle>
+              {subtitle ? <SheetDescription className="drawer__subtitle">{subtitle}</SheetDescription> : null}
             </div>
           </div>
           <div className="drawer__header-actions">
             {headerActions}
-            <IconButton label={closeLabel} icon={<CloseIcon size={16} />} onClick={onClose} />
+            {showCloseButton ? <IconButton label={closeLabel} icon={<CloseIcon size={16} />} onClick={onClose} /> : null}
           </div>
         </div>
         <div className="drawer__body">{children}</div>
         {footer ? <div className="drawer__commands">{footer}</div> : null}
-      </aside>
-    </>
+      </SheetContent>
+    </Sheet>
   );
 }

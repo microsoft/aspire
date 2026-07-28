@@ -1,7 +1,7 @@
 import type { AppHostInfo, ConnectionState, ConnectionTarget, DeckConfig } from "../api/types";
 import { ConnectionPill } from "./ConnectionPill";
 import { AppHostSwitcher } from "./AppHostSwitcher";
-import { MoonIcon, NamedIcon, SunIcon } from "../toolkit";
+import { IconButton, MoonIcon, NamedIcon, SunIcon } from "../toolkit";
 import type { Theme } from "../lib/theme";
 import { UserProfile } from "./UserProfile";
 
@@ -63,30 +63,26 @@ export function TopBar({
       >
         <NamedIcon name="BranchFork" size={17} />
       </a>
-      <button className="icon-btn" type="button" onClick={onHelp} title="Help" aria-label="Help">
-        <NamedIcon name="QuestionCircle" size={17} />
-      </button>
+      <IconButton label="Help" onClick={onHelp} icon={<NamedIcon name="QuestionCircle" size={17} />} />
       {config?.isAgentHelpEnabled && config.agentHelpMarkdown ? (
-        <button className="icon-btn" type="button" onClick={onAIAgents} title="AI agents" aria-label="AI agents">
-          <NamedIcon name="ChatSparkle" size={17} />
-        </button>
+        <IconButton label="AI agents" onClick={onAIAgents} icon={<NamedIcon name="ChatSparkle" size={17} />} />
       ) : null}
-      <button className="icon-btn topbar__notification-button" type="button" onClick={onNotifications} title="Notifications" aria-label={`Notifications ${notificationCount}`}>
-        <NamedIcon name="Info" size={17} />
-        {notificationCount > 0 ? <span className="topbar__notification-count" aria-hidden="true">{notificationCount}</span> : null}
-      </button>
-
-      <button
-        className="icon-btn"
+      <IconButton
+        label={`Notifications ${notificationCount}`}
+        className="topbar__notification-button"
+        onClick={onNotifications}
+        icon={<>
+          <NamedIcon name="Info" size={17} />
+          {notificationCount > 0 ? <span className="topbar__notification-count" aria-hidden="true">{notificationCount}</span> : null}
+        </>}
+      />
+      <IconButton
+        label="Toggle theme"
         onClick={onToggleTheme}
         title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-        aria-label="Toggle theme"
-      >
-        {theme === "dark" ? <SunIcon size={17} /> : <MoonIcon size={17} />}
-      </button>
-      <button className="icon-btn" type="button" onClick={onSettings} title="Settings" aria-label="Settings">
-        <NamedIcon name="Settings" size={17} />
-      </button>
+        icon={theme === "dark" ? <SunIcon size={17} /> : <MoonIcon size={17} />}
+      />
+      <IconButton label="Settings" onClick={onSettings} icon={<NamedIcon name="Settings" size={17} />} />
       {config?.user ? <UserProfile user={config.user} /> : null}
     </header>
   );

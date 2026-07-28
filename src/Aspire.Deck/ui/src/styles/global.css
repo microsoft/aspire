@@ -554,10 +554,6 @@ a:focus-visible {
   cursor: pointer;
 }
 .user-profile__menu {
-  position: absolute;
-  z-index: 1000;
-  top: calc(100% + 8px);
-  right: 0;
   width: 260px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -644,7 +640,6 @@ a:focus-visible {
   display: inline-flex;
 }
 .command-menu {
-  position: absolute;
   z-index: 80;
   min-width: 240px;
   max-width: min(320px, calc(100vw - 24px));
@@ -1597,7 +1592,7 @@ table.data tbody tr.selected {
 
 /* ---------- Details drawer ---------- */
 .drawer-overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.32);
   opacity: 0;
@@ -1605,8 +1600,8 @@ table.data tbody tr.selected {
   z-index: 30;
 }
 .drawer {
-  position: absolute;
-  top: 0;
+  position: fixed;
+  top: var(--topbar-h);
   right: 0;
   bottom: 0;
   width: min(var(--drawer-size, 560px), 80%);
@@ -2446,11 +2441,16 @@ table.data tbody tr.selected {
   gap: 14px;
 }
 .canvas-card {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-width: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-surface);
   padding: 18px;
   text-align: left;
+  white-space: normal;
   cursor: pointer;
   transition: border-color 0.14s ease, transform 0.14s ease, background 0.14s ease;
 }
@@ -3036,9 +3036,6 @@ table.data tbody tr.selected {
 }
 
 .apphost-switcher__menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
   min-width: 240px;
   margin: 0;
   padding: 6px;
@@ -3047,11 +3044,6 @@ table.data tbody tr.selected {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-pop);
-  z-index: 40;
-}
-
-.apphost-switcher__menu li {
-  margin: 0;
 }
 
 .apphost-switcher__item {
@@ -3082,6 +3074,12 @@ table.data tbody tr.selected {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.apphost-switcher__item-content {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
 }
 
 /* ---------- Interaction pane (command inputs / message box / notification) ---------- */
@@ -3295,7 +3293,7 @@ table.data tbody tr.selected {
 /* When any right-anchored drawer is open (an interaction dialog or a resource details
    drawer), slide the stack to the left of it so the two surfaces don't overlap (the
    drawer is min(560px, 80%) wide). */
-.app:has(.drawer) .notif-stack {
+body:has(.drawer) .notif-stack {
   right: calc(min(560px, 80%) + 14px);
 }
 .notif {
@@ -3549,7 +3547,7 @@ table.data tbody tr.selected {
   }
 
   .notif-stack,
-  .app:has(.drawer) .notif-stack {
+  body:has(.drawer) .notif-stack {
     bottom: 80px;
     right: 12px;
     left: 12px;

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ManageDataRequest, ManageDataResource, ManageDataType } from "../api/types";
 import { exportManageData, getManageData, importManageData, removeManageData } from "../api/deck";
-import { Button, Checkbox, Drawer, NamedIcon } from "../toolkit";
+import { Button, Checkbox, Drawer, IconButton, Input, NamedIcon } from "../toolkit";
 
 const TYPE_LABELS: Record<ManageDataType, string> = {
   ResourceDetails: "Resource details",
@@ -101,7 +101,7 @@ export function ManageDataDrawer({ onClose }: { onClose: () => void }) {
       </Button>
       {isImportEnabled ? (
         <>
-          <input
+          <Input
             ref={fileInput}
             className="manage-data__file"
             type="file"
@@ -147,18 +147,16 @@ export function ManageDataDrawer({ onClose }: { onClose: () => void }) {
           return (
             <div className="manage-data__resource" key={resource.name}>
               <div className="manage-data__resource-row">
-                <button
-                  className="icon-btn icon-btn--sm"
-                  type="button"
-                  aria-label={`${isExpanded ? "Collapse" : "Expand"} ${resource.displayName}`}
+                <IconButton
+                  className="icon-btn--sm"
+                  label={`${isExpanded ? "Collapse" : "Expand"} ${resource.displayName}`}
+                  icon={<NamedIcon name={isExpanded ? "ChevronDown" : "ChevronRight"} size={14} />}
                   onClick={() => setExpanded((current) => {
                     const next = new Set(current);
                     isExpanded ? next.delete(resource.name) : next.add(resource.name);
                     return next;
                   })}
-                >
-                  <NamedIcon name={isExpanded ? "ChevronDown" : "ChevronRight"} size={14} />
-                </button>
+                />
                 <Checkbox
                   label={resource.displayName}
                   ariaLabel={`Select all data for ${resource.displayName}`}

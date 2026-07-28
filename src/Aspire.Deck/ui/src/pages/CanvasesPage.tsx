@@ -4,6 +4,7 @@ import { listCanvases } from "../api/deck";
 import { attachCanvasBridge } from "../lib/canvasBridge";
 import {
   BackIcon,
+  Button,
   CanvasHost,
   CanvasIcon,
   EmptyState,
@@ -13,6 +14,7 @@ import {
   PageHeading,
   PageSubtitle,
   PageTitle,
+  IconButton,
 } from "../toolkit";
 
 // Resolves a canvas url against the app base so it loads under both the native
@@ -50,9 +52,7 @@ export function CanvasesPage() {
     return (
       <Page aria-labelledby="deck-page-canvas-title">
         <PageHeader>
-          <button className="icon-btn" onClick={() => setOpenId(null)} aria-label="Back to canvases">
-            <BackIcon size={17} />
-          </button>
+          <IconButton label="Back to canvases" onClick={() => setOpenId(null)} icon={<BackIcon size={17} />} />
           <PageHeading>
             <PageTitle id="deck-page-canvas-title">
               {open.icon ? `${open.icon} ` : ""}
@@ -96,11 +96,16 @@ export function CanvasesPage() {
         ) : (
           <div className="canvas-grid">
             {canvases.map((canvas) => (
-              <button key={canvas.id} className="canvas-card" onClick={() => setOpenId(canvas.id)}>
+              <Button
+                key={canvas.id}
+                variant="ghost"
+                className="canvas-card !block !h-auto !w-full !min-w-0 !whitespace-normal"
+                onClick={() => setOpenId(canvas.id)}
+              >
                 <div className="canvas-card__icon">{canvas.icon ?? "🧩"}</div>
                 <div className="canvas-card__title">{canvas.title}</div>
                 {canvas.description ? <div className="canvas-card__desc">{canvas.description}</div> : null}
-              </button>
+              </Button>
             ))}
           </div>
         )}

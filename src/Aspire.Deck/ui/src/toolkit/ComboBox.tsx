@@ -6,6 +6,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { Input } from "@/components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 
 export interface ComboBoxOption<T = unknown> {
@@ -77,7 +78,7 @@ export function ComboBox<T>({
         }}
       >
         <PopoverAnchor asChild>
-          <input
+          <Input
             id={controlId}
             role="combobox"
             type="text"

@@ -1,4 +1,5 @@
 import { useState, type InputHTMLAttributes } from "react";
+import { Input } from "@/components/ui/input";
 import { IconButton } from "./Button";
 import { EyeIcon, EyeOffIcon } from "./Icons";
 
@@ -6,7 +7,7 @@ export function SecretInput({ className, ...props }: Omit<InputHTMLAttributes<HT
   const [revealed, setRevealed] = useState(false);
   return (
     <span className="deck-secret-input">
-      <input
+      <Input
         {...props}
         className={["input", className].filter(Boolean).join(" ")}
         type={revealed ? "text" : "password"}

@@ -222,15 +222,13 @@ export function ResourcesPage({
       render: ({ resource, depth, hasChildren, collapsed: isCollapsed }) => (
         <span className="cell-name resource-name" style={{ paddingInlineStart: `${depth * 22}px` }}>
           {hasChildren ? (
-            <button
+            <IconButton
               className="resource-name__toggle"
-              type="button"
-              aria-label={`${isCollapsed ? "Expand" : "Collapse"} ${resource.displayName}`}
+              label={`${isCollapsed ? "Expand" : "Collapse"} ${resource.displayName}`}
+              icon={<ChevronIcon size={14} className={isCollapsed ? "" : "resource-name__chevron--expanded"} />}
               aria-expanded={!isCollapsed}
               onClick={(event) => { event.stopPropagation(); toggleCollapsed(resource.name); }}
-            >
-              <ChevronIcon size={14} className={isCollapsed ? "" : "resource-name__chevron--expanded"} />
-            </button>
+            />
           ) : <span className="resource-name__spacer" />}
           <ResourceTypeIcon type={resource.resourceType} iconName={resource.iconName} iconVariant={resource.iconVariant} size={16} className="cell-type-icon" />
           {resource.displayName}

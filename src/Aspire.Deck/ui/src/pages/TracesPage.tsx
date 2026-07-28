@@ -10,8 +10,10 @@ import { SpanDetailDrawer } from "../components/SpanDetailDrawer";
 import { formatSpanJson } from "../components/SpanActions";
 import { GenAIVisualizerDialog, hasGenAIAttributes } from "../components/GenAIVisualizerDialog";
 import {
+  Button,
   ChevronIcon,
   CommandMenu,
+  IconButton,
   NamedIcon,
   Page,
   PageBody,
@@ -636,7 +638,7 @@ function TraceBlock({
   return (
     <div className={`wf__trace ${trace.hasError ? "wf__trace--error" : ""}`}>
       <div className="wf__head">
-        <button className="wf__head-toggle" onClick={onToggle} aria-expanded={!collapsed}>
+        <Button variant="ghost" className="wf__head-toggle" onClick={onToggle} aria-expanded={!collapsed}>
           <ChevronIcon size={14} className={`wf__chevron ${collapsed ? "" : "wf__chevron--open"}`} />
           <span className="wf__swatch" style={{ background: headColor }} />
           <span className="wf__head-name">{trace.rootName}</span>
@@ -647,7 +649,7 @@ function TraceBlock({
           </time>
           <span className="wf__head-meta">{trace.rows.length} spans</span>
           <span className="wf__head-dur">{formatDurationNanos(String(trace.durationNano))}</span>
-        </button>
+        </Button>
         <CommandMenu
           ariaLabel="Trace actions"
           triggerContent={null}
@@ -696,20 +698,18 @@ function TraceBlock({
                     style={{ paddingLeft: row.depth * 16 + 4, borderLeftColor: color }}
                   >
                     {hasChildren ? (
-                      <button
-                        type="button"
+                      <IconButton
                         className="wf__span-toggle"
-                        aria-label={`${spanCollapsed ? "Expand" : "Collapse"} children of ${row.span.name}`}
+                        label={`${spanCollapsed ? "Expand" : "Collapse"} children of ${row.span.name}`}
+                        icon={<ChevronIcon size={12} className={`wf__chevron ${spanCollapsed ? "" : "wf__chevron--open"}`} />}
                         aria-expanded={!spanCollapsed}
                         onClick={(event) => { event.stopPropagation(); onToggleSpan(trace.traceId, row.span.spanId); }}
-                      >
-                        <ChevronIcon size={12} className={`wf__chevron ${spanCollapsed ? "" : "wf__chevron--open"}`} />
-                      </button>
+                      />
                     ) : <span className="wf__span-toggle-placeholder" />}
-                    <button type="button" className="wf__span-open" onClick={(event) => { event.stopPropagation(); onSelect(row.span); }}>
+                    <Button variant="ghost" className="wf__span-open" onClick={(event) => { event.stopPropagation(); onSelect(row.span); }}>
                       {isError ? <span className="wf__error-dot" /> : null}
                       <span className="cell-mono wf__name-text">{row.span.name}</span>
-                    </button>
+                    </Button>
                   </div>
                   <div className="wf__track">
                     <span

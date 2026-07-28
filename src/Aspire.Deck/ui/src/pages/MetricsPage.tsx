@@ -8,6 +8,7 @@ import { MetricTreeSelector } from "../components/MetricTreeSelector";
 import { displayUnit, formatMetricValue, formatTimeWithMillis } from "../lib/format";
 import { useResources, useTelemetry } from "../lib/useDeckEvent";
 import {
+  Button,
   CommandMenu,
   EmptyState,
   MetricsIcon,
@@ -285,16 +286,16 @@ export function MetricsPage({
         />
         <div className="seg" role="group" aria-label="Time range">
           {TIME_RANGES.map((range) => (
-            <button
+            <Button
               key={range.seconds}
-              type="button"
+              variant="ghost"
               className={`seg__btn ${range.seconds === selectedWindowSeconds ? "active" : ""}`}
               aria-pressed={range.seconds === selectedWindowSeconds}
               title={range.title}
               onClick={() => updateRoute({ windowSeconds: range.seconds, zoomStartMs: null, zoomEndMs: null })}
             >
               {range.label}
-            </button>
+            </Button>
           ))}
         </div>
         <div className="page__header-spacer" />
@@ -368,15 +369,15 @@ export function MetricsPage({
                   {active.kind === "histogram" ? (
                     <div className="metric-histogram-options seg" role="group" aria-label="Histogram aggregation">
                       {(["percentiles", "count", "sum", "buckets"] as const).map((mode) => (
-                        <button
+                        <Button
                           key={mode}
-                          type="button"
+                          variant="ghost"
                           className={`seg__btn ${routeHistogramMode === mode ? "active" : ""}`}
                           aria-pressed={routeHistogramMode === mode}
                           onClick={() => updateRoute({ histogramMode: mode, zoomStartMs: null, zoomEndMs: null })}
                         >
                           {mode[0]!.toUpperCase() + mode.slice(1)}
-                        </button>
+                        </Button>
                       ))}
                     </div>
                   ) : null}

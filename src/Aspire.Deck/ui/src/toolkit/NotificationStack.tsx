@@ -1,4 +1,5 @@
 import type { Key, ReactNode } from "react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, IconButton } from "./Button";
 import {
   CloseIcon,
@@ -51,19 +52,19 @@ export function NotificationStack({
 export function Notification({ notification }: { notification: NotificationItem }) {
   const intent = notification.intent ?? "info";
   return (
-    <div className={`notif notif--${intent}`} role="alert">
+    <Alert className={`notif notif--${intent}`} variant={toAlertVariant(intent)}>
       <span className="notif__icon" aria-hidden="true">
         <IntentIcon intent={intent} />
       </span>
       <div className="notif__body">
-        {notification.title ? <div className="notif__title">{notification.title}</div> : null}
-        {notification.message ? <div className="notif__message">{notification.message}</div> : null}
+        {notification.title ? <AlertTitle className="notif__title">{notification.title}</AlertTitle> : null}
+        {notification.message ? <AlertDescription className="notif__message">{notification.message}</AlertDescription> : null}
 
         {notification.link ? (
-          <button className="notif__link" type="button" onClick={notification.link.onClick}>
+          <Button className="notif__link" variant="ghost" size="small" onClick={notification.link.onClick}>
             {notification.link.label}
             <ExternalIcon size={13} />
-          </button>
+          </Button>
         ) : null}
 
         {notification.primaryAction || notification.secondaryAction ? (
@@ -90,8 +91,21 @@ export function Notification({ notification }: { notification: NotificationItem 
           onClick={notification.onDismiss}
         />
       ) : null}
-    </div>
+    </Alert>
   );
+}
+
+function toAlertVariant(intent: NotificationIntent): "default" | "destructive" | "warning" | "success" {
+  switch (intent) {
+    case "error":
+      return "destructive";
+    case "warning":
+      return "warning";
+    case "success":
+      return "success";
+    default:
+      return "default";
+  }
 }
 
 function IntentIcon({ intent }: { intent: NotificationIntent }) {

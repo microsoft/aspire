@@ -238,7 +238,6 @@ test(`${features("TK-MENU-001")} exercises the command menu with pointer and key
 
   await trigger.press("ArrowDown");
   await expect(menu).toBeVisible();
-  await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Enter");
   await expect(page.getByRole("region", { name: "Actions" }).getByRole("status")).toHaveText("Restart selected");
   await expect(menu).toHaveCount(0);
@@ -306,13 +305,13 @@ test(`${features("TK-DIALOG-001", "TK-DRAWER-001")} exercises modal surfaces`, a
   const openConfirmation = page.getByRole("button", { name: "Confirm command" });
 
   await openConfirmation.click();
-  await expect(page.getByRole("dialog", { name: "Restart frontend" })).toBeVisible();
+  await expect(page.getByRole("alertdialog", { name: "Restart frontend" })).toBeVisible();
   await page.getByRole("button", { name: "Cancel" }).click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
 
   await openConfirmation.click();
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
 
   await openConfirmation.click();
   await page.getByRole("button", { name: "Restart", exact: true }).click();

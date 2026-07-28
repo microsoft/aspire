@@ -2,7 +2,7 @@ import type { DeckConfig } from "../api/types";
 import { changeCulture } from "../api/deck";
 import type { ThemeChoice } from "../lib/theme";
 import type { TimeFormatChoice } from "../lib/timeFormat";
-import { Button, Dialog, NamedIcon, Select } from "../toolkit";
+import { Button, Dialog, NamedIcon, RadioGroup, Select } from "../toolkit";
 
 const choices: Array<{ value: ThemeChoice; label: string }> = [
   { value: "system", label: "System" },
@@ -45,37 +45,11 @@ export function SettingsDialog({
     >
       <fieldset className="settings-group">
         <legend>Theme</legend>
-        <div className="settings-radio-group">
-          {choices.map((choice) => (
-            <label key={choice.value} className="deck-radio">
-              <input
-                type="radio"
-                name="settings-theme"
-                value={choice.value}
-                checked={themeChoice === choice.value}
-                onChange={() => onThemeChoiceChange(choice.value)}
-              />
-              {choice.label}
-            </label>
-          ))}
-        </div>
+        <RadioGroup ariaLabel="Theme" value={themeChoice} options={choices} onValueChange={onThemeChoiceChange} className="settings-radio-group" />
       </fieldset>
       <fieldset className="settings-group">
         <legend>Time format</legend>
-        <div className="settings-radio-group">
-          {timeChoices.map((choice) => (
-            <label key={choice.value} className="deck-radio">
-              <input
-                type="radio"
-                name="settings-time-format"
-                value={choice.value}
-                checked={timeFormatChoice === choice.value}
-                onChange={() => onTimeFormatChoiceChange(choice.value)}
-              />
-              {choice.label}
-            </label>
-          ))}
-        </div>
+        <RadioGroup ariaLabel="Time format" value={timeFormatChoice} options={timeChoices} onValueChange={onTimeFormatChoiceChange} className="settings-radio-group" />
       </fieldset>
       {config?.culture && config.cultures && config.cultures.length > 0 ? (
         <div className="settings-language">

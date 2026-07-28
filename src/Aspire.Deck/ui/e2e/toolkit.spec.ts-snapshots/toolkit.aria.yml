@@ -708,10 +708,10 @@
       - tab "Overview" [selected]
       - tab "Logs 3"
     - tabpanel "Overview": Overview panel
-    - group:
+    - heading "Environment 2" [level=3]:
       - button "Environment 2" [expanded]
-      - text: ASPNETCORE_ENVIRONMENT and HTTP_PORTS
-    - group:
+    - region "Environment 2": ASPNETCORE_ENVIRONMENT and HTTP_PORTS
+    - heading "Endpoints 1" [level=3]:
       - button "Endpoints 1"
     - separator "Horizontal divider"
     - text: Resource
@@ -767,8 +767,9 @@
     - region "Sample property explorer":
       - toolbar "Sample property explorer tools":
         - textbox "Filter sample details…"
-      - group:
+      - heading "Span 3" [level=3]:
         - button "Span 3" [expanded]
+      - region "Span 3":
         - group "Sample span properties":
           - term: Name
           - definition: GET /catalog
@@ -776,8 +777,9 @@
           - definition: Server
           - term: Trace ID
           - definition: 0123456789abcdef0123456789abcdef
-      - group:
+      - heading "Context 2" [level=3]:
         - button "Context 2" [expanded]
+      - region "Context 2":
         - group "Sample context properties":
           - term: Source
           - definition: OpenTelemetry.AspNetCore

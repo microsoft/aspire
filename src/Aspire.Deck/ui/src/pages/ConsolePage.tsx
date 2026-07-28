@@ -439,9 +439,9 @@ export function ConsolePage({
           />
         ) : null}
         {!autoScroll ? (
-          <button className="btn btn--sm" onClick={scrollToBottom}>
+          <Button size="small" onClick={scrollToBottom}>
             Scroll to bottom
-          </button>
+          </Button>
         ) : selectedResource?.hasTerminal ? (
           <InteractiveTerminal resourceName={selectedResource.displayName} replicaIndex={selectedResource.terminalReplicaIndex ?? 0} />
         ) : (

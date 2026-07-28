@@ -1,6 +1,13 @@
-import { useEffect, useRef, useState } from "react";
 import type { DeckUser } from "../api/types";
 import { signOut } from "../api/deck";
+import { Button } from "../toolkit";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 function getInitials(name: string): string {
   return name
@@ -12,42 +19,18 @@ function getInitials(name: string): string {
 }
 
 export function UserProfile({ user }: { user: DeckUser }) {
-  const [open, setOpen] = useState(false);
-  const container = useRef<HTMLDivElement>(null);
   const initials = getInitials(user.name);
 
-  useEffect(() => {
-    if (!open) return;
-    const close = (event: Event): void => {
-      if (event instanceof KeyboardEvent && event.key === "Escape") {
-        setOpen(false);
-      } else if (event instanceof PointerEvent && !container.current?.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    };
-    window.addEventListener("keydown", close);
-    window.addEventListener("pointerdown", close);
-    return () => {
-      window.removeEventListener("keydown", close);
-      window.removeEventListener("pointerdown", close);
-    };
-  }, [open]);
-
   return (
-    <div className="user-profile" ref={container}>
-      <button
-        className="user-profile__trigger"
-        type="button"
-        aria-label={`User profile for ${user.name}`}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
-      >
-        {initials}
-      </button>
-      {open ? (
-        <div className="user-profile__menu" role="menu" aria-label="User profile">
-          <div className="user-profile__label">Logged in as</div>
+    <div className="user-profile">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" className="user-profile__trigger" aria-label={`User profile for ${user.name}`}>
+            {initials}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="user-profile__menu" aria-label="User profile" align="end" sideOffset={8}>
+          <DropdownMenuLabel className="user-profile__label">Logged in as</DropdownMenuLabel>
           <div className="user-profile__identity">
             <div className="user-profile__avatar" aria-hidden="true">{initials}</div>
             <div>
@@ -56,10 +39,10 @@ export function UserProfile({ user }: { user: DeckUser }) {
             </div>
           </div>
           <div className="user-profile__signout">
-            <button className="btn btn--ghost" type="button" role="menuitem" onClick={() => void signOut()}>Sign out</button>
+            <DropdownMenuItem onSelect={() => void signOut()}>Sign out</DropdownMenuItem>
           </div>
-        </div>
-      ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

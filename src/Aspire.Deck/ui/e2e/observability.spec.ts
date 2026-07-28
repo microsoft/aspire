@@ -52,7 +52,7 @@ test.afterEach(async ({ page }) => {
 test(`${features("CONSOLE-RESOURCE-001", "CONSOLE-ALL-001", "CONSOLE-STREAM-001", "CONSOLE-SWITCH-001", "CONSOLE-FOLLOW-001")} streams and follows all or one resource console`, async ({ page }) => {
   await navigationButton(page, "Console").click();
 
-  const resourceSelect = page.getByRole("combobox");
+  const resourceSelect = page.getByRole("combobox", { name: "Resource" });
   await resourceSelect.click();
   await expect(page.getByRole("option")).toHaveCount(9);
   await page.keyboard.press("Escape");
@@ -107,7 +107,7 @@ test(`${features("CONSOLE-RESOURCE-001", "CONSOLE-ALL-001", "CONSOLE-STREAM-001"
 
 test(`${features("CONSOLE-PAUSE-001", "CONSOLE-CLEAR-001")} pauses, catches up, and clears console output`, async ({ page }) => {
   await navigationButton(page, "Console").click();
-  await selectOption(page.getByRole("combobox"), "frontend");
+  await selectOption(page.getByRole("combobox", { name: "Resource" }), "frontend");
 
   const consolePanel = page.locator(".console");
   const lineText = consolePanel.locator(".log-line__text");
@@ -127,7 +127,7 @@ test(`${features("CONSOLE-PAUSE-001", "CONSOLE-CLEAR-001")} pauses, catches up, 
   await expect(consolePanel.locator(".console__footer")).toContainText("0 lines");
   await expect.poll(() => lineText.count(), { timeout: 4_000 }).toBeGreaterThan(0);
 
-  await selectOption(page.getByRole("combobox"), "__all-resources__");
+  await selectOption(page.getByRole("combobox", { name: "Resource" }), "__all-resources__");
   await expect.poll(() => lineText.count()).toBeGreaterThan(0);
   await page.getByRole("button", { name: "Clear console" }).click();
   await page.getByRole("menuitem", { name: "Clear all resources" }).click();
@@ -163,10 +163,10 @@ test(`${features("CONSOLE-TERMINAL-001", "CONSOLE-TERMINAL-FONT-001", "CONSOLE-T
 
 test(`${features("CONSOLE-COMMANDS-001")} executes selected resource commands with confirmation`, async ({ page }) => {
   await navigationButton(page, "Console").click();
-  await selectOption(page.getByRole("combobox"), "frontend");
+  await selectOption(page.getByRole("combobox", { name: "Resource" }), "frontend");
 
   await page.getByRole("button", { name: "Restart" }).click();
-  const dialog = page.getByRole("dialog", { name: "Restart" });
+  const dialog = page.getByRole("alertdialog", { name: "Restart" });
   await expect(dialog).toContainText("Are you sure you want to restart this resource?");
   await dialog.getByRole("button", { name: "Restart" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Restart succeeded" })).toBeVisible();

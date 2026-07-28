@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { MetricSummary } from "../api/types";
-import { Accordion, SearchBox } from "../toolkit";
+import { Accordion, Button, SearchBox } from "../toolkit";
 import { formatMetricValue } from "../lib/format";
 
 export function MetricTreeSelector({
@@ -53,9 +53,9 @@ export function MetricTreeSelector({
             heading: <span className="metric-tree__meter">{meter}</span>,
             count: instruments.length,
             content: instruments.map((metric) => (
-              <button
+              <Button
                 key={`${meter}/${metric.name}`}
-                type="button"
+                variant="ghost"
                 className={`metric-item ${metric === active ? "active" : ""}`}
                 aria-current={metric === active ? "true" : undefined}
                 onClick={() => onSelect(metric)}
@@ -65,7 +65,7 @@ export function MetricTreeSelector({
                   <span>{formatMetricValue(metric.lastValue, metric.unit)}</span>
                   <span>{metric.kind}</span>
                 </span>
-              </button>
+              </Button>
             )),
           }))}
         />

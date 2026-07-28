@@ -7,6 +7,7 @@ import {
   TableHead as TableHeaderCell,
   TableRow,
 } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
 import { SortAscendingIcon, SortDescendingIcon } from "./Icons";
 
 export type SortDirection = "ascending" | "descending";
@@ -153,11 +154,11 @@ export function DataTable<T>({
                   aria-sort={direction}
                 >
                   {column.compare || column.compareWithDirection ? (
-                    <button className="data__sort" type="button" onClick={() => changeSort(column)}>
+                    <Button className="data__sort" variant="ghost" type="button" onClick={() => changeSort(column)}>
                       <span>{column.header}</span>
                       {direction === "ascending" ? <SortAscendingIcon size={14} /> : null}
                       {direction === "descending" ? <SortDescendingIcon size={14} /> : null}
-                    </button>
+                    </Button>
                   ) : (
                     column.header
                   )}

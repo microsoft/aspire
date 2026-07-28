@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import type { PageId } from "../lib/routes";
 import {
   CanvasIcon,
+  Button,
   ConsoleIcon,
   LogsIcon,
   MetricsIcon,
@@ -54,8 +55,9 @@ export function Sidebar({
         const Icon = entry.icon;
         const count = counts[entry.id];
         return (
-          <button
+          <Button
             key={entry.id}
+            variant="ghost"
             className={`nav-item ${active === entry.id ? "active" : ""}`}
             aria-current={active === entry.id ? "page" : undefined}
             onClick={() => onNavigate(entry.id)}
@@ -63,7 +65,7 @@ export function Sidebar({
             <Icon size={18} className="nav-item__icon" />
             <span className="nav-item__label">{entry.label}</span>
             {count !== undefined ? <span className="nav-item__badge">{count}</span> : null}
-          </button>
+          </Button>
         );
       })}
 

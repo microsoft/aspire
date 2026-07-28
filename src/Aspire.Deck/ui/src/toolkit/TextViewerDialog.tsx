@@ -1,6 +1,12 @@
-import { useEffect, useId, useState } from "react";
-import { Button, IconButton } from "./Button";
-import { CloseIcon, NamedIcon } from "./Icons";
+import { useEffect, useState } from "react";
+import {
+  Dialog as ShadcnDialog,
+  DialogContent,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "./Button";
+import { NamedIcon } from "./Icons";
 import { MarkdownContent } from "./MarkdownContent";
 
 export interface TextViewerRequest {
@@ -17,26 +23,11 @@ export function TextViewerDialog({
   request: TextViewerRequest | null;
   onClose: () => void;
 }) {
-  const titleId = useId();
   const [copyStatus, setCopyStatus] = useState("");
 
   useEffect(() => {
     setCopyStatus("");
   }, [request?.value]);
-
-  useEffect(() => {
-    if (request === null) {
-      return;
-    }
-
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose, request]);
 
   if (request === null) {
     return null;
@@ -72,27 +63,22 @@ export function TextViewerDialog({
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        className="modal text-viewer"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="text-viewer__header">
-          <div className="modal__title" id={titleId}>{request.title}</div>
-          <IconButton label="Close visualizer" icon={<CloseIcon size={16} />} onClick={onClose} />
-        </div>
-        {format === "markdown" ? (
-          <div className="text-viewer__content text-viewer__content--markdown" data-format={format}>
-            <MarkdownContent markdown={request.value} />
-          </div>
-        ) : (
-          <pre className="text-viewer__content" data-format={format}>
-            <code>{displayValue}</code>
-          </pre>
-        )}
+    <ShadcnDialog open onOpenChange={(open) => {
+      if (!open) onClose();
+    }}>
+      <DialogContent className="modal text-viewer" closeLabel="Close visualizer">
+        <DialogTitle className="modal__title">{request.title}</DialogTitle>
+        <ScrollArea className="text-viewer__content">
+          {format === "markdown" ? (
+            <div className="text-viewer__content--markdown">
+              <MarkdownContent markdown={request.value} />
+            </div>
+          ) : (
+            <pre data-format={format}>
+              <code>{displayValue}</code>
+            </pre>
+          )}
+        </ScrollArea>
         <div className="modal__actions">
           <span className="text-viewer__status" role="status" aria-live="polite">{copyStatus}</span>
           <Button onClick={download}>
@@ -105,7 +91,7 @@ export function TextViewerDialog({
           </Button>
           <Button variant="primary" onClick={onClose}>Close</Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </ShadcnDialog>
   );
 }

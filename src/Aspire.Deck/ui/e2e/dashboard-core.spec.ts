@@ -105,11 +105,11 @@ test(`${features("APP-NAV-001", "APP-APPHOST-001", "APP-THEME-001")} navigates, 
     await expect(navigationButton(page, button)).toHaveAttribute("aria-current", "page");
   }
 
-  await page.getByRole("button", { name: /^TestShop 2$/ }).click();
+  await page.getByRole("combobox", { name: "Switch AppHost" }).click();
   const listbox = page.getByRole("listbox");
   await expect(listbox.getByRole("option")).toHaveCount(2);
   await expect(listbox.getByRole("option", { name: "TestShop" })).toHaveAttribute("aria-selected", "true");
-  await listbox.getByRole("option", { name: "OrdersService" }).getByRole("button").click();
+  await listbox.getByRole("option", { name: "OrdersService" }).click();
   await expect(page.getByRole("banner").locator(".topbar__app")).toHaveText("OrdersService");
   await expect(page.getByRole("banner").locator(".topbar__app-sub")).toHaveText("https://localhost:18055");
 
@@ -353,7 +353,7 @@ test(`${features("APP-NOTIFICATION-CENTER-001")} preserves completed notificatio
   await expect(center).toContainText("Unresolved parameters");
   await center.getByRole("button", { name: "Close" }).click();
 
-  await page.getByRole("row", { name: /apiservice/ }).click();
+  await page.getByRole("row", { name: /apiservice/ }).press("Enter");
   const details = page.getByRole("dialog", { name: "apiservice" });
   await details.getByRole("button", { name: "Resource commands" }).click();
   await page.getByRole("menu", { name: "Resource commands" }).getByRole("menuitem", { name: /Show notification samples/ }).click();
@@ -652,7 +652,7 @@ test(`${features("RES-COMMANDS-001", "RES-ACTION-MENU-001", "RES-CONFIRM-001", "
   expect(menuBounds!.x + menuBounds!.width).toBeLessThanOrEqual(drawerBounds!.x + drawerBounds!.width);
 
   await menu.getByRole("menuitem", { name: /Stop/ }).click();
-  const confirmation = page.getByRole("dialog", { name: "Stop" });
+  const confirmation = page.getByRole("alertdialog", { name: "Stop" });
   await expect(confirmation).toContainText("Are you sure you want to stop this resource?");
   await confirmation.getByRole("button", { name: "Stop", exact: true }).click();
   await expect(page.getByRole("status")).toHaveText("Stop succeeded");
@@ -962,6 +962,9 @@ test(`${features("APP-RESPONSIVE-001")} keeps core workflows usable on mobile`, 
 
   const assertMobileOverlay = async (overlay: Locator): Promise<void> => {
     await expect(overlay).toBeVisible();
+    if (await overlay.evaluate((element) => element.classList.contains("drawer"))) {
+      await expect(overlay).toHaveCSS("transform", "matrix(1, 0, 0, 1, 0, 0)");
+    }
     const box = (await overlay.boundingBox())!;
     expect(box.x).toBeGreaterThanOrEqual(-1);
     expect(box.x + box.width).toBeLessThanOrEqual(391);

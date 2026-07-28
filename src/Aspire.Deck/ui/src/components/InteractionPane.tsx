@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { InteractionInfo, InteractionInputInfo } from "../api/types";
 import { openExternal, respondInteraction, uploadInteractionFile } from "../api/deck";
-import { CloseIcon, ComboBox, MarkdownContent, SecretInput } from "../toolkit";
+import { Button, Checkbox, ComboBox, Drawer, MarkdownContent, SecretInput } from "../toolkit";
+import { Input } from "@/components/ui/input";
 
 // Side pane (like the resource details drawer) that renders a blocking interaction
 // from the AppHost: a command-input dialog with per-field validation, or a message
@@ -138,21 +139,15 @@ export function InteractionPane({ interaction }: { interaction: InteractionInfo 
   );
 
   return (
-    <>
-      <div className="drawer-overlay" onClick={close} />
-      <aside className={`drawer interaction-pane interaction-pane--${toIntent(interaction.intent)}`} data-intent={interaction.intent} role="dialog" aria-modal="true" aria-label={interaction.title}>
-        <div className="drawer__header">
-          <div>
-            <div className="drawer__title">{interaction.title || "Input required"}</div>
-          </div>
-          {interaction.showDismiss !== false ? (
-            <button className="icon-btn" onClick={close} aria-label="Dismiss">
-              <CloseIcon size={16} />
-            </button>
-          ) : null}
-        </div>
-
-        <div className="drawer__body">
+    <Drawer
+      title={interaction.title || "Input required"}
+      ariaLabel={interaction.title}
+      closeLabel="Dismiss"
+      showCloseButton={interaction.showDismiss !== false}
+      intent={interaction.intent}
+      className={`interaction-pane interaction-pane--${toIntent(interaction.intent)}`}
+      onClose={close}
+    >
           {interaction.message ? (
             <MarkdownContent
               markdown={interaction.message}
@@ -196,40 +191,37 @@ export function InteractionPane({ interaction }: { interaction: InteractionInfo 
 
               <div className="interaction-form__actions">
                 {interaction.showSecondaryButton ? (
-                  <button type="button" className="btn" onClick={close}>
+                  <Button type="button" onClick={close}>
                     {interaction.secondaryButtonText || "Cancel"}
-                  </button>
+                  </Button>
                 ) : null}
-                <button type="submit" className="btn btn--primary">
+                <Button type="submit" variant="primary">
                   {interaction.primaryButtonText || "Submit"}
-                </button>
+                </Button>
               </div>
             </form>
           ) : (
             <div className="interaction-form">
               <div className="interaction-form__actions">
                 {interaction.showSecondaryButton ? (
-                  <button
+                  <Button
                     type="button"
-                    className="btn"
                     onClick={() => void respondInteraction(interaction.interactionId, "secondary", {})}
                   >
                     {interaction.secondaryButtonText || "No"}
-                  </button>
+                  </Button>
                 ) : null}
-                <button
+                <Button
                   type="button"
-                  className="btn btn--primary"
+                  variant="primary"
                   onClick={() => void respondInteraction(interaction.interactionId, "primary", {})}
                 >
                   {interaction.primaryButtonText || "OK"}
-                </button>
+                </Button>
               </div>
             </div>
           )}
-        </div>
-      </aside>
-    </>
+    </Drawer>
   );
 }
 
@@ -257,18 +249,14 @@ function InputField({
   return (
     <div className={`field ${hasErrors ? "field--error" : ""}`}>
       {input.inputType === "boolean" ? (
-        <label className="field__check" htmlFor={fieldId}>
-          <input
-            id={fieldId}
-            type="checkbox"
+        <div className="field__check">
+          <Checkbox
             checked={value === "true"}
             disabled={input.disabled}
-            aria-invalid={hasErrors || undefined}
-            aria-describedby={describedBy}
-            onChange={(e) => onChange(e.target.checked ? "true" : "false")}
+            label={input.label}
+            onCheckedChange={(checked) => queueMicrotask(() => onChange(checked ? "true" : "false"))}
           />
-          <span>{input.label}</span>
-        </label>
+        </div>
       ) : (
         <>
           <label className="field__label" htmlFor={fieldId}>
@@ -277,7 +265,7 @@ function InputField({
           </label>
           {input.inputType === "file" ? (
             <>
-              <input
+              <Input
                 id={fieldId}
                 className="input interaction-file-input"
                 type="file"
@@ -332,7 +320,7 @@ function InputField({
               onChange={(event) => onChange(event.target.value)}
             />
           ) : (
-            <input
+            <Input
               id={fieldId}
               className="input"
               type={input.inputType === "number" ? "number" : "text"}

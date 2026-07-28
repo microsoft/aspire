@@ -1,4 +1,11 @@
-import { useEffect, useId } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "./Button";
 
 export interface ConfirmRequest {
@@ -16,49 +23,31 @@ export function ConfirmDialog({
   request: ConfirmRequest | null;
   onClose: () => void;
 }) {
-  const titleId = useId();
-
-  useEffect(() => {
-    if (!request) {
-      return;
-    }
-
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [request, onClose]);
-
-  if (!request) {
-    return null;
-  }
-
   const confirm = (): void => {
-    request.onConfirm();
+    request?.onConfirm();
     onClose();
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        className="modal"
-        onClick={(event) => event.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-      >
-        <div className="modal__title" id={titleId}>{request.title}</div>
-        <div className="modal__text">{request.message}</div>
-        <div className="modal__actions">
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant={request.danger ? "danger" : "primary"} onClick={confirm} autoFocus>
-            {request.confirmLabel ?? "Confirm"}
-          </Button>
-        </div>
-      </div>
-    </div>
+    <AlertDialog open={request !== null} onOpenChange={(open) => {
+      if (!open) onClose();
+    }}>
+      {request ? (
+        <AlertDialogContent className="modal">
+          <AlertDialogTitle className="modal__title">{request.title}</AlertDialogTitle>
+          <AlertDialogDescription className="modal__text">{request.message}</AlertDialogDescription>
+          <div className="modal__actions">
+            <AlertDialogCancel asChild>
+              <Button>Cancel</Button>
+            </AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <Button variant={request.danger ? "danger" : "primary"} onClick={confirm}>
+                {request.confirmLabel ?? "Confirm"}
+              </Button>
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      ) : null}
+    </AlertDialog>
   );
 }

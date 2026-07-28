@@ -1,4 +1,10 @@
 import { useEffect, useRef, type ReactElement } from "react";
+import {
+  ContextMenu as ShadcnContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 
 export interface ContextMenuEntry {
   id: string;
@@ -23,45 +29,50 @@ export function ContextMenu({
   entries: readonly ContextMenuEntry[];
   onClose: () => void;
 }) {
-  const ref = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
-    if (!open) return;
-    const closeOnPointer = (event: PointerEvent): void => {
-      if (event.target instanceof Node && !ref.current?.contains(event.target)) onClose();
-    };
-    const closeOnEscape = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("pointerdown", closeOnPointer);
-    document.addEventListener("keydown", closeOnEscape);
-    window.setTimeout(() => ref.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus(), 0);
-    return () => {
-      document.removeEventListener("pointerdown", closeOnPointer);
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [onClose, open]);
+    if (!open) {
+      return;
+    }
 
-  if (!open) return null;
+    triggerRef.current?.dispatchEvent(new MouseEvent("contextmenu", {
+      bubbles: true,
+      button: 2,
+      clientX: x,
+      clientY: y,
+    }));
+  }, [open, x, y]);
+
+  if (!open) {
+    return null;
+  }
+
   return (
-    <div
-      ref={ref}
-      className="context-menu"
-      role="menu"
-      aria-label={ariaLabel}
-      style={{ left: `min(${x}px, calc(100vw - 220px))`, top: `min(${y}px, calc(100vh - ${Math.max(entries.length * 38 + 16, 54)}px))` }}
-    >
-      {entries.map((entry) => (
-        <button
-          key={entry.id}
-          type="button"
-          role="menuitem"
-          disabled={entry.disabled}
-          onClick={() => { entry.onSelect(); onClose(); }}
-        >
-          {entry.icon}<span>{entry.label}</span>
-        </button>
-      ))}
-    </div>
+    <ShadcnContextMenu onOpenChange={(nextOpen) => {
+      if (!nextOpen) onClose();
+    }}>
+      <ContextMenuTrigger
+        ref={triggerRef}
+        aria-hidden="true"
+        tabIndex={-1}
+        style={{ position: "fixed", left: x, top: y, width: 1, height: 1, opacity: 0 }}
+      />
+      <ContextMenuContent className="context-menu" aria-label={ariaLabel}>
+        {entries.map((entry) => (
+          <ContextMenuItem
+            key={entry.id}
+            disabled={entry.disabled}
+            onSelect={() => {
+              entry.onSelect();
+              onClose();
+            }}
+          >
+            {entry.icon}
+            <span>{entry.label}</span>
+          </ContextMenuItem>
+        ))}
+      </ContextMenuContent>
+    </ShadcnContextMenu>
   );
 }
