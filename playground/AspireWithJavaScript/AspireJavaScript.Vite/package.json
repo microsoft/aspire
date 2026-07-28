@@ -31,9 +31,9 @@
     "vite": "^8.0.16"
   },
   "overrides": {
-    "postcss": "8.5.10",
+    "postcss": "8.5.18",
     "esbuild": "0.28.1",
     "@babel/core": "7.29.6",
-    "js-yaml": "4.2.0"
+    "js-yaml": "4.3.0"
   }
 }

@@ -43,7 +43,7 @@
   },
   "overrides": {
     "vite": "7.3.5",
-    "postcss": "8.5.10",
+    "postcss": "8.5.18",
     "uuid": "14.0.0",
     "webpack-dev-server": "5.2.5",
     "tmp": "0.2.7",
