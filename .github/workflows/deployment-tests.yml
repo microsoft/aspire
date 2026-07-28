@@ -321,15 +321,12 @@ jobs:
           done
 
           # Kick the registrations off, give them a short bounded head start, then continue.
-          # The bound is deliberately small. This step runs right after 'az login' and before the
-          # test, and the test's own Azure auth gate (AzureAuthenticationHelpers.IsAzureAuthAvailable,
-          # a DefaultAzureCredential.GetToken call) stops succeeding once the CI login is old enough:
-          # empirically a full 10-minute wait here pushed the test past that window and every matrix
-          # job failed with "Azure authentication not available in CI" ~16s in, before deploying.
-          # Registration is eventually consistent and keeps completing in the background, so a short
-          # head start is enough for the deploy steps that block on RP registration (e.g. the SQL
-          # admin SequencerJob deployment script); a provider still mid-registration only affects a
-          # test that actually needs it, which surfaces its own clear error. Never fail on timeout.
+          # This runs once in the provision-subscription prerequisite job that the test matrix waits
+          # on, so the bound is kept small to avoid delaying the whole run. Registration is eventually
+          # consistent and keeps completing in the background, so a short head start is enough for the
+          # deploy steps that block on RP registration (e.g. the SQL admin SequencerJob deployment
+          # script); a provider still mid-registration only affects a test that actually needs it,
+          # which surfaces its own clear error. Never fail on timeout.
           deadline=$(( SECONDS + 120 ))
           while [ ${#missing[@]} -gt 0 ] && [ "$SECONDS" -lt "$deadline" ]; do
             sleep 15
@@ -355,8 +352,11 @@ jobs:
       # QuotaExceeded error in the test that needs it.
       #
       # Scope: this self-heals only the quotas configured in QUOTA_TARGETS (currently the centralus
-      # AKS node-pool vCPUs and managed clusters). Other regions the suite uses are NOT covered here
-      # — westus3 Container Apps / App Service and australiaeast DASv4 (AksBlazorRedis) remain
+      # AKS node-pool compute vCPUs — both the StandardDSv5Family quota and the Total Regional vCPUs
+      # quota, which Azure enforces independently, so a node pool needs headroom in each). Other
+      # quotas the suite depends on are NOT covered here — westus3 Container Apps / App Service,
+      # australiaeast DASv4 (AksBlazorRedis), and the AKS managed-cluster count
+      # (Microsoft.ContainerService is not exposed through the Microsoft.Quota API used here) remain
       # documented manual quota requests (see the E2E README's quota section). Requests are submitted
       # asynchronously (--no-wait, below), so extending QUOTA_TARGETS does not lengthen this step.
       - name: Ensure Azure quotas
@@ -364,13 +364,13 @@ jobs:
           # Quotas to ensure, one per line: "provider location resourceName desiredLimit [resourceType]".
           #   provider     - resource provider that owns the quota (e.g. Microsoft.Compute, Microsoft.Network)
           #   location     - region the quota applies to; match the Azure__Location the tests deploy into
-          #   resourceName - the quota's resource name (e.g. StandardDsv6Family, ManagedClusters)
+          #   resourceName - the quota's resource name (e.g. StandardDSv5Family, cores)
           #   desiredLimit - both the minimum we accept and the value we request
           #   resourceType - optional; compute vCPU quotas need it (dedicated | lowPriority), omit otherwise
           # Add a line to cover a new provider, region, resource, or higher limit.
           QUOTA_TARGETS: |
             Microsoft.Compute centralus StandardDSv5Family 200 dedicated
-            Microsoft.ContainerService centralus ManagedClusters 20
+            Microsoft.Compute centralus cores 200 dedicated
         run: |
           sub="$ASPIRE_DEPLOYMENT_TEST_SUBSCRIPTION"
 
@@ -416,16 +416,12 @@ jobs:
             # allowed to fail the job.
             #
             # Submit with --no-wait: the request is queued and the CLI returns as soon as it is
-            # accepted instead of polling the long-running operation to a terminal state. A
-            # synchronous call blocks for minutes when the request routes to manual review, and with
-            # every matrix job hitting Microsoft.Quota at once they throttle each other into long
-            # backoffs; that pre-test delay can outlive the CI OIDC token window and make the tests'
-            # own auth gate (AzureAuthenticationHelpers.IsAzureAuthAvailable) fail matrix-wide before
-            # they deploy. A short `timeout` still guards a pathological network/throttle hang;
-            # because --no-wait returns once the request is accepted, that bound no longer risks
-            # killing an already-accepted request and re-submitting it via the `||` fallback. A
-            # request that is not granted in time surfaces later as a normal QuotaExceeded error in
-            # the test that needs it.
+            # accepted instead of polling the long-running operation to a terminal state, which can
+            # otherwise block for minutes when the request routes to manual review. A short `timeout`
+            # still guards a pathological network/throttle hang; because --no-wait returns once the
+            # request is accepted, that bound no longer risks killing an already-accepted request and
+            # re-submitting it via the `||` fallback. A request that is not granted in time surfaces
+            # later as a normal QuotaExceeded error in the test that needs it.
             if timeout 30 az quota create --resource-name "$name" --scope "$scope" \
                  --limit-object value="$desired" "${rt_args[@]}" --no-wait --only-show-errors >/dev/null 2>&1 \
                || timeout 30 az quota update --resource-name "$name" --scope "$scope" \

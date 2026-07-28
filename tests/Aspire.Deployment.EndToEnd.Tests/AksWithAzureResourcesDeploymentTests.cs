@@ -135,7 +135,7 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 #pragma warning disable ASPIREAZURE003
 
-// AKS environment with Dsv5 SKUs
+// AKS environment with DSv5 SKUs
 var aks = builder.AddAzureKubernetesEnvironment("aks")
     .WithSystemNodePool("Standard_D2s_v5");
 aks.AddNodePool("workload", "Standard_D2s_v5", 1, 3);

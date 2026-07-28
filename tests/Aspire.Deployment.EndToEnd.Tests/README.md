@@ -26,12 +26,13 @@ The deployment tests require an Azure subscription with sufficient quota for the
 
 ### AKS / Kubernetes node pools
 
-The AKS scenarios deploy to `centralus`, where the subscription holds `Standard_D2s_v5` (DSv5) capacity. The CI workflow's quota self-healing (`QUOTA_TARGETS` in `.github/workflows/deployment-tests.yml`) requests these automatically:
+The AKS scenarios deploy to `centralus`, where the subscription holds `Standard_D2s_v5` (DSv5) capacity. The CI workflow's quota self-healing (`QUOTA_TARGETS` in `.github/workflows/deployment-tests.yml`) requests the compute vCPU quotas automatically; the managed-cluster count is not exposed by the Microsoft.Quota API and must be raised manually if the default is ever insufficient:
 
 | Resource | Region | Quota Required | Notes |
 |----------|--------|----------------|-------|
-| `StandardDSv5Family` vCPUs (`Microsoft.Compute`) | `centralus` | 200 (dedicated) | System and workload node pools use `Standard_D2s_v5`. |
-| Managed Clusters (`Microsoft.ContainerService`) | `centralus` | 20 | Each AKS test creates a cluster; headroom covers concurrent runs and cleanup lag. |
+| `StandardDSv5Family` vCPUs (`Microsoft.Compute`) | `centralus` | 200 (dedicated) | System and workload node pools use `Standard_D2s_v5`. Self-healed by the workflow. |
+| Total Regional vCPUs (`Microsoft.Compute`, `cores`) | `centralus` | 200 (dedicated) | Azure enforces this regional total independently of the family quota, so node pools need headroom in both. Self-healed by the workflow. |
+| Managed Clusters (`Microsoft.ContainerService`) | `centralus` | 20 | Each AKS test creates a cluster; headroom covers concurrent runs and cleanup lag. Not exposed by the Microsoft.Quota API — request via the Azure Portal/support if the default is insufficient. |
 
 A few tests intentionally use other regions for capacity or feature reasons:
 
@@ -327,7 +328,7 @@ The test Azure tenant/subscription rotates approximately every 90 days per polic
 3. Grant Owner role on subscription (constrained - cannot create other Owner identities)
 4. Update GitHub secrets: `AZURE_DEPLOYMENT_TEST_CLIENT_ID`, `AZURE_DEPLOYMENT_TEST_TENANT_ID`
 5. Update GitHub variable: `AZURE_DEPLOYMENT_TEST_SUBSCRIPTION_ID`
-6. Ensure regional quotas per [Azure Subscription Quota Requirements](#azure-subscription-quota-requirements): Container Apps and App Service in `westus3`, and AKS (`StandardDSv5Family` vCPUs and managed clusters) in `centralus`. The CI workflow attempts to self-heal these, but a new subscription may still need a manual request.
+6. Ensure regional quotas per [Azure Subscription Quota Requirements](#azure-subscription-quota-requirements): Container Apps and App Service in `westus3`, and AKS in `centralus` (`StandardDSv5Family` vCPUs, Total Regional vCPUs, and managed clusters). The CI workflow self-heals the compute vCPU quotas (family and regional total); the managed-cluster count is not covered by the Microsoft.Quota API, so a new subscription may still need a manual portal/support request.
 
 See [Deployment Testing Documentation](../../docs/deployment-testing.md) for detailed rotation procedures.
 
