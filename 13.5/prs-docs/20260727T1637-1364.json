@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "CI configuration for docs repo (adding NuGet to Dependabot). Not product feature documentation.",
+  "mergedAt": "2026-07-27T16:37:18Z",
+  "number": 1364,
+  "runDate": "2026-07-28T00:21:21Z",
+  "status": "excluded",
+  "title": "[auto-sec-meta] ci: add NuGet ecosystem to Dependabot configuration"
+}

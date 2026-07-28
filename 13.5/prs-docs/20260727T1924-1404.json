@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "Dependency bump in docs repo. Not product feature documentation.",
+  "mergedAt": "2026-07-27T19:24:22Z",
+  "number": 1404,
+  "runDate": "2026-07-28T00:21:21Z",
+  "status": "excluded",
+  "title": "Bump the nuget-selected group with 10 updates"
+}
