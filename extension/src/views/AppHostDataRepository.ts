@@ -188,6 +188,7 @@ export class AppHostDataRepository {
     private static readonly _processShutdownGracePeriodMs = 5000;
     private static readonly _appHostStopRefreshDelayMs = 400;
     private static readonly _appHostStopRefreshMaxAttempts = 75;
+    private static readonly _incrementalCandidateUpdateIntervalMs = 50;
     private static readonly _oneShotCommandTimeoutMs = 30000;
     private static readonly _oneShotOutputBufferLimit = oneShotOutputBufferLimit;
 
@@ -710,13 +711,16 @@ export class AppHostDataRepository {
         const canApplyStreamedCandidateUpdates = this._workspaceAppHostPath === undefined && this._workspaceAppHostCandidatePaths.length === 0;
 
         const streamedCandidates: CandidateAppHostDisplayInfo[] = [];
-        const onIncrementalCandidate = (candidate: CandidateAppHostDisplayInfo): void => {
-            if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
-                return;
+        let incrementalCandidateUpdateTimer: ReturnType<typeof setTimeout> | undefined;
+        const cancelIncrementalCandidateUpdate = (): void => {
+            if (incrementalCandidateUpdateTimer) {
+                clearTimeout(incrementalCandidateUpdateTimer);
+                incrementalCandidateUpdateTimer = undefined;
             }
-
-            streamedCandidates.push(candidate);
-            if (!canApplyStreamedCandidateUpdates) {
+        };
+        const applyIncrementalCandidateUpdates = (): void => {
+            incrementalCandidateUpdateTimer = undefined;
+            if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
                 return;
             }
 
@@ -729,8 +733,27 @@ export class AppHostDataRepository {
             this._setWorkspaceAppHostCandidatePaths(buildableAppHostCandidates);
             this._updateWorkspaceContext();
         };
+        const onIncrementalCandidate = (candidate: CandidateAppHostDisplayInfo): void => {
+            if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
+                return;
+            }
+
+            streamedCandidates.push(candidate);
+            if (!canApplyStreamedCandidateUpdates) {
+                return;
+            }
+
+            if (!incrementalCandidateUpdateTimer) {
+                // Keep the first candidate's visibility bounded while coalescing any additional
+                // candidates that arrive before the tree and context update runs.
+                incrementalCandidateUpdateTimer = setTimeout(
+                    applyIncrementalCandidateUpdates,
+                    AppHostDataRepository._incrementalCandidateUpdateIntervalMs);
+            }
+        };
 
         this._appHostDiscoveryService.discover(rootFolder, options?.forceRefresh, cancellationSource.token, onIncrementalCandidate).then(appHosts => {
+            cancelIncrementalCandidateUpdate();
             if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
                 return;
             }
@@ -739,6 +762,7 @@ export class AppHostDataRepository {
             this._workspaceAppHostDiscoveryComplete = true;
             this._handleWorkspaceAppHostCandidates(result.app_host_candidates, result.selected_project_file);
         }).catch(error => {
+            cancelIncrementalCandidateUpdate();
             if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
                 return;
             }

@@ -761,7 +761,7 @@ suite('AppHost discovery', () => {
             }
         });
 
-        test('does not time out a slow but active aspire ls --stream discovery', async () => {
+        test('allows active aspire ls --stream discovery to complete within the overall runtime limit', async () => {
             stubFileSystemWatchers(sandbox);
             sandbox.stub(vscode.workspace, 'getConfiguration').returns({
                 get: <T>(key: string, defaultValue: T) => key === 'appHostDiscoveryTimeoutMs' ? 5000 as T : defaultValue,
@@ -790,8 +790,8 @@ suite('AppHost discovery', () => {
                 }));
 
                 // Each candidate arrives within the 5s idle window, but the total run (12s) far
-                // exceeds it. The streaming path's inactivity watchdog must re-arm on every line so a
-                // healthy slow stream is never killed by the total-duration timeout it replaced.
+                // exceeds it. The inactivity watchdog must re-arm without interfering with the
+                // separate five-minute maximum streaming runtime.
                 emit('First');
                 await clock.tickAsync(4_000);
                 emit('Second');
@@ -807,6 +807,60 @@ suite('AppHost discovery', () => {
                     buildPath('workspace', 'First', 'AppHost.csproj'),
                     buildPath('workspace', 'Second', 'AppHost.csproj'),
                     buildPath('workspace', 'Third', 'AppHost.csproj'),
+                ]);
+            }
+            finally {
+                service.dispose();
+                clock.restore();
+            }
+        });
+
+        test('times out active aspire ls --stream discovery at the overall runtime limit', async () => {
+            stubFileSystemWatchers(sandbox);
+            sandbox.stub(vscode.workspace, 'getConfiguration').returns({
+                get: <T>(key: string, defaultValue: T) => key === 'appHostDiscoveryTimeoutMs' ? 5000 as T : defaultValue,
+            } as vscode.WorkspaceConfiguration);
+            const clock = sandbox.useFakeTimers();
+            const killedArgs: string[][] = [];
+            let streamOptions: cliModule.SpawnProcessOptions | undefined;
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
+                const childProcess = {
+                    killed: false,
+                    kill: sandbox.stub().callsFake(() => {
+                        childProcess.killed = true;
+                        killedArgs.push(args);
+                        return true;
+                    }),
+                };
+
+                if (args.includes('--stream')) {
+                    streamOptions = options;
+                }
+                else {
+                    options?.stderrCallback?.('legacy discovery unavailable');
+                    options?.exitCallback?.(1);
+                }
+
+                return childProcess as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+
+            try {
+                const discovery = service.discover(workspaceFolder);
+                const expectedRejection = assert.rejects(discovery, /exceeded the maximum streaming runtime of 300 seconds/);
+                await waitForMicrotasks();
+                assert.ok(streamOptions);
+
+                const activityTimer = setInterval(() => {
+                    streamOptions?.stderrCallback?.('still discovering projects');
+                }, 4_000);
+                await clock.tickAsync(5 * 60 * 1000);
+                clearInterval(activityTimer);
+
+                await expectedRejection;
+                assert.deepStrictEqual(killedArgs, [
+                    ['ls', '--format', 'json', '--stream', '--nologo'],
                 ]);
             }
             finally {

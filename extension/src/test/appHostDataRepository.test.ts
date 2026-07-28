@@ -3340,6 +3340,56 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('coalesces rapid streamed workspace candidates into one repository update', async () => {
+        const clock = sinon.useFakeTimers();
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        let incrementalCandidateCallback: ((candidate: CandidateAppHostDisplayInfo) => void) | undefined;
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: (_folder: vscode.WorkspaceFolder, _forceRefresh?: boolean, _cancellationToken?: vscode.CancellationToken, onIncrementalCandidate?: (candidate: CandidateAppHostDisplayInfo) => void) => {
+                incrementalCandidateCallback = onIncrementalCandidate;
+                return discovery.promise;
+            },
+            dispose: () => { },
+        };
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+        let updateCount = 0;
+        const updateSubscription = repository.onDidChangeData(() => updateCount++);
+        const candidates = ['First', 'Second', 'Third'].map(name => ({
+            path: `/workspace/${name}/AppHost.csproj`,
+            language: 'csharp',
+            status: 'buildable',
+        }));
+
+        try {
+            await waitForMicrotasks();
+            assert.ok(incrementalCandidateCallback);
+
+            for (const candidate of candidates) {
+                incrementalCandidateCallback(candidate);
+            }
+
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, []);
+            assert.strictEqual(updateCount, 0);
+
+            await clock.tickAsync(50);
+
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, candidates.map(candidate => candidate.path));
+            assert.strictEqual(updateCount, 1);
+        } finally {
+            updateSubscription.dispose();
+            repository.dispose();
+            workspaceFoldersStub.restore();
+            clock.restore();
+        }
+    });
+
     test('queues forced workspace discovery refresh without starting overlapping discovery', async () => {
         const workspaceFolder = {
             uri: vscode.Uri.file('/workspace'),

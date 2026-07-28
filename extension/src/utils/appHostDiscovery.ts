@@ -70,6 +70,7 @@ interface CliProcessResult {
 
 export class AppHostDiscoveryService implements vscode.Disposable {
     private static readonly _candidateChangeDebounceMs = 250;
+    private static readonly _streamingDiscoveryMaxRuntimeMs = 5 * 60 * 1000;
 
     private readonly _onDidChangeCandidates = new vscode.EventEmitter<vscode.WorkspaceFolder>();
     private readonly _cache = new Map<string, CachedAppHostDiscovery>();
@@ -505,7 +506,8 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             let settled = false;
             let cancellationDisposable: vscode.Disposable | undefined;
             let childProcess: ChildProcessWithoutNullStreams | undefined;
-            let timeout: ReturnType<typeof setTimeout> | undefined;
+            let inactivityTimeout: ReturnType<typeof setTimeout> | undefined;
+            let overallTimeout: ReturnType<typeof setTimeout> | undefined;
             const cancel = (error: Error) => {
                 if (childProcess && !childProcess.killed) {
                     try {
@@ -521,9 +523,13 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                 settle(() => reject(error));
             };
             const cleanup = () => {
-                if (timeout) {
-                    clearTimeout(timeout);
-                    timeout = undefined;
+                if (inactivityTimeout) {
+                    clearTimeout(inactivityTimeout);
+                    inactivityTimeout = undefined;
+                }
+                if (overallTimeout) {
+                    clearTimeout(overallTimeout);
+                    overallTimeout = undefined;
                 }
                 if (childProcess) {
                     this._activeCliProcesses.delete(childProcess);
@@ -547,10 +553,10 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                     return;
                 }
 
-                if (timeout) {
-                    clearTimeout(timeout);
+                if (inactivityTimeout) {
+                    clearTimeout(inactivityTimeout);
                 }
-                timeout = setTimeout(() => {
+                inactivityTimeout = setTimeout(() => {
                     const silence = onLine ? ' without output' : '';
                     cancel(new Error(`aspire ${cliArgs.join(' ')} timed out after ${timeoutMs / 1000} seconds${silence}.`));
                 }, timeoutMs);
@@ -571,6 +577,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                     lineCallback: onLine
                         ? line => {
                             try {
+                                onActivity?.();
                                 onLine(line);
                             }
                             catch (error) {
@@ -603,6 +610,13 @@ export class AppHostDiscoveryService implements vscode.Disposable {
 
             this._activeCliProcesses.add(childProcess);
             startTimeout();
+            if (onLine) {
+                // Stream activity re-arms the inactivity watchdog, but it must not let a chatty
+                // hung process keep workspace discovery alive forever.
+                overallTimeout = setTimeout(() => {
+                    cancel(new Error(`aspire ${cliArgs.join(' ')} exceeded the maximum streaming runtime of ${AppHostDiscoveryService._streamingDiscoveryMaxRuntimeMs / 1000} seconds.`));
+                }, AppHostDiscoveryService._streamingDiscoveryMaxRuntimeMs);
+            }
         });
     }
 }
