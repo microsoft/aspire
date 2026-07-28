@@ -710,7 +710,7 @@ export class AppHostDataRepository {
         const canApplyStreamedCandidateUpdates = this._workspaceAppHostPath === undefined && this._workspaceAppHostCandidatePaths.length === 0;
 
         const streamedCandidates: CandidateAppHostDisplayInfo[] = [];
-        const onCandidate = (candidate: CandidateAppHostDisplayInfo): void => {
+        const onIncrementalCandidate = (candidate: CandidateAppHostDisplayInfo): void => {
             if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
                 return;
             }
@@ -730,7 +730,7 @@ export class AppHostDataRepository {
             this._updateWorkspaceContext();
         };
 
-        this._appHostDiscoveryService.discover(rootFolder, options?.forceRefresh, cancellationSource.token, onCandidate).then(appHosts => {
+        this._appHostDiscoveryService.discover(rootFolder, options?.forceRefresh, cancellationSource.token, onIncrementalCandidate).then(appHosts => {
             if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
                 return;
             }

@@ -9,6 +9,8 @@ import * as vscode from 'vscode';
 import * as cliModule from '../debugger/languages/cli';
 import { AppHostDiscoveryService, CandidateAppHostDisplayInfo, findCandidateForEditorFile, findConfiguredAppHostPaths, getDebugTargetForCandidate, getWorkspaceAppHostProjectSearchResult, selectWorkspaceAppHostPath } from '../utils/appHostDiscovery';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
+import * as configInfoProvider from '../utils/configInfoProvider';
+import { lsJsonStreamCapability } from '../types/configInfo';
 import { __resetCommonPropertiesForTests, __setReporterForTests } from '../utils/telemetry';
 import { appHostDiscoveryFindFilesMaxResults } from '../utils/workspaceFileSearch';
 
@@ -124,10 +126,14 @@ suite('AppHost discovery', () => {
     suite('service', () => {
         let sandbox: sinon.SinonSandbox;
         let findFilesStub: sinon.SinonStub;
+        let getConfigInfoStub: sinon.SinonStub;
 
         setup(() => {
             sandbox = sinon.createSandbox();
             findFilesStub = sandbox.stub(vscode.workspace, 'findFiles').resolves([]);
+            getConfigInfoStub = sandbox.stub(configInfoProvider.ConfigInfoProvider.prototype, 'getConfigInfo').resolves({
+                capabilities: [lsJsonStreamCapability],
+            } as any);
         });
 
         teardown(() => {
@@ -137,12 +143,11 @@ suite('AppHost discovery', () => {
         test('does not force refresh discovery after cached negative editor lookup', async () => {
             stubFileSystemWatchers(sandbox);
             const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
-                options?.stdoutCallback?.(JSON.stringify([{
+                emitLsOutput(options, [{
                     path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
                     language: 'csharp',
                     status: 'buildable',
-                }]));
-                options?.exitCallback?.(0);
+                }]);
                 return { kill: () => { } } as any;
             });
             const service = new AppHostDiscoveryService(makeTerminalProvider());
@@ -166,12 +171,11 @@ suite('AppHost discovery', () => {
             const fake = new FakeTelemetryReporter();
             const restore = __setReporterForTests(fake as unknown as Parameters<typeof __setReporterForTests>[0]);
             sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
-                options?.stdoutCallback?.(JSON.stringify([{
+                emitLsOutput(options, [{
                     path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
                     language: 'csharp',
                     status: 'buildable',
-                }]));
-                options?.exitCallback?.(0);
+                }]);
                 return { kill: () => { } } as any;
             });
             const service = new AppHostDiscoveryService(makeTerminalProvider());
@@ -234,12 +238,11 @@ suite('AppHost discovery', () => {
         test('keeps workspace folder debug target unchanged and returns default candidate separately', async () => {
             stubFileSystemWatchers(sandbox);
             sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
-                options?.stdoutCallback?.(JSON.stringify([{
+                emitLsOutput(options, [{
                     path: buildPath('workspace', 'NestedAppHost', 'apphost.ts'),
                     language: 'typescript/nodejs',
                     status: 'buildable',
-                }]));
-                options?.exitCallback?.(0);
+                }]);
                 return { kill: () => { } } as any;
             });
             const service = new AppHostDiscoveryService(makeTerminalProvider());
@@ -562,15 +565,14 @@ suite('AppHost discovery', () => {
 
                 cancellationSource.cancel();
 
-                await assert.rejects(cancelledDiscovery, /cancelled/);
+                await assert.rejects(cancelledDiscovery, vscode.CancellationError);
                 assert.strictEqual(childProcess.kill.callCount, 0);
 
-                options.stdoutCallback?.(JSON.stringify([{
+                emitLsOutput(options, [{
                     path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
                     language: 'csharp',
                     status: 'buildable',
-                }]));
-                options.exitCallback?.(0);
+                }]);
 
                 assert.deepStrictEqual(await sharedDiscovery, [{
                     path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
@@ -669,7 +671,7 @@ suite('AppHost discovery', () => {
 
                 await assert.rejects(firstDiscovery, vscode.CancellationError);
                 assert.deepStrictEqual(killedArgs, [
-                    ['ls', '--format', 'json', '--nologo', '--stream'],
+                    ['ls', '--format', 'json', '--stream', '--nologo'],
                 ]);
 
                 hangCli = false;
@@ -695,7 +697,7 @@ suite('AppHost discovery', () => {
             cancellationSource.cancel();
 
             try {
-                await assert.rejects(service.discover(workspaceFolder, false, cancellationSource.token), /cancelled/);
+                await assert.rejects(service.discover(workspaceFolder, false, cancellationSource.token), vscode.CancellationError);
                 assert.strictEqual(spawnStub.callCount, 0);
 
                 const result = await service.discover(workspaceFolder);
@@ -744,7 +746,7 @@ suite('AppHost discovery', () => {
 
                 await assert.rejects(discovery, /timed out after 5 seconds/);
                 assert.deepStrictEqual(killedArgs, [
-                    ['ls', '--format', 'json', '--nologo', '--stream'],
+                    ['ls', '--format', 'json', '--stream', '--nologo'],
                     ['extension', 'get-apphosts', '--nologo'],
                 ]);
 
@@ -870,9 +872,10 @@ suite('AppHost discovery', () => {
         });
 
         test('keeps valid aspire ls candidates when future entries have unexpected shape', async () => {
+            getConfigInfoStub.resolves({ capabilities: [] } as any);
             stubFileSystemWatchers(sandbox);
             sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
-                options?.stdoutCallback?.(JSON.stringify([
+                emitLsOutput(options, [
                     {
                         path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
                         language: 'csharp',
@@ -884,8 +887,7 @@ suite('AppHost discovery', () => {
                         status: 42,
                         extraMetadata: true,
                     },
-                ]));
-                options?.exitCallback?.(0);
+                ]);
                 return { kill: () => { } } as any;
             });
             const service = new AppHostDiscoveryService(makeTerminalProvider());
@@ -1026,16 +1028,16 @@ suite('AppHost discovery', () => {
             }
         });
 
-        test('probes aspire ls with --stream when a no-op candidate callback is provided', async () => {
+        test('uses aspire ls stream when config info advertises the capability', async () => {
             stubFileSystemWatchers(sandbox);
             const observedArgs: string[][] = [];
             const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
                 observedArgs.push(args);
-                options?.stdoutCallback?.(JSON.stringify([{
+                options?.lineCallback?.(JSON.stringify({
                     path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
                     language: 'csharp',
                     status: 'buildable',
-                }]));
+                }));
                 options?.exitCallback?.(0);
                 return { kill: () => { } } as any;
             });
@@ -1045,7 +1047,7 @@ suite('AppHost discovery', () => {
                 const result = await service.discover(makeWorkspaceFolder(buildPath('workspace')));
 
                 assert.strictEqual(spawnStub.callCount, 1);
-                assert.deepStrictEqual(observedArgs, [['ls', '--format', 'json', '--nologo', '--stream']]);
+                assert.deepStrictEqual(observedArgs, [['ls', '--format', 'json', '--stream', '--nologo']]);
                 assert.deepStrictEqual(result, [{
                     path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
                     language: 'csharp',
@@ -1057,8 +1059,9 @@ suite('AppHost discovery', () => {
             }
         });
 
-        test('retries buffered aspire ls and disables streaming when an older CLI rejects --stream', async () => {
-            const watcherCallbacks = stubFileSystemWatchers(sandbox);
+        test('uses buffered aspire ls when config info does not advertise the capability', async () => {
+            getConfigInfoStub.resolves({ capabilities: [] } as any);
+            stubFileSystemWatchers(sandbox);
             const candidate = {
                 path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
                 language: 'csharp',
@@ -1067,34 +1070,41 @@ suite('AppHost discovery', () => {
             const observedArgs: string[][] = [];
             sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
                 observedArgs.push(args);
-                if (args.includes('--stream')) {
-                    options?.stderrCallback?.("Unrecognized command or argument '--stream'.");
-                    options?.exitCallback?.(1);
-                }
-                else {
-                    options?.stdoutCallback?.(JSON.stringify([candidate]));
-                    options?.exitCallback?.(0);
-                }
+                options?.stdoutCallback?.(JSON.stringify([candidate]));
+                options?.exitCallback?.(0);
                 return { kill: () => { } } as any;
             });
             const service = new AppHostDiscoveryService(makeTerminalProvider());
 
             try {
-                const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
-                const observedCandidates: CandidateAppHostDisplayInfo[] = [];
+                assert.deepStrictEqual(await service.discover(makeWorkspaceFolder(buildPath('workspace'))), [candidate]);
+                assert.deepStrictEqual(observedArgs, [['ls', '--format', 'json', '--nologo']]);
+            }
+            finally {
+                service.dispose();
+            }
+        });
 
-                const firstResult = await service.discover(workspaceFolder, false, undefined, candidate => observedCandidates.push(candidate));
-                assert.deepStrictEqual(firstResult, [candidate]);
-                assert.deepStrictEqual(observedCandidates, []);
+        test('uses buffered aspire ls when config info is unavailable', async () => {
+            getConfigInfoStub.resolves(undefined);
+            stubFileSystemWatchers(sandbox);
+            const candidate = {
+                path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
+                language: 'csharp',
+                status: 'buildable',
+            };
+            const observedArgs: string[][] = [];
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
+                observedArgs.push(args);
+                options?.stdoutCallback?.(JSON.stringify([candidate]));
+                options?.exitCallback?.(0);
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
 
-                watcherCallbacks[0]();
-                const secondResult = await service.discover(workspaceFolder);
-                assert.deepStrictEqual(secondResult, [candidate]);
-                assert.deepStrictEqual(observedArgs, [
-                    ['ls', '--format', 'json', '--nologo', '--stream'],
-                    ['ls', '--format', 'json', '--nologo'],
-                    ['ls', '--format', 'json', '--nologo'],
-                ]);
+            try {
+                assert.deepStrictEqual(await service.discover(makeWorkspaceFolder(buildPath('workspace'))), [candidate]);
+                assert.deepStrictEqual(observedArgs, [['ls', '--format', 'json', '--nologo']]);
             }
             finally {
                 service.dispose();
@@ -1156,92 +1166,9 @@ suite('AppHost discovery', () => {
                 assert.deepStrictEqual(await service.discover(workspaceFolder), [streamCandidate]);
 
                 assert.deepStrictEqual(observedArgs, [
-                    ['ls', '--format', 'json', '--nologo', '--stream'],
+                    ['ls', '--format', 'json', '--stream', '--nologo'],
                     ['extension', 'get-apphosts', '--nologo'],
-                    ['ls', '--format', 'json', '--nologo', '--stream'],
-                ]);
-            }
-            finally {
-                service.dispose();
-            }
-        });
-
-        test('reprobes aspire ls with --stream after CLI path changes', async () => {
-            const watcherCallbacks = stubFileSystemWatchers(sandbox);
-            const candidate = {
-                path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
-                language: 'csharp',
-                status: 'buildable',
-            };
-            const observedCalls: { cliPath: string; args: string[] }[] = [];
-            let cliPath = 'old-aspire';
-            const terminalProvider = makeTerminalProvider();
-            sandbox.stub(terminalProvider, 'getAspireCliExecutablePath').callsFake(async () => cliPath);
-            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, command, args = [], options) => {
-                observedCalls.push({ cliPath: command, args });
-                if (command === 'old-aspire' && args.includes('--stream')) {
-                    options?.stderrCallback?.("Unrecognized command or argument '--stream'.");
-                    options?.exitCallback?.(1);
-                }
-                else {
-                    options?.stdoutCallback?.(JSON.stringify([candidate]));
-                    options?.exitCallback?.(0);
-                }
-                return { kill: () => { } } as any;
-            });
-            const service = new AppHostDiscoveryService(terminalProvider);
-            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
-
-            try {
-                assert.deepStrictEqual(await service.discover(workspaceFolder), [candidate]);
-
-                cliPath = 'new-aspire';
-                watcherCallbacks[0]();
-                assert.deepStrictEqual(await service.discover(workspaceFolder), [candidate]);
-
-                assert.deepStrictEqual(observedCalls, [
-                    { cliPath: 'old-aspire', args: ['ls', '--format', 'json', '--nologo', '--stream'] },
-                    { cliPath: 'old-aspire', args: ['ls', '--format', 'json', '--nologo'] },
-                    { cliPath: 'new-aspire', args: ['ls', '--format', 'json', '--nologo', '--stream'] },
-                ]);
-            }
-            finally {
-                service.dispose();
-            }
-        });
-
-        test('keeps buffered aspire ls after force refresh when the same CLI rejected --stream', async () => {
-            stubFileSystemWatchers(sandbox);
-            const candidate = {
-                path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
-                language: 'csharp',
-                status: 'buildable',
-            };
-            const observedArgs: string[][] = [];
-            let streamAttempt = 0;
-            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
-                observedArgs.push(args);
-                if (args.includes('--stream') && streamAttempt++ === 0) {
-                    options?.stderrCallback?.("Unrecognized command or argument '--stream'.");
-                    options?.exitCallback?.(1);
-                }
-                else {
-                    options?.stdoutCallback?.(JSON.stringify([candidate]));
-                    options?.exitCallback?.(0);
-                }
-                return { kill: () => { } } as any;
-            });
-            const service = new AppHostDiscoveryService(makeTerminalProvider());
-            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
-
-            try {
-                assert.deepStrictEqual(await service.discover(workspaceFolder), [candidate]);
-                assert.deepStrictEqual(await service.discover(workspaceFolder, true), [candidate]);
-
-                assert.deepStrictEqual(observedArgs, [
-                    ['ls', '--format', 'json', '--nologo', '--stream'],
-                    ['ls', '--format', 'json', '--nologo'],
-                    ['ls', '--format', 'json', '--nologo'],
+                    ['ls', '--format', 'json', '--stream', '--nologo'],
                 ]);
             }
             finally {
@@ -1257,12 +1184,11 @@ suite('AppHost discovery', () => {
                     options?.stderrCallback?.("Unrecognized command or argument '--nologo'.");
                     options?.exitCallback?.(1);
                 } else {
-                    options?.stdoutCallback?.(JSON.stringify([{
+                    emitLsOutput(options, [{
                         path: appHostPath,
                         language: 'csharp',
                         status: 'buildable',
-                    }]));
-                    options?.exitCallback?.(0);
+                    }]);
                 }
                 return { kill: () => { } } as any;
             });
@@ -1271,7 +1197,7 @@ suite('AppHost discovery', () => {
             try {
                 const result = await service.discover(makeWorkspaceFolder(buildPath('workspace')));
 
-                assert.deepStrictEqual(spawnStub.firstCall.args[2], ['ls', '--format', 'json', '--nologo', '--stream']);
+                assert.deepStrictEqual(spawnStub.firstCall.args[2], ['ls', '--format', 'json', '--stream', '--nologo']);
                 assert.deepStrictEqual(spawnStub.secondCall.args[2], ['ls', '--format', 'json', '--stream']);
                 assert.deepStrictEqual(result, [{
                     path: appHostPath,
@@ -1321,7 +1247,7 @@ suite('AppHost discovery', () => {
         test('filters aspire ls candidates in excluded directories', async () => {
             stubFileSystemWatchers(sandbox);
             sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
-                options?.stdoutCallback?.(JSON.stringify([
+                emitLsOutput(options, [
                     {
                         path: buildPath('workspace', '.agents', 'skills', 'demo', 'snippets', 'apphost.ts'),
                         language: 'typescript/nodejs',
@@ -1332,8 +1258,7 @@ suite('AppHost discovery', () => {
                         language: 'csharp',
                         status: 'buildable',
                     },
-                ]));
-                options?.exitCallback?.(0);
+                ]);
                 return { kill: () => { } } as any;
             });
             const service = new AppHostDiscoveryService(makeTerminalProvider());
@@ -1355,7 +1280,7 @@ suite('AppHost discovery', () => {
         test('filters path-scoped agent skill candidates but keeps other .github apphosts', async () => {
             stubFileSystemWatchers(sandbox);
             sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
-                options?.stdoutCallback?.(JSON.stringify([
+                emitLsOutput(options, [
                     {
                         path: buildPath('workspace', '.github', 'skills', 'demo', 'snippets', 'apphost.ts'),
                         language: 'typescript/nodejs',
@@ -1371,8 +1296,7 @@ suite('AppHost discovery', () => {
                         language: 'csharp',
                         status: 'buildable',
                     },
-                ]));
-                options?.exitCallback?.(0);
+                ]);
                 return { kill: () => { } } as any;
             });
             const service = new AppHostDiscoveryService(makeTerminalProvider());
@@ -1435,14 +1359,13 @@ suite('AppHost discovery', () => {
             // (excludeOutsideWorkspace=true) would prune this candidate and fail this test.
             const outsideCandidatePath = buildPath('outside-workspace', 'AppHost', 'AppHost.csproj');
             sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
-                options?.stdoutCallback?.(JSON.stringify([
+                emitLsOutput(options, [
                     {
                         path: outsideCandidatePath,
                         language: 'csharp',
                         status: 'buildable',
                     },
-                ]));
-                options?.exitCallback?.(0);
+                ]);
                 return { kill: () => { } } as any;
             });
             const service = new AppHostDiscoveryService(makeTerminalProvider());
@@ -1846,7 +1769,7 @@ suite('AppHost discovery', () => {
                 assert.ok(resolveFindFiles);
 
                 cancellationSource.cancel();
-                const cancelledResult = assert.rejects(cancelledDiscovery, /cancelled/);
+                const cancelledResult = assert.rejects(cancelledDiscovery, vscode.CancellationError);
                 resolveFindFiles([]);
                 await cancelledResult;
 
@@ -1950,7 +1873,7 @@ suite('AppHost discovery', () => {
                         : [];
                 });
                 sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
-                    options?.stdoutCallback?.(JSON.stringify([
+                    emitLsOutput(options, [
                         {
                             path: otherAppHostPath,
                             language: 'csharp',
@@ -1961,8 +1884,7 @@ suite('AppHost discovery', () => {
                             language: 'csharp',
                             status: 'buildable',
                         },
-                    ]));
-                    options?.exitCallback?.(0);
+                    ]);
                     return { kill: () => { } } as any;
                 });
                 const service = new AppHostDiscoveryService(makeTerminalProvider());
@@ -2119,6 +2041,16 @@ function emitLsStream(options: cliModule.SpawnProcessOptions | undefined, entrie
         options?.lineCallback?.(JSON.stringify(entry));
     }
 
+    options?.exitCallback?.(0);
+}
+
+function emitLsOutput(options: cliModule.SpawnProcessOptions | undefined, entries: readonly unknown[]): void {
+    if (options?.lineCallback) {
+        emitLsStream(options, entries);
+        return;
+    }
+
+    options?.stdoutCallback?.(JSON.stringify(entries));
     options?.exitCallback?.(0);
 }
 

@@ -19,6 +19,7 @@ import { AppHostLaunchService } from '../services/AppHostLaunchService';
 import { terminalCommandArgumentControlCharacters } from '../loc/strings';
 import { onDidInvokeCommand, withCommandTelemetry } from '../utils/telemetry';
 import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
+import { lsJsonStreamCapability } from '../types/configInfo';
 
 function makeResource(overrides: Partial<ResourceJson> = {}): ResourceJson {
     const base: ResourceJson = {
@@ -1438,9 +1439,10 @@ suite('AppHostDataRepository', () => {
 
     setup(() => {
         sandbox = sinon.createSandbox();
-        // The repository eagerly probes `aspire config info --json` in its constructor. Stub it so
-        // it doesn't spawn through the shared spawnCliProcess fake and clobber the discovery callback.
-        sandbox.stub(configInfoProvider.ConfigInfoProvider.prototype, 'getConfigInfo').resolves(null);
+        // Keep the capability probe out of the shared spawn fake while exercising streamed discovery.
+        sandbox.stub(configInfoProvider.ConfigInfoProvider.prototype, 'getConfigInfo').resolves({
+            capabilities: [lsJsonStreamCapability],
+        } as any);
     });
 
     teardown(() => {
@@ -1448,6 +1450,8 @@ suite('AppHostDataRepository', () => {
     });
 
     test('workspace apphost name uses all candidates to disambiguate duplicate filenames', async () => {
+        const clock = sinon.useFakeTimers();
+        let clockRestored = false;
         let emitCandidates: ((candidates: CandidateAppHostDisplayInfo[]) => void) | undefined;
         let completeDiscovery: (() => void) | undefined;
         sandbox.stub(vscode.workspace, 'workspaceFolders').value([{
@@ -1471,7 +1475,7 @@ suite('AppHostDataRepository', () => {
         const repository = new AppHostDataRepository(makeTerminalProvider());
 
         try {
-            await flushPromises();
+            await clock.tickAsync(0);
             assert.ok(emitCandidates);
             assert.ok(completeDiscovery);
 
@@ -1489,10 +1493,7 @@ suite('AppHostDataRepository', () => {
                     selected: false,
                 },
             ]);
-            await flushPromises();
-            await waitForCondition(
-                () => repository.workspaceAppHostCandidatePaths.length === 2,
-                'streamed workspace AppHost candidate paths were not updated');
+            await clock.tickAsync(50);
 
             assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, [
                 '/workspace/apps/Store/AppHost.csproj',
@@ -1500,6 +1501,8 @@ suite('AppHostDataRepository', () => {
             ]);
             assert.strictEqual(repository.workspaceAppHostName, undefined);
 
+            clock.restore();
+            clockRestored = true;
             completeDiscovery();
             await waitForCondition(
                 () => repository.workspaceAppHostName === 'apps/Store/AppHost.csproj',
@@ -1507,6 +1510,9 @@ suite('AppHostDataRepository', () => {
 
             assert.strictEqual(repository.workspaceAppHostName, 'apps/Store/AppHost.csproj');
         } finally {
+            if (!clockRestored) {
+                clock.restore();
+            }
             completeDiscovery?.();
             repository.dispose();
         }

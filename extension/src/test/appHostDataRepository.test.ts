@@ -12,7 +12,7 @@ import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import type { AppHostDiscoveryService, CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import * as cliModule from '../debugger/languages/cli';
 import * as configInfoProvider from '../utils/configInfoProvider';
-import { describeIncludeDisabledCommandsCapability } from '../types/configInfo';
+import { describeIncludeDisabledCommandsCapability, lsJsonStreamCapability } from '../types/configInfo';
 
 class TestChildProcess extends EventEmitter {
     stdout = new PassThrough();
@@ -90,11 +90,10 @@ suite('AppHostDataRepository', () => {
         getCliPathStub = sinon.stub(terminalProvider, 'getAspireCliExecutablePath').resolves('aspire');
         spawnStub = sinon.stub(cliModule, 'spawnCliProcess');
         spawnStub.callsFake(() => new TestChildProcess());
-        // The repository probes `aspire config info --json` to learn whether the CLI advertises the
-        // describe `--include-disabled-commands` capability. Default to a capability-supporting CLI
-        // so the common-path tests below still see the flag on the describe invocation.
+        // Default to a current CLI so common-path tests use streamed discovery and include disabled
+        // commands in describe output. Compatibility tests override this response explicitly.
         getConfigInfoStub = sinon.stub(configInfoProvider.ConfigInfoProvider.prototype, 'getConfigInfo').resolves({
-            capabilities: [describeIncludeDisabledCommandsCapability],
+            capabilities: [describeIncludeDisabledCommandsCapability, lsJsonStreamCapability],
         } as any);
         defaultWorkspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').value(undefined);
         findFilesStub = sinon.stub(vscode.workspace, 'findFiles').resolves([]);
@@ -1261,11 +1260,12 @@ suite('AppHostDataRepository', () => {
 
     test('describe reports generic error when workspace AppHost exits with runtime failure', async () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
-        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsOutputCallback(options);
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ls') {
+                getAppHostsLineCallback = createLsOutputCallback(options);
+            }
             return new TestChildProcess();
         });
-        spawnStub.onSecondCall().returns(new TestChildProcess());
         const workspaceFoldersStub = stubWorkspaceFolders([{
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
@@ -1286,7 +1286,9 @@ suite('AppHostDataRepository', () => {
                     '/workspace/apps/Store/AppHost.csproj',
                 ],
             }));
-            await waitForAppHostDiscovery();
+            await waitForCondition(
+                () => repository.isWorkspaceAppHostDiscoveryComplete,
+                'workspace AppHost discovery did not complete');
 
             repository.setAppHostFilesOpen(['/workspace/apps/Store/AppHost.csproj']);
             await waitForMicrotasks();
@@ -1333,8 +1335,10 @@ suite('AppHostDataRepository', () => {
 
     test('describe clears compatibility error after receiving resource data', async () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
-        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsOutputCallback(options);
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ls') {
+                getAppHostsLineCallback = createLsOutputCallback(options);
+            }
             return new TestChildProcess();
         });
         const workspaceFoldersStub = stubWorkspaceFolders([{
@@ -1356,7 +1360,9 @@ suite('AppHostDataRepository', () => {
                     '/workspace/AppHost.csproj',
                 ],
             }));
-            await waitForAppHostDiscovery();
+            await waitForCondition(
+                () => repository.isWorkspaceAppHostDiscoveryComplete,
+                'workspace AppHost discovery did not complete');
 
             repository.setAppHostFilesOpen(['/workspace/AppHost.csproj']);
             await waitForMicrotasks();
@@ -1392,10 +1398,11 @@ suite('AppHostDataRepository', () => {
 
     test('workspace ps success does not clear describe error', async () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
-        const getAppHostsProcess = new TestChildProcess();
-        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsOutputCallback(options);
-            return getAppHostsProcess;
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ls') {
+                getAppHostsLineCallback = createLsOutputCallback(options);
+            }
+            return new TestChildProcess();
         });
         const workspaceFoldersStub = stubWorkspaceFolders([{
             uri: vscode.Uri.file('/workspace'),
@@ -1416,7 +1423,9 @@ suite('AppHostDataRepository', () => {
                     '/workspace/apps/Store/AppHost.csproj',
                 ],
             }));
-            await waitForAppHostDiscovery();
+            await waitForCondition(
+                () => repository.isWorkspaceAppHostDiscoveryComplete,
+                'workspace AppHost discovery did not complete');
 
             repository.setAppHostFilesOpen(['/workspace/apps/Store/AppHost.csproj']);
             await waitForMicrotasks();
@@ -2570,7 +2579,7 @@ suite('AppHostDataRepository', () => {
         try {
             await waitForAppHostDiscovery();
             assert.ok(getAppHostsLineCallback);
-            assert.deepStrictEqual(spawnStub.firstCall.args[2], ['ls', '--format', 'json', '--nologo', '--stream']);
+            assert.deepStrictEqual(spawnStub.firstCall.args[2], ['ls', '--format', 'json', '--stream', '--nologo']);
 
             getAppHostsLineCallback(JSON.stringify([
                 {
@@ -2611,8 +2620,10 @@ suite('AppHostDataRepository', () => {
         }]);
         const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
-        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsOutputCallback(options);
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ls') {
+                getAppHostsLineCallback = createLsOutputCallback(options);
+            }
             return new TestChildProcess();
         });
         const repository = new AppHostDataRepository(terminalProvider);
@@ -2624,7 +2635,9 @@ suite('AppHostDataRepository', () => {
             assert.ok(getAppHostsLineCallback);
 
             getAppHostsLineCallback(JSON.stringify([]));
-            await waitForAppHostDiscovery();
+            await waitForCondition(
+                () => repository.isWorkspaceAppHostDiscoveryComplete,
+                'workspace AppHost discovery did not complete');
 
             const loadingContextCalls = executeCommandStub.getCalls().filter(call =>
                 call.args[0] === 'setContext' && call.args[1] === 'aspire.loading');
@@ -2668,8 +2681,10 @@ suite('AppHostDataRepository', () => {
         }]);
         const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
-        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsOutputCallback(options);
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ls') {
+                getAppHostsLineCallback = createLsOutputCallback(options);
+            }
             return new TestChildProcess();
         });
         const repository = new AppHostDataRepository(terminalProvider);
@@ -2688,7 +2703,9 @@ suite('AppHostDataRepository', () => {
                     status: 'possibly-unbuildable',
                 },
             ]));
-            await waitForAppHostDiscovery();
+            await waitForCondition(
+                () => repository.isWorkspaceAppHostDiscoveryComplete,
+                'workspace AppHost discovery did not complete');
 
             const loadingContextCalls = executeCommandStub.getCalls().filter(call =>
                 call.args[0] === 'setContext' && call.args[1] === 'aspire.loading');
