@@ -1,0 +1,28 @@
+@*
+    Deck-styled horizontal toolbar, replacing FluentToolbar during the Fluent-removal phase.
+    Renders a flex row (role="toolbar"). Children opt into right-alignment with slot="end" exactly
+    as they did under FluentToolbar; the CSS in app.css groups the first slot="end" child (and its
+    trailing siblings) to the right. Class/Style/unmatched attributes flow through.
+*@
+@namespace Aspire.Dashboard.Components.Deck
+
+<div class="deck-toolbar @Class" style="@Style" role="toolbar" @attributes="AdditionalAttributes">
+    @ChildContent
+</div>
+
+@code {
+    /// <summary>Additional CSS classes appended to the toolbar (e.g. <c>main-toolbar</c>).</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Inline style applied to the toolbar.</summary>
+    [Parameter]
+    public string? Style { get; set; }
+
+    /// <summary>The toolbar content.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+}

@@ -9,27 +9,32 @@
     grid-column-gap: 10px;
 }
 
-fluent-toolbar fluent-divider {
+.deck-toolbar .deck-divider {
     border: 0;
 }
 
-fluent-toolbar fluent-switch,
-fluent-toolbar p {
+.deck-toolbar p {
     margin-inline-end: 15px;
 }
 
-fluent-toolbar[orientation=horizontal] {
+.deck-toolbar {
+    display: flex;
+    align-items: center;
     width: 100%;
+    flex-wrap: wrap;
+    column-gap: calc(var(--design-unit) * 2px);
+    row-gap: calc(var(--design-unit) * 1.5px);
     padding-right: calc(var(--design-unit) * 2px);
 }
 
-fluent-toolbar::part(positioning-region) {
-    row-gap: calc(var(--design-unit) * 1.5px);
+/* Group the end-slot items to the right: the first slot="end" child absorbs the free space; any
+   following end-slot siblings sit next to it (matching FluentToolbar's ::part(end) container). */
+.deck-toolbar > [slot="end"] {
+    margin-left: auto;
 }
 
-fluent-toolbar::part(end) {
-    flex-wrap: wrap;
-    row-gap: calc(var(--design-unit) * 1.5px);
+.deck-toolbar > [slot="end"] ~ [slot="end"] {
+    margin-left: 0;
 }
 
 /* Hide any web components that haven't been */
@@ -260,7 +265,7 @@ h1 {
 }
 
 @media (max-width: 768px) {
-    fluent-toolbar[orientation=horizontal].main-toolbar {
+    .deck-toolbar.main-toolbar {
         padding-left: calc(var(--design-unit) * 2px);
         padding-right: calc(var(--design-unit) * 2px);
     }
@@ -281,7 +286,7 @@ h1 {
 }
 
 @media (min-width: 768px) {
-    fluent-toolbar[orientation=horizontal].main-toolbar {
+    .deck-toolbar.main-toolbar {
         padding-left: var(--layout-left-padding);
         padding-right: var(--layout-right-padding);
     }
@@ -335,7 +340,7 @@ fluent-dialog[class~="right"]::part(control) {
     border-left-width: 1px !important;
 }
 
-fluent-dialog fluent-toolbar {
+fluent-dialog .deck-toolbar {
     background-color: var(--dialog-background-color);
 }
 
@@ -736,7 +741,7 @@ fluent-switch.table-switch::part(label) {
     display: flex;
 }
 
-.layout fluent-toolbar > .fluent-input-label {
+.layout .deck-toolbar > .deck-input-label {
     margin-bottom: 0;
 }
 

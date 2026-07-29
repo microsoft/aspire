@@ -6,7 +6,7 @@
 <div class="span-details-layout">
     @if (!HideToolbar)
     {
-        <FluentToolbar Orientation="Orientation.Horizontal">
+        <Toolbar>
             <div>
                 @Loc[nameof(ControlsStrings.SpanDetailsResourceLabel)] <strong>@ViewModel.Span.Source.Resource.ResourceName</strong>
             </div>
@@ -32,7 +32,7 @@
                               Items="@_spanActionsMenuItems"
                               Title="@Loc[nameof(ControlsStrings.ActionsButtonText)]"
                               slot="end" />
-        </FluentToolbar>
+        </Toolbar>
     }
     <div class="property-grid-container">
         <Accordion>

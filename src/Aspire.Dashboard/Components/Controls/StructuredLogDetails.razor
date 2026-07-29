@@ -5,7 +5,7 @@
 @inject IStringLocalizer<ControlsStrings> Loc
 
 <div class="structured-log-details-layout">
-    <FluentToolbar Orientation="Orientation.Horizontal">
+    <Toolbar>
         <div>
             @Loc[nameof(ControlsStrings.StructuredLogsDetailsResourceLabel)] <strong>@ViewModel.LogEntry.ResourceView.Resource.ResourceName</strong>
         </div>
@@ -22,7 +22,7 @@
                           Items="@_logActionsMenuItems"
                           Title="@Loc[nameof(ControlsStrings.ActionsButtonText)]"
                           slot="end" />
-    </FluentToolbar>
+    </Toolbar>
     <div class="property-grid-container">
         <Accordion>
             <AccordionItem Heading="@Loc[nameof(ControlsStrings.StructuredLogsDetailsLogEntryHeader)]" Expanded="true" Count="@FilteredItems.Count()">

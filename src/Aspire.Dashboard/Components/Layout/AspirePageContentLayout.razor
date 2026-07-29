@@ -12,30 +12,30 @@
             {
                 @PageTitleSection
 
-                <FluentToolbar Class="main-toolbar" Orientation="Orientation.Horizontal">
+                <Toolbar Class="main-toolbar">
                     @ToolbarSection
-                </FluentToolbar>
+                </Toolbar>
             }
             else
             {
-                <FluentToolbar Class="title-toolbar-inline" Orientation="Orientation.Horizontal">
+                <Toolbar Class="title-toolbar-inline">
                     @PageTitleSection
                     @ToolbarSection
-                </FluentToolbar>
+                </Toolbar>
             }
         </header>
     }
     else if (!IsSummaryDetailsViewOpen)
     {
         <header class="content-header">
-            <FluentToolbar Orientation="Orientation.Horizontal" Style="@HeaderStyle">
+            <Toolbar Style="@HeaderStyle">
                 @PageTitleSection
 
                 @if (!AddNewlineOnToolbar)
                 {
                     @MobilePageTitleToolbarSection
                 }
-            </FluentToolbar>
+            </Toolbar>
 
             @if (AddNewlineOnToolbar)
             {

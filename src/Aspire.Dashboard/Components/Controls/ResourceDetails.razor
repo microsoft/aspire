@@ -11,7 +11,7 @@
 
 <div class="resource-details-layout">
 
-    <FluentToolbar Orientation="Orientation.Horizontal">
+    <Toolbar>
         <SearchBox Placeholder="@ControlStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
                    Autofocus="true"
                    @bind-Value="_filter"
@@ -22,7 +22,7 @@
                           Items="@_resourceActionsMenuItems"
                           Title="@Loc[nameof(Aspire.Dashboard.Resources.Resources.ResourcesChangeViewOptions)]"
                           slot="end" />
-    </FluentToolbar>
+    </Toolbar>
     <div class="property-grid-container">
         <Accordion>
             <AccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsResourceHeader)]" Expanded="true" Count="@FilteredResourceProperties.Count()">
