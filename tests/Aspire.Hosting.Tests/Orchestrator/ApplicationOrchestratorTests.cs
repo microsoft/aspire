@@ -572,6 +572,182 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(KnownResourceStates.Starting, snapshotEvent.Snapshot.State?.Text);
     }
 
+    [Fact]
+    public async Task SelfDrivenResourceWaitsForDependencyBeforeStarting()
+    {
+        // Custom resources that drive their own startup publish BeforeResourceStartedEvent from
+        // OnInitializeResource, so they are still in the initial "NotStarted" state when the wait is
+        // published rather than having been moved to "Starting" by the orchestrator first.
+        // https://github.com/microsoft/aspire/issues/17453
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var blockerReleased = new TaskCompletionSource();
+        var blocker = AddSelfDrivenResource(builder, "blocker", blockerReleased.Task);
+        var waiter = AddSelfDrivenResource(builder, "waiter").WaitFor(blocker);
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events, applicationEventing: builder.Eventing);
+        await appOrchestrator.RunApplicationAsync();
+
+        await events.PublishAsync(new OnResourcesPreparedContext(CancellationToken.None));
+
+        await resourceNotificationService.WaitForResourceAsync(waiter.Resource.Name, KnownResourceStates.Waiting, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        // The blocker is still inside its initialize callback, so the waiter must not have started.
+        Assert.True(resourceNotificationService.TryGetCurrentState(waiter.Resource.Name, out var waitingEvent));
+        Assert.Equal(KnownResourceStates.Waiting, waitingEvent.Snapshot.State?.Text);
+
+        blockerReleased.SetResult();
+
+        await resourceNotificationService.WaitForResourceAsync(blocker.Resource.Name, KnownResourceStates.Running, TestContext.Current.CancellationToken).DefaultTimeout();
+        await resourceNotificationService.WaitForResourceAsync(waiter.Resource.Name, KnownResourceStates.Running, TestContext.Current.CancellationToken).DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ResourceWaitingOnSelfDrivenResourceWaitsForItToStart()
+    {
+        // The reciprocal of SelfDrivenResourceWaitsForDependencyBeforeStarting: the dependency is the
+        // resource that drives its own startup. https://github.com/microsoft/aspire/issues/17453
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var dependencyReleased = new TaskCompletionSource();
+        var dependency = AddSelfDrivenResource(builder, "dependency", dependencyReleased.Task);
+        var waiter = AddSelfDrivenResource(builder, "waiter").WaitFor(dependency);
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events, applicationEventing: builder.Eventing);
+        await appOrchestrator.RunApplicationAsync();
+
+        await events.PublishAsync(new OnResourcesPreparedContext(CancellationToken.None));
+
+        await resourceNotificationService.WaitForResourceAsync(waiter.Resource.Name, KnownResourceStates.Waiting, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.True(resourceNotificationService.TryGetCurrentState(dependency.Resource.Name, out var dependencyEvent));
+        Assert.NotEqual(KnownResourceStates.Running, dependencyEvent.Snapshot.State?.Text);
+
+        dependencyReleased.SetResult();
+
+        await resourceNotificationService.WaitForResourceAsync(dependency.Resource.Name, KnownResourceStates.Running, TestContext.Current.CancellationToken).DefaultTimeout();
+        await resourceNotificationService.WaitForResourceAsync(waiter.Resource.Name, KnownResourceStates.Running, TestContext.Current.CancellationToken).DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ResourceForcedOutOfWaitingStopsWaitingForItsDependency()
+    {
+        // The Start command forces a waiting resource to start by moving it from "Waiting" to "Starting"
+        // (see ApplicationOrchestrator.StartResourceAsync). BeforeResourceStartedEvent has to stop waiting
+        // when that happens, even though the dependency is still not ready.
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var blockerReleased = new TaskCompletionSource();
+        var blocker = AddSelfDrivenResource(builder, "blocker", blockerReleased.Task);
+        var waiter = AddSelfDrivenResource(builder, "waiter").WaitFor(blocker);
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events, applicationEventing: builder.Eventing);
+        await appOrchestrator.RunApplicationAsync();
+
+        await events.PublishAsync(new OnResourcesPreparedContext(CancellationToken.None));
+
+        await resourceNotificationService.WaitForResourceAsync(waiter.Resource.Name, KnownResourceStates.Waiting, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        // Stand in for the Start command.
+        await resourceNotificationService.PublishUpdateAsync(waiter.Resource, s => s with { State = KnownResourceStates.Starting }).DefaultTimeout();
+
+        await resourceNotificationService.WaitForResourceAsync(waiter.Resource.Name, KnownResourceStates.Running, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.True(resourceNotificationService.TryGetCurrentState(blocker.Resource.Name, out var blockerEvent));
+        Assert.NotEqual(KnownResourceStates.Running, blockerEvent.Snapshot.State?.Text);
+
+        blockerReleased.SetResult();
+    }
+
+    [Fact]
+    public async Task ConnectionStringResourceWaitsForReferencedResourceBeforeBecomingAvailable()
+    {
+        // AddConnectionString has the same shape as a third-party custom resource: it starts in "NotStarted"
+        // and publishes BeforeResourceStartedEvent from OnInitializeResource, and it implicitly adds a
+        // WaitForStart on every resource its expression references. It must not report a connection string
+        // before those resources have started. https://github.com/microsoft/aspire/issues/17453
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var referencedReleased = new TaskCompletionSource();
+        var referenced = AddSelfDrivenResource(builder, "referenced", referencedReleased.Task);
+        var connectionString = builder.AddConnectionString("cs", ReferenceExpression.Create($"Endpoint={referenced.Resource}"));
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events, applicationEventing: builder.Eventing);
+        await appOrchestrator.RunApplicationAsync();
+
+        await events.PublishAsync(new OnResourcesPreparedContext(CancellationToken.None));
+
+        await resourceNotificationService.WaitForResourceAsync(connectionString.Resource.Name, KnownResourceStates.Waiting, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        referencedReleased.SetResult();
+
+        await resourceNotificationService.WaitForResourceAsync(referenced.Resource.Name, KnownResourceStates.Running, TestContext.Current.CancellationToken).DefaultTimeout();
+        await resourceNotificationService.WaitForResourceAsync(connectionString.Resource.Name, KnownResourceStates.Running, TestContext.Current.CancellationToken).DefaultTimeout();
+    }
+
+    /// <summary>
+    /// Adds a resource shaped like a custom hosting integration that drives its own startup: it starts in
+    /// <see cref="KnownResourceStates.NotStarted"/> and publishes <see cref="BeforeResourceStartedEvent"/> itself
+    /// instead of being started by DCP.
+    /// </summary>
+    private static IResourceBuilder<CustomResourceWithWaitSupport> AddSelfDrivenResource(IDistributedApplicationBuilder builder, string name, Task? gate = null)
+    {
+        return builder.AddResource(new CustomResourceWithWaitSupport(name))
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "CustomResource",
+                State = KnownResourceStates.NotStarted,
+                Properties = []
+            })
+            .OnInitializeResource(async (resource, @event, ct) =>
+            {
+                // This is where waiting happens.
+                await @event.Eventing.PublishAsync(new BeforeResourceStartedEvent(resource, @event.Services), ct);
+
+                if (gate is not null)
+                {
+                    await gate;
+                }
+
+                // ResourceHealthCheckService isn't running in this harness, so stand in for it and publish the
+                // ready event a resource with no health checks would otherwise get. Without it, WaitFor - which
+                // waits until healthy - could never observe the dependency as ready.
+                await @event.Notifications.PublishUpdateAsync(resource, s => s with
+                {
+                    State = KnownResourceStates.Running,
+                    ResourceReadyEvent = new EventSnapshot(Task.CompletedTask)
+                });
+            });
+    }
+
     private ApplicationOrchestrator CreateOrchestrator(
         DistributedApplicationModel distributedAppModel,
         ResourceNotificationService notificationService,
@@ -644,6 +820,11 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     }
 
     private sealed class CustomResource(string name) : Resource(name);
+
+    private sealed class CustomResourceWithWaitSupport(string name) : Resource(name), IResourceWithWaitSupport, IResourceWithConnectionString
+    {
+        public ReferenceExpression ConnectionStringExpression => ReferenceExpression.Create($"{Name}-connection-string");
+    }
 
     private sealed class CustomChildResource(string name, IResource parent) : Resource(name), IResourceWithParent
     {
