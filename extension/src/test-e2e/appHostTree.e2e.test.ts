@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 import { findRunningAppHost, getCommandInvocationCount, getResources, getTerminalCommandCount, getTreeAppHostLabel, isSamePath, waitForCommandOutcome, waitForDashboardUrl, waitForExtensionState, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
-import { executeE2eControlCommand, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, writeDelayedPsCliWrapper, writeStreamingDiscoveryCliWrapper } from './helpers/fixtures';
+import { executeE2eControlCommand, getCliWrapperInvocationCount, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, touchPrimaryAppHostProject, writeDelayedPsCliWrapper, writeStreamingDiscoveryCliWrapper, writeTrackedStreamingDiscoveryCliWrapper } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { cancelActiveInput, clickTreeItem, executeCommandFromPalette, openAspireView, waitForTreeItem, waitForWorkbenchText } from './helpers/vscode';
 
@@ -36,7 +36,7 @@ suite('Aspire AppHost tree E2E', function () {
         await openAspireView();
         await waitForWorkspaceAppHost();
 
-        await setE2eCliPathForE2E(writeStreamingDiscoveryCliWrapper());
+        await setE2eCliPathForE2E(writeStreamingDiscoveryCliWrapper(15_000));
         const invocationCountBefore = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
         await executeE2eControlCommand({ name: 'refreshAppHosts' }, { waitFor: 'started' });
 
@@ -49,11 +49,34 @@ suite('Aspire AppHost tree E2E', function () {
         const partialSection = await openAspireView();
         const partialItem = await waitForTreeItem(partialSection, getTreeAppHostLabel(partialState.state));
         assert.strictEqual(await partialItem.getLabel(), getTreeAppHostLabel(partialState.state));
+        await waitForTreeItem(partialSection, 'Searching for AppHosts...');
 
         await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 30000, invocationCountBefore);
         const finalState = await waitForRepositoryIdle();
         assert.strictEqual(finalState.state.isWorkspaceAppHostDiscoveryComplete, true);
         assert.ok(finalState.state.workspaceAppHostCandidatePaths.some(candidatePath => isSamePath(candidatePath, getPrimaryAppHostProjectPath())));
+    });
+
+    test('file changes queue one rediscovery', async () => {
+        await openAspireView();
+        await waitForWorkspaceAppHost();
+
+        const wrapper = writeTrackedStreamingDiscoveryCliWrapper();
+        await setE2eCliPathForE2E(wrapper.cliPath);
+        const invocationCountBefore = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
+        await executeE2eControlCommand({ name: 'refreshAppHosts' }, { waitFor: 'started' });
+        await waitForExtensionState(
+            file => file.state.isWorkspaceAppHostDiscoveryComplete === false,
+            'streaming AppHost discovery to start');
+
+        for (let i = 0; i < 3; i++) {
+            touchPrimaryAppHostProject();
+            await new Promise(resolve => setTimeout(resolve, 400));
+        }
+
+        await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 30000, invocationCountBefore);
+        await waitForRepositoryIdle();
+        assert.strictEqual(getCliWrapperInvocationCount(wrapper.invocationLogPath), 2);
     });
 
     test('refresh shows loading until an AppHost appears', async () => {

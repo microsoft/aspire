@@ -220,6 +220,38 @@ export function writeStreamingDiscoveryCliWrapper(delayMs = 5_000, initialDelayM
     });
 }
 
+export function writeTrackedStreamingDiscoveryCliWrapper(delayMs = 4_000, initialDelayMs = 500): { cliPath: string; invocationLogPath: string } {
+    const invocationLogPath = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers', 'streaming-discovery-invocations.log');
+    removePath(invocationLogPath, { force: true });
+    const cliPath = writeCliWrapper('aspire-tracked-streaming-discovery', {
+        streamedLsCandidate: {
+            path: getPrimaryAppHostProjectPath(),
+            language: 'csharp',
+            status: 'buildable',
+            selected: true,
+        },
+        streamedLsDelayMs: delayMs,
+        streamedLsInitialDelayMs: initialDelayMs,
+        streamedLsInvocationLogPath: invocationLogPath,
+    });
+    return { cliPath, invocationLogPath };
+}
+
+export function getCliWrapperInvocationCount(invocationLogPath: string): number {
+    if (!fs.existsSync(invocationLogPath)) {
+        return 0;
+    }
+
+    return fs.readFileSync(invocationLogPath, 'utf8')
+        .split(/\r?\n/)
+        .filter(line => line.length > 0)
+        .length;
+}
+
+export function touchPrimaryAppHostProject(): void {
+    fs.appendFileSync(getPrimaryAppHostProjectPath(), '\n');
+}
+
 export function writeDelayedPsCliWrapper(delayMs = 1_500): string {
     return writeCliWrapper('aspire-delayed-ps', { psSnapshotDelayMs: delayMs });
 }
@@ -660,6 +692,7 @@ function writeCliWrapper(
         streamedLsCandidate?: unknown;
         streamedLsDelayMs?: number;
         streamedLsInitialDelayMs?: number;
+        streamedLsInvocationLogPath?: string;
         psSnapshotDelayMs?: number;
     },
 ): string {
@@ -688,6 +721,7 @@ ${options.configInfoJson === undefined
 ${options.streamedLsCandidate === undefined
         ? ''
         : `if (args[0] === 'ls') {
+${options.streamedLsInvocationLogPath === undefined ? '' : `  require('fs').appendFileSync(${JSON.stringify(options.streamedLsInvocationLogPath)}, 'ls\\n');`}
   if (!args.includes('--format') || args[args.indexOf('--format') + 1] !== 'json' || !args.includes('--stream')) {
     console.error('Expected AppHost discovery to use ls --format json --stream.');
     process.exit(126);

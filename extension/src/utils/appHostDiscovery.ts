@@ -472,9 +472,13 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         cancellationToken: vscode.CancellationToken): Promise<CandidateAppHostDisplayInfo[]> {
         const argsWithNoLogo = [...args, noLogoOption];
         let candidates: CandidateAppHostDisplayInfo[] = [];
+        const reportedCandidatePaths: string[] = [];
         const createCandidateHandler = () => createLsStreamCandidateHandler(candidate => {
             candidates.push(candidate);
-            notifyCandidateProgressCallback(reportCandidateProgress, candidate);
+            if (!reportedCandidatePaths.some(reportedPath => isSamePath(reportedPath, candidate.path))) {
+                reportedCandidatePaths.push(candidate.path);
+                notifyCandidateProgressCallback(reportCandidateProgress, candidate);
+            }
         });
         let result = await this._runCliProcess(
             cliPath,
@@ -494,7 +498,9 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                 cancellationToken);
         }
 
-        throwIfCliCommandFailed(result);
+        // Streaming stdout is NDJSON containing absolute AppHost paths. It is useful for parsing,
+        // but should not become a user-visible error when the process exits without stderr.
+        throwIfCliCommandFailed(result, false);
         return candidates;
     }
 
@@ -684,9 +690,9 @@ function notifyCandidateProgressCallback(callback: IncrementalCandidateCallback,
     }
 }
 
-function throwIfCliCommandFailed(result: CliProcessResult): void {
+function throwIfCliCommandFailed(result: CliProcessResult, includeStdout = true): void {
     if (result.exitCode !== 0) {
-        throw new Error(result.stderr.trim() || result.stdout.trim() || `exit code ${result.exitCode ?? 1}`);
+        throw new Error(result.stderr.trim() || (includeStdout ? result.stdout.trim() : '') || `exit code ${result.exitCode ?? 1}`);
     }
 }
 

@@ -1229,30 +1229,111 @@ suite('AppHost discovery', () => {
         test('retries aspire ls without nologo when an older CLI rejects it', async () => {
             stubFileSystemWatchers(sandbox);
             const appHostPath = buildPath('workspace', 'AppHost', 'AppHost.csproj');
+            const candidate = {
+                path: appHostPath,
+                language: 'csharp',
+                status: 'buildable',
+            };
             const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
                 if (args.includes('--nologo')) {
+                    options?.stdoutCallback?.(`${JSON.stringify(candidate)}\n`);
+                    options?.lineCallback?.(JSON.stringify(candidate));
                     options?.stderrCallback?.("Unrecognized command or argument '--nologo'.");
                     options?.exitCallback?.(1);
                 } else {
-                    emitLsOutput(options, [{
-                        path: appHostPath,
-                        language: 'csharp',
-                        status: 'buildable',
-                    }]);
+                    emitLsStream(options, [candidate]);
                 }
                 return { kill: () => { } } as any;
             });
             const service = new AppHostDiscoveryService(makeTerminalProvider());
 
             try {
-                const result = await service.discover(makeWorkspaceFolder(buildPath('workspace')));
+                const observed: CandidateAppHostDisplayInfo[] = [];
+                const result = await service.discover(
+                    makeWorkspaceFolder(buildPath('workspace')),
+                    false,
+                    undefined,
+                    candidate => observed.push(candidate));
 
                 assert.deepStrictEqual(spawnStub.firstCall.args[2], ['ls', '--format', 'json', '--stream', '--nologo']);
                 assert.deepStrictEqual(spawnStub.secondCall.args[2], ['ls', '--format', 'json', '--stream']);
+                assert.deepStrictEqual(observed, [candidate]);
+                assert.deepStrictEqual(result, [candidate]);
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
+        test('stream failures do not expose candidate output', async () => {
+            stubFileSystemWatchers(sandbox);
+            const candidate = {
+                path: buildPath('workspace', 'Private', 'AppHost.csproj'),
+                language: 'csharp',
+                status: 'buildable',
+            };
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
+                if (args.includes('--stream')) {
+                    options?.stdoutCallback?.(`${JSON.stringify(candidate)}\n`);
+                    options?.lineCallback?.(JSON.stringify(candidate));
+                    options?.exitCallback?.(1);
+                } else {
+                    options?.stderrCallback?.('legacy discovery unavailable');
+                    options?.exitCallback?.(1);
+                }
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+            try {
+                await assert.rejects(
+                    service.discover(makeWorkspaceFolder(buildPath('workspace'))),
+                    {
+                        message: 'aspire ls discovery failed: exit code 1\naspire extension get-apphosts fallback failed: legacy discovery unavailable',
+                    });
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
+        test('truncated streamed output falls back instead of completing partially', async () => {
+            stubFileSystemWatchers(sandbox);
+            const streamedCandidate = {
+                path: buildPath('workspace', 'Partial', 'AppHost.csproj'),
+                language: 'csharp',
+                status: 'buildable',
+            };
+            const fallbackPath = buildPath('workspace', 'Fallback', 'AppHost.csproj');
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
+                if (args.includes('--stream')) {
+                    options?.lineCallback?.(JSON.stringify(streamedCandidate));
+                    options?.lineCallback?.('{"path":');
+                } else {
+                    options?.stdoutCallback?.(JSON.stringify({
+                        selected_project_file: fallbackPath,
+                        all_project_file_candidates: [fallbackPath],
+                    }));
+                    options?.exitCallback?.(0);
+                }
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+            try {
+                const observed: CandidateAppHostDisplayInfo[] = [];
+                const result = await service.discover(
+                    makeWorkspaceFolder(buildPath('workspace')),
+                    false,
+                    undefined,
+                    candidate => observed.push(candidate));
+
+                assert.deepStrictEqual(observed, [streamedCandidate]);
                 assert.deepStrictEqual(result, [{
-                    path: appHostPath,
+                    path: fallbackPath,
                     language: 'csharp',
                     status: 'buildable',
+                    selected: true,
                 }]);
             }
             finally {

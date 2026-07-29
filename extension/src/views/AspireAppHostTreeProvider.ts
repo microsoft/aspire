@@ -14,6 +14,7 @@ import {
     workspaceAppHostLabel,
     workspaceAppHostsGroupLabel,
     runningAppHostsGroupLabel,
+    appHostDiscoveryInProgressLabel,
     appHostOpenSourceActionLabel,
     appHostRunActionLabel,
     appHostDebugActionLabel,
@@ -58,7 +59,7 @@ import { executeResourceCommand as executeResourceCommandWithUi, type ResourceCo
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 import { isCommandCancellation } from '../utils/telemetry';
 
-type TreeElement = AppHostItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | WorkspaceAppHostItem | WorkspaceAppHostsGroupItem | RunningAppHostsGroupItem | WorkspaceAppHostActionItem | WorkspaceAppHostPathItem | HealthChecksGroupItem | HealthCheckItem | LogFileItem | CommandsGroupItem | ResourceCommandItem;
+type TreeElement = AppHostItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | WorkspaceAppHostItem | WorkspaceAppHostsGroupItem | RunningAppHostsGroupItem | WorkspaceAppHostDiscoveryItem | WorkspaceAppHostActionItem | WorkspaceAppHostPathItem | HealthChecksGroupItem | HealthCheckItem | LogFileItem | CommandsGroupItem | ResourceCommandItem;
 
 const integratedBrowserOpenCommand = 'workbench.action.browser.open';
 const terminalEnabledPropertyName = 'terminal.enabled';
@@ -212,6 +213,15 @@ class WorkspaceAppHostItem extends vscode.TreeItem {
         }
 
         this.tooltip = appHostDescription;
+    }
+}
+
+class WorkspaceAppHostDiscoveryItem extends vscode.TreeItem {
+    constructor() {
+        super(appHostDiscoveryInProgressLabel, vscode.TreeItemCollapsibleState.None);
+        this.id = 'workspace-apphost-discovery';
+        this.iconPath = new vscode.ThemeIcon('loading~spin');
+        this.contextValue = 'workspaceAppHostDiscovery';
     }
 }
 
@@ -1069,21 +1079,21 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
                     const workspaceChild = workspaceItems.length === 1
                         ? workspaceItems[0]
                         : new WorkspaceAppHostsGroupItem(workspaceItems);
-                    return [runningChild, workspaceChild];
+                    return this._withWorkspaceDiscoveryProgress([runningChild, workspaceChild]);
                 }
                 // For a single idle AppHost (nothing running), skip the "Workspace AppHosts"
                 // grouping node and surface the AppHost directly at the root, for the same
                 // reason as the mixed case above (mirrors VS Code's SCM view for a single repo).
                 // See https://github.com/microsoft/aspire/issues/18420.
                 if (workspaceItems.length === 1) {
-                    return [workspaceItems[0]];
+                    return this._withWorkspaceDiscoveryProgress([workspaceItems[0]]);
                 }
                 // When two or more idle AppHosts exist, wrap them under the "Workspace AppHosts"
                 // header so the tree shape stays consistent and avoids loose root-level items.
                 if (workspaceItems.length > 0) {
-                    return [new WorkspaceAppHostsGroupItem(workspaceItems)];
+                    return this._withWorkspaceDiscoveryProgress([new WorkspaceAppHostsGroupItem(workspaceItems)]);
                 }
-                return [...runningItems];
+                return this._withWorkspaceDiscoveryProgress([...runningItems]);
             }
 
             // Single candidate, running — show flat WorkspaceResourcesItem
@@ -1093,7 +1103,9 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             const rawDashboardUrl = workspaceAppHost?.dashboardUrl ?? resources.find(r => r.dashboardUrl)?.dashboardUrl ?? null;
             const dashboardUrl = rawDashboardUrl ? stripResourceSuffix(rawDashboardUrl) : null;
             const appHostPath = workspaceAppHost?.appHostPath ?? this._repository.workspaceAppHostPath;
-            return [new WorkspaceResourcesItem(resources, dashboardUrl, appHostPath, workspaceAppHost, this._repository.workspaceAppHostName, this._repository.workspaceAppHostDescription, this._isStoppingAppHost(appHostPath))];
+            return this._withWorkspaceDiscoveryProgress([
+                new WorkspaceResourcesItem(resources, dashboardUrl, appHostPath, workspaceAppHost, this._repository.workspaceAppHostName, this._repository.workspaceAppHostDescription, this._isStoppingAppHost(appHostPath)),
+            ]);
         }
 
         if (element instanceof AppHostItem || element instanceof ResourcesGroupItem) {
@@ -1160,6 +1172,12 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         }
 
         return [];
+    }
+
+    private _withWorkspaceDiscoveryProgress(items: TreeElement[]): TreeElement[] {
+        return this._repository.isWorkspaceAppHostDiscoveryComplete === false
+            ? [...items, new WorkspaceAppHostDiscoveryItem()]
+            : items;
     }
 
     // ── Global mode tree ──
