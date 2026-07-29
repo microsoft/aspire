@@ -2874,12 +2874,12 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             projectBuilder.Resource.Annotations.Remove(annotationToRemove);
         }
 
-        projectBuilder.WithDebugSupport(_ => new ProjectLaunchConfiguration
+        projectBuilder.WithDebugSupport((_, _) => Task.FromResult(new ProjectLaunchConfiguration
         {
             Mode = ExecutableLaunchMode.NoDebug,
             ProjectPath = "ProducerSuppliedPath",
             DisableLaunchProfile = true
-        }, "project");
+        }), "project");
 
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -3140,7 +3140,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         // Create executable resources with SupportsDebuggingAnnotation
         var debuggableExecutable = new TestExecutableResource("test-working-directory");
-        builder.AddResource(debuggableExecutable).WithDebugSupport(mode => new ExecutableLaunchConfiguration("test") { Mode = mode }, "test");
+        builder.AddResource(debuggableExecutable).WithDebugSupport((mode, ct) => Task.FromResult(new ExecutableLaunchConfiguration("test") { Mode = mode }), "test");
 
         var nonDebuggableExecutable = new TestOtherExecutableResource("test-working-directory-2");
         // No SupportsDebuggingAnnotation for this one
@@ -3199,7 +3199,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var executable = new TestExecutableResource("test-working-directory");
         builder.AddResource(executable)
-            .WithDebugSupport(mode => new ExecutableLaunchConfiguration("test") { Mode = mode }, "test")
+            .WithDebugSupport((mode, ct) => Task.FromResult(new ExecutableLaunchConfiguration("test") { Mode = mode }), "test")
             .WithPersistentLifetime();
 
         var configDict = new Dictionary<string, string?>
@@ -3245,7 +3245,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         }
 
         projectBuilder.WithDebugSupport(
-            mode => new ExecutableLaunchConfiguration("test") { Mode = mode },
+            (mode, ct) => Task.FromResult(new ExecutableLaunchConfiguration("test") { Mode = mode }),
             "test",
             argsCallback: _ => { /* rewrites arguments for debugging */ });
 
@@ -3689,7 +3689,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         // Create executable resources with SupportsDebuggingAnnotation
         var executable = new TestExecutableResource("test-working-directory");
-        builder.AddResource(executable).WithDebugSupport(_ => new ExecutableLaunchConfiguration("test"), "test");
+        builder.AddResource(executable).WithDebugSupport((_, _) => Task.FromResult(new ExecutableLaunchConfiguration("test")), "test");
 
         // Simulate debug session port and extension endpoint (extension mode)
         var configDict = new Dictionary<string, string?>
@@ -3725,7 +3725,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         // Create executable resources with SupportsDebuggingAnnotation
         var debuggableExecutable = new TestExecutableResource("test-working-directory");
-        builder.AddResource(debuggableExecutable).WithDebugSupport(_ => new ExecutableLaunchConfiguration("test"), "test");
+        builder.AddResource(debuggableExecutable).WithDebugSupport((_, _) => Task.FromResult(new ExecutableLaunchConfiguration("test")), "test");
 
         var nonDebuggableExecutable = new TestOtherExecutableResource("test-working-directory-2");
         builder.AddResource(nonDebuggableExecutable);
@@ -3767,7 +3767,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         // Create executable resources with SupportsDebuggingAnnotation
         var debuggableExecutable = new TestExecutableResource("test-working-directory");
-        builder.AddResource(debuggableExecutable).WithDebugSupport(_ => new ExecutableLaunchConfiguration("test"), "test");
+        builder.AddResource(debuggableExecutable).WithDebugSupport((_, _) => Task.FromResult(new ExecutableLaunchConfiguration("test")), "test");
 
         // Simulate no debug session port and no extension endpoint (no debug session info)
         var configDict = new Dictionary<string, string?>
@@ -3803,7 +3803,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         // Create executable resources with SupportsDebuggingAnnotation
         var debuggableExecutable = new TestExecutableResource("test-working-directory");
-        builder.AddResource(debuggableExecutable).WithDebugSupport(_ => new ExecutableLaunchConfiguration("test"), "test");
+        builder.AddResource(debuggableExecutable).WithDebugSupport((_, _) => Task.FromResult(new ExecutableLaunchConfiguration("test")), "test");
 
         // Simulate debug session port with invalid JSON in DebugSessionInfo
         var configDict = new Dictionary<string, string?>
@@ -3839,7 +3839,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         // Create executable resources with SupportsDebuggingAnnotation
         var debuggableExecutable = new TestExecutableResource("test-working-directory");
-        builder.AddResource(debuggableExecutable).WithDebugSupport(_ => new ExecutableLaunchConfiguration("test"), "test");
+        builder.AddResource(debuggableExecutable).WithDebugSupport((_, _) => Task.FromResult(new ExecutableLaunchConfiguration("test")), "test");
 
         // Simulate debug session info with null SupportedLaunchConfigurations
         var runSessionInfo = new RunSessionInfo
@@ -3881,7 +3881,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         // Create executable resources with SupportsDebuggingAnnotation
         var debuggableExecutable = new TestExecutableResource("test-working-directory");
-        builder.AddResource(debuggableExecutable).WithDebugSupport(_ => new ExecutableLaunchConfiguration("test"), "test");
+        builder.AddResource(debuggableExecutable).WithDebugSupport((_, _) => Task.FromResult(new ExecutableLaunchConfiguration("test")), "test");
 
         // Simulate debug session info with SupportedLaunchConfigurations that do not match the executable type
         var runSessionInfo = new RunSessionInfo
@@ -3923,7 +3923,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         // Create executable resources with SupportsDebuggingAnnotation
         var debuggableExecutable = new TestExecutableResource("test-working-directory");
-        builder.AddResource(debuggableExecutable).WithDebugSupport(_ => new ExecutableLaunchConfiguration("test"), "test");
+        builder.AddResource(debuggableExecutable).WithDebugSupport((_, _) => Task.FromResult(new ExecutableLaunchConfiguration("test")), "test");
 
         // Simulate debug session info with SupportedLaunchConfigurations that match the executable type
         var runSessionInfo = new RunSessionInfo
@@ -4001,7 +4001,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var debugArgsCallbackInvoked = false;
         var resource = builder.AddProject<Projects.ServiceA>("ServiceA").WithTerminal();
         resource.WithDebugSupport(
-            mode => new ProjectLaunchConfiguration { ProjectPath = "/test/path", Mode = mode },
+            (mode, ct) => Task.FromResult(new ProjectLaunchConfiguration { ProjectPath = "/test/path", Mode = mode }),
             "project",
             argsCallback: _ => debugArgsCallbackInvoked = true);
 
@@ -4196,7 +4196,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         {
             projectBuilder.Resource.Annotations.Remove(annotationToRemove);
         }
-        projectBuilder.WithDebugSupport(mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }, "azure-functions");
+        projectBuilder.WithDebugSupport((mode, ct) => Task.FromResult(new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }), "azure-functions");
 
         var configDict = new Dictionary<string, string?>
         {
@@ -4236,7 +4236,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         {
             projectBuilder.Resource.Annotations.Remove(annotationToRemove);
         }
-        projectBuilder.WithDebugSupport(mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }, "azure-functions");
+        projectBuilder.WithDebugSupport((mode, ct) => Task.FromResult(new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }), "azure-functions");
 
         var runSessionInfo = new RunSessionInfo
         {
@@ -4292,7 +4292,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
                 Command = "dotnet",
                 WorkingDirectory = "/tmp/mauiapp"
             })
-            .WithDebugSupport(mode => new ExecutableLaunchConfiguration(launchConfigurationType) { Mode = mode }, launchConfigurationType)
+            .WithDebugSupport((mode, ct) => Task.FromResult(new ExecutableLaunchConfiguration(launchConfigurationType) { Mode = mode }), launchConfigurationType)
             .WithArgs(resourceArgs);
 
         var runSessionInfo = new RunSessionInfo
@@ -4352,7 +4352,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
                 Command = "dotnet",
                 WorkingDirectory = "/tmp/mauiapp"
             })
-            .WithDebugSupport(mode => new ExecutableLaunchConfiguration(launchConfigurationType) { Mode = mode }, launchConfigurationType)
+            .WithDebugSupport((mode, ct) => Task.FromResult(new ExecutableLaunchConfiguration(launchConfigurationType) { Mode = mode }), launchConfigurationType)
             .WithArgs(resourceArgs);
 
         var configDict = new Dictionary<string, string?>
@@ -4404,7 +4404,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
                 Command = "dotnet",
                 WorkingDirectory = "/tmp/mauiapp"
             })
-            .WithDebugSupport(mode => new ExecutableLaunchConfiguration(launchConfigurationType) { Mode = mode }, launchConfigurationType)
+            .WithDebugSupport((mode, ct) => Task.FromResult(new ExecutableLaunchConfiguration(launchConfigurationType) { Mode = mode }), launchConfigurationType)
             .WithArgs(resourceArgs);
 
         var kubernetesService = new TestKubernetesService();
@@ -4448,7 +4448,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
                 Command = "dotnet",
                 WorkingDirectory = "/tmp/mauiapp"
             })
-            .WithDebugSupport(mode => new TestMauiLaunchConfiguration
+            .WithDebugSupport((mode, ct) => Task.FromResult(new TestMauiLaunchConfiguration
             {
                 Mode = mode,
                 ProjectPath = "/tmp/mauiapp/MauiApp.csproj",
@@ -4459,7 +4459,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
                 {
                     ["AdbTarget"] = "-e"
                 }
-            }, "maui")
+            }), "maui")
             .WithArgs("run", "-f", "net10.0-android", "-p:AdbTarget=-e");
 
         var runSessionInfo = new RunSessionInfo
@@ -4530,7 +4530,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
                 Command = "dotnet",
                 WorkingDirectory = "/tmp/mauiapp"
             })
-            .WithDebugSupport(mode => new ExecutableLaunchConfiguration("maui") { Mode = mode }, "maui")
+            .WithDebugSupport((mode, ct) => Task.FromResult(new ExecutableLaunchConfiguration("maui") { Mode = mode }), "maui")
             .WithArgs("run", "-f", "net10.0-ios", "-p:_DeviceName=:v2:udid=E25BBE37-69BA-4720-B6FD-D54C97791E79");
 
         var runSessionInfo = new RunSessionInfo
@@ -4590,7 +4590,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         {
             projectBuilder.Resource.Annotations.Remove(annotationToRemove);
         }
-        projectBuilder.WithDebugSupport(mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }, "azure-functions");
+        projectBuilder.WithDebugSupport((mode, ct) => Task.FromResult(new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }), "azure-functions");
 
         var kubernetesService = new TestKubernetesService();
         using var app = builder.Build();
@@ -4617,7 +4617,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         {
             projectBuilder.Resource.Annotations.Remove(annotationToRemove);
         }
-        projectBuilder.WithDebugSupport(mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }, "azure-functions");
+        projectBuilder.WithDebugSupport((mode, ct) => Task.FromResult(new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }), "azure-functions");
 
         var runSessionInfo = new RunSessionInfo
         {
@@ -4664,7 +4664,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         {
             customProject.Resource.Annotations.Remove(annotationToRemove);
         }
-        customProject.WithDebugSupport(mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }, "azure-functions");
+        customProject.WithDebugSupport((mode, ct) => Task.FromResult(new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }), "azure-functions");
 
         var configDict = new Dictionary<string, string?>
         {
@@ -4714,7 +4714,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         {
             customProject.Resource.Annotations.Remove(annotationToRemove);
         }
-        customProject.WithDebugSupport(mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }, "azure-functions");
+        customProject.WithDebugSupport((mode, ct) => Task.FromResult(new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }), "azure-functions");
 
         var runSessionInfo = new RunSessionInfo
         {
@@ -4760,7 +4760,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         {
             projectBuilder.Resource.Annotations.Remove(annotationToRemove);
         }
-        projectBuilder.WithDebugSupport(mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }, "azure-functions");
+        projectBuilder.WithDebugSupport((mode, ct) => Task.FromResult(new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }), "azure-functions");
 
         var configDict = new Dictionary<string, string?>
         {
@@ -4866,6 +4866,129 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.True(exe.TryGetAnnotationAsObjectList<ProjectLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var launchConfigs));
         Assert.Single(launchConfigs);
         Assert.Equal("project", launchConfigs[0].Type);
+    }
+
+    [Fact]
+    public async Task ProjectExecutable_AsyncLaunchConfigurationProducer_IsAwaitedDuringPrepare()
+    {
+        // Regression guard for the async launch configuration producer. A ProjectResource has its "project"
+        // launch configuration applied while DCP objects are *prepared* (PrepareProjectExecutablesAsync), not
+        // when they are created, so this is the path that previously forced producers to be synchronous.
+        // A producer that genuinely suspends must still be awaited to completion before the Executable is
+        // handed to DCP; otherwise the annotation would be missing or hold an unresolved Task.
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        var projectBuilder = builder.AddProject<Projects.ServiceA>("ServiceA", launchProfileName: null);
+        projectBuilder.WithDebugSupport(
+            async (mode, ct) =>
+            {
+                // Yield so the producer completes asynchronously rather than returning an already-completed task.
+                await Task.Yield();
+                return new ProjectLaunchConfiguration { ProjectPath = "AsyncProducerPath", Mode = mode, LaunchProfile = "async-profile" };
+            },
+            KnownLaunchConfigurationTypes.Project);
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo { ProtocolsSupported = ["test"], SupportedLaunchConfigurations = ["project"] }),
+            [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234",
+            [KnownConfigNames.DebugSessionRunMode] = ExecutableLaunchMode.Debug
+        };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "ServiceA");
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        Assert.True(exe.TryGetProjectLaunchConfiguration(out var plc));
+        Assert.Equal("AsyncProducerPath", plc.ProjectPath);
+        Assert.Equal("async-profile", plc.LaunchProfile);
+        Assert.Equal(ExecutableLaunchMode.Debug, plc.Mode);
+    }
+
+    [Fact]
+    public async Task PlainExecutable_AsyncLaunchConfigurationProducer_IsAwaitedDuringCreate()
+    {
+        // The companion to ProjectExecutable_AsyncLaunchConfigurationProducer_IsAwaitedDuringPrepare: a
+        // non-"project" launch configuration is applied when the Executable is created (after endpoints are
+        // allocated), which is the other producer call site.
+        var builder = DistributedApplication.CreateBuilder();
+
+        var debuggableExecutable = new TestExecutableResource("test-working-directory");
+        builder.AddResource(debuggableExecutable).WithDebugSupport(
+            async (mode, ct) =>
+            {
+                await Task.Yield();
+                return new ExecutableLaunchConfiguration("test") { Mode = mode };
+            },
+            "test");
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo { ProtocolsSupported = ["test"], SupportedLaunchConfigurations = ["test"] }),
+            [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234",
+            [KnownConfigNames.DebugSessionRunMode] = ExecutableLaunchMode.Debug
+        };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "TestExecutable");
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        Assert.True(exe.TryGetAnnotationAsObjectList<ExecutableLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var launchConfigs));
+        var launchConfig = Assert.Single(launchConfigs);
+        Assert.Equal("test", launchConfig.Type);
+        Assert.Equal(ExecutableLaunchMode.Debug, launchConfig.Mode);
+    }
+
+    [Fact]
+    public async Task PlainExecutable_AsyncLaunchConfigurationProducerFaults_FallsBackToProcess()
+    {
+        // An async producer that faults after suspending surfaces the exception through the awaited task
+        // rather than synchronously from the delegate invocation. The Process fallback must still kick in.
+        var builder = DistributedApplication.CreateBuilder();
+
+        var debuggableExecutable = new TestExecutableResource("test-working-directory");
+        builder.AddResource(debuggableExecutable).WithDebugSupport<TestExecutableResource, ExecutableLaunchConfiguration>(
+            async (mode, ct) =>
+            {
+                await Task.Yield();
+                throw new InvalidOperationException("Test exception from async launch configuration producer");
+            },
+            "test");
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo { ProtocolsSupported = ["test"], SupportedLaunchConfigurations = ["test"] }),
+            [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234"
+        };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "TestExecutable");
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
     }
 
     [Fact]
@@ -5151,7 +5274,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         builder.AddResource(resource)
             .WithAnnotation(new TestProjectWithLaunchSettings())
             .WithAnnotation(new LaunchProfileAnnotation("http"))
-            .WithDebugSupport(mode => ProjectLaunchConfigurationFactory.Create(resource, mode), KnownLaunchConfigurationTypes.Project);
+            .WithDebugSupport((mode, ct) => Task.FromResult(ProjectLaunchConfigurationFactory.Create(resource, mode)), KnownLaunchConfigurationTypes.Project);
 
         var configDict = new Dictionary<string, string?>
         {
@@ -5219,7 +5342,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var resource = new TestDotnetProjectExecutableResource("test-working-directory");
         builder.AddResource(resource)
             .WithAnnotation(new TestProjectWithLaunchSettings())
-            .WithDebugSupport(mode => new ProjectLaunchConfiguration { ProjectPath = "TestProjectWithLaunchSettings", Mode = mode }, "project");
+            .WithDebugSupport((mode, ct) => Task.FromResult(new ProjectLaunchConfiguration { ProjectPath = "TestProjectWithLaunchSettings", Mode = mode }), "project");
 
         var configDict = new Dictionary<string, string?>
         {
@@ -5249,7 +5372,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var resource = new TestDotnetProjectExecutableResource("test-working-directory");
         builder.AddResource(resource)
             .WithAnnotation(new TestProjectWithLaunchSettings())
-            .WithDebugSupport(mode => new ProjectLaunchConfiguration { ProjectPath = "TestProjectWithLaunchSettings", Mode = mode }, "project")
+            .WithDebugSupport((mode, ct) => Task.FromResult(new ProjectLaunchConfiguration { ProjectPath = "TestProjectWithLaunchSettings", Mode = mode }), "project")
             .WithPersistentLifetime();
 
         var configDict = new Dictionary<string, string?>
@@ -5324,7 +5447,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         Assert.Contains(logLines, line => line.Content.Contains("Project launch configuration failed.", StringComparison.Ordinal));
 
-        static ProjectLaunchConfiguration CreateProjectLaunchConfiguration(string mode)
+        static Task<ProjectLaunchConfiguration> CreateProjectLaunchConfiguration(string mode, CancellationToken cancellationToken)
         {
             throw new InvalidOperationException("Project launch configuration failed.");
         }
@@ -5343,7 +5466,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         builder.AddResource(debuggableExecutable)
             .WithArgs("run", "app-arg")
             .WithDebugSupport(
-                mode => new ExecutableLaunchConfiguration("test") { Mode = mode },
+                (mode, ct) => Task.FromResult(new ExecutableLaunchConfiguration("test") { Mode = mode }),
                 "test",
                 argsCallback: static ctx =>
                 {
@@ -5426,7 +5549,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Empty(kubernetesService.CreatedResources.OfType<Executable>());
         Assert.Same(resource, Assert.Single(failedResources));
 
-        static ExecutableLaunchConfiguration ThrowingLaunchConfiguration(string mode)
+        static Task<ExecutableLaunchConfiguration> ThrowingLaunchConfiguration(string mode, CancellationToken cancellationToken)
         {
             throw new InvalidOperationException("Launch configuration failed.");
         }
@@ -5444,7 +5567,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var resource = new TestExecutableResource("test-working-directory");
         builder.AddResource(resource)
-            .WithDebugSupport(mode => new ProjectLaunchConfiguration { ProjectPath = "/test/path", Mode = mode }, "project");
+            .WithDebugSupport((mode, ct) => Task.FromResult(new ProjectLaunchConfiguration { ProjectPath = "/test/path", Mode = mode }), "project");
 
         var configDict = new Dictionary<string, string?>
         {
@@ -5487,7 +5610,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         builder.AddResource(resource)
             .WithAnnotation(new TestProjectWithLaunchSettings())
             .WithAnnotation(new LaunchProfileAnnotation("http"))
-            .WithDebugSupport(mode => new ProjectLaunchConfiguration { ProjectPath = "TestProjectWithLaunchSettings", Mode = mode }, "project");
+            .WithDebugSupport((mode, ct) => Task.FromResult(new ProjectLaunchConfiguration { ProjectPath = "TestProjectWithLaunchSettings", Mode = mode }), "project");
 
         var configDict = new Dictionary<string, string?>
         {
@@ -6324,7 +6447,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var builder = DistributedApplication.CreateBuilder();
 
         var debuggableExecutable = new TestExecutableResource("test-working-directory");
-        builder.AddResource(debuggableExecutable).WithDebugSupport<TestExecutableResource, ExecutableLaunchConfiguration>(_ => throw new InvalidOperationException("Test exception from launch configuration producer"), "test");
+        builder.AddResource(debuggableExecutable).WithDebugSupport<TestExecutableResource, ExecutableLaunchConfiguration>((_, _) => throw new InvalidOperationException("Test exception from launch configuration producer"), "test");
 
         var runSessionInfo = new RunSessionInfo
         {
@@ -6376,7 +6499,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         {
             projectBuilder.Resource.Annotations.Remove(annotationToRemove);
         }
-        projectBuilder.WithDebugSupport(mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }, "azure-functions");
+        projectBuilder.WithDebugSupport((mode, ct) => Task.FromResult(new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }), "azure-functions");
 
         var configDict = new Dictionary<string, string?>
         {
@@ -6422,7 +6545,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             projectBuilder.Resource.Annotations.Remove(annotationToRemove);
         }
         projectBuilder.WithDebugSupport<ProjectResource, ExecutableLaunchConfiguration>(
-            _ => throw new InvalidOperationException("Test exception from launch configuration producer"),
+            (_, _) => throw new InvalidOperationException("Test exception from launch configuration producer"),
             "azure-functions");
 
         var configDict = new Dictionary<string, string?>
@@ -6462,7 +6585,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         {
             projectBuilder.Resource.Annotations.Remove(annotationToRemove);
         }
-        projectBuilder.WithDebugSupport(mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }, "azure-functions");
+        projectBuilder.WithDebugSupport((mode, ct) => Task.FromResult(new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }), "azure-functions");
 
         // Extension does NOT list "azure-functions" in SupportedLaunchConfigurations
         var configDict = new Dictionary<string, string?>

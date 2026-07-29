@@ -4751,12 +4751,19 @@ public static class ResourceBuilderExtensions
     /// Adds support for debugging the resource in VS Code when running in an extension host.
     /// </summary>
     /// <param name="builder">The resource builder.</param>
-    /// <param name="launchConfigurationProducer">Launch configuration producer for the resource.</param>
+    /// <param name="launchConfigurationProducer">Launch configuration producer for the resource. It is passed the launch mode (one of the values on <see cref="ExecutableLaunchMode"/>) and produces the configuration that is handed to the IDE.</param>
     /// <param name="launchConfigurationType">The type of the resource.</param>
     /// <param name="argsCallback">Optional callback to add or modify command line arguments when running in an extension host. Useful if the entrypoint is usually provided as an argument to the resource executable.</param>
+    /// <remarks>
+    /// The producer is asynchronous so an integration can resolve the launch configuration from callbacks
+    /// that are themselves asynchronous (for example build-argument callbacks contributed by other
+    /// annotations). Aspire invokes it while preparing and creating the underlying orchestrator objects,
+    /// which means a producer that only computes values synchronously can simply return
+    /// <see cref="Task.FromResult{TResult}(TResult)"/>.
+    /// </remarks>
     [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Generic debug launch configuration support is not part of the ATS surface.")]
-    public static IResourceBuilder<T> WithDebugSupport<T, TLaunchConfiguration>(this IResourceBuilder<T> builder, Func<string, TLaunchConfiguration> launchConfigurationProducer, string launchConfigurationType, Action<CommandLineArgsCallbackContext>? argsCallback = null)
+    public static IResourceBuilder<T> WithDebugSupport<T, TLaunchConfiguration>(this IResourceBuilder<T> builder, Func<string, CancellationToken, Task<TLaunchConfiguration>> launchConfigurationProducer, string launchConfigurationType, Action<CommandLineArgsCallbackContext>? argsCallback = null)
         where T : IResource
     {
         ArgumentNullException.ThrowIfNull(builder);

@@ -180,7 +180,7 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void AddDotnetProject_DebugAnnotator_ProducesProjectLaunchConfiguration()
+    public async Task AddDotnetProject_DebugAnnotator_ProducesProjectLaunchConfiguration()
     {
         // The "project" SupportsDebuggingAnnotation must produce a ProjectLaunchConfiguration carrying the
         // project path so the IDE (and DCP) can launch/debug it exactly like AddProject. The producer also
@@ -194,7 +194,7 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         Assert.True(app.Resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
         Assert.Equal(KnownLaunchConfigurationTypes.Project, supportsDebugging.LaunchConfigurationType);
 
-        var launchConfig = Assert.IsType<ProjectLaunchConfiguration>(app.Resource.CreateLaunchConfiguration(ExecutableLaunchMode.Debug));
+        var launchConfig = Assert.IsType<ProjectLaunchConfiguration>(await app.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.Debug));
         Assert.Equal(KnownLaunchConfigurationTypes.Project, launchConfig.Type);
         Assert.Equal(ExecutableLaunchMode.Debug, launchConfig.Mode);
         Assert.Equal(projectPath, launchConfig.ProjectPath);
@@ -225,7 +225,7 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         var app = builder.AddDotnetProject("svc", projectPath);
 
-        var launchConfig = Assert.IsType<ProjectLaunchConfiguration>(app.Resource.CreateLaunchConfiguration(ExecutableLaunchMode.Debug));
+        var launchConfig = Assert.IsType<ProjectLaunchConfiguration>(await app.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.Debug));
 
         Assert.False(launchConfig.DisableLaunchProfile);
         Assert.Equal("http", launchConfig.LaunchProfile);
@@ -308,7 +308,7 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         var projectPath = Path.Combine(builder.AppHostDirectory, "MyService", "MyService.csproj");
         var app = builder.AddDotnetProject("svc", projectPath, o => o.ExcludeLaunchProfile = true)
                          .WithArgs("--config", "prod.yaml")
-                         .WithDebugSupport(_ => new ExecutableLaunchConfiguration("custom"), "custom");
+                         .WithDebugSupport((_, _) => Task.FromResult(new ExecutableLaunchConfiguration("custom")), "custom");
 
         using var application = builder.Build();
         var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource, application.Services);
@@ -341,7 +341,7 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         var projectPath = Path.Combine(builder.AppHostDirectory, "MyService", "MyService.csproj");
         var app = builder.AddDotnetProject("svc", projectPath, o => o.ExcludeLaunchProfile = true)
                          .WithArgs("--config", "prod.yaml")
-                         .WithDebugSupport(_ => new ExecutableLaunchConfiguration("custom"), "custom", ctx => ctx.Args.Add("rewritten-arg"));
+                         .WithDebugSupport((_, _) => Task.FromResult(new ExecutableLaunchConfiguration("custom")), "custom", ctx => ctx.Args.Add("rewritten-arg"));
 
         using var application = builder.Build();
         var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource, application.Services);

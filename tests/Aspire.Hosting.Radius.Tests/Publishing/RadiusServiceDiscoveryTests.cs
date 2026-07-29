@@ -67,7 +67,7 @@ public class RadiusServiceDiscoveryTests
         var resource = new ProjectResource("webapp");
         var https = new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "https", name: "https");
         resource.Annotations.Add(https);
-        ((IProjectLaunchDefaultsResource)resource).DefaultHttpsEndpoint = https;
+        resource.Annotations.OfType<ProjectLaunchDefaultsAnnotation>().Single().DefaultHttpsEndpoint = https;
 
         Assert.Null(RadiusServiceDiscovery.ResolveServicePort(resource, "https"));
     }

@@ -939,7 +939,7 @@ public static class PythonAppResourceBuilderExtensions
         var entrypoint = entrypointAnnotation.Entrypoint;
 
         builder.WithDebugSupport(
-            mode =>
+            (mode, ct) =>
             {
                 // Compute paths inside the lambda so a later WithWorkingDirectory(...) override is respected.
                 var workingDirectory = builder.Resource.WorkingDirectory;
@@ -984,14 +984,14 @@ public static class PythonAppResourceBuilderExtensions
                     }
                 }
 
-                return new PythonLaunchConfiguration
+                return Task.FromResult(new PythonLaunchConfiguration
                 {
                     ProgramPath = programPath,
                     Module = module,
                     Mode = mode,
                     InterpreterPath = interpreterPath,
                     WorkingDirectory = workingDirectory
-                };
+                });
             },
             "python",
             static ctx =>

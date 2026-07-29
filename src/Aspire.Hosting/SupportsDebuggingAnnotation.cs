@@ -15,7 +15,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// Added by <see cref="ResourceBuilderExtensions.WithDebugSupport{T, TLaunchConfiguration}"/>. The
 /// annotation is only honored while a debug session is active; use
 /// <see cref="DebugSupportExtensions.SupportsDebugging"/> to test for that, and
-/// <see cref="DebugSupportExtensions.CreateLaunchConfiguration"/> to inspect the launch configuration
+/// <see cref="DebugSupportExtensions.CreateLaunchConfigurationAsync"/> to inspect the launch configuration
 /// the resource will send.
 /// </remarks>
 [DebuggerDisplay("Type = {GetType().Name,nq}, RequiredExtensionId = {LaunchConfigurationType,nq}")]
@@ -24,8 +24,8 @@ public sealed class SupportsDebuggingAnnotation : IResourceAnnotation
 {
     private SupportsDebuggingAnnotation(
         string launchConfigurationType,
-        Action<Executable, string> launchConfigurationAnnotator,
-        Func<string, object> launchConfigurationProducer,
+        Func<Executable, string, CancellationToken, Task> launchConfigurationAnnotator,
+        Func<string, CancellationToken, Task<object>> launchConfigurationProducer,
         bool rewritesArgumentsForDebugging)
     {
         LaunchConfigurationType = launchConfigurationType;
@@ -50,12 +50,12 @@ public sealed class SupportsDebuggingAnnotation : IResourceAnnotation
     public string LaunchConfigurationType { get; }
 
     // Takes the internal DCP Executable object, so it stays internal even though the annotation is public.
-    internal Action<Executable, string> LaunchConfigurationAnnotator { get; }
+    internal Func<Executable, string, CancellationToken, Task> LaunchConfigurationAnnotator { get; }
 
     // The producer callback passed to WithDebugSupport, with the launch configuration boxed as object.
-    // Internal because it hands out an untyped object; DebugSupportExtensions.CreateLaunchConfiguration is
+    // Internal because it hands out an untyped object; DebugSupportExtensions.CreateLaunchConfigurationAsync is
     // the supported way to reach it.
-    internal Func<string, object> LaunchConfigurationProducer { get; }
+    internal Func<string, CancellationToken, Task<object>> LaunchConfigurationProducer { get; }
 
     /// <summary>
     /// Indicates that the debug support rewrites the resource's command-line arguments while a debug
@@ -79,14 +79,14 @@ public sealed class SupportsDebuggingAnnotation : IResourceAnnotation
     /// </remarks>
     public bool RewritesArgumentsForDebugging { get; }
 
-    internal static SupportsDebuggingAnnotation Create<T>(string launchConfigurationType, Func<string, T> launchProfileProducer, bool rewritesArgumentsForDebugging = false)
+    internal static SupportsDebuggingAnnotation Create<T>(string launchConfigurationType, Func<string, CancellationToken, Task<T>> launchProfileProducer, bool rewritesArgumentsForDebugging = false)
     {
         // The annotator stays generic over T so the DCP annotation is serialized against the concrete
         // launch configuration type rather than a boxed object, which would change the emitted JSON.
         return new SupportsDebuggingAnnotation(
             launchConfigurationType,
-            (exe, mode) => exe.AnnotateAsObjectList(Executable.LaunchConfigurationsAnnotation, launchProfileProducer(mode)),
-            mode => launchProfileProducer(mode)!,
+            async (exe, mode, ct) => exe.AnnotateAsObjectList(Executable.LaunchConfigurationsAnnotation, await launchProfileProducer(mode, ct).ConfigureAwait(false)),
+            async (mode, ct) => (await launchProfileProducer(mode, ct).ConfigureAwait(false))!,
             rewritesArgumentsForDebugging);
     }
 }

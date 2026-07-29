@@ -33,7 +33,7 @@ builder.AddFakeIntegrationProject(
 // exactly as Aspire.Hosting.Azure.Functions does with "azure-functions".
 builder.AddProject<Projects.CustomDebugService>("custom-debug-service")
     .WithDebugSupport(
-        mode => new CustomLaunchConfiguration { Mode = mode, ProjectPath = "CustomDebugService" },
+        (mode, ct) => Task.FromResult(new CustomLaunchConfiguration { Mode = mode, ProjectPath = "CustomDebugService" }),
         "custom-debug-type");
 
 builder.Build().Run();

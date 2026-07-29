@@ -87,17 +87,17 @@ public class ExecutableResourceBuilderExtensionTests
     }
 
     [Fact]
-    public void WithDebugSupportAddsAnnotationInRunMode()
+    public async Task WithDebugSupportAddsAnnotationInRunMode()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         var launchConfig = new ExecutableLaunchConfiguration("python");
         var executable = builder.AddExecutable("myexe", "command", "workingdirectory")
-            .WithDebugSupport(_ => launchConfig, "ms-python.python");
+            .WithDebugSupport((_, _) => Task.FromResult(launchConfig), "ms-python.python");
 
         var annotation = executable.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
         var exe = new Executable(new ExecutableSpec());
-        annotation.LaunchConfigurationAnnotator(exe, "NoDebug");
+        await annotation.LaunchConfigurationAnnotator(exe, "NoDebug", CancellationToken.None);
         Assert.Equal("ms-python.python", annotation.LaunchConfigurationType);
 
         Assert.True(exe.TryGetAnnotationAsObjectList<ExecutableLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var annotations));
@@ -110,7 +110,7 @@ public class ExecutableResourceBuilderExtensionTests
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var executable = builder.AddExecutable("myexe", "command", "workingdirectory")
-            .WithDebugSupport(_ => new ExecutableLaunchConfiguration("python"), "ms-python.python");
+            .WithDebugSupport((_, _) => Task.FromResult(new ExecutableLaunchConfiguration("python")), "ms-python.python");
 
         var annotation = executable.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
         Assert.Null(annotation);
@@ -133,7 +133,7 @@ public class ExecutableResourceBuilderExtensionTests
 
         var executable = builder.AddExecutable("myexe", "command", "workingdirectory")
             .WithArgs("base-arg")
-            .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go", ctx => ctx.Args.Add("rewritten-arg"));
+            .WithDebugSupport((_, _) => Task.FromResult(new ExecutableLaunchConfiguration("go")), "go", ctx => ctx.Args.Add("rewritten-arg"));
 
         var args = await ArgumentEvaluator.GetArgumentListAsync(executable.Resource);
 
@@ -163,8 +163,8 @@ public class ExecutableResourceBuilderExtensionTests
 
         var executable = builder.AddExecutable("myexe", "command", "workingdirectory")
             .WithArgs("base-arg")
-            .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go", ctx => ctx.Args.Add("rewritten-arg"))
-            .WithDebugSupport(_ => new ExecutableLaunchConfiguration("project"), "project");
+            .WithDebugSupport((_, _) => Task.FromResult(new ExecutableLaunchConfiguration("go")), "go", ctx => ctx.Args.Add("rewritten-arg"))
+            .WithDebugSupport((_, _) => Task.FromResult(new ExecutableLaunchConfiguration("project")), "project");
 
         var args = await ArgumentEvaluator.GetArgumentListAsync(executable.Resource);
 
@@ -180,7 +180,7 @@ public class ExecutableResourceBuilderExtensionTests
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         var executable = builder.AddExecutable("myexe", "command", "workingdirectory")
-            .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go", ctx => ctx.Args.Add("rewritten-arg"));
+            .WithDebugSupport((_, _) => Task.FromResult(new ExecutableLaunchConfiguration("go")), "go", ctx => ctx.Args.Add("rewritten-arg"));
 
         var annotation = executable.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Single();
         Assert.True(annotation.RewritesArgumentsForDebugging);
@@ -195,7 +195,7 @@ public class ExecutableResourceBuilderExtensionTests
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         var resource = builder.AddResource(new DebuggableResourceWithoutArgs("noargs"))
-            .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go", ctx => ctx.Args.Add("rewritten-arg"));
+            .WithDebugSupport((_, _) => Task.FromResult(new ExecutableLaunchConfiguration("go")), "go", ctx => ctx.Args.Add("rewritten-arg"));
 
         var annotation = resource.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Single();
         Assert.False(annotation.RewritesArgumentsForDebugging);
@@ -207,7 +207,7 @@ public class ExecutableResourceBuilderExtensionTests
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         var executable = builder.AddExecutable("myexe", "command", "workingdirectory")
-            .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go");
+            .WithDebugSupport((_, _) => Task.FromResult(new ExecutableLaunchConfiguration("go")), "go");
 
         var annotation = executable.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Single();
         Assert.False(annotation.RewritesArgumentsForDebugging);

@@ -150,7 +150,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [MemberData(nameof(MauiPlatformsWithIdeLaunchConfiguration))]
-    public void AddMauiPlatform_EmitsMauiIdeLaunchConfiguration(PlatformTestConfig config)
+    public async Task AddMauiPlatform_EmitsMauiIdeLaunchConfiguration(PlatformTestConfig config)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
@@ -164,7 +164,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         var debugSupport = Assert.Single(platform.Resource.Annotations.OfType<SupportsDebuggingAnnotation>());
         Assert.Equal("maui", debugSupport.LaunchConfigurationType);
 
-        var launchConfiguration = DeserializeLaunchConfiguration(platform.Resource);
+        var launchConfiguration = await DeserializeLaunchConfigurationAsync(platform.Resource);
         Assert.Equal("maui", launchConfiguration.Type);
         Assert.Equal("Debug", launchConfiguration.Mode);
         Assert.Equal(tempFile, launchConfiguration.ProjectPath);
@@ -346,7 +346,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void AddAndroidDevice_WithDeviceId_CreatesResourceWithCorrectName()
+    public async Task AddAndroidDevice_WithDeviceId_CreatesResourceWithCorrectName()
     {
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -363,13 +363,13 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         Assert.NotNull(device);
         Assert.Equal("my-device", device.Resource.Name);
         Assert.IsType<MauiAndroidDeviceResource>(device.Resource);
-        var launchConfiguration = GetSingleMauiLaunchConfiguration(device.Resource);
+        var launchConfiguration = await GetSingleMauiLaunchConfigurationAsync(device.Resource);
         Assert.Equal("abc12345", launchConfiguration.Device);
         Assert.Equal(new Dictionary<string, string> { ["AdbTarget"] = "-s abc12345" }, launchConfiguration.MsBuildProperties);
     }
 
     [Fact]
-    public void AddAndroidEmulator_WithEmulatorId_CreatesResourceWithCorrectName()
+    public async Task AddAndroidEmulator_WithEmulatorId_CreatesResourceWithCorrectName()
     {
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -386,13 +386,13 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         Assert.NotNull(emulator);
         Assert.Equal("my-emulator", emulator.Resource.Name);
         Assert.IsType<MauiAndroidEmulatorResource>(emulator.Resource);
-        var launchConfiguration = GetSingleMauiLaunchConfiguration(emulator.Resource);
+        var launchConfiguration = await GetSingleMauiLaunchConfigurationAsync(emulator.Resource);
         Assert.Equal("Pixel_5_API_33", launchConfiguration.Device);
         Assert.Equal(new Dictionary<string, string> { ["AdbTarget"] = "-s Pixel_5_API_33" }, launchConfiguration.MsBuildProperties);
     }
 
     [Fact]
-    public void AddiOSDevice_WithDeviceId_CreatesResourceWithCorrectName()
+    public async Task AddiOSDevice_WithDeviceId_CreatesResourceWithCorrectName()
     {
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -409,7 +409,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         Assert.NotNull(device);
         Assert.Equal("my-device", device.Resource.Name);
         Assert.IsType<MauiiOSDeviceResource>(device.Resource);
-        var launchConfiguration = GetSingleMauiLaunchConfiguration(device.Resource);
+        var launchConfiguration = await GetSingleMauiLaunchConfigurationAsync(device.Resource);
         Assert.Equal("00008030-001234567890123A", launchConfiguration.Device);
         Assert.Equal("ios-arm64", launchConfiguration.RuntimeIdentifier);
         Assert.Equal(new Dictionary<string, string>
@@ -420,7 +420,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void AddiOSSimulator_WithSimulatorId_CreatesResourceWithCorrectName()
+    public async Task AddiOSSimulator_WithSimulatorId_CreatesResourceWithCorrectName()
     {
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -437,7 +437,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         Assert.NotNull(simulator);
         Assert.Equal("my-simulator", simulator.Resource.Name);
         Assert.IsType<MauiiOSSimulatorResource>(simulator.Resource);
-        var launchConfiguration = GetSingleMauiLaunchConfiguration(simulator.Resource);
+        var launchConfiguration = await GetSingleMauiLaunchConfigurationAsync(simulator.Resource);
         Assert.Equal("E25BBE37-69BA-4720-B6FD-D54C97791E79", launchConfiguration.Device);
         Assert.Equal(new Dictionary<string, string>
         {
@@ -879,18 +879,18 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     private static string? GetTestAssemblyConfiguration() =>
         typeof(MauiPlatformExtensionsTests).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration;
 
-    private static SerializedMauiLaunchConfiguration GetSingleMauiLaunchConfiguration(IResource resource)
+    private static Task<SerializedMauiLaunchConfiguration> GetSingleMauiLaunchConfigurationAsync(IResource resource)
     {
-        return DeserializeLaunchConfiguration(resource);
+        return DeserializeLaunchConfigurationAsync(resource);
     }
 
     /// <summary>
     /// Round-trips the launch configuration through JSON so assertions run against the wire shape the
     /// IDE receives (snake_case property names), not the in-memory type.
     /// </summary>
-    private static SerializedMauiLaunchConfiguration DeserializeLaunchConfiguration(IResource resource)
+    private static async Task<SerializedMauiLaunchConfiguration> DeserializeLaunchConfigurationAsync(IResource resource)
     {
-        var json = JsonSerializer.Serialize(resource.CreateLaunchConfiguration(ExecutableLaunchMode.Debug));
+        var json = JsonSerializer.Serialize(await resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.Debug));
         var launchConfiguration = JsonSerializer.Deserialize<SerializedMauiLaunchConfiguration>(json);
         Assert.NotNull(launchConfiguration);
 

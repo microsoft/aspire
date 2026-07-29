@@ -78,6 +78,7 @@ public static class DebugSupportExtensions
     /// </summary>
     /// <param name="resource">The resource to inspect. It must carry a <see cref="SupportsDebuggingAnnotation"/>.</param>
     /// <param name="mode">The launch mode, one of the values on <see cref="ExecutableLaunchMode"/>.</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>The launch configuration, typically an <see cref="ExecutableLaunchConfiguration"/>.</returns>
     /// <exception cref="InvalidOperationException">The resource does not declare debug launch support.</exception>
     /// <remarks>
@@ -95,7 +96,7 @@ public static class DebugSupportExtensions
     /// </para>
     /// </remarks>
     [AspireExportIgnore(Reason = "Debug support inspection is a local .NET helper and is not part of the ATS surface.")]
-    public static object CreateLaunchConfiguration(this IResource resource, string mode)
+    public static Task<object> CreateLaunchConfigurationAsync(this IResource resource, string mode, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(resource);
         ArgumentNullException.ThrowIfNull(mode);
@@ -108,7 +109,7 @@ public static class DebugSupportExtensions
                 $"Note that it only adds the annotation in run mode.");
         }
 
-        return supportsDebuggingAnnotation.LaunchConfigurationProducer(mode);
+        return supportsDebuggingAnnotation.LaunchConfigurationProducer(mode, cancellationToken);
     }
 
     private static string[]? GetSupportedLaunchConfigurations(IConfiguration configuration)

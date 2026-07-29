@@ -115,8 +115,8 @@ internal static class RadiusServiceDiscovery
         // endpoint — is given the standard container port so the container declares a port and the
         // recipe creates a Service, matching the Kubernetes publisher's 8080 default.
         // See: https://github.com/microsoft/aspire/issues/14029
-        if (resource is IProjectLaunchDefaultsResource projectResource &&
-            ReferenceEquals(resolved.Endpoint, projectResource.DefaultHttpsEndpoint))
+        if (resource.TryGetLastAnnotation<ProjectLaunchDefaultsAnnotation>(out var launchDefaults) &&
+            ReferenceEquals(resolved.Endpoint, launchDefaults.DefaultHttpsEndpoint))
         {
             return null;
         }
