@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Fix to aspire.dev internal PackageJsonGenerator tooling to redact connection-string passwords; does not document any specific Aspire product feature from this milestone",
+  "mergedAt": "2026-07-28T22:53:44Z",
+  "number": 1410,
+  "runDate": "2026-07-29T06:52:24Z",
+  "status": "excluded",
+  "title": "Redact connection-string passwords in generated package docs"
+}

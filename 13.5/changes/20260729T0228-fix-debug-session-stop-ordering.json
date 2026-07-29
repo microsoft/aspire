@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed an issue in the VS Code extension where the global debug stop command would stop the synthetic Aspire parent session before stopping the real AppHost debug session, leaving the AppHost registry populated after stopping.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-07-29T02:28:01Z",
+  "lastMergedAt": "2026-07-29T02:28:01Z",
+  "name": "Fix debug session stop ordering in VS Code",
+  "owner": "adamint",
+  "prs": [
+    18561
+  ]
+}

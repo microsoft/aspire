@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Bug fix in VS Code extension: stop ordering fix ensures AppHost debug session stops before the synthetic Aspire parent session",
+  "mergedAt": "2026-07-29T02:28:01Z",
+  "number": 18561,
+  "runDate": "2026-07-29T06:52:24Z",
+  "status": "included",
+  "title": "Stop AppHost debug session before Aspire parent"
+}
