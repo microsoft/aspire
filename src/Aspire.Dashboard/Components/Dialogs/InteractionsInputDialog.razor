@@ -184,9 +184,9 @@
                                         @foreach (var fileReference in input.ViewModel.FileReferences.Where(f => f.Id is not null))
                                         {
                                             <div class="uploaded-file-container">
-                                                <FluentIcon Icon="Icons.Filled.Size16.Document"
-                                                            Style="vertical-align: text-bottom;"
-                                                            Color="Color.Accent" />
+                                                <DeckIcon Name="DeckIconName.DocumentText"
+                                                          Size="16"
+                                                          Style="vertical-align: text-bottom; color: var(--accent);" />
                                                 <span>@fileReference.Name</span>
                                             </div>
                                         }

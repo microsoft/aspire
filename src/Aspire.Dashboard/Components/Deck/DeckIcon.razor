@@ -4,8 +4,8 @@
     so we avoid shipping an icon font/library.
 
     The glyph markup lives in DeckIconData so the resource graph (which renders icons in JS, not
-    Blazor) can reuse the exact same paths. Emitting it via MarkupString inside an <svg> is the same
-    technique Fluent's own <FluentIcon> uses, so the children parse into the SVG namespace correctly.
+    Blazor) can reuse the exact same paths. Emitting it via MarkupString inside an <svg> is the
+    standard inline-SVG technique, so the children parse into the SVG namespace correctly.
 *@
 <svg width="@Size" height="@Size" viewBox="0 0 24 24" fill="none" stroke="currentColor"
      stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
