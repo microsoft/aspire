@@ -119,7 +119,103 @@
                       "description": "Gets or sets the key to use to authenticate to the Azure OpenAI endpoint."
                     }
                   },
-                  "description": "The settings relevant to accessing Azure OpenAI or OpenAI."
+                  "description": "The settings relevant to accessing Azure OpenAI or OpenAI.",
+                  "additionalProperties": {
+                    "type": "object",
+                    "properties": {
+                      "ClientOptions": {
+                        "type": "object",
+                        "properties": {
+                          "ClientLoggingOptions": {
+                            "type": "object",
+                            "properties": {
+                              "AllowedHeaderNames": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "Gets or sets a list of header names that are not redacted during logging."
+                              },
+                              "AllowedQueryParameters": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "Gets or sets a list of query parameter names that are not redacted during logging."
+                              },
+                              "EnableLogging": {
+                                "type": "boolean",
+                                "description": "Gets or sets value indicating if logging should be enabled in this client pipeline."
+                              },
+                              "EnableMessageContentLogging": {
+                                "type": "boolean",
+                                "description": "Gets or sets value indicating if request and response content should be logged."
+                              },
+                              "EnableMessageLogging": {
+                                "type": "boolean",
+                                "description": "Gets or sets value indicating if request and response uri and header information should be logged."
+                              },
+                              "MessageContentSizeLimit": {
+                                "type": "integer",
+                                "description": "Gets or sets value indicating maximum size of content to log in bytes."
+                              }
+                            },
+                            "description": "The options to be used to configure logging within the 'System.ClientModel.Primitives.ClientPipeline'."
+                          },
+                          "DefaultHeaders": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "DefaultQueryParameters": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "EnableDistributedTracing": {
+                            "type": "boolean",
+                            "description": "Gets or sets whether distributed tracing should be enabled. If null, this value will be treated as true. The default is null."
+                          },
+                          "NetworkTimeout": {
+                            "type": "string",
+                            "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                            "description": "The timeout applied to an individual network operation."
+                          },
+                          "UserAgentApplicationId": {
+                            "type": "string",
+                            "description": "An optional application ID to use as part of the request User-Agent header."
+                          }
+                        },
+                        "description": "Defines the scenario-independent, client-level options for the Azure-specific OpenAI client."
+                      },
+                      "DisableMetrics": {
+                        "type": "boolean",
+                        "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry metrics are enabled or not.",
+                        "default": false
+                      },
+                      "DisableTracing": {
+                        "type": "boolean",
+                        "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
+                        "default": false
+                      },
+                      "EnableSensitiveTelemetryData": {
+                        "type": "boolean",
+                        "description": "Gets or sets a boolean value indicating whether potentially sensitive information should be included in telemetry."
+                      },
+                      "Endpoint": {
+                        "type": "string",
+                        "format": "uri",
+                        "description": "Gets or sets a 'System.Uri' referencing the Azure OpenAI endpoint. This is likely to be similar to \"https://{account_name}.openai.azure.com\"."
+                      },
+                      "Key": {
+                        "type": "string",
+                        "description": "Gets or sets the key to use to authenticate to the Azure OpenAI endpoint."
+                      }
+                    },
+                    "description": "The settings relevant to accessing Azure OpenAI or OpenAI."
+                  }
                 }
               }
             }

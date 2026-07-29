@@ -68,7 +68,40 @@
                       "description": "Gets or sets the time to wait for the response to come back from the network peer."
                     }
                   },
-                  "description": "The settings relevant to accessing Azure Cosmos DB database using EntityFrameworkCore."
+                  "description": "The settings relevant to accessing Azure Cosmos DB database using EntityFrameworkCore.",
+                  "additionalProperties": {
+                    "type": "object",
+                    "properties": {
+                      "AccountEndpoint": {
+                        "type": "string",
+                        "format": "uri",
+                        "description": "A 'System.Uri' referencing the Azure Cosmos DB Endpoint. This is likely to be similar to \"https://{account_name}.documents.azure.com\"."
+                      },
+                      "ConnectionString": {
+                        "type": "string",
+                        "description": "The connection string of the Azure Cosmos DB server database to connect to."
+                      },
+                      "DatabaseName": {
+                        "type": "string",
+                        "description": "The name of the database to connect to."
+                      },
+                      "DisableTracing": {
+                        "type": "boolean",
+                        "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
+                        "default": false
+                      },
+                      "Region": {
+                        "type": "string",
+                        "description": "Gets or sets a string value that indicates what Azure region this client will run in."
+                      },
+                      "RequestTimeout": {
+                        "type": "string",
+                        "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                        "description": "Gets or sets the time to wait for the response to come back from the network peer."
+                      }
+                    },
+                    "description": "The settings relevant to accessing Azure Cosmos DB database using EntityFrameworkCore."
+                  }
                 }
               }
             }

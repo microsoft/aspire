@@ -7,6 +7,8 @@ using Azure.Messaging.ServiceBus;
 
 [assembly: ConfigurationSchema("Aspire:Azure:Messaging:ServiceBus", typeof(AzureMessagingServiceBusSettings))]
 [assembly: ConfigurationSchema("Aspire:Azure:Messaging:ServiceBus:ClientOptions", typeof(ServiceBusClientOptions))]
+[assembly: ConfigurationSchema("Aspire:Azure:Messaging:ServiceBus:*", typeof(AzureMessagingServiceBusSettings))]
+[assembly: ConfigurationSchema("Aspire:Azure:Messaging:ServiceBus:*:ClientOptions", typeof(ServiceBusClientOptions))]
 
 [assembly: LoggingCategories(
     "Azure",

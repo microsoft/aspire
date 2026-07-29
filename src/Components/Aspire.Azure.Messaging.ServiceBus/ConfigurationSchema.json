@@ -124,7 +124,105 @@
                       "description": "Name of the subscription associated with the connection string."
                     }
                   },
-                  "description": "Provides the client configuration settings for connecting to Azure Service Bus."
+                  "description": "Provides the client configuration settings for connecting to Azure Service Bus.",
+                  "additionalProperties": {
+                    "type": "object",
+                    "properties": {
+                      "ClientOptions": {
+                        "type": "object",
+                        "properties": {
+                          "ConnectionIdleTimeout": {
+                            "type": "string",
+                            "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                            "description": "The amount of time to allow a connection to have no observed traffic before considering it idle and eligible to close."
+                          },
+                          "CustomEndpointAddress": {
+                            "type": "string",
+                            "format": "uri",
+                            "description": "A custom endpoint address that can be used when establishing the connection to the Service Bus service."
+                          },
+                          "EnableCrossEntityTransactions": {
+                            "type": "boolean",
+                            "description": "Gets or sets a flag that indicates whether or not transactions may span multiple Service Bus entities."
+                          },
+                          "Identifier": {
+                            "type": "string",
+                            "description": "A property used to set the 'Azure.Messaging.ServiceBus.ServiceBusClient' ID to identify the client. This can be used to correlate logs and exceptions. If null or empty, a random unique value will be used."
+                          },
+                          "RetryOptions": {
+                            "type": "object",
+                            "properties": {
+                              "Delay": {
+                                "type": "string",
+                                "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                                "description": "The delay between retry attempts for a fixed approach or the delay on which to base calculations for a backoff-based approach."
+                              },
+                              "MaxDelay": {
+                                "type": "string",
+                                "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                                "description": "The maximum permissible delay between retry attempts."
+                              },
+                              "MaxRetries": {
+                                "type": "integer",
+                                "description": "The maximum number of retry attempts before considering the associated operation to have failed."
+                              },
+                              "Mode": {
+                                "enum": [
+                                  "Fixed",
+                                  "Exponential"
+                                ],
+                                "description": "The approach to use for calculating retry delays."
+                              },
+                              "TryTimeout": {
+                                "type": "string",
+                                "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                                "description": "The maximum duration to wait for completion of a single attempt, whether the initial attempt or a retry."
+                              }
+                            },
+                            "description": "The set of options to use for determining whether a failed service operation should be retried and, if so, the amount of time to wait between retry attempts.  These options also control the amount of time allowed for the individual network operations used for interactions with the Service Bus service."
+                          },
+                          "TransportType": {
+                            "enum": [
+                              "AmqpTcp",
+                              "AmqpWebSockets"
+                            ],
+                            "description": "The type of protocol and transport that will be used for communicating with the Service Bus service."
+                          }
+                        },
+                        "description": "The set of options that can be specified when creating an 'Azure.Messaging.ServiceBus.ServiceBusConnection' to configure its behavior."
+                      },
+                      "ConnectionString": {
+                        "type": "string",
+                        "description": "Gets or sets the connection string used to connect to the Service Bus namespace."
+                      },
+                      "DisableTracing": {
+                        "type": "boolean",
+                        "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
+                        "default": false
+                      },
+                      "FullyQualifiedNamespace": {
+                        "type": "string",
+                        "description": "Gets or sets the fully qualified Service Bus namespace."
+                      },
+                      "HealthCheckQueueName": {
+                        "type": "string",
+                        "description": "Name of the queue used by the health check. Mandatory to get health checks enabled."
+                      },
+                      "HealthCheckTopicName": {
+                        "type": "string",
+                        "description": "Name of the topic used by the health check. Mandatory to get health checks enabled."
+                      },
+                      "QueueOrTopicName": {
+                        "type": "string",
+                        "description": "Name of the queue or topic associated with the connection string."
+                      },
+                      "SubscriptionName": {
+                        "type": "string",
+                        "description": "Name of the subscription associated with the connection string."
+                      }
+                    },
+                    "description": "Provides the client configuration settings for connecting to Azure Service Bus."
+                  }
                 }
               }
             }

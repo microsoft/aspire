@@ -7,6 +7,8 @@ using Azure.Data.Tables;
 
 [assembly: ConfigurationSchema("Aspire:Azure:Data:Tables", typeof(AzureDataTablesSettings))]
 [assembly: ConfigurationSchema("Aspire:Azure:Data:Tables:ClientOptions", typeof(TableClientOptions), exclusionPaths: ["Default"])]
+[assembly: ConfigurationSchema("Aspire:Azure:Data:Tables:*", typeof(AzureDataTablesSettings))]
+[assembly: ConfigurationSchema("Aspire:Azure:Data:Tables:*:ClientOptions", typeof(TableClientOptions), exclusionPaths: ["Default"])]
 
 [assembly: LoggingCategories(
     "Azure",

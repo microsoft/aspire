@@ -5,6 +5,7 @@ using Aspire;
 using Aspire.Pomelo.EntityFrameworkCore.MySql;
 
 [assembly: ConfigurationSchema("Aspire:Pomelo:EntityFrameworkCore:MySql", typeof(PomeloEntityFrameworkCoreMySqlSettings))]
+[assembly: ConfigurationSchema("Aspire:Pomelo:EntityFrameworkCore:MySql:*", typeof(PomeloEntityFrameworkCoreMySqlSettings))]
 
 [assembly: LoggingCategories(
     "Microsoft.EntityFrameworkCore",

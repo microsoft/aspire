@@ -54,7 +54,32 @@
               "default": false
             }
           },
-          "description": "Provides the client configuration settings for connecting to a PostgreSQL database using Npgsql."
+          "description": "Provides the client configuration settings for connecting to a PostgreSQL database using Npgsql.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "ConnectionString": {
+                "type": "string",
+                "description": "The connection string of the PostgreSQL database to connect to."
+              },
+              "DisableHealthChecks": {
+                "type": "boolean",
+                "description": "Gets or sets a boolean value that indicates whether the database health check is disabled or not.",
+                "default": false
+              },
+              "DisableMetrics": {
+                "type": "boolean",
+                "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry metrics are disabled or not.",
+                "default": false
+              },
+              "DisableTracing": {
+                "type": "boolean",
+                "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
+                "default": false
+              }
+            },
+            "description": "Provides the client configuration settings for connecting to a PostgreSQL database using Npgsql."
+          }
         }
       }
     }

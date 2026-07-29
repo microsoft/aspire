@@ -5,5 +5,6 @@ using Aspire;
 using Aspire.Qdrant.Client;
 
 [assembly: ConfigurationSchema("Aspire:Qdrant:Client", typeof(QdrantClientSettings))]
+[assembly: ConfigurationSchema("Aspire:Qdrant:Client:*", typeof(QdrantClientSettings))]
 
 [assembly: LoggingCategories("Qdrant.Client")]

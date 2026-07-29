@@ -1556,6 +1556,71 @@ public partial class GeneratorTests
             """);
     }
 
+    [Fact]
+    public void CanGenerateNestedSchemaForNamedOptionsWithDefaultOptions()
+    {
+        var source =
+            """
+            [assembly: Aspire.ConfigurationSchema("Components", typeof(ComponentSettings))]
+            [assembly: Aspire.ConfigurationSchema("Components:ClientOptions", typeof(ClientOptions))]
+            [assembly: Aspire.ConfigurationSchema("Components:*", typeof(ComponentSettings))]
+            [assembly: Aspire.ConfigurationSchema("Components:*:ClientOptions", typeof(ClientOptions))]
+
+            public class ComponentSettings
+            {
+                public string? ConnectionString { get; set; }
+            }
+
+            public class ClientOptions
+            {
+                public int RetryCount { get; set; }
+            }
+            """;
+
+        var schema = GenerateSchemaFromCode(source, []);
+
+        AssertIsJson(schema,
+            """
+            {
+              "type": "object",
+              "properties": {
+                "Components": {
+                  "type": "object",
+                  "properties": {
+                    "ClientOptions": {
+                      "type": "object",
+                      "properties": {
+                        "RetryCount": {
+                          "type": "integer"
+                        }
+                      }
+                    },
+                    "ConnectionString": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": {
+                    "type": "object",
+                    "properties": {
+                      "ClientOptions": {
+                        "type": "object",
+                        "properties": {
+                          "RetryCount": {
+                            "type": "integer"
+                          }
+                        }
+                      },
+                      "ConnectionString": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            """);
+    }
+
     private static string GenerateSchemaFromCode(string sourceText, IEnumerable<MetadataReference> references)
     {
         var sourceSyntaxTree = SyntaxFactory.ParseSyntaxTree(SourceText.From(sourceText));

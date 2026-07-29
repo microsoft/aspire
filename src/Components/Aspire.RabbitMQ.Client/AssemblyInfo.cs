@@ -8,5 +8,8 @@ using RabbitMQ.Client;
 [assembly: ConfigurationSchema("Aspire:RabbitMQ:Client", typeof(RabbitMQClientSettings))]
 [assembly: ConfigurationSchema("Aspire:RabbitMQ:Client:ConnectionFactory", typeof(ConnectionFactory),
     exclusionPaths: ["ClientProperties", "Ssl:ClientCertificateContext", "Endpoint:Ssl:ClientCertificateContext"])]
+[assembly: ConfigurationSchema("Aspire:RabbitMQ:Client:*", typeof(RabbitMQClientSettings))]
+[assembly: ConfigurationSchema("Aspire:RabbitMQ:Client:*:ConnectionFactory", typeof(ConnectionFactory),
+    exclusionPaths: ["ClientProperties", "Ssl:ClientCertificateContext", "Endpoint:Ssl:ClientCertificateContext"])]
 
 [assembly: LoggingCategories("RabbitMQ.Client")]

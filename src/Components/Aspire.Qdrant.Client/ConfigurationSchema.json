@@ -39,7 +39,32 @@
                   "description": "The API Key of the Qdrant server to connect to."
                 }
               },
-              "description": "Provides the client configuration settings for connecting to a Qdrant server using QdrantClient."
+              "description": "Provides the client configuration settings for connecting to a Qdrant server using QdrantClient.",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "DisableHealthChecks": {
+                    "type": "boolean",
+                    "description": "Gets or sets a boolean value that indicates whether the Qdrant client health check is disabled or not.",
+                    "default": false
+                  },
+                  "Endpoint": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "The endpoint URI string of the Qdrant server to connect to."
+                  },
+                  "HealthCheckTimeout": {
+                    "type": "string",
+                    "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                    "description": "Gets or sets the timeout duration for the health check."
+                  },
+                  "Key": {
+                    "type": "string",
+                    "description": "The API Key of the Qdrant server to connect to."
+                  }
+                },
+                "description": "Provides the client configuration settings for connecting to a Qdrant server using QdrantClient."
+              }
             }
           }
         }

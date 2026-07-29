@@ -76,7 +76,36 @@
                   "default": false
                 }
               },
-              "description": "Provides the client configuration settings for connecting to a Oracle database using EntityFrameworkCore."
+              "description": "Provides the client configuration settings for connecting to a Oracle database using EntityFrameworkCore.",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "CommandTimeout": {
+                    "type": "integer",
+                    "description": "Gets or sets the time in seconds to wait for the command to execute."
+                  },
+                  "ConnectionString": {
+                    "type": "string",
+                    "description": "The connection string of the Oracle database to connect to."
+                  },
+                  "DisableHealthChecks": {
+                    "type": "boolean",
+                    "description": "Gets or sets a boolean value that indicates whether the database health check is disabled or not.",
+                    "default": false
+                  },
+                  "DisableRetry": {
+                    "type": "boolean",
+                    "description": "Gets or sets whether retries should be disabled.",
+                    "default": false
+                  },
+                  "DisableTracing": {
+                    "type": "boolean",
+                    "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
+                    "default": false
+                  }
+                },
+                "description": "Provides the client configuration settings for connecting to a Oracle database using EntityFrameworkCore."
+              }
             }
           }
         }

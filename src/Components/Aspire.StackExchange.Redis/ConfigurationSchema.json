@@ -192,7 +192,185 @@
                   "default": false
                 }
               },
-              "description": "Provides the client configuration settings for connecting to a Redis server."
+              "description": "Provides the client configuration settings for connecting to a Redis server.",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "ConfigurationOptions": {
+                    "type": "object",
+                    "properties": {
+                      "AbortOnConnectFail": {
+                        "type": "boolean",
+                        "description": "Gets or sets whether connect/configuration timeouts should be explicitly notified via a TimeoutException."
+                      },
+                      "AllowAdmin": {
+                        "type": "boolean",
+                        "description": "Indicates whether admin operations should be allowed."
+                      },
+                      "AsyncTimeout": {
+                        "type": "integer",
+                        "description": "Specifies the time in milliseconds that the system should allow for asynchronous operations (defaults to SyncTimeout)."
+                      },
+                      "ChannelPrefix": {
+                        "type": "object",
+                        "properties": {
+                          "UseImplicitAutoPattern": {
+                            "type": "boolean",
+                            "description": "Indicates whether channels should use 'StackExchange.Redis.RedisChannel.PatternMode.Auto' when no 'StackExchange.Redis.RedisChannel.PatternMode' is specified; this is enabled by default, but can be disabled to avoid unexpected wildcard scenarios."
+                          }
+                        },
+                        "description": "Automatically encodes and decodes channels."
+                      },
+                      "CheckCertificateRevocation": {
+                        "type": "boolean",
+                        "description": "A Boolean value that specifies whether the certificate revocation list is checked during authentication."
+                      },
+                      "ClientName": {
+                        "type": "string",
+                        "description": "The client name to use for all connections."
+                      },
+                      "ConfigCheckSeconds": {
+                        "type": "integer",
+                        "description": "Check configuration every n seconds (every minute by default)."
+                      },
+                      "ConfigurationChannel": {
+                        "type": "string",
+                        "description": "Channel to use for broadcasting and listening for configuration change notification."
+                      },
+                      "ConnectRetry": {
+                        "type": "integer",
+                        "description": "The number of times to repeat the initial connect cycle if no servers respond promptly."
+                      },
+                      "ConnectTimeout": {
+                        "type": "integer",
+                        "description": "Specifies the time in milliseconds that should be allowed for connection (defaults to 5 seconds unless SyncTimeout is higher)."
+                      },
+                      "DefaultDatabase": {
+                        "type": "integer",
+                        "description": "Specifies the default database to be used when calling 'StackExchange.Redis.ConnectionMultiplexer.GetDatabase(System.Int32,System.Object)' without any parameters."
+                      },
+                      "DefaultVersion": {
+                        "type": "string",
+                        "description": "The server version to assume."
+                      },
+                      "HeartbeatConsistencyChecks": {
+                        "type": "boolean",
+                        "description": "Whether to enable ECHO checks on every heartbeat to ensure network stream consistency. This is a rare measure to react to any potential network traffic drops ASAP, terminating the connection."
+                      },
+                      "HeartbeatInterval": {
+                        "type": "string",
+                        "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                        "description": "Controls how often the connection heartbeats. A heartbeat includes: - Evaluating if any messages have timed out. - Evaluating connection status (checking for failures). - Sending a server message to keep the connection alive if needed."
+                      },
+                      "HighIntegrity": {
+                        "type": "boolean",
+                        "description": "A Boolean value that specifies whether to use per-command validation of strict protocol validity. This sends an additional command after EVERY command which incurs measurable overhead."
+                      },
+                      "IncludeDetailInExceptions": {
+                        "type": "boolean",
+                        "description": "Whether exceptions include identifiable details (key names, additional .Data annotations)."
+                      },
+                      "IncludePerformanceCountersInExceptions": {
+                        "type": "boolean",
+                        "description": "Whether exceptions include performance counter details."
+                      },
+                      "KeepAlive": {
+                        "type": "integer",
+                        "description": "Specifies the time in seconds at which connections should be pinged to ensure validity. -1 Defaults to 60 Seconds."
+                      },
+                      "LibraryName": {
+                        "type": "string",
+                        "description": "Gets or sets the library name to use for CLIENT SETINFO lib-name calls to Redis during handshake. Defaults to \"SE.Redis\"."
+                      },
+                      "Password": {
+                        "type": "string",
+                        "description": "The password to use to authenticate with the server."
+                      },
+                      "Protocol": {
+                        "enum": [
+                          "Resp2",
+                          "Resp3"
+                        ],
+                        "description": "Specify the redis protocol type."
+                      },
+                      "Proxy": {
+                        "enum": [
+                          "None",
+                          "Twemproxy",
+                          "Envoyproxy"
+                        ],
+                        "description": "Type of proxy to use (if any); for example 'StackExchange.Redis.Proxy.Twemproxy'."
+                      },
+                      "ResolveDns": {
+                        "type": "boolean",
+                        "description": "Indicates whether endpoints should be resolved via DNS before connecting. If enabled the ConnectionMultiplexer will not re-resolve DNS when attempting to re-connect after a connection failure."
+                      },
+                      "ServiceName": {
+                        "type": "string",
+                        "description": "The service name used to resolve a service via sentinel."
+                      },
+                      "SetClientLibrary": {
+                        "type": "boolean",
+                        "description": "Gets or sets whether the library should identify itself by library-name/version when possible."
+                      },
+                      "Ssl": {
+                        "type": "boolean",
+                        "description": "Indicates whether the connection should be encrypted."
+                      },
+                      "SslHost": {
+                        "type": "string",
+                        "description": "The target-host to use when validating SSL certificate; setting a value here enables SSL mode."
+                      },
+                      "SslProtocols": {
+                        "enum": [
+                          "None",
+                          "Ssl2",
+                          "Ssl3",
+                          "Tls",
+                          "Default",
+                          "Tls11",
+                          "Tls12",
+                          "Tls13"
+                        ],
+                        "description": "Configures which SSL/TLS protocols should be allowed.  If not set, defaults are chosen by the .NET framework."
+                      },
+                      "SyncTimeout": {
+                        "type": "integer",
+                        "description": "Specifies the time in milliseconds that the system should allow for synchronous operations (defaults to 5 seconds)."
+                      },
+                      "TieBreaker": {
+                        "type": "string",
+                        "description": "Tie-breaker used to choose between primaries (must match the endpoint exactly)."
+                      },
+                      "User": {
+                        "type": "string",
+                        "description": "The username to use to authenticate with the server."
+                      }
+                    },
+                    "description": "The options relevant to a set of redis connections."
+                  },
+                  "ConnectionString": {
+                    "type": "string",
+                    "description": "Gets or sets the comma-delimited configuration string used to connect to the Redis server."
+                  },
+                  "DisableAutoActivation": {
+                    "type": "boolean",
+                    "description": "Gets or sets a boolean value that indicates whether auto activation is disabled or not.",
+                    "default": true
+                  },
+                  "DisableHealthChecks": {
+                    "type": "boolean",
+                    "description": "Gets or sets a boolean value that indicates whether the Redis health check is disabled or not.",
+                    "default": false
+                  },
+                  "DisableTracing": {
+                    "type": "boolean",
+                    "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
+                    "default": false
+                  }
+                },
+                "description": "Provides the client configuration settings for connecting to a Redis server."
+              }
             }
           }
         }

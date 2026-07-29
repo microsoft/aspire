@@ -349,7 +349,342 @@
                   "description": "Gets or sets the maximum number of connection retry attempts.\n\nDefault value is 5, set it to 0 to disable the retry mechanism."
                 }
               },
-              "description": "Provides the client configuration settings for connecting to a RabbitMQ message broker."
+              "description": "Provides the client configuration settings for connecting to a RabbitMQ message broker.",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "ConnectionFactory": {
+                    "type": "object",
+                    "properties": {
+                      "AmqpUriSslProtocols": {
+                        "enum": [
+                          "None",
+                          "Ssl2",
+                          "Ssl3",
+                          "Tls",
+                          "Default",
+                          "Tls11",
+                          "Tls12",
+                          "Tls13"
+                        ],
+                        "description": "The AMQP URI SSL protocols."
+                      },
+                      "AutomaticRecoveryEnabled": {
+                        "type": "boolean",
+                        "description": "Set to false to disable automatic connection recovery. Defaults to true."
+                      },
+                      "ClientProvidedName": {
+                        "type": "string",
+                        "description": "Default client provided name to be used for connections."
+                      },
+                      "ConsumerDispatchConcurrency": {
+                        "type": "integer",
+                        "description": "Set to a value greater than one to enable concurrent processing. For a concurrency greater than one 'RabbitMQ.Client.IAsyncBasicConsumer' will be offloaded to the worker thread pool so it is important to choose the value for the concurrency wisely to avoid thread pool overloading. 'RabbitMQ.Client.IAsyncBasicConsumer' can handle concurrency much more efficiently due to the non-blocking nature of the consumer. Defaults to 1."
+                      },
+                      "ContinuationTimeout": {
+                        "type": "string",
+                        "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                        "description": "Amount of time protocol operations (e.g. queue.declare) are allowed to take before timing out."
+                      },
+                      "DefaultAddressFamily": {
+                        "enum": [
+                          "Unknown",
+                          "Unspecified",
+                          "Unix",
+                          "InterNetwork",
+                          "ImpLink",
+                          "Pup",
+                          "Chaos",
+                          "Ipx",
+                          "NS",
+                          "Iso",
+                          "Osi",
+                          "Ecma",
+                          "DataKit",
+                          "Ccitt",
+                          "Sna",
+                          "DecNet",
+                          "DataLink",
+                          "Lat",
+                          "HyperChannel",
+                          "AppleTalk",
+                          "NetBios",
+                          "VoiceView",
+                          "FireFox",
+                          "Banyan",
+                          "Atm",
+                          "InterNetworkV6",
+                          "Cluster",
+                          "Ieee12844",
+                          "Irda",
+                          "NetworkDesigners",
+                          "Max",
+                          "Packet",
+                          "ControllerAreaNetwork"
+                        ],
+                        "description": "Address family used by default. Use 'System.Net.Sockets.AddressFamily.InterNetwork' to force to IPv4. Use 'System.Net.Sockets.AddressFamily.InterNetworkV6' to force to IPv6. Or use 'System.Net.Sockets.AddressFamily.Unknown' to attempt both IPv6 and IPv4."
+                      },
+                      "DefaultAmqpUriSslProtocols": {
+                        "enum": [
+                          "None",
+                          "Ssl2",
+                          "Ssl3",
+                          "Tls",
+                          "Default",
+                          "Tls11",
+                          "Tls12",
+                          "Tls13"
+                        ],
+                        "description": "TLS versions enabled by default: TLSv1.2, v1.1, v1.0."
+                      },
+                      "Endpoint": {
+                        "type": "object",
+                        "properties": {
+                          "AddressFamily": {
+                            "enum": [
+                              "Unknown",
+                              "Unspecified",
+                              "Unix",
+                              "InterNetwork",
+                              "ImpLink",
+                              "Pup",
+                              "Chaos",
+                              "Ipx",
+                              "NS",
+                              "Iso",
+                              "Osi",
+                              "Ecma",
+                              "DataKit",
+                              "Ccitt",
+                              "Sna",
+                              "DecNet",
+                              "DataLink",
+                              "Lat",
+                              "HyperChannel",
+                              "AppleTalk",
+                              "NetBios",
+                              "VoiceView",
+                              "FireFox",
+                              "Banyan",
+                              "Atm",
+                              "InterNetworkV6",
+                              "Cluster",
+                              "Ieee12844",
+                              "Irda",
+                              "NetworkDesigners",
+                              "Max",
+                              "Packet",
+                              "ControllerAreaNetwork"
+                            ],
+                            "description": "Used to force the address family of the endpoint. Use 'System.Net.Sockets.AddressFamily.InterNetwork' to force to IPv4. Use 'System.Net.Sockets.AddressFamily.InterNetworkV6' to force to IPv6. Or use 'System.Net.Sockets.AddressFamily.Unknown' to attempt both IPv6 and IPv4."
+                          },
+                          "HostName": {
+                            "type": "string",
+                            "description": "Retrieve or set the hostname of this 'RabbitMQ.Client.AmqpTcpEndpoint'."
+                          },
+                          "Port": {
+                            "type": "integer",
+                            "description": "Retrieve or set the port number of this AmqpTcpEndpoint. A port number of -1 causes the default port number."
+                          },
+                          "Ssl": {
+                            "type": "object",
+                            "properties": {
+                              "AcceptablePolicyErrors": {
+                                "enum": [
+                                  "None",
+                                  "RemoteCertificateNotAvailable",
+                                  "RemoteCertificateNameMismatch",
+                                  "RemoteCertificateChainErrors"
+                                ],
+                                "description": "Retrieve or set the set of TLS policy (peer verification) errors that are deemed acceptable."
+                              },
+                              "CertPassphrase": {
+                                "type": "string",
+                                "description": "Retrieve or set the client certificate passphrase."
+                              },
+                              "CertPath": {
+                                "type": "string",
+                                "description": "Retrieve or set the path to client certificate."
+                              },
+                              "CheckCertificateRevocation": {
+                                "type": "boolean",
+                                "description": "Attempts to check certificate revocation status. Default is false. Set to true to check peer certificate for revocation."
+                              },
+                              "Enabled": {
+                                "type": "boolean",
+                                "description": "Controls if TLS should indeed be used. Set to false to disable TLS on the connection."
+                              },
+                              "ServerName": {
+                                "type": "string",
+                                "description": "Retrieve or set server's expected name. This MUST match the Subject Alternative Name (SAN) or CN on the peer's (server's) leaf certificate, otherwise the TLS connection will fail."
+                              },
+                              "Version": {
+                                "enum": [
+                                  "None",
+                                  "Ssl2",
+                                  "Ssl3",
+                                  "Tls",
+                                  "Default",
+                                  "Tls11",
+                                  "Tls12",
+                                  "Tls13"
+                                ],
+                                "description": "Retrieve or set the TLS protocol version. The client will let the OS pick a suitable version by using 'System.Security.Authentication.SslProtocols.None'. If this option is disabled, e.g.see via app context, the client will attempt to fall back to TLSv1.2."
+                              }
+                            },
+                            "description": "Retrieve the TLS options for this AmqpTcpEndpoint. If not set, null is returned."
+                          }
+                        },
+                        "description": "Connection endpoint."
+                      },
+                      "HandshakeContinuationTimeout": {
+                        "type": "string",
+                        "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                        "description": "Amount of time protocol handshake operations are allowed to take before timing out."
+                      },
+                      "HostName": {
+                        "type": "string",
+                        "description": "The host to connect to."
+                      },
+                      "MaxInboundMessageBodySize": {
+                        "type": "integer",
+                        "description": "Maximum allowed message size, in bytes, from RabbitMQ. Corresponds to the ConnectionFactory.DefaultMaxMessageSize setting."
+                      },
+                      "NetworkRecoveryInterval": {
+                        "type": "string",
+                        "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                        "description": "Amount of time client will wait for before re-trying  to recover connection."
+                      },
+                      "Password": {
+                        "type": "string",
+                        "description": "Password to use when authenticating to the server."
+                      },
+                      "Port": {
+                        "type": "integer",
+                        "description": "The port to connect on. 'RabbitMQ.Client.AmqpTcpEndpoint.UseDefaultPort' indicates the default for the protocol should be used."
+                      },
+                      "RequestedChannelMax": {
+                        "type": "integer",
+                        "description": "Maximum channel number to ask for."
+                      },
+                      "RequestedConnectionTimeout": {
+                        "type": "string",
+                        "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                        "description": "Timeout setting for connection attempts."
+                      },
+                      "RequestedFrameMax": {
+                        "type": "integer",
+                        "description": "Frame-max parameter to ask for (in bytes)."
+                      },
+                      "RequestedHeartbeat": {
+                        "type": "string",
+                        "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                        "description": "Heartbeat timeout to use when negotiating with the server."
+                      },
+                      "SocketReadTimeout": {
+                        "type": "string",
+                        "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                        "description": "Timeout setting for socket read operations."
+                      },
+                      "SocketWriteTimeout": {
+                        "type": "string",
+                        "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                        "description": "Timeout setting for socket write operations."
+                      },
+                      "Ssl": {
+                        "type": "object",
+                        "properties": {
+                          "AcceptablePolicyErrors": {
+                            "enum": [
+                              "None",
+                              "RemoteCertificateNotAvailable",
+                              "RemoteCertificateNameMismatch",
+                              "RemoteCertificateChainErrors"
+                            ],
+                            "description": "Retrieve or set the set of TLS policy (peer verification) errors that are deemed acceptable."
+                          },
+                          "CertPassphrase": {
+                            "type": "string",
+                            "description": "Retrieve or set the client certificate passphrase."
+                          },
+                          "CertPath": {
+                            "type": "string",
+                            "description": "Retrieve or set the path to client certificate."
+                          },
+                          "CheckCertificateRevocation": {
+                            "type": "boolean",
+                            "description": "Attempts to check certificate revocation status. Default is false. Set to true to check peer certificate for revocation."
+                          },
+                          "Enabled": {
+                            "type": "boolean",
+                            "description": "Controls if TLS should indeed be used. Set to false to disable TLS on the connection."
+                          },
+                          "ServerName": {
+                            "type": "string",
+                            "description": "Retrieve or set server's expected name. This MUST match the Subject Alternative Name (SAN) or CN on the peer's (server's) leaf certificate, otherwise the TLS connection will fail."
+                          },
+                          "Version": {
+                            "enum": [
+                              "None",
+                              "Ssl2",
+                              "Ssl3",
+                              "Tls",
+                              "Default",
+                              "Tls11",
+                              "Tls12",
+                              "Tls13"
+                            ],
+                            "description": "Retrieve or set the TLS protocol version. The client will let the OS pick a suitable version by using 'System.Security.Authentication.SslProtocols.None'. If this option is disabled, e.g.see via app context, the client will attempt to fall back to TLSv1.2."
+                          }
+                        },
+                        "description": "TLS options setting."
+                      },
+                      "TopologyRecoveryEnabled": {
+                        "type": "boolean",
+                        "description": "Set to false to make automatic connection recovery not recover topology (exchanges, queues, bindings, etc). Defaults to true."
+                      },
+                      "Uri": {
+                        "type": "string",
+                        "format": "uri",
+                        "description": "The uri to use for the connection."
+                      },
+                      "UserName": {
+                        "type": "string",
+                        "description": "Username to use when authenticating to the server."
+                      },
+                      "VirtualHost": {
+                        "type": "string",
+                        "description": "Virtual host to access during this connection."
+                      }
+                    },
+                    "description": "Main entry point to the RabbitMQ .NET AMQP client API. Constructs 'RabbitMQ.Client.IConnection' instances."
+                  },
+                  "ConnectionString": {
+                    "type": "string",
+                    "description": "Gets or sets the connection string of the RabbitMQ server to connect to."
+                  },
+                  "DisableAutoActivation": {
+                    "type": "boolean",
+                    "description": "Gets or sets a boolean value that indicates whether auto activation is disabled or not.",
+                    "default": true
+                  },
+                  "DisableHealthChecks": {
+                    "type": "boolean",
+                    "description": "Gets or sets a boolean value that indicates whether the RabbitMQ health check is disabled or not.",
+                    "default": false
+                  },
+                  "DisableTracing": {
+                    "type": "boolean",
+                    "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
+                    "default": false
+                  },
+                  "MaxConnectRetryCount": {
+                    "type": "integer",
+                    "description": "Gets or sets the maximum number of connection retry attempts.\n\nDefault value is 5, set it to 0 to disable the retry mechanism."
+                  }
+                },
+                "description": "Provides the client configuration settings for connecting to a RabbitMQ message broker."
+              }
             }
           }
         }

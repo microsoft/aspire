@@ -38,7 +38,31 @@
                   "description": "The auth Key of the Milvus server to connect to."
                 }
               },
-              "description": "Provides the client configuration settings for connecting to a Milvus server using MilvusClient."
+              "description": "Provides the client configuration settings for connecting to a Milvus server using MilvusClient.",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "Database": {
+                    "type": "string",
+                    "description": "The database name of the Milvus server to connect to."
+                  },
+                  "DisableHealthChecks": {
+                    "type": "boolean",
+                    "description": "Gets or sets a boolean value that indicates whether the Milvus client health check is disabled or not.",
+                    "default": false
+                  },
+                  "Endpoint": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "The endpoint URI string of the Milvus server to connect to."
+                  },
+                  "Key": {
+                    "type": "string",
+                    "description": "The auth Key of the Milvus server to connect to."
+                  }
+                },
+                "description": "Provides the client configuration settings for connecting to a Milvus server using MilvusClient."
+              }
             }
           }
         }

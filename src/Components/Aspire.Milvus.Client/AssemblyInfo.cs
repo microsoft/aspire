@@ -5,5 +5,6 @@ using Aspire;
 using Aspire.Milvus.Client;
 
 [assembly: ConfigurationSchema("Aspire:Milvus:Client", typeof(MilvusClientSettings))]
+[assembly: ConfigurationSchema("Aspire:Milvus:Client:*", typeof(MilvusClientSettings))]
 
 [assembly: LoggingCategories("Milvus.Client")]

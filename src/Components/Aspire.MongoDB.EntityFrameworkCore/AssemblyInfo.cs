@@ -5,6 +5,7 @@ using Aspire;
 using Aspire.MongoDB.EntityFrameworkCore;
 
 [assembly: ConfigurationSchema("Aspire:MongoDB:EntityFrameworkCore", typeof(MongoDBEntityFrameworkCoreSettings))]
+[assembly: ConfigurationSchema("Aspire:MongoDB:EntityFrameworkCore:*", typeof(MongoDBEntityFrameworkCoreSettings))]
 
 [assembly: LoggingCategories(
     "Microsoft.EntityFrameworkCore",
@@ -19,4 +20,3 @@ using Aspire.MongoDB.EntityFrameworkCore;
     "Microsoft.EntityFrameworkCore.Model.Validation",
     "Microsoft.EntityFrameworkCore.Query",
     "Microsoft.EntityFrameworkCore.Update")]
-

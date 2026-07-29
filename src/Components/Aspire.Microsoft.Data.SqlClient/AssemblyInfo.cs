@@ -5,3 +5,4 @@ using Aspire;
 using Aspire.Microsoft.Data.SqlClient;
 
 [assembly: ConfigurationSchema("Aspire:Microsoft:Data:SqlClient", typeof(MicrosoftDataSqlClientSettings))]
+[assembly: ConfigurationSchema("Aspire:Microsoft:Data:SqlClient:*", typeof(MicrosoftDataSqlClientSettings))]

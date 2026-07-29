@@ -7,3 +7,5 @@ using OpenAI;
 
 [assembly: ConfigurationSchema("Aspire:OpenAI", typeof(OpenAISettings))]
 [assembly: ConfigurationSchema("Aspire:OpenAI:ClientOptions", typeof(OpenAIClientOptions))]
+[assembly: ConfigurationSchema("Aspire:OpenAI:*", typeof(OpenAISettings))]
+[assembly: ConfigurationSchema("Aspire:OpenAI:*:ClientOptions", typeof(OpenAIClientOptions))]

@@ -34,7 +34,27 @@
                   "default": false
                 }
               },
-              "description": "Provides the client configuration settings for connecting to a NATS cluster."
+              "description": "Provides the client configuration settings for connecting to a NATS cluster.",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "ConnectionString": {
+                    "type": "string",
+                    "description": "Gets or sets the connection string of the NATS cluster to connect to."
+                  },
+                  "DisableHealthChecks": {
+                    "type": "boolean",
+                    "description": "Gets or sets a boolean value that indicates whether the NATS health check is disabled or not.",
+                    "default": false
+                  },
+                  "DisableTracing": {
+                    "type": "boolean",
+                    "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
+                    "default": false
+                  }
+                },
+                "description": "Provides the client configuration settings for connecting to a NATS cluster."
+              }
             }
           }
         }

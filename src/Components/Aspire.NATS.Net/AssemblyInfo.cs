@@ -5,5 +5,6 @@ using Aspire;
 using Aspire.NATS.Net;
 
 [assembly: ConfigurationSchema("Aspire:NATS:Net", typeof(NatsClientSettings))]
+[assembly: ConfigurationSchema("Aspire:NATS:Net:*", typeof(NatsClientSettings))]
 
 [assembly: LoggingCategories("NATS")]

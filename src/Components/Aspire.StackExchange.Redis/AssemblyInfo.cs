@@ -7,5 +7,7 @@ using StackExchange.Redis;
 
 [assembly: ConfigurationSchema("Aspire:StackExchange:Redis", typeof(StackExchangeRedisSettings))]
 [assembly: ConfigurationSchema("Aspire:StackExchange:Redis:ConfigurationOptions", typeof(ConfigurationOptions))]
+[assembly: ConfigurationSchema("Aspire:StackExchange:Redis:*", typeof(StackExchangeRedisSettings))]
+[assembly: ConfigurationSchema("Aspire:StackExchange:Redis:*:ConfigurationOptions", typeof(ConfigurationOptions))]
 
 [assembly: LoggingCategories("StackExchange.Redis")]

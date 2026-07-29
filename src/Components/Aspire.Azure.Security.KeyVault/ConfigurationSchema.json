@@ -134,7 +134,118 @@
                       "description": "A 'System.Uri' to the vault on which the client operates. Appears as \"DNS Name\" in the Azure portal. If you have a secret 'System.Uri', use 'Azure.Security.KeyVault.Secrets.KeyVaultSecretIdentifier' to parse the 'Azure.Security.KeyVault.Secrets.KeyVaultSecretIdentifier.VaultUri' and other information. You should validate that this URI references a valid Key Vault resource. See https://aka.ms/azsdk/blog/vault-uri for details."
                     }
                   },
-                  "description": "Provides the client configuration settings for connecting to Azure Key Vault."
+                  "description": "Provides the client configuration settings for connecting to Azure Key Vault.",
+                  "additionalProperties": {
+                    "type": "object",
+                    "properties": {
+                      "ClientOptions": {
+                        "type": "object",
+                        "properties": {
+                          "Diagnostics": {
+                            "type": "object",
+                            "properties": {
+                              "ApplicationId": {
+                                "type": "string",
+                                "description": "Gets or sets the value sent as the first part of \"User-Agent\" headers for all requests issues by this client. Defaults to 'Azure.Core.DiagnosticsOptions.DefaultApplicationId'."
+                              },
+                              "DefaultApplicationId": {
+                                "type": "string",
+                                "description": "Gets or sets the default application id. Default application id would be set on all instances."
+                              },
+                              "IsDistributedTracingEnabled": {
+                                "type": "boolean",
+                                "description": "Gets or sets value indicating whether distributed tracing activities ('System.Diagnostics.Activity') are going to be created for the clients methods calls and HTTP calls."
+                              },
+                              "IsLoggingContentEnabled": {
+                                "type": "boolean",
+                                "description": "Gets or sets value indicating if request or response content should be logged."
+                              },
+                              "IsLoggingEnabled": {
+                                "type": "boolean",
+                                "description": "Get or sets value indicating whether HTTP pipeline logging is enabled."
+                              },
+                              "IsTelemetryEnabled": {
+                                "type": "boolean",
+                                "description": "Gets or sets value indicating whether the \"User-Agent\" header containing 'Azure.Core.DiagnosticsOptions.ApplicationId', client library package name and version, 'System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription' and 'System.Runtime.InteropServices.RuntimeInformation.OSDescription' should be sent. The default value can be controlled process wide by setting AZURE_TELEMETRY_DISABLED to true, false, 1 or 0."
+                              },
+                              "LoggedContentSizeLimit": {
+                                "type": "integer",
+                                "description": "Gets or sets value indicating maximum size of content to log in bytes. Defaults to 4096."
+                              },
+                              "LoggedHeaderNames": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "Gets a list of header names that are not redacted during logging."
+                              },
+                              "LoggedQueryParameters": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "Gets a list of query parameter names that are not redacted during logging."
+                              }
+                            },
+                            "description": "Gets the client diagnostic options."
+                          },
+                          "DisableChallengeResourceVerification": {
+                            "type": "boolean",
+                            "description": "Gets or sets whether to disable verification that the authentication challenge resource matches the Key Vault domain."
+                          },
+                          "Retry": {
+                            "type": "object",
+                            "properties": {
+                              "Delay": {
+                                "type": "string",
+                                "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                                "description": "The delay between retry attempts for a fixed approach or the delay on which to base calculations for a backoff-based approach. If the service provides a Retry-After response header, the next retry will be delayed by the duration specified by the header value."
+                              },
+                              "MaxDelay": {
+                                "type": "string",
+                                "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                                "description": "The maximum permissible delay between retry attempts when the service does not provide a Retry-After response header. If the service provides a Retry-After response header, the next retry will be delayed by the duration specified by the header value."
+                              },
+                              "MaxRetries": {
+                                "type": "integer",
+                                "description": "The maximum number of retry attempts before giving up."
+                              },
+                              "Mode": {
+                                "enum": [
+                                  "Fixed",
+                                  "Exponential"
+                                ],
+                                "description": "The approach to use for calculating retry delays."
+                              },
+                              "NetworkTimeout": {
+                                "type": "string",
+                                "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                                "description": "The timeout applied to individual network operations."
+                              }
+                            },
+                            "description": "Gets the client retry options."
+                          }
+                        },
+                        "description": "Options that allow you to configure the requests sent to Key Vault."
+                      },
+                      "DisableHealthChecks": {
+                        "type": "boolean",
+                        "description": "Gets or sets a boolean value that indicates whether the Key Vault health check is disabled or not.",
+                        "default": false
+                      },
+                      "DisableTracing": {
+                        "type": "boolean",
+                        "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
+                        "default": false
+                      },
+                      "VaultUri": {
+                        "type": "string",
+                        "format": "uri",
+                        "description": "A 'System.Uri' to the vault on which the client operates. Appears as \"DNS Name\" in the Azure portal. If you have a secret 'System.Uri', use 'Azure.Security.KeyVault.Secrets.KeyVaultSecretIdentifier' to parse the 'Azure.Security.KeyVault.Secrets.KeyVaultSecretIdentifier.VaultUri' and other information. You should validate that this URI references a valid Key Vault resource. See https://aka.ms/azsdk/blog/vault-uri for details."
+                      }
+                    },
+                    "description": "Provides the client configuration settings for connecting to Azure Key Vault."
+                  }
                 }
               }
             }

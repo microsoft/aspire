@@ -5,5 +5,6 @@ using Aspire;
 using Aspire.Seq;
 
 [assembly: ConfigurationSchema("Aspire:Seq", typeof(SeqSettings))]
+[assembly: ConfigurationSchema("Aspire:Seq:*", typeof(SeqSettings))]
 
 [assembly: LoggingCategories("Seq")]

@@ -75,7 +75,35 @@
                   "description": "Gets or sets a integer value that indicates the MongoDB health check timeout in milliseconds."
                 }
               },
-              "description": "Provides the client configuration settings for connecting to a MongoDB database using EntityFrameworkCore."
+              "description": "Provides the client configuration settings for connecting to a MongoDB database using EntityFrameworkCore.",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "ConnectionString": {
+                    "type": "string",
+                    "description": "Gets or sets the connection string of the MongoDB database to connect to."
+                  },
+                  "DatabaseName": {
+                    "type": "string",
+                    "description": "Gets or sets the name of the MongoDB database to connect to."
+                  },
+                  "DisableHealthChecks": {
+                    "type": "boolean",
+                    "description": "Gets or sets a boolean value that indicates whether the MongoDB health check is disabled or not.",
+                    "default": false
+                  },
+                  "DisableTracing": {
+                    "type": "boolean",
+                    "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
+                    "default": false
+                  },
+                  "HealthCheckTimeout": {
+                    "type": "integer",
+                    "description": "Gets or sets a integer value that indicates the MongoDB health check timeout in milliseconds."
+                  }
+                },
+                "description": "Provides the client configuration settings for connecting to a MongoDB database using EntityFrameworkCore."
+              }
             }
           }
         }

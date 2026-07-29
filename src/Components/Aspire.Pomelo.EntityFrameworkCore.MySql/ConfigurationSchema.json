@@ -88,7 +88,45 @@
                       "description": "Gets or sets the server version of the MySQL database to connect to."
                     }
                   },
-                  "description": "Provides the client configuration settings for connecting to a MySQL database using EntityFrameworkCore."
+                  "description": "Provides the client configuration settings for connecting to a MySQL database using EntityFrameworkCore.",
+                  "additionalProperties": {
+                    "type": "object",
+                    "properties": {
+                      "CommandTimeout": {
+                        "type": "integer",
+                        "description": "Gets or sets the time in seconds to wait for the command to execute."
+                      },
+                      "ConnectionString": {
+                        "type": "string",
+                        "description": "Gets or sets the connection string of the MySQL database to connect to."
+                      },
+                      "DisableHealthChecks": {
+                        "type": "boolean",
+                        "description": "Gets or sets a boolean value that indicates whether the database health check is disabled or not.",
+                        "default": false
+                      },
+                      "DisableMetrics": {
+                        "type": "boolean",
+                        "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry metrics are disabled or not.",
+                        "default": false
+                      },
+                      "DisableRetry": {
+                        "type": "boolean",
+                        "description": "Gets or sets whether retries should be disabled.",
+                        "default": false
+                      },
+                      "DisableTracing": {
+                        "type": "boolean",
+                        "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
+                        "default": false
+                      },
+                      "ServerVersion": {
+                        "type": "string",
+                        "description": "Gets or sets the server version of the MySQL database to connect to."
+                      }
+                    },
+                    "description": "Provides the client configuration settings for connecting to a MySQL database using EntityFrameworkCore."
+                  }
                 }
               }
             }

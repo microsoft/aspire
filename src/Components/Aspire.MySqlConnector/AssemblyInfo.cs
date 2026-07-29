@@ -5,6 +5,7 @@ using Aspire.MySqlConnector;
 using Aspire;
 
 [assembly: ConfigurationSchema("Aspire:MySqlConnector", typeof(MySqlConnectorSettings))]
+[assembly: ConfigurationSchema("Aspire:MySqlConnector:*", typeof(MySqlConnectorSettings))]
 
 [assembly: LoggingCategories(
     "MySqlConnector",
