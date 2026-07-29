@@ -299,12 +299,16 @@ public sealed class ResourceMenuBuilder
 
         MenuButtonItem CreateMenuItem(CommandViewModel command)
         {
+            DeckIconName? icon = !string.IsNullOrEmpty(command.IconName)
+                && ResourceIconHelpers.TryGetDeckIcon(command.IconName, out var commandIcon)
+                    ? commandIcon
+                    : null;
+
             return new MenuButtonItem
             {
                 Text = command.GetDisplayName(),
                 Tooltip = command.GetDisplayDescription(),
-                FluentIconName = command.IconName,
-                FluentIconVariant = command.IconVariant,
+                Icon = icon,
                 OnClick = () => commandSelected.InvokeAsync(command),
                 IsDisabled = command.State == CommandViewModelState.Disabled || isCommandExecuting(resource, command)
             };

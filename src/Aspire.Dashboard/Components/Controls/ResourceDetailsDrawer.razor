@@ -173,11 +173,7 @@
                         disabled="@(command.State == CommandViewModelState.Disabled)"
                         title="@(command.GetDisplayDescription() ?? command.GetDisplayName())"
                         @onclick="() => OnExecuteCommand.InvokeAsync((Resource, command))">
-                    @if (!string.IsNullOrEmpty(command.IconName))
-                    {
-                        <DynamicFluentIcon IconName="@command.IconName" IconVariant="command.IconVariant" />
-                    }
-                    else if (CommandIcon(command.Name) is { } icon)
+                    @if (CommandIcon(command) is { } icon)
                     {
                         <DeckIcon Name="icon" Size="15" />
                     }
@@ -235,8 +231,14 @@
             _ => "neutral"
         };
 
-    private static DeckIconName? CommandIcon(string name)
+    private static DeckIconName? CommandIcon(CommandViewModel command)
     {
+        if (!string.IsNullOrEmpty(command.IconName) && ResourceIconHelpers.TryGetDeckIcon(command.IconName, out var commandIcon))
+        {
+            return commandIcon;
+        }
+
+        var name = command.Name;
         if (name.Contains("start", StringComparison.OrdinalIgnoreCase))
         {
             return DeckIconName.Play;

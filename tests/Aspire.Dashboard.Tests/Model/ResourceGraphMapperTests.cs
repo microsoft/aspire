@@ -2,21 +2,19 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Immutable;
+using Aspire.Dashboard.Components.Deck;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.ResourceGraph;
 using Aspire.Dashboard.Resources;
 using Aspire.Tests.Shared.DashboardModel;
-using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Aspire.Dashboard.Tests.Model;
 
 public class ResourceGraphMapperTests
 {
-    private static IconResolver IconResolver { get; } = new(NullLogger<IconResolver>.Instance);
-
     [Fact]
-    public void MapResource_CustomIcon_PreservesNameAndVariant()
+    public void MapResource_CustomIcon_MapsToDeckIcon()
     {
         var resource = ModelTestHelpers.CreateResource(
             "app1",
@@ -27,12 +25,9 @@ public class ResourceGraphMapperTests
             [resource.Name] = resource,
         };
 
-        var dto = ResourceGraphMapper.MapResource(resource, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, IconResolver);
+        var dto = ResourceGraphMapper.MapResource(resource, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false);
 
-        Assert.True(dto.ResourceIcon.UsesFill);
-        Assert.Equal("Server", dto.ResourceIcon.Name);
-        Assert.Equal("regular", dto.ResourceIcon.Variant);
-        Assert.False(string.IsNullOrEmpty(dto.ResourceIcon.Svg));
+        Assert.Equal(DeckIconData.GetInnerMarkup(DeckIconName.Server), dto.ResourceIcon.Svg);
     }
 
     [Fact]
@@ -48,7 +43,7 @@ public class ResourceGraphMapperTests
         };
 
         // Act
-        var dto = ResourceGraphMapper.MapResource(resource1, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, IconResolver);
+        var dto = ResourceGraphMapper.MapResource(resource1, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false);
 
         // Assert
         var referencedName = Assert.Single(dto.ReferencedNames);
@@ -70,7 +65,7 @@ public class ResourceGraphMapperTests
         };
 
         // Act
-        var dto = ResourceGraphMapper.MapResource(resource1, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, IconResolver);
+        var dto = ResourceGraphMapper.MapResource(resource1, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false);
 
         // Assert
         Assert.Collection(dto.ReferencedNames,
@@ -89,7 +84,7 @@ public class ResourceGraphMapperTests
         };
 
         // Act
-        var dto = ResourceGraphMapper.MapResource(resource, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, IconResolver);
+        var dto = ResourceGraphMapper.MapResource(resource, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false);
 
         // Assert
         Assert.Empty(dto.ReferencedNames);
@@ -108,7 +103,7 @@ public class ResourceGraphMapperTests
         };
 
         // Act
-        var dto = ResourceGraphMapper.MapResource(resource1, resources, new TestStringLocalizer<Columns>(), showHiddenResources: true, IconResolver);
+        var dto = ResourceGraphMapper.MapResource(resource1, resources, new TestStringLocalizer<Columns>(), showHiddenResources: true);
 
         // Assert
         Assert.Contains("hidden-app", dto.ReferencedNames);
@@ -129,7 +124,7 @@ public class ResourceGraphMapperTests
         };
 
         // Act
-        var dto = ResourceGraphMapper.MapResource(resource, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, IconResolver);
+        var dto = ResourceGraphMapper.MapResource(resource, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false);
 
         // Assert
         Assert.Null(dto.EndpointUrl);
@@ -151,7 +146,7 @@ public class ResourceGraphMapperTests
         };
 
         // Act
-        var dto = ResourceGraphMapper.MapResource(resource, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, IconResolver);
+        var dto = ResourceGraphMapper.MapResource(resource, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false);
 
         // Assert - non-parameter resources should always have endpoint text (even if "No endpoints")
         Assert.NotNull(dto.EndpointText);

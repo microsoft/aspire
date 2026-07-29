@@ -12,7 +12,6 @@ using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Tests;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 
@@ -177,7 +176,6 @@ internal static class FluentUISetupHelpers
         context.Services.AddSingleton<ThemeManager>(themeManager ?? new ThemeManager(new TestThemeResolver()));
         context.Services.AddSingleton<GlobalState>();
         context.Services.AddSingleton<DimensionManager>();
-        context.Services.AddSingleton(new IconResolver(NullLogger<IconResolver>.Instance));
         context.Services.AddSingleton(TimeProvider.System);
         context.Services.AddSingleton<INotificationService, NotificationService>();
         context.Services.AddScoped<DashboardDialogService>();

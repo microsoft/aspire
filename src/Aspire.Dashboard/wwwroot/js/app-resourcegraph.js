@@ -257,13 +257,7 @@ class ResourceGraph {
     }
 
     iconEqual(i1, i2) {
-        if (i1.path !== i2.path) {
-            return false;
-        }
         if (i1.svg !== i2.svg) {
-            return false;
-        }
-        if (i1.usesFill !== i2.usesFill || i1.name !== i2.name || i1.variant !== i2.variant) {
             return false;
         }
         if (i1.color !== i2.color) {
@@ -341,11 +335,7 @@ class ResourceGraph {
 
         function createIcon(resourceIcon) {
             return {
-                path: resourceIcon.path,
                 svg: resourceIcon.svg,
-                usesFill: resourceIcon.usesFill,
-                name: resourceIcon.name,
-                variant: resourceIcon.variant,
                 color: resourceIcon.color,
                 tooltip: resourceIcon.tooltip
             };
@@ -424,14 +414,12 @@ class ResourceGraph {
         // used for the state icon), so render their inner markup into a group via innerHTML and stroke it.
         var iconGroup = iconTransform
             .append("g")
-            .attr("fill", n => n.resourceIcon.usesFill ? n.resourceIcon.color : "none")
+            .attr("fill", "none")
             .attr("stroke-linecap", "round")
-            .attr("stroke-linejoin", "round")
-            .attr("data-icon-name", n => n.resourceIcon.name)
-            .attr("data-icon-variant", n => n.resourceIcon.variant);
+            .attr("stroke-linejoin", "round");
         iconGroup
             .html(n => n.resourceIcon.svg)
-            .attr("stroke", n => n.resourceIcon.usesFill ? "none" : n.resourceIcon.color);
+            .attr("stroke", n => n.resourceIcon.color);
         iconGroup
             .append("title")
             .text(n => n.resourceIcon.tooltip);
