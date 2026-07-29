@@ -2,22 +2,18 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text;
+using Aspire.Dashboard.Components.Deck;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Resources;
 using Markdig.Renderers;
 using Markdig.Renderers.Html;
 using Markdig.Syntax;
 using Microsoft.Extensions.Localization;
-using Microsoft.FluentUI.AspNetCore.Components;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Model.Markdown;
 
 public class HighlightedCodeBlockRenderer : HtmlObjectRenderer<CodeBlock>
 {
-    private static readonly Icon s_copyIcon = new Icons.Regular.Size16.Copy();
-    private static readonly Icon s_checkmarkIcon = new Icons.Regular.Size16.Checkmark();
-
     private readonly IStringLocalizer<ControlsStrings> _loc;
 
     public HighlightedCodeBlockRenderer(IStringLocalizer<ControlsStrings> loc)
@@ -102,10 +98,10 @@ public class HighlightedCodeBlockRenderer : HtmlObjectRenderer<CodeBlock>
         renderer.WriteAttributes(copyButtonAttributes);
         renderer.Writer.Write('>');
         renderer.Writer.Write(@"<div class=""copy-icon"">");
-        renderer.Writer.Write(ToMarkup(s_copyIcon));
+        renderer.Writer.Write(ToMarkup(DeckIconName.Copy));
         renderer.Writer.Write("</div>");
         renderer.Writer.Write(@"<div class=""checkmark-icon"" style=""display:none;"">");
-        renderer.Writer.Write(ToMarkup(s_checkmarkIcon));
+        renderer.Writer.Write(ToMarkup(DeckIconName.Checkmark));
         renderer.Writer.Write("</div>");
         renderer.Writer.Write("</button>");
         renderer.Writer.Write("</div>");
@@ -147,10 +143,9 @@ public class HighlightedCodeBlockRenderer : HtmlObjectRenderer<CodeBlock>
         return sb.ToString();
     }
 
-    public static string ToMarkup(Icon icon)
+    public static string ToMarkup(DeckIconName icon)
     {
-        var sizePx = (int)icon.Size;
-        var size = $"{sizePx}px";
-        return $@"<svg viewBox=""0 0 {sizePx} {sizePx}"" width=""{size}"" fill=""var(--accent-fill-rest)"" style=""width: {size};"" aria-hidden=""true"">{icon.Content}</svg>";
+        const int Size = 16;
+        return $@"<svg viewBox=""0 0 24 24"" width=""{Size}px"" height=""{Size}px"" fill=""none"" stroke=""var(--accent-fill-rest)"" stroke-width=""1.8"" stroke-linecap=""round"" stroke-linejoin=""round"" aria-hidden=""true"">{DeckIconData.GetInnerMarkup(icon)}</svg>";
     }
 }
