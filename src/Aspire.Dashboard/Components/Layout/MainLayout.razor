@@ -1,5 +1,4 @@
-﻿@using Aspire.Dashboard.Components.CustomIcons
-@using Aspire.Dashboard.Components.Interactions
+﻿@using Aspire.Dashboard.Components.Interactions
 @using Aspire.Dashboard.Components.Dialogs
 @using Aspire.Dashboard.Resources
 @inject IStringLocalizer<Dialogs> DialogsLoc
@@ -47,7 +46,7 @@ else
             <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo"
                           title="@Loc[nameof(Layout.MainLayoutAspire)]"
                           aria-label="@Loc[nameof(Layout.MainLayoutAspire)]">
-                <FluentIcon Value="@(new AspireIcons.Size24.Logo())"/>
+                <AspireLogo />
             </FluentAnchor>
         </div>
 

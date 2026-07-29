@@ -17,20 +17,10 @@
         <FluentMenuItem OnClick="@(async () => { CloseNavMenu(); await item.OnClick(); })" Class="@(isActive ? "mobile-nav-menu-item-active" : null)" Style="height: 40px; width: 100vw; margin-bottom: 6px;" AdditionalAttributes="@menuItemAttributes">
             <span>@item.Text</span>
 
-            @{
-                var renderedIcon = isActive ? item.ActiveIcon ?? item.Icon : item.Icon;
-            }
-            @if (renderedIcon is { } icon)
+            @if (item.Icon is { } icon)
             {
                 <span slot="start" class="@(isActive ? "mobile-nav-menu-icon-active" : null)">
-                    @if (isActive)
-                    {
-                        <FluentIcon Class="align-text-bottom" Value="@icon" Slot="start" CustomColor="var(--accent-foreground-active)" Color="Color.Custom"/>
-                    }
-                    else
-                    {
-                        <FluentIcon Class="align-text-bottom" Value="@icon" Slot="start" Color="Color.Neutral" />
-                    }
+                    <DeckIcon Name="@icon" Size="24" />
                 </span>
             }
         </FluentMenuItem>

@@ -2,12 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.RegularExpressions;
-using Aspire.Dashboard.Components.CustomIcons;
+using Aspire.Dashboard.Components.Deck;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.JSInterop;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Layout;
 
@@ -38,16 +37,14 @@ public partial class MobileNavMenu : ComponentBase
             yield return new MobileNavMenuEntry(
                 Loc[nameof(Resources.Layout.NavMenuResourcesTab)],
                 () => NavigateToAsync(DashboardUrls.ResourcesUrl()),
-                DesktopNavMenu.ResourcesIcon(),
-                ActiveIcon: DesktopNavMenu.ResourcesIcon(active: true),
+                DeckIconName.Resources,
                 LinkMatchRegex: GetIndexPageRegex(DashboardUrls.ResourcesUrl())
             );
 
             yield return new MobileNavMenuEntry(
                 Loc[nameof(Resources.Layout.NavMenuConsoleLogsTab)],
                 () => NavigateToAsync(DashboardUrls.ConsoleLogsUrl()),
-                DesktopNavMenu.ConsoleLogsIcon(),
-                ActiveIcon: DesktopNavMenu.ConsoleLogsIcon(active: true),
+                DeckIconName.Console,
                 LinkMatchRegex: GetNonIndexPageRegex(DashboardUrls.ConsoleLogsUrl())
             );
         }
@@ -55,24 +52,21 @@ public partial class MobileNavMenu : ComponentBase
         yield return new MobileNavMenuEntry(
             Loc[nameof(Resources.Layout.NavMenuStructuredLogsTab)],
             () => NavigateToAsync(DashboardUrls.StructuredLogsUrl()),
-            DesktopNavMenu.StructuredLogsIcon(),
-            ActiveIcon: DesktopNavMenu.StructuredLogsIcon(active: true),
+            DeckIconName.Logs,
             LinkMatchRegex: GetNonIndexPageRegex(DashboardUrls.StructuredLogsUrl())
         );
 
         yield return new MobileNavMenuEntry(
             Loc[nameof(Resources.Layout.NavMenuTracesTab)],
             () => NavigateToAsync(DashboardUrls.TracesUrl()),
-            DesktopNavMenu.TracesIcon(),
-            ActiveIcon: DesktopNavMenu.TracesIcon(active: true),
+            DeckIconName.Traces,
             LinkMatchRegex: GetNonIndexPageRegex(DashboardUrls.TracesUrl())
         );
 
         yield return new MobileNavMenuEntry(
             Loc[nameof(Resources.Layout.NavMenuMetricsTab)],
             () => NavigateToAsync(DashboardUrls.MetricsUrl()),
-            DesktopNavMenu.MetricsIcon(),
-            ActiveIcon: DesktopNavMenu.MetricsIcon(active: true),
+            DeckIconName.Metrics,
             LinkMatchRegex: GetNonIndexPageRegex(DashboardUrls.MetricsUrl())
         );
 
@@ -82,13 +76,13 @@ public partial class MobileNavMenu : ComponentBase
             {
                 await JS.InvokeVoidAsync("open", ["https://aka.ms/aspire/repo", "_blank"]);
             },
-            new AspireIcons.Size24.GitHub()
+            DeckIconName.GitHub
         );
 
         yield return new MobileNavMenuEntry(
             Loc[nameof(Resources.Layout.MainLayoutAspireDashboardHelpLink)],
             LaunchHelpAsync,
-            new Icons.Regular.Size24.QuestionCircle()
+            DeckIconName.Help
         );
 
         if (IsAgentHelpEnabled)
@@ -96,20 +90,20 @@ public partial class MobileNavMenu : ComponentBase
             yield return new MobileNavMenuEntry(
                 Loc[nameof(Resources.Layout.MainLayoutLaunchAIAgents)],
                 LaunchAIAgentsAsync,
-                new Icons.Regular.Size24.BotSparkle()
+                DeckIconName.Sparkle
             );
         }
 
         yield return new MobileNavMenuEntry(
             Loc[nameof(Resources.Layout.MainLayoutLaunchNotifications)],
             LaunchNotificationsAsync,
-            new Icons.Regular.Size24.Alert()
+            DeckIconName.Bell
         );
 
         yield return new MobileNavMenuEntry(
             Loc[nameof(Resources.Layout.MainLayoutLaunchSettings)],
             LaunchSettingsAsync,
-            new Icons.Regular.Size24.Settings()
+            DeckIconName.Settings
         );
     }
 
