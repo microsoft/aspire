@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { getCommandInvocationCount, getResources, getTerminalCommandCount, getTreeAppHostLabel, isSamePath, waitForCommandOutcome, waitForDashboardUrl, waitForExtensionState, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
 import { executeE2eControlCommand, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, writeStreamingDiscoveryCliWrapper } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
-import { cancelActiveInput, clickTreeItem, executeCommandFromPalette, openAspireView, waitForTreeItem } from './helpers/vscode';
+import { cancelActiveInput, clickTreeItem, executeCommandFromPalette, openAspireView, waitForTreeItem, waitForWorkbenchText } from './helpers/vscode';
 
 suite('Aspire AppHost tree E2E', function () {
     this.timeout(240000);
@@ -39,6 +39,17 @@ suite('Aspire AppHost tree E2E', function () {
         await setE2eCliPathForE2E(writeStreamingDiscoveryCliWrapper());
         const invocationCountBefore = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
         await executeE2eControlCommand({ name: 'refreshAppHosts' }, { waitFor: 'started' });
+
+        const loadingState = await waitForExtensionState(
+            file => file.state.isRepositoryLoading
+                && file.state.isWorkspaceAppHostDiscoveryComplete === false
+                && file.state.workspaceAppHostPath === undefined
+                && file.state.workspaceAppHostCandidatePaths.length === 0,
+            'workspace AppHost refresh loading state',
+            30000);
+        assert.strictEqual(loadingState.state.isRepositoryLoading, true);
+        const loadingText = await waitForWorkbenchText('Searching for AppHosts...', 30000);
+        assert.ok(!loadingText.includes('No Aspire AppHosts detected in this workspace.'));
 
         const partialState = await waitForExtensionState(
             file => file.state.isWorkspaceAppHostDiscoveryComplete === false &&

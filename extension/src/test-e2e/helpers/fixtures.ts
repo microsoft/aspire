@@ -207,7 +207,7 @@ export function writeConfigInfoUnsupportedCliWrapper(name = 'aspire-no-config-in
     });
 }
 
-export function writeStreamingDiscoveryCliWrapper(delayMs = 5_000): string {
+export function writeStreamingDiscoveryCliWrapper(delayMs = 5_000, initialDelayMs = 1_500): string {
     return writeCliWrapper('aspire-streaming-discovery', {
         streamedLsCandidate: {
             path: getPrimaryAppHostProjectPath(),
@@ -216,6 +216,7 @@ export function writeStreamingDiscoveryCliWrapper(delayMs = 5_000): string {
             selected: true,
         },
         streamedLsDelayMs: delayMs,
+        streamedLsInitialDelayMs: initialDelayMs,
     });
 }
 
@@ -654,6 +655,7 @@ function writeCliWrapper(
         configInfoStderr?: string;
         streamedLsCandidate?: unknown;
         streamedLsDelayMs?: number;
+        streamedLsInitialDelayMs?: number;
     },
 ): string {
     const wrapperDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers');
@@ -686,8 +688,10 @@ ${options.streamedLsCandidate === undefined
     process.exit(126);
   }
 
-  console.log(${JSON.stringify(JSON.stringify(options.streamedLsCandidate))});
-  setTimeout(() => process.exit(0), ${options.streamedLsDelayMs ?? 5_000});
+  setTimeout(() => {
+    console.log(${JSON.stringify(JSON.stringify(options.streamedLsCandidate))});
+    setTimeout(() => process.exit(0), ${options.streamedLsDelayMs ?? 5_000});
+  }, ${options.streamedLsInitialDelayMs ?? 0});
 }
 else {`}
 const result = spawnSync(realCli, args, {

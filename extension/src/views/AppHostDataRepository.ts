@@ -287,10 +287,8 @@ export class AppHostDataRepository {
         this._workspaceFoldersChangeDisposable = vscode.workspace.onDidChangeWorkspaceFolders(() => {
             this._stopAllDescribes();
             this._stopPolling();
-            this._workspaceAppHostDiscoveryComplete = false;
-            this._clearWorkspaceAppHostDiscovery();
+            this._markWorkspaceAppHostDiscoveryPending();
             this._clearErrors();
-            this._updateWorkspaceContext();
             this._syncPolling();
             this._fetchWorkspaceAppHost({ forceRefresh: true });
         });
@@ -778,10 +776,10 @@ export class AppHostDataRepository {
 
     private _markWorkspaceAppHostDiscoveryPending(): void {
         this._workspaceAppHostDiscoveryComplete = false;
-        if (this._workspaceAppHostPath === undefined && this._workspaceAppHostCandidatePaths.length === 0) {
-            this._loadingWorkspace = true;
-            this._updateLoadingContext();
-        }
+        this._clearWorkspaceAppHostDiscovery();
+        this._loadingWorkspace = true;
+        this._updateLoadingContext();
+        this._updateWorkspaceContext({ clearLoading: false });
     }
 
     private _handleWorkspaceAppHostCandidates(appHostCandidates: readonly AppHostCandidate[], selectedAppHostPath: string | null): void {

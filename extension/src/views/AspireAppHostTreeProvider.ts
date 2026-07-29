@@ -988,6 +988,10 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
     private _getWorkspaceChildren(element?: TreeElement): TreeElement[] {
         if (!element) {
+            if (this._repository.isLoading) {
+                return [];
+            }
+
             const workspaceResources = [...this._repository.workspaceResources];
             const workspaceAppHost = this._repository.workspaceAppHost;
             const workspaceCandidatePaths = this._repository.workspaceAppHostCandidatePaths ?? [];

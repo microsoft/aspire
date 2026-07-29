@@ -3277,7 +3277,7 @@ suite('AppHostDataRepository', () => {
         }
     });
 
-    test('workspace discovery change keeps stale selection until streamed replacements arrive', async () => {
+    test('workspace discovery change shows loading until the first streamed candidate replaces it', async () => {
         const workspaceFolder = {
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
@@ -3309,24 +3309,26 @@ suite('AppHostDataRepository', () => {
             dispose: () => { },
         };
         const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
-
         try {
             await waitForCondition(() => repository.workspaceAppHostPath === oldCandidate.path, 'initial workspace discovery did not apply');
             assert.strictEqual(repository.workspaceAppHostName, 'AppHost.csproj');
+            repository.activate();
+            repository.setPanelVisible(true);
 
             discoveryChanges.fire(workspaceFolder);
             await waitForCondition(() => discoverStub.callCount === 2, 'workspace rediscovery did not start');
 
-            assert.strictEqual(repository.workspaceAppHostPath, oldCandidate.path);
-            assert.strictEqual(repository.workspaceAppHostName, 'AppHost.csproj');
-            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, [oldCandidate.path]);
+            assert.strictEqual(repository.isLoading, true);
+            assert.strictEqual(repository.workspaceAppHostPath, undefined);
+            assert.strictEqual(repository.workspaceAppHostName, undefined);
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, []);
             assert.ok(secondDiscoveryCallback);
 
             secondDiscoveryCallback(newCandidate);
 
+            assert.strictEqual(repository.isLoading, false);
             assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, [newCandidate.path]);
-            assert.strictEqual(repository.workspaceAppHostPath, oldCandidate.path);
-            assert.strictEqual(repository.workspaceAppHostName, 'AppHost.csproj');
+            assert.strictEqual(repository.workspaceAppHostPath, undefined);
 
             secondDiscovery.resolve([newCandidate]);
             await waitForCondition(() => repository.workspaceAppHostPath === newCandidate.path, 'replacement workspace discovery did not apply');
