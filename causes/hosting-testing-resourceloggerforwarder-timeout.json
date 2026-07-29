@@ -1,0 +1,17 @@
+{
+  "id": "hosting-testing-resourceloggerforwarder-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: ResourceLoggerForwarderServiceTests.ExecuteDoesNotThrowOperationCanceledWhenAppStoppingTokenSignaled times out intermittently on Windows",
+  "test_name": "Aspire.Hosting.Testing.Tests.ResourceLoggerForwarderServiceTests.ExecuteDoesNotThrowOperationCanceledWhenAppStoppingTokenSignaled",
+  "error_pattern": "System.TimeoutException : The operation has timed out.\n   at Aspire.Hosting.Testing.Tests.ResourceLoggerForwarderServiceTests.ExecuteDoesNotThrowOperationCanceledWhenAppStoppingTokenSignaled() in /_/tests/Aspire.Hosting.Testing.Tests/ResourceLoggerForwarderServiceTests.cs:line 59",
+  "occurrences": [
+    {
+      "run_id": 30416905407,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/30416905407",
+      "job": "Tests / Hosting.Testing / Hosting.Testing (windows-latest)",
+      "pr_number": 18561,
+      "observed_at": "2026-07-29T03:01:22Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/18921"
+}

@@ -1,0 +1,58 @@
+{
+  "run_id": 30416905407,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/30416905407",
+  "analyzed_at": "2026-07-29T03:01:22Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 18561,
+    "title": "Stop AppHost debug session before Aspire parent",
+    "author": "adamint",
+    "state": "closed",
+    "head_branch": "adamint/daily-queue-20260629-issue18524-flaky",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18561"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.Testing / Hosting.Testing (windows-latest)",
+      "id": 90465547524,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/30416905407/job/90465547524",
+      "classification": "flaky-test",
+      "reason": "ExecuteDoesNotThrowOperationCanceledWhenAppStoppingTokenSignaled timed out with System.TimeoutException. This test is in Aspire.Hosting.Testing.Tests which is unrelated to the PR's TypeScript extension changes.",
+      "failed_steps": ["Run tests (Windows)"]
+    },
+    {
+      "name": "Tests / Azure.AI.OpenAI / Azure.AI.OpenAI (windows-latest)",
+      "id": 90465555050,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/30416905407/job/90465555050",
+      "classification": "flaky-test",
+      "reason": "TracingEnablesTheRightActivitySource_Keyed failed with RemoteExecutionException 'Half-way through waiting for remote process'. The remote executor timed out due to Azure Identity credential failures (no credentials available on the runner), causing the remote process to hang. This is unrelated to the PR's TypeScript extension changes.",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Testing.Tests.ResourceLoggerForwarderServiceTests.ExecuteDoesNotThrowOperationCanceledWhenAppStoppingTokenSignaled",
+      "job": "Tests / Hosting.Testing / Hosting.Testing (windows-latest)",
+      "error": "System.TimeoutException : The operation has timed out.",
+      "stack_trace": "at Aspire.Hosting.Testing.Tests.ResourceLoggerForwarderServiceTests.ExecuteDoesNotThrowOperationCanceledWhenAppStoppingTokenSignaled() in /_/tests/Aspire.Hosting.Testing.Tests/ResourceLoggerForwarderServiceTests.cs:line 59",
+      "classification": "flaky",
+      "reason": "Timing-sensitive test that timed out intermittently on Windows runner. The PR only modifies VS Code extension TypeScript files, not anything in Hosting.Testing."
+    },
+    {
+      "name": "Aspire.Azure.AI.OpenAI.Tests.ConformanceTests.TracingEnablesTheRightActivitySource_Keyed",
+      "job": "Tests / Azure.AI.OpenAI / Azure.AI.OpenAI (windows-latest)",
+      "error": "Microsoft.DotNet.RemoteExecutor.RemoteExecutionException : Half-way through waiting for remote process.\nMemory load: 21",
+      "stack_trace": "at Microsoft.DotNet.RemoteExecutor.RemoteInvokeHandle.Dispose(Boolean disposing) in /_/src/Microsoft.DotNet.RemoteExecutor/src/RemoteInvokeHandle.cs:line 225\n   at Microsoft.DotNet.RemoteExecutor.RemoteInvokeHandle.Dispose() in /_/src/Microsoft.DotNet.RemoteExecutor/src/RemoteInvokeHandle.cs:line 55\n   at Aspire.Components.ConformanceTests.ConformanceTests`2.RemoteInvokeWithLogging(...) in /_/tests/Aspire.Components.Common.TestUtilities/ConformanceTests.cs:line 636\n   at Aspire.Azure.AI.OpenAI.Tests.ConformanceTests.TracingEnablesTheRightActivitySource_Keyed() in /_/tests/Aspire.Azure.AI.OpenAI.Tests/ConformanceTests.cs:line 96",
+      "classification": "flaky",
+      "reason": "Remote executor process hung while Azure Identity attempted and failed all credential providers (VisualStudio, AzureCLI, AzurePowerShell, AzureDeveloperCLI) causing the remote process to stall until the executor timed out. This is an environmental/infrastructure issue on the Windows runner, unrelated to the PR's TypeScript extension changes."
+    }
+  ],
+  "causes": [
+    "hosting-testing-resourceloggerforwarder-timeout",
+    "azure-openai-conformance-tracing-remoteexecutor-timeout"
+  ]
+}

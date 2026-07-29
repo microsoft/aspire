@@ -1,0 +1,17 @@
+{
+  "id": "azure-openai-conformance-tracing-remoteexecutor-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: ConformanceTests.TracingEnablesTheRightActivitySource_Keyed remote executor hangs due to Azure Identity credential failures on Windows runner",
+  "test_name": "Aspire.Azure.AI.OpenAI.Tests.ConformanceTests.TracingEnablesTheRightActivitySource_Keyed",
+  "error_pattern": "Microsoft.DotNet.RemoteExecutor.RemoteExecutionException : Half-way through waiting for remote process.\n   at Microsoft.DotNet.RemoteExecutor.RemoteInvokeHandle.Dispose(Boolean disposing)\n   at Aspire.Azure.AI.OpenAI.Tests.ConformanceTests.TracingEnablesTheRightActivitySource_Keyed()\nCaused by: Azure.Identity.CredentialUnavailableException: DefaultAzureCredential failed to retrieve a token - AzureCliCredential authentication failed: Azure CLI authentication timed out. AzurePowerShellCredential authentication failed: Azure PowerShell authentication timed out.",
+  "occurrences": [
+    {
+      "run_id": 30416905407,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/30416905407",
+      "job": "Tests / Hosting.Testing / Hosting.Testing (windows-latest)",
+      "pr_number": 18561,
+      "observed_at": "2026-07-29T03:01:22Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/18920"
+}
