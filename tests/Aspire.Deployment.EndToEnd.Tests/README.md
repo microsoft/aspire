@@ -331,4 +331,3 @@ The test Azure tenant/subscription rotates approximately every 90 days per polic
 6. Ensure regional quotas per [Azure Subscription Quota Requirements](#azure-subscription-quota-requirements): Container Apps and App Service in `westus3`, and AKS in `centralus` (`StandardDSv5Family` vCPUs, Total Regional vCPUs, and managed clusters). The CI workflow self-heals the compute vCPU quotas (family and regional total); the managed-cluster count is not covered by the Microsoft.Quota API, so a new subscription may still need a manual portal/support request.
 
 See [Deployment Testing Documentation](../../docs/deployment-testing.md) for detailed rotation procedures.
-
