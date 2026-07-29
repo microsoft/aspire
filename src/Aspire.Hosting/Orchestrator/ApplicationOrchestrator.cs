@@ -108,25 +108,35 @@ internal sealed class ApplicationOrchestrator
         // Wait for either dependencies to be ready or for someone to move the resource out of a waiting state.
         // This happens when resource start command is run, which forces the status to "Starting".
         //
-        // The resource has to be observed in "Waiting" before a non-"Waiting" state
-        // counts as the release signal. Otherwise, a simple check for "state is not Waiting" could be satisfied
-        // by the very first replayed event whenever the resource never entered "Waiting", which would result in
-        // the wait being silently abandoned and resource being started with unmet dependencies.
-        var seenWaiting = false;
+        // A resource instance has to be observed in "Waiting" first, and then leave it, for a non-"Waiting" state
+        // to count as the release signal. The tracking is per resource id because WaitForResourceAsync only
+        // filters on the model resource name, so this predicate is fed events for every replica. Both halves
+        // of the condition matter:
+        //   - Without "was seen waiting", the very first replayed event of a resource that never entered
+        //     "Waiting" satisfies the predicate, and the resource starts with unmet dependencies.
+        //   - Without the per-id scoping, a sibling replica reporting a non-"Waiting" state releases a wait that
+        //     nobody asked to be released. The rebuild command relies on this: it moves non-waiting replicas to
+        //     "Building" while intentionally leaving waiting replicas alone, precisely so that waiting replicas
+        //     don't get unblocked and launch the old binary mid-build (see CommandsConfigurationExtensions).
+        //
+        // The wait itself is still per BeforeResourceStartedEvent rather than per replica, because the event
+        // does not carry the DCP resource id. Force-starting any replica that was waiting therefore releases
+        // the wait for the whole resource.
+        //
+        // No synchronization is needed for the set: WaitForResourceAsync evaluates the predicate from a single
+        // sequential consumer loop.
+        var waitingResourceIds = new HashSet<string>(StringComparers.ResourceName);
         var waitForNonWaitingStateTask = _notificationService.WaitForResourceAsync(
             @event.Resource.Name,
             e =>
             {
-                var isWaiting = e.Snapshot.State?.Text == KnownResourceStates.Waiting;
-                if (isWaiting)
+                if (e.Snapshot.State?.Text == KnownResourceStates.Waiting)
                 {
-                    seenWaiting = true;
+                    waitingResourceIds.Add(e.ResourceId);
                     return false;
                 }
-                else
-                {
-                    return seenWaiting;
-                }
+
+                return waitingResourceIds.Contains(e.ResourceId);
             },
             cts.Token);
 
@@ -202,27 +212,27 @@ internal sealed class ApplicationOrchestrator
 
                 break;
             case KnownResourceTypes.Container:
+            {
+                var (displayName, isHighlighted, sortOrder) = ResourcePropertySnapshotMetadata.Get(KnownResourceTypes.Container, KnownProperties.Container.Image);
+                var imageName = context.Resource.TryGetContainerImageName(out var resolvedImageName) ? resolvedImageName : "";
+
+                await PublishUpdateAsync(_notificationService, context.Resource, context.DcpResourceName, s => s with
                 {
-                    var (displayName, isHighlighted, sortOrder) = ResourcePropertySnapshotMetadata.Get(KnownResourceTypes.Container, KnownProperties.Container.Image);
-                    var imageName = context.Resource.TryGetContainerImageName(out var resolvedImageName) ? resolvedImageName : "";
+                    State = KnownResourceStates.Starting,
+                    Properties = s.Properties.SetResourceProperty(
+                        KnownProperties.Container.Image,
+                        imageName,
+                        displayName: displayName,
+                        isHighlighted: isHighlighted,
+                        sortOrder: sortOrder),
+                    HealthReports = GetInitialHealthReports(context.Resource)
+                })
+                .ConfigureAwait(false);
 
-                    await PublishUpdateAsync(_notificationService, context.Resource, context.DcpResourceName, s => s with
-                    {
-                        State = KnownResourceStates.Starting,
-                        Properties = s.Properties.SetResourceProperty(
-                            KnownProperties.Container.Image,
-                            imageName,
-                            displayName: displayName,
-                            isHighlighted: isHighlighted,
-                            sortOrder: sortOrder),
-                        HealthReports = GetInitialHealthReports(context.Resource)
-                    })
-                    .ConfigureAwait(false);
-
-                    Debug.Assert(context.DcpResourceName is not null, "Container that is starting should always include the DCP name.");
-                    await SetChildResourceAsync(context.Resource, state: KnownResourceStates.Starting, startTimeStamp: null, stopTimeStamp: null).ConfigureAwait(false);
-                    break;
-                }
+                Debug.Assert(context.DcpResourceName is not null, "Container that is starting should always include the DCP name.");
+                await SetChildResourceAsync(context.Resource, state: KnownResourceStates.Starting, startTimeStamp: null, stopTimeStamp: null).ConfigureAwait(false);
+                break;
+            }
             default:
                 break;
         }

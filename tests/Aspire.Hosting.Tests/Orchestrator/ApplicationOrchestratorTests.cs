@@ -612,14 +612,15 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task ResourceWaitingOnSelfDrivenResourceWaitsForItToStart()
     {
-        // The reciprocal of SelfDrivenResourceWaitsForDependencyBeforeStarting: the dependency is the
-        // resource that drives its own startup. https://github.com/microsoft/aspire/issues/17453
+        // The reciprocal of SelfDrivenResourceWaitsForDependencyBeforeStarting: the dependency is the resource
+        // that drives its own startup, while the waiter is a regular DCP-managed resource that the orchestrator
+        // starts through OnResourceStarting. https://github.com/microsoft/aspire/issues/17453
         var builder = DistributedApplication.CreateBuilder();
         builder.WithTestAndResourceLogging(testOutputHelper);
 
         var dependencyReleased = new TaskCompletionSource();
         var dependency = AddSelfDrivenResource(builder, "dependency", dependencyReleased.Task);
-        var waiter = AddSelfDrivenResource(builder, "waiter").WaitFor(dependency);
+        var waiter = builder.AddResource(new CustomResourceWithWaitSupport("waiter")).WaitFor(dependency);
 
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -632,6 +633,12 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
 
         await events.PublishAsync(new OnResourcesPreparedContext(CancellationToken.None));
 
+        // Stand in for DCP starting the resource. This does not complete until the wait for dependencies is over,
+        // so it cannot be awaited here. The resource name is used as the DCP name so that the per-instance update
+        // published by OnResourceStarting and the model-level waiting update address the same snapshot.
+        var startingTask = events.PublishAsync(new OnResourceStartingContext(
+            CancellationToken.None, KnownResourceTypes.Executable, waiter.Resource, waiter.Resource.Name));
+
         await resourceNotificationService.WaitForResourceAsync(waiter.Resource.Name, KnownResourceStates.Waiting, TestContext.Current.CancellationToken).DefaultTimeout();
 
         Assert.True(resourceNotificationService.TryGetCurrentState(dependency.Resource.Name, out var dependencyEvent));
@@ -640,7 +647,67 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         dependencyReleased.SetResult();
 
         await resourceNotificationService.WaitForResourceAsync(dependency.Resource.Name, KnownResourceStates.Running, TestContext.Current.CancellationToken).DefaultTimeout();
-        await resourceNotificationService.WaitForResourceAsync(waiter.Resource.Name, KnownResourceStates.Running, TestContext.Current.CancellationToken).DefaultTimeout();
+        await startingTask.DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task WaitIsNotReleasedByAnotherReplicaLeavingWaitingState()
+    {
+        // The wait is released when the resource is forced out of "Waiting" by the start command, but
+        // WaitForResourceAsync only filters on the model resource name, so the release signal has to be scoped
+        // to the replica that was forced out. Here the model-level waiting update also re-publishes the running
+        // sibling replica, and that must not be mistaken for a force-start of the waiting replica.
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var dependencyReleased = new TaskCompletionSource();
+        var dependency = AddSelfDrivenResource(builder, "dependency", dependencyReleased.Task);
+        var waiter = builder.AddResource(new CustomResourceWithWaitSupport("waiter")).WaitFor(dependency);
+        waiter.Resource.Annotations.Add(new DcpInstancesAnnotation([
+            new DcpInstance("waiter-abc123", "abc123", 0),
+            new DcpInstance("waiter-def456", "def456", 1)
+        ]));
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events, applicationEventing: builder.Eventing);
+        await appOrchestrator.RunApplicationAsync();
+
+        await events.PublishAsync(new OnResourcesPreparedContext(CancellationToken.None));
+
+        // The second replica is already running and is not part of this start attempt.
+        await resourceNotificationService.PublishUpdateAsync(waiter.Resource, "waiter-def456", s => s with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+
+        var startingTask = events.PublishAsync(new OnResourceStartingContext(
+            CancellationToken.None, KnownResourceTypes.Executable, waiter.Resource, "waiter-abc123"));
+
+        await resourceNotificationService.WaitForResourceAsync(
+            waiter.Resource.Name,
+            e => e.ResourceId == "waiter-abc123" && e.Snapshot.State?.Text == KnownResourceStates.Waiting,
+            TestContext.Current.CancellationToken).DefaultTimeout();
+
+        // The rebuild command moves non-waiting replicas to "Building" while deliberately leaving waiting
+        // replicas alone, so this is a state change a waiting replica really does observe from a sibling.
+        await resourceNotificationService.PublishUpdateAsync(waiter.Resource, "waiter-def456", s => s with
+        {
+            State = KnownResourceStates.Building
+        }).DefaultTimeout();
+
+        // Negative assertion: give the wait a chance to be released incorrectly. This can only ever produce a
+        // false pass, never a false failure - with a model-wide release flag the wait is abandoned immediately.
+        await Task.Delay(TimeSpan.FromMilliseconds(250), TestContext.Current.CancellationToken);
+        Assert.False(startingTask.IsCompleted, "The dependency wait must not be released by a sibling replica leaving the waiting state.");
+
+        dependencyReleased.SetResult();
+
+        await startingTask.DefaultTimeout();
     }
 
     [Fact]

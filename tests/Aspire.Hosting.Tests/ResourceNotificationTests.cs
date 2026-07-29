@@ -573,6 +573,54 @@ public class ResourceNotificationTests
     }
 
     [Fact]
+    public async Task WaitForDependenciesDoesNotTransitionNotStartedReplicaToWaiting()
+    {
+        // "NotStarted" is only a valid pre-wait state for a resource that drives its own startup, and those
+        // resources always resolve to a single instance. Replicas are started individually, so a replica that
+        // is still "NotStarted" while a sibling is starting - for example with WithExplicitStart - was
+        // deliberately not started and must keep its state even though the wait is a model-level update.
+        var dependency = new CustomResource("dependency");
+        var resource = new CustomResource("resource");
+        resource.Annotations.Add(new DcpInstancesAnnotation([
+            new DcpInstance("resource-abc123", "abc123", 0),
+            new DcpInstance("resource-def456", "def456", 1)
+        ]));
+        resource.Annotations.Add(new WaitAnnotation(dependency, WaitType.WaitUntilStarted));
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        await notificationService.PublishUpdateAsync(resource, "resource-abc123", s => s with
+        {
+            State = KnownResourceStates.Starting
+        }).DefaultTimeout();
+        await notificationService.PublishUpdateAsync(resource, "resource-def456", s => s with
+        {
+            State = KnownResourceStates.NotStarted
+        }).DefaultTimeout();
+
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var waitTask = notificationService.WaitForDependenciesAsync(resource, cts.Token);
+
+        await notificationService.WaitForResourceAsync(
+            resource.Name,
+            re => re.ResourceId == "resource-abc123" && re.Snapshot.State?.Text == KnownResourceStates.Waiting,
+            cts.Token).DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState("resource-def456", out var notStartedEvent));
+        Assert.Equal(KnownResourceStates.NotStarted, notStartedEvent.Snapshot.State?.Text);
+
+        await notificationService.PublishUpdateAsync(dependency, s => s with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+
+        await waitTask.DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState("resource-def456", out notStartedEvent));
+        Assert.Equal(KnownResourceStates.NotStarted, notStartedEvent.Snapshot.State?.Text);
+    }
+
+    [Fact]
     public async Task WaitForDependenciesPublishesResolvedWaitingForDependenciesForReplicas()
     {
         var dependency = new CustomResource("dependency");
