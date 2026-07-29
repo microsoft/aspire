@@ -2129,31 +2129,6 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         provider.dispose();
     });
 
-    test('workspace mode marks streamed AppHost candidates as incomplete while discovery continues', () => {
-        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
-        const repository = {
-            viewMode: 'workspace' as ViewMode,
-            appHosts: [],
-            workspaceResources: [],
-            workspaceAppHostPath: '/repo/AppHost/AppHost.csproj',
-            workspaceAppHostCandidatePaths: ['/repo/AppHost/AppHost.csproj'],
-            workspaceAppHostName: undefined,
-            isWorkspaceAppHostDiscoveryComplete: false,
-            onDidChangeData,
-        } as unknown as AppHostDataRepository;
-        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
-
-        const topLevel = provider.getChildren();
-
-        assert.deepStrictEqual(topLevel.map(item => item.contextValue), [
-            'workspaceAppHost',
-            'workspaceAppHostDiscovery',
-        ]);
-        assert.strictEqual(topLevel[1].label, 'Discovering AppHosts...');
-        assert.deepStrictEqual(topLevel[1].iconPath, new vscode.ThemeIcon('loading~spin'));
-        provider.dispose();
-    });
-
     test('workspace mode renders launching AppHost with spinner and no context menu', async () => {
         const appHostPath = '/repo/AppHost/AppHost.csproj';
         const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });

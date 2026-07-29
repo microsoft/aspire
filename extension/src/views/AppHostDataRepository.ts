@@ -6,7 +6,7 @@ import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { appHostDescribeMayNotBeSupported, appHostPathMustBeNonEmptyAbsolute, aspireCliCommandFailed, aspireCliCommandTimedOut, aspireCliDescribeNotSupported, aspireCliOutputParseFailed, aspireCommandOutputTruncated, aspireDescribeMinimumVersion, errorFetchingAppHosts, workspaceViewSelectedMultipleAppHosts, workspaceViewSelectedSingleAppHost } from '../loc/strings';
 import { AppHostCandidate, AppHostDiscoveryService, CandidateAppHostDisplayInfo, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate } from '../utils/appHostDiscovery';
-import { containsQuotedCliToken, isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from '../utils/cliCompatibility';
+import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from '../utils/cliCompatibility';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { describeIncludeDisabledCommandsCapability } from '../types/configInfo';
 import { nonInteractiveCliEnvironment } from '../utils/environment';
@@ -188,7 +188,6 @@ export class AppHostDataRepository {
     private static readonly _processShutdownGracePeriodMs = 5000;
     private static readonly _appHostStopRefreshDelayMs = 400;
     private static readonly _appHostStopRefreshMaxAttempts = 75;
-    private static readonly _incrementalCandidateUpdateIntervalMs = 50;
     private static readonly _oneShotCommandTimeoutMs = 30000;
     private static readonly _oneShotOutputBufferLimit = oneShotOutputBufferLimit;
 
@@ -708,52 +707,28 @@ export class AppHostDataRepository {
         const cancellationSource = new vscode.CancellationTokenSource();
         this._workspaceAppHostDiscoveryInProgress = true;
         this._workspaceAppHostDiscoveryCancellationSource = cancellationSource;
-        const canApplyStreamedCandidateUpdates = this._workspaceAppHostPath === undefined && this._workspaceAppHostCandidatePaths.length === 0;
-
         const streamedCandidates: CandidateAppHostDisplayInfo[] = [];
-        let incrementalCandidateUpdateTimer: ReturnType<typeof setTimeout> | undefined;
-        const cancelIncrementalCandidateUpdate = (): void => {
-            if (incrementalCandidateUpdateTimer) {
-                clearTimeout(incrementalCandidateUpdateTimer);
-                incrementalCandidateUpdateTimer = undefined;
-            }
-        };
-        const applyIncrementalCandidateUpdates = (): void => {
-            incrementalCandidateUpdateTimer = undefined;
-            if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
-                return;
-            }
-
-            const result = getWorkspaceAppHostProjectSearchResult(rootFolder, streamedCandidates);
-            const buildableAppHostCandidates = result.app_host_candidates.filter(isBuildableAppHostCandidate);
-            if (buildableAppHostCandidates.length === 0) {
-                return;
-            }
-
-            this._setWorkspaceAppHostCandidatePaths(buildableAppHostCandidates);
-            this._updateWorkspaceContext();
-        };
         const onIncrementalCandidate = (candidate: CandidateAppHostDisplayInfo): void => {
             if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
                 return;
             }
 
-            streamedCandidates.push(candidate);
-            if (!canApplyStreamedCandidateUpdates) {
-                return;
+            const existingCandidateIndex = streamedCandidates.findIndex(existingCandidate => isMatchingAppHostPath(existingCandidate.path, candidate.path));
+            if (existingCandidateIndex >= 0) {
+                streamedCandidates[existingCandidateIndex] = candidate;
+            } else {
+                streamedCandidates.push(candidate);
             }
 
-            if (!incrementalCandidateUpdateTimer) {
-                // Keep the first candidate's visibility bounded while coalescing any additional
-                // candidates that arrive before the tree and context update runs.
-                incrementalCandidateUpdateTimer = setTimeout(
-                    applyIncrementalCandidateUpdates,
-                    AppHostDataRepository._incrementalCandidateUpdateIntervalMs);
+            const result = getWorkspaceAppHostProjectSearchResult(rootFolder, streamedCandidates);
+            const buildableAppHostCandidates = result.app_host_candidates.filter(isBuildableAppHostCandidate);
+            if (buildableAppHostCandidates.length > 0) {
+                this._setWorkspaceAppHostCandidatePaths(buildableAppHostCandidates);
+                this._updateWorkspaceContext();
             }
         };
 
         this._appHostDiscoveryService.discover(rootFolder, options?.forceRefresh, cancellationSource.token, onIncrementalCandidate).then(appHosts => {
-            cancelIncrementalCandidateUpdate();
             if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
                 return;
             }
@@ -762,7 +737,6 @@ export class AppHostDataRepository {
             this._workspaceAppHostDiscoveryComplete = true;
             this._handleWorkspaceAppHostCandidates(result.app_host_candidates, result.selected_project_file);
         }).catch(error => {
-            cancelIncrementalCandidateUpdate();
             if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
                 return;
             }
@@ -2325,6 +2299,11 @@ function isDescribeUnsupportedOutput(nonJsonLines: readonly string[], stderr: st
 
 function isAspireCommandHelpSyntaxLine(line: string): boolean {
     return /^aspire(?:\.exe)?\s+(?:<[^>]+>|\[[^\]]+\])(?:\s|$)/i.test(normalizeResourceCommandStatusLine(line));
+}
+
+function containsQuotedCliToken(output: string, token: string): boolean {
+    const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`[\\'"\`\\u2018\\u2019\\u201C\\u201D]${escapedToken}[\\'"\`\\u2018\\u2019\\u201C\\u201D]`).test(output);
 }
 
 function isIncludeDisabledCommandsUnsupportedOutput(nonJsonLines: readonly string[], stderr: string): boolean {

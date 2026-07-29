@@ -1,6 +1,6 @@
 import * as assert from 'assert';
-import { getCommandInvocationCount, getResources, getTerminalCommandCount, getTreeAppHostLabel, waitForCommandOutcome, waitForDashboardUrl, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
-import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
+import { getCommandInvocationCount, getResources, getTerminalCommandCount, getTreeAppHostLabel, isSamePath, waitForCommandOutcome, waitForDashboardUrl, waitForExtensionState, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
+import { executeE2eControlCommand, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, writeStreamingDiscoveryCliWrapper } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { cancelActiveInput, clickTreeItem, executeCommandFromPalette, openAspireView, waitForTreeItem } from './helpers/vscode';
 
@@ -11,6 +11,7 @@ suite('Aspire AppHost tree E2E', function () {
         await runE2eTeardown([
             () => setCliUnavailableForE2E(false),
             () => setTerminalCommandExecutionSuppressedForE2E(false),
+            () => restoreE2eCliPathForE2E(),
             () => restoreWorkspaceCliPath(),
             () => executeE2eControlCommand({ name: 'stopDebugging' }),
             () => stopPrimaryAppHostIfRunning(),
@@ -29,6 +30,27 @@ suite('Aspire AppHost tree E2E', function () {
         const item = await waitForTreeItem(section, label);
         assert.strictEqual(await item.getLabel(), label);
         assert.ok(stateFile.state.workspaceAppHostCandidatePaths.length >= 1);
+    });
+
+    test('shows streamed candidates while AppHost discovery is still running', async () => {
+        await openAspireView();
+        await waitForWorkspaceAppHost();
+
+        await setE2eCliPathForE2E(writeStreamingDiscoveryCliWrapper());
+        const invocationCountBefore = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
+        await executeE2eControlCommand({ name: 'refreshAppHosts' }, { waitFor: 'started' });
+
+        const partialState = await waitForExtensionState(
+            file => file.state.isWorkspaceAppHostDiscoveryComplete === false &&
+                file.state.workspaceAppHostCandidatePaths.some(candidatePath => isSamePath(candidatePath, getPrimaryAppHostProjectPath())),
+            'streamed AppHost candidate before discovery completes',
+            30000);
+        assert.strictEqual(partialState.state.isWorkspaceAppHostDiscoveryComplete, false);
+
+        await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 30000, invocationCountBefore);
+        const finalState = await waitForRepositoryIdle();
+        assert.strictEqual(finalState.state.isWorkspaceAppHostDiscoveryComplete, true);
+        assert.ok(finalState.state.workspaceAppHostCandidatePaths.some(candidatePath => isSamePath(candidatePath, getPrimaryAppHostProjectPath())));
     });
 
     test('runs, shows resources and dashboard state, routes resource commands, and stops from the tree', async () => {

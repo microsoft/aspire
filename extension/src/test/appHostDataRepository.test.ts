@@ -3277,7 +3277,7 @@ suite('AppHostDataRepository', () => {
         }
     });
 
-    test('workspace discovery change keeps stale selection until streaming replacement completes', async () => {
+    test('workspace discovery change keeps stale selection until streamed replacements arrive', async () => {
         const workspaceFolder = {
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
@@ -3323,9 +3323,8 @@ suite('AppHostDataRepository', () => {
             assert.ok(secondDiscoveryCallback);
 
             secondDiscoveryCallback(newCandidate);
-            await waitForMicrotasks();
 
-            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, [oldCandidate.path]);
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, [newCandidate.path]);
             assert.strictEqual(repository.workspaceAppHostPath, oldCandidate.path);
             assert.strictEqual(repository.workspaceAppHostName, 'AppHost.csproj');
 
@@ -3340,8 +3339,7 @@ suite('AppHostDataRepository', () => {
         }
     });
 
-    test('coalesces rapid streamed workspace candidates into one repository update', async () => {
-        const clock = sinon.useFakeTimers();
+    test('applies every streamed workspace candidate immediately', async () => {
         const workspaceFolder = {
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
@@ -3371,27 +3369,26 @@ suite('AppHostDataRepository', () => {
             await waitForMicrotasks();
             assert.ok(incrementalCandidateCallback);
 
-            for (const candidate of candidates) {
-                incrementalCandidateCallback(candidate);
-            }
+            incrementalCandidateCallback(candidates[0]);
 
-            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, []);
-            assert.strictEqual(updateCount, 0);
-
-            await clock.tickAsync(50);
-
-            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, candidates.map(candidate => candidate.path));
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, [candidates[0].path]);
             assert.strictEqual(updateCount, 1);
+
+            incrementalCandidateCallback(candidates[1]);
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, candidates.slice(0, 2).map(candidate => candidate.path));
+            assert.strictEqual(updateCount, 2);
+
+            incrementalCandidateCallback(candidates[2]);
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, candidates.map(candidate => candidate.path));
+            assert.strictEqual(updateCount, 3);
         } finally {
             updateSubscription.dispose();
             repository.dispose();
             workspaceFoldersStub.restore();
-            clock.restore();
         }
     });
 
     test('keeps streamed workspace candidate order stable when discovery completes', async () => {
-        const clock = sinon.useFakeTimers();
         const workspaceFolder = {
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
@@ -3424,10 +3421,9 @@ suite('AppHostDataRepository', () => {
         try {
             await waitForMicrotasks();
             assert.ok(incrementalCandidateCallback);
-
             incrementalCandidateCallback(zetaCandidate);
             incrementalCandidateCallback(alphaCandidate);
-            await clock.tickAsync(50);
+            incrementalCandidateCallback(alphaCandidate);
 
             assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, expectedPaths);
 
@@ -3439,7 +3435,6 @@ suite('AppHostDataRepository', () => {
         } finally {
             repository.dispose();
             workspaceFoldersStub.restore();
-            clock.restore();
         }
     });
 

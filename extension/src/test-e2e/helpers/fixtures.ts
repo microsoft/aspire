@@ -207,6 +207,18 @@ export function writeConfigInfoUnsupportedCliWrapper(name = 'aspire-no-config-in
     });
 }
 
+export function writeStreamingDiscoveryCliWrapper(delayMs = 5_000): string {
+    return writeCliWrapper('aspire-streaming-discovery', {
+        streamedLsCandidate: {
+            path: getPrimaryAppHostProjectPath(),
+            language: 'csharp',
+            status: 'buildable',
+            selected: true,
+        },
+        streamedLsDelayMs: delayMs,
+    });
+}
+
 export async function restoreWorkspaceCliPath(): Promise<void> {
     await writeWorkspaceCliPath(getCliPath());
 }
@@ -636,7 +648,13 @@ function getLegacyAspireSettingsPath(): string {
 
 function writeCliWrapper(
     name: string,
-    options: { configInfoJson?: unknown; configInfoExitCode?: number; configInfoStderr?: string },
+    options: {
+        configInfoJson?: unknown;
+        configInfoExitCode?: number;
+        configInfoStderr?: string;
+        streamedLsCandidate?: unknown;
+        streamedLsDelayMs?: number;
+    },
 ): string {
     const wrapperDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers');
     fs.mkdirSync(wrapperDirectory, { recursive: true });
@@ -660,6 +678,18 @@ ${options.configInfoJson === undefined
   process.exit(0);`}
 }
 
+${options.streamedLsCandidate === undefined
+        ? ''
+        : `if (args[0] === 'ls') {
+  if (!args.includes('--format') || args[args.indexOf('--format') + 1] !== 'json' || !args.includes('--stream')) {
+    console.error('Expected AppHost discovery to use ls --format json --stream.');
+    process.exit(126);
+  }
+
+  console.log(${JSON.stringify(JSON.stringify(options.streamedLsCandidate))});
+  setTimeout(() => process.exit(0), ${options.streamedLsDelayMs ?? 5_000});
+}
+else {`}
 const result = spawnSync(realCli, args, {
   cwd: process.cwd(),
   env: process.env,
@@ -673,6 +703,7 @@ if (result.error) {
 }
 
 process.exit(result.status ?? (result.signal ? 1 : 0));
+${options.streamedLsCandidate === undefined ? '' : '}'}
 `);
     fs.chmodSync(scriptPath, 0o755);
 

@@ -508,8 +508,6 @@ The `devtools` category surfaces development-tooling recommendations. The `vscod
 }
 ```
 
-The `ls-json-stream.v1` capability indicates that `aspire ls --format json --stream` is supported. Tools should use buffered `aspire ls --format json` unless this capability is explicitly advertised.
-
 ## MCP tooling
 
 ### `aspire mcp tools`

@@ -117,7 +117,6 @@ export const dashboardUrlNotFound = vscode.l10n.t('No Aspire Dashboard URL is av
 export const dashboardUrlUnsupported = vscode.l10n.t('The Aspire Dashboard URL must use http or https.');
 export const workspaceAppHostLabel = vscode.l10n.t('Workspace AppHost');
 export const workspaceAppHostsGroupLabel = vscode.l10n.t('Workspace AppHosts');
-export const appHostDiscoveryInProgressLabel = vscode.l10n.t('Discovering AppHosts...');
 export const runningAppHostsGroupLabel = vscode.l10n.t('Running AppHosts');
 export const appHostOpenSourceActionLabel = vscode.l10n.t('Open AppHost source');
 export const appHostRunActionLabel = vscode.l10n.t('Run AppHost');

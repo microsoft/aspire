@@ -33,10 +33,3 @@ export function isNoLogoUnsupportedOutput(args: readonly string[], stdout: strin
     const combined = `${stdout}\n${stderr}`;
     return combined.includes(noLogoOption);
 }
-
-export function containsQuotedCliToken(output: string, token: string): boolean {
-    const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const quoteCharacters = String.raw`[\'"\`\u2018\u2019\u201C\u201D]`;
-    const quotedTokenPattern = new RegExp(`${quoteCharacters}${escapedToken}${quoteCharacters}`);
-    return quotedTokenPattern.test(output);
-}

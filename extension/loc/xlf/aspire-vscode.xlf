@@ -707,7 +707,7 @@
       <source xml:lang="en">This setting has been renamed to aspire.appHostsPollingInterval.</source>
     </trans-unit>
     <trans-unit id="configuration.aspire.appHostDiscoveryTimeoutMs">
-      <source xml:lang="en">Timeout in milliseconds for Aspire CLI commands that discover AppHost projects. Minimum: 1000.</source>
+      <source xml:lang="en">Timeout in milliseconds for Aspire CLI commands that discover AppHost projects. Streaming discovery resets this timeout when output is received and has a maximum runtime of five minutes. Minimum: 1000.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.unableToAddFolderToWorkspace">
       <source xml:lang="en">Unable to add folder to workspace: {0}</source>
