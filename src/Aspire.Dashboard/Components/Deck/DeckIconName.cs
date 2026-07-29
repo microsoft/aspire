@@ -183,6 +183,8 @@ public enum DeckIconName
     Lock,
     /// <summary>Open book; a telemetry-only resource fallback icon.</summary>
     Book,
+    /// <summary>Calendar grid; date pickers.</summary>
+    Calendar,
     /// <summary>
     /// Special value: resolves to a project/container/executable icon based on the
     /// <see cref="DeckIcon.ResourceType"/> string.

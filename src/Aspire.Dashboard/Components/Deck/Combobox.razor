@@ -1,0 +1,225 @@
+@*
+    Deck-styled editable combobox, replacing FluentCombobox during the Fluent-removal phase.
+
+    It is an autocomplete text field: the caller filters Items in response to Value changes (via
+    @bind-Value:after) and this control renders the current Items as a listbox popup. Selecting an
+    option sets Value to the option's OptionValue. Options render through OptionTemplate when
+    provided, otherwise their OptionText. Keyboard: Up/Down move the active option, Enter selects it,
+    Escape closes. Mirrors the subset of FluentCombobox the dashboard uses so call sites change little.
+*@
+@namespace Aspire.Dashboard.Components.Deck
+@typeparam TOption
+
+<div class="deck-combobox @(Disabled ? "deck-combobox--disabled" : null) @Class">
+    @if (!string.IsNullOrEmpty(Label))
+    {
+        <label class="deck-input-label" for="@Id">
+            <span class="deck-input-label__text">@Label</span>
+            @if (Required)
+            {
+                <span class="deck-input-label__required" aria-hidden="true">*</span>
+            }
+        </label>
+    }
+    <input class="input deck-combobox__input"
+           id="@Id"
+           type="text"
+           role="combobox"
+           aria-expanded="@(_open ? "true" : "false")"
+           aria-autocomplete="list"
+           autocomplete="off"
+           placeholder="@Placeholder"
+           disabled="@Disabled"
+           required="@Required"
+           style="@GetStyle()"
+           value="@Value"
+           @oninput="OnInputAsync"
+           @onfocus="OnFocus"
+           @onkeydown="OnKeyDownAsync"
+           @onblur="OnBlurAsync"
+           @attributes="AdditionalAttributes" />
+    @if (_open && _items.Count > 0)
+    {
+        <ul class="deck-combobox__list" role="listbox" style="@ListStyle()">
+            @for (var i = 0; i < _items.Count; i++)
+            {
+                var option = _items[i];
+                var index = i;
+                var disabled = OptionDisabled?.Invoke(option) ?? false;
+                <li role="option"
+                    class="deck-combobox__option @(index == _activeIndex ? "deck-combobox__option--active" : null) @(disabled ? "deck-combobox__option--disabled" : null)"
+                    title="@OptionTitle?.Invoke(option)"
+                    aria-disabled="@(disabled ? "true" : "false")"
+                    @onmousedown:preventDefault="true"
+                    @onmousedown="@(() => OnOptionMouseDownAsync(option, disabled))">
+                    @if (OptionTemplate is not null)
+                    {
+                        @OptionTemplate(option)
+                    }
+                    else
+                    {
+                        @GetOptionText(option)
+                    }
+                </li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    private List<TOption> _items = new();
+    private bool _open;
+    private int _activeIndex = -1;
+
+    /// <summary>The options to display (already filtered by the caller for the current <see cref="Value"/>).</summary>
+    [Parameter]
+    public IEnumerable<TOption>? Items { get; set; }
+
+    /// <summary>The current text value (enables <c>@bind-Value</c>).</summary>
+    [Parameter]
+    public string? Value { get; set; }
+
+    /// <summary>Raised when the value changes (typing or selecting an option).</summary>
+    [Parameter]
+    public EventCallback<string?> ValueChanged { get; set; }
+
+    /// <summary>Maps an option to the value assigned to <see cref="Value"/> when it is selected.</summary>
+    [Parameter]
+    public Func<TOption, string?>? OptionValue { get; set; }
+
+    /// <summary>Maps an option to its display text (used when no <see cref="OptionTemplate"/> is set).</summary>
+    [Parameter]
+    public Func<TOption, string?>? OptionText { get; set; }
+
+    /// <summary>Maps an option to its tooltip title.</summary>
+    [Parameter]
+    public Func<TOption, string?>? OptionTitle { get; set; }
+
+    /// <summary>Maps an option to whether it is disabled.</summary>
+    [Parameter]
+    public Func<TOption, bool>? OptionDisabled { get; set; }
+
+    /// <summary>Custom rendering for each option.</summary>
+    [Parameter]
+    public RenderFragment<TOption>? OptionTemplate { get; set; }
+
+    /// <summary>Placeholder shown when empty.</summary>
+    [Parameter]
+    public string? Placeholder { get; set; }
+
+    /// <summary>Optional label rendered before the input.</summary>
+    [Parameter]
+    public string? Label { get; set; }
+
+    /// <summary>Whether the field is required.</summary>
+    [Parameter]
+    public bool Required { get; set; }
+
+    /// <summary>Whether the field is disabled.</summary>
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    /// <summary>The element id.</summary>
+    [Parameter]
+    public string? Id { get; set; }
+
+    /// <summary>Additional CSS classes appended to the combobox wrapper.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Optional width for the input.</summary>
+    [Parameter]
+    public string? Width { get; set; }
+
+    /// <summary>Optional max height for the option list popup.</summary>
+    [Parameter]
+    public string? Height { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        _items = Items?.ToList() ?? new List<TOption>();
+        if (_activeIndex >= _items.Count)
+        {
+            _activeIndex = _items.Count - 1;
+        }
+    }
+
+    private string? GetOptionText(TOption option) => OptionText is not null ? OptionText(option) : option?.ToString();
+
+    private string? GetStyle() => string.IsNullOrEmpty(Width) ? null : $"width: {Width};";
+
+    private string? ListStyle() => string.IsNullOrEmpty(Height) ? null : $"max-height: {Height};";
+
+    private void OnFocus()
+    {
+        _open = true;
+    }
+
+    private async Task OnBlurAsync()
+    {
+        // The option's @onmousedown (which runs before blur and preventDefaults focus loss) performs
+        // selection; by the time blur fires the choice is already made, so simply close the popup.
+        _open = false;
+        await Task.CompletedTask;
+    }
+
+    private async Task OnInputAsync(ChangeEventArgs e)
+    {
+        _open = true;
+        _activeIndex = -1;
+        var text = e.Value?.ToString();
+        if (ValueChanged.HasDelegate)
+        {
+            await ValueChanged.InvokeAsync(text);
+        }
+    }
+
+    private async Task OnOptionMouseDownAsync(TOption option, bool disabled)
+    {
+        if (disabled)
+        {
+            return;
+        }
+
+        await SelectAsync(option);
+    }
+
+    private async Task SelectAsync(TOption option)
+    {
+        _open = false;
+        var value = OptionValue?.Invoke(option) ?? GetOptionText(option);
+        if (ValueChanged.HasDelegate)
+        {
+            await ValueChanged.InvokeAsync(value);
+        }
+    }
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "ArrowDown":
+                _open = true;
+                if (_items.Count > 0)
+                {
+                    _activeIndex = (_activeIndex + 1) % _items.Count;
+                }
+                break;
+            case "ArrowUp":
+                if (_items.Count > 0)
+                {
+                    _activeIndex = _activeIndex <= 0 ? _items.Count - 1 : _activeIndex - 1;
+                }
+                break;
+            case "Enter" when _open && _activeIndex >= 0 && _activeIndex < _items.Count:
+                await SelectAsync(_items[_activeIndex]);
+                break;
+            case "Escape":
+                _open = false;
+                break;
+        }
+    }
+}

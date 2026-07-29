@@ -113,7 +113,7 @@
                                 }
                                 else
                                 {
-                                    <FluentCombobox @key="input.ViewModel.InputKey"
+                                    <Combobox @key="input.ViewModel.InputKey"
                                                     TOption="SelectViewModel<string>"
                                                     Id="@_fieldIds[input.ViewModel]"
                                                     @bind-Value="input.ViewModel.Value"
@@ -124,15 +124,12 @@
                                                     OptionText="@(vm => vm.Name)"
                                                     OptionTitle="@(vm => DashboardUIHelpers.ResolveTooltip(vm.Name))"
                                                     Height="250px"
-                                                    Position="SelectPosition.Below"
                                                     Disabled="input.ViewModel.InputDisabled"
-                                                    Immediate="true"
-                                                    ImmediateDelay="@FluentUIExtensions.InputDelay"
                                                     aria-describedby="@input.DescriptionId">
                                         <OptionTemplate Context="optionContext">
                                             <Highlighter Text="@optionContext.Name" HighlightedText="@input.ViewModel.Value" />
                                         </OptionTemplate>
-                                    </FluentCombobox>
+                                    </Combobox>
                                 }
                             </InteractionInputField>
                             break;

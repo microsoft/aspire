@@ -36,14 +36,15 @@
         @if (_formModel.ValueIsNumeric)
         {
             <div class="filter-input-container input-container">
-                <FluentNumberField TValue="double?"
-                                   @bind-Value="_formModel.NumericValue"
-                                   Min="0"
-                                   Step="50"
-                                   Width="100%"
-                                   Immediate="true"
-                                   ImmediateDelay="@FluentUIExtensions.InputDelay"
-                                   Label="@Loc[nameof(Dialogs.FilterDialogTextValuePlaceholder)]" />
+                <InputLabel Label="@Loc[nameof(Dialogs.FilterDialogTextValuePlaceholder)]" ForId="filter-numeric-value" Orientation="vertical" />
+                <input id="filter-numeric-value"
+                       class="input"
+                       type="number"
+                       min="0"
+                       step="50"
+                       style="width: 100%"
+                       @bind="_formModel.NumericValue"
+                       @bind:event="oninput" />
                 <ValidationMessage For="() => _formModel.NumericValue" />
             </div>
         }
@@ -52,18 +53,23 @@
             <div class="filter-input-container input-container">
                 @* Position relative to correctly align the absolute positioned date picker *@
                 <div style="position: relative;">
-                    <FluentTextField @bind-Value="_formModel.Value"
-                                    Style="min-width: 100%"
-                                    Immediate="true"
-                                    ImmediateDelay="@FluentUIExtensions.InputDelay"
-                                    Placeholder="@Loc[nameof(Dialogs.FilterDialogDatePlaceholder)]"
-                                    Label="@Loc[nameof(Dialogs.FilterDialogDateValueLabel)]">
-                        <FluentIcon slot="end"
-                                    Value="@(new Icons.Regular.Size16.Calendar())"
-                                    Title="@Loc[nameof(Dialogs.FilterDialogPickDateButtonTitle)]"
-                                    OnClick="OpenDatePickerAsync"
-                                    Style="cursor: pointer;" />
-                    </FluentTextField>
+                    <InputLabel Label="@Loc[nameof(Dialogs.FilterDialogDateValueLabel)]" ForId="filter-date-value" Orientation="vertical" />
+                    <div class="deck-input-with-end">
+                        <input id="filter-date-value"
+                               class="input"
+                               type="text"
+                               style="min-width: 100%"
+                               placeholder="@Loc[nameof(Dialogs.FilterDialogDatePlaceholder)]"
+                               @bind="_formModel.Value"
+                               @bind:event="oninput" />
+                        <button type="button"
+                                class="deck-input-end-icon"
+                                title="@Loc[nameof(Dialogs.FilterDialogPickDateButtonTitle)]"
+                                aria-label="@Loc[nameof(Dialogs.FilterDialogPickDateButtonTitle)]"
+                                @onclick="OpenDatePickerAsync">
+                            <DeckIcon Name="DeckIconName.Calendar" Size="16" />
+                        </button>
+                    </div>
                     <input type="datetime-local"
                         @ref="_datePickerInput"
                         step="1"
@@ -77,7 +83,7 @@
         else
         {
             <div class="filter-input-container input-container">
-                <FluentCombobox TOption="SelectViewModel<FieldValue>"
+                                <Combobox TOption="SelectViewModel<FieldValue>"
                                 @bind-Value="_formModel.Value"
                                 @bind-Value:after="ValueChanged"
                                 Items="@_filteredValues"
@@ -86,19 +92,14 @@
                                 OptionText="@(c => c.Name)"
                                 OptionValue="@(c => c.Name)"
                                 OptionTitle="@(c => DashboardUIHelpers.ResolveTooltip(c.Name))"
-                                Immediate="true"
-                                ImmediateDelay="@FluentUIExtensions.InputDelay"
                                 Label="@Loc[nameof(Dialogs.FilterDialogTextValuePlaceholder)]">
                     <OptionTemplate Context="optionContext">
                         <Badge slot="end">
-                            @* There is FluentUI bug that causes bad data if there is additional text in an option. *@
-                            @* https://github.com/microsoft/fluentui-blazor/issues/2695 *@
-                            @* Workaround this issue by inserting extra text using CSS. *@
                             <span data-filtercount="@optionContext.Id!.Count"></span>
                         </Badge>
                         <Highlighter Text="@optionContext.Name" HighlightedText="@_formModel.Value" />
                     </OptionTemplate>
-                </FluentCombobox>
+                </Combobox>
                 <ValidationMessage For="() => _formModel.Value" />
             </div>
         }

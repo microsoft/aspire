@@ -745,7 +745,7 @@ fluent-switch.table-switch::part(label) {
     margin-bottom: 0;
 }
 
-.input-container .fluent-input-label {
+.input-container .deck-input-label {
     font-weight: 500 !important;
     font-size: 13.5px !important;
 }

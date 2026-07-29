@@ -6,7 +6,6 @@ using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
 using Bunit;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Dialogs;
@@ -28,8 +27,7 @@ public class FilterDialogTests : DashboardTestContext
             }));
         });
 
-        Assert.Single(cut.FindComponents<FluentNumberField<double?>>());
-        Assert.DoesNotContain("fluent-combobox", cut.Markup);
+        Assert.Single(cut.FindAll("input[type='number']"));
 
         var conditionSelect = Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.Deck.Select<SelectViewModel<FilterCondition>>>());
         Assert.Collection(conditionSelect.Instance.Items!,
@@ -56,8 +54,8 @@ public class FilterDialogTests : DashboardTestContext
             }));
         });
 
-        Assert.Empty(cut.FindComponents<FluentNumberField<double?>>());
-        Assert.Contains("fluent-combobox", cut.Markup);
+        Assert.Empty(cut.FindAll("input[type='number']"));
+        Assert.Contains("deck-combobox", cut.Markup);
 
         var conditionSelect = Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.Deck.Select<SelectViewModel<FilterCondition>>>());
         Assert.Collection(conditionSelect.Instance.Items!,

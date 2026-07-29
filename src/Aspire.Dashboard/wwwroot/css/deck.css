@@ -2901,3 +2901,73 @@ hr.deck-divider {
   white-space: nowrap;
 }
 /* === end Deck tree === */
+
+/* === Deck combobox (replaces FluentCombobox) === */
+.deck-combobox {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.deck-combobox__input {
+  width: 100%;
+}
+.deck-combobox__list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin: 2px 0 0;
+  padding: 4px;
+  list-style: none;
+  overflow-y: auto;
+  background: var(--bg-elevated, var(--bg-app, #fff));
+  border: 1px solid var(--border, rgba(127, 127, 127, 0.3));
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+.deck-combobox__option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.deck-combobox__option:hover,
+.deck-combobox__option--active {
+  background: var(--bg-hover, rgba(127, 127, 127, 0.12));
+}
+.deck-combobox__option--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+/* === end Deck combobox === */
+
+/* === Deck input with trailing icon (replaces FluentTextField slot="end") === */
+.deck-input-with-end {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.deck-input-with-end > .input {
+  padding-right: 34px;
+}
+.deck-input-end-icon {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary, inherit);
+  cursor: pointer;
+}
+/* === end Deck input with trailing icon === */
