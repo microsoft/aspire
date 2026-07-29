@@ -25,6 +25,22 @@ public sealed class McpClientSettings
     /// </value>
     public bool DisableHealthChecks { get; set; }
 
+    /// <summary>
+    /// Gets or sets a value indicating whether MCP tracing is disabled.
+    /// </summary>
+    /// <value>
+    /// The default value is <see langword="false"/>.
+    /// </value>
+    public bool DisableTracing { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether MCP metrics are disabled.
+    /// </summary>
+    /// <value>
+    /// The default value is <see langword="false"/>.
+    /// </value>
+    public bool DisableMetrics { get; set; }
+
     internal void ParseConnectionString(string? connectionString)
     {
         if (Uri.TryCreate(connectionString, UriKind.Absolute, out var endpoint) &&

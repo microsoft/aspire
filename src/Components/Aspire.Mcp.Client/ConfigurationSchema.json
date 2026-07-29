@@ -33,6 +33,16 @@
                   "description": "Gets or sets a value indicating whether health checks are disabled.",
                   "default": false
                 },
+                "DisableMetrics": {
+                  "type": "boolean",
+                  "description": "Gets or sets a value indicating whether MCP metrics are disabled.",
+                  "default": false
+                },
+                "DisableTracing": {
+                  "type": "boolean",
+                  "description": "Gets or sets a value indicating whether MCP tracing is disabled.",
+                  "default": false
+                },
                 "Endpoint": {
                   "type": "string",
                   "format": "uri",

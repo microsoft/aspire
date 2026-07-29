@@ -32,6 +32,30 @@ public class AspireMcpClientExtensionsTests
         Assert.Contains(builder.Services, descriptor => descriptor.ServiceType == typeof(McpClient) && descriptor.ServiceKey is null);
     }
 
+    private sealed class HeaderRecordingInitializationHandler : SuccessfulInitializationHandler
+    {
+        public ConcurrentQueue<string> AuthorizationHeaders { get; } = [];
+        public ConcurrentQueue<string> CustomHeaderValues { get; } = [];
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.Headers.Authorization is { } authorization)
+            {
+                AuthorizationHeaders.Enqueue(authorization.ToString());
+            }
+
+            if (request.Headers.TryGetValues("x-test", out var values))
+            {
+                foreach (var value in values)
+                {
+                    CustomHeaderValues.Enqueue(value);
+                }
+            }
+
+            return await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
     [Fact]
     public void AddKeyedMcpClientRegistersKeyedClient()
     {
@@ -43,7 +67,72 @@ public class AspireMcpClientExtensionsTests
     }
 
     [Fact]
-    public void AddMcpClientInvokesConfigurationDelegates()
+    public void AddMcpClientRejectsDuplicateUnkeyedRegistration()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.AddMcpClient("mcp");
+
+        var exception = Assert.Throws<InvalidOperationException>(() => builder.AddMcpClient("mcp"));
+
+        Assert.Contains("already exists", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AddKeyedMcpClientRejectsDuplicateKeyedRegistration()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.AddKeyedMcpClient("mcp");
+
+        var exception = Assert.Throws<InvalidOperationException>(() => builder.AddKeyedMcpClient("mcp"));
+
+        Assert.Contains("already exists", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AddMcpClientRejectsCombiningOAuthAndBearerProvider()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        var mcpBuilder = builder.AddMcpClient("mcp");
+        mcpBuilder.UseOAuth(_ => { });
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            mcpBuilder.UseBearerTokenProvider(static (_, _, _) => ValueTask.FromResult<string?>(null)));
+
+        Assert.Contains("cannot be enabled at the same time", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AddMcpClientRejectsCombiningBearerProviderAndOAuth()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        var mcpBuilder = builder.AddMcpClient("mcp");
+        mcpBuilder.UseBearerTokenProvider(static (_, _, _) => ValueTask.FromResult<string?>(null));
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            mcpBuilder.UseOAuth(_ => { }));
+
+        Assert.Contains("cannot be enabled at the same time", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AddMcpClientOAuthRequiresExplicitRedirectDelegate()
+    {
+        var handler = new SuccessfulInitializationHandler();
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => handler));
+        builder.AddMcpClient("mcp").UseOAuth(_ => { });
+
+        using var host = builder.Build();
+        var client = host.Services.GetRequiredService<McpClient>();
+
+        var exception = await Record.ExceptionAsync(async () => await client.PingAsync());
+
+        Assert.IsType<InvalidOperationException>(exception);
+        Assert.Contains("AuthorizationRedirectDelegate", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AddMcpClientInvokesConfigurationDelegates()
     {
         var handler = new RequestRecordingHandler();
         var builder = Host.CreateEmptyApplicationBuilder(null);
@@ -65,7 +154,8 @@ public class AspireMcpClientExtensionsTests
             });
 
         using var host = builder.Build();
-        _ = Record.Exception(() => _ = host.Services.GetRequiredService<McpClient>());
+        var client = host.Services.GetRequiredService<McpClient>();
+        _ = await Record.ExceptionAsync(async () => await client.PingAsync());
 
         Assert.True(clientOptionsConfigured);
         Assert.True(transportOptionsConfigured);
@@ -73,7 +163,7 @@ public class AspireMcpClientExtensionsTests
     }
 
     [Fact]
-    public void AddKeyedMcpClientInvokesConfigurationDelegates()
+    public async Task AddKeyedMcpClientInvokesConfigurationDelegates()
     {
         var handler = new RequestRecordingHandler();
         var builder = Host.CreateEmptyApplicationBuilder(null);
@@ -92,7 +182,8 @@ public class AspireMcpClientExtensionsTests
             });
 
         using var host = builder.Build();
-        _ = Record.Exception(() => _ = host.Services.GetRequiredKeyedService<McpClient>("mcp"));
+        var client = host.Services.GetRequiredKeyedService<McpClient>("mcp");
+        _ = await Record.ExceptionAsync(async () => await client.PingAsync());
 
         Assert.True(clientOptionsConfigured);
         Assert.True(transportOptionsConfigured);
@@ -110,6 +201,20 @@ public class AspireMcpClientExtensionsTests
         var options = host.Services.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value;
 
         Assert.Empty(options.Registrations);
+    }
+
+    [Fact]
+    public void AddMcpClientAndKeyedClientUseDistinctHealthCheckNames()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.AddMcpClient("mcp");
+        builder.AddKeyedMcpClient("mcp");
+
+        using var host = builder.Build();
+        var options = host.Services.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value;
+
+        Assert.Contains(options.Registrations, registration => registration.Name == "Mcp.Client_mcp");
+        Assert.Contains(options.Registrations, registration => registration.Name == "Mcp.Client_mcp_mcp");
     }
 
     [Fact]
@@ -148,7 +253,7 @@ public class AspireMcpClientExtensionsTests
     }
 
     [Fact]
-    public void ConfigureSettingsCanOverrideMalformedConnectionString()
+    public async Task ConfigureSettingsCanOverrideMalformedConnectionString()
     {
         var handler = new RequestRecordingHandler();
         var builder = Host.CreateEmptyApplicationBuilder(null);
@@ -157,9 +262,29 @@ public class AspireMcpClientExtensionsTests
         builder.AddMcpClient("mcp", configureSettings: settings => settings.Endpoint = new Uri("https://override/mcp"));
 
         using var host = builder.Build();
-        _ = Record.Exception(() => _ = host.Services.GetRequiredService<McpClient>());
+        var client = host.Services.GetRequiredService<McpClient>();
+        _ = await Record.ExceptionAsync(async () => await client.PingAsync());
 
         Assert.Contains(handler.RequestUris, uri => uri.ToString() == "https://override/mcp");
+    }
+
+    [Fact]
+    public async Task AddMcpClientBearerProviderPreservesNamedHttpClientConfiguration()
+    {
+        var handler = new HeaderRecordingInitializationHandler();
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => handler));
+        builder.AddMcpClient("mcp")
+            .ConfigureHttpClient(httpClient => httpClient.ConfigureHttpClient(client => client.DefaultRequestHeaders.Add("x-test", "configured")))
+            .UseBearerTokenProvider(static (_, _, _) => ValueTask.FromResult<string?>("token"));
+
+        using var host = builder.Build();
+        var client = host.Services.GetRequiredService<McpClient>();
+        var exception = await Record.ExceptionAsync(async () => await client.PingAsync());
+
+        Assert.Null(exception);
+        Assert.Contains("Bearer token", handler.AuthorizationHeaders);
+        Assert.Contains("configured", handler.CustomHeaderValues);
     }
 
     [Fact]
@@ -178,7 +303,7 @@ public class AspireMcpClientExtensionsTests
     }
 
     [Fact]
-    public void ConfigurationUsesBaseThenNamedThenConnectionStringThenSettings()
+    public async Task ConfigurationUsesBaseThenNamedThenConnectionStringThenSettings()
     {
         var handler = new RequestRecordingHandler();
         var builder = Host.CreateEmptyApplicationBuilder(null);
@@ -192,7 +317,8 @@ public class AspireMcpClientExtensionsTests
         builder.AddMcpClient("mcp", configureSettings: settings => settings.Endpoint = new Uri("https://settings/mcp"));
 
         using var host = builder.Build();
-        _ = Record.Exception(() => _ = host.Services.GetRequiredService<McpClient>());
+        var client = host.Services.GetRequiredService<McpClient>();
+        _ = await Record.ExceptionAsync(async () => await client.PingAsync());
 
         Assert.Contains(handler.RequestUris, uri => uri.ToString() == "https://settings/mcp");
     }
@@ -239,7 +365,7 @@ public class AspireMcpClientExtensionsTests
     }
 
     [Fact]
-    public void McpClientUsesServiceDiscoveryEndpoint()
+    public async Task McpClientUsesServiceDiscoveryEndpoint()
     {
         var handler = new RequestRecordingHandler();
         var builder = Host.CreateEmptyApplicationBuilder(null);
@@ -247,9 +373,8 @@ public class AspireMcpClientExtensionsTests
         builder.AddMcpClient("mcp");
 
         using var host = builder.Build();
-        Action resolveClient = () => _ = host.Services.GetRequiredService<McpClient>();
-
-        var exception = Record.Exception(resolveClient);
+        var client = host.Services.GetRequiredService<McpClient>();
+        var exception = await Record.ExceptionAsync(async () => await client.PingAsync());
 
         Assert.NotNull(exception);
         Assert.NotEmpty(handler.RequestUris);
@@ -257,7 +382,7 @@ public class AspireMcpClientExtensionsTests
     }
 
     [Fact]
-    public void KeyedMcpClientsUseTheirOwnServiceDiscoveryEndpoints()
+    public async Task KeyedMcpClientsUseTheirOwnServiceDiscoveryEndpoints()
     {
         var handler = new RequestRecordingHandler();
         var builder = Host.CreateEmptyApplicationBuilder(null);
@@ -267,15 +392,17 @@ public class AspireMcpClientExtensionsTests
 
         using var host = builder.Build();
 
-        _ = Record.Exception(() => _ = host.Services.GetRequiredKeyedService<McpClient>("weather"));
-        _ = Record.Exception(() => _ = host.Services.GetRequiredKeyedService<McpClient>("calendar"));
+        var weatherClient = host.Services.GetRequiredKeyedService<McpClient>("weather");
+        var calendarClient = host.Services.GetRequiredKeyedService<McpClient>("calendar");
+        _ = await Record.ExceptionAsync(async () => await weatherClient.PingAsync());
+        _ = await Record.ExceptionAsync(async () => await calendarClient.PingAsync());
 
         Assert.Contains(handler.RequestUris, uri => uri.ToString() == "https://weather/mcp");
         Assert.Contains(handler.RequestUris, uri => uri.ToString() == "https://calendar/mcp");
     }
 
     [Fact]
-    public void AddMcpClientSupportsConfiguringOnlyTransportOptions()
+    public async Task AddMcpClientSupportsConfiguringOnlyTransportOptions()
     {
         var handler = new RequestRecordingHandler();
         var builder = Host.CreateEmptyApplicationBuilder(null);
@@ -292,14 +419,15 @@ public class AspireMcpClientExtensionsTests
             });
 
         using var host = builder.Build();
-        _ = Record.Exception(() => _ = host.Services.GetRequiredService<McpClient>());
+        var client = host.Services.GetRequiredService<McpClient>();
+        _ = await Record.ExceptionAsync(async () => await client.PingAsync());
 
         Assert.True(transportOptionsConfigured);
         Assert.Contains(handler.RequestUris, uri => uri.ToString() == "https://transport-only/mcp");
     }
 
     [Fact]
-    public void AddMcpClientDefaultsTransportNameToConnectionName()
+    public async Task AddMcpClientDefaultsTransportNameToConnectionName()
     {
         var handler = new RequestRecordingHandler();
         var builder = Host.CreateEmptyApplicationBuilder(null);
@@ -310,14 +438,15 @@ public class AspireMcpClientExtensionsTests
         builder.AddMcpClient("mcp", configureTransportOptions: options => transportName = options.Name);
 
         using var host = builder.Build();
-        _ = Record.Exception(() => _ = host.Services.GetRequiredService<McpClient>());
+        var client = host.Services.GetRequiredService<McpClient>();
+        _ = await Record.ExceptionAsync(async () => await client.PingAsync());
 
         Assert.Equal("mcp", transportName);
     }
 
     [Theory]
     [InlineData("ftp://mcp/mcp")]
-    public void AddMcpClientRejectsInvalidTransportEndpoint(string endpoint)
+    public async Task AddMcpClientRejectsInvalidTransportEndpoint(string endpoint)
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
         builder.AddMcpClient(
@@ -325,14 +454,12 @@ public class AspireMcpClientExtensionsTests
             configureTransportOptions: options => options.Endpoint = new Uri(endpoint, UriKind.RelativeOrAbsolute));
 
         using var host = builder.Build();
-
-        void ResolveClient() => _ = host.Services.GetRequiredService<McpClient>();
-
-        Assert.Throws<ArgumentException>(ResolveClient);
+        var client = host.Services.GetRequiredService<McpClient>();
+        await Assert.ThrowsAsync<ArgumentException>(() => client.PingAsync().AsTask());
     }
 
     [Fact]
-    public void AddKeyedMcpClientSupportsConfiguringOnlyClientOptions()
+    public async Task AddKeyedMcpClientSupportsConfiguringOnlyClientOptions()
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
         var clientOptionsConfigured = false;
@@ -345,13 +472,14 @@ public class AspireMcpClientExtensionsTests
             });
 
         using var host = builder.Build();
-        _ = Record.Exception(() => _ = host.Services.GetRequiredKeyedService<McpClient>("mcp"));
+        var client = host.Services.GetRequiredKeyedService<McpClient>("mcp");
+        _ = await Record.ExceptionAsync(async () => await client.PingAsync());
 
         Assert.True(clientOptionsConfigured);
     }
 
     [Fact]
-    public void McpClientResolvesHttpOnlyServiceDiscoveryEndpoint()
+    public async Task McpClientResolvesHttpOnlyServiceDiscoveryEndpoint()
     {
         var handler = new SuccessfulInitializationHandler();
         var builder = Host.CreateEmptyApplicationBuilder(null);
@@ -368,14 +496,15 @@ public class AspireMcpClientExtensionsTests
         builder.AddMcpClient("mcp");
 
         using var host = builder.Build();
-        var exception = Record.Exception(() => _ = host.Services.GetRequiredService<McpClient>());
+        var client = host.Services.GetRequiredService<McpClient>();
+        var exception = await Record.ExceptionAsync(async () => await client.PingAsync());
 
         Assert.Null(exception);
         Assert.Contains(handler.RequestUris, uri => uri.ToString() == "http://resolved-mcp/mcp");
     }
 
     [Fact]
-    public void McpClientPreservesServiceDiscoveryEndpointPathPrefix()
+    public async Task McpClientPreservesServiceDiscoveryEndpointPathPrefix()
     {
         var handler = new SuccessfulInitializationHandler();
         var builder = Host.CreateEmptyApplicationBuilder(null);
@@ -388,7 +517,8 @@ public class AspireMcpClientExtensionsTests
         builder.AddMcpClient("mcp");
 
         using var host = builder.Build();
-        var exception = Record.Exception(() => _ = host.Services.GetRequiredService<McpClient>());
+        var client = host.Services.GetRequiredService<McpClient>();
+        var exception = await Record.ExceptionAsync(async () => await client.PingAsync());
 
         Assert.Null(exception);
         Assert.Contains(handler.RequestUris, uri => uri.ToString() == "https://resolved-mcp/base/mcp");
@@ -402,7 +532,7 @@ public class AspireMcpClientExtensionsTests
 
     [Theory]
     [MemberData(nameof(PlatformServiceDiscoveryEndpoints))]
-    public void McpClientResolvesPlatformServiceDiscoveryEndpoint(EndPoint endPoint, string expectedEndpoint)
+    public async Task McpClientResolvesPlatformServiceDiscoveryEndpoint(EndPoint endPoint, string expectedEndpoint)
     {
         var handler = new SuccessfulInitializationHandler();
         var builder = Host.CreateEmptyApplicationBuilder(null);
@@ -412,7 +542,8 @@ public class AspireMcpClientExtensionsTests
         builder.AddMcpClient("mcp");
 
         using var host = builder.Build();
-        var exception = Record.Exception(() => _ = host.Services.GetRequiredService<McpClient>());
+        var client = host.Services.GetRequiredService<McpClient>();
+        var exception = await Record.ExceptionAsync(async () => await client.PingAsync());
 
         Assert.Null(exception);
         Assert.Contains(handler.RequestUris, uri => uri.ToString() == expectedEndpoint);
@@ -514,7 +645,7 @@ public class AspireMcpClientExtensionsTests
     }
 
     [Fact]
-    public void AddMcpClientDisposesHttpClientTransportOnHostDisposal()
+    public async Task AddMcpClientDisposesHttpClientTransportOnHostDisposal()
     {
         var handler = new SuccessfulInitializationHandler();
         var builder = Host.CreateEmptyApplicationBuilder(null);
@@ -523,12 +654,13 @@ public class AspireMcpClientExtensionsTests
         builder.Services.AddSingleton<IHttpClientFactory>(factory);
 
         var host = builder.Build();
-        var resolveException = Record.Exception(() => _ = host.Services.GetRequiredService<McpClient>());
+        var client = host.Services.GetRequiredService<McpClient>();
+        var resolveException = await Record.ExceptionAsync(async () => await client.PingAsync());
 
         Assert.Null(resolveException);
         Assert.Null(Record.Exception(host.Dispose));
         Assert.True(handler.Disposed);
-        Assert.Equal(string.Empty, factory.Name);
+        Assert.Equal("Aspire.Mcp.Client:mcp:default", factory.Name);
     }
 
     [Fact]
@@ -540,7 +672,8 @@ public class AspireMcpClientExtensionsTests
         builder.Services.AddSingleton<IHttpClientFactory>(new TrackingHttpClientFactory(handler));
 
         var host = builder.Build();
-        var resolveException = Record.Exception(() => _ = host.Services.GetRequiredService<McpClient>());
+        var client = host.Services.GetRequiredService<McpClient>();
+        var resolveException = await Record.ExceptionAsync(async () => await client.PingAsync());
 
         Assert.Null(resolveException);
         await ((IAsyncDisposable)host).DisposeAsync();
@@ -556,7 +689,8 @@ public class AspireMcpClientExtensionsTests
         builder.AddMcpClient("mcp");
 
         var host = builder.Build();
-        var resolutionTask = Task.Run(() => Record.Exception(() => _ = host.Services.GetRequiredService<McpClient>()));
+        var client = host.Services.GetRequiredService<McpClient>();
+        var resolutionTask = Task.Run(async () => await Record.ExceptionAsync(async () => await client.PingAsync()));
         await handler.InitializeStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
         var disposeException = Record.Exception(host.Dispose);
@@ -630,9 +764,9 @@ public class AspireMcpClientExtensionsTests
                 return ValueTask.CompletedTask;
             });
 
-        await handler.InitialStream.Task.WaitAsync(TimeSpan.FromSeconds(10));
         var failure = await Record.ExceptionAsync(async () => await client.PingAsync());
         Assert.NotNull(failure);
+        await handler.InitialStream.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
         var serverInfo = client.ServerInfo;
         var replacementStream = await handler.ReplacementStream.Task.WaitAsync(TimeSpan.FromSeconds(10));
@@ -664,14 +798,12 @@ public class AspireMcpClientExtensionsTests
         Assert.Throws<ArgumentException>(() => client.RegisterNotificationHandler(" ", (_, _) => ValueTask.CompletedTask));
         Assert.Throws<ArgumentNullException>(() => client.RegisterNotificationHandler("test/notification", null!));
 
-        await handler.InitialStream.Task.WaitAsync(TimeSpan.FromSeconds(10));
         var failure = await Record.ExceptionAsync(async () => await client.PingAsync());
         Assert.NotNull(failure);
 
         var exception = Record.Exception(() => _ = client.ServerInfo);
 
         Assert.Null(exception);
-        await handler.ReplacementStream.Task.WaitAsync(TimeSpan.FromSeconds(10));
     }
 
     [Theory]

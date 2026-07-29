@@ -1,75 +1,112 @@
 # Aspire.Mcp.Client library
 
-Registers an [McpClient](https://modelcontextprotocol.io/specification/2025-06-18/basic/architecture) in the DI container for connecting to a Model Context Protocol (MCP) server through Aspire service discovery. Enables a corresponding health check and logging.
+Registers [McpClient](https://modelcontextprotocol.io/specification/2025-06-18/basic/architecture) with Aspire service discovery plus MCP-specific behavior that is awkward to wire manually:
+
+- per-session endpoint affinity with reconnect rotation;
+- lazy initialization (no network I/O during DI resolution);
+- optional MCP OAuth or per-request bearer token injection;
+- keyed registrations with isolated HTTP pipelines;
+- health checks and OpenTelemetry source/meter registration.
 
 ## Getting started
 
 ### Prerequisites
 
-- An MCP server exposed in your distributed application, with its HTTP route mapped at `/mcp`.
-- A consuming service that calls `AddServiceDefaults()` so logical service names are resolved by service discovery.
+- An MCP server exposed from your distributed app (typically at `/mcp`).
+- A consuming service that calls `AddServiceDefaults()`.
 
 ### Install the package
-
-Install the Aspire MCP Client library with [NuGet](https://www.nuget.org):
 
 ```dotnetcli
 dotnet add package Aspire.Mcp.Client
 ```
 
-## Usage example
+## AppHost and service wiring
 
-In the _Program.cs_ file of your project, call the `AddMcpClient` extension method to register an `McpClient` for use via the dependency injection container. The method takes the MCP server connection name.
+No dedicated `Aspire.Hosting.Mcp` package is required. Use normal `WithReference` wiring in AppHost and consume the same connection name.
 
 ```csharp
+// AppHost
+var mcp = builder.AddProject<Projects.Mcp>("mcp");
+builder.AddProject<Projects.Api>("api")
+    .WithReference(mcp)
+    .WaitFor(mcp);
+```
+
+```csharp
+// Api Program.cs
 builder.AddServiceDefaults();
 builder.AddMcpClient("mcp");
 ```
 
-You can then retrieve the `McpClient` instance using dependency injection. For example, to retrieve the client from a Web API controller:
+By default the client resolves `https://{connectionName}/mcp`, and falls back to HTTP when only HTTP endpoints are available.
+
+## Builder API
+
+`AddMcpClient` and `AddKeyedMcpClient` return `AspireMcpClientBuilder`, which lets you compose settings, transport, client, and authentication behavior.
 
 ```csharp
-public sealed class ProductsController
-{
-    private readonly McpClient _mcpClient;
-
-    public ProductsController(McpClient mcpClient)
+builder.AddMcpClient("mcp")
+    .ConfigureClientOptions(options =>
     {
-        _mcpClient = mcpClient;
-    }
-}
+        options.ClientInfo = new() { Name = "MyService", Version = "1.0.0" };
+        options.InitializationTimeout = TimeSpan.FromSeconds(60);
+    })
+    .ConfigureTransportOptions(options =>
+    {
+        options.TransportMode = HttpTransportMode.StreamableHttp;
+        options.ConnectionTimeout = TimeSpan.FromSeconds(15);
+    });
 ```
 
-`AddMcpClient("mcp")` resolves the server endpoint as `https://mcp/mcp` by default. If service discovery only provides HTTP endpoints, it resolves `http://mcp/mcp` instead.
+### Keyed registrations
+
+```csharp
+builder.AddKeyedMcpClient("weather");
+var weatherClient = serviceProvider.GetRequiredKeyedService<McpClient>("weather");
+```
+
+## Authentication
+
+### MCP OAuth
+
+OAuth is explicit and requires an authorization redirect delegate.
+
+```csharp
+builder.AddMcpClient("mcp")
+    .UseOAuth(options =>
+    {
+        options.AuthorizationRedirectDelegate = async (authorizationUri, _, cancellationToken) =>
+        {
+            // Perform your app-specific redirect/authorization flow.
+            await HandleAuthorizationRedirectAsync(authorizationUri, cancellationToken);
+        };
+    });
+```
+
+### Bearer token provider
+
+Use a per-request token callback when your service already manages token acquisition/refresh.
+
+```csharp
+builder.AddMcpClient("mcp")
+    .UseBearerTokenProvider(async (services, request, cancellationToken) =>
+    {
+        var provider = services.GetRequiredService<IMyTokenProvider>();
+        return await provider.GetAccessTokenAsync(cancellationToken);
+    });
+```
+
+`UseOAuth` and `UseBearerTokenProvider` are mutually exclusive for a registration.
 
 ## Configuration
 
-The Aspire MCP Client library provides multiple options to configure the endpoint and behavior based on your project requirements and configuration conventions.
+Settings bind from:
 
-### Use a connection string
-
-When using a connection string from the `ConnectionStrings` configuration section, provide the connection name when calling `builder.AddMcpClient()`:
-
-```csharp
-builder.AddMcpClient("mcp");
-```
-
-And then configure the endpoint URI in the `ConnectionStrings` configuration section:
-
-```json
-{
-  "ConnectionStrings": {
-    "mcp": "https://my-mcp-server.example.com/mcp"
-  }
-}
-```
-
-The connection string must be an absolute HTTP or HTTPS URI; malformed values throw
-`FormatException` unless `configureSettings` supplies an endpoint.
-
-### Use configuration providers
-
-The Aspire MCP Client library supports [Microsoft.Extensions.Configuration](https://learn.microsoft.com/dotnet/api/microsoft.extensions.configuration). It loads [McpClientSettings](https://github.com/microsoft/aspire/blob/main/src/Components/Aspire.Mcp.Client/McpClientSettings.cs) from configuration using the `Aspire:Mcp:Client` key:
+1. `Aspire:Mcp:Client`
+2. `Aspire:Mcp:Client:{connectionName}`
+3. `ConnectionStrings:{connectionName}`
+4. `configureSettings` delegate
 
 ```json
 {
@@ -77,106 +114,22 @@ The Aspire MCP Client library supports [Microsoft.Extensions.Configuration](http
     "Mcp": {
       "Client": {
         "Endpoint": "https://my-mcp-server.example.com/mcp",
-        "DisableHealthChecks": false
+        "DisableHealthChecks": false,
+        "DisableTracing": false,
+        "DisableMetrics": false
       }
     }
   }
 }
 ```
 
-You can also use named configuration (`Aspire:Mcp:Client:{connectionName}`) to override base settings for specific registrations.
-Configured endpoint values must be absolute HTTP or HTTPS URIs with a non-empty host.
-
-### Use the connection name
-
-When using `WithReference` in AppHost, provide the same connection name in your service:
-
-```csharp
-builder.AddMcpClient("mcp");
-```
-
-The client resolves `https://{connectionName}/mcp` by default. If service discovery only provides HTTP endpoints, it resolves `http://{connectionName}/mcp` instead.
-
-### Use inline delegates
-
-Use the overload to configure [McpClientOptions](https://github.com/modelcontextprotocol/csharp-sdk/blob/main/src/ModelContextProtocol.Core/Client/McpClientOptions.cs) and [HttpClientTransportOptions](https://github.com/modelcontextprotocol/csharp-sdk/blob/main/src/ModelContextProtocol.Core/Client/HttpClientTransportOptions.cs) inline.
-
-Use `configureClientOptions` to configure MCP client behavior, such as client metadata and initialization timeout:
-
-```csharp
-builder.AddMcpClient(
-    "mcp",
-    configureClientOptions: options =>
-    {
-        options.ClientInfo = new() { Name = "MyService", Version = "1.0.0" };
-        options.InitializationTimeout = TimeSpan.FromSeconds(60);
-    });
-```
-
-Use `configureTransportOptions` to configure HTTP transport behavior, such as transport mode, timeout, headers, and OAuth:
-
-```csharp
-builder.AddMcpClient(
-    "mcp",
-    configureTransportOptions: options =>
-    {
-        options.TransportMode = HttpTransportMode.StreamableHttp;
-        options.ConnectionTimeout = TimeSpan.FromSeconds(15);
-        options.AdditionalHeaders = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["x-api-key"] = "api-key-value"
-        };
-        options.OAuth = oauthProvider;
-    });
-```
-
-Use `configureSettings` to configure Aspire integration behavior, such as disabling health checks:
-
-```csharp
-builder.AddMcpClient(
-    "mcp",
-    configureSettings: settings => settings.DisableHealthChecks = true);
-```
-
-### Use keyed registrations
-
-When your application consumes multiple MCP servers, register keyed clients:
-
-```csharp
-builder.AddServiceDefaults();
-builder.AddKeyedMcpClient("weather");
-```
-
-And resolve the keyed `McpClient`:
-
-```csharp
-var weatherClient = serviceProvider.GetRequiredKeyedService<McpClient>("weather");
-```
-
-## AppHost extensions
-
-There is no dedicated `Aspire.Hosting.Mcp` package. In the _AppHost.cs_ file of `AppHost`, register your MCP server project and reference it from the consuming service:
-
-```csharp
-var mcp = builder.AddProject<Projects.Mcp>("mcp");
-
-var api = builder.AddProject<Projects.Api>("api")
-    .WithReference(mcp)
-    .WaitFor(mcp);
-```
-
-The `WithReference` method configures a connection in the `api` project named `mcp`. In the _Program.cs_ file of `api`, consume that connection with:
-
-```csharp
-builder.AddServiceDefaults();
-builder.AddMcpClient("mcp");
-```
+Connection strings and configured endpoints must be absolute HTTP/HTTPS URIs with a host.
 
 ## Additional documentation
 
-* https://modelcontextprotocol.io/
-* https://github.com/modelcontextprotocol/csharp-sdk
-* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
+- https://modelcontextprotocol.io/
+- https://github.com/modelcontextprotocol/csharp-sdk
+- https://github.com/microsoft/aspire/tree/main/src/Components/README.md
 
 ## Feedback & contributing
 

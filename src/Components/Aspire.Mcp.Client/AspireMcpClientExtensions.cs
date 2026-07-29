@@ -6,11 +6,15 @@ using Aspire.Mcp.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.ServiceDiscovery;
+using ModelContextProtocol.Authentication;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using System.Net;
+using System.Net.Http.Headers;
 
 namespace Microsoft.Extensions.Hosting;
 
@@ -37,11 +41,11 @@ public static class AspireMcpClientExtensions
     /// builder.AddMcpClient("mcp-server");
     /// </code>
     /// </example>
-    /// <returns>The <paramref name="builder"/> for chaining.</returns>
+    /// <returns>An <see cref="AspireMcpClientBuilder"/> that can be used to further configure the registration.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="connectionName"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="connectionName"/> is empty.</exception>
     /// <exception cref="FormatException">Thrown when the configured connection string is not an absolute HTTP or HTTPS URI.</exception>
-    public static IHostApplicationBuilder AddMcpClient(this IHostApplicationBuilder builder, string connectionName)
+    public static AspireMcpClientBuilder AddMcpClient(this IHostApplicationBuilder builder, string connectionName)
         => AddMcpClientCore(builder, connectionName, serviceKey: null, configureClientOptions: null, configureTransportOptions: null, configureSettings: null);
 
     /// <summary>
@@ -76,11 +80,11 @@ public static class AspireMcpClientExtensions
     ///     });
     /// </code>
     /// </example>
-    /// <returns>The <paramref name="builder"/> for chaining.</returns>
+    /// <returns>An <see cref="AspireMcpClientBuilder"/> that can be used to further configure the registration.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="connectionName"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="connectionName"/> is empty.</exception>
     /// <exception cref="FormatException">Thrown when the configured connection string is not an absolute HTTP or HTTPS URI and <paramref name="configureSettings"/> does not provide an endpoint.</exception>
-    public static IHostApplicationBuilder AddMcpClient(
+    public static AspireMcpClientBuilder AddMcpClient(
         this IHostApplicationBuilder builder,
         string connectionName,
         Action<McpClientSettings>? configureSettings = null,
@@ -104,11 +108,11 @@ public static class AspireMcpClientExtensions
     /// builder.AddKeyedMcpClient("mcp-server");
     /// </code>
     /// </example>
-    /// <returns>The <paramref name="builder"/> for chaining.</returns>
+    /// <returns>An <see cref="AspireMcpClientBuilder"/> that can be used to further configure the registration.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="name"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="name"/> is empty.</exception>
     /// <exception cref="FormatException">Thrown when the configured connection string is not an absolute HTTP or HTTPS URI.</exception>
-    public static IHostApplicationBuilder AddKeyedMcpClient(this IHostApplicationBuilder builder, string name)
+    public static AspireMcpClientBuilder AddKeyedMcpClient(this IHostApplicationBuilder builder, string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
@@ -148,11 +152,11 @@ public static class AspireMcpClientExtensions
     ///     });
     /// </code>
     /// </example>
-    /// <returns>The <paramref name="builder"/> for chaining.</returns>
+    /// <returns>An <see cref="AspireMcpClientBuilder"/> that can be used to further configure the registration.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="name"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="name"/> is empty.</exception>
     /// <exception cref="FormatException">Thrown when the configured connection string is not an absolute HTTP or HTTPS URI and <paramref name="configureSettings"/> does not provide an endpoint.</exception>
-    public static IHostApplicationBuilder AddKeyedMcpClient(
+    public static AspireMcpClientBuilder AddKeyedMcpClient(
         this IHostApplicationBuilder builder,
         string name,
         Action<McpClientSettings>? configureSettings = null,
@@ -165,7 +169,7 @@ public static class AspireMcpClientExtensions
         return AddMcpClientCore(builder, name, name, configureClientOptions, configureTransportOptions, configureSettings);
     }
 
-    private static IHostApplicationBuilder AddMcpClientCore(
+    private static AspireMcpClientBuilder AddMcpClientCore(
         IHostApplicationBuilder builder,
         string connectionName,
         object? serviceKey,
@@ -204,6 +208,8 @@ public static class AspireMcpClientExtensions
             throw connectionStringException;
         }
 
+        ThrowIfDuplicateRegistration(builder.Services, serviceKey, connectionName);
+
         var endpoint = settings.Endpoint;
         if (endpoint is null)
         {
@@ -214,13 +220,27 @@ public static class AspireMcpClientExtensions
             McpClientSettings.ValidateEndpoint(endpoint);
         }
         var registrationKey = new object();
+        var registrationOptions = new McpClientRegistrationOptions();
+        if (configureClientOptions is not null)
+        {
+            registrationOptions.ClientOptionsActions.Add(configureClientOptions);
+        }
+        if (configureTransportOptions is not null)
+        {
+            registrationOptions.TransportOptionsActions.Add(configureTransportOptions);
+        }
+
+        var httpClientName = GetHttpClientName(connectionName, serviceKey);
         builder.Services.AddHttpClient();
+        builder.Services.AddHttpClient(httpClientName);
         builder.Services.AddKeyedSingleton<McpClientRegistration>(registrationKey, (serviceProvider, _) => new McpClientRegistration(
             connectionName,
             endpoint,
-            configureClientOptions,
-            configureTransportOptions,
+            registrationOptions,
+            httpClientName,
+            serviceProvider,
             serviceProvider.GetRequiredService<IHttpClientFactory>(),
+            serviceProvider.GetRequiredService<IHttpMessageHandlerFactory>(),
             serviceProvider.GetRequiredService<ILoggerFactory>(),
             serviceProvider.GetService<ServiceEndpointResolver>()));
 
@@ -237,7 +257,9 @@ public static class AspireMcpClientExtensions
 
         if (!settings.DisableHealthChecks)
         {
-            var healthCheckName = serviceKey is null ? "Mcp.Client" : $"Mcp.Client_{connectionName}";
+            var healthCheckName = serviceKey is null
+                ? $"Mcp.Client_{connectionName}"
+                : $"Mcp.Client_{connectionName}_{serviceKey}";
 
             builder.TryAddHealthCheck(new HealthCheckRegistration(
                 healthCheckName,
@@ -247,7 +269,33 @@ public static class AspireMcpClientExtensions
                 timeout: default));
         }
 
-        return builder;
+        return new AspireMcpClientBuilder(
+            builder,
+            connectionName,
+            serviceKey,
+            settings,
+            httpClientName,
+            AddClientOptionsAction,
+            AddTransportOptionsAction,
+            oauthOptions =>
+            {
+                if (registrationOptions.BearerTokenProvider is not null)
+                {
+                    throw new InvalidOperationException("MCP OAuth and bearer token provider authentication cannot be enabled at the same time.");
+                }
+                registrationOptions.OAuthOptions = oauthOptions;
+            },
+            tokenProvider =>
+            {
+                if (registrationOptions.OAuthOptions is not null)
+                {
+                    throw new InvalidOperationException("MCP OAuth and bearer token provider authentication cannot be enabled at the same time.");
+                }
+                registrationOptions.BearerTokenProvider = tokenProvider;
+            });
+
+        void AddClientOptionsAction(Action<McpClientOptions> action) => registrationOptions.ClientOptionsActions.Add(action);
+        void AddTransportOptionsAction(Action<HttpClientTransportOptions> action) => registrationOptions.TransportOptionsActions.Add(action);
     }
 
     private static Uri CreateServiceDiscoveryEndpoint(string connectionName)
@@ -258,6 +306,31 @@ public static class AspireMcpClientExtensions
         }
 
         return new Uri($"https+http://{connectionName}/mcp", UriKind.Absolute);
+    }
+
+    private static string GetHttpClientName(string connectionName, object? serviceKey)
+        => serviceKey is null
+            ? $"Aspire.Mcp.Client:{connectionName}:default"
+            : $"Aspire.Mcp.Client:{connectionName}:{serviceKey}";
+
+    private static void ThrowIfDuplicateRegistration(IServiceCollection services, object? serviceKey, string connectionName)
+    {
+        if (services.Any(descriptor =>
+            descriptor.ServiceType == typeof(McpClient) &&
+            Equals(descriptor.ServiceKey, serviceKey)))
+        {
+            var keyText = serviceKey?.ToString() ?? "default";
+            throw new InvalidOperationException($"An MCP client registration already exists for service key '{keyText}' (connection '{connectionName}').");
+        }
+    }
+
+    private sealed class McpClientRegistrationOptions
+    {
+        public List<Action<McpClientOptions>> ClientOptionsActions { get; } = [];
+        public List<Action<HttpClientTransportOptions>> TransportOptionsActions { get; } = [];
+        public ClientOAuthOptions? OAuthOptions { get; set; }
+        public ITokenCache? OAuthTokenCache { get; set; }
+        public Func<IServiceProvider, HttpRequestMessage, CancellationToken, ValueTask<string?>>? BearerTokenProvider { get; set; }
     }
 
     private sealed class McpClientRegistration : IDisposable, IAsyncDisposable
@@ -272,21 +345,19 @@ public static class AspireMcpClientExtensions
         public McpClientRegistration(
             string connectionName,
             Uri endpoint,
-            Action<McpClientOptions>? configureClientOptions,
-            Action<HttpClientTransportOptions>? configureTransportOptions,
+            McpClientRegistrationOptions registrationOptions,
+            string httpClientName,
+            IServiceProvider serviceProvider,
             IHttpClientFactory httpClientFactory,
+            IHttpMessageHandlerFactory httpMessageHandlerFactory,
             ILoggerFactory loggerFactory,
             ServiceEndpointResolver? serviceEndpointResolver)
         {
-            _createClient = () => CreateClientAsync(connectionName, endpoint, configureClientOptions, configureTransportOptions, httpClientFactory, loggerFactory, serviceEndpointResolver);
+            _createClient = () => CreateClientAsync(connectionName, endpoint, registrationOptions, httpClientName, serviceProvider, httpClientFactory, httpMessageHandlerFactory, loggerFactory, serviceEndpointResolver);
         }
 
         public McpClient GetClient()
-        {
-            var client = GetOrCreateClient();
-            client.Initialize();
-            return client;
-        }
+            => GetOrCreateClient();
 
         public async Task<McpClient> GetClientAsync(CancellationToken cancellationToken)
         {
@@ -327,30 +398,32 @@ public static class AspireMcpClientExtensions
         }
 
         public async ValueTask DisposeAsync()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) is 0)
             {
-                if (Interlocked.Exchange(ref _disposed, 1) is 0)
+                _creationCancellation.Cancel();
+                ReconnectableMcpClient? client;
+                lock (_lock)
                 {
-                    _creationCancellation.Cancel();
-                    ReconnectableMcpClient? client;
-                    lock (_lock)
-                    {
-                        client = _client;
-                    }
-
-                    if (client is not null)
-                    {
-                        await client.DisposeAsync().ConfigureAwait(false);
-                    }
-                    _creationCancellation.Dispose();
+                    client = _client;
                 }
+
+                if (client is not null)
+                {
+                    await client.DisposeAsync().ConfigureAwait(false);
+                }
+                _creationCancellation.Dispose();
             }
+        }
 
         private async Task<DisposableMcpClient> CreateClientAsync(
             string connectionName,
             Uri endpoint,
-            Action<McpClientOptions>? configureClientOptions,
-            Action<HttpClientTransportOptions>? configureTransportOptions,
+            McpClientRegistrationOptions registrationOptions,
+            string httpClientName,
+            IServiceProvider serviceProvider,
             IHttpClientFactory httpClientFactory,
+            IHttpMessageHandlerFactory httpMessageHandlerFactory,
             ILoggerFactory loggerFactory,
             ServiceEndpointResolver? serviceEndpointResolver)
         {
@@ -364,16 +437,53 @@ public static class AspireMcpClientExtensions
                     Endpoint = defaultTransportEndpoint,
                     Name = connectionName,
                 };
-                configureTransportOptions?.Invoke(transportOptions);
+                foreach (var configureTransportOptions in registrationOptions.TransportOptionsActions)
+                {
+                    configureTransportOptions(transportOptions);
+                }
                 transportOptions.Name ??= connectionName;
                 var endpointToResolve = endpoint.Scheme is "https+http" && Equals(transportOptions.Endpoint, defaultTransportEndpoint)
                     ? endpoint
                     : transportOptions.Endpoint;
-                transportOptions.Endpoint = await ResolveEndpointAsync(endpointToResolve, serviceEndpointResolver, _creationCancellation.Token).ConfigureAwait(false);
+                var resolvedEndpoint = await ResolveEndpointAsync(endpointToResolve, serviceEndpointResolver, _creationCancellation.Token).ConfigureAwait(false);
+                transportOptions.Endpoint = resolvedEndpoint;
                 McpClientSettings.ValidateEndpoint(transportOptions.Endpoint);
                 var clientOptions = new McpClientOptions();
-                configureClientOptions?.Invoke(clientOptions);
-                httpClient = httpClientFactory.CreateClient(string.Empty);
+                foreach (var configureClientOptions in registrationOptions.ClientOptionsActions)
+                {
+                    configureClientOptions(clientOptions);
+                }
+                if (registrationOptions.BearerTokenProvider is not null && registrationOptions.OAuthOptions is not null)
+                {
+                    throw new InvalidOperationException("MCP OAuth and bearer token provider authentication cannot be enabled at the same time.");
+                }
+                if (registrationOptions.OAuthOptions is not null)
+                {
+                    var oauth = registrationOptions.OAuthOptions;
+                    if (oauth.AuthorizationRedirectDelegate is null)
+                    {
+                        throw new InvalidOperationException("MCP OAuth requires an explicit AuthorizationRedirectDelegate.");
+                    }
+                    oauth.TokenCache ??= registrationOptions.OAuthTokenCache ??= new InMemoryTokenCache();
+                    transportOptions.OAuth = oauth;
+                }
+                if (registrationOptions.BearerTokenProvider is not null)
+                {
+                    var innerHandler = httpMessageHandlerFactory.CreateHandler(httpClientName);
+                    httpClient = new HttpClient(new BearerTokenHttpMessageHandler(serviceProvider, registrationOptions.BearerTokenProvider, resolvedEndpoint)
+                    {
+                        InnerHandler = innerHandler,
+                    }, disposeHandler: true);
+                    var clientFactoryOptions = serviceProvider.GetRequiredService<IOptionsMonitor<HttpClientFactoryOptions>>().Get(httpClientName);
+                    foreach (var configureClient in clientFactoryOptions.HttpClientActions)
+                    {
+                        configureClient(httpClient);
+                    }
+                }
+                else
+                {
+                    httpClient = httpClientFactory.CreateClient(httpClientName);
+                }
                 transport = new HttpClientTransport(transportOptions, httpClient, loggerFactory, ownsHttpClient: true);
                 var client = await McpClient.CreateAsync(transport, clientOptions, loggerFactory: loggerFactory, cancellationToken: _creationCancellation.Token).ConfigureAwait(false);
                 if (Volatile.Read(ref _disposed) is not 0)
@@ -491,6 +601,53 @@ public static class AspireMcpClientExtensions
             var index = Interlocked.Increment(ref _endpointIndex);
 
             return (int)((uint)index % (uint)endpointCount);
+        }
+    }
+
+    private sealed class BearerTokenHttpMessageHandler(
+        IServiceProvider serviceProvider,
+        Func<IServiceProvider, HttpRequestMessage, CancellationToken, ValueTask<string?>> tokenProvider,
+        Uri mcpEndpoint) : DelegatingHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.RequestUri is { } requestUri &&
+                requestUri.Host.Equals(mcpEndpoint.Host, StringComparison.OrdinalIgnoreCase) &&
+                requestUri.Scheme.Equals(mcpEndpoint.Scheme, StringComparison.OrdinalIgnoreCase) &&
+                requestUri.Port == mcpEndpoint.Port)
+            {
+                var token = await tokenProvider(serviceProvider, request, cancellationToken).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(token))
+                {
+                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                }
+            }
+
+            return await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private sealed class InMemoryTokenCache : ITokenCache
+    {
+        private TokenContainer? _tokens;
+        private readonly object _lock = new();
+
+        public ValueTask<TokenContainer?> GetTokensAsync(CancellationToken cancellationToken = default)
+        {
+            lock (_lock)
+            {
+                return ValueTask.FromResult<TokenContainer?>(_tokens);
+            }
+        }
+
+        public ValueTask StoreTokensAsync(TokenContainer tokenContainer, CancellationToken cancellationToken = default)
+        {
+            lock (_lock)
+            {
+                _tokens = tokenContainer;
+            }
+
+            return ValueTask.CompletedTask;
         }
     }
 
@@ -704,7 +861,8 @@ public static class AspireMcpClientExtensions
         {
             if (exception is OperationCanceledException)
             {
-                return false;
+                // Distinguish caller-initiated cancellation from transport/session cancellation.
+                return task.IsCanceled;
             }
 
             if (task.IsFaulted)
