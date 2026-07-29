@@ -1,0 +1,96 @@
+@implements IDisposable
+@inject IDashboardToastService ToastService
+@inject IStringLocalizer<Resources.Dialogs> Loc
+@inject IStringLocalizer<Resources.Layout> LayoutLoc
+
+@if (_toasts.Count > 0)
+{
+    <div class="notif-stack" role="region" aria-label="@LayoutLoc[nameof(Resources.Layout.MainLayoutLaunchNotifications)]">
+        @foreach (var toast in _toasts)
+        {
+            <div class="notif notif--@GetTone(toast.Intent)" role="status" @key="toast.Id">
+                <span class="notif__icon" aria-hidden="true">
+                    <DeckIcon Name="@GetIcon(toast)" Size="16" />
+                </span>
+                <div class="notif__body">
+                    <div class="notif__title">@toast.Title</div>
+                    @if (!string.IsNullOrEmpty(toast.Details))
+                    {
+                        <div class="notif__message">@toast.Details</div>
+                    }
+                    @if (toast.PrimaryAction is not null || toast.SecondaryAction is not null)
+                    {
+                        <div class="notif__actions">
+                            @if (toast.SecondaryAction is { } secondaryAction)
+                            {
+                                <button class="btn btn--sm" type="button" @onclick="secondaryAction.OnClick">
+                                    @secondaryAction.Text
+                                </button>
+                            }
+                            @if (toast.PrimaryAction is { } primaryAction)
+                            {
+                                <button class="btn btn--sm btn--primary" type="button" @onclick="primaryAction.OnClick">
+                                    @primaryAction.Text
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+                <button class="icon-btn notif__dismiss"
+                        type="button"
+                        @onclick="() => ToastService.Close(toast.Id)"
+                        aria-label="@Loc[nameof(Resources.Dialogs.NotificationEntryDismiss)]">
+                    <DeckIcon Name="DeckIconName.Close" Size="15" />
+                </button>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private IReadOnlyList<DashboardToast> _toasts = [];
+
+    protected override void OnInitialized()
+    {
+        _toasts = ToastService.GetToasts();
+        ToastService.OnChange += HandleToastsChanged;
+    }
+
+    public void Dispose()
+    {
+        ToastService.OnChange -= HandleToastsChanged;
+    }
+
+    private void HandleToastsChanged()
+    {
+        _ = InvokeAsync(() =>
+        {
+            _toasts = ToastService.GetToasts();
+            StateHasChanged();
+        });
+    }
+
+    private static string GetTone(NotificationIntent intent) => intent switch
+    {
+        NotificationIntent.Success => "success",
+        NotificationIntent.Warning => "warning",
+        NotificationIntent.Error => "error",
+        _ => "info"
+    };
+
+    private static DeckIconName GetIcon(DashboardToast toast)
+    {
+        if (toast.IsProgress)
+        {
+            return DeckIconName.Sparkle;
+        }
+
+        return toast.Intent switch
+        {
+            NotificationIntent.Success => DeckIconName.CheckmarkCircle,
+            NotificationIntent.Warning => DeckIconName.Warning,
+            NotificationIntent.Error => DeckIconName.ErrorCircle,
+            _ => DeckIconName.Info
+        };
+    }
+}

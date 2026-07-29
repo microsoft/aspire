@@ -386,7 +386,6 @@ public partial class MainLayoutTests : DashboardTestContext
         Services.AddSingleton<IThemeResolver, TestThemeResolver>();
         Services.AddSingleton<IDashboardClient, TestDashboardClient>();
         Services.AddSingleton<ITooltipService, TooltipService>();
-        Services.AddSingleton<IToastService, ToastService>();
         Services.Configure<DashboardOptions>(o =>
         {
             // Configure OTLP endpoint URLs so they can be parsed

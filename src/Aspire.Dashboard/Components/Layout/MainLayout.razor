@@ -35,6 +35,7 @@
             @* Inside .app so interaction panes/toasts sit alongside the Deck drawers and the
                `:has(.drawer) .notif-stack` toast-shift applies. *@
             <InteractionsProvider />
+            <DashboardToastProvider />
         </main>
     </div>
 }
@@ -78,16 +79,16 @@ else
             LaunchSettingsAsync="@LaunchSettingsAsync" />
 
         <InteractionsProvider />
+        <DashboardToastProvider />
     </div>
 }
 
-@* Shared overlay providers. These are message/dialog/toast hosts positioned over the shell;
+@* Shared overlay providers. These are message/dialog hosts positioned over the shell;
    they keep working while individual surfaces are migrated to Deck panes/toasts. *@
 <div class="messagebar-container">
     <FluentMessageBarProvider Section="@DashboardUIHelpers.MessageBarSection" Class="top-messagebar" MaxMessageCount="null" NewestOnTop="true" />
 </div>
 
-<FluentToastProvider MaxToastCount="3" Timeout="5000" />
 <FluentDialogProvider/>
 <FluentTooltipProvider />
 <FluentMenuProvider />
