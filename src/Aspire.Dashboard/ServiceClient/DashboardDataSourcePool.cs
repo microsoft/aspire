@@ -46,7 +46,7 @@ public sealed class DashboardDataSourcePool : IDisposable
             {
                 ObjectDisposedException.ThrowIf(_disposed, this);
 
-                var currentRun = _runStore.GetRuns().Single(run => run.IsCurrent);
+                var currentRun = _runStore.GetCurrentRun();
                 if (_current is null)
                 {
                     var database = new DashboardSqliteDatabase(currentRun.DatabasePath);

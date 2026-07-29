@@ -28,6 +28,26 @@ public interface IDashboardRunStore
     IReadOnlyList<DashboardRunDescriptor> GetRuns();
 
     /// <summary>
+    /// Gets the current dashboard run.
+    /// </summary>
+    /// <returns>The current dashboard run.</returns>
+    DashboardRunDescriptor GetCurrentRun();
+
+    /// <summary>
+    /// Gets the dashboard run with the specified ID.
+    /// </summary>
+    /// <param name="runId">The ID of the dashboard run.</param>
+    /// <returns>The dashboard run, or <see langword="null"/> when the run is not available.</returns>
+    DashboardRunDescriptor? GetRunById(string runId);
+
+    /// <summary>
+    /// Pins or unpins the specified dashboard run.
+    /// </summary>
+    /// <param name="run">The dashboard run to update.</param>
+    /// <param name="isPinned"><see langword="true"/> to pin the dashboard run; <see langword="false"/> to unpin it.</param>
+    void SetRunPinned(DashboardRunDescriptor run, bool isPinned);
+
+    /// <summary>
     /// Attempts to acquire a lease that keeps the specified dashboard run available while it is selected.
     /// </summary>
     /// <param name="run">The dashboard run to lease.</param>
@@ -50,11 +70,12 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     private readonly string? _metadataPath;
     private readonly string? _temporaryDirectory;
     private readonly FileStream? _runLock;
-    private readonly DashboardRunMetadata _metadata;
+    private DashboardRunMetadata _metadata;
     private readonly ILogger<DashboardRunStore> _logger;
     private readonly TimeProvider _timeProvider;
     private readonly Action<string> _deleteRunDirectory;
     private readonly Lazy<IReadOnlyList<DashboardRunDescriptor>> _runs;
+    private readonly object _runStateLock = new();
     private bool _metadataPublished;
 
     public DashboardRunStore(IOptions<DashboardOptions> options, ILogger<DashboardRunStore> logger, TimeProvider timeProvider)
@@ -205,6 +226,52 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             : runs;
     }
 
+    public DashboardRunDescriptor GetCurrentRun() => GetRuns().Single(run => run.IsCurrent);
+
+    public DashboardRunDescriptor? GetRunById(string runId) =>
+        GetRuns().SingleOrDefault(run => string.Equals(run.RunId, runId, StringComparison.Ordinal));
+
+    public void SetRunPinned(DashboardRunDescriptor run, bool isPinned)
+    {
+        var storedRun = GetRunById(run.RunId);
+        if (storedRun is null)
+        {
+            throw new InvalidOperationException($"Dashboard run '{run.RunId}' is no longer available.");
+        }
+
+        var runDirectory = Path.GetDirectoryName(storedRun.DatabasePath)!;
+        lock (_runStateLock)
+        {
+            // The current run has the store's lifetime lock, and a selected historical run has a lease.
+            // Only an unselected historical run needs a temporary lock while its metadata is updated.
+            using var runLock = storedRun.IsCurrent || storedRun.IsLeased
+                ? null
+                : TryOpenRunLock(runDirectory)
+                    ?? throw new InvalidOperationException($"Dashboard run '{storedRun.RunId}' is no longer available.");
+            UpdatePinnedState(storedRun, runDirectory, isPinned);
+        }
+    }
+
+    private void UpdatePinnedState(DashboardRunDescriptor run, string runDirectory, bool isPinned)
+    {
+        var metadataPath = Path.Combine(runDirectory, "run.json");
+        var metadata = JsonSerializer.Deserialize<DashboardRunMetadata>(File.ReadAllText(metadataPath));
+        if (metadata is not { SchemaVersion: SchemaVersion } ||
+            !string.Equals(metadata.RunId, run.RunId, StringComparison.Ordinal))
+        {
+            throw new InvalidDataException($"Dashboard run metadata for '{run.RunId}' is invalid.");
+        }
+
+        var updatedMetadata = metadata with { IsPinned = isPinned };
+        File.WriteAllText(metadataPath, JsonSerializer.Serialize(updatedMetadata, s_jsonOptions));
+        if (string.Equals(run.RunId, RunId, StringComparison.Ordinal))
+        {
+            _metadata = updatedMetadata;
+        }
+
+        run.IsPinned = isPinned;
+    }
+
     internal void PublishRun()
     {
         if (_metadataPath is null || _metadataPublished)
@@ -237,8 +304,24 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
     public IDisposable? TryAcquireRunLease(DashboardRunDescriptor run)
     {
-        var runDirectory = Path.GetDirectoryName(run.DatabasePath)!;
-        return TryOpenRunLock(runDirectory);
+        var storedRun = GetRunById(run.RunId);
+        if (storedRun is null)
+        {
+            return null;
+        }
+
+        var runDirectory = Path.GetDirectoryName(storedRun.DatabasePath)!;
+        lock (_runStateLock)
+        {
+            var runLock = TryOpenRunLock(runDirectory);
+            if (runLock is null)
+            {
+                return null;
+            }
+
+            storedRun.IsLeased = true;
+            return new RunLease(this, storedRun, runLock);
+        }
     }
 
     private IReadOnlyList<DashboardRunDescriptor> LoadRuns()
@@ -265,7 +348,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
                     {
                         var run = CreateDescriptor(metadata, directory, isCurrent: false);
                         // Filter out in-progress runs that are owned by other Dashboard instances.
-                        using var runLock = TryAcquireRunLease(run);
+                        using var runLock = TryOpenRunLock(directory);
                         run.IsSelectable = runLock is not null;
                         runs.Add(run);
                     }
@@ -279,6 +362,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
         var orderedRuns = runs
             .OrderByDescending(run => run.IsCurrent)
+            .ThenByDescending(run => run.IsPinned)
             .ThenByDescending(run => run.StartedAtUtc)
             .ToArray();
         _logger.LogDebug(
@@ -339,11 +423,13 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
     private void PruneRuns(Action<string> deleteRunDirectory)
     {
-        foreach (var run in _runs.Value.Skip(MaxRuns))
+        foreach (var run in _runs.Value.Where(run => !run.IsPinned).Skip(MaxRuns))
         {
             var directory = Path.GetDirectoryName(run.DatabasePath)!;
             using var runLock = TryOpenRunLock(directory);
-            if (runLock is null)
+            // Pinning can happen after the candidate list is created. Recheck while holding the same lock used by
+            // SetRunPinned so a successful pin always completes before pruning decides whether to delete the run.
+            if (runLock is null || IsPinnedRunDirectory(directory))
             {
                 continue;
             }
@@ -360,6 +446,21 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
                     "Failed to delete expired dashboard run directory '{RunDirectory}'. The directory may still be in use by another dashboard process.",
                     directory);
             }
+        }
+    }
+
+    private static bool IsPinnedRunDirectory(string runDirectory)
+    {
+        try
+        {
+            var metadataPath = Path.Combine(runDirectory, "run.json");
+            return JsonSerializer.Deserialize<DashboardRunMetadata>(File.ReadAllText(metadataPath))?.IsPinned == true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
+        {
+            // Run metadata is written locally by DashboardRunStore and is assumed to be reliable during normal usage.
+            // Treat unreadable metadata as unpinned so incomplete or abandoned run directories can still be pruned.
+            return false;
         }
     }
 
@@ -422,7 +523,10 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             metadata.CleanShutdown,
             metadata.ApplicationName,
             Path.Combine(runDirectory, metadata.DatabaseFileName),
-            isCurrent);
+            isCurrent)
+        {
+            IsPinned = metadata.IsPinned
+        };
     }
 
     internal static string GetApplicationDirectory(string? dataRoot, string applicationName)
@@ -474,6 +578,32 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         return $"{prefix}-{hash}";
     }
 
+    private sealed class RunLease(DashboardRunStore owner, DashboardRunDescriptor run, FileStream runLock) : IDisposable
+    {
+        private FileStream? _runLock = runLock;
+
+        public void Dispose()
+        {
+            lock (owner._runStateLock)
+            {
+                var runLock = Interlocked.Exchange(ref _runLock, null);
+                if (runLock is not null)
+                {
+                    try
+                    {
+                        runLock.Dispose();
+                    }
+                    finally
+                    {
+                        run.IsLeased = false;
+                    }
+                }
+            }
+
+            GC.SuppressFinalize(this);
+        }
+    }
+
     private sealed record DashboardRunMetadata
     {
         public required int SchemaVersion { get; init; }
@@ -483,6 +613,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         public bool CleanShutdown { get; init; }
         public string? ApplicationName { get; init; }
         public required string DatabaseFileName { get; init; }
+        public bool IsPinned { get; init; }
     }
 }
 
@@ -513,4 +644,11 @@ public sealed record DashboardRunDescriptor(
     public bool IsPruned { get; set; }
 
     internal bool IsSelectable { get; set; } = true;
+
+    /// <summary>
+    /// Gets a value indicating whether the dashboard run is pinned.
+    /// </summary>
+    public bool IsPinned { get; internal set; }
+
+    internal bool IsLeased { get; set; }
 }

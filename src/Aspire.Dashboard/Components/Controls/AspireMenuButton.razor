@@ -36,5 +36,5 @@
 @* Render lazily because FluentMenu is expensive: building menu items and initializing its JavaScript interop add significant overhead when many menu buttons are displayed. *@
 @if (_renderMenu)
 {
-    <AspireMenu Anchor="@MenuButtonId" Open="@_visible" OpenChanged="OnMenuOpenChanged" OnRenderComplete="OnMenuRenderComplete" Items="_items" RestoreFocusOnItemClick="@RestoreFocusOnItemClick" />
+    <AspireMenu Anchor="@MenuButtonId" Open="@_visible" OpenChanged="OnMenuOpenChanged" OnRenderComplete="OnMenuRenderComplete" OnSecondaryActionComplete="RefreshItems" Items="_items" RestoreFocusOnItemClick="@RestoreFocusOnItemClick" />
 }

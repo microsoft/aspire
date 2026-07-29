@@ -160,9 +160,9 @@ Historical discovery only includes directories that:
 - have readable, valid `run.json` metadata; and
 - have the current metadata schema version.
 
-The current run is listed first. Historical runs are ordered by descending start time.
+Run discovery orders pinned runs before unpinned runs, then orders each group by descending start time. The run selector applies its presentation order separately: the current run is first, followed by pinned historical runs and then unpinned historical runs, with each historical group ordered by descending start time. Pin state is stored in `run.json`; both current and historical runs can be pinned or unpinned.
 
-`Run` mode retains at most ten runs per application: the current run and the nine newest historical run directories. Pruning happens after a new run writes its metadata. A run is deleted only after the pruner acquires its lock, so a historical run selected by another Dashboard circuit or a run owned by another Dashboard process is skipped. I/O and access failures are logged and do not prevent Dashboard startup.
+`Run` mode retains the five newest unpinned historical run directories. The current run and pinned historical runs do not count toward this limit, so the total number of retained runs is not fixed. Pruning happens after a new run writes its metadata. Before deleting a candidate, the pruner acquires its lock and rechecks its pin state. A historical run selected by another Dashboard circuit or a run owned by another Dashboard process is skipped, which can temporarily leave more than five unpinned historical runs. I/O and access failures are logged and do not prevent Dashboard startup.
 
 ## Database lifecycle
 

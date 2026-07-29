@@ -12,6 +12,10 @@ public class MenuButtonItem
     public string? Text { get; set; }
     public string? Tooltip { get; set; }
     public Icon? Icon { get; set; }
+    public Icon? SecondaryActionIcon { get; set; }
+    public string? SecondaryActionAriaLabel { get; set; }
+    public Func<Task>? OnSecondaryActionClick { get; set; }
+    public bool IsSecondaryActionSelected { get; set; }
     /// <summary>
     /// Optional ARIA role for the item. Set to <see cref="MenuItemRole.MenuItemCheckbox"/> or
     /// <see cref="MenuItemRole.MenuItemRadio"/> to expose an accessible checked state (via

@@ -1,0 +1,27 @@
+::deep .aspire-menu-secondary-action {
+    opacity: 0;
+    visibility: hidden;
+    padding-left: 8px;
+}
+
+::deep .aspire-menu-secondary-action::part(control) {
+    background-color: transparent;
+}
+
+::deep .aspire-menu-secondary-action:hover::part(control) {
+    background-color: var(--neutral-fill-secondary-hover);
+}
+
+fluent-menu-item:hover > span[slot="end"] ::deep .aspire-menu-secondary-action,
+fluent-menu-item:focus-within > span[slot="end"] ::deep .aspire-menu-secondary-action,
+::deep .aspire-menu-secondary-action.selected {
+    opacity: 1;
+    visibility: visible;
+}
+
+@media (hover: none) {
+    fluent-menu-item > span[slot="end"] ::deep .aspire-menu-secondary-action {
+        opacity: 1;
+        visibility: visible;
+    }
+}

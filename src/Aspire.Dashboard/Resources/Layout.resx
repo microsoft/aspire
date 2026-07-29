@@ -195,4 +195,10 @@
   <data name="DashboardRunSelectCurrent" xml:space="preserve">
     <value>Live run</value>
   </data>
+  <data name="DashboardRunSelectPin" xml:space="preserve">
+    <value>Pin run</value>
+  </data>
+  <data name="DashboardRunSelectUnpin" xml:space="preserve">
+    <value>Unpin run</value>
+  </data>
 </root>
