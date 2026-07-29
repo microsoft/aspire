@@ -5,11 +5,10 @@ using Aspire.Dashboard.Components.Deck;
 using Aspire.Dashboard.Model;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Components;
 
-public partial class AspireMenuButton : FluentComponentBase
+public partial class AspireMenuButton : ComponentBase
 {
     private const DeckIconName DefaultIcon = DeckIconName.ChevronDown;
 
@@ -38,16 +37,16 @@ public partial class AspireMenuButton : FluentComponentBase
     public required IList<MenuButtonItem> Items { get; set; }
 
     [Parameter]
-    public Appearance? ButtonAppearance { get; set; }
-
-    [Parameter]
     public string? Title { get; set; }
 
     [Parameter]
-    public string MenuButtonId { get; set; } = Identifier.NewId();
+    public string MenuButtonId { get; set; } = Guid.NewGuid().ToString("N");
 
     [Parameter]
     public bool HideIcon { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether focus should return to this menu button after a menu item is clicked.
@@ -61,33 +60,14 @@ public partial class AspireMenuButton : FluentComponentBase
 
     private string? IconStyle => IconColorStyle is null ? null : $"color: {IconColorStyle};";
 
-    // Map the Fluent Appearance parameter (kept for call-site compatibility) onto the native Deck
-    // button classes. No Text => icon-only trigger (.icon-btn); with Text => .btn, where the accent
-    // appearance is primary and the lightweight/stealth appearances are ghost (transparent) triggers.
     private string TriggerClass
     {
         get
         {
-            var classes = new List<string>();
-
-            if (string.IsNullOrWhiteSpace(Text))
+            var classes = new List<string>
             {
-                classes.Add("icon-btn");
-            }
-            else
-            {
-                classes.Add("btn");
-                switch (ButtonAppearance)
-                {
-                    case Appearance.Accent:
-                        classes.Add("btn--primary");
-                        break;
-                    case Appearance.Lightweight:
-                    case Appearance.Stealth:
-                        classes.Add("btn--ghost");
-                        break;
-                }
-            }
+                string.IsNullOrWhiteSpace(Text) ? "icon-btn" : "btn"
+            };
 
             if (!string.IsNullOrWhiteSpace(ButtonClass))
             {

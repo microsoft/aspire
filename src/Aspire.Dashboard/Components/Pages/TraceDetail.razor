@@ -67,15 +67,14 @@
                 else
                 {
                     <FluentCounterBadge HorizontalPosition="70" Count="@(PageViewModel.Filters.GetEnabledFilters().Count())" Appearance="Appearance.Accent">
-                        <AspireMenuButton ButtonAppearance="Appearance.Stealth" HideIcon="true"
+                        <AspireMenuButton HideIcon="true"
                                           Icon="DeckIconName.Filter"
                                           Items="@GetFilterMenuItems()"
                                           Title="@FilterLoc[nameof(StructuredFiltering.Filters)]" />
                     </FluentCounterBadge>
                 }
 
-                <AspireMenuButton ButtonAppearance="Appearance.Lightweight"
-                                  Icon="DeckIconName.Options"
+                <AspireMenuButton Icon="DeckIconName.Options"
                                   Items="@_traceActionsMenuItems"
                                   Title="@ControlStringsLoc[nameof(ControlsStrings.ActionsButtonText)]" />
             </div>
