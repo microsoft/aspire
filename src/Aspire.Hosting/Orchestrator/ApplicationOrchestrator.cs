@@ -108,23 +108,23 @@ internal sealed class ApplicationOrchestrator
         // Wait for either dependencies to be ready or for someone to move the resource out of a waiting state.
         // This happens when resource start command is run, which forces the status to "Starting".
         //
-        // This must be edge-triggered: the resource has to be observed in "Waiting" before a non-"Waiting" state
-        // counts as the release signal. WatchAsync replays the current snapshot to new subscribers, so a level
-        // check ("state is not Waiting") is satisfied by that very first replayed event whenever the resource
-        // never entered "Waiting" - which silently abandoned the wait and started the resource with unmet
-        // dependencies. See https://github.com/microsoft/aspire/issues/17453.
+        // The resource has to be observed in "Waiting" before a non-"Waiting" state
+        // counts as the release signal. Otherwise, a simple check for "state is not Waiting" could be satisfied 
+        // by the very first replayed event whenever the resource never entered "Waiting", which would result in 
+        // the wait being silently abandoned and resource being started with unmet dependencies. 
         var seenWaiting = false;
         var waitForNonWaitingStateTask = _notificationService.WaitForResourceAsync(
             @event.Resource.Name,
             e =>
             {
-                if (e.Snapshot.State?.Text == KnownResourceStates.Waiting)
+                var isWaiting = e.Snapshot.State?.Text == KnownResourceStates.Waiting;
+                if (isWaiting)
                 {
                     seenWaiting = true;
                     return false;
                 }
 
-                return seenWaiting;
+                return seenWaiting && !isWaiting;
             },
             cts.Token);
 

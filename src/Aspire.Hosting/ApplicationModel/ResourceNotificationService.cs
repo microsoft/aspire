@@ -600,19 +600,12 @@ public class ResourceNotificationService : IDisposable
     /// while its dependencies are being awaited.
     /// </summary>
     /// <remarks>
-    /// This is an allow-list of the states that mean "has not started yet". A guard is needed because
-    /// <see cref="PublishUpdateAsync(IResource, Func{CustomResourceSnapshot, CustomResourceSnapshot})"/> broadcasts to
-    /// ALL replicas of the resource (it is a model-level update), not just the specific replica being started. Replicas
-    /// that are already running, stopping, rebuilding, or in a terminal state must not be clobbered back to "Waiting" -
-    /// for example, <c>ExecuteRebuildAsync</c> puts replicas into <see cref="KnownResourceStates.Building"/> and relies
-    /// on that state surviving while a sibling replica is still waiting on dependencies.
-    /// <para>
+    /// This is an allow-list of the states that mean "has not started yet". 
     /// <see cref="KnownResourceStates.NotStarted"/> must be allowed: custom resources that drive their own startup
-    /// publish <see cref="BeforeResourceStartedEvent"/> from <c>OnInitializeResource</c>, so they are still in the
+    /// can publish <see cref="BeforeResourceStartedEvent"/> from <c>OnInitializeResource</c>, so they are still in the
     /// initial state supplied by <c>WithInitialState</c> when the wait is published, rather than having been moved to
     /// "Starting" by the orchestrator first. Omitting it silently skipped the transition and, in turn, the wait itself.
     /// See https://github.com/microsoft/aspire/issues/17453.
-    /// </para>
     /// </remarks>
     private static bool CanTransitionToWaiting(string? state) =>
         state is null
