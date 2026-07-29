@@ -1,0 +1,35 @@
+@*
+    Deck-styled text label, replacing FluentLabel during the Fluent-removal phase. Supports the one
+    typography variant the dashboard uses (pane header, for dialog titles) via the Typo parameter;
+    without it the label renders as plain inline text. Unmatched attributes (style, slot) flow through.
+*@
+@namespace Aspire.Dashboard.Components.Deck
+
+<div class="deck-label @TypoClass @Class" style="@Style" @attributes="AdditionalAttributes">@ChildContent</div>
+
+@code {
+    /// <summary>Optional typography variant. Currently only <c>pane-header</c> is supported.</summary>
+    [Parameter]
+    public string? Typo { get; set; }
+
+    /// <summary>Additional CSS classes appended to the label.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Inline style applied to the label.</summary>
+    [Parameter]
+    public string? Style { get; set; }
+
+    /// <summary>The label content.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string? TypoClass => Typo switch
+    {
+        "pane-header" => "deck-label--pane-header",
+        _ => null
+    };
+}

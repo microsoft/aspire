@@ -7,10 +7,10 @@
 <FluentDialogHeader ShowDismiss="true">
     <div class="dialog-title-grid">
         <FluentIcon Value="@(new Icons.Regular.Size24.Sparkle())" Style="grid-area: dialog-icon; align-self: center;" />
-        <FluentLabel Typo="Typography.PaneHeader" Class="col-long-content" Style="grid-area: dialog-title;">
+        <Label Typo="pane-header" Class="col-long-content" Style="grid-area: dialog-title;">
             @Content.Title
             <span class="trace-id">@OtlpHelpers.ToShortenedId(Content.Span.SpanId)</span>
-        </FluentLabel>
+        </Label>
 
         @if (_contextSpans.Count > 1)
         {

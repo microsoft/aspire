@@ -4,11 +4,11 @@
 @if (!string.IsNullOrEmpty(Dialog.Instance.Parameters.Title))
 {
     <FluentDialogHeader ShowDismiss="@Dialog.Instance.Parameters.ShowDismiss">
-        <FluentStack VerticalAlignment="VerticalAlignment.Center">
-            <FluentLabel Typo="Typography.PaneHeader">
+        <div class="deck-stack" style="align-items: center;">
+            <Label Typo="pane-header">
                 @Dialog.Instance.Parameters.Title
-            </FluentLabel>
-        </FluentStack>
+            </Label>
+        </div>
     </FluentDialogHeader>
 }
 else
@@ -18,7 +18,7 @@ else
 
 <FluentDialogBody Class="interaction-progress-dialog">
     <div class="progress-content">
-        <FluentProgressRing />
+        <div class="spinner" role="progressbar" aria-label="@Dialog.Instance.Parameters.Title"></div>
 
         <div class="interaction-message">
             @((MarkupString)Content.Message)
@@ -29,9 +29,9 @@ else
 @if (!string.IsNullOrEmpty(Dialog.Instance.Parameters.PrimaryAction))
 {
     <FluentDialogFooter>
-        <FluentButton Appearance="Appearance.Neutral" OnClick="@CancelAsync">
+        <button type="button" class="btn" @onclick="@CancelAsync">
             @Dialog.Instance.Parameters.PrimaryAction
-        </FluentButton>
+        </button>
     </FluentDialogFooter>
 }
 else

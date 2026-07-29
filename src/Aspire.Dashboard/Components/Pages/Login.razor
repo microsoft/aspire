@@ -25,7 +25,7 @@
                    value="@_formModel.Token" @oninput="OnTokenInput" />
         </div>
         <div class="auth-validation">
-            <FluentValidationMessage For="() => _formModel.Token" />
+            <ValidationMessage For="() => _formModel.Token" />
         </div>
         <div class="auth-actions">
             <button class="btn btn--primary auth-submit" name="submit-token" type="submit">@Loc[nameof(Dashboard.Resources.Login.LogInButtonText)]</button>

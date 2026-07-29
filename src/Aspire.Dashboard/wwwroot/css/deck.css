@@ -2813,3 +2813,27 @@ hr.deck-divider {
   pointer-events: none;
 }
 /* === end Deck counter badge === */
+
+/* === Deck label (replaces FluentLabel) === */
+.deck-label {
+  color: var(--text-primary, inherit);
+}
+.deck-label--pane-header {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+/* === end Deck label === */
+
+/* === Deck help-dialog shortcuts grid (replaces FluentGrid) === */
+.help-shortcuts-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+@media (min-width: 600px) {
+  .help-shortcuts-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+/* === end Deck help-dialog shortcuts grid === */
