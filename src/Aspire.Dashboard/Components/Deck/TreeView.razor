@@ -1,0 +1,56 @@
+@*
+    Deck-styled tree, replacing FluentTreeView during the Fluent-removal phase. Renders an ARIA
+    tree (role="tree") and cascades itself to descendant TreeItems so they can report selection.
+    CurrentSelected is two-way bindable (with :after), mirroring FluentTreeView's binding so the
+    metric and GenAI selectors keep driving their view models unchanged.
+*@
+@namespace Aspire.Dashboard.Components.Deck
+
+<ul role="tree" class="deck-tree @Class" id="@Id" @attributes="AdditionalAttributes">
+    <CascadingValue Value="this" IsFixed="true">
+        @ChildContent
+    </CascadingValue>
+</ul>
+
+@code {
+    /// <summary>The element id (used to associate an external label via ForId).</summary>
+    [Parameter]
+    public string? Id { get; set; }
+
+    /// <summary>Additional CSS classes appended to the tree.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>The tree items.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>The currently selected tree item (enables <c>@bind-CurrentSelected</c>).</summary>
+    [Parameter]
+    public TreeItem? CurrentSelected { get; set; }
+
+    /// <summary>Raised when the selected tree item changes.</summary>
+    [Parameter]
+    public EventCallback<TreeItem?> CurrentSelectedChanged { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    internal bool IsSelected(TreeItem item) => ReferenceEquals(CurrentSelected, item);
+
+    internal async Task SelectAsync(TreeItem item)
+    {
+        if (ReferenceEquals(CurrentSelected, item))
+        {
+            return;
+        }
+
+        CurrentSelected = item;
+        if (CurrentSelectedChanged.HasDelegate)
+        {
+            await CurrentSelectedChanged.InvokeAsync(item);
+        }
+
+        StateHasChanged();
+    }
+}

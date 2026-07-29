@@ -15,7 +15,7 @@ using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.FluentUI.AspNetCore.Components;
+using Aspire.Dashboard.Components.Deck;
 using OpenTelemetry.Proto.Metrics.V1;
 using Xunit;
 using static Aspire.Dashboard.Components.Pages.Metrics;
@@ -224,8 +224,8 @@ public partial class MetricsTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             // Assert in wait to make sure rendering has caught up to data update.
-            var tree1 = cut.FindComponent<FluentTreeView>();
-            var items1 = tree1.FindComponents<FluentTreeItem>();
+            var tree1 = cut.FindComponent<TreeView>();
+            var items1 = tree1.FindComponents<TreeItem>();
 
             foreach (var instrument in cut.Instance.PageViewModel.Instruments!)
             {
@@ -269,8 +269,8 @@ public partial class MetricsTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             // Assert in wait to make sure rendering has caught up to data update.
-            var tree2 = cut.FindComponent<FluentTreeView>();
-            var items2 = tree2.FindComponents<FluentTreeItem>();
+            var tree2 = cut.FindComponent<TreeView>();
+            var items2 = tree2.FindComponents<TreeItem>();
 
             foreach (var instrument in cut.Instance.PageViewModel.Instruments!)
             {

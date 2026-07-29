@@ -60,11 +60,11 @@
     min-width: auto;
 }
 
-::deep fluent-tree-item::part(positioning-region) {
+::deep .deck-tree-item__row {
     margin-bottom: 1px;
 }
 
-::deep fluent-tree-item:not([selected])::part(positioning-region):not(:hover) {
+::deep .deck-tree-item:not(.deck-tree-item--selected) > .deck-tree-item__row:not(:hover) {
     background-color: unset;
 }
 

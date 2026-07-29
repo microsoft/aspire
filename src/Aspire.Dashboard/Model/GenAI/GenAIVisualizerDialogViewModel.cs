@@ -14,7 +14,6 @@ using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Model.GenAI;
 
@@ -32,7 +31,7 @@ public sealed class GenAIVisualizerDialogViewModel
     public required string PeerName { get; init; }
     public required string SourceName { get; init; }
 
-    public FluentTreeItem? SelectedTreeItem { get; set; }
+    public global::Aspire.Dashboard.Components.Deck.TreeItem? SelectedTreeItem { get; set; }
     public List<GenAIItemViewModel> Items { get; } = new List<GenAIItemViewModel>();
     public List<GenAIItemViewModel> InputMessages { get; private set; } = default!;
     public List<GenAIItemViewModel> OutputMessages { get; private set; } = default!;

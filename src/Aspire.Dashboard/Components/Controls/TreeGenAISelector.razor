@@ -1,22 +1,22 @@
 ﻿@using Aspire.Dashboard.Resources
 @using Metrics = Aspire.Dashboard.Resources.Metrics
 
-<FluentTreeView Class="genai-message-tree" @bind-CurrentSelected="@PageViewModel.SelectedTreeItem" @bind-CurrentSelected:after="HandleSelectedTreeItemChangedAsync">
+<TreeView Class="genai-message-tree" @bind-CurrentSelected="@PageViewModel.SelectedTreeItem" @bind-CurrentSelected:after="HandleSelectedTreeItemChangedAsync">
     <ChildContent>
-        <FluentTreeItem @key="@PageViewModel.Span" Data="@PageViewModel.Span" title="@PageViewModel.Span.Name" InitiallySelected="@(SelectedItem is null)">
+        <TreeItem @key="@PageViewModel.Span" Data="@PageViewModel.Span" title="@PageViewModel.Span.Name" InitiallySelected="@(SelectedItem is null)">
             <span class="llm-badge">@Loc[nameof(Dialogs.GenAILLMBadgeText)]</span> @PageViewModel.Span.Name
-        </FluentTreeItem>
+        </TreeItem>
 
         @foreach (var itemVM in PageViewModel.Items)
         {
-            <FluentTreeItem @key="itemVM"
+            <TreeItem @key="itemVM"
                             Data="@itemVM.Index"
                             title="@itemVM.GetTitleBadge(Loc).Text"
                             InitiallySelected="@(itemVM.Index == SelectedItem?.Index)">
                 <div class="message-tree-item-container">
                     <GenAIItemTitle Item="itemVM" ResourceName="@itemVM.ResourceName" />
                 </div>
-            </FluentTreeItem>
+            </TreeItem>
         }
     </ChildContent>
-</FluentTreeView>
+</TreeView>

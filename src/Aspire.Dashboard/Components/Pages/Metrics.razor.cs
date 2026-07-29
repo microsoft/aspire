@@ -11,7 +11,6 @@ using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Components.Pages;
 
@@ -279,7 +278,7 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
 
     public sealed class MetricsViewModel
     {
-        public FluentTreeItem? SelectedTreeItem { get; set; }
+        public global::Aspire.Dashboard.Components.Deck.TreeItem? SelectedTreeItem { get; set; }
         public string? SelectedMeter { get; set; }
         public OtlpInstrumentSummary? SelectedInstrument { get; set; }
         public required SelectViewModel<ResourceTypeDetails> SelectedResource { get; set; }

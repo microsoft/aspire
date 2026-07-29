@@ -12,16 +12,16 @@
     <InputLabel Label="@Loc[nameof(Metrics.MetricsInsturementNameGridNameColumnHeader)]" ForId="metric-selector" />
 }
 
-<FluentTreeView Id="metric-selector" Class="metrics-tree" @bind-CurrentSelected="@PageViewModel.SelectedTreeItem" @bind-CurrentSelected:after="HandleSelectedTreeItemChangedAsync">
+<TreeView Id="metric-selector" Class="metrics-tree" @bind-CurrentSelected="@PageViewModel.SelectedTreeItem" @bind-CurrentSelected:after="HandleSelectedTreeItemChangedAsync">
     <ChildContent>
         @foreach (var meterGroup in PageViewModel.Instruments.GroupBy(i => i.Parent.Name).OrderBy(g => g.Key))
         {
-            <FluentTreeItem @key="meterGroup.Key" Text="@meterGroup.Key" Data="@meterGroup.Key" title="@meterGroup.Key" InitiallyExpanded="true" InitiallySelected="@(PageViewModel.SelectedInstrument == null && meterGroup.Key == PageViewModel.SelectedMeter)">
+            <TreeItem @key="meterGroup.Key" Text="@meterGroup.Key" Data="@meterGroup.Key" title="@meterGroup.Key" InitiallyExpanded="true" InitiallySelected="@(PageViewModel.SelectedInstrument == null && meterGroup.Key == PageViewModel.SelectedMeter)">
                 @foreach (var instrument in meterGroup.OrderBy(i => i.Name))
                 {
-                    <FluentTreeItem @key="instrument" Class="nested" Text="@instrument.Name" Data="@instrument" title="@instrument.Name" InitiallySelected="@(instrument.Name == PageViewModel.SelectedInstrument?.Name && instrument.Parent.Name == PageViewModel.SelectedMeter)"/>
+                    <TreeItem @key="instrument" Class="nested" Text="@instrument.Name" Data="@instrument" title="@instrument.Name" InitiallySelected="@(instrument.Name == PageViewModel.SelectedInstrument?.Name && instrument.Parent.Name == PageViewModel.SelectedMeter)"/>
                 }
-            </FluentTreeItem>
+            </TreeItem>
         }
     </ChildContent>
-</FluentTreeView>
+</TreeView>

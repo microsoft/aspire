@@ -1,0 +1,142 @@
+@*
+    Deck-styled tree item, replacing FluentTreeItem during the Fluent-removal phase.
+
+    Two shapes are supported, matching how the dashboard uses tree items:
+      - Text set: the item shows Text as its label. If ChildContent is also provided it is the nested
+        group of child items (the metric meter -> instrument hierarchy).
+      - Text not set: ChildContent is the item's (rich) label and the item is a leaf (the GenAI
+        message rows).
+
+    The row is keyboard operable: Enter/Space select, ArrowRight/ArrowLeft expand/collapse. Data is
+    exposed so callers (and tests) can read the model backing each item.
+*@
+@namespace Aspire.Dashboard.Components.Deck
+
+<li role="treeitem"
+    class="deck-tree-item @Class @(Selected ? "deck-tree-item--selected" : null)"
+    aria-selected="@(Selected ? "true" : "false")"
+    aria-expanded="@(HasChildren ? (_expanded ? "true" : "false") : null)"
+    title="@Title"
+    @attributes="AdditionalAttributes">
+    <div class="deck-tree-item__row" tabindex="0" @onclick="OnRowClickAsync" @onkeydown="OnKeyDownAsync">
+        @if (HasChildren)
+        {
+            <button type="button"
+                    class="deck-tree-item__chevron @(_expanded ? "deck-tree-item__chevron--expanded" : null)"
+                    aria-label="@(_expanded ? "Collapse" : "Expand")"
+                    tabindex="-1"
+                    @onclick="ToggleExpand"
+                    @onclick:stopPropagation="true">
+                <DeckIcon Name="DeckIconName.Chevron" Size="14" />
+            </button>
+        }
+        else
+        {
+            <span class="deck-tree-item__chevron-spacer"></span>
+        }
+        <span class="deck-tree-item__label">
+            @if (Text is not null)
+            {
+                @Text
+            }
+            else
+            {
+                @ChildContent
+            }
+        </span>
+    </div>
+    @if (HasChildren && _expanded)
+    {
+        <ul role="group" class="deck-tree-item__group">
+            @ChildContent
+        </ul>
+    }
+</li>
+
+@code {
+    private bool _expanded;
+    private bool _initialized;
+
+    [CascadingParameter]
+    internal TreeView? Tree { get; set; }
+
+    /// <summary>The item label (a plain string). When omitted, <see cref="ChildContent"/> is the label.</summary>
+    [Parameter]
+    public string? Text { get; set; }
+
+    /// <summary>
+    /// The nested child items (when <see cref="Text"/> is set) or the rich label content (when it is not).
+    /// </summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>The model backing this item, surfaced for selection handlers.</summary>
+    [Parameter]
+    public object? Data { get; set; }
+
+    /// <summary>Additional CSS classes appended to the item.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Tooltip text for the item row.</summary>
+    [Parameter]
+    public string? Title { get; set; }
+
+    /// <summary>Whether the item starts expanded.</summary>
+    [Parameter]
+    public bool InitiallyExpanded { get; set; }
+
+    /// <summary>Whether the item starts selected (visual only, until the tree has a selection).</summary>
+    [Parameter]
+    public bool InitiallySelected { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    // A leaf carries a Text label (metric nodes) or rich content (GenAI rows). Only items that pair a
+    // Text label with ChildContent host a nested group.
+    private bool HasChildren => Text is not null && ChildContent is not null;
+
+    // Selected when the tree points at this item, or (before any selection) when it opted in via
+    // InitiallySelected. Matches FluentTreeItem's initial-selection highlight.
+    private bool Selected => Tree is not null && (Tree.IsSelected(this) || (Tree.CurrentSelected is null && InitiallySelected));
+
+    protected override void OnInitialized()
+    {
+        if (!_initialized)
+        {
+            _expanded = InitiallyExpanded;
+            _initialized = true;
+        }
+    }
+
+    private void ToggleExpand()
+    {
+        _expanded = !_expanded;
+    }
+
+    private async Task OnRowClickAsync()
+    {
+        if (Tree is not null)
+        {
+            await Tree.SelectAsync(this);
+        }
+    }
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "Enter":
+            case " ":
+                await OnRowClickAsync();
+                break;
+            case "ArrowRight" when HasChildren && !_expanded:
+                _expanded = true;
+                break;
+            case "ArrowLeft" when HasChildren && _expanded:
+                _expanded = false;
+                break;
+        }
+    }
+}
