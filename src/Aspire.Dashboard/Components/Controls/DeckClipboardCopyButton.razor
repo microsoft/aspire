@@ -4,7 +4,7 @@
 @*
     Native clipboard-copy button for the Deck UI. The copy behaviour is driven by the global
     document click handler in wwwroot/js/app.js, which matches any <button data-copybutton> (the
-    data-* attributes come from FluentUIExtensions.GetClipboardCopyAdditionalAttributes, splatted
+    data-* attributes come from ClipboardExtensions.GetClipboardCopyAdditionalAttributes, splatted
     via AdditionalAttributes) and, on click, copies data-text and toggles the .copy-icon /
     .checkmark-icon children.
 
@@ -34,7 +34,7 @@
 
     /// <summary>
     /// Attributes splatted onto the button, typically the dictionary returned by
-    /// <see cref="Extensions.FluentUIExtensions.GetClipboardCopyAdditionalAttributes"/> (which carries the
+    /// <see cref="Extensions.ClipboardExtensions.GetClipboardCopyAdditionalAttributes"/> (which carries the
     /// <c>data-copybutton</c>/<c>data-text</c>/<c>data-precopy</c>/<c>data-postcopy</c> hooks read by app.js).
     /// </summary>
     [Parameter]

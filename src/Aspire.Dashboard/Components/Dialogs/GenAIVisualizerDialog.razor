@@ -216,7 +216,7 @@
                         }
                         <DeckClipboardCopyButton Id="@_copyButtonId"
                                                  Class="btn message-copy-button"
-                                                 AdditionalAttributes="@FluentUIExtensions.GetClipboardCopyAdditionalAttributes(string.Join(Environment.NewLine + Environment.NewLine, selectedItem.ItemParts.Select(p => p.TextVisualizerViewModel?.FormattedText ?? string.Empty)), ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)])">
+                                                 AdditionalAttributes="@ClipboardExtensions.GetClipboardCopyAdditionalAttributes(string.Join(Environment.NewLine + Environment.NewLine, selectedItem.ItemParts.Select(p => p.TextVisualizerViewModel?.FormattedText ?? string.Empty)), ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)])">
                             @ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]
                         </DeckClipboardCopyButton>
                     }

@@ -74,7 +74,7 @@ public class HighlightedCodeBlockRenderer : HtmlObjectRenderer<CodeBlock>
 
         // Add copy attributes to the copy button.
         var rawCode = GetRawCodeText(obj);
-        var attributes = FluentUIExtensions.GetClipboardCopyAdditionalAttributes(rawCode, _loc[nameof(ControlsStrings.GridValueCopyToClipboard)], _loc[nameof(ControlsStrings.GridValueCopied)]);
+        var attributes = ClipboardExtensions.GetClipboardCopyAdditionalAttributes(rawCode, _loc[nameof(ControlsStrings.GridValueCopyToClipboard)], _loc[nameof(ControlsStrings.GridValueCopied)]);
         var copyButtonAttributes = new HtmlAttributes();
         copyButtonAttributes.AddClass("code-copy-button");
         copyButtonAttributes.AddProperty("id", $"code-copy-button-{obj.Span.Start}");

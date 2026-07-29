@@ -3,10 +3,8 @@
 
 namespace Aspire.Dashboard.Extensions;
 
-internal static class FluentUIExtensions
+internal static class ClipboardExtensions
 {
-    public const int InputDelay = 200;
-
     public static Dictionary<string, object> GetClipboardCopyAdditionalAttributes(string? text, string? precopy, string? postcopy, params (string Attribute, object Value)[] additionalAttributes)
     {
         // No onclick attribute is added here. The CSP restricts inline scripts, including onclick.
