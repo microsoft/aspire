@@ -1,57 +1,75 @@
+.profile-menu-container {
+    display: flex;
+}
 
-/*
-    Workaround for issue in fluent-anchored-region when the content
-    is near the top-right corner of the screen. Addressed in
-    https://github.com/microsoft/fluentui-blazor/pull/1795 which
-    we can use instead when it is available
-*/
-.profile-menu-container ::deep .fluent-profile-menu fluent-anchored-region {
-    transform: unset !important;
-    left: unset;
+::deep .deck-profile-menu {
+    position: relative;
+}
+
+::deep .deck-profile-menu__trigger {
+    list-style: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+}
+
+/* Hide the default disclosure triangle; the avatar is the affordance. */
+::deep .deck-profile-menu__trigger::-webkit-details-marker {
+    display: none;
+}
+
+::deep .deck-profile-menu__trigger::marker {
+    content: "";
+}
+
+::deep .deck-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 600;
+    font-size: var(--font-size-sm, 12px);
+    box-sizing: border-box;
+}
+
+::deep .deck-profile-menu__panel {
+    position: absolute;
+    top: calc(100% + 6px);
     right: -4px;
-}
-
-::deep fluent-button[appearance=stealth]:not(:hover):not(:active)::part(control) {
-    background-color: var(--neutral-layer-floating);
-}
-
-::deep fluent-button[appearance=stealth]:hover::part(control) {
-    background-color: var(--neutral-fill-secondary-hover);
-}
-
-::deep .fluent-profile-menu > .fluent-persona {
-    margin: 0 4px;
-}
-
-::deep .fluent-profile-menu > .fluent-persona > .initials {
-    font-size: var(--type-ramp-minus-1-font-size);
+    z-index: 30;
+    min-width: 240px;
+    padding: 12px;
+    background: var(--bg-elevated, var(--bg-app));
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
 ::deep .full-name,
 ::deep .user-id {
-    color: var(--neutral-foreground-rest);
+    color: var(--text-primary);
     max-width: 200px;
     overflow-x: hidden;
     text-overflow: ellipsis;
 }
 
-::deep .full-name {
-    font-size: var(--type-ramp-base-font-size);
-}
-
 ::deep .user-id {
-    font-size: var(--type-ramp-minus-1-font-size);
+    font-size: var(--font-size-sm, 12px);
     font-weight: normal;
-    max-width: 200px;
 }
 
 ::deep .inner-persona-container {
-    height: 100%;
+    align-items: center;
 }
 
-::deep .fluent-persona.inner-persona {
-    margin-right: 40px;
-    align-items: normal;
+::deep .inner-persona {
+    margin-right: 8px;
+    flex-shrink: 0;
 }
 
 /* The form takes up space and throws off the alignment if we don't change its display */

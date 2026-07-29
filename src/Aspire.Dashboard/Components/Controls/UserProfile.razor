@@ -3,30 +3,30 @@
     <AuthorizeView>
         <Authorized>
             <div class="profile-menu-container">
-                <FluentProfileMenu Initials="@_initials"
-                                   EMail="@_username"
-                                   FullName="@_name"
-                                   ButtonSize="@ButtonSize"
-                                   FooterLink="">
-                    <HeaderTemplate>
+                @* A native <details> gives a keyboard-accessible, JS-free dropdown, replacing
+                   FluentProfileMenu during the Fluent-removal phase. *@
+                <details class="deck-profile-menu">
+                    <summary class="deck-profile-menu__trigger" title="@_name" aria-label="@_name">
+                        <span class="deck-avatar" style="width: @ButtonSize; height: @ButtonSize;">@_initials</span>
+                    </summary>
+                    <div class="deck-profile-menu__panel">
                         <div class="deck-stack" style="align-items: center;">
-                            <FluentLabel>@Loc[nameof(Resources.Login.LoggedInAs)]</FluentLabel>
-                            <FluentSpacer />
+                            <Label>@Loc[nameof(Resources.Login.LoggedInAs)]</Label>
+                            <div class="deck-spacer"></div>
                             <form @formname="sign-out-form" class="sign-out-form" action="authentication/logout" method="post">
                                 <AntiforgeryToken />
                                 <button type="submit" class="btn btn--ghost">Sign out</button>
                             </form>
                         </div>
-                    </HeaderTemplate>
-                    <ChildContent>
                         <div class="deck-stack inner-persona-container">
-                            <FluentPersona Initials="@_initials" ImageSize="@ImageSize" Class="inner-persona">
+                            <span class="deck-avatar inner-persona" style="width: @ImageSize; height: @ImageSize;">@_initials</span>
+                            <div>
                                 <div class="full-name">@_name</div>
                                 <div class="user-id">@_username</div>
-                            </FluentPersona>
+                            </div>
                         </div>
-                    </ChildContent>
-                </FluentProfileMenu>
+                    </div>
+                </details>
             </div>
         </Authorized>
     </AuthorizeView>

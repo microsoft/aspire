@@ -2971,3 +2971,18 @@ hr.deck-divider {
   cursor: pointer;
 }
 /* === end Deck input with trailing icon === */
+
+/* === Deck spacer (replaces FluentSpacer) === */
+.deck-spacer {
+  flex: 1 1 auto;
+}
+/* === end Deck spacer === */
+
+/* === Deck full-screen overlay (replaces FluentOverlay click-catcher) === */
+.deck-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  background: transparent;
+}
+/* === end Deck full-screen overlay === */

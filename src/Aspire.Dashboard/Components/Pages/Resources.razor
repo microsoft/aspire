@@ -175,7 +175,12 @@
 </div>
 
 @* Context menu for the resource graph (opened from graph nodes via JS interop). *@
-<FluentOverlay @bind-Visible="_contextMenuOpen" OnClose="ContextMenuClosed" Transparent="true" FullScreen="true" />
+@* Full-screen transparent click-catcher that dismisses the resource graph context menu,
+   replacing FluentOverlay during the Fluent-removal phase. *@
+@if (_contextMenuOpen)
+{
+    <div class="deck-overlay" @onclick="ContextMenuClosed"></div>
+}
 <AspireMenu @bind-Open="_contextMenuOpen" @ref="_contextMenu" Anchor="resources-page-body-id" Anchored="false" Items="_contextMenuItems" />
 
 @* Filter popover (kept as-is for now; opened by the Deck filter button above). *@
