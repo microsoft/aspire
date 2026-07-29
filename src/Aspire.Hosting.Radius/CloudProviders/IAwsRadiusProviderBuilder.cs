@@ -10,6 +10,7 @@ namespace Aspire.Hosting.Radius.CloudProviders;
 /// selecting an AWS credential mode. Exactly one <c>With*</c> method must
 /// be called; a repeat call replaces the previous selection.
 /// </summary>
+[AspireExport(ExposeMethods = true)]
 public interface IAwsRadiusProviderBuilder
 {
     /// <summary>

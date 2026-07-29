@@ -16,6 +16,7 @@ namespace Aspire.Hosting.Radius.Publishing.Constructs;
 /// since they vary per Aspire resource mapping.
 /// </summary>
 [Experimental("ASPIRERADIUS004", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport]
 public sealed class RadiusResourceTypeConstruct : ProvisionableResource
 {
     private BicepValue<string>? _name;

@@ -299,4 +299,68 @@ public class ConfigureRadiusInfrastructureTests
         Assert.Contains("environment: renamedEnv.id", bicep);
         Assert.DoesNotContain("environment: myenv.id", bicep);
     }
+
+    [Fact]
+    public void PolyglotAdapters_CanCustomizeGeneratedInfrastructure()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddRadiusEnvironment("myenv")
+            .ConfigureRadiusInfrastructure(options =>
+            {
+                options.Environments[0]
+                    .WithEnvironmentName("custom-environment")
+                    .WithKubernetesNamespace("custom-namespace")
+                    .WithEnvironmentRecipePack("recipepack");
+                options.Applications[0]
+                    .WithApplicationName("custom-application")
+                    .WithApplicationEnvironment("myenv");
+                options.RecipePacks[0]
+                    .WithRecipePackName("custom-recipes")
+                    .WithRecipe("Custom.Resources/widgets", "bicep", "ghcr.io/example/widget:1.0");
+
+                options.AddResourceTypeInstance(
+                        "custom_widget",
+                        "Custom.Resources/widgets",
+                        "2025-01-01-preview")
+                    .WithResourceName("custom-widget")
+                    .WithResourceRecipeName("default")
+                    .WithResourceScope("app", "myenv")
+                    .WithStringRecipeParameter("sku", "small");
+
+                options.Containers[0]
+                    .WithContainerImage("nginx:alpine")
+                    .WithContainerScope("app", "myenv")
+                    .WithContainerEnvironmentVariable("RADIUS_TEST", "true")
+                    .WithContainerPort("http", 8080, "TCP")
+                    .WithContainerConnection("widget", "custom_widget");
+
+                options.LegacyEnvironments[0]
+                    .WithLegacyEnvironment("custom-legacy-environment", "custom-namespace")
+                    .WithLegacyAzureScope("/subscriptions/sub/resourceGroups/rg")
+                    .WithLegacyAwsScope("/planes/aws/aws/accounts/123456789012/regions/us-east-1");
+                options.LegacyApplications[0]
+                    .WithLegacyApplicationName("custom-legacy-application")
+                    .WithLegacyApplicationEnvironment("legacy_env");
+            });
+        builder.AddContainer("api", "nginx", "latest");
+        builder.AddRedis("cache");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
+        var bicep = new RadiusBicepPublishingContext(radiusEnv).GenerateBicep(model);
+
+        Assert.Contains("Custom.Resources/widgets@2025-01-01-preview", bicep);
+        Assert.Contains("name: 'custom-environment'", bicep);
+        Assert.Contains("name: 'custom-application'", bicep);
+        Assert.Contains("name: 'custom-recipes'", bicep);
+        Assert.Contains("name: 'custom-widget'", bicep);
+        Assert.Contains("recipepack.id", bicep);
+        Assert.Contains("sku: 'small'", bicep);
+        Assert.Contains("RADIUS_TEST:", bicep);
+        Assert.Contains("source: custom_widget.id", bicep);
+        Assert.Contains("name: 'custom-legacy-environment'", bicep);
+        Assert.Contains("name: 'custom-legacy-application'", bicep);
+    }
 }

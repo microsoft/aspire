@@ -23,6 +23,7 @@ namespace Aspire.Hosting.Radius.Publishing.Constructs;
 /// <c>recipeLocation</c> keys are only used by <c>Radius.Core/recipePacks</c>.
 /// </remarks>
 [Experimental("ASPIRERADIUS004", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport]
 public sealed class LegacyApplicationEnvironmentConstruct : ProvisionableResource
 {
     private BicepValue<string>? _name;

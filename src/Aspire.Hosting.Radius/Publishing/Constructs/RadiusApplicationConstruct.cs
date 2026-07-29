@@ -14,6 +14,7 @@ namespace Aspire.Hosting.Radius.Publishing.Constructs;
 /// Represents a <c>Radius.Core/applications</c> resource in the Bicep AST.
 /// </summary>
 [Experimental("ASPIRERADIUS004", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport]
 public sealed class RadiusApplicationConstruct : ProvisionableResource
 {
     private BicepValue<string>? _name;

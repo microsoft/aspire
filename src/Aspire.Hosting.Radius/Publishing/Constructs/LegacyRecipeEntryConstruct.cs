@@ -17,6 +17,7 @@ namespace Aspire.Hosting.Radius.Publishing.Constructs;
 /// are only valid on <c>Radius.Core/recipePacks</c>).
 /// </summary>
 [Experimental("ASPIRERADIUS004", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport]
 public sealed class LegacyRecipeEntryConstruct : ProvisionableConstruct
 {
     private BicepValue<string>? _templateKind;

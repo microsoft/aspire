@@ -88,7 +88,7 @@ public static partial class RadiusExtensions
     /// <param name="configure">The callback that mutates the generated infrastructure options.</param>
     /// <returns>The same <see cref="IResourceBuilder{RadiusEnvironmentResource}"/> for chaining.</returns>
     [Experimental("ASPIRERADIUS004", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "RadiusInfrastructureOptions customization callbacks are not ATS-compatible.")]
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<RadiusEnvironmentResource> ConfigureRadiusInfrastructure(
         this IResourceBuilder<RadiusEnvironmentResource> builder,
         Action<RadiusInfrastructureOptions> configure)

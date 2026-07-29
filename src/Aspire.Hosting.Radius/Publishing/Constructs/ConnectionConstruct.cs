@@ -13,6 +13,7 @@ namespace Aspire.Hosting.Radius.Publishing.Constructs;
 /// Represents a connection entry in a container's connections block.
 /// </summary>
 [Experimental("ASPIRERADIUS004", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport]
 public sealed class ConnectionConstruct : ProvisionableConstruct
 {
     private BicepValue<string>? _source;
