@@ -429,6 +429,9 @@ export class AppHostDataRepository {
     refresh(): void {
         this._clearErrors();
         this._runtimeSnapshotAfterWorkspaceDiscovery = false;
+        if (this._viewMode === 'global') {
+            this._loadingGlobal = true;
+        }
         // A user-triggered refresh should observe AppHost/config files written by tools
         // even when the file watcher has not delivered an invalidation event yet.
         // Refresh only needs to re-pull discovery + the authoritative `ps` snapshot and let
@@ -1826,15 +1829,21 @@ export class AppHostDataRepository {
                 this._updateWorkspaceContext({ clearLoading: !discoveryPending || workspaceAppHosts.length > 0 });
             }
         } else {
-            if (this._loadingGlobal) {
+            const wasLoading = this._loadingGlobal;
+            if (wasLoading) {
                 this._loadingGlobal = false;
-                this._updateLoadingContext();
             }
-            if (appHostsChanged || force) {
+            if (appHostsChanged || force || wasLoading) {
                 const hasDashboardUrl = this._appHosts.some(appHost => Boolean(appHost.dashboardUrl));
                 vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', this._appHosts.length === 0);
                 vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasDashboardUrl);
                 this._onDidChangeData.fire();
+            }
+            if (wasLoading) {
+                // Keep the loading welcome visible until the tree has been invalidated with the
+                // fresh snapshot. Clearing the context first leaves a blank frame while VS Code
+                // schedules the tree refresh.
+                this._updateLoadingContext();
             }
         }
     }

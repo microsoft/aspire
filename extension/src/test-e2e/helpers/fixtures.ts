@@ -220,6 +220,10 @@ export function writeStreamingDiscoveryCliWrapper(delayMs = 5_000, initialDelayM
     });
 }
 
+export function writeDelayedPsCliWrapper(delayMs = 1_500): string {
+    return writeCliWrapper('aspire-delayed-ps', { psSnapshotDelayMs: delayMs });
+}
+
 export async function restoreWorkspaceCliPath(): Promise<void> {
     await writeWorkspaceCliPath(getCliPath());
 }
@@ -656,6 +660,7 @@ function writeCliWrapper(
         streamedLsCandidate?: unknown;
         streamedLsDelayMs?: number;
         streamedLsInitialDelayMs?: number;
+        psSnapshotDelayMs?: number;
     },
 ): string {
     const wrapperDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers');
@@ -694,6 +699,10 @@ ${options.streamedLsCandidate === undefined
   }, ${options.streamedLsInitialDelayMs ?? 0});
 }
 else {`}
+if (args[0] === 'ps' && !args.includes('--follow')) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ${options.psSnapshotDelayMs ?? 0});
+}
+
 const result = spawnSync(realCli, args, {
   cwd: process.cwd(),
   env: process.env,

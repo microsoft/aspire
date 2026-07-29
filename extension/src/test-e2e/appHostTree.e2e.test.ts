@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 import { findRunningAppHost, getCommandInvocationCount, getResources, getTerminalCommandCount, getTreeAppHostLabel, isSamePath, waitForCommandOutcome, waitForDashboardUrl, waitForExtensionState, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
-import { executeE2eControlCommand, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, writeStreamingDiscoveryCliWrapper } from './helpers/fixtures';
+import { executeE2eControlCommand, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, writeDelayedPsCliWrapper, writeStreamingDiscoveryCliWrapper } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { cancelActiveInput, clickTreeItem, executeCommandFromPalette, openAspireView, waitForTreeItem, waitForWorkbenchText } from './helpers/vscode';
 
@@ -76,6 +76,31 @@ suite('Aspire AppHost tree E2E', function () {
 
         await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 30000, invocationCountBefore);
         await waitForRepositoryIdle();
+    });
+
+    test('global refresh shows loading until AppHost state is fresh', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+        await executeE2eControlCommand({ name: 'switchToGlobalView' });
+        await waitForExtensionState(
+            file => file.state.viewMode === 'global' && !file.state.isRepositoryLoading,
+            'global AppHost view to become idle');
+
+        await setE2eCliPathForE2E(writeDelayedPsCliWrapper());
+        await executeE2eControlCommand({ name: 'globalRefreshAppHosts' }, { waitFor: 'started' });
+
+        const loadingState = await waitForExtensionState(
+            file => file.state.viewMode === 'global' && file.state.isRepositoryLoading,
+            'global AppHost refresh loading state',
+            30000);
+        assert.strictEqual(loadingState.state.isRepositoryLoading, true);
+        await waitForWorkbenchText('Searching for AppHosts...', 30000);
+
+        const freshState = await waitForExtensionState(
+            file => file.state.viewMode === 'global' && !file.state.isRepositoryLoading,
+            'fresh global AppHost state',
+            30000);
+        assert.strictEqual(freshState.state.isRepositoryLoading, false);
     });
 
     test('running AppHosts appear before slow discovery results', async () => {

@@ -4981,6 +4981,79 @@ suite('AppHostDataRepository global polling', () => {
         repository.dispose();
     });
 
+    test('global refresh shows loading until the fresh AppHost snapshot arrives', async () => {
+        const psFollowProcess = new TestChildProcess();
+        const psSnapshotProcess = new TestChildProcess();
+        let psFollowOptions: any;
+        let psSnapshotOptions: any;
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ps' && args.includes('--follow')) {
+                psFollowOptions = options;
+                return psFollowProcess;
+            }
+            if (args[0] === 'ps') {
+                psSnapshotOptions = options;
+                return psSnapshotProcess;
+            }
+            return new TestChildProcess();
+        });
+        const completionEvents: string[] = [];
+        const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').callsFake(async (command: string, key: string, value: unknown) => {
+            if (command === 'setContext' && key === 'aspire.loading' && value === false) {
+                completionEvents.push('loading cleared');
+            }
+            return undefined;
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+        let dataChanges = 0;
+        const dataSubscription = repository.onDidChangeData(() => {
+            dataChanges++;
+            if (repository.viewMode === 'global' && !repository.isLoading) {
+                completionEvents.push('tree refreshed');
+            }
+        });
+        const runningAppHost = {
+            appHostPath: '/workspace/AppHost.csproj',
+            appHostPid: 1234,
+            status: 'running',
+        };
+
+        try {
+            repository.activate();
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForCondition(() => psFollowOptions !== undefined, 'global ps watch did not start');
+
+            psFollowOptions.lineCallback(JSON.stringify(runningAppHost));
+            await waitForCondition(() => repository.appHosts.length === 1, 'global AppHost ps delta was not applied');
+            assert.strictEqual(repository.isLoading, false);
+
+            const changesBeforeRefresh = dataChanges;
+            repository.refresh();
+            await waitForCondition(() => psSnapshotOptions !== undefined, 'global refresh snapshot did not start');
+
+            assert.strictEqual(repository.isLoading, true);
+            assert.strictEqual(repository.appHosts.length, 1);
+            assert.strictEqual(repository.appHosts[0].appHostPath, runningAppHost.appHostPath);
+            assert.ok(dataChanges > changesBeforeRefresh, 'loading must invalidate the global tree');
+
+            const changesWhileLoading = dataChanges;
+            completionEvents.length = 0;
+            psSnapshotOptions.stdoutCallback(JSON.stringify([runningAppHost]));
+            psSnapshotOptions.exitCallback(0);
+            await waitForCondition(() => !repository.isLoading, 'global refresh loading did not clear');
+
+            assert.strictEqual(repository.appHosts.length, 1);
+            assert.strictEqual(repository.appHosts[0].appHostPath, runningAppHost.appHostPath);
+            assert.ok(dataChanges > changesWhileLoading, 'the unchanged snapshot must restore the global tree');
+            assert.deepStrictEqual(completionEvents, ['tree refreshed', 'loading cleared']);
+        } finally {
+            dataSubscription.dispose();
+            repository.dispose();
+            executeCommandStub.restore();
+        }
+    });
+
     test('global panel starts ps follow and updates from streamed AppHost deltas', async () => {
         const childProcess = new TestChildProcess();
         spawnStub.returns(childProcess);

@@ -1166,6 +1166,10 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
     private _getGlobalChildren(element?: TreeElement): TreeElement[] {
         if (!element) {
+            if (this._repository.isLoading) {
+                return [];
+            }
+
             const appHosts = this._repository.appHosts;
             const labels = shortenPaths(appHosts.map(appHost => appHost.appHostPath));
             return appHosts.map((appHost, index) => new AppHostItem(appHost, labels[index], this._repository.workspaceAppHostDescription, this._isStoppingAppHost(appHost.appHostPath)));

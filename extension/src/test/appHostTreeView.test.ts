@@ -2129,23 +2129,25 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         provider.dispose();
     });
 
-    test('workspace mode hides stale running AppHosts while loading', () => {
+    test('loading hides stale AppHosts', () => {
         const appHostPath = '/repo/AppHost/AppHost.csproj';
         const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
-        const repository = {
-            viewMode: 'workspace' as ViewMode,
-            isLoading: true,
-            appHosts: [makeAppHost({ appHostPath })],
-            workspaceResources: [],
-            workspaceAppHostPath: undefined,
-            workspaceAppHostCandidatePaths: [],
-            workspaceAppHostName: undefined,
-            onDidChangeData,
-        } as unknown as AppHostDataRepository;
-        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
+        for (const viewMode of ['workspace', 'global'] as const) {
+            const repository = {
+                viewMode,
+                isLoading: true,
+                appHosts: [makeAppHost({ appHostPath })],
+                workspaceResources: [],
+                workspaceAppHostPath: undefined,
+                workspaceAppHostCandidatePaths: [],
+                workspaceAppHostName: undefined,
+                onDidChangeData,
+            } as unknown as AppHostDataRepository;
+            const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
 
-        assert.deepStrictEqual(provider.getChildren(), []);
-        provider.dispose();
+            assert.deepStrictEqual(provider.getChildren(), []);
+            provider.dispose();
+        }
     });
 
     test('workspace mode renders launching AppHost with spinner and no context menu', async () => {
