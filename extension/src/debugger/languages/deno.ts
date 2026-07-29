@@ -6,7 +6,7 @@ import { denoDisplayName, denoInspectorPortAllocationFailed, denoLabel, denoTask
 import { extensionLogOutputChannel } from "../../utils/logging";
 import { ResourceDebuggerExtension } from "../debuggerExtensions";
 import { registerRunCleanup } from "../runCleanupRegistry";
-import { getJavaScriptRuntimeDisplayName, getJavaScriptRuntimeTargetPath, jsRuntimeBaseFileTypes } from "./javascriptRuntime";
+import { getJavaScriptRuntimeDisplayName, getJavaScriptRuntimeTargetPath, jsRuntimeBaseFileTypes, launchMethodDirect, launchMethodPackageManager, resolveJavaScriptLaunchMethod } from "./javascriptRuntime";
 
 // Deno exposes a V8 inspector; --inspect-wait blocks execution until a debugger attaches (unlike
 // --inspect-brk it guarantees no early code — including module top-level — runs before attach, which
@@ -225,6 +225,14 @@ export const denoDebuggerExtension: ResourceDebuggerExtension = {
         // node/bun — there is no separate "program" file to hoist. Drive js-debug purely through
         // runtimeExecutable + runtimeArgs and let it attach to the inspector.
         debugConfiguration.runtimeExecutable = config.runtime_executable || 'deno';
+
+        const launchMethod = resolveJavaScriptLaunchMethod(
+            config,
+            () => args?.[0] === 'task' ? launchMethodPackageManager : launchMethodDirect);
+        if (launchOptions.debug && launchMethod === launchMethodPackageManager) {
+            extensionLogOutputChannel.info('Skipping Deno debug launch for a package-manager task because Deno does not accept runtime inspector flags on the task subcommand.');
+            throw new Error(denoTaskDebuggingUnsupported);
+        }
 
         const { runtimeArgs, port } = await withDenoInspectWait(args ?? [], config, launchOptions);
         debugConfiguration.runtimeArgs = runtimeArgs;

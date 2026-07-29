@@ -4,7 +4,7 @@ import { debugProject, runProject } from "../loc/strings";
 import { getEnvironmentWithoutE2EBridgeVariables, mergeEnvs } from "../utils/environment";
 import { extensionLogOutputChannel } from "../utils/logging";
 import { projectDebuggerExtension } from "./languages/dotnet";
-import { isAzureFunctionsExtensionInstalled, isBunInstalled, isCsharpInstalled, isDenoInstalled, isGoInstalled, isMauiInstalled, isPythonInstalled } from '../capabilities';
+import { isAzureFunctionsExtensionInstalled, isBunInstalled, isCsharpInstalled, isGoInstalled, isMauiInstalled, isPythonInstalled } from '../capabilities';
 import { pythonDebuggerExtension } from "./languages/python";
 import { nodeDebuggerExtension } from "./languages/node";
 import { browserDebuggerExtension } from "./languages/browser";
@@ -97,9 +97,7 @@ export function getResourceDebuggerExtensions(): ResourceDebuggerExtension[] {
         extensions.push(bunDebuggerExtension);
     }
 
-    if (isDenoInstalled()) {
-        extensions.push(denoDebuggerExtension);
-    }
+    extensions.push(denoDebuggerExtension);
 
     if (isMauiInstalled()) {
         extensions.push(mauiDebuggerExtension);

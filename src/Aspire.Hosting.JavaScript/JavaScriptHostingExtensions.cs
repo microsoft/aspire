@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREDENO001 // AddDenoApp and its implementation use the experimental Deno resource
+
 #pragma warning disable ASPIREDOCKERFILEBUILDER001
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIRECERTIFICATES001
@@ -813,10 +815,9 @@ public static partial class JavaScriptHostingExtensions
     ///
     /// The full Deno flag surface (granular permissions, <c>--config</c>/<c>--import-map</c>/<c>--lock</c>, unstable
     /// features, <c>--watch</c>, inspector flags, script args, and the <c>run</c>/<c>task</c>/<c>serve</c> sub-command
-    /// modes) can be configured with the fluent <c>WithDeno*</c> methods (for example <see cref="WithDenoAllowNet"/>,
+    /// modes) can be configured with the fluent <c>WithDeno*</c> methods (for example <see cref="WithDenoAllow"/>,
     /// <see cref="WithDenoConfig"/>, <see cref="WithDenoUnstable"/>, <see cref="WithDenoServe"/>). Configuring any of
     /// these fully replaces the default arg vector, so a Deno workload never has to fall back to <c>AddExecutable</c>.
-    /// See <c>docs/deno-flag-surface.md</c> for capabilities Aspire's model cannot express.
     ///
     /// If the application directory contains a <c>package.json</c>, <c>deno.json</c>, or <c>deno.jsonc</c> file, Deno will
     /// be added as the default package manager. When publishing to a container, the default base image is
@@ -833,6 +834,7 @@ public static partial class JavaScriptHostingExtensions
     /// </code>
     /// </example>
     [AspireExport]
+    [Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<DenoAppResource> AddDenoApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string scriptPath)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -918,7 +920,7 @@ public static partial class JavaScriptHostingExtensions
                     // local .git, dotenv files, and Aspire output out of the image.
                     if (dockerfileContext.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation))
                     {
-                        dockerfileBuildAnnotation.BuildContextIgnoreContent ??= DefaultDenoBuildContextIgnoreContent;
+                        dockerfileBuildAnnotation.BuildContextIgnoreContent ??= BuildDenoBuildContextIgnoreContent(dockerfileContext.Resource);
                     }
 
                     ThrowIfUnsupportedDenoDockerfileOptions(dockerfileContext.Resource);
@@ -943,10 +945,38 @@ public static partial class JavaScriptHostingExtensions
                     // Pre-cache direct run/serve entrypoints into DENO_DIR at build time. Mirror the Deno
                     // resolution/lock flags that affect module graph resolution so cache validation sees the
                     // same config, import map, lockfile, and node_modules mode as the runtime entrypoint.
-                    var denoCacheCommand = BuildDenoCacheCommand(dockerfileContext.Resource, scriptPath, resource.WorkingDirectory);
-                    buildStage
-                        .EmptyLine()
-                        .Run(denoCacheCommand);
+                    dockerfileContext.Resource.TryGetLastAnnotation<JavaScriptPublishModeAnnotation>(out var publishMode);
+                    if (publishMode?.Mode == JavaScriptPublishMode.PackageScript)
+                    {
+                        if (!dockerfileContext.Resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager) ||
+                            !dockerfileContext.Resource.TryGetLastAnnotation<JavaScriptInstallCommandAnnotation>(out var installCommand))
+                        {
+                            throw new InvalidOperationException("PublishAsPackageScript requires a Deno package manager. Add a deno.json file or call WithDeno().");
+                        }
+
+                        buildStage
+                            .EmptyLine()
+                            .AddInstallCommand(packageManager, installCommand);
+                    }
+                    else
+                    {
+                        var denoCacheCommand = BuildDenoCacheCommand(dockerfileContext.Resource, scriptPath, resource.WorkingDirectory);
+                        buildStage
+                            .EmptyLine()
+                            .Run(denoCacheCommand);
+                    }
+
+                    if (dockerfileContext.Resource.TryGetLastAnnotation<JavaScriptBuildScriptAnnotation>(out var buildCommand))
+                    {
+                        if (!dockerfileContext.Resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager))
+                        {
+                            throw new InvalidOperationException("WithBuildScript requires a Deno package manager. Add a deno.json file or call WithDeno().");
+                        }
+
+                        buildStage
+                            .EmptyLine()
+                            .Run(BuildPackageScriptCommand(packageManager, buildCommand));
+                    }
 
                     var logger = dockerfileContext.Services.GetService<ILogger<JavaScriptAppResource>>();
                     dockerfileContext.Builder.AddContainerFilesStages(dockerfileContext.Resource, logger);
@@ -1049,8 +1079,66 @@ public static partial class JavaScriptHostingExtensions
         return resourceBuilder;
     }
 
-    private static IResourceBuilder<TResource> WithDenoDefaults<TResource>(this IResourceBuilder<TResource> builder) where TResource : JavaScriptAppResource =>
-        builder.WithOtlpExporter(OtlpProtocol.HttpProtobuf)
+    private static string BuildDenoBuildContextIgnoreContent(IResource resource)
+    {
+        if (!resource.TryGetLastAnnotation<DenoCommandLineAnnotation>(out var deno))
+        {
+            return DefaultDenoBuildContextIgnoreContent;
+        }
+
+        var environmentFiles = GetDenoEnvironmentFiles(deno.RuntimeArgs)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (environmentFiles.Length == 0)
+        {
+            return DefaultDenoBuildContextIgnoreContent;
+        }
+
+        // The default ignore protects dotenv secrets, but an explicit --env-file is a request to ship
+        // that file. Dockerignore negations preserve the secure default while admitting only named files.
+        return $"{DefaultDenoBuildContextIgnoreContent.TrimEnd('\r', '\n')}\n{string.Join('\n', environmentFiles.Select(file => $"!{file}"))}";
+    }
+
+    private static IResourceBuilder<TResource> WithDenoDefaults<TResource>(this IResourceBuilder<TResource> builder) where TResource : JavaScriptAppResource
+    {
+        builder.WithEnvironment(context =>
+            {
+                if (context.ExecutionContext.IsPublishMode)
+                {
+                    return;
+                }
+
+                var configuredHttpEndpoint = builder.ApplicationBuilder.Configuration.GetString(
+                    KnownConfigNames.DashboardOtlpHttpEndpointUrl,
+                    KnownConfigNames.Legacy.DashboardOtlpHttpEndpointUrl);
+                if (!string.IsNullOrWhiteSpace(configuredHttpEndpoint))
+                {
+                    return;
+                }
+
+                DistributedApplicationModel? model;
+                try
+                {
+                    model = context.ExecutionContext.Services.GetService<DistributedApplicationModel>();
+                }
+                catch (InvalidOperationException)
+                {
+                    // Environment evaluation in tests can run before a service provider exists. Treat that the
+                    // same as a model without a dashboard so callers get the Deno-specific diagnostic below.
+                    model = null;
+                }
+
+                var hasDashboardHttpEndpoint = model?.Resources
+                    .OfType<IResourceWithEndpoints>()
+                    .Any(r => r.Name == KnownResourceNames.AspireDashboard &&
+                        r.GetEndpoint(KnownEndpointNames.OtlpHttpEndpointName).Exists) is true;
+                if (!hasDashboardHttpEndpoint)
+                {
+                    throw new InvalidOperationException(
+                        $"Deno resource '{builder.Resource.Name}' requires an OTLP HTTP/protobuf endpoint, but the application has no dashboard HTTP OTLP endpoint and ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL is not configured.");
+                }
+            })
+            .WithOtlpExporter(OtlpProtocol.HttpProtobuf)
             .WithRequiredCommandsFromPackageManager("deno")
             // Deno has first-class, built-in OpenTelemetry support. Setting OTEL_DENO=true enables automatic export
             // of traces, metrics, and logs to the OTLP endpoint configured by WithOtlpExporter, with no
@@ -1099,6 +1187,9 @@ public static partial class JavaScriptHostingExtensions
 
                 return Task.CompletedTask;
             });
+
+        return builder;
+    }
 
     private static void ValidateDenoScriptPath(string scriptPath)
     {
@@ -2398,6 +2489,7 @@ public static partial class JavaScriptHostingExtensions
     /// </code>
     /// </example>
     [AspireExport]
+    [Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<TResource> WithDeno<TResource>(this IResourceBuilder<TResource> resource, bool install = false, string[]? installArgs = null) where TResource : JavaScriptAppResource
     {
         ArgumentNullException.ThrowIfNull(resource);
@@ -2667,8 +2759,11 @@ public static partial class JavaScriptHostingExtensions
                 // Compute at run time so the launch config reflects the final annotation state
                 var hasRunScript = resource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out _);
                 var hasPackageManager = resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var pmAnnotation);
-                var isPackageManagerScript = hasRunScript && hasPackageManager;
-                var effectiveLaunchConfigType = launchConfigType == "deno" && isPackageManagerScript
+                var isDenoTask = launchConfigType == "deno" &&
+                    resource.TryGetLastAnnotation<DenoCommandLineAnnotation>(out var deno) &&
+                    deno.Mode == DenoCommandMode.Task;
+                var isPackageManagerScript = (hasRunScript && hasPackageManager) || isDenoTask;
+                var effectiveLaunchConfigType = launchConfigType == "deno" && hasRunScript && hasPackageManager
                     ? GetJavaScriptPackageManagerLaunchConfigurationType(pmAnnotation!.ExecutableName)
                     : launchConfigType;
 
@@ -2676,7 +2771,7 @@ public static partial class JavaScriptHostingExtensions
                 {
                     ScriptPath = Path.GetFullPath(scriptPath, workingDirectory),
                     Mode = mode,
-                    RuntimeExecutable = isPackageManagerScript ? pmAnnotation!.ExecutableName : launchConfigType,
+                    RuntimeExecutable = hasRunScript && hasPackageManager ? pmAnnotation!.ExecutableName : launchConfigType,
                     LaunchMethod = isPackageManagerScript ? JavaScriptLaunchConfiguration.LaunchMethodPackageManager : JavaScriptLaunchConfiguration.LaunchMethodDirect,
                     WorkingDirectory = workingDirectory
                 };

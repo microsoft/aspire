@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREDENO001 // Type is for evaluation purposes only
+
 using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Testing;
@@ -14,11 +16,24 @@ namespace Aspire.Hosting.JavaScript.Tests;
 /// one running a script file directly (<c>deno run -A main.ts</c>) and one via a package-manager task
 /// (<c>deno task start</c>).
 /// </summary>
-public class DenoAppFixture(IMessageSink diagnosticMessageSink) : IAsyncLifetime
+public sealed class DenoAppFixture(IMessageSink diagnosticMessageSink)
+    : DenoAppFixtureBase(diagnosticMessageSink, enableDashboard: false, includeTaskApp: true);
+
+/// <summary>
+/// Test fixture that boots one Deno application and the dashboard for native telemetry validation.
+/// </summary>
+public sealed class DenoTelemetryFixture(IMessageSink diagnosticMessageSink)
+    : DenoAppFixtureBase(diagnosticMessageSink, enableDashboard: true, includeTaskApp: false)
 {
     public const string AspireDashboardResourceName = "aspire-dashboard";
     public const string DashboardApiKey = "DenoFunctionalTestsApiKey";
+}
 
+public abstract class DenoAppFixtureBase(
+    IMessageSink diagnosticMessageSink,
+    bool enableDashboard,
+    bool includeTaskApp) : IAsyncLifetime
+{
     private IDistributedApplicationTestingBuilder? _builder;
     private DistributedApplication? _app;
     private string? _denoAppPath;
@@ -33,12 +48,20 @@ public class DenoAppFixture(IMessageSink diagnosticMessageSink) : IAsyncLifetime
         _builder = TestDistributedApplicationBuilder.Create(
             options =>
             {
-                options.DisableDashboard = false;
-                options.TrustDeveloperCertificate = true;
+                options.DisableDashboard = !enableDashboard;
+                options.TrustDeveloperCertificate = enableDashboard;
             },
             new TestOutputWrapper(diagnosticMessageSink));
-        _builder.Configuration["ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"] = "https://localhost:0";
-        _builder.Configuration["AppHost:DashboardApiKey"] = DashboardApiKey;
+        if (enableDashboard)
+        {
+            _builder.Configuration["ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"] = "https://localhost:0";
+            _builder.Configuration["AppHost:DashboardApiKey"] = DenoTelemetryFixture.DashboardApiKey;
+        }
+        else
+        {
+            // Deno's native exporter requires HTTP/protobuf even when the dashboard is intentionally absent.
+            _builder.Configuration["ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"] = "http://localhost:4318";
+        }
 
         _denoAppPath = CreateDenoApp();
 
@@ -46,10 +69,13 @@ public class DenoAppFixture(IMessageSink diagnosticMessageSink) : IAsyncLifetime
             .WithHttpEndpoint(env: "PORT")
             .WithHttpHealthCheck("/", endpointName: "http");
 
-        DenoScriptBuilder = _builder.AddDenoApp("denoscript", _denoAppPath, "main.ts")
-            .WithRunScript("start")
-            .WithHttpEndpoint(env: "PORT")
-            .WithHttpHealthCheck("/", endpointName: "http");
+        if (includeTaskApp)
+        {
+            DenoScriptBuilder = _builder.AddDenoApp("denoscript", _denoAppPath, "main.ts")
+                .WithRunScript("start")
+                .WithHttpEndpoint(env: "PORT")
+                .WithHttpHealthCheck("/", endpointName: "http");
+        }
 
         _app = _builder.Build();
 
@@ -76,9 +102,13 @@ public class DenoAppFixture(IMessageSink diagnosticMessageSink) : IAsyncLifetime
             {
                 Directory.Delete(_denoAppPath, recursive: true);
             }
-            catch
+            catch (IOException)
             {
-                // Don't fail the test if we can't clean up the temporary folder
+                // A terminating Deno process can briefly retain a file handle on Windows.
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Cleanup should not mask the functional-test result.
             }
         }
     }
@@ -124,10 +154,25 @@ public class DenoAppFixture(IMessageSink diagnosticMessageSink) : IAsyncLifetime
     {
         // Wait for each resource in parallel — separate timeouts would compound startup time
         // and either resource being slow shouldn't starve the other.
-        await Task.WhenAll(
-            App.ResourceNotifications.WaitForResourceAsync(AspireDashboardResourceName, KnownResourceStates.Running, cancellationToken),
-            App.ResourceNotifications.WaitForResourceHealthyAsync(DenoAppBuilder!.Resource.Name, cancellationToken),
-            App.ResourceNotifications.WaitForResourceHealthyAsync(DenoScriptBuilder!.Resource.Name, cancellationToken));
+        var readinessTasks = new List<Task>
+        {
+            App.ResourceNotifications.WaitForResourceHealthyAsync(DenoAppBuilder!.Resource.Name, cancellationToken)
+        };
+        if (enableDashboard)
+        {
+            readinessTasks.Add(App.ResourceNotifications.WaitForResourceAsync(
+                DenoTelemetryFixture.AspireDashboardResourceName,
+                KnownResourceStates.Running,
+                cancellationToken));
+        }
+        if (DenoScriptBuilder is not null)
+        {
+            readinessTasks.Add(App.ResourceNotifications.WaitForResourceHealthyAsync(
+                DenoScriptBuilder.Resource.Name,
+                cancellationToken));
+        }
+
+        await Task.WhenAll(readinessTasks);
     }
 
     private sealed class TestOutputWrapper(IMessageSink messageSink) : ITestOutputHelper

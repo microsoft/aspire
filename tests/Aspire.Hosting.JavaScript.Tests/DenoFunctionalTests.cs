@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREDENO001 // Type is for evaluation purposes only
+
 using System.Net;
 using System.Text.Json;
 using Aspire.TestUtilities;
@@ -39,23 +41,29 @@ public class DenoFunctionalTests : IClassFixture<DenoAppFixture>
         Assert.Equal("Hello from deno task!", response);
     }
 
+}
+
+[RequiresTools(["deno"])]
+public class DenoTelemetryFunctionalTests(DenoTelemetryFixture denoFixture)
+    : IClassFixture<DenoTelemetryFixture>
+{
     [Fact]
     public async Task VerifyDenoAppExportsNativeTelemetryToDashboard()
     {
         using var cts = new CancellationTokenSource(TestConstants.LongTimeoutDuration);
-        var resourceName = _denoFixture.DenoAppBuilder!.Resource.Name;
-        using var denoClient = _denoFixture.App.CreateHttpClient(resourceName, "http");
+        var resourceName = denoFixture.DenoAppBuilder!.Resource.Name;
+        using var denoClient = denoFixture.App.CreateHttpClient(resourceName, "http");
 
         var response = await denoClient.GetStringAsync("/", cts.Token);
         Assert.Equal("Hello from deno!", response);
 
-        await WaitForDashboardTelemetryAsync(_denoFixture.App, resourceName, cts.Token);
+        await WaitForDashboardTelemetryAsync(denoFixture.App, resourceName, cts.Token);
     }
 
     private static async Task WaitForDashboardTelemetryAsync(DistributedApplication app, string resourceName, CancellationToken cancellationToken)
     {
-        using var dashboardClient = app.CreateHttpClient(DenoAppFixture.AspireDashboardResourceName, "http");
-        dashboardClient.DefaultRequestHeaders.TryAddWithoutValidation("x-api-key", DenoAppFixture.DashboardApiKey);
+        using var dashboardClient = app.CreateHttpClient(DenoTelemetryFixture.AspireDashboardResourceName, "http");
+        dashboardClient.DefaultRequestHeaders.TryAddWithoutValidation("x-api-key", DenoTelemetryFixture.DashboardApiKey);
 
         var resourceQuery = Uri.EscapeDataString(resourceName);
         var tracesRequest = $"/api/telemetry/traces?resource={resourceQuery}&limit=10";

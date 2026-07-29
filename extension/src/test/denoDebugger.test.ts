@@ -2,6 +2,7 @@ import * as assert from 'assert';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
+import { getSupportedCapabilities } from '../capabilities';
 import { denoDebuggerExtension } from '../debugger/languages/deno';
 import { cleanupRun } from '../debugger/runCleanupRegistry';
 import { AspireResourceExtendedDebugConfiguration, DenoLaunchConfiguration } from '../dcp/types';
@@ -53,6 +54,7 @@ suite('Deno Debugger Tests', () => {
         assert.strictEqual(denoDebuggerExtension.debugAdapter, 'pwa-node');
         // Deno debugging needs no third-party debug adapter extension (uses js-debug).
         assert.strictEqual(denoDebuggerExtension.extensionId, null);
+        assert.strictEqual(getSupportedCapabilities().filter(capability => capability === 'deno').length, 1);
     });
 
     test('runs TypeScript and JSX/TSX natively', () => {
@@ -144,6 +146,41 @@ suite('Deno Debugger Tests', () => {
 
         assert.strictEqual(debugConfig.runtimeArgs, undefined);
         assert.strictEqual(debugConfig.attachSimplePort, undefined);
+        assert.strictEqual(registeredCleanupCount, 0);
+    });
+
+    test('rejects explicit package-manager launch methods even when the argument shape is unfamiliar', async () => {
+        const launchConfig: DenoLaunchConfiguration = {
+            type: 'deno',
+            launch_method: 'package-manager',
+            runtime_executable: 'deno',
+            script_path: '/workspace/app/deno.json',
+            working_directory: '/workspace/app'
+        };
+        const debugConfig = createDebugConfig('/workspace/app/deno.json');
+
+        await assert.rejects(
+            () => configure(launchConfig, ['future-task-shape', 'dev'], debugConfig),
+            /Deno task launches cannot be debugged automatically/);
+
+        assert.strictEqual(debugConfig.runtimeArgs, undefined);
+        assert.strictEqual(debugConfig.attachSimplePort, undefined);
+        assert.strictEqual(registeredCleanupCount, 0);
+    });
+
+    test('uses legacy argument inference when launch_method is absent', async () => {
+        const launchConfig: DenoLaunchConfiguration = {
+            type: 'deno',
+            runtime_executable: 'deno',
+            script_path: '/workspace/app/deno.json',
+            working_directory: '/workspace/app'
+        };
+        const debugConfig = createDebugConfig('/workspace/app/deno.json');
+
+        await assert.rejects(
+            () => configure(launchConfig, ['task', 'dev'], debugConfig),
+            /Deno task launches cannot be debugged automatically/);
+
         assert.strictEqual(registeredCleanupCount, 0);
     });
 

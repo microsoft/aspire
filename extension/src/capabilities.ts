@@ -64,12 +64,6 @@ export function isBunInstalled() {
     return isExtensionInstalled("oven.bun-vscode");
 }
 
-export function isDenoInstalled() {
-    // Deno debugging uses VS Code's built-in js-debug (pwa-node) attaching to Deno's V8 inspector via
-    // --inspect-wait, so no third-party debug adapter extension is required.
-    return true;
-}
-
 export function getSupportedCapabilities(): Capabilities {
     const capabilities: Capabilities = ['prompting', 'baseline.v1', 'secret-prompts.v1', 'file-pickers.v1', 'build-dotnet-using-cli'];
 
@@ -109,9 +103,8 @@ export function getSupportedCapabilities(): Capabilities {
         capabilities.push("oven.bun-vscode");
     }
 
-    if (isDenoInstalled()) {
-        capabilities.push("deno");
-    }
+    // Deno debugging uses VS Code's built-in js-debug, so no extension probe is required.
+    capabilities.push("deno");
 
     if (isMauiInstalled()) {
         capabilities.push("maui");

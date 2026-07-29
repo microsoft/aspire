@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMMAND001 // RequiredCommandAnnotation is for evaluation purposes only
+#pragma warning disable ASPIREDENO001 // Type is for evaluation purposes only
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;

@@ -1,6 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREDENO001 // Deno APIs use this implementation type internally
+
+using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.JavaScript;
@@ -23,7 +26,8 @@ internal enum DenoCommandMode
 /// <summary>
 /// The Deno inspector flavor.
 /// </summary>
-internal enum DenoInspectMode
+[Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+public enum DenoInspectMode
 {
     /// <summary><c>--inspect</c> — attach a debugger; execution starts immediately.</summary>
     Inspect,
@@ -38,15 +42,31 @@ internal enum DenoInspectMode
 /// <summary>
 /// A granular Deno permission grant/denial (for example <c>--allow-net</c> or <c>--deny-read</c>).
 /// </summary>
-internal enum DenoPermissionKind
+[Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+public enum DenoPermissionKind
 {
+    /// <summary>Network access controlled by <c>--allow-net</c> or <c>--deny-net</c>.</summary>
     Net,
+
+    /// <summary>File-system read access controlled by <c>--allow-read</c> or <c>--deny-read</c>.</summary>
     Read,
+
+    /// <summary>File-system write access controlled by <c>--allow-write</c> or <c>--deny-write</c>.</summary>
     Write,
+
+    /// <summary>Subprocess execution controlled by <c>--allow-run</c> or <c>--deny-run</c>.</summary>
     Run,
+
+    /// <summary>Environment-variable access controlled by <c>--allow-env</c> or <c>--deny-env</c>.</summary>
     Env,
+
+    /// <summary>Remote import access controlled by <c>--allow-import</c> or <c>--deny-import</c>.</summary>
     Import,
+
+    /// <summary>System-information access controlled by <c>--allow-sys</c> or <c>--deny-sys</c>.</summary>
     Sys,
+
+    /// <summary>Foreign-function-interface access controlled by <c>--allow-ffi</c> or <c>--deny-ffi</c>.</summary>
     Ffi,
 }
 
@@ -96,10 +116,24 @@ internal sealed class DenoCommandLineAnnotation : IResourceAnnotation
     public bool ModeSet { get; set; }
 
     /// <summary>
-    /// The endpoint <c>WithDenoServe</c> created, tracked so a later mode selector can remove that endpoint
-    /// without disturbing endpoints the caller configured themselves.
+    /// The HTTP endpoint used by <c>WithDenoServe</c>.
     /// </summary>
     public EndpointAnnotation? ServeEndpoint { get; set; }
+
+    /// <summary>Whether <see cref="ServeEndpoint"/> was created by <c>WithDenoServe</c>.</summary>
+    public bool ServeEndpointCreated { get; set; }
+
+    /// <summary>
+    /// The environment callback created when <c>WithDenoServe</c> added <c>PORT</c> to an endpoint that did not
+    /// already have a target-port environment variable.
+    /// </summary>
+    public EnvironmentCallbackAnnotation? ServeEnvironmentCallback { get; set; }
+
+    /// <summary>The endpoint's target-port environment variable before <c>WithDenoServe</c> selected it.</summary>
+    public string? ServePreviousTargetPortEnvironmentVariable { get; set; }
+
+    /// <summary>The publish target port assigned by <c>WithDenoServe</c>, if it supplied one.</summary>
+    public int? ServeAssignedTargetPort { get; set; }
 
     /// <summary>The task name to invoke when <see cref="Mode"/> is <see cref="DenoCommandMode.Task"/>.</summary>
     public string? TaskName { get; set; }

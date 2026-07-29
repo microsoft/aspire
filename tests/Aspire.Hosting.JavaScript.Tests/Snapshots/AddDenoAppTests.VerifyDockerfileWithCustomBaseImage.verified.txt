@@ -17,4 +17,4 @@ COPY --from=build /deno-dir /deno-dir
 
 ENV NODE_ENV=production
 
-ENTRYPOINT ["deno","run","-A","--cached-only","main.ts"]
+ENTRYPOINT ["deno","run","--allow-net","--allow-env","--cached-only","main.ts"]

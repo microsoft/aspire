@@ -1,8 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREDENO001 // Type is for evaluation purposes only
+
 #pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
 
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.ApplicationModel;
@@ -1887,8 +1890,8 @@ public class AtsTypeScriptCodeGeneratorTests
 
     [Theory]
     [InlineData("withDenoAllowAll")]
-    [InlineData("withDenoAllowImport")]
-    [InlineData("withDenoDenyImport")]
+    [InlineData("withDenoAllow")]
+    [InlineData("withDenoDeny")]
     [InlineData("withDenoConfig")]
     [InlineData("withDenoTask")]
     [InlineData("withDenoServe")]
@@ -1905,5 +1908,100 @@ public class AtsTypeScriptCodeGeneratorTests
 
         var denoAppTypeId = AtsTypeMapping.DeriveTypeId(typeof(Aspire.Hosting.JavaScript.DenoAppResource));
         Assert.Contains(capability.ExpandedTargetTypes.Select(t => t.TypeId), id => id == denoAppTypeId);
+    }
+
+    [Fact]
+    public void Scanner_DenoMethods_HaveConsolidatedSurfaceAndEnumParameters()
+    {
+        var hostingAssembly = typeof(DistributedApplication).Assembly;
+        var jsAssembly = typeof(Aspire.Hosting.JavaScript.JavaScriptAppResource).Assembly;
+
+        var result = AtsCapabilityScanner.ScanAssemblies([hostingAssembly, jsAssembly]);
+        var denoCapabilities = result.Capabilities
+            .Where(c => c.CapabilityId.StartsWith("Aspire.Hosting.JavaScript/withDeno", StringComparison.Ordinal) &&
+                c.MethodName != "withDeno")
+            .OrderBy(c => c.MethodName, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.Equal(
+            [
+                "withDenoAllow",
+                "withDenoAllowAll",
+                "withDenoConfig",
+                "withDenoDeny",
+                "withDenoImportMap",
+                "withDenoInspect",
+                "withDenoLock",
+                "withDenoNoLock",
+                "withDenoNodeModulesDir",
+                "withDenoRun",
+                "withDenoRuntimeArgs",
+                "withDenoScriptArgs",
+                "withDenoServe",
+                "withDenoTask",
+                "withDenoUnstable",
+                "withDenoWatch",
+            ],
+            denoCapabilities.Select(c => c.MethodName));
+
+        var allow = Assert.Single(denoCapabilities, c => c.MethodName == "withDenoAllow");
+        var permissionKind = Assert.Single(allow.Parameters, p => p.Name == "kind");
+        Assert.Equal(typeof(Aspire.Hosting.JavaScript.DenoPermissionKind), permissionKind.Type?.ClrType);
+
+        var inspect = Assert.Single(denoCapabilities, c => c.MethodName == "withDenoInspect");
+        var inspectMode = Assert.Single(inspect.Parameters, p => p.Name == "mode");
+        Assert.Equal(typeof(Aspire.Hosting.JavaScript.DenoInspectMode), inspectMode.Type?.ClrType);
+        Assert.True(inspectMode.IsOptional);
+    }
+
+    [Fact]
+    public void DenoPublicApis_AreExperimental()
+    {
+        var denoMethods = typeof(JavaScriptHostingExtensions)
+            .GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .Where(method => method.Name == nameof(JavaScriptHostingExtensions.AddDenoApp) ||
+                method.Name.StartsWith("WithDeno", StringComparison.Ordinal))
+            .OrderBy(method => method.Name, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.Equal(
+            [
+                "AddDenoApp",
+                "WithDeno",
+                "WithDenoAllow",
+                "WithDenoAllowAll",
+                "WithDenoConfig",
+                "WithDenoDeny",
+                "WithDenoImportMap",
+                "WithDenoInspect",
+                "WithDenoLock",
+                "WithDenoNoLock",
+                "WithDenoNodeModulesDir",
+                "WithDenoRun",
+                "WithDenoRuntimeArgs",
+                "WithDenoScriptArgs",
+                "WithDenoServe",
+                "WithDenoTask",
+                "WithDenoUnstable",
+                "WithDenoWatch",
+            ],
+            denoMethods.Select(method => method.Name));
+
+        foreach (var method in denoMethods)
+        {
+            var experimental = Assert.Single(method.GetCustomAttributes<ExperimentalAttribute>());
+            Assert.Equal("ASPIREDENO001", experimental.DiagnosticId);
+        }
+
+        foreach (var type in new[]
+        {
+            typeof(Aspire.Hosting.JavaScript.DenoAppResource),
+            typeof(Aspire.Hosting.JavaScript.DenoInspectMode),
+            typeof(Aspire.Hosting.JavaScript.DenoPermissionKind),
+        })
+        {
+            var experimental = Assert.Single(type.GetCustomAttributes<ExperimentalAttribute>());
+            Assert.Equal("ASPIREDENO001", experimental.DiagnosticId);
+        }
     }
 }
