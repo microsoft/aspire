@@ -711,6 +711,108 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task WaitingUpdateDoesNotDisturbNotStartedReplicas()
+    {
+        // A replicated resource that uses WithExplicitStart is started one replica at a time, so only the replica
+        // named in the start request is moved to "Starting". The waiting update, however, is published as a
+        // model-level update that reaches every replica, so a sibling that is still "NotStarted" - deliberately not
+        // started - must be left alone.
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var dependencyReleased = new TaskCompletionSource();
+        var dependency = AddSelfDrivenResource(builder, "dependency", dependencyReleased.Task);
+        var waiter = builder.AddResource(new CustomResourceWithWaitSupport("waiter")).WaitFor(dependency);
+        waiter.Resource.Annotations.Add(new DcpInstancesAnnotation([
+            new DcpInstance("waiter-abc123", "abc123", 0),
+            new DcpInstance("waiter-def456", "def456", 1)
+        ]));
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events, applicationEventing: builder.Eventing);
+        await appOrchestrator.RunApplicationAsync();
+
+        await events.PublishAsync(new OnResourcesPreparedContext(CancellationToken.None));
+
+        // Both replicas of an explicit start resource report "NotStarted" until someone starts them.
+        await PublishReplicaStatesAsync(resourceNotificationService, waiter.Resource, KnownResourceStates.NotStarted);
+
+        // Only the first replica is being started.
+        var startingTask = events.PublishAsync(new OnResourceStartingContext(
+            CancellationToken.None, KnownResourceTypes.Executable, waiter.Resource, "waiter-abc123"));
+
+        await resourceNotificationService.WaitForResourceAsync(
+            waiter.Resource.Name,
+            e => e.ResourceId == "waiter-abc123" && e.Snapshot.State?.Text == KnownResourceStates.Waiting,
+            TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.True(resourceNotificationService.TryGetCurrentState("waiter-def456", out var siblingEvent));
+        Assert.Equal(KnownResourceStates.NotStarted, siblingEvent.Snapshot.State?.Text);
+
+        dependencyReleased.SetResult();
+
+        await startingTask.DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task StartingNotStartedReplicaIsForwardedToDcpWhileSiblingWaits()
+    {
+        // The consequence of WaitingUpdateDoesNotDisturbNotStartedReplicas: StartResourceAsync reads "Waiting" as
+        // proof that startup is already in flight and only updates the snapshot, skipping DCP. If the waiting update
+        // relabelled the untouched replica, its start command would silently do nothing - the dashboard would show
+        // "Starting" while no process was ever launched.
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var dependencyReleased = new TaskCompletionSource();
+        var dependency = AddSelfDrivenResource(builder, "dependency", dependencyReleased.Task);
+        var waiter = builder.AddResource(new CustomResourceWithWaitSupport("waiter")).WaitFor(dependency);
+        waiter.Resource.Annotations.Add(new DcpInstancesAnnotation([
+            new DcpInstance("waiter-abc123", "abc123", 0),
+            new DcpInstance("waiter-def456", "def456", 1)
+        ]));
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var dcpExecutor = new TestDcpExecutor();
+        dcpExecutor.AddResource(waiter.Resource, "waiter-abc123");
+        dcpExecutor.AddResource(waiter.Resource, "waiter-def456");
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events, applicationEventing: builder.Eventing, dcpExecutor: dcpExecutor);
+        await appOrchestrator.RunApplicationAsync();
+
+        await events.PublishAsync(new OnResourcesPreparedContext(CancellationToken.None));
+
+        await PublishReplicaStatesAsync(resourceNotificationService, waiter.Resource, KnownResourceStates.NotStarted);
+
+        var startingTask = events.PublishAsync(new OnResourceStartingContext(
+            CancellationToken.None, KnownResourceTypes.Executable, waiter.Resource, "waiter-abc123"));
+
+        await resourceNotificationService.WaitForResourceAsync(
+            waiter.Resource.Name,
+            e => e.ResourceId == "waiter-abc123" && e.Snapshot.State?.Text == KnownResourceStates.Waiting,
+            TestContext.Current.CancellationToken).DefaultTimeout();
+
+        // Stand in for the user invoking the start command on the replica that was never started.
+        await appOrchestrator.StartResourceAsync("waiter-def456", TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.Equal(["waiter-def456"], dcpExecutor.StartedResources);
+
+        dependencyReleased.SetResult();
+
+        await startingTask.DefaultTimeout();
+    }
+
+    [Fact]
     public async Task ResourceForcedOutOfWaitingStopsWaitingForItsDependency()
     {
         // The Start command forces a waiting resource to start by moving it from "Waiting" to "Starting"
@@ -837,6 +939,20 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     }
 
     /// <summary>
+    /// Publishes <paramref name="state"/> for every DCP instance (replica) of <paramref name="resource"/>, as an
+    /// individual per-instance update rather than a model-level one.
+    /// </summary>
+    private static async Task PublishReplicaStatesAsync(ResourceNotificationService notificationService, IResource resource, string state)
+    {
+        Assert.True(resource.TryGetInstances(out var instances));
+
+        foreach (var instance in instances)
+        {
+            await notificationService.PublishUpdateAsync(resource, instance.Name, s => s with { State = state }).DefaultTimeout();
+        }
+    }
+
+    /// <summary>
     /// Adds a resource shaped like a custom hosting integration that drives its own startup: it starts in
     /// <see cref="KnownResourceStates.NotStarted"/> and publishes <see cref="BeforeResourceStartedEvent"/> itself
     /// instead of being started by DCP.
@@ -877,7 +993,8 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         DcpExecutorEvents? dcpEvents = null,
         IDistributedApplicationEventing? applicationEventing = null,
         ResourceLoggerService? resourceLoggerService = null,
-        DashboardOptions? dashboardOptions = null)
+        DashboardOptions? dashboardOptions = null,
+        TestDcpExecutor? dcpExecutor = null)
     {
         var services = new ServiceCollection();
         var configuration = new ConfigurationManager();
@@ -890,7 +1007,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
 
         return new ApplicationOrchestrator(
             distributedAppModel,
-            new TestDcpExecutor(),
+            dcpExecutor ?? new TestDcpExecutor(),
             dcpEvents ?? new DcpExecutorEvents(),
             [],
             notificationService,
