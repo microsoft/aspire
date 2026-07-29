@@ -395,6 +395,7 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
 
     private Task ClearTraces(ResourceKey? key)
     {
+        DataSource.EnsureWritable();
         return TelemetryRepositoryWriter.ClearTracesAsync(key);
     }
 

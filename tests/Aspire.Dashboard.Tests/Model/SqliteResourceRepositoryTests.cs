@@ -90,12 +90,14 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
     }
 
     [Fact]
-    public async Task ConsoleLogs_UseInsertionOrderAndAllowLineNumbersToRestart()
+    public async Task ConsoleLogs_UseInsertionOrderAndContinueLineNumbersAfterRestart()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var resource = CreateResource("api", "api");
         {
             using var repositoryContext = CreateRepository(workspace.Path);
             var writer = (IResourceRepositoryWriter)repositoryContext.Repository;
+            await writer.ReplaceResourcesAsync([resource]);
             await writer.AddConsoleLogsAsync("api", [
                 new ConsoleLogLine { LineNumber = 2, Text = "second", IsStdErr = true },
                 new ConsoleLogLine { LineNumber = 1, Text = "first" }
@@ -110,7 +112,7 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
             using var restartedRepositoryContext = CreateRepository(workspace.Path);
             await ((IResourceRepositoryWriter)restartedRepositoryContext.Repository).AddConsoleLogsAsync(
                 "api",
-                [new ConsoleLogLine { LineNumber = 1, Text = "first-after-restart" }]);
+                [new ConsoleLogLine { LineNumber = 4, Text = "fourth" }]);
         }
 
         using var historicalContext = CreateRepository(workspace.Path, readOnly: true);
@@ -124,7 +126,47 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
             line => Assert.Equal(new global::Aspire.Dashboard.Model.ResourceLogLine(2, "second", true), line),
             line => Assert.Equal(new global::Aspire.Dashboard.Model.ResourceLogLine(1, "first", false), line),
             line => Assert.Equal(new global::Aspire.Dashboard.Model.ResourceLogLine(3, "third", false), line),
-            line => Assert.Equal(new global::Aspire.Dashboard.Model.ResourceLogLine(1, "first-after-restart", false), line));
+            line => Assert.Equal(new global::Aspire.Dashboard.Model.ResourceLogLine(4, "fourth", false), line));
+    }
+
+    [Fact]
+    public async Task ConsoleLogs_ReplayAfterRepositoryRestartIsIgnored()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var resource = CreateResource("api", "api");
+        {
+            using var repositoryContext = CreateRepository(workspace.Path);
+            var writer = (IResourceRepositoryWriter)repositoryContext.Repository;
+            await writer.ReplaceResourcesAsync([resource]);
+            await writer.AddConsoleLogsAsync("api", [
+                new ConsoleLogLine { LineNumber = 1, Text = "first" },
+                new ConsoleLogLine { LineNumber = 2, Text = "second" }
+            ]);
+        }
+
+        {
+            using var restartedRepositoryContext = CreateRepository(workspace.Path);
+            var writer = (IResourceRepositoryWriter)restartedRepositoryContext.Repository;
+            await writer.ReplaceResourcesAsync([resource]);
+            await writer.AddConsoleLogsAsync("api", [
+                new ConsoleLogLine { LineNumber = 1, Text = "first" },
+                new ConsoleLogLine { LineNumber = 2, Text = "second" },
+                new ConsoleLogLine { LineNumber = 3, Text = "third" }
+            ]);
+        }
+
+        using var historicalContext = CreateRepository(workspace.Path, readOnly: true);
+        var batches = new List<IReadOnlyList<global::Aspire.Dashboard.Model.ResourceLogLine>>();
+        await foreach (var batch in historicalContext.Repository.GetConsoleLogs("api", CancellationToken.None))
+        {
+            batches.Add(batch);
+        }
+
+        Assert.Collection(
+            Assert.Single(batches),
+            line => Assert.Equal(new global::Aspire.Dashboard.Model.ResourceLogLine(1, "first", false), line),
+            line => Assert.Equal(new global::Aspire.Dashboard.Model.ResourceLogLine(2, "second", false), line),
+            line => Assert.Equal(new global::Aspire.Dashboard.Model.ResourceLogLine(3, "third", false), line));
     }
 
     [Fact]

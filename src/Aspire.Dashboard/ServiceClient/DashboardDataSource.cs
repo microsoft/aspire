@@ -65,6 +65,14 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
 
     internal bool IsReadOnly { get; private set; }
 
+    internal void EnsureWritable()
+    {
+        if (IsReadOnly)
+        {
+            throw new InvalidOperationException("Historical dashboard data is read-only.");
+        }
+    }
+
     DashboardRunDescriptor IDashboardRunSelection.SelectedRun => SelectedRun;
 
     void IDashboardRunSelection.SelectRun(string? runId) => SelectRun(runId);

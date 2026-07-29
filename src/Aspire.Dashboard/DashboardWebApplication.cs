@@ -321,6 +321,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddSingleton<IDashboardRunStore>(services => services.GetRequiredService<DashboardRunStore>());
         builder.Services.AddSingleton<IRepositoryFactory, RepositoryFactory>();
         builder.Services.AddSingleton(services => services.GetRequiredService<DashboardDataSourcePool>().Current.TelemetryRepository);
+        // OTLP ingestion and telemetry mutations always target the current dashboard run, even when a browser circuit selects a historical run.
         builder.Services.AddSingleton<ITelemetryRepositoryWriter>(services =>
             (ITelemetryRepositoryWriter)services.GetRequiredService<ITelemetryRepository>());
         builder.Services.AddSingleton(services => services.GetRequiredService<DashboardDataSourcePool>().Current.ResourceRepository);

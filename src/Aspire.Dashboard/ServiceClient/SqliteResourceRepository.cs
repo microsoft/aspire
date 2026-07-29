@@ -19,10 +19,9 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
     private readonly IKnownPropertyLookup _knownPropertyLookup;
     private readonly ILogger _logger;
     private readonly object _stateLock = new();
-    private readonly Dictionary<string, ResourceViewModel> _resources = new(StringComparers.ResourceName);
+    private readonly Dictionary<string, ResourceState> _resourceStates = new(StringComparers.ResourceName);
     private ImmutableHashSet<Channel<IReadOnlyList<ResourceViewModelChange>>> _resourceChannels = [];
     private readonly Dictionary<string, ImmutableHashSet<Channel<IReadOnlyList<ResourceLogLine>>>> _consoleChannels = new(StringComparers.ResourceName);
-    private readonly Dictionary<string, int> _lastConsoleLogLineNumbers = new(StringComparers.ResourceName);
     private int _disposed;
 
     /// <summary>
@@ -48,7 +47,7 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
         ThrowIfDisposed();
         lock (_stateLock)
         {
-            return _resources.GetValueOrDefault(resourceName);
+            return _resourceStates.GetValueOrDefault(resourceName)?.Resource;
         }
     }
 
@@ -57,7 +56,7 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
         ThrowIfDisposed();
         lock (_stateLock)
         {
-            return _resources.Values.ToList();
+            return _resourceStates.Values.Select(state => state.Resource).ToList();
         }
     }
 
@@ -74,7 +73,7 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
         lock (_stateLock)
         {
             _resourceChannels = _resourceChannels.Add(channel);
-            initialState = _resources.Values.ToImmutableArray();
+            initialState = _resourceStates.Values.Select(state => state.Resource).ToImmutableArray();
         }
 
         return Task.FromResult(new ResourceViewModelSubscription(
@@ -181,7 +180,7 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
             Dictionary<string, ResourceViewModel> currentResources;
             lock (_stateLock)
             {
-                currentResources = new Dictionary<string, ResourceViewModel>(_resources, StringComparers.ResourceName);
+                currentResources = _resourceStates.ToDictionary(entry => entry.Key, entry => entry.Value.Resource, StringComparers.ResourceName);
             }
 
             var replacementResources = new Dictionary<string, ResourceViewModel>(StringComparers.ResourceName);
@@ -216,11 +215,7 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
 
             lock (_stateLock)
             {
-                _resources.Clear();
-                foreach (var (resourceName, viewModel) in replacementResources)
-                {
-                    _resources.Add(resourceName, viewModel);
-                }
+                UpdateResourceStates(replacementResources);
             }
         }
 
@@ -250,7 +245,7 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
 
             lock (_stateLock)
             {
-                updatedResources = new Dictionary<string, ResourceViewModel>(_resources, StringComparers.ResourceName);
+                updatedResources = _resourceStates.ToDictionary(entry => entry.Key, entry => entry.Value.Resource, StringComparers.ResourceName);
             }
             foreach (var change in changes)
             {
@@ -277,11 +272,7 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
 
             lock (_stateLock)
             {
-                _resources.Clear();
-                foreach (var (resourceName, viewModel) in updatedResources)
-                {
-                    _resources.Add(resourceName, viewModel);
-                }
+                UpdateResourceStates(updatedResources);
             }
         }
 
@@ -302,9 +293,9 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
                 """, new { ResourceName = resourceName });
             lock (_stateLock)
             {
-                if (_resources.TryGetValue(resourceName, out var resource))
+                if (_resourceStates.TryGetValue(resourceName, out var state))
                 {
-                    resource.ConsoleLogsLoaded = true;
+                    state.Resource.ConsoleLogsLoaded = true;
                 }
             }
         }
@@ -326,7 +317,7 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
             int lastLineNumber;
             lock (_stateLock)
             {
-                lastLineNumber = _lastConsoleLogLineNumbers.GetValueOrDefault(resourceName, int.MinValue);
+                lastLineNumber = _resourceStates.GetValueOrDefault(resourceName)?.LastConsoleLogLineNumber ?? int.MinValue;
             }
 
             // A response can overlap a previously persisted response or repeat a line number within the
@@ -363,13 +354,13 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
 
             lock (_stateLock)
             {
-                if (consoleLogsToInsert.Count > 0)
+                if (_resourceStates.TryGetValue(resourceName, out var state))
                 {
-                    _lastConsoleLogLineNumbers[resourceName] = consoleLogsToInsert.Max(line => line.LineNumber);
-                }
-                if (_resources.TryGetValue(resourceName, out var resource))
-                {
-                    resource.ConsoleLogsLoaded = true;
+                    if (consoleLogsToInsert.Count > 0)
+                    {
+                        state.LastConsoleLogLineNumber = consoleLogsToInsert.Max(line => line.LineNumber);
+                    }
+                    state.Resource.ConsoleLogsLoaded = true;
                 }
                 channels = (_consoleChannels.GetValueOrDefault(resourceName) ?? []).ToArray();
             }
@@ -401,7 +392,42 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
         {
             var viewModel = storedResource.Resource.ToViewModel(storedResource.ReplicaIndex, _knownPropertyLookup, _logger);
             viewModel.ConsoleLogsLoaded = storedResource.ConsoleLogsLoaded;
-            _resources[storedResource.Resource.Name] = viewModel;
+            _resourceStates[storedResource.Resource.Name] = new ResourceState(viewModel);
+        }
+
+        foreach (var consoleLogState in connection.Query<ConsoleLogState>("""
+            SELECT resource_name AS ResourceName, MAX(line_number) AS LastLineNumber
+            FROM console_logs
+            GROUP BY resource_name;
+            """))
+        {
+            if (_resourceStates.TryGetValue(consoleLogState.ResourceName, out var state))
+            {
+                state.LastConsoleLogLineNumber = consoleLogState.LastLineNumber;
+            }
+        }
+    }
+
+    private void UpdateResourceStates(IReadOnlyDictionary<string, ResourceViewModel> resources)
+    {
+        var updatedStates = new Dictionary<string, ResourceState>(StringComparers.ResourceName);
+        foreach (var (resourceName, resource) in resources)
+        {
+            if (_resourceStates.TryGetValue(resourceName, out var state))
+            {
+                state.Resource = resource;
+            }
+            else
+            {
+                state = new ResourceState(resource);
+            }
+            updatedStates.Add(resourceName, state);
+        }
+
+        _resourceStates.Clear();
+        foreach (var (resourceName, state) in updatedStates)
+        {
+            _resourceStates.Add(resourceName, state);
         }
     }
 
@@ -484,5 +510,17 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
         public required int LineNumber { get; init; }
         public required string Content { get; init; }
         public required bool IsStdErr { get; init; }
+    }
+
+    private sealed class ConsoleLogState
+    {
+        public required string ResourceName { get; init; }
+        public required int LastLineNumber { get; init; }
+    }
+
+    private sealed class ResourceState(ResourceViewModel resource)
+    {
+        public ResourceViewModel Resource { get; set; } = resource;
+        public int LastConsoleLogLineNumber { get; set; } = int.MinValue;
     }
 }

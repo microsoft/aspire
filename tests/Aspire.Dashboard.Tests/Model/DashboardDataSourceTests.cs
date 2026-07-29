@@ -833,6 +833,9 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         Assert.Empty(currentTelemetryRepository.GetResources());
         Assert.Empty(currentResourceRepository.GetResources());
 
+        var exception = Assert.Throws<InvalidOperationException>(dataSource.EnsureWritable);
+        Assert.Equal("Historical dashboard data is read-only.", exception.Message);
+
         using var activitySource = new DashboardActivitySource();
         await using var currentClient = new DashboardClient(
             activitySource,

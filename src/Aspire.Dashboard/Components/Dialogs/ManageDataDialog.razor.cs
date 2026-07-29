@@ -557,6 +557,7 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
             var selectedResources = GetSelectedResourcesAndDataTypes();
 
             // Clear telemetry signals via repository
+            DataSource.EnsureWritable();
             await TelemetryRepositoryWriter.ClearSelectedSignalsAsync(selectedResources);
 
             // Handle console logs filtering separately (not stored in TelemetryRepository)

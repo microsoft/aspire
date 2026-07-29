@@ -284,8 +284,11 @@ internal static class FluentUISetupHelpers
 
         public string? SelectedRunId { get; private set; }
 
+        public Action<string?>? OnSelectRun { get; set; }
+
         public void SelectRun(string? runId)
         {
+            OnSelectRun?.Invoke(runId);
             var runs = runStore.GetRuns();
             SelectedRun = runs.FirstOrDefault(run => string.Equals(run.RunId, runId, StringComparison.Ordinal))
                 ?? runs.Single(run => run.IsCurrent);

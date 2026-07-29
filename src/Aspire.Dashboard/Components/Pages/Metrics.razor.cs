@@ -241,6 +241,7 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
 
     private Task ClearMetrics(ResourceKey? key)
     {
+        DataSource.EnsureWritable();
         return TelemetryRepositoryWriter.ClearMetricsAsync(key);
     }
 

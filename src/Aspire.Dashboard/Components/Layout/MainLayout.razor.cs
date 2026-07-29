@@ -83,6 +83,9 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     [Inject]
     public required IDashboardRunSelection RunSelection { get; init; }
 
+    [Inject]
+    public required ILogger<MainLayout> Logger { get; init; }
+
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
 
@@ -94,7 +97,16 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             var selectedRunId = selectedRunResult is { Success: true } ? selectedRunResult.Value : null;
             if (!_runSelectionChanged && !string.IsNullOrEmpty(selectedRunId))
             {
-                RunSelection.SelectRun(selectedRunId);
+                try
+                {
+                    RunSelection.SelectRun(selectedRunId);
+                }
+                catch (Exception exception)
+                {
+                    Logger.LogError(exception, "Failed to restore dashboard run '{RunId}'. Falling back to the current run.", selectedRunId);
+                    RunSelection.SelectRun(runId: null);
+                }
+
                 if (RunSelection.SelectedRun.IsCurrent)
                 {
                     await SessionStorage.SetAsync(BrowserStorageKeys.SelectedDashboardRunId, string.Empty);

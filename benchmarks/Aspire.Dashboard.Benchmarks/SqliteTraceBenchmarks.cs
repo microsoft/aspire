@@ -30,6 +30,7 @@ public class SqliteTraceBenchmarks
 {
     private const string TraceFileEnvironmentVariable = "ASPIRE_DASHBOARD_TRACE_BENCHMARK_FILE";
     private const int GeneratedSpanCount = 10_000;
+    private static readonly DateTime s_generatedTraceStartTime = DateTime.UnixEpoch;
 
     private string _temporaryDirectory = null!;
     private DashboardSqliteDatabase _database = null!;
@@ -115,10 +116,9 @@ public class SqliteTraceBenchmarks
         };
         var scopeSpans = resourceSpans.ScopeSpans[0];
         var traceId = ByteString.CopyFrom(Encoding.UTF8.GetBytes("benchmark-trace"));
-        var startTime = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         for (var spanIndex = 0; spanIndex < GeneratedSpanCount; spanIndex++)
         {
-            var spanStartTime = startTime.AddTicks(spanIndex);
+            var spanStartTime = s_generatedTraceStartTime.AddTicks(spanIndex);
             scopeSpans.Spans.Add(new OtlpProtoSpan
             {
                 TraceId = traceId,

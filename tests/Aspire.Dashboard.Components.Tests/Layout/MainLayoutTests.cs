@@ -15,6 +15,8 @@ using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components.Components.Tooltip;
 using Microsoft.JSInterop;
@@ -515,6 +517,67 @@ public partial class MainLayoutTests : DashboardTestContext
             var menuButton = cut.FindComponent<DashboardRunSelect>().FindComponent<AspireMenuButton>();
             Assert.Equal(expectedHistoricalRunText, menuButton.Instance.Text);
         });
+    }
+
+    [Fact]
+    public void StoredHistoricalRunFailure_FallsBackToCurrentRunAndClearsSelection()
+    {
+        var runStore = new FluentUISetupHelpers.TestDashboardRunStore(
+        [
+            new(
+                RunId: "current",
+                SchemaVersion: DashboardRunStore.SchemaVersion,
+                StartedAtUtc: DateTimeOffset.UnixEpoch,
+                EndedAtUtc: null,
+                CleanShutdown: false,
+                ApplicationName: "TestApp",
+                DatabasePath: string.Empty,
+                IsCurrent: true),
+            new(
+                RunId: "historical",
+                SchemaVersion: DashboardRunStore.SchemaVersion,
+                StartedAtUtc: DateTimeOffset.UnixEpoch,
+                EndedAtUtc: DateTimeOffset.UnixEpoch,
+                CleanShutdown: true,
+                ApplicationName: "TestApp",
+                DatabasePath: string.Empty,
+                IsCurrent: false)
+        ]);
+        string? storedRunId = null;
+        var sessionStorage = new TestSessionStorage
+        {
+            OnGetAsync = _ => (true, "historical"),
+            OnSetAsync = (_, value) => storedRunId = Assert.IsType<string>(value)
+        };
+        SetupMainLayoutServices(dashboardRunStore: runStore, sessionStorage: sessionStorage);
+        var testSink = new TestSink();
+        Services.AddSingleton<ILogger<MainLayout>>(new TestLogger<MainLayout>(new TestLoggerFactory(testSink, enabled: true)));
+        var runSelection = Assert.IsType<FluentUISetupHelpers.TestDashboardRunSelection>(Services.GetRequiredService<IDashboardRunSelection>());
+        var selectedRunIds = new List<string?>();
+        var exception = new InvalidOperationException("The historical database could not be opened.");
+        runSelection.OnSelectRun = runId =>
+        {
+            selectedRunIds.Add(runId);
+            if (runId == "historical")
+            {
+                throw exception;
+            }
+        };
+
+        var cut = RenderComponent<MainLayout>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        Assert.Equal(["historical", null], selectedRunIds);
+        Assert.True(runSelection.SelectedRun.IsCurrent);
+        Assert.Null(runSelection.SelectedRunId);
+        Assert.Equal(string.Empty, storedRunId);
+        Assert.Equal("Live run", cut.FindComponent<DashboardRunSelect>().FindComponent<AspireMenuButton>().Instance.Text);
+        var errorLog = Assert.Single(testSink.Writes);
+        Assert.Equal(LogLevel.Error, errorLog.LogLevel);
+        Assert.Equal("Failed to restore dashboard run 'historical'. Falling back to the current run.", errorLog.Message);
+        Assert.Same(exception, errorLog.Exception);
     }
 
     [Fact]
