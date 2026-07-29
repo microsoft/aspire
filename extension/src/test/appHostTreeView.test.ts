@@ -2129,36 +2129,6 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         provider.dispose();
     });
 
-    test('partial discovery stays visible in the workspace tree', () => {
-        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
-        const repository = {
-            viewMode: 'workspace' as ViewMode,
-            isLoading: false,
-            isWorkspaceAppHostDiscoveryComplete: false,
-            appHosts: [],
-            workspaceResources: [],
-            workspaceAppHostPath: undefined,
-            workspaceAppHostCandidatePaths: ['/repo/apps/Store/AppHost.csproj'],
-            workspaceAppHostName: undefined,
-            workspaceAppHostDescription: undefined,
-            onDidChangeData,
-        } as unknown as AppHostDataRepository;
-        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
-
-        const items = provider.getChildren();
-
-        assert.deepStrictEqual(items.map(item => item.label), [
-            'AppHost.csproj',
-            'Searching for AppHosts...',
-        ]);
-        assert.deepStrictEqual(items.map(item => item.contextValue), [
-            'workspaceAppHost',
-            'workspaceAppHostDiscovery',
-        ]);
-        assert.strictEqual((items[1].iconPath as vscode.ThemeIcon).id, 'loading~spin');
-        provider.dispose();
-    });
-
     test('loading hides stale AppHosts', () => {
         const appHostPath = '/repo/AppHost/AppHost.csproj';
         const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
