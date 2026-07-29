@@ -97,30 +97,35 @@ internal sealed class ApplicationOrchestrator
     private async Task WaitForInBeforeResourceStartedEvent(BeforeResourceStartedEvent @event, CancellationToken cancellationToken)
     {
         using var activity = ProfilingTelemetry.StartResourceBeforeStartWait(Configuration, @event.Resource);
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
-        var waitForDependenciesTask = _notificationService.WaitForDependenciesAsync(@event.Resource, cts.Token);
-        if (waitForDependenciesTask.IsCompletedSuccessfully)
+        // A resource without wait annotations can never be put into "Waiting", so there is nothing to do.
+        // WaitForDependenciesAsync makes the same check, but it has to be repeated here because the watcher
+        // below has to be subscribed before that call is made (see below).
+        if (!@event.Resource.HasAnnotationOfType<WaitAnnotation>())
         {
-            // Nothing to wait for. Return immediately.
             return;
         }
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         // Wait for either dependencies to be ready or for someone to move the resource out of a waiting state.
         // This happens when resource start command is run, which forces the status to "Starting".
         //
         // A resource instance has to be observed in "Waiting" first, and then leave it, for a non-"Waiting" state
         // to count as the release signal. The tracking is per resource id because WaitForResourceAsync only
-        // filters on the model resource name, so this predicate is fed events for every replica. 
+        // filters on the model resource name, so this predicate is fed events for every replica.
         // Both halves of the condition matter:
         //   - Without "was seen waiting", the very first replayed event of a resource that never entered
         //     "Waiting" satisfies the predicate, and the resource starts with unmet dependencies.
         //   - Without the per-id scoping, a sibling replica reporting a non-"Waiting" state releases a wait that
-        //     nobody asked to be released. 
+        //     nobody asked to be released.
         //
         // The wait itself is still per BeforeResourceStartedEvent rather than per replica, because the event
-        // does not carry the resource id. 
+        // does not carry the resource id.
         // Force-starting any replica that was waiting therefore releases the wait for the whole resource.
+        //
+        // Important: call WaitForResourceAsync before WaitForDependenciesAsync, because the latter can complete synchronously 
+        // if there are no dependencies to wait for, and the transition from Waiting to Starting will be lost.
         var waitingResourceIds = new ConcurrentDictionary<string, bool>(StringComparers.ResourceName);
         var waitForNonWaitingStateTask = _notificationService.WaitForResourceAsync(
             @event.Resource.Name,
@@ -138,6 +143,14 @@ internal sealed class ApplicationOrchestrator
 
         try
         {
+            var waitForDependenciesTask = _notificationService.WaitForDependenciesAsync(@event.Resource, cts.Token);
+            if (waitForDependenciesTask.IsCompletedSuccessfully)
+            {
+                // Nothing to wait for after all, e.g. every dependency is a resource without a lifetime.
+                // The finally block below cancels the watcher started above.
+                return;
+            }
+
             var completedTask = await Task.WhenAny(waitForDependenciesTask, waitForNonWaitingStateTask).ConfigureAwait(false);
             if (completedTask.IsFaulted)
             {

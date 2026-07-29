@@ -748,6 +748,62 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ResourceForcedOutOfWaitingImmediatelyStopsWaitingForItsDependency()
+    {
+        // Regression test for a race between publishing "Waiting" and subscribing to state changes.
+        // WaitForInBeforeResourceStartedEvent detects a force-start by observing the resource leave "Waiting",
+        // and ResourceNotificationService.WatchAsync only replays the latest snapshot of each resource rather
+        // than the full history. If the Start command lands in the window between the wait publishing "Waiting"
+        // and the orchestrator subscribing, a replay-only view shows "Starting" without ever showing "Waiting",
+        // and the force-start signal is lost - the resource stays blocked on a dependency that never becomes
+        // ready. https://github.com/microsoft/aspire/pull/18930#discussion_r3677777200
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var blockerReleased = new TaskCompletionSource();
+        var blocker = AddSelfDrivenResource(builder, "blocker", blockerReleased.Task);
+        var waiter = AddSelfDrivenResource(builder, "waiter").WaitFor(blocker);
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events, applicationEventing: builder.Eventing);
+        await appOrchestrator.RunApplicationAsync();
+
+        // Stand in for the Start command, firing as soon as the waiting state is stored. PublishUpdateAsync
+        // stores the snapshot synchronously, so a tight poll observes "Waiting" well before any watcher started
+        // afterwards could - which is exactly the window the fix has to cover. Losing the poll only ever
+        // produces a false pass, never a false failure.
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var forceStartTask = Task.Run(async () =>
+        {
+            while (!resourceNotificationService.TryGetCurrentState(waiter.Resource.Name, out var waiterEvent)
+                || waiterEvent.Snapshot.State?.Text != KnownResourceStates.Waiting)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await Task.Yield();
+            }
+
+            await resourceNotificationService.PublishUpdateAsync(waiter.Resource, s => s with { State = KnownResourceStates.Starting });
+        }, cancellationToken);
+
+        await events.PublishAsync(new OnResourcesPreparedContext(CancellationToken.None));
+
+        await forceStartTask.DefaultTimeout();
+
+        // The waiter has to start even though the blocker is still inside its initialize callback.
+        await resourceNotificationService.WaitForResourceAsync(waiter.Resource.Name, KnownResourceStates.Running, cancellationToken).DefaultTimeout();
+
+        Assert.True(resourceNotificationService.TryGetCurrentState(blocker.Resource.Name, out var blockerEvent));
+        Assert.NotEqual(KnownResourceStates.Running, blockerEvent.Snapshot.State?.Text);
+
+        blockerReleased.SetResult();
+    }
+
+    [Fact]
     public async Task ConnectionStringResourceWaitsForReferencedResourceBeforeBecomingAvailable()
     {
         // AddConnectionString has the same shape as a third-party custom resource: it starts in "NotStarted"
