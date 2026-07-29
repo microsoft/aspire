@@ -24,25 +24,25 @@ public partial class NotificationEntryComponent : ComponentBase
 
     private string IntentClass => Entry.Intent switch
     {
-        MessageIntent.Success => "intent-success",
-        MessageIntent.Error => "intent-error",
-        MessageIntent.Warning => "intent-warning",
+        NotificationIntent.Success => "intent-success",
+        NotificationIntent.Error => "intent-error",
+        NotificationIntent.Warning => "intent-warning",
         _ => "intent-info"
     };
 
     private DeckIconName IconName => Entry.Intent switch
     {
-        MessageIntent.Success => DeckIconName.CheckmarkCircle,
-        MessageIntent.Error => DeckIconName.ErrorCircle,
-        MessageIntent.Warning => DeckIconName.Warning,
+        NotificationIntent.Success => DeckIconName.CheckmarkCircle,
+        NotificationIntent.Error => DeckIconName.ErrorCircle,
+        NotificationIntent.Warning => DeckIconName.Warning,
         _ => DeckIconName.Info
     };
 
     private string IconTone => Entry.Intent switch
     {
-        MessageIntent.Success => "icon-success",
-        MessageIntent.Error => "icon-error",
-        MessageIntent.Warning => "icon-warning",
+        NotificationIntent.Success => "icon-success",
+        NotificationIntent.Error => "icon-error",
+        NotificationIntent.Warning => "icon-warning",
         _ => "icon-muted"
     };
 

@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Microsoft.FluentUI.AspNetCore.Components;
-
 namespace Aspire.Dashboard.Model;
 
 /// <summary>
@@ -55,13 +53,24 @@ public interface INotificationService
 }
 
 /// <summary>
+/// Describes the visual intent of a dashboard notification.
+/// </summary>
+public enum NotificationIntent
+{
+    Info,
+    Success,
+    Warning,
+    Error
+}
+
+/// <summary>
 /// Represents a single notification in the notification center.
 /// </summary>
 public sealed class NotificationEntry
 {
     public required string Title { get; init; }
     public string? Body { get; init; }
-    public required MessageIntent Intent { get; init; }
+    public required NotificationIntent Intent { get; init; }
     public DateTimeOffset Timestamp { get; set; }
     public NotificationAction? PrimaryAction { get; init; }
 }

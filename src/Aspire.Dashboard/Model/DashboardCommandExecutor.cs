@@ -8,7 +8,6 @@ using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
-using FluentMessageIntent = Microsoft.FluentUI.AspNetCore.Components.MessageIntent;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Model;
@@ -134,7 +133,7 @@ public sealed class DashboardCommandExecutor(
         progressNotificationId = notificationService.AddNotification(new NotificationEntry
         {
             Title = messageBarStartingTitle,
-            Intent = FluentMessageIntent.Info,
+            Intent = NotificationIntent.Info,
             PrimaryAction = CreateCancelNotificationAction(loc, RequestCancelAsync)
         });
 
@@ -199,7 +198,7 @@ public sealed class DashboardCommandExecutor(
             {
                 Title = successTitle,
                 Body = response.Message,
-                Intent = FluentMessageIntent.Success,
+                Intent = NotificationIntent.Success,
                 PrimaryAction = response.Result is not null ? CreateViewResponseNotificationAction(loc, command, response) : null
             });
 
@@ -222,7 +221,7 @@ public sealed class DashboardCommandExecutor(
             {
                 Title = canceledTitle,
                 Body = response.Message,
-                Intent = FluentMessageIntent.Info,
+                Intent = NotificationIntent.Info,
             });
             closeToastCts.Dispose();
             return;
@@ -247,7 +246,7 @@ public sealed class DashboardCommandExecutor(
             {
                 Title = failedTitle,
                 Body = response.Message,
-                Intent = FluentMessageIntent.Error,
+                Intent = NotificationIntent.Error,
                 PrimaryAction = response.Result is not null ? CreateViewResponseNotificationAction(loc, command, response) : null
             });
 
@@ -301,7 +300,7 @@ public sealed class DashboardCommandExecutor(
             notificationService.ReplaceNotification(GetProgressNotificationId(), new NotificationEntry
             {
                 Title = cancelingTitle,
-                Intent = FluentMessageIntent.Info,
+                Intent = NotificationIntent.Info,
             });
 
             return Task.CompletedTask;
