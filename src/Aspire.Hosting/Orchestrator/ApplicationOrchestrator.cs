@@ -123,8 +123,10 @@ internal sealed class ApplicationOrchestrator
                     seenWaiting = true;
                     return false;
                 }
-
-                return seenWaiting && !isWaiting;
+                else
+                {
+                    return seenWaiting;
+                }
             },
             cts.Token);
 
@@ -200,27 +202,27 @@ internal sealed class ApplicationOrchestrator
 
                 break;
             case KnownResourceTypes.Container:
-            {
-                var (displayName, isHighlighted, sortOrder) = ResourcePropertySnapshotMetadata.Get(KnownResourceTypes.Container, KnownProperties.Container.Image);
-                var imageName = context.Resource.TryGetContainerImageName(out var resolvedImageName) ? resolvedImageName : "";
-
-                await PublishUpdateAsync(_notificationService, context.Resource, context.DcpResourceName, s => s with
                 {
-                    State = KnownResourceStates.Starting,
-                    Properties = s.Properties.SetResourceProperty(
-                        KnownProperties.Container.Image,
-                        imageName,
-                        displayName: displayName,
-                        isHighlighted: isHighlighted,
-                        sortOrder: sortOrder),
-                    HealthReports = GetInitialHealthReports(context.Resource)
-                })
-                .ConfigureAwait(false);
+                    var (displayName, isHighlighted, sortOrder) = ResourcePropertySnapshotMetadata.Get(KnownResourceTypes.Container, KnownProperties.Container.Image);
+                    var imageName = context.Resource.TryGetContainerImageName(out var resolvedImageName) ? resolvedImageName : "";
 
-                Debug.Assert(context.DcpResourceName is not null, "Container that is starting should always include the DCP name.");
-                await SetChildResourceAsync(context.Resource, state: KnownResourceStates.Starting, startTimeStamp: null, stopTimeStamp: null).ConfigureAwait(false);
-                break;
-            }
+                    await PublishUpdateAsync(_notificationService, context.Resource, context.DcpResourceName, s => s with
+                    {
+                        State = KnownResourceStates.Starting,
+                        Properties = s.Properties.SetResourceProperty(
+                            KnownProperties.Container.Image,
+                            imageName,
+                            displayName: displayName,
+                            isHighlighted: isHighlighted,
+                            sortOrder: sortOrder),
+                        HealthReports = GetInitialHealthReports(context.Resource)
+                    })
+                    .ConfigureAwait(false);
+
+                    Debug.Assert(context.DcpResourceName is not null, "Container that is starting should always include the DCP name.");
+                    await SetChildResourceAsync(context.Resource, state: KnownResourceStates.Starting, startTimeStamp: null, stopTimeStamp: null).ConfigureAwait(false);
+                    break;
+                }
             default:
                 break;
         }
