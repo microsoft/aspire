@@ -66,12 +66,12 @@
                 }
                 else
                 {
-                    <FluentCounterBadge HorizontalPosition="70" Count="@(PageViewModel.Filters.GetEnabledFilters().Count())" Appearance="Appearance.Accent">
+                    <CounterBadge HorizontalPosition="70" Count="@(PageViewModel.Filters.GetEnabledFilters().Count())">
                         <AspireMenuButton HideIcon="true"
                                           Icon="DeckIconName.Filter"
                                           Items="@GetFilterMenuItems()"
                                           Title="@FilterLoc[nameof(StructuredFiltering.Filters)]" />
-                    </FluentCounterBadge>
+                    </CounterBadge>
                 }
 
                 <AspireMenuButton Icon="DeckIconName.Options"

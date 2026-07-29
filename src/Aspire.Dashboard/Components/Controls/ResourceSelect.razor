@@ -1,9 +1,9 @@
 ﻿@using Aspire.Dashboard.Resources
 
-<FluentInputLabel Label="@Loc[nameof(ControlsStrings.ResourceLabel)]"
-                  ForId="@_selectId"
-                  Orientation="Orientation.Horizontal"
-                  class="@LabelClass" />
+<InputLabel Label="@Loc[nameof(ControlsStrings.ResourceLabel)]"
+            ForId="@_selectId"
+            Orientation="horizontal"
+            class="@LabelClass" />
 
 <FluentSelect Items="Resources"
               Disabled="@(Resources is null)"

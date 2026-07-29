@@ -4,10 +4,10 @@
 
 @if (ViewportInformation.IsDesktop)
 {
-    <FluentInputLabel slot="end"
-                      Label="@Loc[nameof(Dashboard.Resources.Traces.SpanTypeLabel)]"
-                      ForId="@spanTypeSelectId"
-                      Orientation="@(ViewportInformation.IsDesktop ? Orientation.Horizontal : Orientation.Vertical)" />
+    <InputLabel slot="end"
+                Label="@Loc[nameof(Dashboard.Resources.Traces.SpanTypeLabel)]"
+                ForId="@spanTypeSelectId"
+                Orientation="@(ViewportInformation.IsDesktop ? "horizontal" : "vertical")" />
 
     <DesktopToolbarDivider />
 

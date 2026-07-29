@@ -2768,3 +2768,48 @@ hr.deck-divider {
   line-height: 0;
 }
 /* === end Deck clipboard-copy button === */
+
+/* === Deck input label (replaces FluentInputLabel) === */
+.deck-input-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-sm, 12px);
+  color: var(--text-secondary, inherit);
+  white-space: nowrap;
+}
+.deck-input-label--vertical {
+  flex-direction: column;
+  align-items: flex-start;
+}
+.deck-input-label__required {
+  color: var(--tone-error, #d13438);
+}
+/* === end Deck input label === */
+
+/* === Deck counter badge (replaces FluentCounterBadge) === */
+.deck-counter-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.deck-counter-badge__count {
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--accent, #2563eb);
+  color: var(--accent-contrast, #fff);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  pointer-events: none;
+}
+/* === end Deck counter badge === */

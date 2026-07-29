@@ -1,0 +1,61 @@
+@*
+    Deck-styled count badge, replacing FluentCounterBadge during the Fluent-removal phase.
+    Wraps its child content and overlays a small count bubble in the top-right corner. The bubble
+    is hidden when the count is zero (matching FluentCounterBadge's default ShowZero=false). When a
+    Max is set and the count exceeds it, the bubble shows "Max+" (ShowOverflow).
+*@
+@namespace Aspire.Dashboard.Components.Deck
+
+<span class="deck-counter-badge @Class" style="@Style" @attributes="AdditionalAttributes">
+    @ChildContent
+    @if (Count > 0)
+    {
+        <span class="deck-counter-badge__count" style="@PositionStyle">@DisplayText</span>
+    }
+</span>
+
+@code {
+    /// <summary>The count to display. The bubble is hidden when this is zero or negative.</summary>
+    [Parameter]
+    public int Count { get; set; }
+
+    /// <summary>Optional maximum before the count is shown as an overflow (e.g. <c>9+</c>).</summary>
+    [Parameter]
+    public int? Max { get; set; }
+
+    /// <summary>Whether to append a <c>+</c> when the count exceeds <see cref="Max"/>.</summary>
+    [Parameter]
+    public bool ShowOverflow { get; set; }
+
+    /// <summary>
+    /// Horizontal position of the bubble as a percentage offset from the right edge, mirroring
+    /// FluentCounterBadge's <c>HorizontalPosition</c>. Defaults to the top-right corner.
+    /// </summary>
+    [Parameter]
+    public int? HorizontalPosition { get; set; }
+
+    /// <summary>The content the badge is overlaid on.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Additional CSS classes appended to the badge wrapper.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Inline style applied to the badge wrapper.</summary>
+    [Parameter]
+    public string? Style { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string DisplayText => Max is int max && Count > max
+        ? (ShowOverflow ? $"{max}+" : max.ToString(System.Globalization.CultureInfo.CurrentCulture))
+        : Count.ToString(System.Globalization.CultureInfo.CurrentCulture);
+
+    // HorizontalPosition is a percentage nudge; translate it into a right offset so higher values
+    // pull the bubble further in from the right edge, approximating the Fluent placement.
+    private string? PositionStyle => HorizontalPosition is int pos
+        ? $"right: calc({100 - pos}% - 8px);"
+        : null;
+}

@@ -6,9 +6,9 @@
 
 @if (ViewportInformation.IsDesktop)
 {
-    <FluentInputLabel Label="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsLevels)]"
-                      ForId="@logLevelSelectId"
-                      Orientation="Orientation.Horizontal" />
+    <InputLabel Label="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsLevels)]"
+                ForId="@logLevelSelectId"
+                Orientation="horizontal" />
 
     <Select TOption="SelectViewModel<LogLevel?>"
             Id="@logLevelSelectId"

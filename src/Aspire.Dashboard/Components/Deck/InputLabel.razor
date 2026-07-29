@@ -1,0 +1,56 @@
+@*
+    Deck-styled form field label, replacing FluentInputLabel during the Fluent-removal phase.
+    Renders a native <label> associated with a control via ForId, with an optional required
+    indicator. Used standalone next to a sibling control (Select, tree, input). Unmatched
+    attributes (e.g. slot, class) flow through so it can still be slotted into layout hosts.
+*@
+@namespace Aspire.Dashboard.Components.Deck
+
+<label class="deck-input-label @OrientationClass"
+       for="@ForId"
+       aria-label="@AriaLabel"
+       @attributes="AdditionalAttributes">
+    @if (!string.IsNullOrEmpty(Label))
+    {
+        <span class="deck-input-label__text">@Label</span>
+    }
+    @if (Required)
+    {
+        @* Mirrors FluentInputLabel's required asterisk; decorative because the field itself is marked required. *@
+        <span class="deck-input-label__required" aria-hidden="true">*</span>
+    }
+    @ChildContent
+</label>
+
+@code {
+    /// <summary>The label text.</summary>
+    [Parameter]
+    public string? Label { get; set; }
+
+    /// <summary>The id of the control this label is associated with.</summary>
+    [Parameter]
+    public string? ForId { get; set; }
+
+    /// <summary>Accessible name applied to the label element.</summary>
+    [Parameter]
+    public string? AriaLabel { get; set; }
+
+    /// <summary>Whether to render the required indicator.</summary>
+    [Parameter]
+    public bool Required { get; set; }
+
+    /// <summary>Layout orientation: <c>horizontal</c> (default) or <c>vertical</c>.</summary>
+    [Parameter]
+    public string Orientation { get; set; } = "horizontal";
+
+    /// <summary>Optional additional content rendered after the label text.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string OrientationClass => string.Equals(Orientation, "vertical", StringComparison.OrdinalIgnoreCase)
+        ? "deck-input-label--vertical"
+        : "deck-input-label--horizontal";
+}

@@ -5,17 +5,14 @@
     <button type="button" class="icon-btn header-button"
             @onclick="@HandleClick"
             title="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]">
-        <FluentCounterBadge Count="@UnreadCount"
-                            Max="9"
-                            ShowOverflow="true"
-                            BackgroundColor="@Color.FillInverse"
-                            Color="Color.Fill"
-                            Appearance="Appearance.Accent"
-                            Style="border: 0;">
+        <CounterBadge Count="@UnreadCount"
+                      Max="9"
+                      ShowOverflow="true"
+                      Style="border: 0;">
             <ChildContent>
                 <DeckIcon Name="DeckIconName.Bell" Size="24" />
             </ChildContent>
-        </FluentCounterBadge>
+        </CounterBadge>
     </button>
 }
 else
