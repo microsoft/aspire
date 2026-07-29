@@ -219,7 +219,7 @@ public partial class MainLayoutTests : DashboardTestContext
                 : "Settings";
 
             await cut.InvokeAsync(() => cut.Find("#dashboard-navigation-button").Click());
-            await cut.InvokeAsync(() => cut.FindAll("fluent-menu-item").Single(item => item.TextContent.Contains(menuItemName, StringComparison.OrdinalIgnoreCase)).Click());
+            await cut.InvokeAsync(() => cut.FindAll(".mobile-nav-menu-item").Single(item => item.TextContent.Contains(menuItemName, StringComparison.OrdinalIgnoreCase)).Click());
         }
 
         Assert.NotNull(capturedParameters);
@@ -274,7 +274,7 @@ public partial class MainLayoutTests : DashboardTestContext
                 : "Settings";
 
             await cut.InvokeAsync(() => cut.Find("#dashboard-navigation-button").Click());
-            await cut.InvokeAsync(() => cut.FindAll("fluent-menu-item").Single(item => item.TextContent.Contains(menuItemName, StringComparison.OrdinalIgnoreCase)).Click());
+            await cut.InvokeAsync(() => cut.FindAll(".mobile-nav-menu-item").Single(item => item.TextContent.Contains(menuItemName, StringComparison.OrdinalIgnoreCase)).Click());
         }
 
         Assert.NotNull(capturedParameters);
@@ -418,6 +418,10 @@ public partial class MainLayoutTests : DashboardTestContext
         var drawerModule = JSInterop.SetupModule("./Components/Deck/Drawer.razor.js");
         drawerModule.SetupVoid("registerDrawerEscape", _ => true);
         drawerModule.SetupVoid("disposeDrawerEscape", _ => true);
+
+        var mobileNavModule = JSInterop.SetupModule("./Components/Layout/MobileNavMenu.razor.js");
+        mobileNavModule.SetupVoid("initializeMobileNavMenu", _ => true);
+        mobileNavModule.SetupVoid("disposeMobileNavMenu", _ => true);
     }
 
     private sealed class RecordingJSRuntime : IJSRuntime

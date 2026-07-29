@@ -1,37 +1,35 @@
-﻿<FluentMenu Class="aspire-menu-container" Open="@IsNavMenuOpen" Anchored="false" Style="grid-area: nav-menu; max-height: calc(100dvh - var(--mobile-header-height) - var(--mobile-nav-menu-offset)); margin-top: var(--mobile-nav-menu-offset); overflow-y: auto;">
+﻿<nav id="mobile-navigation-menu"
+     class="aspire-menu-container mobile-nav-menu"
+     hidden="@(!IsNavMenuOpen)"
+     aria-label="@DialogsLoc[nameof(Resources.Dialogs.HelpDialogCategoryNavigation)]"
+     style="grid-area: nav-menu; max-height: calc(100dvh - var(--mobile-header-height) - var(--mobile-nav-menu-offset)); margin-top: var(--mobile-nav-menu-offset); overflow-y: auto;"
+     @ref="_menuElement">
     @foreach (var item in GetMobileNavMenuEntries())
     {
         var isActive = item.LinkMatchRegex is not null && item.LinkMatchRegex.IsMatch($"/{NavigationManager.ToBaseRelativePath(NavigationManager.Uri)}");
-        var menuItemAttributes = new Dictionary<string, object>
-        {
-            ["title"] = item.Text
-        };
-        if (isActive)
-        {
-            menuItemAttributes["aria-current"] = "page";
-        }
-
-        @* mobile-nav-menu-item-active drives the accent color bar applied via
-           ::before in app.css, mirroring the desktop FluentAppBar selected
-           treatment without needing a separate sibling element. *@
-        <FluentMenuItem OnClick="@(async () => { CloseNavMenu(); await item.OnClick(); })" Class="@(isActive ? "mobile-nav-menu-item-active" : null)" Style="height: 40px; width: 100vw; margin-bottom: 6px;" AdditionalAttributes="@menuItemAttributes">
-            <span>@item.Text</span>
-
+        <button type="button"
+                title="@item.Text"
+                aria-current="@(isActive ? "page" : null)"
+                class="mobile-nav-menu-item @(isActive ? "mobile-nav-menu-item-active" : null)"
+                @onclick="@(async () => { CloseNavMenu(); await item.OnClick(); })">
             @if (item.Icon is { } icon)
             {
-                <span slot="start" class="@(isActive ? "mobile-nav-menu-icon-active" : null)">
+                <span class="mobile-nav-menu-icon @(isActive ? "mobile-nav-menu-icon-active" : null)">
                     <DeckIcon Name="@icon" Size="24" />
                 </span>
             }
-        </FluentMenuItem>
-
-        <FluentDivider/>
+            <span class="mobile-nav-menu-label">@item.Text</span>
+        </button>
+        <div class="mobile-nav-menu-divider" role="separator"></div>
     }
-</FluentMenu>
+</nav>
 
 @code {
     [Parameter, EditorRequired]
     public required bool IsNavMenuOpen { get; set; }
+
+    [Parameter, EditorRequired]
+    public required string NavigationButtonId { get; set; }
 
     [Parameter, EditorRequired]
     public required Action CloseNavMenu { get; set; }

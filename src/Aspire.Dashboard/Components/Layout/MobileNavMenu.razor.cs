@@ -10,8 +10,12 @@ using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Layout;
 
-public partial class MobileNavMenu : ComponentBase
+public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
 {
+    private ElementReference _menuElement;
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<MobileNavMenu>? _selfReference;
+
     [Inject]
     public required NavigationManager NavigationManager { get; init; }
 
@@ -20,6 +24,9 @@ public partial class MobileNavMenu : ComponentBase
 
     [Inject]
     public required IStringLocalizer<Resources.Layout> Loc { get; init; }
+
+    [Inject]
+    public required IStringLocalizer<Resources.Dialogs> DialogsLoc { get; init; }
 
     [Inject]
     public required IJSRuntime JS { get; init; }
@@ -120,4 +127,31 @@ public partial class MobileNavMenu : ComponentBase
     }
 
     private const RegexOptions LinkMatchRegexOptions = RegexOptions.CultureInvariant | RegexOptions.IgnoreCase;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _module = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Layout/MobileNavMenu.razor.js");
+            _selfReference = DotNetObjectReference.Create(this);
+            await _module.InvokeVoidAsync("initializeMobileNavMenu", _menuElement, NavigationButtonId, _selfReference);
+        }
+    }
+
+    [JSInvokable]
+    public void CloseFromNavigation()
+    {
+        CloseNavMenu();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is not null)
+        {
+            await _module.InvokeVoidAsync("disposeMobileNavMenu", _menuElement);
+            await _module.DisposeAsync();
+        }
+
+        _selfReference?.Dispose();
+    }
 }

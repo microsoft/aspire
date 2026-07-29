@@ -109,6 +109,10 @@
         grid-area: head;
     }
 
+    ::deep.layout > .mobile-nav-menu {
+        grid-area: nav-menu;
+    }
+
     ::deep.layout > .fluent-appbar {
         grid-area: nav;
         overflow-y: auto;
@@ -138,12 +142,8 @@
         background-color: var(--neutral-layer-4);
     }
 
-    ::deep.layout > .aspire-icon fluent-anchor {
+    ::deep.layout > .aspire-icon .mobile-logo {
         margin-left: 5px;
-    }
-
-    ::deep.layout > .aspire-icon .navigation-button {
-        border: 1px solid #a8aeb3;
     }
 
     ::deep.layout > header {
@@ -151,24 +151,51 @@
         margin-bottom: 0;
     }
 
-    ::deep.layout > header > .header-gutters > fluent-anchor {
-        font-size: var(--type-ramp-plus-2-font-size);
+    ::deep.layout > .mobile-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 12px;
     }
 
-    ::deep .aspire-icon fluent-anchor.logo::part(control) {
+    ::deep .mobile-logo {
         padding: 0;
         border: none;
     }
 
-    ::deep .aspire-icon fluent-anchor.logo,
-    ::deep .aspire-icon fluent-anchor.logo::part(control),
-    ::deep .aspire-icon fluent-anchor.logo::part(content) {
+    ::deep .mobile-logo {
+        display: inline-flex;
         height: 24px;
         width: 24px;
     }
 
-    ::deep.layout > header > .header-gutters {
-        margin-left: 0;
+    ::deep .mobile-app-name {
+        color: inherit;
+        font-size: var(--type-ramp-plus-2-font-size);
+        text-decoration: none;
+    }
+
+    ::deep .navigation-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        border: 0;
+        border-radius: 4px;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+    }
+
+    ::deep .navigation-button:hover {
+        background: var(--neutral-fill-stealth-hover);
+    }
+
+    ::deep .navigation-button:focus-visible {
+        outline: 2px solid var(--accent-fill-focus);
+        outline-offset: -2px;
     }
 }
 

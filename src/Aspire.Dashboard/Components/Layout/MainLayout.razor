@@ -40,35 +40,36 @@
 }
 else
 {
-    @* Mobile keeps the existing Fluent layout for now; it is restyled in a later phase. *@
     <div class="layout" style="@(_isNavMenuOpen ? "overflow: hidden;" : string.Empty)">
         <div class="aspire-icon">
-            <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo"
-                          title="@Loc[nameof(Layout.MainLayoutAspire)]"
-                          aria-label="@Loc[nameof(Layout.MainLayoutAspire)]">
+            <a href="/" class="logo mobile-logo"
+               title="@Loc[nameof(Layout.MainLayoutAspire)]"
+               aria-label="@Loc[nameof(Layout.MainLayoutAspire)]">
                 <AspireLogo />
-            </FluentAnchor>
+            </a>
         </div>
 
-        <FluentHeader>
-            <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo">
+        <header class="mobile-header">
+            <a href="/" class="logo mobile-app-name">
                 <ApplicationName/>
-            </FluentAnchor>
+            </a>
             <div class="flex-filler"></div>
 
             <UserProfile/>
-            <FluentButton
-                IconEnd="@(_isNavMenuOpen ? new Icons.Regular.Size24.Dismiss() : new Icons.Regular.Size24.Navigation())"
-                Id="@NavigationButtonId"
-                Title="@(DialogsLoc[nameof(Dialogs.HelpDialogCategoryNavigation)])"
-                Appearance="Appearance.Stealth"
-                BackgroundColor="transparent"
-                OnClick="@(() => _isNavMenuOpen = !_isNavMenuOpen)"
-                Class="navigation-button"/>
-        </FluentHeader>
+            <button type="button"
+                    id="@NavigationButtonId"
+                    title="@(DialogsLoc[nameof(Dialogs.HelpDialogCategoryNavigation)])"
+                    aria-expanded="@_isNavMenuOpen"
+                    aria-controls="mobile-navigation-menu"
+                    @onclick="@(() => _isNavMenuOpen = !_isNavMenuOpen)"
+                    class="navigation-button">
+                <DeckIcon Name="@(_isNavMenuOpen ? DeckIconName.Close : DeckIconName.AppsList)" Size="24" />
+            </button>
+        </header>
 
         <MobileNavMenu
             IsNavMenuOpen="_isNavMenuOpen"
+            NavigationButtonId="@NavigationButtonId"
             CloseNavMenu="@CloseMobileNavMenu"
             LaunchHelpAsync="@LaunchHelpAsync"
             LaunchAIAgentsAsync="@LaunchAIAgentsAsync"

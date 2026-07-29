@@ -35,7 +35,7 @@ public sealed class MobileNavMenuTests : PlaywrightTestsBase<DashboardServerFixt
         await Assertions.Expect(page.GetByText(MockDashboardClient.TestResource1.DisplayName)).ToBeVisibleAsync();
 
         await page.Locator(".navigation-button").ClickAsync();
-        var menu = page.Locator("fluent-menu.mobile-nav-menu");
+        var menu = page.Locator("nav.mobile-nav-menu");
         await Assertions.Expect(menu).ToBeVisibleAsync();
 
         await page.Keyboard.PressAsync("Tab");
@@ -72,7 +72,7 @@ public sealed class MobileNavMenuTests : PlaywrightTestsBase<DashboardServerFixt
         await Assertions.Expect(page.GetByText(MockDashboardClient.TestResource1.DisplayName)).ToBeVisibleAsync();
 
         await page.Locator(".navigation-button").ClickAsync();
-        var menu = page.Locator("fluent-menu.mobile-nav-menu");
+        var menu = page.Locator("nav.mobile-nav-menu");
         await Assertions.Expect(menu).ToBeVisibleAsync();
 
         await page.Keyboard.PressAsync("Escape");
@@ -105,8 +105,10 @@ public sealed class MobileNavMenuTests : PlaywrightTestsBase<DashboardServerFixt
 
         var metrics = await page.EvaluateAsync<MobileNavFocusMetrics>("""
             () => {
-                const menu = document.querySelector('fluent-menu.mobile-nav-menu');
-                const focusedMenuItem = getActiveMenuItem();
+                const menu = document.querySelector('nav.mobile-nav-menu');
+                const focusedMenuItem = document.activeElement?.matches('.mobile-nav-menu-item')
+                    ? document.activeElement
+                    : null;
                 const menuRect = menu.getBoundingClientRect();
                 const focusedRect = focusedMenuItem?.getBoundingClientRect() ?? new DOMRect();
                 const style = getComputedStyle(menu);
@@ -123,26 +125,6 @@ public sealed class MobileNavMenuTests : PlaywrightTestsBase<DashboardServerFixt
                     paddingBottomValue: Number.parseFloat(style.paddingBottom),
                     scrollPaddingTop: style.scrollPaddingTop,
                     scrollPaddingBottom: style.scrollPaddingBottom
-                };
-
-                function getActiveMenuItem() {
-                    const visited = new Set();
-                    let element = document.activeElement;
-                    while (element && !visited.has(element)) {
-                        visited.add(element);
-                        if (element.matches?.('fluent-menu-item')) {
-                            return element;
-                        }
-
-                        if (element.shadowRoot?.activeElement) {
-                            element = element.shadowRoot.activeElement;
-                            continue;
-                        }
-
-                        element = element.getRootNode?.().host ?? null;
-                    }
-
-                    return null;
                 }
             }
             """);
@@ -166,41 +148,17 @@ public sealed class MobileNavMenuTests : PlaywrightTestsBase<DashboardServerFixt
 
     private const string GetActiveMenuItemTitleScript = """
         () => {
-            const visited = new Set();
-            let element = document.activeElement;
-            while (element && !visited.has(element)) {
-                visited.add(element);
-                if (element.matches?.('fluent-menu-item')) {
-                    return element.getAttribute('title');
-                }
-
-                if (element.shadowRoot?.activeElement) {
-                    element = element.shadowRoot.activeElement;
-                    continue;
-                }
-
-                element = element.getRootNode?.().host ?? null;
-            }
-
-            return null;
+            const element = document.activeElement;
+            return element?.matches('.mobile-nav-menu-item')
+                ? element.getAttribute('title')
+                : null;
         }
         """;
 
     private const string IsFocusInsideMobileNavMenuScript = """
         () => {
-            const menu = document.querySelector('fluent-menu.mobile-nav-menu');
-            if (!menu) return false;
-            let element = document.activeElement;
-            while (element) {
-                if (element === menu) {
-                    return true;
-                }
-                // Traverse upward: if inside a shadow root, go to the shadow host;
-                // otherwise walk up the light DOM via parentElement.
-                const root = element.getRootNode?.();
-                element = (root instanceof ShadowRoot ? root.host : element.parentElement) ?? null;
-            }
-            return false;
+            const menu = document.querySelector('nav.mobile-nav-menu');
+            return menu?.contains(document.activeElement) ?? false;
         }
         """;
 
