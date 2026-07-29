@@ -600,7 +600,7 @@ public class ResourceNotificationService : IDisposable
     /// while its dependencies are being awaited.
     /// </summary>
     /// <remarks>
-    /// This is an allow-list of the states that mean "has not started yet". 
+    /// This is an allow-list of the states that mean "has not started yet".
     /// <see cref="KnownResourceStates.NotStarted"/> must be allowed: custom resources that drive their own startup
     /// can publish <see cref="BeforeResourceStartedEvent"/> from <c>OnInitializeResource</c>, so they are still in the
     /// initial state supplied by <c>WithInitialState</c> when the wait is published, rather than having been moved to

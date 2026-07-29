@@ -109,9 +109,9 @@ internal sealed class ApplicationOrchestrator
         // This happens when resource start command is run, which forces the status to "Starting".
         //
         // The resource has to be observed in "Waiting" before a non-"Waiting" state
-        // counts as the release signal. Otherwise, a simple check for "state is not Waiting" could be satisfied 
-        // by the very first replayed event whenever the resource never entered "Waiting", which would result in 
-        // the wait being silently abandoned and resource being started with unmet dependencies. 
+        // counts as the release signal. Otherwise, a simple check for "state is not Waiting" could be satisfied
+        // by the very first replayed event whenever the resource never entered "Waiting", which would result in
+        // the wait being silently abandoned and resource being started with unmet dependencies.
         var seenWaiting = false;
         var waitForNonWaitingStateTask = _notificationService.WaitForResourceAsync(
             @event.Resource.Name,
