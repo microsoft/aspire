@@ -68,7 +68,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     public required ShortcutManager ShortcutManager { get; init; }
 
     [Inject]
-    public required IMessageService MessageService { get; init; }
+    public required IDashboardMessageService MessageService { get; init; }
 
     [Inject]
     public required IOptionsMonitor<DashboardOptions> Options { get; init; }
@@ -143,25 +143,18 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
             if (!skipMessage)
             {
-                // ShowMessageBarAsync must come after an await. Otherwise it will NRE.
-                // I think this order allows the message bar provider to be fully initialized.
-                await MessageService.ShowMessageBarAsync(options =>
+                MessageService.Show(new DashboardMessageOptions
                 {
-                    options.Title = Loc[nameof(Resources.Layout.MessageUnsecuredEndpointTitle)];
-                    options.Body = unsecuredEndpointsMessage.ToString();
-                    options.Link = new()
-                    {
-                        Text = Loc[nameof(Resources.Layout.MessageUnsecuredEndpointLink)],
-                        Href = "https://aka.ms/aspire/api-endpoint-unsecured",
-                        Target = "_blank"
-                    };
-                    options.Intent = MessageIntent.Warning;
-                    options.Section = DashboardUIHelpers.MessageBarSection;
-                    options.AllowDismiss = true;
-                    options.OnClose = async m =>
+                    Title = Loc[nameof(Resources.Layout.MessageUnsecuredEndpointTitle)],
+                    Body = unsecuredEndpointsMessage.ToString(),
+                    LinkText = Loc[nameof(Resources.Layout.MessageUnsecuredEndpointLink)],
+                    LinkUrl = "https://aka.ms/aspire/api-endpoint-unsecured",
+                    Intent = NotificationIntent.Warning,
+                    AllowDismiss = true,
+                    OnClose = async () =>
                     {
                         await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey, true);
-                    };
+                    }
                 });
             }
         }

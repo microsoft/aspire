@@ -28,17 +28,19 @@ public partial class MainLayoutTests : DashboardTestContext
     {
         // Arrange
         var testLocalStorage = new TestLocalStorage();
-        var messageService = new MessageService();
+        var messageService = new DashboardMessageService();
 
         SetupMainLayoutServices(localStorage: testLocalStorage, messageService: messageService);
 
-        Message? message = null;
+        DashboardMessage? message = null;
         var messageShownTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        messageService.OnMessageItemsUpdatedAsync += () =>
+        messageService.OnChange += () =>
         {
-            message = messageService.AllMessages.Single();
-            messageShownTcs.TrySetResult();
-            return Task.CompletedTask;
+            if (messageService.GetMessages() is [var shownMessage])
+            {
+                message = shownMessage;
+                messageShownTcs.TrySetResult();
+            }
         };
 
         testLocalStorage.OnGetUnprotectedAsync = key =>
@@ -78,7 +80,7 @@ public partial class MainLayoutTests : DashboardTestContext
 
         Assert.NotNull(message);
 
-        message.Close();
+        await message.CloseAsync();
 
         Assert.True(await dismissedSettingSetTcs.Task.DefaultTimeout());
     }
@@ -90,15 +92,14 @@ public partial class MainLayoutTests : DashboardTestContext
     {
         // Arrange
         var testLocalStorage = new TestLocalStorage();
-        var messageService = new MessageService();
+        var messageService = new DashboardMessageService();
 
         SetupMainLayoutServices(localStorage: testLocalStorage, messageService: messageService);
 
         var messageShownTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        messageService.OnMessageItemsUpdatedAsync += () =>
+        messageService.OnChange += () =>
         {
             messageShownTcs.TrySetResult();
-            return Task.CompletedTask;
         };
 
         testLocalStorage.OnGetUnprotectedAsync = key =>
@@ -127,7 +128,7 @@ public partial class MainLayoutTests : DashboardTestContext
         // It's hard to test something not happening.
         // In this case of checking for a message, apply a small display and then double check that no message was displayed.
         Assert.True(completedTask != messageShownTcs.Task, "No message bar should be displayed.");
-        Assert.Empty(messageService.AllMessages);
+        Assert.Empty(messageService.GetMessages());
     }
 
     [Theory]
@@ -137,7 +138,7 @@ public partial class MainLayoutTests : DashboardTestContext
     {
         // Arrange
         var testLocalStorage = new TestLocalStorage();
-        var messageService = new MessageService();
+        var messageService = new DashboardMessageService();
 
         SetupMainLayoutServices(localStorage: testLocalStorage, messageService: messageService, configureOptions: o =>
         {
@@ -145,10 +146,9 @@ public partial class MainLayoutTests : DashboardTestContext
         });
 
         var messageShownTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        messageService.OnMessageItemsUpdatedAsync += () =>
+        messageService.OnChange += () =>
         {
             messageShownTcs.TrySetResult();
-            return Task.CompletedTask;
         };
 
         testLocalStorage.OnGetUnprotectedAsync = key =>
@@ -177,13 +177,13 @@ public partial class MainLayoutTests : DashboardTestContext
 
             // When suppressed, no message should be displayed
             Assert.True(completedTask != messageShownTcs.Task, "No message bar should be displayed when suppressed by configuration.");
-            Assert.Empty(messageService.AllMessages);
+            Assert.Empty(messageService.GetMessages());
         }
         else
         {
             // When not suppressed, message should be displayed since it wasn't dismissed
             await messageShownTcs.Task.DefaultTimeout();
-            Assert.NotEmpty(messageService.AllMessages);
+            Assert.NotEmpty(messageService.GetMessages());
         }
     }
 
@@ -371,7 +371,7 @@ public partial class MainLayoutTests : DashboardTestContext
 
     private void SetupMainLayoutServices(
         TestLocalStorage? localStorage = null,
-        MessageService? messageService = null,
+        DashboardMessageService? messageService = null,
         Action<DashboardOptions>? configureOptions = null,
         IDialogService? dialogService = null)
     {

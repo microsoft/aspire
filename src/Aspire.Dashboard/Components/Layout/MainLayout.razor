@@ -20,6 +20,7 @@
         </div>
         <main class="app__content">
             @Body
+            <DashboardMessageProvider />
             @if (_showSettingsPane)
             {
                 <Aspire.Dashboard.Components.Dialogs.SettingsPane OnClose="@CloseSettingsPane" OnManageData="@OpenManageDataPane" />
@@ -35,6 +36,7 @@
             @* Inside .app so interaction panes/toasts sit alongside the Deck drawers and the
                `:has(.drawer) .notif-stack` toast-shift applies. *@
             <InteractionsProvider />
+            <DashboardMessageProvider />
             <DashboardToastProvider />
         </main>
     </div>
@@ -82,12 +84,6 @@ else
         <DashboardToastProvider />
     </div>
 }
-
-@* Shared overlay providers. These are message/dialog hosts positioned over the shell;
-   they keep working while individual surfaces are migrated to Deck panes/toasts. *@
-<div class="messagebar-container">
-    <FluentMessageBarProvider Section="@DashboardUIHelpers.MessageBarSection" Class="top-messagebar" MaxMessageCount="null" NewestOnTop="true" />
-</div>
 
 <FluentDialogProvider/>
 <FluentTooltipProvider />

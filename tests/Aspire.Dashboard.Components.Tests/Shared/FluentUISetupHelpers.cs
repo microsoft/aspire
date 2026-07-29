@@ -155,7 +155,7 @@ internal static class FluentUISetupHelpers
         ILocalStorage? localStorage = null,
         ISessionStorage? sessionStorage = null,
         ThemeManager? themeManager = null,
-        IMessageService? messageService = null,
+        DashboardMessageService? messageService = null,
         BrowserTimeProvider? browserTimeProvider = null)
     {
         context.Services.AddLocalization();
@@ -168,7 +168,7 @@ internal static class FluentUISetupHelpers
         context.Services.AddSingleton<ShortcutManager>();
         context.Services.AddSingleton<LibraryConfiguration>();
         context.Services.AddSingleton<IKeyCodeService, KeyCodeService>();
-        context.Services.AddSingleton<IMessageService>(messageService ?? new MessageService());
+        context.Services.AddSingleton<IDashboardMessageService>(messageService ?? new DashboardMessageService());
         context.Services.AddSingleton<DashboardTelemetryService>();
         context.Services.AddSingleton<IDashboardTelemetrySender, TestDashboardTelemetrySender>();
         context.Services.AddSingleton<ComponentTelemetryContextProvider>();

@@ -68,7 +68,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     public required IOptions<DashboardOptions> DashboardOptions { get; init; }
 
     [Inject]
-    public required IMessageService MessageService { get; init; }
+    public required IDashboardMessageService MessageService { get; init; }
 
     [Inject]
     public required PauseManager PauseManager { get; init; }

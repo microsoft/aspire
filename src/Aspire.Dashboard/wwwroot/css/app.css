@@ -324,33 +324,6 @@ h1 {
     margin-right: 10px;
 }
 
-.top-messagebar {
-    padding: calc(var(--design-unit) * 4px);
-    padding-top: calc(var(--design-unit) * 2px);
-    padding-bottom: 0 !important;
-    width: 100%;
-}
-
-.fluent-messagebar.intent-success {
-    background-color: var(--messagebar-success-background-color) !important;
-    border: 1px solid var(--messagebar-success-border-color) !important;
-}
-
-.fluent-messagebar.intent-error {
-    background-color: var(--messagebar-error-background-color) !important;
-    border: 1px solid var(--messagebar-error-border-color) !important;
-}
-
-.fluent-messagebar.intent-warning {
-    background-color: var(--messagebar-warning-background-color) !important;
-    border: 1px solid var(--messagebar-warning-border-color) !important;
-}
-
-.fluent-messagebar.intent-info {
-    background-color: var(--messagebar-info-background-color) !important;
-    border: 1px solid var(--messagebar-info-border-color) !important;
-}
-
 /* The fluent dialog's default fill color is too dark in our current dark theme.
    Setting it to the floating layer allows it to stand out more and doesn't impact light theme. */
 fluent-dialog::part(control) {
@@ -936,10 +909,6 @@ fluent-tooltip[anchor="dialog_close"] > div {
 .overflow-fluent-menu-item::part(content) {
     width: 100%;
     text-overflow: ellipsis;
-}
-
-.fluent-messagebar-action {
-    font-size: var(--type-ramp-minus-1-font-size);
 }
 
 .filter-group > legend {

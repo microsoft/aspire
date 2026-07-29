@@ -3,6 +3,7 @@
 
 using System.Collections.Concurrent;
 using System.Text;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Resources;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.WebUtilities;
@@ -13,8 +14,6 @@ namespace Aspire.Dashboard.Utils;
 
 internal static class DashboardUIHelpers
 {
-    public const string MessageBarSection = "MessagesTop";
-
     // these are language names supported by highlight.js
     public const string XmlFormat = "xml";
     public const string JsonFormat = "json";
@@ -79,21 +78,20 @@ internal static class DashboardUIHelpers
         });
     }
 
-    public static async Task<Message> DisplayMaxLimitMessageAsync(IMessageService messageService, string title, string message, Action onClose)
+    public static Task<DashboardMessage> DisplayMaxLimitMessageAsync(IDashboardMessageService messageService, string title, string message, Action onClose)
     {
-        return await messageService.ShowMessageBarAsync(options =>
+        return Task.FromResult(messageService.Show(new DashboardMessageOptions
         {
-            options.Title = title;
-            options.Body = message;
-            options.Intent = MessageIntent.Info;
-            options.Section = "MessagesTop";
-            options.AllowDismiss = true;
-            options.OnClose = m =>
+            Title = title,
+            Body = message,
+            Intent = NotificationIntent.Info,
+            AllowDismiss = true,
+            OnClose = () =>
             {
                 onClose();
                 return Task.CompletedTask;
-            };
-        }).ConfigureAwait(false);
+            }
+        }));
     }
 
     public static string? ResolveTooltip(string value)

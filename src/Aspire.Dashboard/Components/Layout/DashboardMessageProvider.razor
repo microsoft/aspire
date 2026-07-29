@@ -1,0 +1,74 @@
+@implements IDisposable
+@inject IDashboardMessageService MessageService
+@inject IStringLocalizer<Resources.Dialogs> Loc
+@inject IStringLocalizer<Resources.Layout> LayoutLoc
+
+@if (_messages.Count > 0)
+{
+    <div class="dashboard-message-stack" role="region" aria-label="@LayoutLoc[nameof(Resources.Layout.MainLayoutLaunchNotifications)]">
+        @foreach (var message in _messages)
+        {
+            <div class="dashboard-message dashboard-message--@GetTone(message.Options.Intent)"
+                 role="@(message.Options.Intent == NotificationIntent.Error ? "alert" : "status")"
+                 @key="message.Id">
+                <span class="dashboard-message-icon" aria-hidden="true">
+                    <DeckIcon Name="@GetIcon(message.Options.Intent)" Size="18" />
+                </span>
+                <div class="dashboard-message-content">
+                    <strong>@message.Options.Title</strong>
+                    <span>@message.Options.Body</span>
+                    @if (message.Options.LinkUrl is { } linkUrl)
+                    {
+                        <a href="@linkUrl" target="_blank" rel="noreferrer noopener">
+                            @(message.Options.LinkText ?? linkUrl)
+                            <DeckIcon Name="DeckIconName.External" Size="13" />
+                        </a>
+                    }
+                </div>
+                @if (message.Options.AllowDismiss)
+                {
+                    <button type="button"
+                            class="icon-btn icon-btn--sm dashboard-message-dismiss"
+                            aria-label="@Loc[nameof(Resources.Dialogs.NotificationEntryDismiss)]"
+                            @onclick="message.CloseAsync">
+                        <DeckIcon Name="DeckIconName.Close" Size="16" />
+                    </button>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private IReadOnlyList<DashboardMessage> _messages = [];
+
+    protected override void OnInitialized()
+    {
+        _messages = MessageService.GetMessages();
+        MessageService.OnChange += HandleMessagesChanged;
+    }
+
+    public void Dispose()
+    {
+        MessageService.OnChange -= HandleMessagesChanged;
+    }
+
+    private void HandleMessagesChanged()
+    {
+        _ = InvokeAsync(() =>
+        {
+            _messages = MessageService.GetMessages();
+            StateHasChanged();
+        });
+    }
+
+    private static string GetTone(NotificationIntent intent) => intent.ToString().ToLowerInvariant();
+
+    private static DeckIconName GetIcon(NotificationIntent intent) => intent switch
+    {
+        NotificationIntent.Success => DeckIconName.CheckmarkCircle,
+        NotificationIntent.Warning => DeckIconName.Warning,
+        NotificationIntent.Error => DeckIconName.ErrorCircle,
+        _ => DeckIconName.Info
+    };
+}

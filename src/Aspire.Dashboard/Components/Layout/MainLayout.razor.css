@@ -40,13 +40,6 @@
         flex: 1;
     }
 
-    ::deep.layout > .messagebar-container {
-        grid-area: messagebar;
-        border-top: 1px solid var(--neutral-stroke-rest);
-        border-left: 1px solid var(--neutral-stroke-rest);
-        display: flex;
-    }
-
     ::deep .header-right {
         margin-left: auto;
     }
@@ -124,13 +117,6 @@
         overflow-x: auto; /* allow horizontal scrolling */
         overflow: auto;
         border-left: 1px solid var(--neutral-stroke-rest);
-    }
-
-    ::deep.layout > .messagebar-container {
-        grid-area: messagebar;
-        border-top: 1px solid var(--neutral-stroke-rest);
-        border-left: 1px solid var(--neutral-stroke-rest);
-        display: flex;
     }
 
     ::deep .header-right {

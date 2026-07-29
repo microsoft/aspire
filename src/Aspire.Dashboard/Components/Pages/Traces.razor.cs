@@ -60,7 +60,7 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     public required IOptions<DashboardOptions> DashboardOptions { get; init; }
 
     [Inject]
-    public required IMessageService MessageService { get; init; }
+    public required IDashboardMessageService MessageService { get; init; }
 
     [Inject]
     public required ILogger<Traces> Logger { get; init; }

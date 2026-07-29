@@ -15,7 +15,6 @@ using Aspire.Dashboard.Otlp.Model.MetricValues;
 using Aspire.Dashboard.Utils;
 using Google.Protobuf.Collections;
 using Microsoft.Extensions.Options;
-using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Metrics.V1;
 using OpenTelemetry.Proto.Resource.V1;
@@ -73,10 +72,10 @@ public sealed partial class TelemetryRepository : IDisposable
     internal readonly OtlpContext _otlpContext;
 
     public bool HasDisplayedMaxLogLimitMessage { get; set; }
-    public Message? MaxLogLimitMessage { get; set; }
+    public DashboardMessage? MaxLogLimitMessage { get; set; }
 
     public bool HasDisplayedMaxTraceLimitMessage { get; set; }
-    public Message? MaxTraceLimitMessage { get; set; }
+    public DashboardMessage? MaxTraceLimitMessage { get; set; }
 
     // For testing.
     internal List<OtlpSpanLink> SpanLinks => _spanLinks;
