@@ -607,17 +607,17 @@ public class ResourceNotificationService : IDisposable
     /// This is an allow-list of the states that mean "has not started yet". It ensures that resources/replicas that are
     /// in running, stopping, or in one of terminal states cannot be transitioned to waiting.
     ///
-    /// <see cref="KnownResourceStates.NotStarted"/> is conditional. It must be allowed for custom resources that drive
+    /// Transition from <see cref="KnownResourceStates.NotStarted"/> is conditional. It must be allowed for custom resources that drive
     /// their own startup: they can publish <see cref="BeforeResourceStartedEvent"/> from <c>OnInitializeResource</c>, so
     /// they are still in the initial state supplied by <c>WithInitialState</c> when the wait is published, rather than
     /// having been moved to "Starting" by the orchestrator first. Omitting it silently skipped the transition and, in
     /// turn, the wait itself. See https://github.com/microsoft/aspire/issues/17453.
     ///
-    /// It must not be allowed when the resource has more than one instance, because the wait is published as a
+    /// Transition from <see cref="KnownResourceStates.NotStarted"/> must not be allowed 
+    /// when the resource has more than one instance, because the wait is published as a
     /// model-level update that reaches every replica. Replicas are started individually (a start request moves only that
     /// replica to "Starting"), so a replica that is still "NotStarted" is one that was deliberately not started - for
-    /// example with <c>WithExplicitStart</c> - and relabeling it "Waiting" would misreport it and disable its start
-    /// command. Self-driven resources are never DCP-backed, so they always resolve to a single instance and keep the fix.
+    /// example with <c>WithExplicitStart</c> - and relabeling it "Waiting" would misreport it and disable its start command.
     /// </remarks>
     private static bool CanTransitionToWaiting(string? state, bool allowNotStarted) =>
         state is null
