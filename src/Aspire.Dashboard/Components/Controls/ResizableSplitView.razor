@@ -1,0 +1,96 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject IStringLocalizer<Resources.ControlsStrings> Loc
+
+<div class="split-view @(Collapsed ? "split-view--collapsed" : null)"
+     data-orientation="@Orientation.ToString().ToLowerInvariant()"
+     style="--panel-1-size: @Panel1Size; --panel-2-size: @Panel2Size; --panel-1-min-size: @Panel1MinSize; --panel-2-min-size: @Panel2MinSize; --split-bar-size: @(BarSize)px;"
+     @ref="_container">
+    <div class="split-view-panel split-view-panel-1">
+        @Panel1
+    </div>
+    <div class="split-view-bar"
+         role="separator"
+         aria-orientation="@(Orientation == SplitOrientation.Horizontal ? "vertical" : "horizontal")"
+         aria-label="@Loc[nameof(Resources.ControlsStrings.FluentDataGridHeaderCellResizeButtonText)]"
+         aria-valuemin="0"
+         aria-valuemax="100"
+         aria-valuenow="@Panel1Percent.ToString("F0", CultureInfo.InvariantCulture)"
+         tabindex="0"
+         hidden="@Collapsed"></div>
+    <div class="split-view-panel split-view-panel-2">
+        @Panel2
+    </div>
+</div>
+
+@code {
+    private ElementReference _container;
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<ResizableSplitView>? _selfReference;
+
+    [Parameter, EditorRequired]
+    public required RenderFragment Panel1 { get; set; }
+
+    [Parameter, EditorRequired]
+    public required RenderFragment Panel2 { get; set; }
+
+    [Parameter]
+    public SplitOrientation Orientation { get; set; }
+
+    [Parameter]
+    public bool Collapsed { get; set; }
+
+    [Parameter]
+    public string Panel1Size { get; set; } = "1fr";
+
+    [Parameter]
+    public string Panel2Size { get; set; } = "1fr";
+
+    [Parameter]
+    public string Panel1MinSize { get; set; } = "0";
+
+    [Parameter]
+    public string Panel2MinSize { get; set; } = "0";
+
+    [Parameter]
+    public int BarSize { get; set; } = 5;
+
+    [Parameter]
+    public double Panel1Percent { get; set; } = 50;
+
+    [Parameter]
+    public EventCallback<SplitResizedEventArgs> OnResized { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _module = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Controls/ResizableSplitView.razor.js");
+            _selfReference = DotNetObjectReference.Create(this);
+            await _module.InvokeVoidAsync("initializeSplitView", _container, _selfReference);
+        }
+    }
+
+    [JSInvokable]
+    public Task HandleResizeAsync(double panel1Size, double panel2Size)
+    {
+        return OnResized.InvokeAsync(new SplitResizedEventArgs(panel1Size, panel2Size));
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (_module is not null)
+            {
+                await _module.InvokeVoidAsync("disposeSplitView", _container);
+                await _module.DisposeAsync();
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+
+        _selfReference?.Dispose();
+    }
+}

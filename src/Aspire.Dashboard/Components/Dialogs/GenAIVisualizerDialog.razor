@@ -34,11 +34,10 @@
 
 <FluentDialogBody>
     <div class="genai-visualizer-container">
-        <FluentSplitter BarHandle="true"
-                        Style="height:100%"
-                        Panel1Size="3fr"
-                        Panel2Size="7fr"
-                        BarSize="10">
+        <ResizableSplitView Panel1Size="3fr"
+                            Panel2Size="7fr"
+                            Panel1Percent="30"
+                            BarSize="10">
             <Panel1>
                 <div class="span-messages-sidebar">
                     <TreeGenAISelector PageViewModel="@Content"
@@ -458,7 +457,7 @@
                     }
                 </div>
             </Panel2>
-        </FluentSplitter>
+        </ResizableSplitView>
     </div>
 </FluentDialogBody>
 

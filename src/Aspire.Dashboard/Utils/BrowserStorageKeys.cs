@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text;
-using Microsoft.FluentUI.AspNetCore.Components;
+using Aspire.Dashboard.Components.Controls;
 
 namespace Aspire.Dashboard.Utils;
 
@@ -51,7 +51,7 @@ internal static class BrowserStorageKeys
         return $"{SplitterOrientationKeyPrefix}{viewKey}";
     }
 
-    public static string SplitterSizeKey(string viewKey, Orientation orientation)
+    public static string SplitterSizeKey(string viewKey, SplitOrientation orientation)
     {
         return $"{SplitterSizeKeyPrefix}{orientation}_{viewKey}";
     }

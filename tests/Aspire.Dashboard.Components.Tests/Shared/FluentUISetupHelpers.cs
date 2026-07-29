@@ -185,6 +185,10 @@ internal static class FluentUISetupHelpers
         context.Services.AddScoped<SpanMenuBuilder>();
         context.Services.AddScoped<TraceMenuBuilder>();
         context.Services.AddSingleton<IOptions<DashboardOptions>>(Options.Create(new DashboardOptions()));
+
+        var splitViewModule = context.JSInterop.SetupModule("./Components/Controls/ResizableSplitView.razor.js");
+        splitViewModule.SetupVoid("initializeSplitView", _ => true);
+        splitViewModule.SetupVoid("disposeSplitView", _ => true);
     }
 
     public static void SetupFluentUIComponents(TestContext context)

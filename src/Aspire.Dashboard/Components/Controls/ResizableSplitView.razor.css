@@ -1,0 +1,50 @@
+.split-view {
+    display: grid;
+    grid-template-columns: minmax(var(--panel-1-min-size), var(--panel-1-size)) var(--split-bar-size) minmax(var(--panel-2-min-size), var(--panel-2-size));
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.split-view[data-orientation="vertical"] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(var(--panel-1-min-size), var(--panel-1-size)) var(--split-bar-size) minmax(var(--panel-2-min-size), var(--panel-2-size));
+}
+
+.split-view--collapsed {
+    grid-template-columns: minmax(0, 1fr) 0 0;
+}
+
+.split-view--collapsed[data-orientation="vertical"] {
+    grid-template-rows: minmax(0, 1fr) 0 0;
+}
+
+.split-view-panel {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.split-view-bar {
+    position: relative;
+    z-index: 1;
+    background: var(--border);
+    cursor: col-resize;
+    touch-action: none;
+}
+
+.split-view[data-orientation="vertical"] > .split-view-bar {
+    cursor: row-resize;
+}
+
+.split-view-bar:hover,
+.split-view-bar:focus-visible {
+    background: var(--accent);
+}
+
+.split-view-bar:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+}

@@ -5,12 +5,11 @@ using System.Globalization;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Controls;
 
-public sealed record SummaryDetailsSize(Orientation Orientation, float Panel1Fraction);
+public sealed record SummaryDetailsSize(SplitOrientation Orientation, float Panel1Fraction);
 
 public partial class SummaryDetailsView<T> : IGlobalKeydownListener, IDisposable
 {
@@ -27,7 +26,7 @@ public partial class SummaryDetailsView<T> : IGlobalKeydownListener, IDisposable
     public string? DetailsTitle { get; set; }
 
     [Parameter]
-    public Orientation Orientation { get; set; } = Orientation.Horizontal;
+    public SplitOrientation Orientation { get; set; } = SplitOrientation.Horizontal;
 
     [Parameter]
     public EventCallback OnDismiss { get; set; }
@@ -75,7 +74,7 @@ public partial class SummaryDetailsView<T> : IGlobalKeydownListener, IDisposable
     private string _panel1Size { get; set; } = "1fr";
     private string _panel2Size { get; set; } = "1fr";
     private bool _internalShowDetails;
-    private FluentSplitter? _splitterRef;
+    private ResizableSplitView? _splitterRef;
 
     public string EffectivePanel1Size => ViewportInformation.IsDesktop ? _panel1Size : "0fr";
     public string EffectivePanel2Size => ViewportInformation.IsDesktop ? _panel2Size : "1fr";
@@ -105,7 +104,7 @@ public partial class SummaryDetailsView<T> : IGlobalKeydownListener, IDisposable
             {
                 if (RememberOrientation)
                 {
-                    var orientationResult = await LocalStore.GetUnprotectedAsync<Orientation>(GetOrientationStorageKey());
+                    var orientationResult = await LocalStore.GetUnprotectedAsync<SplitOrientation>(GetOrientationStorageKey());
                     if (orientationResult.Success)
                     {
                         Orientation = orientationResult.Value;
@@ -144,13 +143,13 @@ public partial class SummaryDetailsView<T> : IGlobalKeydownListener, IDisposable
 
     private async Task HandleToggleOrientation()
     {
-        if (Orientation == Orientation.Horizontal)
+        if (Orientation == SplitOrientation.Horizontal)
         {
-            Orientation = Orientation.Vertical;
+            Orientation = SplitOrientation.Vertical;
         }
         else
         {
-            Orientation = Orientation.Horizontal;
+            Orientation = SplitOrientation.Horizontal;
         }
 
         if (RememberOrientation)
@@ -178,16 +177,14 @@ public partial class SummaryDetailsView<T> : IGlobalKeydownListener, IDisposable
 
         await RaiseOnResizeAsync();
 
-        // The FluentSplitter control will render during the async calls above, but with the wrong values.
-        // We need to force a re-render to get the correct values.
         StateHasChanged();
     }
 
-    private async Task HandleSplitterResize(SplitterResizedEventArgs args)
+    private async Task HandleSplitterResize(SplitResizedEventArgs args)
     {
         var totalSize = (float)(args.Panel1Size + args.Panel2Size);
 
-        var panel1Fraction = (args.Panel1Size / totalSize);
+        var panel1Fraction = (float)(args.Panel1Size / totalSize);
 
         SetPanelSizes(panel1Fraction);
 
@@ -261,7 +258,7 @@ public partial class SummaryDetailsView<T> : IGlobalKeydownListener, IDisposable
             hasChanged = true;
         }
 
-        GetPanelSizes(_splitterRef.Panel1Size, _splitterRef.Panel2Size, out var panel1Size, out var panel2Size, out var panel1Fraction);
+        GetPanelSizes(_panel1Size, _panel2Size, out var panel1Size, out var panel2Size, out var panel1Fraction);
 
         if (panel1Size is null || panel2Size is null || panel1Fraction is null)
         {
@@ -279,7 +276,7 @@ public partial class SummaryDetailsView<T> : IGlobalKeydownListener, IDisposable
             hasChanged = true;
         }
 
-        GetPanelSizes(_splitterRef.Panel1Size, _splitterRef.Panel2Size, out _, out _, out var newPanel1Fraction);
+        GetPanelSizes(_panel1Size, _panel2Size, out _, out _, out var newPanel1Fraction);
 
         if (newPanel1Fraction is null || !hasChanged)
         {

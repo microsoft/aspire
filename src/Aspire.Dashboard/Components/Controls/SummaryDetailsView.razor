@@ -2,12 +2,13 @@
 @typeparam T
 
 <div class="summary-details-container">
-    <FluentSplitter Orientation="@Orientation" Collapsed="@(!_internalShowDetails || !ViewportInformation.IsDesktop)"
-                    OnResized="HandleSplitterResize"
-                    Panel1Size="@EffectivePanel1Size" Panel2Size="@EffectivePanel2Size"
-                    Panel1MinSize="@PanelMinimumSize" Panel2MinSize="@PanelMinimumSize"
-                    BarSize="5"
-                    @ref="_splitterRef">
+    <ResizableSplitView Orientation="@Orientation" Collapsed="@(!_internalShowDetails || !ViewportInformation.IsDesktop)"
+                        OnResized="HandleSplitterResize"
+                        Panel1Size="@EffectivePanel1Size" Panel2Size="@EffectivePanel2Size"
+                        Panel1MinSize="@PanelMinimumSize" Panel2MinSize="@PanelMinimumSize"
+                        Panel1Percent="@(_panel1Fraction * 100)"
+                        BarSize="5"
+                        @ref="_splitterRef">
         <Panel1>
             @*
                 The summary container should never be added/removed from the DOM. If it is added/removed then content dynamically
@@ -37,5 +38,5 @@
                             Orientation="@Orientation" />
             }
         </Panel2>
-    </FluentSplitter>
+    </ResizableSplitView>
 </div>
