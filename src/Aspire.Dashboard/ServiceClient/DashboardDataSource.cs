@@ -79,9 +79,8 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
 
     internal void SelectRun(string? runId)
     {
-        var runs = _runStore.GetRuns();
-        var currentRun = runs.Single(run => run.IsCurrent);
-        var selectedRun = runs.FirstOrDefault(run => string.Equals(run.RunId, runId, StringComparison.Ordinal));
+        var currentRun = _runStore.GetCurrentRun();
+        var selectedRun = runId is not null ? _runStore.GetRunById(runId) : null;
         if (selectedRun is null)
         {
             if (!string.IsNullOrEmpty(runId))

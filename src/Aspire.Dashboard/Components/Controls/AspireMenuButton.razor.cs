@@ -60,6 +60,9 @@ public partial class AspireMenuButton : FluentComponentBase, IAsyncDisposable
     [Parameter]
     public required Func<IList<MenuButtonItem>> ItemsProvider { get; set; }
 
+    // Exposed only for tests to inspect the rendered menu items.
+    internal IReadOnlyList<MenuButtonItem> Items => _items;
+
     [Parameter]
     public Appearance? ButtonAppearance { get; set; }
 

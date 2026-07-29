@@ -88,6 +88,24 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Pin run.
+        /// </summary>
+        public static string DashboardRunSelectPin {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectPin", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Unpin run.
+        /// </summary>
+        public static string DashboardRunSelectUnpin {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectUnpin", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Aspire.
         /// </summary>
         public static string MainLayoutAspire {

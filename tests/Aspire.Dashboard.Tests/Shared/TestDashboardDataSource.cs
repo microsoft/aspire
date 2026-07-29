@@ -39,16 +39,27 @@ internal static class TestDashboardDataSource
 }
 
 internal sealed class TestDashboardRunStore(
-    IReadOnlyList<DashboardRunDescriptor>? runs = null,
+    IEnumerable<DashboardRunDescriptor>? runs = null,
     Func<DashboardRunDescriptor, IDisposable?>? tryAcquireRunLease = null,
     string? databasePath = null) : IDashboardRunStore
 {
-    private readonly IReadOnlyList<DashboardRunDescriptor> _runs = runs ??
-        [new("current", DashboardRunStore.SchemaVersion, DateTimeOffset.UnixEpoch, null, false, "TestApp", databasePath ?? string.Empty, IsCurrent: true)];
+    private readonly IReadOnlyList<DashboardRunDescriptor> _runs = (runs ??
+        [new("current", DashboardRunStore.SchemaVersion, DateTimeOffset.UnixEpoch, null, false, "TestApp", databasePath ?? string.Empty, IsCurrent: true)])
+        .ToArray();
 
     public bool SupportsRunSelection => _runs.Any(run => !run.IsCurrent);
 
     public IReadOnlyList<DashboardRunDescriptor> GetRuns() => _runs;
+
+    public DashboardRunDescriptor GetCurrentRun() => _runs.Single(run => run.IsCurrent);
+
+    public DashboardRunDescriptor? GetRunById(string runId) =>
+        _runs.SingleOrDefault(run => string.Equals(run.RunId, runId, StringComparison.Ordinal));
+
+    public void SetRunPinned(DashboardRunDescriptor run, bool isPinned)
+    {
+        _runs.Single(candidate => string.Equals(candidate.RunId, run.RunId, StringComparison.Ordinal)).IsPinned = isPinned;
+    }
 
     public IDisposable? TryAcquireRunLease(DashboardRunDescriptor run) => tryAcquireRunLease?.Invoke(run);
 }

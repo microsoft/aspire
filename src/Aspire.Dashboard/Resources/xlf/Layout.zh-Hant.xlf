@@ -12,9 +12,19 @@
         <target state="new">Live run</target>
         <note />
       </trans-unit>
+      <trans-unit id="DashboardRunSelectPin">
+        <source>Pin run</source>
+        <target state="new">Pin run</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DashboardRunSelectTitle">
         <source>Select dashboard run</source>
         <target state="new">Select dashboard run</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectUnpin">
+        <source>Unpin run</source>
+        <target state="new">Unpin run</target>
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutAspire">
