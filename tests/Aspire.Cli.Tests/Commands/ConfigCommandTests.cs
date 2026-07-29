@@ -20,7 +20,7 @@ namespace Aspire.Cli.Tests.Commands;
 public class ConfigCommandTests(ITestOutputHelper outputHelper)
 {
     [Fact]
-    public void ConfigInfoCapabilities_AdvertiseLsJsonStream()
+    public void ConfigInfo_AdvertisesLsJsonStream()
     {
         Assert.Contains(KnownCapabilities.LsJsonStream, KnownCapabilities.GetAdvertisedCapabilities());
     }

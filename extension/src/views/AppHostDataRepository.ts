@@ -190,6 +190,7 @@ export class AppHostDataRepository {
     private static readonly _appHostStopRefreshMaxAttempts = 75;
     private static readonly _oneShotCommandTimeoutMs = 30000;
     private static readonly _oneShotOutputBufferLimit = oneShotOutputBufferLimit;
+    private static readonly _streamedCandidateUpdateDebounceMs = 50;
 
     private readonly _onDidChangeData = new vscode.EventEmitter<void>();
     readonly onDidChangeData = this._onDidChangeData.event;
@@ -706,6 +707,26 @@ export class AppHostDataRepository {
         this._workspaceAppHostDiscoveryInProgress = true;
         this._workspaceAppHostDiscoveryCancellationSource = cancellationSource;
         const streamedCandidates: CandidateAppHostDisplayInfo[] = [];
+        let incrementalCandidateUpdateTimer: ReturnType<typeof setTimeout> | undefined;
+        const cancelIncrementalCandidateUpdate = (): void => {
+            if (incrementalCandidateUpdateTimer) {
+                clearTimeout(incrementalCandidateUpdateTimer);
+                incrementalCandidateUpdateTimer = undefined;
+            }
+        };
+        const applyIncrementalCandidateUpdates = (): void => {
+            incrementalCandidateUpdateTimer = undefined;
+            if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
+                return;
+            }
+
+            const result = getWorkspaceAppHostProjectSearchResult(rootFolder, streamedCandidates);
+            const buildableAppHostCandidates = result.app_host_candidates.filter(isBuildableAppHostCandidate);
+            if (buildableAppHostCandidates.length > 0) {
+                this._setWorkspaceAppHostCandidatePaths(buildableAppHostCandidates);
+                this._updateWorkspaceContext();
+            }
+        };
         const onIncrementalCandidate = (candidate: CandidateAppHostDisplayInfo): void => {
             if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
                 return;
@@ -718,15 +739,15 @@ export class AppHostDataRepository {
                 streamedCandidates.push(candidate);
             }
 
-            const result = getWorkspaceAppHostProjectSearchResult(rootFolder, streamedCandidates);
-            const buildableAppHostCandidates = result.app_host_candidates.filter(isBuildableAppHostCandidate);
-            if (buildableAppHostCandidates.length > 0) {
-                this._setWorkspaceAppHostCandidatePaths(buildableAppHostCandidates);
-                this._updateWorkspaceContext();
-            }
+            // Warm discovery caches can emit dozens of candidates within a few milliseconds.
+            // Resetting a trailing timer coalesces that burst into one tree update while preserving
+            // incremental results when a slower scan has a natural pause between candidates.
+            cancelIncrementalCandidateUpdate();
+            incrementalCandidateUpdateTimer = setTimeout(applyIncrementalCandidateUpdates, AppHostDataRepository._streamedCandidateUpdateDebounceMs);
         };
 
         this._appHostDiscoveryService.discover(rootFolder, options?.forceRefresh, cancellationSource.token, onIncrementalCandidate).then(appHosts => {
+            cancelIncrementalCandidateUpdate();
             if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
                 return;
             }
@@ -735,6 +756,7 @@ export class AppHostDataRepository {
             this._workspaceAppHostDiscoveryComplete = true;
             this._handleWorkspaceAppHostCandidates(result.app_host_candidates, result.selected_project_file);
         }).catch(error => {
+            cancelIncrementalCandidateUpdate();
             if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
                 return;
             }
@@ -751,6 +773,7 @@ export class AppHostDataRepository {
             this._updateWorkspaceContext({ clearLoading: true });
             this._syncPolling();
         }).finally(() => {
+            cancelIncrementalCandidateUpdate();
             cancellationSource.dispose();
             if (this._workspaceAppHostDiscoveryCancellationSource !== cancellationSource) {
                 return;

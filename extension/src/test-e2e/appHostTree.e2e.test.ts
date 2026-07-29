@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { getCommandInvocationCount, getResources, getTerminalCommandCount, getTreeAppHostLabel, isSamePath, waitForCommandOutcome, waitForDashboardUrl, waitForExtensionState, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
+import { findRunningAppHost, getCommandInvocationCount, getResources, getTerminalCommandCount, getTreeAppHostLabel, isSamePath, waitForCommandOutcome, waitForDashboardUrl, waitForExtensionState, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
 import { executeE2eControlCommand, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, writeStreamingDiscoveryCliWrapper } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { cancelActiveInput, clickTreeItem, executeCommandFromPalette, openAspireView, waitForTreeItem, waitForWorkbenchText } from './helpers/vscode';
@@ -40,28 +40,88 @@ suite('Aspire AppHost tree E2E', function () {
         const invocationCountBefore = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
         await executeE2eControlCommand({ name: 'refreshAppHosts' }, { waitFor: 'started' });
 
-        const loadingState = await waitForExtensionState(
-            file => file.state.isRepositoryLoading
-                && file.state.isWorkspaceAppHostDiscoveryComplete === false
-                && file.state.workspaceAppHostPath === undefined
-                && file.state.workspaceAppHostCandidatePaths.length === 0,
-            'workspace AppHost refresh loading state',
-            30000);
-        assert.strictEqual(loadingState.state.isRepositoryLoading, true);
-        const loadingText = await waitForWorkbenchText('Searching for AppHosts...', 30000);
-        assert.ok(!loadingText.includes('No Aspire AppHosts detected in this workspace.'));
-
         const partialState = await waitForExtensionState(
             file => file.state.isWorkspaceAppHostDiscoveryComplete === false &&
                 file.state.workspaceAppHostCandidatePaths.some(candidatePath => isSamePath(candidatePath, getPrimaryAppHostProjectPath())),
             'streamed AppHost candidate before discovery completes',
             30000);
         assert.strictEqual(partialState.state.isWorkspaceAppHostDiscoveryComplete, false);
+        const partialSection = await openAspireView();
+        const partialItem = await waitForTreeItem(partialSection, getTreeAppHostLabel(partialState.state));
+        assert.strictEqual(await partialItem.getLabel(), getTreeAppHostLabel(partialState.state));
 
         await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 30000, invocationCountBefore);
         const finalState = await waitForRepositoryIdle();
         assert.strictEqual(finalState.state.isWorkspaceAppHostDiscoveryComplete, true);
         assert.ok(finalState.state.workspaceAppHostCandidatePaths.some(candidatePath => isSamePath(candidatePath, getPrimaryAppHostProjectPath())));
+    });
+
+    test('refresh shows loading until an AppHost appears', async () => {
+        await openAspireView();
+        await waitForWorkspaceAppHost();
+
+        await setE2eCliPathForE2E(writeStreamingDiscoveryCliWrapper());
+        const invocationCountBefore = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
+        await executeE2eControlCommand({ name: 'refreshAppHosts' }, { waitFor: 'started' });
+
+        await waitForWorkspaceRediscoveryLoading('workspace AppHost refresh loading state');
+
+        const candidateState = await waitForExtensionState(
+            file => !file.state.isRepositoryLoading
+                && file.state.isWorkspaceAppHostDiscoveryComplete === false
+                && file.state.workspaceAppHostCandidatePaths.some(candidatePath => isSamePath(candidatePath, getPrimaryAppHostProjectPath())),
+            'first streamed AppHost candidate to clear refresh loading',
+            30000);
+        assert.strictEqual(candidateState.state.isRepositoryLoading, false);
+
+        await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 30000, invocationCountBefore);
+        await waitForRepositoryIdle();
+    });
+
+    test('running AppHosts appear before slow discovery results', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+        const discovered = await waitForWorkspaceAppHost();
+        const appHostLabel = getTreeAppHostLabel(discovered.state);
+        let section = await openAspireView();
+
+        const idleItem = await waitForTreeItem(section, appHostLabel);
+        await idleItem.expand();
+        await clickTreeItem(section, 'Run AppHost');
+        await waitForCommandOutcome('aspire-vscode.runAppHost', 'success');
+        await waitForRunningAppHost();
+
+        // Keep workspace discovery pending long enough for the fresh aspire ps snapshot to
+        // independently restore the running AppHost to the tree.
+        await setE2eCliPathForE2E(writeStreamingDiscoveryCliWrapper(5_000, 5_000));
+        const invocationCountBefore = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
+        await executeE2eControlCommand({ name: 'refreshAppHosts' }, { waitFor: 'started' });
+
+        await waitForWorkspaceRediscoveryLoading('workspace AppHost refresh loading state before running AppHost refresh');
+
+        const runningBeforeDiscovery = await waitForExtensionState(
+            file => !file.state.isRepositoryLoading
+                && file.state.isWorkspaceAppHostDiscoveryComplete === false
+                && file.state.workspaceAppHostCandidatePaths.length === 0
+                && findRunningAppHost(file.state) !== undefined,
+            'running AppHost to clear loading before workspace discovery produces a candidate',
+            30000);
+        assert.ok(findRunningAppHost(runningBeforeDiscovery.state));
+
+        section = await openAspireView();
+        const runningItem = await waitForTreeItem(section, appHostLabel);
+        assert.strictEqual(await runningItem.getLabel(), appHostLabel);
+
+        const candidateAfterRunning = await waitForExtensionState(
+            file => file.state.isWorkspaceAppHostDiscoveryComplete === false
+                && file.state.workspaceAppHostCandidatePaths.some(candidatePath => isSamePath(candidatePath, getPrimaryAppHostProjectPath()))
+                && findRunningAppHost(file.state) !== undefined,
+            'streamed workspace AppHost candidate after the running AppHost is restored',
+            30000);
+        assert.strictEqual(candidateAfterRunning.state.isRepositoryLoading, false);
+
+        await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 30000, invocationCountBefore);
+        await waitForRepositoryIdle();
     });
 
     test('runs, shows resources and dashboard state, routes resource commands, and stops from the tree', async () => {
@@ -114,6 +174,20 @@ suite('Aspire AppHost tree E2E', function () {
         await stopPrimaryAppHostIfRunning();
         await waitForNoRunningAppHost();
     });
+
+    async function waitForWorkspaceRediscoveryLoading(description: string): Promise<void> {
+        const loadingState = await waitForExtensionState(
+            file => file.state.isRepositoryLoading
+                && file.state.isWorkspaceAppHostDiscoveryComplete === false
+                && file.state.workspaceAppHostPath === undefined
+                && file.state.workspaceAppHostCandidatePaths.length === 0,
+            description,
+            30000);
+        assert.strictEqual(loadingState.state.isRepositoryLoading, true);
+
+        const loadingText = await waitForWorkbenchText('Searching for AppHosts...', 30000);
+        assert.ok(!loadingText.includes('No Aspire AppHosts detected in this workspace.'));
+    }
 
     test('workspace view return clears stale stopped AppHost after returning to Aspire view', async () => {
         await openAspireView();

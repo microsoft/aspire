@@ -2129,17 +2129,17 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         provider.dispose();
     });
 
-    test('workspace mode hides existing AppHosts while loading', () => {
+    test('workspace mode hides stale running AppHosts while loading', () => {
         const appHostPath = '/repo/AppHost/AppHost.csproj';
         const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
         const repository = {
             viewMode: 'workspace' as ViewMode,
             isLoading: true,
             appHosts: [makeAppHost({ appHostPath })],
-            workspaceResources: [makeResource()],
-            workspaceAppHostPath: appHostPath,
-            workspaceAppHostCandidatePaths: [appHostPath],
-            workspaceAppHostName: 'AppHost.csproj',
+            workspaceResources: [],
+            workspaceAppHostPath: undefined,
+            workspaceAppHostCandidatePaths: [],
+            workspaceAppHostName: undefined,
             onDidChangeData,
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());

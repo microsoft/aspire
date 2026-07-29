@@ -60,6 +60,7 @@ interface CachedAppHostDiscovery {
     candidateProgressCallbacks: Set<IncrementalCandidateCallback>;
     cancellationSource: vscode.CancellationTokenSource;
     completed: boolean;
+    stale: boolean;
 }
 
 interface CliProcessResult {
@@ -146,6 +147,9 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                 cachedDiscoveryForCleanup.completed = true;
                 cachedDiscoveryForCleanup.candidateProgressCallbacks.clear();
                 cachedDiscoveryForCleanup.cancellationSource.dispose();
+                if (cachedDiscoveryForCleanup.stale && this._cache.get(key) === cachedDiscoveryForCleanup) {
+                    this._cache.delete(key);
+                }
             });
             cachedDiscovery = {
                 promise: cachedPromise,
@@ -153,6 +157,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                 candidateProgressCallbacks,
                 cancellationSource,
                 completed: false,
+                stale: false,
             };
             cachedDiscoveryForCleanup = cachedDiscovery;
             this._cache.set(key, cachedDiscovery);
@@ -340,14 +345,20 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                 clearTimeout(existingTimer);
             }
 
-            this._invalidateCachedDiscovery(key);
-
             const timer = setTimeout(() => {
                 this._pendingInvalidationTimers.delete(key);
                 if (this._disposed) {
                     return;
                 }
 
+                const cachedDiscovery = this._cache.get(key);
+                if (cachedDiscovery?.completed === false) {
+                    // Let the current shared stream finish. Cancelling here would only
+                    // turn repeated file notifications into a cancel-and-restart loop.
+                    cachedDiscovery.stale = true;
+                } else {
+                    this._invalidateCachedDiscovery(key);
+                }
                 this._onDidChangeCandidates.fire(workspaceFolder);
             }, AppHostDiscoveryService._candidateChangeDebounceMs);
             this._pendingInvalidationTimers.set(key, timer);
