@@ -176,7 +176,7 @@ public sealed class DashboardCommandExecutorTests
             ImmutableArray<ProtoInteractionInput>.Empty,
             isHighlighted: false,
             iconName: string.Empty,
-            IconVariant.Regular);
+            DashboardIconVariant.Regular);
     }
 
     private sealed class TestNavigationManager : NavigationManager

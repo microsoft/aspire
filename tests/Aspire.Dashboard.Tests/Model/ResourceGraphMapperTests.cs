@@ -19,7 +19,7 @@ public class ResourceGraphMapperTests
         var resource = ModelTestHelpers.CreateResource(
             "app1",
             iconName: "Server",
-            iconVariant: Microsoft.FluentUI.AspNetCore.Components.IconVariant.Regular);
+            iconVariant: DashboardIconVariant.Regular);
         var resources = new Dictionary<string, ResourceViewModel>
         {
             [resource.Name] = resource,

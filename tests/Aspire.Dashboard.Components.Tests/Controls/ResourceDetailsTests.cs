@@ -731,7 +731,7 @@ public class ResourceDetailsTests : DashboardTestContext
             argumentInputs: [],
             isHighlighted: false,
             iconName: string.Empty,
-            iconVariant: IconVariant.Regular);
+            iconVariant: DashboardIconVariant.Regular);
 
         var properties = new Dictionary<string, ResourcePropertyViewModel>
         {
@@ -777,7 +777,7 @@ public class ResourceDetailsTests : DashboardTestContext
             argumentInputs: [],
             isHighlighted: false,
             iconName: string.Empty,
-            iconVariant: IconVariant.Regular);
+            iconVariant: DashboardIconVariant.Regular);
 
         var properties = new Dictionary<string, ResourcePropertyViewModel>
         {
@@ -823,7 +823,7 @@ public class ResourceDetailsTests : DashboardTestContext
             argumentInputs: [],
             isHighlighted: false,
             iconName: string.Empty,
-            iconVariant: IconVariant.Regular);
+            iconVariant: DashboardIconVariant.Regular);
 
         var properties = new Dictionary<string, ResourcePropertyViewModel>
         {

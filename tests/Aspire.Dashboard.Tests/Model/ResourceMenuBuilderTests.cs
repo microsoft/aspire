@@ -12,7 +12,6 @@ using Aspire.Tests.Shared.DashboardModel;
 using Aspire.Tests.Shared.Telemetry;
 using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
 
@@ -252,7 +251,7 @@ public sealed class ResourceMenuBuilderTests
             argumentInputs: [],
             isHighlighted: true,
             iconName: string.Empty,
-            iconVariant: IconVariant.Regular);
+            iconVariant: DashboardIconVariant.Regular);
         var stopCommand = new CommandViewModel(
             CommandViewModel.StopCommand,
             CommandViewModelState.Enabled,
@@ -262,7 +261,7 @@ public sealed class ResourceMenuBuilderTests
             argumentInputs: [],
             isHighlighted: true,
             iconName: string.Empty,
-            iconVariant: IconVariant.Regular);
+            iconVariant: DashboardIconVariant.Regular);
         var resource = ModelTestHelpers.CreateResource(commands: [startCommand, stopCommand]);
         var repository = TelemetryTestHelpers.CreateRepository();
         var resourceMenuBuilder = CreateResourceMenuBuilder(repository);

@@ -348,7 +348,7 @@ public sealed class ResourceViewModelTests
 
         // Assert
         Assert.Equal("Database", vm.IconName);
-        Assert.Equal(Microsoft.FluentUI.AspNetCore.Components.IconVariant.Filled, vm.IconVariant);
+        Assert.Equal(DashboardIconVariant.Filled, vm.IconVariant);
     }
 
     [Fact]
@@ -370,7 +370,7 @@ public sealed class ResourceViewModelTests
 
         // Assert
         Assert.Equal("CloudArrowUp", vm.IconName);
-        Assert.Equal(Microsoft.FluentUI.AspNetCore.Components.IconVariant.Regular, vm.IconVariant);
+        Assert.Equal(DashboardIconVariant.Regular, vm.IconVariant);
     }
 
     [Fact]

@@ -4,10 +4,10 @@
 using System.Collections.Immutable;
 using System.Runtime.CompilerServices;
 using Aspire.Dashboard.Model;
-using FluentUIIconVariant = Microsoft.FluentUI.AspNetCore.Components.IconVariant;
 using Aspire.Dashboard.Resources;
 using Aspire.Hosting;
 using Google.Protobuf.Collections;
+using ModelIconVariant = Aspire.Dashboard.Model.DashboardIconVariant;
 
 namespace Aspire.DashboardService.Proto.V1;
 
@@ -133,23 +133,23 @@ partial class Resource
                 };
             }
 
-            static FluentUIIconVariant MapIconVariant(IconVariant iconVariant)
+            static ModelIconVariant MapIconVariant(IconVariant iconVariant)
             {
                 return iconVariant switch
                 {
-                    IconVariant.Regular => FluentUIIconVariant.Regular,
-                    IconVariant.Filled => FluentUIIconVariant.Filled,
+                    IconVariant.Regular => ModelIconVariant.Regular,
+                    IconVariant.Filled => ModelIconVariant.Filled,
                     _ => throw new InvalidOperationException("Unknown icon variant: " + iconVariant),
                 };
             }
         }
 
-        static FluentUIIconVariant MapResourceIconVariant(IconVariant iconVariant)
+        static ModelIconVariant MapResourceIconVariant(IconVariant iconVariant)
         {
             return iconVariant switch
             {
-                IconVariant.Regular => FluentUIIconVariant.Regular,
-                IconVariant.Filled => FluentUIIconVariant.Filled,
+                IconVariant.Regular => ModelIconVariant.Regular,
+                IconVariant.Filled => ModelIconVariant.Filled,
                 _ => throw new InvalidOperationException("Unknown icon variant: " + iconVariant),
             };
         }

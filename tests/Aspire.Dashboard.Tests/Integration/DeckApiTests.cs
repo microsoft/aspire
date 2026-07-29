@@ -24,7 +24,6 @@ using Humanizer;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Common.V1;
 using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Metrics.V1;
@@ -1288,14 +1287,14 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
                     argumentInputs: [],
                     isHighlighted: true,
                     "ArrowClockwise",
-                    IconVariant.Regular)
+                    DashboardIconVariant.Regular)
             ],
             HealthReports = [new HealthReportViewModel("ready", HealthStatus.Healthy, "Ready to serve traffic.", ExceptionText: null)],
             KnownState = KnownResourceState.Running,
             IsHidden = true,
             SupportsDetailedTelemetry = true,
             IconName = "Code",
-            IconVariant = IconVariant.Filled
+            IconVariant = DashboardIconVariant.Filled
         };
 
         static ResourcePropertyViewModel CreateTerminalProperty(string name, string value) =>

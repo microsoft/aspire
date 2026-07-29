@@ -11,7 +11,6 @@ using Google.Protobuf.WellKnownTypes;
 using Humanizer;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Localization;
-using Microsoft.FluentUI.AspNetCore.Components;
 using InteractionInput = Aspire.DashboardService.Proto.V1.InteractionInput;
 
 namespace Aspire.Dashboard.Model;
@@ -44,7 +43,7 @@ public sealed class ResourceViewModel
     public bool IsHidden { private get; init; }
     public bool SupportsDetailedTelemetry { get; init; }
     public string? IconName { get; init; }
-    public IconVariant? IconVariant { get; init; }
+    public DashboardIconVariant? IconVariant { get; init; }
     public bool IsParameter => string.Equals(ResourceType, KnownResourceTypes.Parameter, StringComparison.Ordinal);
 
     /// <summary>
@@ -243,9 +242,9 @@ public sealed class CommandViewModel
     public ImmutableArray<InteractionInput> ArgumentInputs { get; }
     public bool IsHighlighted { get; }
     public string IconName { get; }
-    public IconVariant IconVariant { get; }
+    public DashboardIconVariant IconVariant { get; }
 
-    public CommandViewModel(string name, CommandViewModelState state, string displayName, string displayDescription, string confirmationMessage, ImmutableArray<InteractionInput> argumentInputs, bool isHighlighted, string iconName, IconVariant iconVariant)
+    public CommandViewModel(string name, CommandViewModelState state, string displayName, string displayDescription, string confirmationMessage, ImmutableArray<InteractionInput> argumentInputs, bool isHighlighted, string iconName, DashboardIconVariant iconVariant)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(displayName);

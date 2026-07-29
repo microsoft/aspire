@@ -4,7 +4,6 @@
 using System.Collections.Immutable;
 using Aspire.Dashboard.Model;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Tests.Shared.DashboardModel;
 
@@ -25,7 +24,7 @@ public static class ModelTestHelpers
         ImmutableArray<RelationshipViewModel>? relationships = null,
         bool hidden = false,
         string? iconName = null,
-        IconVariant? iconVariant = null,
+        DashboardIconVariant? iconVariant = null,
         ImmutableArray<VolumeViewModel>? volumes = null,
         ImmutableArray<HealthReportViewModel>? healthReports = null)
     {

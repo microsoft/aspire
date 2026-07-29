@@ -4,7 +4,6 @@
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
 using Microsoft.Extensions.Localization;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Api;
 
@@ -114,19 +113,19 @@ internal static class DeckResourceMapper
             Type: relationship.Type);
     }
 
-    private static string? MapIconVariant(IconVariant? iconVariant)
+    private static string? MapIconVariant(DashboardIconVariant? iconVariant)
     {
         return iconVariant switch
         {
-            IconVariant.Regular => "regular",
-            IconVariant.Filled => "filled",
+            DashboardIconVariant.Regular => "regular",
+            DashboardIconVariant.Filled => "filled",
             null => null,
-            _ => throw new InvalidOperationException($"Unexpected {nameof(IconVariant)} value: {iconVariant}.")
+            _ => throw new InvalidOperationException($"Unexpected {nameof(DashboardIconVariant)} value: {iconVariant}.")
         };
     }
 
-    private static string MapIconVariant(IconVariant iconVariant)
+    private static string MapIconVariant(DashboardIconVariant iconVariant)
     {
-        return MapIconVariant((IconVariant?)iconVariant)!;
+        return MapIconVariant((DashboardIconVariant?)iconVariant)!;
     }
 }

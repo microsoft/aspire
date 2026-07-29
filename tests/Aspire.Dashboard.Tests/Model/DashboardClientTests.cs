@@ -593,6 +593,6 @@ public sealed class DashboardClientTests
             [],
             isHighlighted: false,
             iconName: string.Empty,
-            iconVariant: Microsoft.FluentUI.AspNetCore.Components.IconVariant.Regular);
+            iconVariant: DashboardIconVariant.Regular);
     }
 }
