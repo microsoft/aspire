@@ -1,0 +1,114 @@
+@* Deck-styled popover replacing FluentPopover during the Fluent-removal phase. The popover is
+   rendered into a fixed-position layer and positioned in JS relative to an anchor element (by id),
+   flipping above the anchor when there isn't room below. It closes on outside click, Escape, scroll,
+   or resize. All positioning JS lives in the colocated module (CSP-safe; no inline script). *@
+@namespace Aspire.Dashboard.Components.Deck
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+@if (Open)
+{
+    <div @ref="_element" class="deck-popover @Class" style="@Style" role="dialog">
+        @if (Header is not null)
+        {
+            <div class="deck-popover__header">@Header</div>
+        }
+        <div class="deck-popover__body">
+            @Body
+        </div>
+    </div>
+}
+
+@code {
+    private ElementReference _element;
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<Popover>? _selfRef;
+    private bool _initialized;
+
+    /// <summary>The id of the element the popover is anchored to.</summary>
+    [Parameter, EditorRequired]
+    public required string AnchorId { get; set; }
+
+    /// <summary>Whether the popover is open. Supports <c>@bind-Open</c>.</summary>
+    [Parameter]
+    public bool Open { get; set; }
+
+    /// <summary>Raised when the popover requests to open or close.</summary>
+    [Parameter]
+    public EventCallback<bool> OpenChanged { get; set; }
+
+    /// <summary>Optional header content.</summary>
+    [Parameter]
+    public RenderFragment? Header { get; set; }
+
+    /// <summary>The popover body content.</summary>
+    [Parameter]
+    public RenderFragment? Body { get; set; }
+
+    [Parameter]
+    public string? Class { get; set; }
+
+    [Parameter]
+    public string? Style { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Open && !_initialized)
+        {
+            // The popover element only exists in the DOM while open; wire up positioning/dismissal now.
+            _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Deck/Popover.razor.js");
+            _selfRef ??= DotNetObjectReference.Create(this);
+            await _module.InvokeVoidAsync("initialize", _element, AnchorId, _selfRef);
+            _initialized = true;
+        }
+        else if (!Open && _initialized)
+        {
+            await DisposeInteropAsync();
+            _initialized = false;
+        }
+    }
+
+    [JSInvokable]
+    public async Task CloseFromJs()
+    {
+        if (Open)
+        {
+            Open = false;
+            await OpenChanged.InvokeAsync(false);
+            StateHasChanged();
+        }
+    }
+
+    private async Task DisposeInteropAsync()
+    {
+        if (_module is not null)
+        {
+            try
+            {
+                await _module.InvokeVoidAsync("dispose", AnchorId);
+            }
+            catch (JSDisconnectedException)
+            {
+                // Circuit already gone; nothing to clean up.
+            }
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await DisposeInteropAsync();
+
+        if (_module is not null)
+        {
+            try
+            {
+                await _module.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
+
+        _selfRef?.Dispose();
+    }
+}

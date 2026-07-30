@@ -11,3 +11,28 @@
     /* Prevent scrollbar briefly appearing during overflow load. */
     overflow-y: hidden;
 }
+
+/* The filters grid is a compact, borderless list (no header) rather than a bordered data table. */
+::deep .chart-filters-grid tbody td {
+    border-bottom: none;
+    padding: 4px 6px;
+    vertical-align: middle;
+}
+
+::deep .chart-filters-grid .chart-filter-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+::deep .dimension-overflow {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 4px;
+    align-items: center;
+    overflow: hidden;
+}
+
+::deep .dimension-popup {
+    gap: 6px;
+}

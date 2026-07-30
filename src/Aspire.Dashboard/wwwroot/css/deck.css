@@ -3094,3 +3094,30 @@ hr.deck-divider {
   cursor: pointer;
 }
 /* === end Deck data table: sortable header === */
+
+/* === Deck popover === */
+/* Fixed-layer popover positioned in JS relative to an anchor (see Popover.razor.js). */
+.deck-popover {
+  position: fixed;
+  z-index: 1000;
+  min-width: 180px;
+  max-width: min(360px, calc(100vw - 16px));
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.24));
+  overflow: hidden;
+}
+.deck-popover__header {
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+.deck-popover__body {
+  padding: 10px 14px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+/* === end Deck popover === */
