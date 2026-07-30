@@ -1,0 +1,23 @@
+@*
+    Deck dialog body chrome, replacing FluentDialogBody during the Fluent-removal phase.
+    A simple scroll container for the dialog's main content.
+*@
+@namespace Aspire.Dashboard.Components.Dialogs
+
+<div class="deck-dialog__body @Class" style="@Style">
+    @ChildContent
+</div>
+
+@code {
+    /// <summary>The body content.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Additional CSS classes.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Inline style.</summary>
+    [Parameter]
+    public string? Style { get; set; }
+}

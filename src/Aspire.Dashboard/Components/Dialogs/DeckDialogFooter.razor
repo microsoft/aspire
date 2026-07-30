@@ -1,0 +1,30 @@
+@*
+    Deck dialog footer chrome, replacing FluentDialogFooter during the Fluent-removal phase.
+    Renders action buttons at the bottom of a dialog.
+*@
+@namespace Aspire.Dashboard.Components.Dialogs
+
+@if (Visible)
+{
+    <div class="deck-dialog__footer @Class" style="@Style">
+        @ChildContent
+    </div>
+}
+
+@code {
+    /// <summary>The footer content (typically action buttons).</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Whether the footer is rendered.</summary>
+    [Parameter]
+    public bool Visible { get; set; } = true;
+
+    /// <summary>Additional CSS classes.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Inline style.</summary>
+    [Parameter]
+    public string? Style { get; set; }
+}

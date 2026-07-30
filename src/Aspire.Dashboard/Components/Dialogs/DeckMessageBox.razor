@@ -1,0 +1,61 @@
+@*
+    Built-in message box content, replacing FluentUI's message box during the Fluent-removal phase.
+    Renders an icon + message and primary/secondary action buttons that close the dialog with an
+    Ok/Cancel result.
+*@
+@namespace Aspire.Dashboard.Components.Dialogs
+@using Aspire.Dashboard.Components.Deck
+@implements IDeckDialogContentComponent<DeckMessageBoxContent>
+
+<DeckDialogHeader Title="@(Content?.Title ?? Dialog?.Parameters.Title)" />
+<DeckDialogBody Class="deck-messagebox">
+    @if (Content?.Icon is { } icon)
+    {
+        <DeckIcon Name="icon" Size="24" Class="@Content.IconColor" />
+    }
+    <div class="deck-messagebox__text">
+        @if (Content?.MarkupMessage is { } markup)
+        {
+            @markup
+        }
+        else
+        {
+            @Content?.Message
+        }
+    </div>
+</DeckDialogBody>
+<DeckDialogFooter>
+    @if (!string.IsNullOrEmpty(Dialog?.Parameters.SecondaryAction))
+    {
+        <button type="button" class="btn" @onclick="CancelAsync">@Dialog!.Parameters.SecondaryAction</button>
+    }
+    @if (!string.IsNullOrEmpty(Dialog?.Parameters.PrimaryAction))
+    {
+        <button type="button" class="btn btn--primary" @onclick="OkAsync">@Dialog!.Parameters.PrimaryAction</button>
+    }
+</DeckDialogFooter>
+
+@code {
+    [CascadingParameter]
+    public DeckDialogInstance? Dialog { get; set; }
+
+    /// <summary>The message box content.</summary>
+    [Parameter]
+    public DeckMessageBoxContent Content { get; set; } = default!;
+
+    private async Task OkAsync()
+    {
+        if (Dialog is not null)
+        {
+            await Dialog.CloseAsync(DeckDialogResult.Ok());
+        }
+    }
+
+    private async Task CancelAsync()
+    {
+        if (Dialog is not null)
+        {
+            await Dialog.CloseAsync(DeckDialogResult.Cancel());
+        }
+    }
+}

@@ -1,0 +1,72 @@
+@*
+    Deck dialog header chrome, replacing FluentDialogHeader during the Fluent-removal phase.
+    Renders a title row with an optional dismiss button that closes the cascading dialog. A plain
+    Title string can be supplied, or rich ChildContent for dialogs with custom headers.
+*@
+@namespace Aspire.Dashboard.Components.Dialogs
+@using Aspire.Dashboard.Components.Deck
+
+@if (Visible)
+{
+    <div class="deck-dialog__header @Class" style="@Style">
+        <div class="deck-dialog__header-content">
+            @if (ChildContent is not null)
+            {
+                @ChildContent
+            }
+            else if (!string.IsNullOrEmpty(Title))
+            {
+                <span class="deck-dialog__title">@Title</span>
+            }
+        </div>
+        @if (ShowDismiss ?? Dialog?.Parameters.ShowDismiss ?? true)
+        {
+            <button type="button"
+                    class="deck-dialog__dismiss icon-btn"
+                    title="@DismissTitle"
+                    aria-label="@DismissTitle"
+                    @onclick="OnDismissAsync">
+                <DeckIcon Name="DeckIconName.Close" Size="16" />
+            </button>
+        }
+    </div>
+}
+
+@code {
+    [CascadingParameter]
+    public DeckDialogInstance? Dialog { get; set; }
+
+    /// <summary>Plain-text title (used when no <see cref="ChildContent"/> is supplied).</summary>
+    [Parameter]
+    public string? Title { get; set; }
+
+    /// <summary>Rich header content.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Whether the header is rendered at all.</summary>
+    [Parameter]
+    public bool Visible { get; set; } = true;
+
+    /// <summary>Whether to show the dismiss button. Defaults to the dialog parameters' value.</summary>
+    [Parameter]
+    public bool? ShowDismiss { get; set; }
+
+    /// <summary>Additional CSS classes.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Inline style.</summary>
+    [Parameter]
+    public string? Style { get; set; }
+
+    private string? DismissTitle => Dialog?.Parameters.DismissTitle;
+
+    private async Task OnDismissAsync()
+    {
+        if (Dialog is not null)
+        {
+            await Dialog.CloseAsync();
+        }
+    }
+}

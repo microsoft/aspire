@@ -1,0 +1,104 @@
+@*
+    Deck dialog host, replacing FluentDialogProvider during the Fluent-removal phase. Subscribes to
+    the DeckDialogService and renders each open dialog as a modal (centered) or panel (edge-docked)
+    with an overlay. Escape and overlay clicks dismiss the dialog unless suppressed. Each dialog's
+    content component is rendered via DynamicComponent with the cascading DeckDialogInstance so it can
+    read parameters and close itself.
+*@
+@namespace Aspire.Dashboard.Components.Dialogs
+@implements IDisposable
+@inject DeckDialogService DialogService
+
+@foreach (var dialog in DialogService.OpenDialogs)
+{
+    @if (dialog.IsVisible)
+    {
+        <div class="deck-dialog-overlay @(dialog.Parameters.Modal ? "deck-dialog-overlay--modal" : null) @AlignmentClass(dialog)"
+             @key="dialog.Id"
+             @onclick="@(() => OnOverlayClickAsync(dialog))">
+            <div class="deck-dialog @BoxClass(dialog)"
+                 style="@BoxStyle(dialog)"
+                 role="dialog"
+                 aria-modal="@(dialog.Parameters.Modal ? "true" : "false")"
+                 tabindex="-1"
+                 @onclick:stopPropagation="true"
+                 @onkeydown="@(e => OnKeyDownAsync(e, dialog))">
+                <CascadingValue Value="dialog.Instance" IsFixed="true">
+                    <DynamicComponent Type="dialog.ComponentType" Parameters="@GetParameters(dialog)" />
+                </CascadingValue>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    protected override void OnInitialized()
+    {
+        DialogService.OnChanged += OnChangedAsync;
+    }
+
+    private Task OnChangedAsync() => InvokeAsync(StateHasChanged);
+
+    private static IDictionary<string, object>? GetParameters(DeckDialogService.DeckOpenDialog dialog)
+    {
+        // Only dialogs opened with content (IDeckDialogContentComponent<T>) receive a Content parameter.
+        return dialog.Content is null
+            ? null
+            : new Dictionary<string, object> { ["Content"] = dialog.Content };
+    }
+
+    private static string? AlignmentClass(DeckDialogService.DeckOpenDialog dialog)
+    {
+        if (dialog.Parameters.DialogType != DeckDialogType.Panel && dialog.Parameters.Alignment == DeckDialogAlignment.Default)
+        {
+            return null;
+        }
+
+        return dialog.Parameters.Alignment switch
+        {
+            DeckDialogAlignment.Start => "deck-dialog-overlay--start",
+            _ => "deck-dialog-overlay--end",
+        };
+    }
+
+    private static string BoxClass(DeckDialogService.DeckOpenDialog dialog)
+    {
+        return dialog.Parameters.DialogType switch
+        {
+            DeckDialogType.Panel => "deck-dialog--panel",
+            DeckDialogType.MessageBox => "deck-dialog--messagebox",
+            _ when dialog.Parameters.Alignment != DeckDialogAlignment.Default => "deck-dialog--panel",
+            _ => "deck-dialog--modal",
+        };
+    }
+
+    private static string? BoxStyle(DeckDialogService.DeckOpenDialog dialog)
+    {
+        var width = dialog.Parameters.Width is { Length: > 0 } w ? $"width: {w};" : null;
+        var height = dialog.Parameters.Height is { Length: > 0 } h && !string.Equals(h, "auto", StringComparison.OrdinalIgnoreCase)
+            ? $"height: {h};"
+            : null;
+        return string.Concat(width, height) is { Length: > 0 } s ? s : null;
+    }
+
+    private async Task OnOverlayClickAsync(DeckDialogService.DeckOpenDialog dialog)
+    {
+        if (!dialog.Parameters.PreventDismissOnOverlayClick)
+        {
+            await dialog.Instance.CloseAsync();
+        }
+    }
+
+    private async Task OnKeyDownAsync(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e, DeckDialogService.DeckOpenDialog dialog)
+    {
+        if (e.Key == "Escape" && !dialog.Parameters.PreventDismissOnOverlayClick)
+        {
+            await dialog.Instance.CloseAsync();
+        }
+    }
+
+    public void Dispose()
+    {
+        DialogService.OnChanged -= OnChangedAsync;
+    }
+}
