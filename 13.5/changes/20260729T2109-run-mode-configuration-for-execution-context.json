@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Added RunConfiguration with a WatchEnabled property to DistributedApplicationExecutionContext, allowing app hosts to detect and respond to watch-mode runs and adjust resource launch behavior accordingly. This is part of the Project v2 work stream.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "⚙️",
+  "firstMergedAt": "2026-07-29T21:09:55Z",
+  "lastMergedAt": "2026-07-29T21:09:55Z",
+  "name": "Run mode configuration for execution context",
+  "owner": "karolz-ms",
+  "prs": [
+    18863
+  ]
+}

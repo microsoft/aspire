@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "New RunConfiguration with WatchEnabled property for DistributedApplicationExecutionContext",
+  "mergedAt": "2026-07-29T21:09:55Z",
+  "number": 18863,
+  "runDate": "2026-07-30T00:21:04Z",
+  "status": "included",
+  "title": "Add run mode configuration to execution context"
+}
