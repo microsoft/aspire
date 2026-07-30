@@ -377,6 +377,8 @@ internal sealed class PipelineOutputRegistry
             var first = outputs[i];
             if (_stagingPath is not null)
             {
+                // Passing the same output checks its physical writable path against its logical
+                // target path; it does not compare the output object with itself.
                 ValidateWritablePathDisjointFromTarget(first, first);
             }
 
