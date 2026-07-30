@@ -1,0 +1,9 @@
+{
+  "author": "nellshamrell",
+  "comment": "Bug fix: cross-container service discovery broken in Radius-enabled Kubernetes deployments. Community contribution.",
+  "mergedAt": "2026-07-30T05:49:37Z",
+  "number": 18797,
+  "runDate": "2026-07-30T06:50:24Z",
+  "status": "included",
+  "title": "Fix Radius service discovery to match the recipe's ClusterIP Service"
+}

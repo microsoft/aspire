@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@nellshamrell"
+  ],
+  "description": "Cross-container service discovery was broken when deploying Aspire apps to Radius-enabled Kubernetes clusters. The `services__*` environment variables emitted to consumer containers now correctly reference the Kubernetes ClusterIP Service created by the Radius recipe, so calls between resources (e.g., a Blazor frontend to an API service) resolve correctly in-cluster.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔌",
+  "firstMergedAt": "2026-07-30T05:49:37Z",
+  "lastMergedAt": "2026-07-30T05:49:37Z",
+  "name": "Fix Radius service discovery for Kubernetes deployments",
+  "owner": "mitchdenny",
+  "prs": [
+    18797
+  ]
+}

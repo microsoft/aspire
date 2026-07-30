@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "CI/deployment test infrastructure: AKS region migration, quota self-healing job, timeout tuning. No user-facing impact.",
+  "mergedAt": "2026-07-30T01:26:11Z",
+  "number": 18854,
+  "runDate": "2026-07-30T06:50:24Z",
+  "status": "excluded",
+  "title": "Reconfigure deployment E2E tests: centralus AKS region, quota self-healing, and subscription-provisioning job"
+}
