@@ -71,13 +71,23 @@ export function dispose(menuId) {
 }
 
 function moveFocus(menuElement, delta) {
-    // Only navigate the top-level items (exclude items inside open submenus).
-    const items = Array.from(menuElement.querySelectorAll(':scope > [role="menuitem"]:not([disabled]), :scope > .deck-menu__item-wrapper > [role="menuitem"]:not([disabled])'));
+    // Navigate the direct enabled items of the menu that actually contains the focused item, so an
+    // open submenu's arrow keys move through that submenu's own siblings rather than jumping back to
+    // the top-level menu. The containing menu is the nearest role="menu" ancestor of the focused
+    // element (submenus render as nested role="menu" surfaces); fall back to the root menu element
+    // when nothing is focused yet.
+    const active = document.activeElement;
+    const containingMenu = (active && active.closest('[role="menu"]')) || menuElement;
+
+    // Items can appear directly (leaf buttons) or wrapped for submenu triggers
+    // (.deck-menu__item-wrapper > button[role="menuitem"]). Support both shapes at one level deep so
+    // only the current menu's siblings participate, not items nested inside its child submenus.
+    const items = Array.from(containingMenu.querySelectorAll(':scope > [role="menuitem"]:not([disabled]), :scope > .deck-menu__item-wrapper > [role="menuitem"]:not([disabled])'));
     if (items.length === 0) {
         return;
     }
 
-    const currentIndex = items.indexOf(document.activeElement);
+    const currentIndex = items.indexOf(active);
     let nextIndex = currentIndex + delta;
     if (nextIndex < 0) {
         nextIndex = items.length - 1;

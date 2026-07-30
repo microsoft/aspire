@@ -89,4 +89,29 @@ public class ChartFiltersTests
         Assert.Contains(postValue, dimensionFilter.SelectedValues);
         Assert.DoesNotContain(getValue, dimensionFilter.SelectedValues);
     }
+
+    [Fact]
+    public void HtmlElementId_IsStableAcrossAccesses()
+    {
+        // The popover anchor button uses this id and the Popover initializes/disposes against it, so
+        // it must stay identical across re-renders (a per-render Guid would break init/dispose matching).
+        var dimensionFilter = new DimensionFilterViewModel { Name = "http.method" };
+
+        var first = dimensionFilter.HtmlElementId;
+        var second = dimensionFilter.HtmlElementId;
+
+        Assert.Equal(first, second);
+        Assert.StartsWith("typeFilterButton-", first);
+    }
+
+    [Fact]
+    public void HtmlElementId_IsUniquePerInstance()
+    {
+        // Two filters that sanitize to the same name (or several charts on one page) must not collide
+        // on a single DOM id, so the id carries a per-instance suffix.
+        var first = new DimensionFilterViewModel { Name = "http.method" };
+        var second = new DimensionFilterViewModel { Name = "http.method" };
+
+        Assert.NotEqual(first.HtmlElementId, second.HtmlElementId);
+    }
 }

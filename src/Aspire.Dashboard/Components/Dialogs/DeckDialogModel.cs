@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.Deck;
+using Aspire.Dashboard.Extensions;
 using Microsoft.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Components.Dialogs;
@@ -212,6 +213,14 @@ public sealed class DeckDialogInstance
 
     /// <summary>The dialog parameters.</summary>
     public DeckDialogParameters Parameters { get; }
+
+    /// <summary>
+    /// A stable HTML element id for the dialog's title region (the <c>DeckDialogHeader</c> content).
+    /// The provider points the dialog's <c>aria-labelledby</c> at this id and the header stamps it on
+    /// its visible title content so the accessible name comes from the on-screen heading. Derived from
+    /// <see cref="Id"/> (sanitized for use in an id) so both sides agree without extra plumbing.
+    /// </summary>
+    public string TitleElementId => $"deck-dialog-title-{Id.SanitizeHtmlId()}";
 
     /// <summary>An info view of this instance (mirrors the <c>Dialog.Instance.Parameters</c> access pattern).</summary>
     public DeckDialogInstanceInfo Instance => new(Id, Parameters);

@@ -71,11 +71,10 @@ public partial class ResourceSelect
     {
         switch (e.Key)
         {
-            case "Enter":
-            case " ":
-            case "Spacebar":
-                Toggle();
-                break;
+            // Enter/Space activation is intentionally NOT handled here. The trigger is a native
+            // <button>, so the browser already synthesizes a click for Enter/Space, which fires the
+            // @onclick="Toggle" handler. Toggling here as well would double-activate (open then
+            // immediately close), so we let the native button click own standard activation.
             case "Escape":
                 _open = false;
                 break;

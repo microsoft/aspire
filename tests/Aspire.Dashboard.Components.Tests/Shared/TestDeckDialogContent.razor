@@ -1,0 +1,13 @@
+@*
+    Minimal Deck dialog content component used by DeckDialogProvider tests. It renders a
+    DeckDialogHeader (so aria-labelledby wiring can be asserted) plus a focusable control so the
+    dialog has something to receive initial focus / participate in focus trapping.
+*@
+@namespace Aspire.Dashboard.Components.Tests.Shared
+@using Aspire.Dashboard.Components.Dialogs
+@implements IDeckDialogContentComponent
+
+<DeckDialogHeader />
+<DeckDialogBody>
+    <button type="button" class="test-dialog-button">Test action</button>
+</DeckDialogBody>

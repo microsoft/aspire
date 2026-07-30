@@ -10,6 +10,7 @@ namespace Aspire.Dashboard.Model;
 public class DimensionFilterViewModel
 {
     private string? _sanitizedHtmlId;
+    private string? _htmlElementId;
 
     public required string Name { get; init; }
     public List<DimensionValueViewModel> Values { get; } = new();
@@ -49,6 +50,14 @@ public class DimensionFilterViewModel
     }
 
     public string SanitizedHtmlId => _sanitizedHtmlId ??= StringExtensions.SanitizeHtmlId(Name);
+
+    /// <summary>
+    /// A stable, unique HTML element id for this filter's popover anchor button. Generated once per
+    /// view model instance (not per render) so the popover initializes and disposes against the same
+    /// id across re-renders. The trailing GUID keeps it unique when two filters sanitize to the same
+    /// name, or when multiple charts render their filters on the same page.
+    /// </summary>
+    public string HtmlElementId => _htmlElementId ??= $"typeFilterButton-{SanitizedHtmlId}-{Guid.NewGuid():N}";
 
     public void OnTagSelectionChanged(DimensionValueViewModel dimensionValue, bool isChecked)
     {

@@ -6,8 +6,10 @@
     read parameters and close itself.
 *@
 @namespace Aspire.Dashboard.Components.Dialogs
-@implements IDisposable
+@using Aspire.Dashboard.Extensions
+@implements IAsyncDisposable
 @inject DeckDialogService DialogService
+@inject IJSRuntime JS
 
 @foreach (var dialog in DialogService.OpenDialogs)
 {
@@ -17,9 +19,11 @@
              @key="dialog.Id"
              @onclick="@(() => OnOverlayClickAsync(dialog))">
             <div class="deck-dialog @BoxClass(dialog)"
+                 id="@DialogElementId(dialog.Id)"
                  style="@BoxStyle(dialog)"
                  role="dialog"
                  aria-modal="@(dialog.Parameters.Modal ? "true" : "false")"
+                 aria-labelledby="@dialog.Instance.TitleElementId"
                  tabindex="-1"
                  @onclick:stopPropagation="true"
                  @onkeydown="@(e => OnKeyDownAsync(e, dialog))">
@@ -32,12 +36,64 @@
 }
 
 @code {
+    private IJSObjectReference? _module;
+
+    // The set of dialog ids we've initialized JS accessibility behavior for. Diffed against the
+    // currently visible dialogs after each render so newly shown dialogs are initialized and closed
+    // (or hidden) ones are disposed exactly once.
+    private readonly HashSet<string> _initialized = new(StringComparer.Ordinal);
+
     protected override void OnInitialized()
     {
         DialogService.OnChanged += OnChangedAsync;
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Import lazily so a provider that never shows a dialog doesn't pull the module. Once loaded
+        // it's reused for the lifetime of the provider.
+        _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Dialogs/DeckDialogProvider.razor.js");
+
+        var visibleIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var dialog in DialogService.OpenDialogs)
+        {
+            if (dialog.IsVisible)
+            {
+                visibleIds.Add(dialog.Id);
+            }
+        }
+
+        // Dispose behavior for dialogs that are no longer visible (closed or hidden). Snapshot the
+        // set first because disposing mutates _initialized.
+        foreach (var id in _initialized.ToList())
+        {
+            if (!visibleIds.Contains(id))
+            {
+                await _module.InvokeVoidAsync("dispose", DialogElementId(id));
+                _initialized.Remove(id);
+            }
+        }
+
+        // Initialize newly visible dialogs. _initialized.Add returns false for ids already set up, so
+        // a dialog is only initialized once even though this runs after every render.
+        foreach (var dialog in DialogService.OpenDialogs)
+        {
+            if (dialog.IsVisible && _initialized.Add(dialog.Id))
+            {
+                var options = new
+                {
+                    trapFocus = dialog.Parameters.TrapFocus,
+                    preventScroll = dialog.Parameters.PreventScroll,
+                };
+                await _module.InvokeVoidAsync("initialize", DialogElementId(dialog.Id), options);
+            }
+        }
+    }
+
     private Task OnChangedAsync() => InvokeAsync(StateHasChanged);
+
+    // Stable DOM id for a dialog's root element, used as the JS lookup key and matched by dispose.
+    private static string DialogElementId(string id) => $"deck-dialog-{id.SanitizeHtmlId()}";
 
     private static IDictionary<string, object>? GetParameters(DeckDialogService.DeckOpenDialog dialog)
     {
@@ -49,7 +105,10 @@
 
     private static string? AlignmentClass(DeckDialogService.DeckOpenDialog dialog)
     {
-        if (dialog.Parameters.DialogType != DeckDialogType.Panel && dialog.Parameters.Alignment == DeckDialogAlignment.Default)
+        // Alignment (edge docking + vertical stretch) is a panel-only concept. A modal Dialog stays
+        // centered even when the caller left Alignment set (e.g. a responsive launcher that shows a
+        // right-docked panel on desktop but a centered modal on mobile using the same parameters).
+        if (dialog.Parameters.DialogType != DeckDialogType.Panel)
         {
             return null;
         }
@@ -63,11 +122,13 @@
 
     private static string BoxClass(DeckDialogService.DeckOpenDialog dialog)
     {
+        // The box style is driven solely by DialogType. Alignment must not turn a Dialog into a panel:
+        // mobile Settings/Notifications are opened as a Dialog (with Alignment still End) and must
+        // remain a centered modal rather than a full-height edge panel.
         return dialog.Parameters.DialogType switch
         {
             DeckDialogType.Panel => "deck-dialog--panel",
             DeckDialogType.MessageBox => "deck-dialog--messagebox",
-            _ when dialog.Parameters.Alignment != DeckDialogAlignment.Default => "deck-dialog--panel",
             _ => "deck-dialog--modal",
         };
     }
@@ -97,8 +158,28 @@
         }
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         DialogService.OnChanged -= OnChangedAsync;
+
+        if (_module is not null)
+        {
+            try
+            {
+                // Release any still-registered dialogs (scroll lock / focus restore) before dropping
+                // the module so the body isn't left with overflow:hidden if the provider is torn down
+                // while a dialog is open.
+                foreach (var id in _initialized)
+                {
+                    await _module.InvokeVoidAsync("dispose", DialogElementId(id));
+                }
+
+                await _module.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // Circuit already gone; nothing to clean up.
+            }
+        }
     }
 }

@@ -9,7 +9,7 @@
 @if (Visible)
 {
     <div class="deck-dialog__header @Class" style="@Style">
-        <div class="deck-dialog__header-content">
+        <div class="deck-dialog__header-content" id="@Dialog?.TitleElementId">
             @if (ChildContent is not null)
             {
                 @ChildContent

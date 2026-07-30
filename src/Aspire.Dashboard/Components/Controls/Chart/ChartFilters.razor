@@ -42,7 +42,10 @@
                             </td>
                             <td>
                                 @{
-                                    var id = $"typeFilterButton-{context.SanitizedHtmlId}-{Guid.NewGuid()}";
+                                    // Use the view model's stable per-instance id so the popover
+                                    // anchor keeps the same id across re-renders (a freshly generated
+                                    // Guid here would break Popover init/dispose id matching).
+                                    var id = context.HtmlElementId;
                                 }
                                 <button type="button"
                                         id="@id"

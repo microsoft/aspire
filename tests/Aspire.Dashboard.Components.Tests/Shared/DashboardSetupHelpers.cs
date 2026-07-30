@@ -21,10 +21,14 @@ namespace Aspire.Dashboard.Components.Tests.Shared;
 // compiling; the ones that still register a colocated JS module (menu, checkbox, popover) do real work.
 internal static class DashboardSetupHelpers
 {
-    public static void SetupDialogProvider(TestContext context)
+    public static Bunit.BunitJSModuleInterop SetupDialogProvider(TestContext context)
     {
-        // The Deck dialog provider has no JS interop to configure.
-        _ = context;
+        // The Deck dialog provider imports a colocated accessibility module (focus trap, scroll lock,
+        // focus restore). Register it so bUnit's strict JS interop doesn't reject the import/calls.
+        var dialogModule = context.JSInterop.SetupModule("./Components/Dialogs/DeckDialogProvider.razor.js");
+        dialogModule.SetupVoid("initialize", _ => true);
+        dialogModule.SetupVoid("dispose", _ => true);
+        return dialogModule;
     }
 
     public static void SetupMenu(TestContext context)
@@ -124,7 +128,9 @@ internal static class DashboardSetupHelpers
 
     public static void SetupCombobox(TestContext context)
     {
-        _ = context;
+        var comboboxModule = context.JSInterop.SetupModule("./Components/Deck/Combobox.razor.js");
+        comboboxModule.SetupVoid("initialize", _ => true);
+        comboboxModule.SetupVoid("dispose", _ => true);
     }
 
     public static void SetupUIComponents(TestContext context)
@@ -197,6 +203,12 @@ internal static class DashboardSetupHelpers
     }
 
     public static IRenderedFragment RenderDialogProvider(TestContext context)
+    {
+        SetupDialogProvider(context);
+        return RenderDialogProviderCore(context);
+    }
+
+    public static IRenderedFragment RenderDialogProviderCore(TestContext context)
     {
         return context.Render(builder =>
         {
