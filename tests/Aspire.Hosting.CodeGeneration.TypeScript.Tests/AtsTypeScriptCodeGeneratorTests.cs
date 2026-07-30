@@ -1952,6 +1952,11 @@ public class AtsTypeScriptCodeGeneratorTests
         var inspectMode = Assert.Single(inspect.Parameters, p => p.Name == "mode");
         Assert.Equal(typeof(Aspire.Hosting.JavaScript.DenoInspectMode), inspectMode.Type?.ClrType);
         Assert.True(inspectMode.IsOptional);
+
+        var nodeModules = Assert.Single(denoCapabilities, c => c.MethodName == "withDenoNodeModulesDir");
+        var nodeModulesMode = Assert.Single(nodeModules.Parameters, p => p.Name == "mode");
+        Assert.Equal(typeof(Aspire.Hosting.JavaScript.DenoNodeModulesDirMode), nodeModulesMode.Type?.ClrType);
+        Assert.True(nodeModulesMode.IsOptional);
     }
 
     [Fact]
@@ -1997,6 +2002,7 @@ public class AtsTypeScriptCodeGeneratorTests
         {
             typeof(Aspire.Hosting.JavaScript.DenoAppResource),
             typeof(Aspire.Hosting.JavaScript.DenoInspectMode),
+            typeof(Aspire.Hosting.JavaScript.DenoNodeModulesDirMode),
             typeof(Aspire.Hosting.JavaScript.DenoPermissionKind),
         })
         {

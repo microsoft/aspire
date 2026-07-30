@@ -166,8 +166,9 @@ function registerDenoInspectorPortRelease(port: number, launchOptions: LaunchOpt
  * attach. The flag is placed immediately after a leading sub-command that accepts runtime flags
  * (run/serve/test/bench) so it is parsed as a runtime flag rather than a script argument. `deno task`
  * does not accept inspector flags, so debug task launches fail fast instead of starting a
- * nonfunctional attach session. No-debug launches are left unchanged. If the caller already
- * configured an inspector flag (WithDenoInspect*), the vector is returned unchanged.
+ * nonfunctional attach session. No-debug launches are left unchanged. An existing inspector flag
+ * with a concrete nonzero port is preserved; a bare flag or port 0 is rewritten with an allocated
+ * port so js-debug has a usable attach target.
  */
 async function withDenoInspectWait(args: string[], config: JavaScriptRuntimeLaunchConfiguration, launchOptions: LaunchOptions): Promise<{ runtimeArgs: string[]; port?: number }> {
     if (!launchOptions.debug) {

@@ -24,9 +24,6 @@ namespace Aspire.Hosting;
 public static partial class JavaScriptHostingExtensions
 {
     private const int DenoServeDefaultPort = 8000;
-    private const string DenoNodeModulesDirModeNone = "none";
-    private const string DenoNodeModulesDirModeAuto = "auto";
-    private const string DenoNodeModulesDirModeManual = "manual";
 
     private static DenoCommandLineAnnotation GetOrAddDenoAnnotation(IResourceBuilder<DenoAppResource> builder)
     {
@@ -81,15 +78,21 @@ public static partial class JavaScriptHostingExtensions
     // ---- Blanket permission -----------------------------------------------------------------
 
     /// <summary>
-    /// Controls the blanket <c>-A</c>/<c>--allow-all</c> grant. Deno runs deny-by-default, so Aspire grants
-    /// <c>-A</c> by default to keep parity with the permissive Node/Bun runtimes. Pass <see langword="false"/> to
-    /// drop to least-privilege and grant only the explicit permissions configured via the granular
-    /// <c>WithDenoAllow*</c> methods.
+    /// Controls the blanket <c>-A</c>/<c>--allow-all</c> grant.
     /// </summary>
     /// <param name="builder">The Deno app resource builder.</param>
-    /// <param name="enabled">Whether to emit <c>-A</c>/<c>--allow-all</c>.</param>
+    /// <param name="enabled">
+    /// Whether to emit <c>-A</c>/<c>--allow-all</c>. Pass <see langword="false"/> to grant only permissions
+    /// configured with <see cref="WithDenoAllow"/>.
+    /// </param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>
+    /// Without explicit permission configuration, local run mode emits <c>-A</c> for parity with Node and Bun,
+    /// while generated containers default direct <c>run</c>/<c>serve</c> entrypoints to
+    /// <c>--allow-net --allow-env</c>. Calling this method with <see langword="true"/> explicitly emits <c>-A</c>
+    /// in both modes.
+    /// </remarks>
     [AspireExport]
     [Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<DenoAppResource> WithDenoAllowAll(this IResourceBuilder<DenoAppResource> builder, bool enabled = true)
@@ -188,44 +191,32 @@ public static partial class JavaScriptHostingExtensions
     }
 
     /// <summary>
-    /// Sets <c>--node-modules-dir</c>, optionally with a mode (<c>none</c>|<c>auto</c>|<c>manual</c>) emitted as
+    /// Sets <c>--node-modules-dir</c>, optionally with a mode emitted as
     /// <c>--node-modules-dir=&lt;mode&gt;</c>.
     /// </summary>
     /// <param name="builder">The Deno app resource builder.</param>
-    /// <param name="mode">The node_modules mode. When <see langword="null"/> or empty, emits <c>--node-modules-dir</c> without a value.</param>
+    /// <param name="mode">The node_modules mode. When <see langword="null"/>, emits <c>--node-modules-dir</c> without a value.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="mode"/> is not <see langword="null"/>, empty, <c>none</c>, <c>auto</c>, or <c>manual</c>.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="mode"/> is not a defined <see cref="DenoNodeModulesDirMode"/> value.</exception>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// The generated Deno Dockerfile publisher does not support <c>manual</c> mode because it excludes local
     /// <c>node_modules</c> from the build context. Use <c>auto</c> or provide a custom Dockerfile for that mode.
     /// </remarks>
-    /// <ats-remarks />
     [AspireExport]
     [Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public static IResourceBuilder<DenoAppResource> WithDenoNodeModulesDir(this IResourceBuilder<DenoAppResource> builder, string? mode = null)
+    public static IResourceBuilder<DenoAppResource> WithDenoNodeModulesDir(this IResourceBuilder<DenoAppResource> builder, DenoNodeModulesDirMode? mode = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
-        var normalizedMode = ValidateDenoNodeModulesDirMode(mode);
+        if (mode is not null && !Enum.IsDefined(mode.Value))
+        {
+            throw new ArgumentOutOfRangeException(nameof(mode), mode, "The node_modules mode must be a defined DenoNodeModulesDirMode value.");
+        }
+
         var annotation = GetOrAddDenoAnnotation(builder);
         annotation.NodeModulesDirSet = true;
-        annotation.NodeModulesDirMode = normalizedMode;
+        annotation.NodeModulesDirMode = mode;
         return builder;
-    }
-
-    private static string? ValidateDenoNodeModulesDirMode(string? mode)
-    {
-        if (string.IsNullOrEmpty(mode))
-        {
-            return null;
-        }
-
-        if (mode is DenoNodeModulesDirModeNone or DenoNodeModulesDirModeAuto or DenoNodeModulesDirModeManual)
-        {
-            return mode;
-        }
-
-        throw new ArgumentException("The node_modules mode must be 'none', 'auto', or 'manual'.", nameof(mode));
     }
 
     // ---- Unstable flags ---------------------------------------------------------------------
@@ -668,11 +659,19 @@ public static partial class JavaScriptHostingExtensions
 
         if (deno.NodeModulesDirSet)
         {
-            yield return string.IsNullOrEmpty(deno.NodeModulesDirMode)
+            yield return deno.NodeModulesDirMode is not { } mode
                 ? "--node-modules-dir"
-                : $"--node-modules-dir={deno.NodeModulesDirMode}";
+                : $"--node-modules-dir={GetDenoNodeModulesDirModeValue(mode)}";
         }
     }
+
+    private static string GetDenoNodeModulesDirModeValue(DenoNodeModulesDirMode mode) => mode switch
+    {
+        DenoNodeModulesDirMode.None => "none",
+        DenoNodeModulesDirMode.Auto => "auto",
+        DenoNodeModulesDirMode.Manual => "manual",
+        _ => throw new InvalidOperationException($"Unsupported Deno node_modules mode '{mode}'."),
+    };
 
     private static void AppendUnstableFlags(List<object> args, DenoCommandLineAnnotation deno)
     {
@@ -926,9 +925,9 @@ public static partial class JavaScriptHostingExtensions
 
         if (resource.TryGetLastAnnotation<DenoCommandLineAnnotation>(out var deno) &&
             deno.NodeModulesDirSet &&
-            string.Equals(deno.NodeModulesDirMode, "manual", StringComparison.OrdinalIgnoreCase))
+            deno.NodeModulesDirMode == DenoNodeModulesDirMode.Manual)
         {
-            throw new InvalidOperationException("WithDenoNodeModulesDir(\"manual\") is not supported by generated Deno Dockerfiles because node_modules is excluded from the build context. Use \"auto\" or provide a custom Dockerfile.");
+            throw new InvalidOperationException("The 'manual' node_modules mode is not supported by generated Deno Dockerfiles because node_modules is excluded from the build context. Use the 'auto' mode or provide a custom Dockerfile.");
         }
 
         if (deno is not null)

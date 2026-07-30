@@ -808,10 +808,11 @@ public static partial class JavaScriptHostingExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
-    /// By default this method executes the script directly using <c>deno run -A &lt;script&gt;</c>. Deno natively runs
-    /// JavaScript and TypeScript files so no transpile step is required. Deno's built-in OpenTelemetry integration is
-    /// enabled via the <c>OTEL_DENO</c> environment variable, so traces, metrics, and logs flow to the Aspire dashboard
-    /// with no application-level SDK wiring.
+    /// In run mode this method executes the script directly using <c>deno run -A &lt;script&gt;</c>. Generated
+    /// containers use the more restrictive <c>deno run --allow-net --allow-env &lt;script&gt;</c> default. Deno
+    /// natively runs JavaScript and TypeScript files so no transpile step is required. Deno's built-in OpenTelemetry
+    /// integration is enabled via the <c>OTEL_DENO</c> environment variable, so traces, metrics, and logs flow to the
+    /// Aspire dashboard with no application-level SDK wiring.
     ///
     /// The full Deno flag surface (granular permissions, <c>--config</c>/<c>--import-map</c>/<c>--lock</c>, unstable
     /// features, <c>--watch</c>, inspector flags, script args, and the <c>run</c>/<c>task</c>/<c>serve</c> sub-command
@@ -1094,9 +1095,30 @@ public static partial class JavaScriptHostingExtensions
             return DefaultDenoBuildContextIgnoreContent;
         }
 
+        foreach (var environmentFile in environmentFiles)
+        {
+            ThrowIfDenoEnvironmentFileIsUnsafeForDockerignore(environmentFile);
+        }
+
         // The default ignore protects dotenv secrets, but an explicit --env-file is a request to ship
         // that file. Dockerignore negations preserve the secure default while admitting only named files.
         return $"{DefaultDenoBuildContextIgnoreContent.TrimEnd('\r', '\n')}\n{string.Join('\n', environmentFiles.Select(file => $"!{file}"))}";
+    }
+
+    private static void ThrowIfDenoEnvironmentFileIsUnsafeForDockerignore(string path)
+    {
+        // Generated negations have the form "!relative/path.env". Dockerignore treats line breaks as new
+        // patterns and these characters as pattern syntax, so accepting them could re-include files other
+        // than the explicitly requested dotenv file.
+        if (string.IsNullOrEmpty(path) ||
+            path.Any(char.IsControl) ||
+            path.AsSpan().IndexOfAny("*?[]!#") >= 0 ||
+            char.IsWhiteSpace(path[0]) ||
+            char.IsWhiteSpace(path[^1]))
+        {
+            throw new InvalidOperationException(
+                "The environment file configured with WithDenoRuntimeArgs cannot be represented as a literal generated Dockerignore pattern. Use a relative path without leading or trailing whitespace, control characters, or Dockerignore metacharacters (*, ?, [, ], !, or #), or provide a custom Dockerfile.");
+        }
     }
 
     private static IResourceBuilder<TResource> WithDenoDefaults<TResource>(this IResourceBuilder<TResource> builder) where TResource : JavaScriptAppResource
@@ -1143,8 +1165,8 @@ public static partial class JavaScriptHostingExtensions
             // Deno has first-class, built-in OpenTelemetry support. Setting OTEL_DENO=true enables automatic export
             // of traces, metrics, and logs to the OTLP endpoint configured by WithOtlpExporter, with no
             // application-level SDK required. Unlike the Node/Bun variants (which need an in-process OpenTelemetry
-            // SDK), this is the headline Deno hosting win. The instrumentation is resilient to an unavailable
-            // collector, so it is safe to enable unconditionally.
+            // SDK), this is the headline Deno hosting win. Once an OTLP HTTP endpoint is configured, the
+            // instrumentation tolerates a temporarily unavailable collector without blocking workload execution.
             //
             // Deno's native exporter sends OTLP as Protobuf over HTTP, so request that dashboard endpoint instead
             // of Aspire's default gRPC preference.

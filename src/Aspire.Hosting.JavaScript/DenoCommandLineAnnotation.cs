@@ -40,6 +40,22 @@ public enum DenoInspectMode
 }
 
 /// <summary>
+/// Controls how Deno manages a local <c>node_modules</c> directory.
+/// </summary>
+[Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+public enum DenoNodeModulesDirMode
+{
+    /// <summary>Do not use a local <c>node_modules</c> directory.</summary>
+    None,
+
+    /// <summary>Automatically manage a local <c>node_modules</c> directory when packages require it.</summary>
+    Auto,
+
+    /// <summary>Use a manually managed local <c>node_modules</c> directory.</summary>
+    Manual,
+}
+
+/// <summary>
 /// A granular Deno permission grant/denial (for example <c>--allow-net</c> or <c>--deny-read</c>).
 /// </summary>
 [Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -162,8 +178,8 @@ internal sealed class DenoCommandLineAnnotation : IResourceAnnotation
     /// <summary>Whether <c>--node-modules-dir</c> was requested.</summary>
     public bool NodeModulesDirSet { get; set; }
 
-    /// <summary>Optional mode for <c>--node-modules-dir=&lt;mode&gt;</c> (<c>none</c>|<c>auto</c>|<c>manual</c>).</summary>
-    public string? NodeModulesDirMode { get; set; }
+    /// <summary>Optional mode for <c>--node-modules-dir=&lt;mode&gt;</c>.</summary>
+    public DenoNodeModulesDirMode? NodeModulesDirMode { get; set; }
 
     /// <summary>Fully-formed <c>--unstable-*</c> flags.</summary>
     public List<string> UnstableFlags { get; } = [];

@@ -184,7 +184,7 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
             .WithDenoConfig("deno.json")
             .WithDenoImportMap("import_map.json")
             .WithDenoLock("custom.lock")
-            .WithDenoNodeModulesDir("auto");
+            .WithDenoNodeModulesDir(DenoNodeModulesDirMode.Auto);
 
         await ManifestUtils.GetManifest(denoApp.Resource, workspace.Path);
 
@@ -209,7 +209,7 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
             .WithDenoConfig("deno.json")
             .WithDenoImportMap("import_map.json")
             .WithDenoLock("custom.lock")
-            .WithDenoNodeModulesDir("auto")
+            .WithDenoNodeModulesDir(DenoNodeModulesDirMode.Auto)
             .WithDenoUnstable("sloppy-imports");
 
         await ManifestUtils.GetManifest(denoApp.Resource, workspace.Path);
@@ -253,7 +253,7 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
             .WithDenoConfig("deno.json")
             .WithDenoImportMap("import_map.json")
             .WithDenoLock("deno.lock")
-            .WithDenoNodeModulesDir("auto");
+            .WithDenoNodeModulesDir(DenoNodeModulesDirMode.Auto);
 
         await ManifestUtils.GetManifest(denoApp.Resource, workspace.Path);
 
@@ -404,6 +404,30 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
             () => ManifestUtils.GetManifest(app.Resource, workspace.Path));
         Assert.Equal(
             "The path '../.env' configured with WithDenoRuntimeArgs is outside the Deno application directory, so it is not part of the generated Dockerfile's build context. Move the file inside the application directory or provide a custom Dockerfile.",
+            exception.Message);
+    }
+
+    [Theory]
+    [InlineData("--env-file=**")]
+    [InlineData("--env-file=[production].env")]
+    [InlineData("--env-file=.env\n!.env")]
+    [InlineData("--env-file= .env")]
+    [InlineData("--env-file=.")]
+    public async Task VerifyDockerfile_UnsafeEnvironmentFileDockerignorePatternIsRejected(string runtimeArg)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+
+        var app = builder.AddDenoApp("js", appDir, "main.ts")
+            .WithDenoRuntimeArgs(runtimeArg);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ManifestUtils.GetManifest(app.Resource, workspace.Path));
+        Assert.Equal(
+            "The environment file configured with WithDenoRuntimeArgs cannot be represented as a literal generated Dockerignore pattern. Use a relative path without leading or trailing whitespace, control characters, or Dockerignore metacharacters (*, ?, [, ], !, or #), or provide a custom Dockerfile.",
             exception.Message);
     }
 
@@ -732,11 +756,11 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
         var denoApp = builder.AddDenoApp("denoapp", workspace.Path, "main.ts")
-            .WithDenoNodeModulesDir("manual");
+            .WithDenoNodeModulesDir(DenoNodeModulesDirMode.Manual);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => ManifestUtils.GetManifest(denoApp.Resource, workspace.Path));
 
-        Assert.Equal("WithDenoNodeModulesDir(\"manual\") is not supported by generated Deno Dockerfiles because node_modules is excluded from the build context. Use \"auto\" or provide a custom Dockerfile.", exception.Message);
+        Assert.Equal("The 'manual' node_modules mode is not supported by generated Deno Dockerfiles because node_modules is excluded from the build context. Use the 'auto' mode or provide a custom Dockerfile.", exception.Message);
     }
 
     [Fact]
@@ -1737,7 +1761,7 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
             .WithDenoConfig("deno.json")
             .WithDenoImportMap("import_map.json")
             .WithDenoLock("deno.lock")
-            .WithDenoNodeModulesDir("auto"));
+            .WithDenoNodeModulesDir(DenoNodeModulesDirMode.Auto));
 
         Assert.Collection(args,
             a => Assert.Equal("run", a),
@@ -1751,17 +1775,19 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
             a => Assert.Equal("main.ts", a));
     }
 
-    [Theory]
-    [InlineData("invalid")]
-    [InlineData("AUTO")]
-    public void WithDenoNodeModulesDir_RejectsInvalidMode(string mode)
+    [Fact]
+    public void WithDenoNodeModulesDir_RejectsUndefinedMode()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var denoApp = builder.AddDenoApp("denoapp", AppContext.BaseDirectory, "main.ts");
 
-        var exception = Assert.Throws<ArgumentException>(() => denoApp.WithDenoNodeModulesDir(mode));
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(
+            () => denoApp.WithDenoNodeModulesDir((DenoNodeModulesDirMode)42));
 
         Assert.Equal("mode", exception.ParamName);
+        Assert.Equal(
+            "The node_modules mode must be a defined DenoNodeModulesDirMode value. (Parameter 'mode')\nActual value was 42.",
+            exception.Message.ReplaceLineEndings("\n"));
     }
 
     [Fact]
@@ -1935,7 +1961,7 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
             .WithDenoConfig("deno.json")
             .WithDenoImportMap("import_map.json") // Deno 2.5.6 rejects --import-map on `deno task`
             .WithDenoLock("deno.lock")
-            .WithDenoNodeModulesDir("auto")
+            .WithDenoNodeModulesDir(DenoNodeModulesDirMode.Auto)
             .WithDenoScriptArgs("--flag"));
 
         Assert.Collection(args,
