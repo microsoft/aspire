@@ -467,6 +467,38 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishAsync_WithDashboard_HonorsRequiredOtlpProtocols()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        builder.AddDockerComposeEnvironment("docker-compose")
+            .WithDashboard();
+
+        builder.AddContainer("default", "my-default")
+            .WithOtlpExporter();
+
+        builder.AddContainer("grpc", "my-grpc")
+            .WithOtlpExporter(OtlpProtocol.Grpc);
+
+        builder.AddContainer("http-protobuf", "my-http-protobuf")
+            .WithOtlpExporter(OtlpProtocol.HttpProtobuf);
+
+        builder.AddContainer("http-json", "my-http-json")
+            .WithOtlpExporter(OtlpProtocol.HttpJson);
+
+        var app = builder.Build();
+        app.Run();
+
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
+        Assert.True(File.Exists(composePath));
+
+        await Verify(File.ReadAllText(composePath), "yaml");
+    }
+
+    [Fact]
     public async Task PublishAsync_WithDashboardDisabled_DoesNotIncludeDashboardService()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
