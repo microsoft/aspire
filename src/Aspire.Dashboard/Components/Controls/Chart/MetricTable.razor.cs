@@ -12,7 +12,7 @@ using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Aspire.Dashboard.Components.Deck;
-using Microsoft.FluentUI.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web.Virtualization;
 using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Controls;
@@ -23,7 +23,7 @@ public partial class MetricTable : ChartBase
     private List<ChartExemplar> _exemplars = [];
     private string _unitColumnHeader = string.Empty;
     private IJSObjectReference? _jsModule;
-    private FluentDataGrid<MetricViewBase> _dataGrid = null!;
+    private Virtualize<MetricViewBase>? _virtualize;
 
     private OtlpInstrumentSummary? _instrument;
     private bool _showCount;
@@ -75,19 +75,18 @@ public partial class MetricTable : ChartBase
         await Task.Delay(500, cancellationToken);
 
         var metricView = _metricsView.ToList();
-        List<int> indices = [];
 
-        for (var i = 0; i < metricView.Count; i++)
-        {
-            if (xValuesToAnnounce.Contains(metricView[i].DateTime))
-            {
-                indices.Add(i);
-            }
-        }
+        // Identify the rows to announce by their timestamp ticks. The native table tags each row with
+        // `data-row-time`, so screen-reader announcements resolve rows by key rather than DOM index,
+        // which is important because the table is virtualized and off-screen rows aren't in the DOM.
+        var rowKeys = metricView
+            .Where(m => xValuesToAnnounce.Contains(m.DateTime))
+            .Select(m => m.DateTime.Ticks.ToString(CultureInfo.InvariantCulture))
+            .ToList();
 
         try
         {
-            await _jsModule.InvokeVoidAsync("announceDataGridRows", "metric-table-container", indices);
+            await _jsModule.InvokeVoidAsync("announceDataGridRows", "metric-table-container", rowKeys);
         }
         catch (ObjectDisposedException)
         {
@@ -239,8 +238,8 @@ public partial class MetricTable : ChartBase
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         // Check to see whether max item count should be set on every render.
-        // This is required because the data grid's virtualize component can be recreated on data change.
-        if (_dataGrid != null && FluentDataGridHelper<MetricViewBase>.TrySetMaxItemCount(_dataGrid, 10_000))
+        // This is required because the virtualize component can be recreated on data change.
+        if (_virtualize is not null && VirtualizeHelper<MetricViewBase>.TrySetMaxItemCount(_virtualize, 10_000))
         {
             StateHasChanged();
         }

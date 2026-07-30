@@ -13,92 +13,129 @@
     {
         columnCount++;
     }
+
+    var showPercentiles = ShowPercentiles();
+    var showValueColumn = !showPercentiles && _metrics.Values.All(value => value is MetricValueView);
+    var rows = _metricsView.ToList();
+    var columnWidths = GridColumnWidths.Parse(string.Join(" ", Enumerable.Repeat("1fr", columnCount)), columnCount);
 }
 
 <div id="metric-table-container" style="height: 40vh; overflow-y: auto; width:1200px;">
-    @* ItemKey is to preserve row focus by associating rows with their associated time *@
-    <FluentDataGrid
-        @ref="_dataGrid"
-        Items="@_metricsView"
-        ItemSize="46"
-        Virtualize="true"
-        GridTemplateColumns="@string.Join(" ", Enumerable.Repeat("1fr", columnCount))"
-        ItemKey="@(item => item.DateTime)">
-        <ChildContent>
-            <TemplateColumn Title="@Loc[nameof(ControlsStrings.MetricTableStartColumnHeader)]" TooltipText="@(context => FormatHelpers.FormatDateTime(TimeProvider, TimeProvider.ToLocal(context.DateTime), MillisecondsDisplay.None, CultureInfo.CurrentCulture))" Tooltip="true">
-                @FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, TimeProvider.ToLocal(context.DateTime))
-            </TemplateColumn>
-
-            @if (ShowPercentiles())
+    <table class="data metric-table">
+        <colgroup>
+            @foreach (var width in columnWidths)
             {
-                foreach (var (percentile, underlineColor) in percentileColumns)
+                <col style="width: @width" />
+            }
+        </colgroup>
+        <thead>
+            <tr>
+                <th>@Loc[nameof(ControlsStrings.MetricTableStartColumnHeader)]</th>
+                @if (showPercentiles)
                 {
-                    <TemplateColumn Title="@((_metricsView.FirstOrDefault() as HistogramMetricView)?.Percentiles[percentile].Name ?? (_instrument is not null ? $"P{percentile} {InstrumentUnitResolver.ResolveDisplayedUnit(_instrument, titleCase: true, pluralize: true)}" : $"P{percentile}"))">
-                        @if (context is HistogramMetricView histogramMetric)
+                    foreach (var (percentile, _) in percentileColumns)
+                    {
+                        <th>@((_metricsView.FirstOrDefault() as HistogramMetricView)?.Percentiles[percentile].Name ?? (_instrument is not null ? $"P{percentile} {InstrumentUnitResolver.ResolveDisplayedUnit(_instrument, titleCase: true, pluralize: true)}" : $"P{percentile}"))</th>
+                    }
+                }
+                else if (showValueColumn)
+                {
+                    <th>@_unitColumnHeader</th>
+                }
+                @if (_exemplars.Count > 0)
+                {
+                    <th>@Loc[nameof(ControlsStrings.MetricTableExemplarsColumnHeader)]</th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @if (rows.Count == 0)
+            {
+                <tr>
+                    <td colspan="@columnCount" class="cell-muted" style="text-align: center; padding: 20px;">
+                        <DeckIcon Name="DeckIconName.ChartMultiple" Size="24" />&nbsp;@Loc[nameof(ControlsStrings.MetricTableNoMetricsFound)]
+                    </td>
+                </tr>
+            }
+            else
+            {
+                @* Virtualize keeps the table performant for high-cardinality metrics. SpacerElement="tr"
+                   keeps the virtualization spacers valid inside the table body; the scroll container is
+                   the surrounding #metric-table-container. ItemSize matches the previous grid row height.
+                   @key preserves row focus by associating rows with their timestamp. *@
+                <Virtualize @ref="_virtualize" Items="rows" ItemSize="46" SpacerElement="tr" TItem="MetricViewBase" Context="context">
+                    <tr @key="context.DateTime" data-row-time="@context.DateTime.Ticks.ToString(CultureInfo.InvariantCulture)">
+                        <td title="@FormatHelpers.FormatDateTime(TimeProvider, TimeProvider.ToLocal(context.DateTime), MillisecondsDisplay.None, CultureInfo.CurrentCulture)">
+                            @FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, TimeProvider.ToLocal(context.DateTime))
+                        </td>
+                        @if (showPercentiles)
                         {
-                            var percentileData = histogramMetric.Percentiles[percentile];
-
-                            <span style="@($"text-decoration-thickness: 2px; text-decoration-line: underline; text-decoration-color: {underlineColor}; margin-right: 4px;")">
-                                @percentileData.Value
-                            </span>
-
-                            if (GetIconAndTitleForDirection(percentileData.Direction) is var (icon, tone, title))
+                            foreach (var (percentile, underlineColor) in percentileColumns)
                             {
-                                <DeckIcon Name="icon" Size="16" Class="@tone" Title="@title" Style="vertical-align: text-bottom" />
+                                <td>
+                                    @if (context is HistogramMetricView histogramMetric)
+                                    {
+                                        var percentileData = histogramMetric.Percentiles[percentile];
+
+                                        <span style="@($"text-decoration-thickness: 2px; text-decoration-line: underline; text-decoration-color: {underlineColor}; margin-right: 4px;")">
+                                            @percentileData.Value
+                                        </span>
+
+                                        if (GetIconAndTitleForDirection(percentileData.Direction) is var (icon, tone, title))
+                                        {
+                                            <DeckIcon Name="icon" Size="16" Class="@tone" Title="@title" Style="vertical-align: text-bottom" />
+                                        }
+                                    }
+                                </td>
                             }
                         }
-                    </TemplateColumn>
-                }
-            }
-            else if (_metrics.Values.All(value => value is MetricValueView))
-            {
-                <!-- if we're switching between grid types, this could be false -->
-                <TemplateColumn Title="@_unitColumnHeader">
-                    @{
-                        var metricValueView = context as MetricValueView;
-                    }
-
-                    @if (metricValueView is null)
-                    {
-                        @Loc[nameof(ControlsStrings.Loading)]
-                    }
-                    else if (metricValueView.ValueChange is null)
-                    {
-                        @FormatMetricValue(metricValueView.Value)
-                    }
-                    else
-                    {
-                        <span style="margin-right: 4px;">@metricValueView.Value</span>
-                        if (GetIconAndTitleForDirection(metricValueView.ValueChange) is var (icon, tone, title))
+                        else if (showValueColumn)
                         {
-                            <DeckIcon Name="icon" Size="16" Class="@tone" Title="@title" Style="vertical-align: text-bottom" />
+                            <td>
+                                @{
+                                    var metricValueView = context as MetricValueView;
+                                }
+                                @if (metricValueView is null)
+                                {
+                                    @Loc[nameof(ControlsStrings.Loading)]
+                                }
+                                else if (metricValueView.ValueChange is null)
+                                {
+                                    @FormatMetricValue(metricValueView.Value)
+                                }
+                                else
+                                {
+                                    <span style="margin-right: 4px;">@metricValueView.Value</span>
+                                    if (GetIconAndTitleForDirection(metricValueView.ValueChange) is var (icon, tone, title))
+                                    {
+                                        <DeckIcon Name="icon" Size="16" Class="@tone" Title="@title" Style="vertical-align: text-bottom" />
+                                    }
+                                }
+                            </td>
                         }
-                    }
-                </TemplateColumn>
+                        @if (_exemplars.Count > 0)
+                        {
+                            <td>
+                                @if (context.Exemplars.Count > 0)
+                                {
+                                    @* min-width ensures a consistent button width up to 999 metrics *@
+                                    <button type="button"
+                                            class="btn btn--primary btn--sm"
+                                            aria-label="@Loc[nameof(ControlsStrings.MetricTableViewExemplarsLabel)]"
+                                            @onclick="() => OpenExemplarsDialogAsync(context)"
+                                            style="min-width: 45px">@context.Exemplars.Count</button>
+                                }
+                                else
+                                {
+                                    <span>0</span>
+                                }
+                            </td>
+                        }
+                    </tr>
+                </Virtualize>
             }
-            @if (_exemplars.Count > 0)
-            {
-                <TemplateColumn Title="@Loc[nameof(ControlsStrings.MetricTableExemplarsColumnHeader)]">
-                    @if (context.Exemplars.Count > 0)
-                    {
-                        @* min-width ensures a consistent button width up to 999 metrics *@
-                        <button type="button"
-                                class="btn btn--primary btn--sm"
-                                aria-label="@Loc[nameof(ControlsStrings.MetricTableViewExemplarsLabel)]"
-                                @onclick="() => OpenExemplarsDialogAsync(context)"
-                                style="min-width: 45px">@context.Exemplars.Count</button>
-                    }
-                    else
-                    {
-                        <span>0</span>
-                    }
-                </TemplateColumn>
-            }
-        </ChildContent>
-        <EmptyContent>
-            <DeckIcon Name="DeckIconName.ChartMultiple" Size="24" />&nbsp;@Loc[nameof(ControlsStrings.MetricTableNoMetricsFound)]
-        </EmptyContent>
-    </FluentDataGrid>
+        </tbody>
+    </table>
 </div>
 
 <div class="deck-stack deck-stack--vertical">

@@ -1,7 +1,10 @@
 /*
- Announces row text of the specified indices to screen readers using an offscreen div
+ Announces row text for the specified row keys to screen readers using an offscreen div.
+ Row keys are timestamp ticks that match each row's `data-row-time` attribute. Resolving rows by
+ key (rather than DOM index) is required because the table is virtualized, so only on-screen rows
+ exist in the DOM; a key that isn't currently rendered is simply skipped.
  */
-export function announceDataGridRows(dataGridContainerId, indices) {
+export function announceDataGridRows(dataGridContainerId, rowKeys) {
     const containerId = "table-announce-container";
     let container = document.getElementById(containerId);
     if (container === null) {
@@ -17,8 +20,8 @@ export function announceDataGridRows(dataGridContainerId, indices) {
 
     const list = container.children[0];
 
-    indices.forEach(index => {
-        const rowText = getRowText(dataGridContainerId, index);
+    rowKeys.forEach(rowKey => {
+        const rowText = getRowText(dataGridContainerId, rowKey);
         if (rowText) {
             const newItem = document.createElement("li");
             const textNode = document.createTextNode(rowText);
@@ -28,14 +31,13 @@ export function announceDataGridRows(dataGridContainerId, indices) {
     });
 }
 
-function getRowText(dataGridContainerId, index) {
+function getRowText(dataGridContainerId, rowKey) {
     const container = document.getElementById(dataGridContainerId);
-    if (!container || container.children.length === 0) {
+    if (!container) {
         return null;
     }
-    const dataGrid = container.children[0];
-    const row = dataGrid.getElementsByClassName("fluent-data-grid-row")[index + 1];
 
+    const row = container.querySelector(`tbody tr[data-row-time="${rowKey}"]`);
     if (!row) {
         return null;
     }
