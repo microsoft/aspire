@@ -368,8 +368,6 @@ public class AzureAppServiceEnvironmentResource :
     /// <summary>
     /// Gets the suffix added to each web app created in this App Service Environment.
     /// </summary>
-    internal BicepOutputReference WebSiteSuffix => new("webSiteSuffix", this);
-
     /// <summary>
     /// Gets the delegated subnet ID configured for this environment, if any.
     /// </summary>
@@ -448,8 +446,8 @@ public class AzureAppServiceEnvironmentResource :
     public BicepOutputReference AzureAppInsightsConnectionStringReference =>
         new("AZURE_APPLICATION_INSIGHTS_CONNECTION_STRING", this);
 
-    internal static BicepValue<string> GetWebSiteSuffixBicep() =>
-        BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id);
+    internal static BicepValue<string> GetWebSiteSuffixBicep(string resourceName) =>
+        BicepFunction.GetUniqueString(BicepFunction.ToLower(resourceName), BicepFunction.GetResourceGroup().Id);
 
     /// <summary>
     /// Gets the default container registry for this environment.
@@ -508,13 +506,13 @@ public class AzureAppServiceEnvironmentResource :
     public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference)
     {
         var resource = endpointReference.Resource;
-        var websiteNamePrefix = resource.Name.ToLowerInvariant();
-        if (websiteNamePrefix.Length > AzureAppServiceWebSiteResource.MaxWebSiteNamePrefixLength)
+        var deploymentTarget = resource.GetDeploymentTargetAnnotation(this)?.DeploymentTarget;
+        if (deploymentTarget is not AzureAppServiceWebSiteResource website)
         {
-            websiteNamePrefix = websiteNamePrefix[..AzureAppServiceWebSiteResource.MaxWebSiteNamePrefixLength];
+            throw new InvalidOperationException($"Resource '{resource.Name}' does not have an Azure App Service deployment target.");
         }
 
-        return ReferenceExpression.Create($"{websiteNamePrefix}-{WebSiteSuffix}.azurewebsites.net");
+        return ReferenceExpression.Create($"{website.NameOutputReference}.azurewebsites.net");
     }
 
     /// <inheritdoc/>

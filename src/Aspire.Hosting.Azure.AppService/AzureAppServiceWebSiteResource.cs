@@ -103,6 +103,8 @@ public class AzureAppServiceWebSiteResource : AzureProvisioningResource
     /// </summary>
     public IResource TargetResource { get; }
 
+    internal BicepOutputReference NameOutputReference => new("name", this);
+
     /// <summary>
     /// Gets the base Azure App Service website name without any deployment slot suffix.
     /// </summary>
@@ -110,9 +112,7 @@ public class AzureAppServiceWebSiteResource : AzureProvisioningResource
     /// <returns>A task that represents the asynchronous operation. The task result contains the website name.</returns>
     private async Task<string> GetAppServiceWebsiteBaseNameAsync(PipelineStepContext context)
     {
-        var computerEnv = (AzureAppServiceEnvironmentResource)TargetResource.GetDeploymentTargetAnnotation()!.ComputeEnvironment!;
-        var websiteSuffix = await computerEnv.WebSiteSuffix.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
-        return $"{TruncateToMaxLength(TargetResource.Name.ToLowerInvariant(), MaxWebSiteNamePrefixLength)}-{websiteSuffix}";
+        return (await NameOutputReference.GetValueAsync(context.CancellationToken).ConfigureAwait(false))!;
     }
 
     private static string GetAppServiceWebsiteName(string websiteName, string? deploymentSlot = null)
@@ -142,4 +142,5 @@ public class AzureAppServiceWebSiteResource : AzureProvisioningResource
     internal const int MaxHostPrefixLengthWithSlot = 59;
     internal const int MaxWebSiteNamePrefixLengthWithSlot = 40;
     internal const int MaxWebSiteNamePrefixLength = 46;
+    internal const int MaxWebSiteNamePrefixLengthWithSlotUniqueSuffix = 26;
 }

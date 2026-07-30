@@ -38,7 +38,7 @@ resource mainContainer 'Microsoft.Web/sites/sitecontainers@2025-03-01' = {
 }
 
 resource webapp 'Microsoft.Web/sites@2025-03-01' = {
-  name: take('${toLower('web')}-${uniqueString(resourceGroup().id)}', 60)
+  name: '${take(toLower('web'), 46)}-${uniqueString(toLower('web'), resourceGroup().id)}'
   location: location
   properties: {
     serverFarmId: env_outputs_planid
@@ -146,3 +146,5 @@ resource slotConfigNames 'Microsoft.Web/sites/config@2025-03-01' = {
   }
   parent: webapp
 }
+
+output name string = '${take(toLower('web'), 46)}-${uniqueString(toLower('web'), resourceGroup().id)}'

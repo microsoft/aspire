@@ -19,7 +19,7 @@ internal static class AzureAppServiceEnvironmentUtility
     {
         var dashboardPrefix = BicepFunction.Interpolate($"{BicepFunction.ToLower(aspireResourceName)}-{BicepFunction.ToLower(ResourceName)}");
         return BicepFunction.Interpolate(
-            $"{BicepFunction.Take(dashboardPrefix, AzureAppServiceWebSiteResource.MaxWebSiteNamePrefixLength)}-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}");
+            $"{BicepFunction.Take(dashboardPrefix, AzureAppServiceWebSiteResource.MaxWebSiteNamePrefixLength)}-{AzureAppServiceEnvironmentResource.GetWebSiteSuffixBicep(aspireResourceName)}");
     }
 
     public static WebSite AddDashboard(AzureResourceInfrastructure infra,

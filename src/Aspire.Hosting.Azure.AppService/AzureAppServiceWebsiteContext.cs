@@ -38,7 +38,7 @@ internal sealed class AzureAppServiceWebsiteContext(
     // within the naming spec for the app service. Truncate the resource-name prefix before appending the suffix so that the
     // suffix is never truncated away.
     private BicepValue<string> HostName => BicepFunction.Interpolate(
-        $"{BicepFunction.Take(BicepFunction.ToLower(resource.Name), AzureAppServiceWebSiteResource.MaxWebSiteNamePrefixLength)}-{AzureAppServiceEnvironmentResource.GetWebSiteSuffixBicep()}");
+        $"{BicepFunction.Take(BicepFunction.ToLower(resource.Name), AzureAppServiceWebSiteResource.MaxWebSiteNamePrefixLength)}-{AzureAppServiceEnvironmentResource.GetWebSiteSuffixBicep(resource.Name)}");
 
     /// <summary>
     /// Gets the hostname for a deployment slot by appending the slot name to the base website name.
@@ -47,8 +47,8 @@ internal sealed class AzureAppServiceWebsiteContext(
     /// <returns>A <see cref="BicepValue{T}"/> representing the slot hostname, truncated to the maximum allowed length.</returns>
     public BicepValue<string> GetSlotHostName(BicepValue<string> deploymentSlot)
     {
-        var websitePrefix = BicepFunction.Take(
-            BicepFunction.Interpolate($"{BicepFunction.ToLower(resource.Name)}-{AzureAppServiceEnvironmentResource.GetWebSiteSuffixBicep()}"), AzureAppServiceWebSiteResource.MaxWebSiteNamePrefixLengthWithSlot);
+        var websitePrefix = BicepFunction.Interpolate(
+            $"{BicepFunction.Take(BicepFunction.ToLower(resource.Name), AzureAppServiceWebSiteResource.MaxWebSiteNamePrefixLengthWithSlotUniqueSuffix)}-{AzureAppServiceEnvironmentResource.GetWebSiteSuffixBicep(resource.Name)}");
 
         return BicepFunction.Take(
             BicepFunction.Interpolate($"{websitePrefix}-{BicepFunction.ToLower(deploymentSlot)}"), AzureAppServiceWebSiteResource.MaxHostPrefixLengthWithSlot);
@@ -325,6 +325,11 @@ internal sealed class AzureAppServiceWebsiteContext(
     public void BuildWebSite(AzureResourceInfrastructure infra)
     {
         _infrastructure = infra;
+
+        infra.Add(new ProvisioningOutput("name", typeof(string))
+        {
+            Value = HostName
+        });
 
         // Check for deployment slot
         // If specified, update hostnames to endpoint references
