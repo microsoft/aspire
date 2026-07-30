@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Website frontend change (cookie consent implementation); not documenting any Aspire 13.5 product feature",
+  "mergedAt": "2026-07-30T11:52:13Z",
+  "number": 1403,
+  "runDate": "2026-07-30T12:32:15Z",
+  "status": "excluded",
+  "title": "Switch cookie consent runtime to WCP API"
+}
