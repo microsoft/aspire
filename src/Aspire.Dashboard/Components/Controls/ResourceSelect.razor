@@ -5,20 +5,51 @@
             Orientation="horizontal"
             class="@LabelClass" />
 
-<FluentSelect Items="Resources"
-              Disabled="@(Resources is null)"
-              @key="@Resources?.Count()"
-              Id="@_selectId"
-              OptionValue="@(c => c!.Name)"
-              OptionDisabled="@(c => !CanSelectGrouping && c!.Id?.Type is Otlp.Model.OtlpResourceType.ResourceGrouping)"
-              OptionTitle="@(c => DashboardUIHelpers.ResolveTooltip(c!.Name))"
-              @bind-SelectedOption="SelectedResource"
-              @bind-SelectedOption:after="SelectedResourceChangedCore"
-              ValueChanged="ValuedChanged"
-              AriaLabel="@AriaLabel"
-              Class="resource-list"
-              Height="@GetPopupHeight()">
-    <OptionTemplate>
-        <ResourceSelectOptionTemplate ViewModel="@context" />
-    </OptionTemplate>
-</FluentSelect>
+@* Deck-styled single-select dropdown that renders rich per-option templates (icons for
+   groupings/replicas), replacing FluentSelect. The listbox is always in the DOM and toggled with the
+   [hidden] attribute so options remain queryable; a transparent overlay closes it on outside click. *@
+<div class="deck-resource-select">
+    <button type="button"
+            id="@_selectId"
+            class="select resource-list deck-resource-select__trigger"
+            disabled="@(Resources is null)"
+            role="combobox"
+            aria-haspopup="listbox"
+            aria-expanded="@(_open ? "true" : "false")"
+            aria-label="@AriaLabel"
+            @onclick="Toggle"
+            @onkeydown="OnTriggerKeyDownAsync">
+        <span class="deck-resource-select__value">
+            @if (SelectedResource is not null)
+            {
+                <ResourceSelectOptionTemplate ViewModel="@SelectedResource" />
+            }
+        </span>
+        <DeckIcon Name="DeckIconName.ChevronDown" Size="16" Class="deck-resource-select__chevron" />
+    </button>
+
+    @if (_open)
+    {
+        <div class="deck-overlay" @onclick="Close"></div>
+    }
+
+    <ul class="deck-resource-select__list" role="listbox" hidden="@(!_open)" style="@ListStyle()">
+        @if (Resources is not null)
+        {
+            foreach (var option in Resources)
+            {
+                var disabled = !CanSelectGrouping && option.Id?.Type is Otlp.Model.OtlpResourceType.ResourceGrouping;
+                var isSelected = Equals(option, SelectedResource);
+                <li role="option"
+                    class="deck-resource-select__option @(isSelected ? "selected" : null) @(disabled ? "disabled" : null)"
+                    data-value="@option.Name"
+                    title="@DashboardUIHelpers.ResolveTooltip(option.Name)"
+                    aria-selected="@(isSelected ? "true" : "false")"
+                    aria-disabled="@(disabled ? "true" : "false")"
+                    @onclick="@(() => OnOptionClickedAsync(option, disabled))">
+                    <ResourceSelectOptionTemplate ViewModel="@option" />
+                </li>
+            }
+        }
+    </ul>
+</div>

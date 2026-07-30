@@ -3121,3 +3121,60 @@ hr.deck-divider {
   overflow-y: auto;
 }
 /* === end Deck popover === */
+
+/* === Deck resource select (replaces FluentSelect in ResourceSelect) === */
+.deck-resource-select {
+  position: relative;
+  display: inline-block;
+  min-width: 200px;
+}
+.deck-resource-select__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+.deck-resource-select__value {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.deck-resource-select__chevron {
+  flex: 0 0 auto;
+  color: var(--text-secondary, inherit);
+}
+.deck-resource-select__list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 501;
+  margin: 2px 0 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--bg-elevated, var(--bg-surface, #fff));
+  border: 1px solid var(--border, rgba(127, 127, 127, 0.3));
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+.deck-resource-select__option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.deck-resource-select__option:hover,
+.deck-resource-select__option.selected {
+  background: var(--bg-hover, rgba(127, 127, 127, 0.12));
+}
+.deck-resource-select__option.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+/* === end Deck resource select === */

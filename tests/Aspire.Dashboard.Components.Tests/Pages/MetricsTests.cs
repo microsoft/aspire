@@ -349,8 +349,7 @@ public partial class MetricsTests : DashboardTestContext
 
         // Act 2
         var resourceSelect = cut.FindComponent<ResourceSelect>();
-        var innerSelect = resourceSelect.Find("fluent-select");
-        innerSelect.Change("TestApp2");
+        resourceSelect.Find("li[data-value='TestApp2']").Click();
 
         cut.WaitForAssertion(() => Assert.Equal("TestApp2", viewModel.SelectedResource.Name));
 
