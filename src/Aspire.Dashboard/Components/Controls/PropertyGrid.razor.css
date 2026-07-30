@@ -1,3 +1,30 @@
-::deep.property-grid td.multiline-text {
+.property-grid-table {
+    width: 100%;
+}
+
+/* Property grids render inside drawers and accordions that own their own scrolling, so the header
+   should scroll with the content unless the caller explicitly opts into a sticky header. This
+   overrides the globally-sticky `table.data thead th` rule from deck.css. */
+.property-grid-table > thead:not(.sticky) th {
+    position: static;
+}
+
+.property-grid-table td.multiline-text {
     overflow-x: hidden !important;
+}
+
+/* Sort affordance: a borderless button that keeps the uppercase header styling from table.data. */
+.column-sort-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    color: inherit;
+    text-transform: inherit;
+    letter-spacing: inherit;
+    cursor: pointer;
 }

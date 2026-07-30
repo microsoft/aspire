@@ -3,41 +3,80 @@
 @typeparam TItem where TItem : IPropertyGridItem
 @inject IStringLocalizer<ControlsStrings> Loc
 
+@{
+    var (nameWidth, valueWidth) = GetColumnWidths();
+}
 <div class="property-grid">
-    <FluentDataGrid ColumnResizeLabels="@_resizeLabels"
-                    ColumnSortLabels="@_sortLabels"
-                    HeaderCellAsButtonWithMenu="true"
-                    ResizeType="DataGridResizeType.Discrete"
-                    Items="@Items"
-                    ItemKey="@ItemKey"
-                    ResizableColumns="true"
-                    Style="width:100%"
-                    GenerateHeader="@GenerateHeader"
-                    GridTemplateColumns="@GridTemplateColumns"
-                    RowSize="DataGridRowSize.Medium"
-                    ShowHover="true"
-                    Class="@Class"
-                    MultiLine="@Multiline">
-        <AspireTemplateColumn Title="@(NameColumnTitle ?? Loc[nameof(ControlsStrings.NameColumnHeader)])" Class="nameColumn" SortBy="@NameSort" Sortable="@IsNameSortable">
-            <GridValue ValueDescription="@(NameColumnTitle ?? Loc[nameof(ControlsStrings.NameColumnHeader)])"
-                       Value="@context.Name"
-                       EnableHighlighting="@(!string.IsNullOrEmpty(HighlightText))"
-                       HighlightText="@HighlightText" />
-        </AspireTemplateColumn>
-        <AspireTemplateColumn Title="@(ValueColumnTitle ?? Loc[nameof(ControlsStrings.PropertyGridValueColumnHeader)])" Class="valueColumn" SortBy="@ValueSort" Sortable="@IsValueSortable">
-            <GridValue ValueDescription="@(context.Name ?? ValueColumnTitle ?? Loc[nameof(ControlsStrings.PropertyGridValueColumnHeader)])"
-                       Value="@context.Value"
-                       ContentAfterValue="@GetContentAfterValue(context)"
-                       EnableHighlighting="@(!string.IsNullOrEmpty(HighlightText))"
-                       HighlightText="@HighlightText"
-                       EnableMasking="@context.IsValueSensitive"
-                       IsMasked="@context.IsValueMasked"
-                       IsMaskedChanged="(isMasked) => OnIsValueMaskedChanged(context, isMasked)"
-                       TextVisualizerTitle="@context.Name"
-                       ValueToVisualize="@(context.ValueToVisualize ?? context.Value)"
-                       ComponentMetadata="@GetComponentMetadata(context)"/>
-            @ExtraValueContent(context)
-        </AspireTemplateColumn>
-    </FluentDataGrid>
+    <table class="@TableCssClass">
+        <colgroup>
+            <col style="width: @nameWidth" />
+            <col style="width: @valueWidth" />
+        </colgroup>
+        @if (GenerateHeader != GridHeaderMode.None)
+        {
+            <thead class="@(GenerateHeader == GridHeaderMode.Sticky ? "sticky" : null)">
+                <tr>
+                    <th class="nameColumn" aria-sort="@GetAriaSort(0)">
+                        @if (IsNameSortable)
+                        {
+                            <button type="button" class="column-sort-button" @onclick="() => OnHeaderClicked(0)">
+                                <span>@NameColumnTitleText</span>
+                                @if (_sortColumnIndex == 0)
+                                {
+                                    <DeckIcon Name="@(_sortAscending ? DeckIconName.ArrowUp : DeckIconName.ArrowDown)" Size="12" />
+                                }
+                            </button>
+                        }
+                        else
+                        {
+                            @NameColumnTitleText
+                        }
+                    </th>
+                    <th class="valueColumn" aria-sort="@GetAriaSort(1)">
+                        @if (IsValueSortable)
+                        {
+                            <button type="button" class="column-sort-button" @onclick="() => OnHeaderClicked(1)">
+                                <span>@ValueColumnTitleText</span>
+                                @if (_sortColumnIndex == 1)
+                                {
+                                    <DeckIcon Name="@(_sortAscending ? DeckIconName.ArrowUp : DeckIconName.ArrowDown)" Size="12" />
+                                }
+                            </button>
+                        }
+                        else
+                        {
+                            @ValueColumnTitleText
+                        }
+                    </th>
+                </tr>
+            </thead>
+        }
+        <tbody>
+            @foreach (var context in GetSortedItems())
+            {
+                <tr @key="ItemKey(context)">
+                    <td class="nameColumn">
+                        <GridValue ValueDescription="@NameColumnTitleText"
+                                   Value="@context.Name"
+                                   EnableHighlighting="@(!string.IsNullOrEmpty(HighlightText))"
+                                   HighlightText="@HighlightText" />
+                    </td>
+                    <td class="valueColumn@(Multiline ? " multiline-text" : "")">
+                        <GridValue ValueDescription="@(context.Name ?? ValueColumnTitleText)"
+                                   Value="@context.Value"
+                                   ContentAfterValue="@GetContentAfterValue(context)"
+                                   EnableHighlighting="@(!string.IsNullOrEmpty(HighlightText))"
+                                   HighlightText="@HighlightText"
+                                   EnableMasking="@context.IsValueSensitive"
+                                   IsMasked="@context.IsValueMasked"
+                                   IsMaskedChanged="(isMasked) => OnIsValueMaskedChanged(context, isMasked)"
+                                   TextVisualizerTitle="@context.Name"
+                                   ValueToVisualize="@(context.ValueToVisualize ?? context.Value)"
+                                   ComponentMetadata="@GetComponentMetadata(context)" />
+                        @ExtraValueContent(context)
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
 </div>
-

@@ -1,10 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Controls.Grid;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Utils;
+using Aspire.Dashboard.Resources;
 using Microsoft.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components;
+using System.Globalization;
 
 namespace Aspire.Dashboard.Components.Controls;
 
@@ -86,8 +87,14 @@ public partial class PropertyGrid<TItem> where TItem : IPropertyGridItem
 {
     private static readonly RenderFragment<TItem> s_emptyChildContent = _ => builder => { };
 
-    private static readonly GridSort<TItem> s_defaultNameSort = GridSort<TItem>.ByAscending(vm => vm.Name);
-    private static readonly GridSort<TItem> s_defaultValueSort = GridSort<TItem>.ByAscending(vm => vm.IsValueMasked ? null : vm.Value);
+    // Default sort key selectors. The value column sorts on the visible text, treating masked
+    // values as null so hidden secrets don't leak their ordering.
+    private static readonly Func<TItem, IComparable?> s_defaultNameSort = static vm => vm.Name;
+    private static readonly Func<TItem, IComparable?> s_defaultValueSort = static vm => vm.IsValueMasked ? null : vm.Value;
+
+    // Sort state. Column 0 = name, 1 = value, null = unsorted (items shown in source order).
+    private int? _sortColumnIndex;
+    private bool _sortAscending = true;
 
     [Parameter, EditorRequired]
     public IQueryable<TItem>? Items { get; set; }
@@ -111,13 +118,13 @@ public partial class PropertyGrid<TItem> where TItem : IPropertyGridItem
     /// Gets and sets the sorting behavior of the name column. Defaults to sorting on <see cref="IPropertyGridItem.Name"/>.
     /// </summary>
     [Parameter]
-    public GridSort<TItem> NameSort { get; set; } = s_defaultNameSort;
+    public Func<TItem, IComparable?> NameSort { get; set; } = s_defaultNameSort;
 
     /// <summary>
     /// Gets and sets the sorting behavior of the value column. Defaults to sorting on <see cref="IPropertyGridItem.Value"/>.
     /// </summary>
     [Parameter]
-    public GridSort<TItem> ValueSort { get; set; } = s_defaultValueSort;
+    public Func<TItem, IComparable?> ValueSort { get; set; } = s_defaultValueSort;
 
     [Parameter]
     public bool IsNameSortable { get; set; } = true;
@@ -138,7 +145,7 @@ public partial class PropertyGrid<TItem> where TItem : IPropertyGridItem
     public RenderFragment<TItem> ExtraValueContent { get; set; } = s_emptyChildContent;
 
     [Parameter]
-    public GenerateHeaderOption GenerateHeader { get; set; } = GenerateHeaderOption.Default;
+    public GridHeaderMode GenerateHeader { get; set; } = GridHeaderMode.Default;
 
     [Parameter]
     public string? Class { get; set; }
@@ -146,12 +153,94 @@ public partial class PropertyGrid<TItem> where TItem : IPropertyGridItem
     [Parameter]
     public Dictionary<string, ComponentMetadata>? ValueComponents { get; set; }
 
-    private ColumnResizeLabels _resizeLabels = ColumnResizeLabels.Default;
-    private ColumnSortLabels _sortLabels = ColumnSortLabels.Default;
+    private string NameColumnTitleText => NameColumnTitle ?? Loc[nameof(ControlsStrings.NameColumnHeader)];
+    private string ValueColumnTitleText => ValueColumnTitle ?? Loc[nameof(ControlsStrings.PropertyGridValueColumnHeader)];
 
-    protected override void OnInitialized()
+    private string TableCssClass
     {
-        (_resizeLabels, _sortLabels) = DashboardUIHelpers.CreateGridLabels(Loc);
+        get
+        {
+            var css = "data property-grid-table";
+            if (Multiline)
+            {
+                css += " multiline";
+            }
+            if (!string.IsNullOrEmpty(Class))
+            {
+                css += " " + Class;
+            }
+            return css;
+        }
+    }
+
+    // The property grid always has exactly two columns (name/value). Translate the fractional
+    // grid-template-columns string (e.g. "1fr 2fr") that callers pass into percentage widths for
+    // the native table's <col> elements. Non-fractional tokens (e.g. "150px") are used verbatim.
+    private (string Name, string Value) GetColumnWidths()
+    {
+        var tokens = GridTemplateColumns.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length == 2 &&
+            TryParseFraction(tokens[0], out var first) &&
+            TryParseFraction(tokens[1], out var second) &&
+            first + second > 0)
+        {
+            var total = first + second;
+            return (FormatPercent(first / total), FormatPercent(second / total));
+        }
+
+        return (tokens.ElementAtOrDefault(0) ?? "auto", tokens.ElementAtOrDefault(1) ?? "auto");
+
+        static string FormatPercent(double fraction) =>
+            (fraction * 100).ToString("0.###", CultureInfo.InvariantCulture) + "%";
+    }
+
+    private static bool TryParseFraction(string token, out double value)
+    {
+        if (token.EndsWith("fr", StringComparison.OrdinalIgnoreCase) &&
+            double.TryParse(token[..^2], NumberStyles.Float, CultureInfo.InvariantCulture, out value))
+        {
+            return true;
+        }
+
+        value = 0;
+        return false;
+    }
+
+    private IEnumerable<TItem> GetSortedItems()
+    {
+        var items = Items ?? Enumerable.Empty<TItem>().AsQueryable();
+
+        return _sortColumnIndex switch
+        {
+            0 => _sortAscending ? items.OrderBy(NameSort) : items.OrderByDescending(NameSort),
+            1 => _sortAscending ? items.OrderBy(ValueSort) : items.OrderByDescending(ValueSort),
+            _ => items
+        };
+    }
+
+    // Clicking a sortable header cycles it into ascending, then toggles ascending/descending.
+    private void OnHeaderClicked(int columnIndex)
+    {
+        if (_sortColumnIndex == columnIndex)
+        {
+            _sortAscending = !_sortAscending;
+        }
+        else
+        {
+            _sortColumnIndex = columnIndex;
+            _sortAscending = true;
+        }
+    }
+
+    // aria-sort value for the header cell, matching WAI-ARIA grid semantics.
+    private string GetAriaSort(int columnIndex)
+    {
+        if (_sortColumnIndex != columnIndex)
+        {
+            return "none";
+        }
+
+        return _sortAscending ? "ascending" : "descending";
     }
 
     // Return null if empty so GridValue knows there is no template.
