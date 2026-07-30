@@ -42,8 +42,6 @@ public class ComboboxTests : DashboardTestContext
     [Fact]
     public void DataActiveOption_BecomesTrue_WhenAnOptionIsActivated()
     {
-        // The colocated JS cancels the browser's implicit EditForm submit only while this attribute is
-        // "true", so activating an option via ArrowDown must flip it on.
         var cut = RenderCombobox(out _);
 
         var input = cut.Find("input.deck-combobox__input");
@@ -51,6 +49,19 @@ public class ComboboxTests : DashboardTestContext
         input.KeyDown(new KeyboardEventArgs { Key = "ArrowDown" });
 
         Assert.Equal("true", cut.Find("input.deck-combobox__input").GetAttribute("data-active-option"));
+    }
+
+    [Fact]
+    public void ArrowUp_OnClosedPopup_OpensAndActivatesLastOption()
+    {
+        var cut = RenderCombobox(out var valueChanges);
+
+        var input = cut.Find("input.deck-combobox__input");
+        input.KeyDown(new KeyboardEventArgs { Key = "ArrowUp" });
+        Assert.Equal("true", cut.Find("input.deck-combobox__input").GetAttribute("data-active-option"));
+
+        cut.Find("input.deck-combobox__input").KeyDown(new KeyboardEventArgs { Key = "Enter" });
+        Assert.Equal("gamma", Assert.Single(valueChanges));
     }
 
     [Fact]
@@ -65,6 +76,22 @@ public class ComboboxTests : DashboardTestContext
 
         cut.Find("input.deck-combobox__input").KeyDown(new KeyboardEventArgs { Key = "Escape" });
         Assert.Equal("false", cut.Find("input.deck-combobox__input").GetAttribute("data-active-option"));
+    }
+
+    [Fact]
+    public void Refocus_AfterPopupClosed_DoesNotRestorePreviousActiveOption()
+    {
+        var cut = RenderCombobox(out var valueChanges);
+
+        var input = cut.Find("input.deck-combobox__input");
+        input.Focus();
+        input.KeyDown(new KeyboardEventArgs { Key = "ArrowDown" });
+        input.Blur();
+        input.Focus();
+
+        Assert.Equal("false", cut.Find("input.deck-combobox__input").GetAttribute("data-active-option"));
+        cut.Find("input.deck-combobox__input").KeyDown(new KeyboardEventArgs { Key = "Enter" });
+        Assert.Empty(valueChanges);
     }
 
     [Fact]
@@ -83,9 +110,7 @@ public class ComboboxTests : DashboardTestContext
     [Fact]
     public void Enter_WithNoActiveOption_DoesNotSelect_SoTheFormCanSubmit()
     {
-        // With nothing active, HasActiveOption is false so data-active-option stays "false"; the JS
-        // leaves Enter alone and the enclosing EditForm submits normally. Here we assert the Blazor
-        // side does not select/emit a value.
+        // The Blazor side must not select or emit a value when no option is active.
         var cut = RenderCombobox(out var valueChanges);
 
         var input = cut.Find("input.deck-combobox__input");

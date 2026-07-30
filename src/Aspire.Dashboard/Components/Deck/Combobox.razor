@@ -77,9 +77,9 @@
     private ElementReference _input;
     private IJSObjectReference? _module;
 
-    // True when Enter would select an active popup option. The colocated JS reads the mirrored
-    // data-active-option attribute to cancel the browser's implicit form submission only in this
-    // exact case, so selecting an option inside an EditForm doesn't also submit the form.
+    // Mirrors whether Enter would select an active popup option for DOM diagnostics and tests.
+    // The colocated JS independently tracks arrow-key activation synchronously because Interactive
+    // Server rendering cannot update this attribute before the browser handles a rapid next key.
     private bool HasActiveOption => _open && _activeIndex >= 0 && _activeIndex < _items.Count;
 
     /// <summary>The options to display (already filtered by the caller for the current <see cref="Value"/>).</summary>
@@ -175,6 +175,7 @@
 
     private void OnFocus()
     {
+        _activeIndex = -1;
         _open = true;
     }
 
@@ -183,6 +184,7 @@
         // The option's @onmousedown (which runs before blur and preventDefaults focus loss) performs
         // selection; by the time blur fires the choice is already made, so simply close the popup.
         _open = false;
+        _activeIndex = -1;
         await Task.CompletedTask;
     }
 
@@ -210,6 +212,7 @@
     private async Task SelectAsync(TOption option)
     {
         _open = false;
+        _activeIndex = -1;
         var value = OptionValue?.Invoke(option) ?? GetOptionText(option);
         if (ValueChanged.HasDelegate)
         {
@@ -229,6 +232,7 @@
                 }
                 break;
             case "ArrowUp":
+                _open = true;
                 if (_items.Count > 0)
                 {
                     _activeIndex = _activeIndex <= 0 ? _items.Count - 1 : _activeIndex - 1;
@@ -239,6 +243,7 @@
                 break;
             case "Escape":
                 _open = false;
+                _activeIndex = -1;
                 break;
         }
     }

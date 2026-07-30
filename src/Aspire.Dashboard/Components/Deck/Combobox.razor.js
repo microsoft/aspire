@@ -6,9 +6,10 @@
 // selection; here we only cancel the native default so selecting an option doesn't double as a
 // submit. When no option is active, Enter is left alone so the form submits normally.
 //
-// The decision is read from the input's data-active-option attribute, which Blazor keeps in sync
-// with the popup's active state each render, so this stays a precise, Enter-only, active-only
-// preventDefault (typing and Tab are never blocked). Colocated module: no inline script, CSP-safe.
+// Interactive Server can receive ArrowDown and Enter before the ArrowDown render returns. Track the
+// arrow activation entirely in the browser so Enter is cancelled before the enclosing form can
+// submit, without consulting server-rendered state that may be stale. Colocated module: no inline
+// script, CSP-safe.
 
 export function initialize(input) {
     if (!input) {
@@ -18,14 +19,46 @@ export function initialize(input) {
     // Guard against double-initialization across re-renders.
     disposeCore(input);
 
+    let keyboardOptionActive = false;
+
+    const resetKeyboardOption = () => {
+        keyboardOptionActive = false;
+    };
+
     const onKeyDown = (e) => {
-        if (e.key === "Enter" && input.dataset.activeOption === "true") {
+        // Arrow navigation itself establishes the synchronous interaction state. Do not consult
+        // server-rendered option data here: it can lag behind rapid input/filtering events.
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            keyboardOptionActive = true;
+            return;
+        }
+
+        if (e.key === "Enter" && keyboardOptionActive) {
             e.preventDefault();
+            keyboardOptionActive = false;
+            return;
+        }
+
+        if (e.key === "Escape") {
+            keyboardOptionActive = false;
+        }
+    };
+
+    const root = input.closest(".deck-combobox");
+    const onOptionMouseDown = (e) => {
+        if (e.target instanceof Element && e.target.closest(".deck-combobox__option")) {
+            resetKeyboardOption();
         }
     };
 
     input.addEventListener("keydown", onKeyDown);
+    input.addEventListener("input", resetKeyboardOption);
+    input.addEventListener("blur", resetKeyboardOption);
+    root?.addEventListener("mousedown", onOptionMouseDown);
     input.deckComboboxKeyDown = onKeyDown;
+    input.deckComboboxResetKeyboardOption = resetKeyboardOption;
+    input.deckComboboxRoot = root;
+    input.deckComboboxOptionMouseDown = onOptionMouseDown;
 }
 
 export function dispose(input) {
@@ -39,5 +72,11 @@ function disposeCore(input) {
     }
 
     input.removeEventListener("keydown", onKeyDown);
+    input.removeEventListener("input", input.deckComboboxResetKeyboardOption);
+    input.removeEventListener("blur", input.deckComboboxResetKeyboardOption);
+    input.deckComboboxRoot?.removeEventListener("mousedown", input.deckComboboxOptionMouseDown);
     delete input.deckComboboxKeyDown;
+    delete input.deckComboboxResetKeyboardOption;
+    delete input.deckComboboxRoot;
+    delete input.deckComboboxOptionMouseDown;
 }

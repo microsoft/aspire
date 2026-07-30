@@ -20,7 +20,6 @@
         </div>
         <main class="app__content">
             @Body
-            <DashboardMessageProvider />
             @if (_showSettingsPane)
             {
                 <Aspire.Dashboard.Components.Dialogs.SettingsPane OnClose="@CloseSettingsPane" OnManageData="@OpenManageDataPane" />

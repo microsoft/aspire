@@ -205,18 +205,43 @@ public class DeckRedesignFindingsTests : PlaywrightTestsBase<DashboardServerFixt
                 async (moduleUrl) => {
                     const mod = await import(moduleUrl);
 
+                    const root = document.createElement('div');
+                    root.className = 'deck-combobox';
                     const input = document.createElement('input');
                     input.type = 'text';
-                    document.body.appendChild(input);
+                    root.appendChild(input);
+                    const option = document.createElement('div');
+                    option.className = 'deck-combobox__option';
+                    root.appendChild(option);
+                    document.body.appendChild(root);
                     mod.initialize(input);
 
-                    input.dataset.activeOption = 'true';
-                    const active = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
-                    input.dispatchEvent(active);
-
-                    input.dataset.activeOption = 'false';
                     const inactive = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
                     input.dispatchEvent(inactive);
+
+                    // Simulate two key events reaching the browser before Interactive Server returns
+                    // the ArrowDown render that updates data-active-option.
+                    const arrowDown = new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true });
+                    input.dispatchEvent(arrowDown);
+                    const rapidEnter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+                    input.dispatchEvent(rapidEnter);
+
+                    // Typing clears synchronous state even while the server-rendered mirror is stale.
+                    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+                    input.dataset.activeOption = 'true';
+                    input.dispatchEvent(new InputEvent('input', { bubbles: true }));
+                    const enterAfterInput = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+                    input.dispatchEvent(enterAfterInput);
+
+                    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+                    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+                    const enterAfterEscape = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+                    input.dispatchEvent(enterAfterEscape);
+
+                    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+                    option.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                    const enterAfterMouseSelection = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+                    input.dispatchEvent(enterAfterMouseSelection);
 
                     const typing = new KeyboardEvent('keydown', { key: 'a', bubbles: true, cancelable: true });
                     input.dispatchEvent(typing);
@@ -224,16 +249,22 @@ public class DeckRedesignFindingsTests : PlaywrightTestsBase<DashboardServerFixt
                     mod.dispose(input);
 
                     return {
-                        preventedWhenActive: active.defaultPrevented,
                         preventedWhenInactive: inactive.defaultPrevented,
+                        preventedAfterRapidArrowDown: rapidEnter.defaultPrevented,
+                        preventedAfterInput: enterAfterInput.defaultPrevented,
+                        preventedAfterEscape: enterAfterEscape.defaultPrevented,
+                        preventedAfterMouseSelection: enterAfterMouseSelection.defaultPrevented,
                         preventedForTyping: typing.defaultPrevented
                     };
                 }
                 """, DeckModuleUrl(page, "Components/Deck/Combobox.razor.js"));
 
             // Only Enter-with-active-option cancels the browser's implicit form submit.
-            Assert.True(result.GetProperty("preventedWhenActive").GetBoolean());
             Assert.False(result.GetProperty("preventedWhenInactive").GetBoolean());
+            Assert.True(result.GetProperty("preventedAfterRapidArrowDown").GetBoolean());
+            Assert.False(result.GetProperty("preventedAfterInput").GetBoolean());
+            Assert.False(result.GetProperty("preventedAfterEscape").GetBoolean());
+            Assert.False(result.GetProperty("preventedAfterMouseSelection").GetBoolean());
             Assert.False(result.GetProperty("preventedForTyping").GetBoolean());
 
             AssertNoConsoleErrors(errors);

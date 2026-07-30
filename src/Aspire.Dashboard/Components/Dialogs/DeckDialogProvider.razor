@@ -7,9 +7,11 @@
 *@
 @namespace Aspire.Dashboard.Components.Dialogs
 @using Aspire.Dashboard.Extensions
+@using Microsoft.Extensions.Localization
 @implements IAsyncDisposable
 @inject DeckDialogService DialogService
 @inject IJSRuntime JS
+@inject IStringLocalizer<Aspire.Dashboard.Resources.Dialogs> Loc
 
 @foreach (var dialog in DialogService.OpenDialogs)
 {
@@ -23,7 +25,8 @@
                  style="@BoxStyle(dialog)"
                  role="dialog"
                  aria-modal="@(dialog.Parameters.Modal ? "true" : "false")"
-                 aria-labelledby="@dialog.Instance.TitleElementId"
+                 aria-labelledby="@AriaLabelledBy(dialog)"
+                 aria-label="@AriaLabel(dialog)"
                  tabindex="-1"
                  @onclick:stopPropagation="true"
                  @onkeydown="@(e => OnKeyDownAsync(e, dialog))">
@@ -101,6 +104,45 @@
         return dialog.Content is null
             ? null
             : new Dictionary<string, object> { ["Content"] = dialog.Content };
+    }
+
+    private string? AriaLabelledBy(DeckDialogService.DeckOpenDialog dialog)
+        => AriaLabel(dialog) is null ? dialog.Instance.TitleElementId : null;
+
+    // Keep normal dialogs associated with their visible header so dynamic titles remain current.
+    // Headerless content supplies AccessibleName, while titleless content falls back to its message
+    // or a localized generic label.
+    private string? AriaLabel(DeckDialogService.DeckOpenDialog dialog)
+    {
+        if (!string.IsNullOrWhiteSpace(dialog.Parameters.AccessibleName))
+        {
+            return dialog.Parameters.AccessibleName;
+        }
+
+        if (dialog.Content is DeckMessageBoxContent message)
+        {
+            if (!string.IsNullOrWhiteSpace(message.Title))
+            {
+               return null;
+            }
+
+            if (!string.IsNullOrWhiteSpace(message.Message))
+            {
+               return message.Message;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(dialog.Parameters.Title))
+        {
+            return null;
+        }
+
+        return dialog.Parameters.DialogType switch
+        {
+            DeckDialogType.Panel => Loc[nameof(Aspire.Dashboard.Resources.Dialogs.DeckDialogGenericPanelLabel)],
+            DeckDialogType.MessageBox => Loc[nameof(Aspire.Dashboard.Resources.Dialogs.DeckDialogGenericMessageBoxLabel)],
+            _ => Loc[nameof(Aspire.Dashboard.Resources.Dialogs.DeckDialogGenericDialogLabel)],
+        };
     }
 
     private static string? AlignmentClass(DeckDialogService.DeckOpenDialog dialog)

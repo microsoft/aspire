@@ -81,6 +81,7 @@ public partial class AspirePageContentLayout : ComponentBase
             {
                 Alignment = DeckDialogAlignment.Default,
                 Title = MobileToolbarButtonText ?? ControlsStringsLoc[nameof(ControlsStrings.ChartContainerFiltersHeader)],
+                AccessibleName = MobileToolbarButtonText ?? ControlsStringsLoc[nameof(ControlsStrings.ChartContainerFiltersHeader)],
                 Width = "100%",
                 Height = "90%",
                 Modal = false,
@@ -118,4 +119,3 @@ public partial class AspirePageContentLayout : ComponentBase
 
     public record MobileToolbar(RenderFragment ToolbarSection, string MobileToolbarButtonText);
 }
-

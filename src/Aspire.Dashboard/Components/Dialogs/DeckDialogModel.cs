@@ -55,6 +55,12 @@ public class DeckDialogParameters
     /// <summary>The dialog title, rendered in the default header when the content supplies none.</summary>
     public string? Title { get; set; }
 
+    /// <summary>
+    /// An explicit accessible name for content that does not render a <see cref="DeckDialogHeader"/>.
+    /// Leave unset when a visible header is present so the dialog is named by that header.
+    /// </summary>
+    public string? AccessibleName { get; set; }
+
     /// <summary>Optional explicit width (CSS length).</summary>
     public string? Width { get; set; }
 
@@ -216,9 +222,9 @@ public sealed class DeckDialogInstance
 
     /// <summary>
     /// A stable HTML element id for the dialog's title region (the <c>DeckDialogHeader</c> content).
-    /// The provider points the dialog's <c>aria-labelledby</c> at this id and the header stamps it on
-    /// its visible title content so the accessible name comes from the on-screen heading. Derived from
-    /// <see cref="Id"/> (sanitized for use in an id) so both sides agree without extra plumbing.
+    /// The provider points <c>aria-labelledby</c> at this id when the dialog has a visible header.
+    /// Headerless and titleless dialogs use an <c>aria-label</c> fallback instead.
+    /// Derived from <see cref="Id"/> (sanitized for use in an id).
     /// </summary>
     public string TitleElementId => $"deck-dialog-title-{Id.SanitizeHtmlId()}";
 

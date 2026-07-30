@@ -125,6 +125,33 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("DialogCloseButtonText", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Dialog.
+        /// </summary>
+        public static string DeckDialogGenericDialogLabel {
+            get {
+                return ResourceManager.GetString("DeckDialogGenericDialogLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Panel.
+        /// </summary>
+        public static string DeckDialogGenericPanelLabel {
+            get {
+                return ResourceManager.GetString("DeckDialogGenericPanelLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Message.
+        /// </summary>
+        public static string DeckDialogGenericMessageBoxLabel {
+            get {
+                return ResourceManager.GetString("DeckDialogGenericMessageBoxLabel", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Yes.

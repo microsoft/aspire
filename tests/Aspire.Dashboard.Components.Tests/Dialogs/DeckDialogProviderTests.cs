@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.Dialogs;
+using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
@@ -38,12 +39,66 @@ public class DeckDialogProviderTests : DashboardTestContext
             Assert.Equal("true", dialog.GetAttribute("aria-modal"));
             Assert.Equal("deck-dialog-my-dialog", dialog.GetAttribute("id"));
 
-            // aria-labelledby points at the visible header content, which carries the same id.
             var labelledBy = dialog.GetAttribute("aria-labelledby");
             Assert.Equal("deck-dialog-title-my-dialog", labelledBy);
+            Assert.Null(dialog.GetAttribute("aria-label"));
 
             var header = cut.Find($"#{labelledBy}");
             Assert.Contains("Hello world", header.TextContent);
+        });
+    }
+
+    [Fact]
+    public async Task ShowConfirmation_UsesMessageAsAccessibleNameWhenTitleIsMissing()
+    {
+        var (cut, service, _) = SetUp();
+
+        await service.ShowConfirmationAsync("Delete this resource?", "Delete", "Cancel");
+
+        cut.WaitForAssertion(() =>
+        {
+            var dialog = cut.Find("[role='dialog']");
+            Assert.Equal("Delete this resource?", dialog.GetAttribute("aria-label"));
+            Assert.Null(dialog.GetAttribute("aria-labelledby"));
+        });
+    }
+
+    [Fact]
+    public async Task ShowToolbarPanel_UsesExplicitAccessibleNameWithoutHeader()
+    {
+        var (cut, service, _) = SetUp();
+
+        await service.ShowPanelAsync<ToolbarPanel>(
+            new AspirePageContentLayout.MobileToolbar(
+                ToolbarSection: builder => builder.AddMarkupContent(0, "<div>filters</div>"),
+                MobileToolbarButtonText: "View filters"),
+            new DeckDialogParameters
+            {
+                Title = "Filters",
+                AccessibleName = "Filters",
+            });
+
+        cut.WaitForAssertion(() =>
+        {
+            var dialog = cut.Find("[role='dialog']");
+            Assert.Equal("Filters", dialog.GetAttribute("aria-label"));
+            Assert.Null(dialog.GetAttribute("aria-labelledby"));
+            Assert.Empty(cut.FindAll(".deck-dialog__header"));
+        });
+    }
+
+    [Fact]
+    public async Task ShowDialog_WithoutTitle_FallsBackToLocalizedGenericName()
+    {
+        var (cut, service, _) = SetUp();
+
+        await service.ShowDialogAsync<TestDeckDialogContent>(new DeckDialogParameters());
+
+        cut.WaitForAssertion(() =>
+        {
+            var dialog = cut.Find("[role='dialog']");
+            Assert.Equal(Aspire.Dashboard.Resources.Dialogs.DeckDialogGenericDialogLabel, dialog.GetAttribute("aria-label"));
+            Assert.Null(dialog.GetAttribute("aria-labelledby"));
         });
     }
 

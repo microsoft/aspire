@@ -229,6 +229,18 @@
   <data name="DialogCloseButtonText" xml:space="preserve">
     <value>Close</value>
   </data>
+  <data name="DeckDialogGenericDialogLabel" xml:space="preserve">
+    <value>Dialog</value>
+    <comment>Fallback accessible name announced for a dialog that has no title.</comment>
+  </data>
+  <data name="DeckDialogGenericPanelLabel" xml:space="preserve">
+    <value>Panel</value>
+    <comment>Fallback accessible name announced for a side panel that has no title.</comment>
+  </data>
+  <data name="DeckDialogGenericMessageBoxLabel" xml:space="preserve">
+    <value>Message</value>
+    <comment>Fallback accessible name announced for a message box that has no title or message text.</comment>
+  </data>
   <data name="ConfirmationDialogConfirmButtonText" xml:space="preserve">
     <value>Yes</value>
   </data>

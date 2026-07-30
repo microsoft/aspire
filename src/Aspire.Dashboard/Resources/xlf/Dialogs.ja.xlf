@@ -99,6 +99,21 @@ For more information about using AI agents with the dashboard, including setting
         <target state="new">Yes</target>
         <note />
       </trans-unit>
+      <trans-unit id="DeckDialogGenericDialogLabel">
+        <source>Dialog</source>
+        <target state="new">Dialog</target>
+        <note>Fallback accessible name announced for a dialog that has no title.</note>
+      </trans-unit>
+      <trans-unit id="DeckDialogGenericMessageBoxLabel">
+        <source>Message</source>
+        <target state="new">Message</target>
+        <note>Fallback accessible name announced for a message box that has no title or message text.</note>
+      </trans-unit>
+      <trans-unit id="DeckDialogGenericPanelLabel">
+        <source>Panel</source>
+        <target state="new">Panel</target>
+        <note>Fallback accessible name announced for a side panel that has no title.</note>
+      </trans-unit>
       <trans-unit id="DialogCloseButtonText">
         <source>Close</source>
         <target state="translated">閉じる</target>

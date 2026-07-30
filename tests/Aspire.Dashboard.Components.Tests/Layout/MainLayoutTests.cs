@@ -386,6 +386,7 @@ public partial class MainLayoutTests : DashboardTestContext
 
         var container = cut.Find($".{expectedContainerClass}");
         Assert.NotNull(container.QuerySelector("#test-page-marker"));
+        Assert.Single(cut.FindComponents<DashboardMessageProvider>());
     }
 
     private void SetupMainLayoutServices(
