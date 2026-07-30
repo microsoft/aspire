@@ -18,6 +18,21 @@ namespace Aspire.Cli.Tests.DotNet;
 public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public async Task StartAsync_AfterDispose_ThrowsObjectDisposedException()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var scriptFile = await CreateLongRunningScriptAsync(workspace.WorkspaceRoot);
+
+        var execution = CreateExecution(
+            scriptFile,
+            new ProcessInvocationOptions());
+
+        await execution.DisposeAsync();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => execution.StartAsync(CancellationToken.None));
+    }
+
+    [Fact]
     public async Task WaitForExitAsync_AllowsForwardersToDrainBeforeClosingStreams()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -63,7 +78,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
                 StandardErrorCallback = line => stderrBuilder.AppendLine(line)
             });
 
-        Assert.True(execution.Start());
+        Assert.True(await execution.StartAsync(CancellationToken.None));
 
         var exitCode = await execution.WaitForExitAsync(CancellationToken.None).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
         await releaseTask.WaitAsync(TimeSpan.FromSeconds(1));
@@ -121,7 +136,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
                 StandardErrorCallback = line => stderrBuilder.AppendLine(line)
             });
 
-        Assert.True(execution.Start());
+        Assert.True(await execution.StartAsync(CancellationToken.None));
 
         var exitCode = await execution.WaitForExitAsync(CancellationToken.None).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
         await releaseTask.WaitAsync(TimeSpan.FromSeconds(1));
@@ -150,7 +165,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
             scriptFile,
             new ProcessInvocationOptions());
 
-        Assert.True(execution.Start());
+        Assert.True(await execution.StartAsync(CancellationToken.None));
 
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
@@ -178,7 +193,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
 
         await using var execution = CreateExecution(scriptFile, isolateConsole, signaler, shutdownService);
 
-        Assert.True(execution.Start());
+        Assert.True(await execution.StartAsync(CancellationToken.None));
 
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
@@ -209,7 +224,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
 
         await using var execution = CreateExecution(scriptFile, isolateConsole, signaler, shutdownService);
 
-        Assert.True(execution.Start());
+        Assert.True(await execution.StartAsync(CancellationToken.None));
 
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
@@ -239,7 +254,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
 
         await using var execution = CreateExecution(scriptFile, isolateConsole, signaler, shutdownService);
 
-        Assert.True(execution.Start());
+        Assert.True(await execution.StartAsync(CancellationToken.None));
 
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();

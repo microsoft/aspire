@@ -9,7 +9,7 @@ using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components;
 
-public partial class AspireMenu : FluentComponentBase
+public partial class AspireMenu : FluentComponentBase, IAsyncDisposable
 {
     private FluentMenu? _menu;
 
@@ -46,6 +46,9 @@ public partial class AspireMenu : FluentComponentBase
 
     [Inject]
     public required IJSRuntime JS { get; init; }
+
+    [Inject]
+    public required IServiceProvider ServiceProvider { get; init; }
 
     // Each menu item is approximately 32px tall, plus 16px padding for the menu container.
     private const int EstimatedItemHeight = 32;
@@ -111,15 +114,18 @@ public partial class AspireMenu : FluentComponentBase
 
     private async Task HandleItemClicked(MenuButtonItem item)
     {
-        if (item.OnClick is {} onClick)
-        {
-            await onClick();
-        }
         await SetOpenAsync(false);
 
         if (RestoreFocusOnItemClick && !string.IsNullOrEmpty(Anchor))
         {
             await JS.InvokeVoidAsync("focusElement", Anchor);
+        }
+
+        // Item callbacks can move focus to a dialog or another control, so restore the
+        // menu trigger first to avoid stealing focus back after the callback completes.
+        if (item.OnClick is {} onClick)
+        {
+            await onClick();
         }
     }
 
@@ -136,5 +142,22 @@ public partial class AspireMenu : FluentComponentBase
         {
             await OpenChanged.InvokeAsync(open);
         }
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        if (_menu is { } menu)
+        {
+            // Remove this workaround once FluentMenu unregisters itself: https://github.com/microsoft/aspire/issues/18852
+            if (ServiceProvider.GetService<IMenuService>() is { } menuService)
+            {
+                menuService.Remove(menu);
+                menuService.OnMenuUpdated();
+            }
+
+            _menu = null;
+        }
+
+        return ValueTask.CompletedTask;
     }
 }

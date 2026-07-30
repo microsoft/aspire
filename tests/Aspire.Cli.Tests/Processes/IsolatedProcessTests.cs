@@ -26,10 +26,12 @@ public class IsolatedProcessTests
             startInfo.ArgumentList.Add(arg);
         }
 
-        await using var child = IsolatedProcess.Start(
-            startInfo,
-            standardOutputHandler: (_, line) => stdout.Enqueue(line),
-            standardErrorHandler: (_, line) => stderr.Enqueue(line));
+        await using var child = new IsolatedProcess(startInfo);
+        child.OutputDataReceived += (_, line) => stdout.Enqueue(line);
+        child.ErrorDataReceived += (_, line) => stderr.Enqueue(line);
+        await child.StartAsync(CancellationToken.None);
+        child.BeginOutputReadLine();
+        child.BeginErrorReadLine();
 
         // Both pumps complete on pipe EOF — child exits within tens of milliseconds, but
         // the OS pipe close + StreamReader drain can take a bit longer under load.
@@ -55,10 +57,10 @@ public class IsolatedProcessTests
             startInfo.ArgumentList.Add(arg);
         }
 
-        await using var child = IsolatedProcess.Start(
-            startInfo,
-            standardOutputHandler: static (_, _) => { },
-            standardErrorHandler: static (_, _) => { });
+        await using var child = new IsolatedProcess(startInfo);
+        await child.StartAsync(CancellationToken.None);
+        child.BeginOutputReadLine();
+        child.BeginErrorReadLine();
 
         // Carried explicitly because Process.GetProcessById returns a Process whose
         // StartInfo is empty — telemetry callers depend on these fields.
@@ -87,17 +89,18 @@ public class IsolatedProcessTests
             startInfo.ArgumentList.Add(arg);
         }
 
-        await using var child = IsolatedProcess.Start(
-            startInfo,
-            standardOutputHandler: (_, line) =>
+        await using var child = new IsolatedProcess(startInfo);
+        child.OutputDataReceived += (_, line) =>
+        {
+            seenLines.Enqueue(line);
+            if (line.Contains("line-one"))
             {
-                seenLines.Enqueue(line);
-                if (line.Contains("line-one"))
-                {
-                    throw new InvalidOperationException("intentional callback failure");
-                }
-            },
-            standardErrorHandler: static (_, _) => { });
+                throw new InvalidOperationException("intentional callback failure");
+            }
+        };
+        await child.StartAsync(CancellationToken.None);
+        child.BeginOutputReadLine();
+        child.BeginErrorReadLine();
 
         // StandardOutputClosed should fault with the recorded exception, but only AFTER
         // draining every line. The first OperationCanceledException-style early-exit was the bug.
@@ -110,6 +113,70 @@ public class IsolatedProcessTests
 
         Assert.Contains(seenLines, line => line.Contains("line-one"));
         Assert.Contains(seenLines, line => line.Contains("line-two"));
+    }
+
+    [Fact]
+    public async Task DisposeAsync_DoesNotWaitForOutputCallbackToComplete()
+    {
+        var callbackEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseCallback = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (fileName, arguments) = GetEchoCommand("blocked-callback");
+
+        var startInfo = new IsolatedProcessStartInfo
+        {
+            FileName = fileName,
+            WorkingDirectory = Environment.CurrentDirectory,
+        };
+        foreach (var arg in arguments)
+        {
+            startInfo.ArgumentList.Add(arg);
+        }
+
+        var child = new IsolatedProcess(startInfo);
+        child.OutputDataReceived += (_, _) =>
+        {
+            callbackEntered.TrySetResult();
+            releaseCallback.Task.GetAwaiter().GetResult();
+        };
+
+        try
+        {
+            await child.StartAsync(CancellationToken.None);
+            child.BeginOutputReadLine();
+            child.BeginErrorReadLine();
+            await callbackEntered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.False(child.StandardOutputClosed.IsCompleted);
+            await child.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1));
+        }
+        finally
+        {
+            releaseCallback.TrySetResult();
+            await child.StandardOutputClosed.WaitAsync(TimeSpan.FromSeconds(10));
+            await child.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task StartAsync_AfterDispose_ThrowsObjectDisposedException()
+    {
+        var (fileName, arguments) = GetEchoCommand("should-not-start");
+
+        var startInfo = new IsolatedProcessStartInfo
+        {
+            FileName = fileName,
+            WorkingDirectory = Environment.CurrentDirectory,
+        };
+        foreach (var arg in arguments)
+        {
+            startInfo.ArgumentList.Add(arg);
+        }
+
+        await using var child = new IsolatedProcess(startInfo);
+        await child.DisposeAsync();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => child.StartAsync(CancellationToken.None));
     }
 
     private static (string FileName, IReadOnlyList<string> Arguments) GetEchoCommand(string text)

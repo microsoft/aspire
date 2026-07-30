@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREWATCH001
 
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -138,5 +139,110 @@ public class OperationModesTests(ITestOutputHelper outputHelper)
             .Create(["--operation", "publish", "--publisher", "manifest", "--output-path", "test-output-path"])
             .WithTestAndResourceLogging(outputHelper);
         Assert.Equal(DistributedApplicationOperation.Publish, builder.ExecutionContext.Operation);
+    }
+
+    [Fact]
+    public void WatchIsDisabledByDefaultInRunMode()
+    {
+        // Without any watch configuration the AppHost runs without watch.
+
+        using var builder = TestDistributedApplicationBuilder
+            .Create()
+            .WithTestAndResourceLogging(outputHelper);
+
+        Assert.True(builder.ExecutionContext.IsRunMode);
+        Assert.False(builder.ExecutionContext.RunConfiguration.WatchEnabled);
+    }
+
+    [Fact]
+    public void WatchIsEnabledWhenConfigured()
+    {
+        // The "AppHost:Run:WatchEnabled" configuration key enables watch.
+
+        using var builder = TestDistributedApplicationBuilder
+            .Create(["AppHost:Run:WatchEnabled=true"])
+            .WithTestAndResourceLogging(outputHelper);
+
+        Assert.True(builder.ExecutionContext.IsRunMode);
+        Assert.True(builder.ExecutionContext.RunConfiguration.WatchEnabled);
+    }
+
+    [Fact]
+    public void WatchConfigurationIsCaseInsensitive()
+    {
+        // The value is parsed case-insensitively so callers do not have to match a particular casing.
+
+        using var builder = TestDistributedApplicationBuilder
+            .Create(["AppHost:Run:WatchEnabled=TRUE"])
+            .WithTestAndResourceLogging(outputHelper);
+
+        Assert.True(builder.ExecutionContext.RunConfiguration.WatchEnabled);
+    }
+
+    [Fact]
+    public void WatchIsDisabledForUnparseableValue()
+    {
+        // An unrecognized value must never fail the run; watch stays disabled.
+
+        using var builder = TestDistributedApplicationBuilder
+            .Create(["AppHost:Run:WatchEnabled=bogus"])
+            .WithTestAndResourceLogging(outputHelper);
+
+        Assert.True(builder.ExecutionContext.IsRunMode);
+        Assert.False(builder.ExecutionContext.RunConfiguration.WatchEnabled);
+    }
+
+    [Fact]
+    public void WatchIsDisabledForNumericValue()
+    {
+        // Some configuration sources emit "1" for booleans. bool.TryParse rejects it, so watch stays
+        // disabled rather than being silently enabled by a value the AppHost does not accept.
+
+        using var builder = TestDistributedApplicationBuilder
+            .Create(["AppHost:Run:WatchEnabled=1"])
+            .WithTestAndResourceLogging(outputHelper);
+
+        Assert.True(builder.ExecutionContext.IsRunMode);
+        Assert.False(builder.ExecutionContext.RunConfiguration.WatchEnabled);
+    }
+
+    [Fact]
+    public void WatchIsDisabledInPublishModeEvenWhenConfigured()
+    {
+        // The run configuration is only meaningful in run mode; publish mode always reports defaults.
+
+        using var builder = TestDistributedApplicationBuilder
+            .Create(["--operation", "publish", "--publisher", "manifest", "--output-path", "test-output-path", "AppHost:Run:WatchEnabled=true"])
+            .WithTestAndResourceLogging(outputHelper);
+
+        Assert.True(builder.ExecutionContext.IsPublishMode);
+        Assert.False(builder.ExecutionContext.RunConfiguration.WatchEnabled);
+    }
+
+    [Fact]
+    public void RunConfigurationIsDefaultWhenExecutionContextConstructedForPublish()
+    {
+        // The run configuration only applies to run mode. Even if a caller constructs options with watch
+        // enabled and a Publish operation, the execution context must report defaults (publish never watches).
+
+        var options = new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Publish)
+        {
+            RunConfiguration = new RunConfiguration { WatchEnabled = true }
+        };
+
+        var context = new DistributedApplicationExecutionContext(options);
+
+        Assert.True(context.IsPublishMode);
+        Assert.False(context.RunConfiguration.WatchEnabled);
+    }
+
+    [Fact]
+    public void RunConfigurationIsNeverNull()
+    {
+        // Every constructor must produce a usable run configuration so integrations never have to null-check it.
+
+        Assert.NotNull(new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run).RunConfiguration);
+        Assert.NotNull(new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish, "manifest").RunConfiguration);
+        Assert.NotNull(new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)).RunConfiguration);
     }
 }

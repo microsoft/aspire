@@ -8,10 +8,8 @@ using System.Text;
 namespace Aspire.Cli.Processes;
 
 /// <summary>
-/// Mirrors <see cref="ProcessStartInfo"/>. Differences from the BCL shape:
-/// stdout/stderr are always redirected (so there is no <c>RedirectStandardOutput</c>
-/// flag — see <see cref="IsolatedProcess.Start"/>), and <see cref="KillOnParentExit"/> adds
-/// a parent-lifetime safety net for children that should not outlive the CLI.
+/// Describes process launch options that are not fully covered by <see cref="ProcessStartInfo"/>
+/// on the target frameworks the CLI currently supports.
 /// </summary>
 internal sealed class IsolatedProcessStartInfo
 {
@@ -49,12 +47,21 @@ internal sealed class IsolatedProcessStartInfo
     /// group on Windows (CREATE_NEW_CONSOLE | SW_HIDE) so a graceful CTRL+C can target it without
     /// also signalling the CLI. When <see langword="false"/> the child
     /// is spawned via an ordinary redirected <see cref="Process.Start(ProcessStartInfo)"/> unless
-    /// <see cref="KillOnParentExit"/> is also supplied. Job-protected Windows children use the suspended-create
-    /// launcher even when they do not need graceful console isolation so they are atomically assigned
-    /// to the kill-on-parent-exit job. On Unix both modes are identical because SIGTERM via the process
-    /// group covers teardown, so only Windows branches on this flag.
+    /// <see cref="KillOnParentExit"/> or <see cref="Detached"/> requires the Windows interop launcher.
+    /// On Unix this flag does not affect process creation.
     /// </summary>
     public bool IsolateConsole { get; init; } = true;
+
+    /// <summary>
+    /// When <see langword="true"/>, launch the child outside the current process group/session on Unix.
+    /// </summary>
+    public bool Detached { get; init; }
+
+    /// <summary>
+    /// DCP executable used to create detached Unix process groups until <see cref="ProcessStartInfo"/>
+    /// exposes this directly.
+    /// </summary>
+    public string? DetachedUnixLauncherPath { get; set; }
 
     /// <summary>
     /// Returns true when the caller has read or modified <see cref="Environment"/>. The
@@ -81,87 +88,62 @@ internal sealed class IsolatedProcessStartInfo
     /// so the spawn uses this explicit block rather than re-inheriting the parent.
     /// </summary>
     internal IDictionary<string, string?> UseEmptyEnvironment()
-        => _environment = new Dictionary<string, string?>(EnvironmentComparer);
+        => _environment = new Dictionary<string, string?>(ProcessEnvironment.Comparer);
 
     private static Dictionary<string, string?> LoadParentEnvironment()
     {
         // Snapshot the parent env on first access. ProcessStartInfo.Environment has the
         // same semantics — touching the property materializes the inherited block so the
         // caller can mutate it freely without affecting the parent process.
-        var parent = System.Environment.GetEnvironmentVariables();
-        var dict = new Dictionary<string, string?>(parent.Count, EnvironmentComparer);
-        foreach (System.Collections.DictionaryEntry entry in parent)
-        {
-            dict[(string)entry.Key] = entry.Value as string;
-        }
-        return dict;
+        return ProcessEnvironment.LoadParentEnvironment();
     }
-
-    // OrdinalIgnoreCase mirrors ProcessStartInfo's behavior on Windows (env vars are
-    // case-insensitive). Using it on all platforms is slightly less strict than the
-    // Unix kernel (which treats env names as bytes) but it matches what ProcessStartInfo
-    // does and prevents the trap of accidentally having both "Path" and "PATH" entries.
-    private static StringComparer EnvironmentComparer => StringComparer.OrdinalIgnoreCase;
 }
 
 /// <summary>
-/// Mirrors <see cref="System.Diagnostics.Process"/> for a child spawned by <see cref="Start"/>.
-/// On Windows, callers can request either kill-on-parent-exit, a hidden console
-/// (CREATE_NEW_CONSOLE | SW_HIDE) for targeted graceful shutdown, or both. On Unix it's a thin
-/// <see cref="Process.Start(ProcessStartInfo)"/> wrapper because SIGTERM via the process group is
-/// enough.
+/// Mirrors the subset of <see cref="System.Diagnostics.Process"/> the CLI needs while compensating
+/// for process launch features missing from the target framework.
 /// </summary>
-/// <remarks>
-/// Differences from the BCL shape worth knowing about:
-/// <list type="bullet">
-///   <item>Stdout/stderr handlers are required at <see cref="Start"/> time — no
-///   <c>OutputDataReceived</c> event you can forget to subscribe, no <c>BeginOutputReadLine</c>
-///   to forget to call. Handlers receive <c>(sender, line)</c>, mirroring
-///   <see cref="DataReceivedEventHandler"/>.</item>
-///   <item><see cref="StandardOutputClosed"/> / <see cref="StandardErrorClosed"/> are separate
-///   from <see cref="WaitForExitAsync"/> so callers can wait for the pipes to fully drain after
-///   the child exits — <see cref="Process.WaitForExit()"/> can return with data still queued.</item>
-/// </list>
-/// </remarks>
 internal sealed partial class IsolatedProcess : IAsyncDisposable
 {
-    private readonly Func<TimeSpan, ValueTask> _disposeAsync;
-    private readonly Func<int>? _exitCodeProvider;
-    private readonly Func<bool>? _hasExitedProvider;
-    private readonly Func<CancellationToken, Task>? _waitForExitProvider;
-    private int _disposed;
+    private readonly IsolatedProcessStartInfo _startInfo;
+    private Func<ValueTask> _disposeAsync = () => ValueTask.CompletedTask;
+    private Func<int>? _exitCodeProvider;
+    private Func<bool>? _hasExitedProvider;
+    private Func<CancellationToken, Task>? _waitForExitProvider;
+    private Process? _process;
+    private int? _id;
+    private DateTimeOffset? _startTime;
+    private StartedProcess? _startedProcess;
+    private readonly TaskCompletionSource _startCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private int _lifecycleState = (int)LifecycleState.NotStarted;
+    private int _outputReadState;
+    private int _errorReadState;
 
-    private IsolatedProcess(
-        Process process,
-        string fileName,
-        IReadOnlyList<string> arguments,
-        Task standardOutputClosed,
-        Task standardErrorClosed,
-        Func<TimeSpan, ValueTask> disposeAsync,
-        Func<int>? exitCodeProvider,
-        Func<bool>? hasExitedProvider,
-        Func<CancellationToken, Task>? waitForExitProvider)
+    public IsolatedProcess(IsolatedProcessStartInfo startInfo)
     {
-        Process = process;
-        Id = process.Id;
-        FileName = fileName;
-        Arguments = arguments;
-        StandardOutputClosed = standardOutputClosed;
-        StandardErrorClosed = standardErrorClosed;
-        _disposeAsync = disposeAsync;
-        _exitCodeProvider = exitCodeProvider;
-        _hasExitedProvider = hasExitedProvider;
-        _waitForExitProvider = waitForExitProvider;
+        ArgumentNullException.ThrowIfNull(startInfo);
+
+        _startInfo = startInfo;
+        FileName = startInfo.FileName;
+        Arguments = startInfo.ArgumentList.ToArray();
+        StandardOutputClosed = Task.CompletedTask;
+        StandardErrorClosed = Task.CompletedTask;
     }
 
+    /// <summary>Raised for each line read from stdout.</summary>
+    public event Action<IsolatedProcess, string>? OutputDataReceived;
+
+    /// <summary>Raised for each line read from stderr.</summary>
+    public event Action<IsolatedProcess, string>? ErrorDataReceived;
+
     /// <summary>The underlying <see cref="System.Diagnostics.Process"/> for escape-hatch scenarios.</summary>
-    public Process Process { get; }
+    public Process Process => _process ?? throw new InvalidOperationException($"{nameof(IsolatedProcess)} has not been started.");
 
     /// <summary>
     /// The child's process id. Captured eagerly at spawn time because <see cref="Process.Id"/>
     /// throws once the underlying handle is closed, which can race a fast-exiting child.
     /// </summary>
-    public int Id { get; }
+    public int Id => _id ?? throw new InvalidOperationException($"{nameof(IsolatedProcess)} has not been started.");
 
     /// <summary>
     /// The original executable path. <see cref="ProcessStartInfo.FileName"/> on a
@@ -171,7 +153,7 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
     public string FileName { get; }
 
     /// <summary>The original argument list. Same rationale as <see cref="FileName"/>.</summary>
-    public IReadOnlyList<string> Arguments { get; }
+    public IReadOnlyList<string> Arguments { get; private set; }
 
     /// <summary>
     /// Mirrors <see cref="Process.HasExited"/>. The Windows spawn path overrides this with a
@@ -190,16 +172,67 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
     /// </summary>
     public int ExitCode => _exitCodeProvider?.Invoke() ?? Process.ExitCode;
 
+    public DateTimeOffset? StartTime => _startTime;
+
     /// <summary>
     /// Completes when the stdout pump finishes (pipe EOF — i.e. child closed the stream
     /// or exited). Faults if any stdout handler threw at any point during draining; the
     /// pump still drains to EOF before surfacing the fault so a hostile handler cannot
     /// back-pressure the child via a full pipe.
     /// </summary>
-    public Task StandardOutputClosed { get; }
+    public Task StandardOutputClosed { get; private set; }
 
     /// <summary>Stderr counterpart of <see cref="StandardOutputClosed"/>.</summary>
-    public Task StandardErrorClosed { get; }
+    public Task StandardErrorClosed { get; private set; }
+
+    /// <summary>
+    /// Starts asynchronous stdout line reads, matching <see cref="Process.BeginOutputReadLine"/>.
+    /// </summary>
+    public void BeginOutputReadLine()
+    {
+        var startedProcess = GetStartedProcessForAsyncRead();
+
+        if (Interlocked.CompareExchange(ref _outputReadState, 1, 0) != 0)
+        {
+            throw new InvalidOperationException($"{nameof(BeginOutputReadLine)} has already been called.");
+        }
+
+        var outputTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        StandardOutputClosed = outputTcs.Task;
+
+        var outputPump = ProcessPump.Start(startedProcess.StandardOutput, line => OutputDataReceived?.Invoke(this, line));
+        _ = ForwardPumpAsync(outputPump.Completion, outputTcs);
+    }
+
+    /// <summary>
+    /// Starts asynchronous stderr line reads, matching <see cref="Process.BeginErrorReadLine"/>.
+    /// </summary>
+    public void BeginErrorReadLine()
+    {
+        var startedProcess = GetStartedProcessForAsyncRead();
+
+        if (Interlocked.CompareExchange(ref _errorReadState, 1, 0) != 0)
+        {
+            throw new InvalidOperationException($"{nameof(BeginErrorReadLine)} has already been called.");
+        }
+
+        var errorTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        StandardErrorClosed = errorTcs.Task;
+
+        var errorPump = ProcessPump.Start(startedProcess.StandardError, line => ErrorDataReceived?.Invoke(this, line));
+        _ = ForwardPumpAsync(errorPump.Completion, errorTcs);
+    }
+
+    private StartedProcess GetStartedProcessForAsyncRead()
+    {
+        return (LifecycleState)Volatile.Read(ref _lifecycleState) switch
+        {
+            LifecycleState.Started => _startedProcess
+                ?? throw new InvalidOperationException($"{nameof(IsolatedProcess)} has not been started."),
+            LifecycleState.Disposed => throw new ObjectDisposedException(nameof(IsolatedProcess)),
+            _ => throw new InvalidOperationException($"{nameof(IsolatedProcess)} has not been started.")
+        };
+    }
 
     /// <summary>Mirrors <see cref="Process.WaitForExitAsync(CancellationToken)"/>.</summary>
     /// <remarks>
@@ -214,77 +247,127 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
         => _waitForExitProvider?.Invoke(cancellationToken) ?? Process.WaitForExitAsync(cancellationToken);
 
     /// <summary>
-    /// Mirrors <see cref="Process.Kill(bool)"/>. Every consumer of this type needs tree-kill
-    /// semantics (graceful-shutdown failures escalate to tree kill), so callers pass
-    /// <see langword="true"/> explicitly, matching <see cref="Aspire.Cli.DotNet.ProcessExecution.Kill(bool)"/>.
+    /// Mirrors <see cref="Process.Kill(bool)"/>.
     /// </summary>
     public void Kill(bool entireProcessTree) => Process.Kill(entireProcessTree);
 
     /// <inheritdoc />
     public ValueTask DisposeAsync()
     {
-        // The caller is expected to have terminated the process by now, but we guard
-        // against double-dispose anyway because this object can land in `using` blocks
-        // and explicit cleanup paths at the same time during error recovery.
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        while (true)
         {
-            return ValueTask.CompletedTask;
-        }
+            switch ((LifecycleState)Volatile.Read(ref _lifecycleState))
+            {
+                case LifecycleState.NotStarted:
+                    if (Interlocked.CompareExchange(ref _lifecycleState, (int)LifecycleState.Disposed, (int)LifecycleState.NotStarted) == (int)LifecycleState.NotStarted)
+                    {
+                        return _disposeAsync();
+                    }
+                    break;
 
-        return _disposeAsync(TimeSpan.FromSeconds(5));
+                case LifecycleState.Starting:
+                    // StartAsync publishes _disposeAsync only after the child resources are wrapped.
+                    // Wait for that handoff so concurrent disposal cannot permanently miss them.
+                    return new ValueTask(DisposeAfterStartCompletesAsync());
+
+                case LifecycleState.Started:
+                    // The caller is expected to have terminated the process by now, but we guard
+                    // against double-dispose anyway because this object can land in `using` blocks
+                    // and explicit cleanup paths at the same time during error recovery.
+                    if (Interlocked.CompareExchange(ref _lifecycleState, (int)LifecycleState.Disposed, (int)LifecycleState.Started) == (int)LifecycleState.Started)
+                    {
+                        return _disposeAsync();
+                    }
+                    break;
+
+                case LifecycleState.Disposed:
+                    return ValueTask.CompletedTask;
+            }
+        }
     }
 
     /// <summary>
-    /// Mirrors <see cref="Process.Start(ProcessStartInfo)"/>. Spawns the child, wires the
-    /// handlers, and starts the stdout/stderr pumps before returning. Throws if the child
-    /// fails to spawn.
+    /// Creates and starts an <see cref="IsolatedProcess"/> from <paramref name="startInfo"/>.
     /// </summary>
     /// <param name="startInfo">Process launch parameters.</param>
-    /// <param name="standardOutputHandler">
-    /// Invoked once per line read from the child's stdout on a background pump. A throw
-    /// is captured and surfaced via <see cref="StandardOutputClosed"/>; the pump keeps
-    /// draining so the child cannot back-pressure on a full pipe.
-    /// </param>
-    /// <param name="standardErrorHandler">Stderr counterpart of <paramref name="standardOutputHandler"/>.</param>
-    public static IsolatedProcess Start(
+    /// <param name="cancellationToken">Cancellation token for asynchronous launch work.</param>
+    public static async Task<IsolatedProcess> StartAsync(
         IsolatedProcessStartInfo startInfo,
-        Action<IsolatedProcess, string> standardOutputHandler,
-        Action<IsolatedProcess, string> standardErrorHandler)
+        CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(startInfo);
-        ArgumentNullException.ThrowIfNull(standardOutputHandler);
-        ArgumentNullException.ThrowIfNull(standardErrorHandler);
+        var process = new IsolatedProcess(startInfo);
+        await process.StartAsync(cancellationToken).ConfigureAwait(false);
 
-        // Windows parent-exit protection requires the suspended-create / assign / resume ceremony in
-        // StartWindows. Route protected helpers through that path even when they do not need a
-        // graceful CTRL+C console group; otherwise use the ordinary redirected Process.Start shape.
-        if (OperatingSystem.IsWindows() && (startInfo.IsolateConsole || startInfo.KillOnParentExit))
-        {
-            return StartWindows(startInfo, standardOutputHandler, standardErrorHandler);
-        }
-
-        return StartRedirected(startInfo, standardOutputHandler, standardErrorHandler, redirectStandardInput: !startInfo.IsolateConsole);
+        return process;
     }
 
     /// <summary>
-    /// Cross-platform redirected spawn — a thin <see cref="Process.Start(ProcessStartInfo)"/>
-    /// wrapper. Used for every non-isolated child (all platforms) and for isolated children on
-    /// Unix, where SIGTERM / process groups handle cooperative shutdown so the new-console
-    /// gymnastics the Windows partial uses are unnecessary. <see cref="IsolatedProcessStartInfo.KillOnParentExit"/>
-    /// is ignored here until a cross-platform platform primitive is available.
+    /// Mirrors <see cref="Process.Start()"/> plus the launch knobs that require platform shims on the current target framework.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token for asynchronous launch work.</param>
+    public async Task<bool> StartAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var previousState = (LifecycleState)Interlocked.CompareExchange(ref _lifecycleState, (int)LifecycleState.Starting, (int)LifecycleState.NotStarted);
+        if (previousState != LifecycleState.NotStarted)
+        {
+            throw previousState == LifecycleState.Disposed
+                ? new ObjectDisposedException(nameof(IsolatedProcess))
+                : new InvalidOperationException($"{nameof(IsolatedProcess)} has already been started.");
+        }
+
+        try
+        {
+            StartedProcess startedProcess;
+            if (_startInfo.Detached && !OperatingSystem.IsWindows())
+            {
+                startedProcess = await StartDetachedUnixAsync(_startInfo, cancellationToken).ConfigureAwait(false);
+            }
+            // Windows parent-exit protection requires the suspended-create / assign / resume ceremony in
+            // StartWindows. Route protected helpers through that path even when they do not need a
+            // graceful CTRL+C console group; otherwise use the ordinary redirected Process.Start shape.
+            else if (OperatingSystem.IsWindows() && (_startInfo.IsolateConsole || _startInfo.KillOnParentExit || _startInfo.Detached))
+            {
+                startedProcess = StartWindows(_startInfo);
+            }
+            else
+            {
+                startedProcess = StartRedirected(_startInfo, redirectStandardInput: !_startInfo.IsolateConsole);
+            }
+
+            InitializeStartedProcess(startedProcess);
+            Volatile.Write(ref _lifecycleState, (int)LifecycleState.Started);
+            return true;
+        }
+        catch
+        {
+            Volatile.Write(ref _lifecycleState, (int)LifecycleState.Disposed);
+            await _disposeAsync().ConfigureAwait(false);
+            throw;
+        }
+        finally
+        {
+            _startCompletion.TrySetResult();
+        }
+    }
+
+    private async Task DisposeAfterStartCompletesAsync()
+    {
+        await _startCompletion.Task.ConfigureAwait(false);
+        await DisposeAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Cross-platform redirected spawn: a thin <see cref="Process.Start(ProcessStartInfo)"/> wrapper.
     /// </summary>
     /// <param name="startInfo">Process launch parameters.</param>
-    /// <param name="standardOutputHandler">Per-line callback for stdout; receives the wrapper as sender.</param>
-    /// <param name="standardErrorHandler">Per-line callback for stderr; receives the wrapper as sender.</param>
     /// <param name="redirectStandardInput">
     /// <see langword="true"/> wires stdin to an empty redirected pipe (the non-isolated shape every
     /// other CLI subprocess uses). <see langword="false"/> lets the child inherit the CLI's stdin
     /// (the isolated-Unix shape).
     /// </param>
-    private static IsolatedProcess StartRedirected(
+    private static StartedProcess StartRedirected(
         IsolatedProcessStartInfo startInfo,
-        Action<IsolatedProcess, string> standardOutputHandler,
-        Action<IsolatedProcess, string> standardErrorHandler,
         bool redirectStandardInput)
     {
         var psi = new ProcessStartInfo
@@ -296,9 +379,8 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             RedirectStandardInput = redirectStandardInput,
-            // Pin encodings so the new pump matches the existing ProcessGuestLauncher behavior
-            // regardless of the ambient Console.OutputEncoding (e.g. on container hosts that
-            // leave it set to ASCII).
+            // Pin encodings so process output decoding is stable regardless of the ambient
+            // Console.OutputEncoding (e.g. on container hosts that leave it set to ASCII).
             StandardOutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: false),
             StandardErrorEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: false),
         };
@@ -312,136 +394,42 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
         // IsolatedProcessStartInfo.Environment. Otherwise leave ProcessStartInfo to inherit
         // the parent's env verbatim — saves a snapshot-and-copy round trip for the common
         // case where nothing was customized.
-        if (startInfo.HasCustomEnvironment)
-        {
-            psi.Environment.Clear();
-            foreach (var (key, value) in startInfo.Environment)
-            {
-                // Match ProcessStartInfo.Environment semantics: a null value means "do not
-                // set this variable in the child" — we get there by simply not adding it.
-                if (value is not null)
-                {
-                    psi.Environment[key] = value;
-                }
-            }
-        }
+        ProcessEnvironment.ApplyTo(psi, startInfo.GetEnvironmentForSpawn());
 
         var process = Process.Start(psi)
             ?? throw new InvalidOperationException($"Failed to start child process: {startInfo.FileName}");
 
-        return WrapStartedProcess(
-            startInfo,
+        return new StartedProcess(
             process,
             process.StandardOutput,
             process.StandardError,
-            standardOutputHandler,
-            standardErrorHandler,
-            extraDispose: null);
+            ExtraDispose: null);
     }
 
     /// <summary>
-    /// Shared post-spawn wiring: build the <see cref="IsolatedProcess"/> wrapper, start
-    /// the pumps with the wrapper bound as the handler "sender", and bridge pump
-    /// completion to the wrapper's <see cref="StandardOutputClosed"/> /
-    /// <see cref="StandardErrorClosed"/> tasks.
+    /// Applies the already-started process and platform-specific handle/readers to this wrapper.
     /// </summary>
-    /// <remarks>
-    /// The wrapper must exist before the pumps start so the handlers can receive it as
-    /// their "sender" parameter. The pumps must produce real Task completions before
-    /// the wrapper exposes them on its <see cref="StandardOutputClosed"/>
-    /// surface. We resolve the chicken-and-egg with a pair of <see cref="TaskCompletionSource"/>
-    /// instances: the wrapper holds <c>tcs.Task</c>; pump completion drives the TCS via
-    /// <see cref="ForwardPumpAsync"/>. No assignment race exists because the TCS task
-    /// is fully constructed before the pumps start reading.
-    /// </remarks>
-    /// <param name="startInfo">The original start info — used for snapshotting FileName/Arguments onto the wrapper.</param>
-    /// <param name="process">The already-started underlying <see cref="Process"/>.</param>
-    /// <param name="standardOutput">Reader fed from the child's stdout pipe.</param>
-    /// <param name="standardError">Reader fed from the child's stderr pipe.</param>
-    /// <param name="standardOutputHandler">Per-line callback for stdout; receives the wrapper as sender.</param>
-    /// <param name="standardErrorHandler">Per-line callback for stderr; receives the wrapper as sender.</param>
-    /// <param name="extraDispose">
-    /// Optional extra cleanup to run as part of <see cref="DisposeAsync"/> after the
-    /// pump-drain window expires but before the wrapped <see cref="Process"/> is disposed.
-    /// The Windows path uses this slot to dispose the anonymous pipes and the NUL stdin
-    /// handle that are owned by the spawn path, not by the Process.
-    /// </param>
-    /// <param name="exitCodeProvider">
-    /// Optional override for <see cref="ExitCode"/>. The Windows spawn path provides one
-    /// because the managed <see cref="Process"/> returned by <see cref="Process.GetProcessById(int)"/>
-    /// cannot reliably surface ExitCode for processes it did not itself start; the override
-    /// reads the exit code via <c>GetExitCodeProcess</c> against the kept CreateProcess handle.
-    /// Unix passes <see langword="null"/> — its <see cref="Process.Start(ProcessStartInfo)"/>
-    /// path produces a Process with a working ExitCode getter.
-    /// </param>
-    /// <param name="hasExitedProvider">
-    /// Optional override for <see cref="HasExited"/>. Same rationale as
-    /// <paramref name="exitCodeProvider"/> — Windows reads via <c>WaitForSingleObject</c>
-    /// against the kept handle; Unix uses the default <see cref="Process.HasExited"/>.
-    /// </param>
-    /// <param name="waitForExitProvider">
-    /// Optional override for <see cref="WaitForExitAsync"/>. Same rationale as
-    /// <paramref name="exitCodeProvider"/> — Windows waits on the kept handle so the wait stays
-    /// consistent with the ExitCode/HasExited reads; Unix uses the default
-    /// <see cref="Process.WaitForExitAsync(CancellationToken)"/>.
-    /// </param>
-    private static IsolatedProcess WrapStartedProcess(
-        IsolatedProcessStartInfo startInfo,
-        Process process,
-        TextReader standardOutput,
-        TextReader standardError,
-        Action<IsolatedProcess, string> standardOutputHandler,
-        Action<IsolatedProcess, string> standardErrorHandler,
-        Func<ValueTask>? extraDispose,
-        Func<int>? exitCodeProvider = null,
-        Func<bool>? hasExitedProvider = null,
-        Func<CancellationToken, Task>? waitForExitProvider = null)
+    private void InitializeStartedProcess(StartedProcess startedProcess)
     {
-        // Snapshot identity off startInfo now — the caller may mutate the startInfo after
-        // we return and we don't want the wrapper to observe those changes.
-        var argumentsSnapshot = startInfo.ArgumentList.ToArray();
+        _process = startedProcess.Process;
+        _id = startedProcess.ProcessId ?? startedProcess.Process.Id;
+        Arguments = _startInfo.ArgumentList.ToArray();
+        _exitCodeProvider = startedProcess.ExitCodeProvider;
+        _hasExitedProvider = startedProcess.HasExitedProvider;
+        _waitForExitProvider = startedProcess.WaitForExitProvider;
+        _startTime = startedProcess.UseProvidedStartTime ? startedProcess.StartTime : GetStartTime(startedProcess.Process);
+        _startedProcess = startedProcess;
 
-        var outputTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var errorTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        ProcessPump? outputPump = null;
-        ProcessPump? errorPump = null;
-
-        async ValueTask DisposeAsync(TimeSpan drainTimeout)
+        async ValueTask DisposeAsync()
         {
-            // Give the pumps a bounded window to finish. They normally complete when the
-            // child exits and the pipes hit EOF. If a caller disposes before the child
-            // exits, the readers stay blocked until the OS tears the pipes down (Process
-            // disposal on Unix, pipe disposal on Windows) — the timeout keeps us from
-            // hanging on bugs.
-            using var timeoutCts = new CancellationTokenSource(drainTimeout);
-            try
+            if (startedProcess.ExtraDispose is not null)
             {
-                if (outputPump is not null && errorPump is not null)
-                {
-                    await Task.WhenAll(outputPump.Completion, errorPump.Completion).WaitAsync(timeoutCts.Token).ConfigureAwait(false);
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                // Drain timed out — fall through to extraDispose so it unblocks the pumps
-                // by tearing the pipes down (Windows path). The TCSs are completed below
-                // via the bridge once the pumps actually return.
-            }
-            catch
-            {
-                // Pump faults surface via StandardOutputClosed / StandardErrorClosed; swallow
-                // here so dispose still tears the rest down cleanly.
-            }
-
-            if (extraDispose is not null)
-            {
-                try { await extraDispose().ConfigureAwait(false); } catch { }
+                try { await startedProcess.ExtraDispose().ConfigureAwait(false); } catch { }
             }
 
             try
             {
-                process.Dispose();
+                startedProcess.Process.Dispose();
             }
             catch
             {
@@ -449,26 +437,39 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
             }
         }
 
-        var isolated = new IsolatedProcess(
-            process,
-            startInfo.FileName,
-            argumentsSnapshot,
-            standardOutputClosed: outputTcs.Task,
-            standardErrorClosed: errorTcs.Task,
-            DisposeAsync,
-            exitCodeProvider,
-            hasExitedProvider,
-            waitForExitProvider);
+        _disposeAsync = DisposeAsync;
+    }
 
-        // The pumps capture 'isolated' as the handler's "sender". The assignment is fully
-        // visible to the pump's Task.Run worker by happens-before semantics.
-        outputPump = ProcessPump.Start(standardOutput, line => standardOutputHandler(isolated, line));
-        errorPump = ProcessPump.Start(standardError, line => standardErrorHandler(isolated, line));
+    private sealed record StartedProcess(
+        Process Process,
+        TextReader StandardOutput,
+        TextReader StandardError,
+        Func<ValueTask>? ExtraDispose,
+        Func<int>? ExitCodeProvider = null,
+        Func<bool>? HasExitedProvider = null,
+        Func<CancellationToken, Task>? WaitForExitProvider = null,
+        DateTimeOffset? StartTime = null,
+        bool UseProvidedStartTime = false,
+        int? ProcessId = null);
 
-        _ = ForwardPumpAsync(outputPump.Completion, outputTcs);
-        _ = ForwardPumpAsync(errorPump.Completion, errorTcs);
+    private enum LifecycleState
+    {
+        NotStarted,
+        Starting,
+        Started,
+        Disposed
+    }
 
-        return isolated;
+    private static DateTimeOffset? GetStartTime(Process process)
+    {
+        try
+        {
+            return ProcessStartTimeHelper.TryGetProcessStartTime(process.Id) ?? new DateTimeOffset(process.StartTime);
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -493,4 +494,93 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
             tcs.TrySetException(ex);
         }
     }
+
+    /// <summary>
+    /// Gives <see cref="IsolatedProcess"/> a Process-like line-output surface when platform
+    /// launch shims own the stdio pipes.
+    /// </summary>
+    /// <remarks>
+    /// Callback exceptions do NOT terminate the drain — the pump continues reading until
+    /// EOF so that a verbose child cannot back-pressure into a full pipe and block on
+    /// every subsequent write. The first exception is recorded and surfaced via the
+    /// returned <see cref="Completion"/> task after the pump finishes draining.
+    /// </remarks>
+    private sealed class ProcessPump
+    {
+        private ProcessPump(Task completion)
+        {
+            Completion = completion;
+        }
+
+        /// <summary>Completes (or faults) when the underlying reader hits EOF.</summary>
+        public Task Completion { get; }
+
+        /// <summary>
+        /// Starts a pump that reads lines from <paramref name="reader"/> and invokes
+        /// <paramref name="onLine"/> for each non-null line. The pump runs on a background
+        /// task and stops when the reader returns null (EOF) or throws.
+        /// </summary>
+        public static ProcessPump Start(TextReader reader, Action<string> onLine)
+        {
+            var completion = Task.Run(() => RunAsync(reader, onLine));
+            return new ProcessPump(completion);
+        }
+
+        private static async Task RunAsync(TextReader reader, Action<string> onLine)
+        {
+            Exception? firstCallbackException = null;
+
+            while (true)
+            {
+                string? line;
+                try
+                {
+                    line = await reader.ReadLineAsync().ConfigureAwait(false);
+                }
+                catch (ObjectDisposedException)
+                {
+                    // The reader's underlying stream was torn down (typically because the
+                    // child process was disposed while a read was in flight). Treat as EOF
+                    // and let the pump exit cleanly — surfacing a previously-recorded
+                    // callback exception at this point would just confuse error attribution.
+                    return;
+                }
+                catch (IOException)
+                {
+                    // The pipe was broken — Windows surfaces "pipe is broken" / Unix surfaces
+                    // EBADF when the underlying handle is reaped during a read. Treat as EOF.
+                    return;
+                }
+
+                if (line is null)
+                {
+                    break;
+                }
+
+                try
+                {
+                    onLine(line);
+                }
+                catch (Exception ex) when (firstCallbackException is null)
+                {
+                    // Record but keep draining — the pipe MUST be drained so the child can
+                    // continue to write without blocking. The recorded exception is
+                    // re-thrown after EOF so callers can observe it via Completion.
+                    firstCallbackException = ex;
+                }
+                catch
+                {
+                    // Subsequent callback failures are dropped; the first one is enough
+                    // signal for callers.
+                }
+            }
+
+            if (firstCallbackException is not null)
+            {
+                // Preserve the original stack trace when faulting the pump task.
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(firstCallbackException).Throw();
+            }
+        }
+    }
+
 }

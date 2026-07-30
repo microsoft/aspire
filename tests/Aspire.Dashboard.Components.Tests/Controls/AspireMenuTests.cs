@@ -4,6 +4,8 @@
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Bunit;
+using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
@@ -12,7 +14,43 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 public class AspireMenuTests : DashboardTestContext
 {
     [Fact]
-    public void ClickItem_RestoreFocusOnItemClickTrue_FocusesAnchor()
+    public async Task DisposeAsync_RemovesFluentMenuFromMenuProvider()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+
+        var menuService = Services.GetRequiredService<IMenuService>();
+        var provider = RenderComponent<FluentMenuProvider>();
+        var menuHost = RenderComponent<CascadingValue<bool>>(builder =>
+        {
+            builder.Add(p => p.Value, false);
+            builder.AddChildContent<AspireMenu>(menuBuilder =>
+            {
+                menuBuilder.Add(p => p.Anchor, "menu-anchor");
+                menuBuilder.Add(p => p.Items, new[] { new MenuButtonItem { Text = "Item" } });
+            });
+        });
+        var menu = menuHost.FindComponent<FluentMenu>().Instance;
+        Assert.Contains(menu, menuService.Menus);
+
+        await menuHost.InvokeAsync(() => menuService.RefreshMenuAsync(menu.Id!, isOpen: true));
+
+        provider.WaitForAssertion(() => Assert.Single(provider.FindComponents<FluentMenu>()));
+
+        menuHost.SetParametersAndRender(builder =>
+        {
+            builder.Add(p => p.Value, false);
+            builder.Add(p => p.ChildContent, (RenderFragment)(_ => { }));
+        });
+
+        Assert.Empty(menuService.Menus);
+        provider.WaitForAssertion(() => Assert.Empty(provider.FindComponents<FluentMenu>()));
+    }
+
+    [Fact]
+    public void ClickItem_MenuButton_FocusesAnchorBeforeOnClick()
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         FluentUISetupHelpers.SetupFluentUIComponents(this);
@@ -23,7 +61,7 @@ public class AspireMenuTests : DashboardTestContext
         var anchor = "view-options-button";
         var itemClicked = false;
         var focusElementInvocationHandler = JSInterop.SetupVoid("focusElement", anchor);
-        var focusElementInvocationsDuringOnClick = -1;
+        focusElementInvocationHandler.SetVoidResult();
         var items = new List<MenuButtonItem>
         {
             new()
@@ -31,10 +69,7 @@ public class AspireMenuTests : DashboardTestContext
                 Text = "Show hidden resources",
                 OnClick = () =>
                 {
-                    focusElementInvocationsDuringOnClick = focusElementInvocationHandler.Invocations.Count;
-                    Assert.True(
-                        focusElementInvocationsDuringOnClick == 0,
-                        $"Focus should not be restored until item OnClick completes. Actual focusElement invocations during OnClick: {focusElementInvocationsDuringOnClick}.");
+                    Assert.Single(focusElementInvocationHandler.Invocations);
                     itemClicked = true;
 
                     return Task.CompletedTask;
@@ -50,7 +85,6 @@ public class AspireMenuTests : DashboardTestContext
             builder.AddAttribute(2, nameof(AspireMenuButton.MenuButtonId), anchor);
             builder.AddAttribute(3, nameof(AspireMenuButton.Title), "View options");
             builder.AddAttribute(4, nameof(AspireMenuButton.Items), items);
-            builder.AddAttribute(5, nameof(AspireMenuButton.RestoreFocusOnItemClick), true);
             builder.CloseComponent();
         });
 
@@ -58,16 +92,13 @@ public class AspireMenuTests : DashboardTestContext
         cut.WaitForElement("fluent-menu-item").Click();
 
         Assert.True(itemClicked);
-        Assert.True(
-            focusElementInvocationsDuringOnClick == 0,
-            $"Expected zero focusElement invocations during item OnClick, but captured {focusElementInvocationsDuringOnClick}.");
         var invocation = Assert.Single(focusElementInvocationHandler.Invocations);
         Assert.Collection(invocation.Arguments,
             argument => Assert.Equal(anchor, Assert.IsType<string>(argument)));
     }
 
     [Fact]
-    public void ClickItem_RestoreFocusOnItemClickFalse_DoesNotFocusAnchor()
+    public void ClickItem_MenuButtonWithFocusRestorationDisabled_DoesNotFocusAnchor()
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         FluentUISetupHelpers.SetupFluentUIComponents(this);
@@ -98,6 +129,7 @@ public class AspireMenuTests : DashboardTestContext
             builder.AddAttribute(2, nameof(AspireMenuButton.MenuButtonId), anchor);
             builder.AddAttribute(3, nameof(AspireMenuButton.Title), "View options");
             builder.AddAttribute(4, nameof(AspireMenuButton.Items), items);
+            builder.AddAttribute(5, nameof(AspireMenuButton.RestoreFocusOnItemClick), false);
             builder.CloseComponent();
         });
 
@@ -111,4 +143,50 @@ public class AspireMenuTests : DashboardTestContext
         Assert.Empty(focusElementInvocations);
     }
 
+    [Fact]
+    public void CheckableItems_RenderAccessibleRoleAndCheckedStateInDom()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+        FluentUISetupHelpers.SetupFluentButton(this);
+
+        var anchor = "view-options-button";
+        var items = new List<MenuButtonItem>
+        {
+            new() { Text = "Console", Role = MenuItemRole.MenuItemCheckbox, Checked = false },
+            new() { Text = "Terminal", Role = MenuItemRole.MenuItemCheckbox, Checked = true },
+        };
+
+        var cut = Render(builder =>
+        {
+            builder.OpenComponent<FluentMenuProvider>(0);
+            builder.CloseComponent();
+            builder.OpenComponent<AspireMenuButton>(1);
+            builder.AddAttribute(2, nameof(AspireMenuButton.MenuButtonId), anchor);
+            builder.AddAttribute(3, nameof(AspireMenuButton.Title), "View options");
+            builder.AddAttribute(4, nameof(AspireMenuButton.Items), items);
+            builder.CloseComponent();
+        });
+
+        cut.Find($"#{anchor}").Click();
+        cut.WaitForElement("fluent-menu-item");
+
+        var menuItems = cut.FindAll("fluent-menu-item");
+        Assert.Equal(2, menuItems.Count);
+
+        // Both options must carry the checkable role so assistive technology announces
+        // them as a selectable set. Asserting on the rendered element (not the backing
+        // MenuButtonItem) guards the Role passthrough through AspireMenu -> FluentMenuItem:
+        // the unchecked item only gets role="menuitemcheckbox" from an explicit Role, since
+        // FluentMenuItem otherwise infers that role solely from a checked item.
+        Assert.Equal("menuitemcheckbox", menuItems[0].GetAttribute("role"));
+        Assert.Equal("menuitemcheckbox", menuItems[1].GetAttribute("role"));
+
+        // Only the active option reflects the checked state in the DOM. This guards the
+        // Checked passthrough; without it the rendered items would lose their checked state.
+        Assert.False(menuItems[0].HasAttribute("checked"));
+        Assert.True(menuItems[1].HasAttribute("checked"));
+    }
 }

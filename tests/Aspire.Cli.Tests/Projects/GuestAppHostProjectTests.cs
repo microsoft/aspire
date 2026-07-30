@@ -928,6 +928,48 @@ public class GuestAppHostProjectTests : IDisposable
     }
 
     [Fact]
+    public async Task RunAsync_PassesWorkloadIdToAppHostServerEnvironment()
+    {
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+        var appHostFile = new FileInfo(appHostPath);
+        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile);
+
+        var projectFactory = new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (path, _) =>
+                Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(path))
+        };
+
+        var serverSession = new FakeAppHostServerSession
+        {
+            GetRpcClientAsyncCallback = _ => Task.FromException<IAppHostRpcClient>(
+                new InvalidOperationException("Stop after the server launch environment has been captured."))
+        };
+        var sessionFactory = new FakeAppHostServerSessionFactory
+        {
+            Session = serverSession
+        };
+        var project = CreateGuestAppHostProject(
+            appHostServerProjectFactory: projectFactory,
+            serverSessionFactory: sessionFactory);
+
+        var context = new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
+        };
+
+        var exitCode = await project.RunAsync(context, CancellationToken.None);
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+        Assert.True(serverSession.StartAsyncCalled);
+        Assert.NotNull(sessionFactory.CapturedEnvironmentVariables);
+        Assert.Equal(expectedWorkloadId, sessionFactory.CapturedEnvironmentVariables[KnownConfigNames.DcpWorkloadId]);
+    }
+
+    [Fact]
     public void IsUsingProjectReferencesReturnsFalseWhenIdentityIsOverridden()
     {
         // When ASPIRE_CLI_* identity overrides (or the install sidecar) are active the CLI is

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -287,6 +288,36 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
+    public async Task CheckWindowsWorkplaceJoinAsync_ReturnsNotDetectedWhenProcessStartTimesOutInternally()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "dsregcmd"), string.Empty);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "dsregcmd.EXE"), string.Empty);
+        var processFactory = new TestProcessExecutionFactory
+        {
+            CreateExecutionWithFileNameCallback = (fileName, arguments, environment, workingDirectory, options) =>
+                new StartCancellingProcessExecution(fileName, arguments, environment)
+        };
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: [],
+            processFactory: processFactory,
+            environmentVariables: new Dictionary<string, string?>
+            {
+                ["PATH"] = workspace.Path,
+                ["PATHEXT"] = ".EXE",
+                ["USERDNSDOMAIN"] = "redmond.corp.microsoft.com",
+                ["USERNAME"] = "test.alias"
+            });
+
+        var result = await detector.CheckWindowsWorkplaceJoinAsync(CancellationToken.None);
+
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Equal("dsregcmd", processFactory.LastFileName);
+    }
+
+    [Fact]
     public async Task CheckGitHubMembershipWithTokenAsync_ReturnsFalseWhenUserRequestFails()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -503,6 +534,40 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    private sealed class StartCancellingProcessExecution(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        IDictionary<string, string>? environment) : IProcessExecution
+    {
+        public string FileName { get; } = fileName;
+
+        public IReadOnlyList<string> Arguments { get; } = arguments;
+
+        public IReadOnlyDictionary<string, string?> EnvironmentVariables { get; } =
+            environment?.ToDictionary(kvp => kvp.Key, kvp => (string?)kvp.Value)
+            ?? new Dictionary<string, string?>();
+
+        public int ProcessId => Environment.ProcessId;
+
+        public DateTimeOffset? StartTime => DateTimeOffset.UtcNow;
+
+        public bool HasExited => false;
+
+        public int ExitCode => 0;
+
+        public Task<bool> StartAsync(CancellationToken cancellationToken)
+            => throw new OperationCanceledException(cancellationToken);
+
+        public Task<int> WaitForExitAsync(CancellationToken cancellationToken)
+            => throw new InvalidOperationException("The process should not wait after start cancellation.");
+
+        public void Kill(bool entireProcessTree)
+        {
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
     private sealed class TestGitHubHttpMessageHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> sendAsync) : HttpMessageHandler

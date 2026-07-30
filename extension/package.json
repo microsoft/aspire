@@ -899,11 +899,19 @@
           "description": "%configuration.aspire.registerMcpServerInWorkspace%",
           "scope": "window"
         },
+        "aspire.appHostsPollingInterval": {
+          "type": "number",
+          "default": 30000,
+          "minimum": 1000,
+          "description": "%configuration.aspire.appHostsPollingInterval%",
+          "scope": "window"
+        },
         "aspire.globalAppHostsPollingInterval": {
           "type": "number",
           "default": 30000,
           "minimum": 1000,
           "description": "%configuration.aspire.globalAppHostsPollingInterval%",
+          "deprecationMessage": "%configuration.aspire.globalAppHostsPollingInterval.deprecated%",
           "scope": "window"
         },
         "aspire.appHostDiscoveryTimeoutMs": {

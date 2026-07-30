@@ -288,7 +288,7 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
         {
             WaitForExitAsyncCallback = (_, ct) => hangingExit.Task.WaitAsync(ct)
         };
-        Assert.True(process.Start());
+        Assert.True(await process.StartAsync(CancellationToken.None));
 
         var timeProvider = new FakeTimeProvider();
         var session = CreateSession(
@@ -530,7 +530,7 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
         if (process is null)
         {
             process = CreateRunningProcess("aspire-managed", [], env: null, new ProcessInvocationOptions());
-            Assert.True(process.Start());
+            Assert.True(process.StartAsync(CancellationToken.None).GetAwaiter().GetResult());
         }
 
         return new ProfileCaptureService.ProfileCaptureSession(
@@ -557,7 +557,7 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
         {
             WaitForExitAsyncCallback = waitForExitAsync
         };
-        Assert.True(process.Start());
+        Assert.True(process.StartAsync(CancellationToken.None).GetAwaiter().GetResult());
         return process;
     }
 

@@ -39,7 +39,7 @@ internal interface IInteractionService
     void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines);
     void DisplayRenderable(IRenderable renderable);
     Task DisplayLiveAsync(IRenderable initialRenderable, Func<Action<IRenderable>, Task> callback);
-    void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null);
+    void DisplayCancellationMessage(string? message = null, ConsoleOutput? consoleOverride = null);
     void DisplayEmptyLine();
 
     /// <summary>

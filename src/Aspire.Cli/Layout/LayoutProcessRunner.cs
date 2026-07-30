@@ -50,7 +50,7 @@ internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFact
 
         await using var execution = executionFactory.CreateExecution(toolPath, args, effectiveEnvironment, workDir, options);
 
-        if (!execution.Start())
+        if (!await execution.StartAsync(ct).ConfigureAwait(false))
         {
             throw new InvalidOperationException($"Failed to start process: {toolPath}");
         }
@@ -88,7 +88,10 @@ internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFact
 
         var execution = executionFactory.CreateExecution(toolPath, args, effectiveEnvironment, workDir, effectiveOptions);
 
-        if (!execution.Start())
+        // StartAsync returns a background execution handle. Its caller owns the lifetime and must
+        // explicitly wait, kill, or dispose it; cancellation here would only abort launch setup,
+        // not define how the background process should be stopped after it starts.
+        if (!await execution.StartAsync(CancellationToken.None).ConfigureAwait(false))
         {
             await execution.DisposeAsync().ConfigureAwait(false);
             throw new InvalidOperationException($"Failed to start process: {toolPath}");

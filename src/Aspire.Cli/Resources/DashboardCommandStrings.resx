@@ -184,6 +184,6 @@
     <value>Failed to start Aspire dashboard: {0}</value>
   </data>
   <data name="StoppingDashboard" xml:space="preserve">
-    <value>Stopping dashboard</value>
+    <value>Stopping dashboard.</value>
   </data>
 </root>

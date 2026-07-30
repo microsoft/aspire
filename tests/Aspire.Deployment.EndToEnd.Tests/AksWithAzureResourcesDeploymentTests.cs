@@ -135,10 +135,10 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 #pragma warning disable ASPIREAZURE003
 
-// AKS environment with DASv5 SKUs
+// AKS environment with DSv5 SKUs
 var aks = builder.AddAzureKubernetesEnvironment("aks")
-    .WithSystemNodePool("Standard_D2as_v5");
-aks.AddNodePool("workload", "Standard_D2as_v5", 1, 3);
+    .WithSystemNodePool("Standard_D2s_v5");
+aks.AddNodePool("workload", "Standard_D2s_v5", 1, 3);
 
 // Azure resources co-deployed alongside AKS
 var vault = builder.AddAzureKeyVault("vault");
@@ -212,7 +212,9 @@ app.Run();
             await auto.WaitForSuccessPromptAsync(counter);
 
             // Step 10: Set environment variables for deployment
-            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
+            // Unset the job-level Azure__Location=westus3 the CI workflow injects: on Linux it coexists
+            // with AZURE__LOCATION (case-sensitive env) and .NET config may bind the inherited westus3 instead.
+            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && unset Azure__Location && export AZURE__LOCATION=centralus && export AZURE__RESOURCEGROUP={resourceGroupName}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 

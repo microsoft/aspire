@@ -103,6 +103,40 @@ public class OrphanDetectionEnvironmentTests
     }
 
     [Fact]
+    public void Apply_WithOverwriteAndNullStartTime_RemovesCallerStartTimes()
+    {
+        var environment = new Dictionary<string, string?>(StringComparer.Ordinal)
+        {
+            [KnownConfigNames.CliProcessId] = "999",
+            [KnownConfigNames.CliProcessStarted] = "111",
+            [KnownConfigNames.CliProcessStartedStable] = "222",
+        };
+
+        OrphanDetectionEnvironment.Apply(environment, pid: 4321, stableStartTimeUnixMilliseconds: null, KnownConfigNames.CliProcessId, KnownConfigNames.CliProcessStarted, overwrite: true);
+
+        Assert.Equal("4321", environment[KnownConfigNames.CliProcessId]);
+        Assert.False(environment.ContainsKey(KnownConfigNames.CliProcessStarted));
+        Assert.False(environment.ContainsKey(KnownConfigNames.CliProcessStartedStable));
+    }
+
+    [Fact]
+    public void Apply_WithOverwriteAndUnavailableRuntimeStartTime_RemovesCallerLegacyStartTime()
+    {
+        var environment = new Dictionary<string, string?>(StringComparer.Ordinal)
+        {
+            [KnownConfigNames.CliProcessId] = "999",
+            [KnownConfigNames.CliProcessStarted] = "111",
+            [KnownConfigNames.CliProcessStartedStable] = "222",
+        };
+
+        OrphanDetectionEnvironment.Apply(environment, pid: int.MaxValue, stableStartTimeUnixMilliseconds: 1000, KnownConfigNames.CliProcessId, KnownConfigNames.CliProcessStarted, overwrite: true);
+
+        Assert.Equal(int.MaxValue.ToString(CultureInfo.InvariantCulture), environment[KnownConfigNames.CliProcessId]);
+        Assert.False(environment.ContainsKey(KnownConfigNames.CliProcessStarted));
+        Assert.Equal("1000", environment[KnownConfigNames.CliProcessStartedStable]);
+    }
+
+    [Fact]
     public void Apply_WithoutOverwrite_PreservesCallerValues()
     {
         var environment = new Dictionary<string, string?>(StringComparer.Ordinal)

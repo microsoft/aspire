@@ -252,9 +252,11 @@ function ensureTerminalStyles() {
   /*
    * Stage for the terminal — themed backdrop with a small breathing margin
    * around the .xterm frame. No drop-shadow on the frame, so we don't need
-   * extra padding to give shadow blur space to extend.
+   * extra padding to give shadow blur space to extend. Top padding is 0 so the
+   * framed terminal sits flush with the top of the pane, matching the console
+   * logs view (which has no padding above its content).
    */
-  padding: 8px;
+  padding: 0 8px 8px;
   overflow: hidden;
   display: flex;
   background: var(--neutral-layer-2);

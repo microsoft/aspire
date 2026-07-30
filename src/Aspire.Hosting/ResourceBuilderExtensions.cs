@@ -3023,7 +3023,7 @@ public static class ResourceBuilderExtensions
 #pragma warning restore CS0618
     }
 
-    #pragma warning disable ASPIREPROCESSCOMMAND001 // Process command APIs are experimental.
+#pragma warning disable ASPIREPROCESSCOMMAND001 // Process command APIs are experimental.
 
     /// <summary>
     /// Adds a command to the resource that starts a local process when invoked.
@@ -3513,7 +3513,7 @@ public static class ResourceBuilderExtensions
             : CommandResults.Failure(message, resultData);
     }
 
-    #pragma warning restore ASPIREPROCESSCOMMAND001
+#pragma warning restore ASPIREPROCESSCOMMAND001
 
     /// <summary>
     /// Adds a command to the resource that when invoked sends an HTTP request to the specified endpoint and path.
@@ -4767,18 +4767,27 @@ public static class ResourceBuilderExtensions
             return builder;
         }
 
-        if (builder is IResourceBuilder<IResourceWithArgs> resourceWithArgs)
+        var supportsDebuggingAnnotation = SupportsDebuggingAnnotation.Create(
+            launchConfigurationType,
+            launchConfigurationProducer,
+            rewritesArgumentsForDebugging: argsCallback is not null && builder is IResourceBuilder<IResourceWithArgs>
+        );
+
+        if (argsCallback is not null && builder is IResourceBuilder<IResourceWithArgs> resourceWithArgs)
         {
-            resourceWithArgs.WithArgs(async ctx =>
+            resourceWithArgs.WithArgs(ctx =>
             {
-                if (resourceWithArgs.Resource.SupportsDebugging(builder.ApplicationBuilder.Configuration, out _) && argsCallback is not null)
+                // Make sure that we do not call the callback if we aren't the active (last) SupportsDebuggingAnnotation, 
+                // because the callback may be specific to the launch configuration type.
+                if (resourceWithArgs.Resource.SupportsDebugging(builder.ApplicationBuilder.Configuration, out var activeAnnotation)
+                    && ReferenceEquals(activeAnnotation, supportsDebuggingAnnotation))
                 {
                     argsCallback(ctx);
                 }
             });
         }
 
-        return builder.WithAnnotation(SupportsDebuggingAnnotation.Create(launchConfigurationType, launchConfigurationProducer));
+        return builder.WithAnnotation(supportsDebuggingAnnotation);
     }
 
     /// <summary>
@@ -5091,7 +5100,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
-[AspireExport]
+    [AspireExport]
     public static IResourceBuilder<T> WithImagePushOptions<T>(
         this IResourceBuilder<T> builder,
         Func<ContainerImagePushOptionsCallbackContext, Task> callback)

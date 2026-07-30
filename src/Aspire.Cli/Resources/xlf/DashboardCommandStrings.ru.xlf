@@ -113,8 +113,8 @@
         <note />
       </trans-unit>
       <trans-unit id="StoppingDashboard">
-        <source>Stopping dashboard</source>
-        <target state="new">Stopping dashboard</target>
+        <source>Stopping dashboard.</source>
+        <target state="new">Stopping dashboard.</target>
         <note />
       </trans-unit>
     </body>

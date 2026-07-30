@@ -5,7 +5,7 @@ using System.Diagnostics;
 using System.Globalization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
-using Aspire.Cli.Processes;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -231,8 +231,10 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
+        services.Replace(ServiceDescriptor.Singleton<IProcessExecutionFactory>(new TestDetachedProcessFactory(() => { })));
+
         // Replace TimeProvider with one that immediately exceeds the backchannel wait
-        // timeout so the test doesn't wait for a real process to exit.
+        // timeout if the fake process ever stops exiting immediately.
         services.Replace(ServiceDescriptor.Singleton<TimeProvider>(new InstantTimeoutTimeProvider()));
 
         using var provider = services.BuildServiceProvider();
@@ -384,7 +386,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        services.Replace(ServiceDescriptor.Singleton<IDetachedProcessLauncher>(new TestDetachedProcessLauncher(() => detachedLauncherCalled = true)));
+        services.Replace(ServiceDescriptor.Singleton<IProcessExecutionFactory>(new TestDetachedProcessFactory(() => detachedLauncherCalled = true)));
         services.Replace(ServiceDescriptor.Singleton<TimeProvider>(new InstantTimeoutTimeProvider()));
 
         using var provider = services.BuildServiceProvider();
@@ -426,7 +428,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        services.Replace(ServiceDescriptor.Singleton<IDetachedProcessLauncher>(new TestDetachedProcessLauncher(() => detachedLauncherCalled = true)));
+        services.Replace(ServiceDescriptor.Singleton<IProcessExecutionFactory>(new TestDetachedProcessFactory(() => detachedLauncherCalled = true)));
         services.Replace(ServiceDescriptor.Singleton<TimeProvider>(new InstantTimeoutTimeProvider()));
 
         using var provider = services.BuildServiceProvider();
@@ -449,17 +451,61 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         return appHostFile;
     }
 
-    private sealed class TestDetachedProcessLauncher(Action onStart) : IDetachedProcessLauncher
+    private sealed class TestDetachedProcessFactory(Action onStart) : IProcessExecutionFactory
     {
-        public Process Start(
-            string fileName,
-            IReadOnlyList<string> arguments,
-            string workingDirectory,
-            Func<string, bool>? shouldRemoveEnvironmentVariable = null,
-            IReadOnlyDictionary<string, string>? additionalEnvironmentVariables = null)
+        public IProcessExecution CreateExecution(string fileName, string[] args, IDictionary<string, string>? env, DirectoryInfo workingDirectory, ProcessInvocationOptions options)
         {
-            onStart();
-            return new Process { StartInfo = new ProcessStartInfo(fileName) };
+            _ = fileName;
+            _ = args;
+            _ = env;
+            _ = workingDirectory;
+
+            Assert.True(options.Detached);
+            return new TestDetachedProcessExecution(onStart);
+        }
+
+        public IProcessExecution CreateExecution(ProcessStartInfo startInfo, ProcessInvocationOptions options)
+        {
+            _ = startInfo;
+
+            Assert.True(options.Detached);
+            return new TestDetachedProcessExecution(onStart);
+        }
+
+        private sealed class TestDetachedProcessExecution(Action onStart) : IProcessExecution
+        {
+            public string FileName => "test";
+
+            public IReadOnlyList<string> Arguments => [];
+
+            public IReadOnlyDictionary<string, string?> EnvironmentVariables => new Dictionary<string, string?>();
+
+            public int ProcessId => int.MaxValue - 1;
+
+            public DateTimeOffset? StartTime => DateTimeOffset.MinValue;
+
+            public bool HasExited => true;
+
+            public int ExitCode => CliExitCodes.FailedToDotnetRunAppHost;
+
+            public Task<bool> StartAsync(CancellationToken cancellationToken)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                onStart();
+                return Task.FromResult(true);
+            }
+
+            public Task<int> WaitForExitAsync(CancellationToken cancellationToken)
+            {
+                return Task.FromResult(ExitCode);
+            }
+
+            public void Kill(bool entireProcessTree)
+            {
+                _ = entireProcessTree;
+            }
+
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
         }
     }
 

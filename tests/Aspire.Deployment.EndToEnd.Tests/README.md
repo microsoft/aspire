@@ -8,7 +8,7 @@ These tests use the [Hex1b](https://github.com/hex1b/hex1b) terminal automation 
 
 ## Azure Subscription Quota Requirements
 
-The deployment tests require an Azure subscription with sufficient quota for the resources being deployed. Ensure the following quotas are available in the test region (currently `westus3`).
+The deployment tests require an Azure subscription with sufficient quota for the resources being deployed. Most scenarios deploy to `westus3`, but the AKS (Azure Kubernetes Service) scenarios deploy to `centralus`, and a couple of resource-specific tests use other regions (`australiaeast`, `eastus`). Ensure the quotas below are available in the region noted for each section.
 
 ### Container Apps
 
@@ -23,6 +23,21 @@ The deployment tests require an Azure subscription with sufficient quota for the
 |----------|---------------|-----------------|-------|
 | PremiumV3 vCPUs | 10+ | TBD | App Service Plans use PremiumV3 tier (P0V3). Each deployment needs ~1 vCPU. |
 | App Service Plans | 10+ | Default | Each deployment creates a new plan |
+
+### AKS / Kubernetes node pools
+
+The AKS scenarios deploy to `centralus`, where the subscription holds `Standard_D2s_v5` (DSv5) capacity. The CI workflow's quota self-healing (`QUOTA_TARGETS` in `.github/workflows/deployment-tests.yml`) requests the compute vCPU quotas automatically; the managed-cluster count is not exposed by the Microsoft.Quota API and must be raised manually if the default is ever insufficient:
+
+| Resource | Region | Quota Required | Notes |
+|----------|--------|----------------|-------|
+| `StandardDSv5Family` vCPUs (`Microsoft.Compute`) | `centralus` | 200 (dedicated) | System and workload node pools use `Standard_D2s_v5`. Self-healed by the workflow. |
+| Total Regional vCPUs (`Microsoft.Compute`, `cores`) | `centralus` | 200 (dedicated) | Azure enforces this regional total independently of the family quota, so node pools need headroom in both. Self-healed by the workflow. |
+| Managed Clusters (`Microsoft.ContainerService`) | `centralus` | 20 | Each AKS test creates a cluster; headroom covers concurrent runs and cleanup lag. Not exposed by the Microsoft.Quota API — request via the Azure Portal/support if the default is insufficient. |
+
+A few tests intentionally use other regions for capacity or feature reasons:
+
+- `AksBlazorRedisDeploymentTests` → `australiaeast` (`Standard_D2as_v4` / DASv4 family).
+- `AcaManagedRedisDeploymentTests` → `eastus` (Azure Managed Redis availability-zone support).
 
 ### Container Registry
 
@@ -47,11 +62,15 @@ To request quota increases:
 4. Filter by the resource type:
    - `Microsoft.App` for Container Apps
    - `Microsoft.Web` for App Service
+   - `Microsoft.Compute` for AKS node pool vCPUs
+   - `Microsoft.ContainerService` for AKS managed clusters
 5. Select the quota to increase and click **Request increase**
 
 Common quota increase requests:
 - **Container Apps Managed Environments**: Request 150+ in westus3
 - **App Service PremiumV3 vCPUs**: Request 10+ in westus3
+- **AKS `StandardDSv5Family` vCPUs**: Request 200 (dedicated) in centralus
+- **AKS Managed Clusters**: Request 20 in centralus
 
 ## Prerequisites
 
@@ -159,6 +178,7 @@ Aspire.Deployment.EndToEnd.Tests/
 ├── AzureStorageDeploymentTests.cs         # Azure Storage resource
 ├── PythonFastApiDeploymentTests.cs        # Python FastAPI to Azure Container Apps
 ├── RadiusStarterDeploymentTests.cs        # Starter template to Radius on AKS (rad deploy)
+├── RadiusAzureResourcesDeploymentTests.cs # Gap: cloud-managed Azure resource refs on Radius
 ├── TypeScriptAzureContainerAppJobDeploymentTests.cs # TypeScript AppHost ACA jobs
 ├── xunit.runner.json                  # Test runner config
 └── README.md                          # This file
@@ -186,14 +206,39 @@ Radius-specific notes:
   `rad app graph -a app --preview` (the legacy `rad app graph` routes to Applications.Core, which
   the Redis-only legacy `app` satisfies on its own) and asserts the graph names both project
   containers. Each container is then probed on its own HTTP endpoint via `kubectl port-forward`:
-  `apiservice`'s `/weatherforecast` and `webfrontend`'s home page (`/`).
-- **Cross-container connectivity is not asserted (current Radius limitation).** The `webfrontend`
-  `/weather` page fans out to `apiservice` through the Redis output cache, but Radius 0.59 does not
-  synthesize a Kubernetes `Service` for a `Radius.Compute/containers` workload, so the
-  service-discovery hostname Aspire emits for `apiservice`
-  (`apiservice.<namespace>.svc.cluster.local`) does not resolve in-cluster (`rad app graph` shows
-  `webfrontend` wired only to the cache). The test therefore validates each container in isolation
-  rather than the `/weather` end-to-end path until that connectivity is supported.
+  `apiservice`'s `/weatherforecast`, `webfrontend`'s home page (`/`), and a Redis output-cache
+  diagnostic endpoint on `webfrontend` (which verifies recipe-backed cache connection injection).
+- **Cross-container connectivity is asserted end-to-end.** The `webfrontend` `/weather` page fans
+  out to `apiservice` through the Redis output cache. The Radius `Radius.Compute/containers`
+  Kubernetes recipe creates a ClusterIP `Service` for each container that declares ports, named
+  `${normalizedName}-${containerName}` with `port`/`targetPort` set to the container port. Aspire
+  emits a single container entry keyed by the resource name, so `apiservice`'s Service is
+  `apiservice-apiservice` on port `8080`, and Aspire's Radius service discovery emits the matching
+  address `http://apiservice-apiservice.<namespace>.svc.cluster.local:8080` (see
+  `RadiusEnvironmentResource.GetHostAddressExpression` / `RadiusServiceDiscovery`). The test asserts
+  the recipe-created Service exists on the container port, then asserts the direct
+  `webfrontend` → `apiservice` diagnostic endpoint and the `/weather` page.
+
+## Radius Azure resource injection (gap)
+
+`RadiusAzureResourcesDeploymentTests.PublishWithAzureKeyVaultReferenceDocumentsCurrentRadiusGap`
+documents a **current gap**, not working coverage. The Aspire Radius publisher does not translate
+cloud-managed Azure resources (Key Vault, Storage, Service Bus, Azure Managed Redis) into Radius
+resources — only portable recipe-backed resources such as `AddRedis` are mapped. When a Radius
+container `WithReference`s an Azure resource, `aspire publish` currently **hangs** resolving
+`Azure.BicepOutputReference.GetValueAsync` inside `RadiusInfrastructureBuilder.ResolveEnvironmentAsync`
+and produces no `app.bicep`. The tracking issue is
+[#18802](https://github.com/microsoft/aspire/issues/18802).
+
+Because that hang is the bug being tracked, the test is marked `[ActiveIssue("…/18802")]` and is
+**skipped** in CI. Its body asserts the **intended fail-fast behavior** — `aspire publish` should
+exit non-zero within a bounded timeout and emit no `app.bicep` — rather than the current hang, so it
+starts passing only once the gap is closed. It needs only the current-build Aspire CLI (no
+AKS/Azure deployment). When Azure resource injection is implemented (or publish is made to fail
+fast), **remove the `[ActiveIssue]` attribute** so the test runs and guards the behavior; do not
+expect it to fail automatically while skipped. Product follow-up: add Azure resource mappings, or a
+deploy-time bridge from Azure Bicep outputs to Radius container env/connections, and fail fast
+instead of hanging.
 
 ## TypeScript deployment coverage
 
@@ -309,5 +354,6 @@ The test Azure tenant/subscription rotates approximately every 90 days per polic
 3. Grant Owner role on subscription (constrained - cannot create other Owner identities)
 4. Update GitHub secrets: `AZURE_DEPLOYMENT_TEST_CLIENT_ID`, `AZURE_DEPLOYMENT_TEST_TENANT_ID`
 5. Update GitHub variable: `AZURE_DEPLOYMENT_TEST_SUBSCRIPTION_ID`
+6. Ensure regional quotas per [Azure Subscription Quota Requirements](#azure-subscription-quota-requirements): Container Apps and App Service in `westus3`, and AKS in `centralus` (`StandardDSv5Family` vCPUs, Total Regional vCPUs, and managed clusters). The CI workflow self-heals the compute vCPU quotas (family and regional total); the managed-cluster count is not covered by the Microsoft.Quota API, so a new subscription may still need a manual portal/support request.
 
 See [Deployment Testing Documentation](../../docs/deployment-testing.md) for detailed rotation procedures.
