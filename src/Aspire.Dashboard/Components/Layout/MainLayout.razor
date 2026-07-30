@@ -80,6 +80,15 @@ else
             LaunchNotificationsAsync="@LaunchNotificationsAsync"
             LaunchSettingsAsync="@LaunchSettingsAsync" />
 
+        @* .layout-body-container occupies the "main" grid area declared in MainLayout.razor.css;
+           without it @Body has no grid placement and the routed page never renders on mobile. The
+           desktop shell renders @Body (and a DashboardMessageProvider for max-item-count notices)
+           inside <main class="app__content">, so mirror both here. *@
+        <div class="layout-body-container">
+            @Body
+            <DashboardMessageProvider />
+        </div>
+
         <InteractionsProvider />
         <DashboardToastProvider />
     </div>

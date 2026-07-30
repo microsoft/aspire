@@ -368,6 +368,26 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.Null(capturedParameters);
     }
 
+    [Theory]
+    [InlineData(true, "app__content")]
+    [InlineData(false, "layout-body-container")]
+    public void Render_AnyViewport_RendersBodyInsideLayoutContainer(bool isDesktop, string expectedContainerClass)
+    {
+        // Regression test: the mobile shell previously had no @Body reference at all (only the
+        // desktop shell's <main class="app__content"> rendered it), so every routed page appeared
+        // blank on mobile even though the header/nav menu still rendered fine.
+        SetupMainLayoutServices();
+
+        var cut = RenderComponent<MainLayout>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false));
+            builder.Add(p => p.Body, (RenderFragment)(b => b.AddMarkupContent(0, "<div id=\"test-page-marker\">Test page content</div>")));
+        });
+
+        var container = cut.Find($".{expectedContainerClass}");
+        Assert.NotNull(container.QuerySelector("#test-page-marker"));
+    }
+
     private void SetupMainLayoutServices(
         TestLocalStorage? localStorage = null,
         DashboardMessageService? messageService = null,
