@@ -15,10 +15,28 @@ namespace Aspire.Dashboard.Api;
 /// <summary>
 /// Handles telemetry API requests, returning data in OTLP JSON format.
 /// </summary>
-internal sealed class TelemetryApiService(ITelemetryRepository telemetryRepository)
+internal sealed class TelemetryApiService
 {
     private const int DefaultLimit = 200;
     private const int DefaultTraceLimit = 100;
+    private readonly DashboardDataSource? _dataSource;
+    private readonly ITelemetryRepository? _telemetryRepository;
+
+    public TelemetryApiService(DashboardDataSource dataSource)
+    {
+        _dataSource = dataSource;
+    }
+
+    internal TelemetryApiService(ITelemetryRepository telemetryRepository)
+    {
+        _telemetryRepository = telemetryRepository;
+    }
+
+    private ITelemetryRepository TelemetryRepository => _dataSource?.TelemetryRepository ?? _telemetryRepository!;
+
+    public bool TrySelectRun(string? runId) => _dataSource?.TrySelectRun(runId) ?? runId is null;
+
+    public bool IsHistoricalRun => _dataSource?.IsReadOnly == true;
 
     /// <summary>
     /// Gets spans in OTLP JSON format.
@@ -28,7 +46,7 @@ internal sealed class TelemetryApiService(ITelemetryRepository telemetryReposito
     public async Task<TelemetryApiResponse?> GetSpansAsync(string[]? resourceNames, string? traceId, bool? hasError, int? limit, CancellationToken cancellationToken, string? search = null)
     {
         // Resolve resource keys for all specified resources
-        var resources = telemetryRepository.GetResources();
+        var resources = TelemetryRepository.GetResources();
         var resourceKeys = ResolveResourceKeys(resources, resourceNames);
         if (resourceKeys is null)
         {
@@ -42,7 +60,7 @@ internal sealed class TelemetryApiService(ITelemetryRepository telemetryReposito
         var searchTextFragments = ParseAndApplySearchFilters(search, spanFilters, AddSpanFiltersFromQualifiers, key => ResolveSpanFieldKey(key) is not null);
 
         // Get spans for all resource keys (empty list means no filter / all resources)
-        var result = await telemetryRepository.GetSpansAsync(new GetSpansRequest
+        var result = await TelemetryRepository.GetSpansAsync(new GetSpansRequest
         {
             ResourceKeys = resourceKeys,
             StartIndex = 0,
@@ -81,7 +99,7 @@ internal sealed class TelemetryApiService(ITelemetryRepository telemetryReposito
     public async Task<TelemetryApiResponse?> GetTracesAsync(string[]? resourceNames, bool? hasError, int? limit, CancellationToken cancellationToken, string? search = null)
     {
         // Resolve resource keys for all specified resources
-        var resources = telemetryRepository.GetResources();
+        var resources = TelemetryRepository.GetResources();
         var resourceKeys = ResolveResourceKeys(resources, resourceNames);
         if (resourceKeys is null)
         {
@@ -104,7 +122,7 @@ internal sealed class TelemetryApiService(ITelemetryRepository telemetryReposito
         var searchTextFragments = ParseAndApplySearchFilters(search, traceFilters, AddSpanFiltersFromQualifiers, key => ResolveSpanFieldKey(key) is not null);
 
         // Get traces for all resource keys (empty list means no filter / all resources)
-        var result = await telemetryRepository.GetTracesAsync(new GetTracesRequest
+        var result = await TelemetryRepository.GetTracesAsync(new GetTracesRequest
         {
             ResourceKeys = resourceKeys,
             StartIndex = 0,
@@ -140,7 +158,7 @@ internal sealed class TelemetryApiService(ITelemetryRepository telemetryReposito
     /// </summary>
     public TelemetryApiResponse? GetTrace(string traceId)
     {
-        var trace = telemetryRepository.GetTrace(traceId);
+        var trace = TelemetryRepository.GetTrace(traceId);
         if (trace is null)
         {
             return null;
@@ -166,7 +184,7 @@ internal sealed class TelemetryApiService(ITelemetryRepository telemetryReposito
     public async Task<TelemetryApiResponse?> GetLogsAsync(string[]? resourceNames, string? traceId, string? severity, int? limit, CancellationToken cancellationToken, string? search = null)
     {
         // Resolve resource keys for all specified resources
-        var resources = telemetryRepository.GetResources();
+        var resources = TelemetryRepository.GetResources();
         var resourceKeys = ResolveResourceKeys(resources, resourceNames);
         if (resourceKeys is null)
         {
@@ -205,7 +223,7 @@ internal sealed class TelemetryApiService(ITelemetryRepository telemetryReposito
         var searchTextFragments = ParseAndApplySearchFilters(search, filters, AddLogFiltersFromQualifiers, key => ResolveLogFieldKey(key) is not null);
 
         // Get logs for all resource keys (empty list means no filter / all resources)
-        var result = await telemetryRepository.GetLogsAsync(new GetLogsContext
+        var result = await TelemetryRepository.GetLogsAsync(new GetLogsContext
         {
             ResourceKeys = resourceKeys,
             StartIndex = 0,
@@ -264,7 +282,7 @@ internal sealed class TelemetryApiService(ITelemetryRepository telemetryReposito
         };
 
         // Watch spans with filtering done inside the repository
-        await foreach (var span in telemetryRepository.WatchSpansAsync(watchRequest, cancellationToken).ConfigureAwait(false))
+        await foreach (var span in TelemetryRepository.WatchSpansAsync(watchRequest, cancellationToken).ConfigureAwait(false))
         {
             // Use compact JSON for NDJSON streaming (no indentation)
             yield return TelemetryExportService.ConvertSpanToJson(span, logs: null, indent: false);
@@ -324,7 +342,7 @@ internal sealed class TelemetryApiService(ITelemetryRepository telemetryReposito
         };
 
         // Watch logs with filtering done inside the repository
-        await foreach (var log in telemetryRepository.WatchLogsAsync(watchRequest, cancellationToken).ConfigureAwait(false))
+        await foreach (var log in TelemetryRepository.WatchLogsAsync(watchRequest, cancellationToken).ConfigureAwait(false))
         {
             var otlpData = TelemetryExportService.ConvertLogsToOtlpJson([log]);
             yield return JsonSerializer.Serialize(otlpData, OtlpJsonSerializerContext.DefaultOptions);
@@ -336,7 +354,7 @@ internal sealed class TelemetryApiService(ITelemetryRepository telemetryReposito
     /// </summary>
     public ResourceInfoJson[] GetResources()
     {
-        var resources = telemetryRepository.GetResources();
+        var resources = TelemetryRepository.GetResources();
         return resources
             .Where(r => !r.UninstrumentedPeer) // Exclude uninstrumented peers
             .Select(r => new ResourceInfoJson
@@ -349,6 +367,61 @@ internal sealed class TelemetryApiService(ITelemetryRepository telemetryReposito
                 HasMetrics = r.HasMetrics
             })
             .ToArray();
+    }
+
+    public async Task<ConsoleLogsApiResponse?> GetConsoleLogsAsync(
+        string? resourceName,
+        bool includeHidden,
+        int? limit,
+        string? search,
+        CancellationToken cancellationToken)
+    {
+        var resources = _dataSource!.ResourceRepository.GetResources()
+            .Where(resource => !resource.IsResourceHidden(includeHidden))
+            .Where(resource => resourceName is null ||
+                string.Equals(resource.Name, resourceName, StringComparisons.ResourceName) ||
+                string.Equals(resource.DisplayName, resourceName, StringComparisons.ResourceName))
+            .ToArray();
+
+        if (resourceName is not null && resources.Length == 0)
+        {
+            return null;
+        }
+
+        var fragments = SearchTextParser.ParseFragments(search);
+        var logs = new List<ConsoleLogLineJson>();
+        foreach (var resource in resources)
+        {
+            await foreach (var batch in _dataSource.ResourceRepository.GetConsoleLogs(resource.Name, cancellationToken).ConfigureAwait(false))
+            {
+                logs.AddRange(batch
+                    .Where(line => fragments.Length == 0 || SearchTextParser.MatchesAllFragments(
+                        fragments,
+                        (line.Content, resource.DisplayName),
+                        static (state, fragment) =>
+                            state.Content.Contains(fragment, StringComparisons.FullTextSearch) ||
+                            state.DisplayName.Contains(fragment, StringComparisons.FullTextSearch)))
+                    .Select(line => new ConsoleLogLineJson
+                    {
+                        ResourceName = resource.DisplayName,
+                        LineNumber = line.LineNumber,
+                        Content = line.Content,
+                        IsError = line.IsErrorMessage
+                    }));
+            }
+        }
+
+        var totalCount = logs.Count;
+        if (limit is > 0 && logs.Count > limit.Value)
+        {
+            logs = logs.Skip(logs.Count - limit.Value).ToList();
+        }
+
+        return new ConsoleLogsApiResponse
+        {
+            Logs = logs.ToArray(),
+            TotalCount = totalCount
+        };
     }
 
     /// <summary>
@@ -526,7 +599,7 @@ internal sealed class TelemetryApiService(ITelemetryRepository telemetryReposito
         // Subscribe before the first check so no notification can be missed between
         // GetResources() and the subscription registration.
         var signal = Channel.CreateBounded<bool>(new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropOldest });
-        using var subscription = telemetryRepository.OnNewResources(() =>
+        using var subscription = TelemetryRepository.OnNewResources(() =>
         {
             signal.Writer.TryWrite(true);
             return Task.CompletedTask;
@@ -534,7 +607,7 @@ internal sealed class TelemetryApiService(ITelemetryRepository telemetryReposito
 
         while (true)
         {
-            var resources = telemetryRepository.GetResources();
+            var resources = TelemetryRepository.GetResources();
             if (ResolveResourceKeys(resources, resourceNames) is { } result)
             {
                 return result;

@@ -66,6 +66,11 @@ internal sealed class AppHostLauncher(
         Description = SharedCommandStrings.IsolatedOptionDescription
     };
 
+    internal static readonly Option<string?> s_runIdOption = new("--run-id")
+    {
+        Description = RunCommandStrings.RunIdOptionDescription
+    };
+
     /// <summary>
     /// Adds the detached launch options to a command so they appear in --help.
     /// Called by both RunCommand and StartCommand to keep options in sync.
@@ -75,6 +80,7 @@ internal sealed class AppHostLauncher(
         command.Options.Add(s_appHostOption);
         command.Options.Add(s_formatOption);
         command.Options.Add(s_isolatedOption);
+        command.Options.Add(s_runIdOption);
     }
 
     /// <summary>
@@ -823,7 +829,8 @@ internal sealed class AppHostLauncher(
                 pid,
                 result.ChildProcess!.ProcessId,
                 dashboardUrls?.BaseUrlWithLoginToken,
-                childLogFile);
+                childLogFile,
+                dashboardUrls?.RunId);
             var json = JsonSerializer.Serialize(jsonResult, RunCommandJsonContext.RelaxedEscaping.DetachOutputInfo);
             interactionService.DisplayRawText(json, ConsoleOutput.Standard);
         }
@@ -837,7 +844,8 @@ internal sealed class AppHostLauncher(
                 codespacesUrl: null,
                 childLogFile,
                 isExtensionHost,
-                pid);
+                pid,
+                dashboardUrls?.RunId);
             interactionService.DisplayEmptyLine();
 
             interactionService.DisplaySuccess(RunCommandStrings.AppHostStartedSuccessfully);

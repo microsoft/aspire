@@ -3,6 +3,7 @@
 
 using System.CommandLine;
 using System.Globalization;
+using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -11,6 +12,8 @@ using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
+using Aspire.Dashboard.Utils;
+using Aspire.Otlp.Serialization;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
@@ -79,6 +82,7 @@ internal sealed class LogsCommand : BaseCommand
     private readonly ICliHostEnvironment _hostEnvironment;
     private readonly AppHostConnectionResolver _connectionResolver;
     private readonly ILogger<LogsCommand> _logger;
+    private readonly IHttpClientFactory _httpClientFactory;
 
     private static readonly Argument<string?> s_resourceArgument = new("resource")
     {
@@ -110,6 +114,7 @@ internal sealed class LogsCommand : BaseCommand
     {
         Description = LogsCommandStrings.SearchOptionDescription
     };
+    private static readonly Option<string?> s_runIdOption = TelemetryCommandHelpers.CreateRunIdOption();
 
     private readonly ResourceColorMap _resourceColorMap;
 
@@ -117,6 +122,7 @@ internal sealed class LogsCommand : BaseCommand
         AppHostConnectionResolver connectionResolver,
         ICliHostEnvironment hostEnvironment,
         ResourceColorMap resourceColorMap,
+        IHttpClientFactory httpClientFactory,
         ILogger<LogsCommand> logger,
         CommonCommandServices services)
         : base("logs", LogsCommandStrings.Description, services)
@@ -124,6 +130,7 @@ internal sealed class LogsCommand : BaseCommand
         _resourceColorMap = resourceColorMap;
         _hostEnvironment = hostEnvironment;
         _logger = logger;
+        _httpClientFactory = httpClientFactory;
         _connectionResolver = connectionResolver;
 
         Arguments.Add(s_resourceArgument);
@@ -134,6 +141,7 @@ internal sealed class LogsCommand : BaseCommand
         Options.Add(s_timestampsOption);
         Options.Add(s_includeHiddenOption);
         Options.Add(s_searchOption);
+        Options.Add(s_runIdOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -148,11 +156,31 @@ internal sealed class LogsCommand : BaseCommand
         var timestamps = parseResult.GetValue(s_timestampsOption);
         var includeHidden = parseResult.GetValue(s_includeHiddenOption);
         var search = parseResult.GetValue(s_searchOption);
+        var runId = parseResult.GetValue(s_runIdOption);
 
         // Validate --tail value
         if (tail.HasValue && tail.Value < 1)
         {
             return CommandResult.Failure(CliExitCodes.InvalidCommand, LogsCommandStrings.TailMustBePositive);
+        }
+
+        if (follow && runId is not null)
+        {
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, TelemetryCommandStrings.HistoricalFollowNotSupported);
+        }
+
+        if (runId is not null)
+        {
+            return await ExecuteHistoricalAsync(
+                passedAppHostProjectFile,
+                resourceName,
+                format,
+                tail,
+                timestamps,
+                includeHidden,
+                search,
+                runId,
+                cancellationToken).ConfigureAwait(false);
         }
 
         var result = await _connectionResolver.ResolveConnectionAsync(
@@ -254,7 +282,11 @@ internal sealed class LogsCommand : BaseCommand
             entries = entries.Skip(entries.Count - tail.Value).ToList();
         }
 
-        // Output the logs
+        return OutputSnapshot(entries, format, timestamps);
+    }
+
+    private int OutputSnapshot(IList<LogEntry> entries, OutputFormat format, bool timestamps)
+    {
         if (format == OutputFormat.Json)
         {
             // Wrapped JSON for snapshot - single JSON object compatible with jq
@@ -288,6 +320,75 @@ internal sealed class LogsCommand : BaseCommand
         }
 
         return CliExitCodes.Success;
+    }
+
+    private async Task<CommandResult> ExecuteHistoricalAsync(
+        FileInfo? appHostProjectFile,
+        string? resourceName,
+        OutputFormat format,
+        int? tail,
+        bool timestamps,
+        bool includeHidden,
+        string? search,
+        string runId,
+        CancellationToken cancellationToken)
+    {
+        var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
+            _connectionResolver,
+            InteractionService,
+            _httpClientFactory,
+            _logger,
+            appHostProjectFile,
+            dashboardUrl: null,
+            apiKey: null,
+            requireDashboard: true,
+            cancellationToken).ConfigureAwait(false);
+        if (!dashboardApi.Success)
+        {
+            return CommandResult.FromExitCode(dashboardApi.ExitCode);
+        }
+
+        try
+        {
+            using var client = TelemetryCommandHelpers.CreateApiClient(_httpClientFactory, dashboardApi.ApiToken!);
+            var url = DashboardUrls.TelemetryConsoleLogsApiUrl(
+                dashboardApi.BaseUrl!,
+                resourceName,
+                tail,
+                search,
+                includeHidden || resourceName is not null,
+                runId);
+            var response = await client.GetAsync(url, cancellationToken).ConfigureAwait(false);
+            TelemetryCommandHelpers.EnsureTelemetryApiResponse(response);
+            var apiResponse = await response.Content.ReadFromJsonAsync(
+                OtlpJsonSerializerContext.Default.ConsoleLogsApiResponse,
+                cancellationToken).ConfigureAwait(false);
+
+            var logParser = new LogParser(ConsoleColor.Black);
+            var logEntries = new LogEntries(int.MaxValue) { BaseLineNumber = 1 };
+            foreach (var log in apiResponse?.Logs ?? [])
+            {
+                logEntries.InsertSorted(logParser.CreateLogEntry(log.Content, log.IsError, log.ResourceName));
+            }
+
+            var entries = logEntries.GetEntries();
+            _resourceColorMap.ResolveAll(entries.Select(entry => entry.ResourcePrefix ?? string.Empty));
+            return CommandResult.FromExitCode(OutputSnapshot(entries, format, timestamps));
+        }
+        catch (HttpRequestException exception)
+        {
+            _logger.LogError(exception, "Failed to fetch console logs from Dashboard API");
+            var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(
+                exception,
+                dashboardApi.BaseUrl!,
+                dashboardOnly: false,
+                _httpClientFactory,
+                _logger,
+                cancellationToken,
+                runId).ConfigureAwait(false);
+            TelemetryCommandHelpers.DisplayTelemetryError(InteractionService, errorInfo);
+            return CommandResult.Failure(CliExitCodes.DashboardFailure);
+        }
     }
 
     private async Task<int> ExecuteWatchAsync(

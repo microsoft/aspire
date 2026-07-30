@@ -30,6 +30,15 @@ This mode is useful for inspecting telemetry during a single development or diag
 
 An AppHost-launched Dashboard defaults to `Run`; no additional configuration is required. Each time the AppHost starts, the Dashboard creates a separate run database. After changing the application code and restarting the AppHost, use the run selector to compare the current telemetry and resources with historical runs and evaluate the impact of the change.
 
+The CLI normally assigns a UTC timestamp run ID. A stable name can be assigned when starting an AppHost:
+
+```bash
+aspire start --run-id incident-42
+aspire run --run-id fixed-build
+```
+
+Named IDs make completed runs addressable from CLI commands and MCP tools. They are unique within the resolved Dashboard application and data directory; reusing an existing ID fails before the application starts, with the Dashboard lock providing the authoritative concurrent-start check.
+
 ### `Resume`: long-running standalone Dashboard
 
 A standalone Dashboard can reuse one persistent database across restarts. For a CLI-managed Dashboard, select `Resume` and give the application a stable name:
@@ -85,6 +94,7 @@ The Dashboard binds persistence settings from configuration or their environment
 | `Dashboard:ApplicationName` | `ASPIRE_DASHBOARD_APPLICATION_NAME` | Logical application name that partitions persisted data |
 | `Dashboard:Data:Directory` | `ASPIRE_DASHBOARD_DATA_DIRECTORY` | Root directory for persistent Dashboard data |
 | `Dashboard:Data:PersistenceMode` | `ASPIRE_DASHBOARD_PERSISTENCE_MODE` | `None`, `Run`, or `Resume` |
+| `Dashboard:Data:RunId` | `ASPIRE_DASHBOARD_RUN_ID` | Optional run ID for `Run` persistence |
 
 An AppHost-launched Dashboard receives the normalized application name and defaults to `Run`. The AppHost can override the mode with `Aspire:Dashboard:PersistenceMode` or `ASPIRE_DASHBOARD_PERSISTENCE_MODE`.
 
@@ -125,12 +135,15 @@ The Dashboard creates the directory with `Directory.CreateTempSubdirectory`, rem
             └── run.json
 ```
 
-Run IDs use the UTC start time in `yyyyMMddTHHmmssfffZ` format. `run.json` contains:
+Automatic run IDs use the UTC start time in `yyyyMMddTHHmmssfffZ` format. User-assigned IDs are portable ASCII slugs from 1 through 64 characters. They must begin and end with an ASCII letter or digit; interior characters may also contain `.`, `_`, and `-`. Whitespace, path separators, traversal, Unicode characters, edge punctuation, and Windows reserved device names are rejected on every operating system.
+
+Supplying `--run-id` requires `Run` persistence and an enabled Dashboard. Omitting it preserves automatic timestamp IDs. `run.json` contains:
 
 - schema version
 - run ID
 - UTC start and end times
 - clean-shutdown flag
+- pinned state
 - application name
 - database file name
 
@@ -160,9 +173,9 @@ Historical discovery only includes directories that:
 - have readable, valid `run.json` metadata; and
 - have the current metadata schema version.
 
-Run discovery orders pinned runs before unpinned runs, then orders each group by descending start time. The run selector applies its presentation order separately: the current run is first, followed by pinned historical runs and then unpinned historical runs, with each historical group ordered by descending start time. Pin state is stored in `run.json`; both current and historical runs can be pinned or unpinned.
+Run discovery orders pinned runs before unpinned runs, then orders each group by descending start time. The run selector applies its presentation order separately: the current run is first, followed by pinned historical runs and then unpinned historical runs, with each historical group ordered by descending metadata start time, independent of whether IDs are timestamps or user-assigned slugs. Pin state is stored in `run.json`; both current and historical runs can be pinned or unpinned from the Dashboard run selector.
 
-`Run` mode retains the five newest unpinned historical run directories. The current run and pinned historical runs do not count toward this limit, so the total number of retained runs is not fixed. Pruning happens after a new run writes its metadata. Before deleting a candidate, the pruner acquires its lock and rechecks its pin state. A historical run selected by another Dashboard circuit or a run owned by another Dashboard process is skipped, which can temporarily leave more than five unpinned historical runs. I/O and access failures are logged and do not prevent Dashboard startup.
+`Run` mode retains the current run and the five newest unpinned historical run directories per application. The current run and pinned historical runs do not count toward this historical limit, so the total number of retained runs is not fixed. Pruning happens after a new run writes its metadata. Before deleting a candidate, the pruner acquires its lock and rechecks its pin state. A historical run selected by another Dashboard circuit or a run owned by another Dashboard process is skipped, which can temporarily leave more than five unpinned historical runs. I/O and access failures are logged and do not prevent Dashboard startup.
 
 ## Database lifecycle
 

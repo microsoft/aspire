@@ -8,6 +8,7 @@ using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Dashboard.Tests.Shared;
+using Aspire.Hosting;
 using Aspire.Shared;
 using Google.Protobuf.Collections;
 using Google.Protobuf.WellKnownTypes;
@@ -87,6 +88,60 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
 
         Assert.Equal("20260720T123456789Z", runStore.RunId);
         Assert.Equal(runStore.RunId, Path.GetFileName(runStore.RunDirectory));
+    }
+
+    [Theory]
+    [InlineData("incident-42")]
+    [InlineData("build.2026_07")]
+    [InlineData("A")]
+    public void RunId_ValidPortableSlug_IsAccepted(string runId)
+    {
+        Assert.True(DashboardRunId.TryValidate(runId, out var errorMessage));
+        Assert.Null(errorMessage);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("../incident")]
+    [InlineData("incident/42")]
+    [InlineData("incident\\42")]
+    [InlineData("incident 42")]
+    [InlineData("incidént")]
+    [InlineData("-incident")]
+    [InlineData("incident-")]
+    [InlineData("CON")]
+    [InlineData("com1.log")]
+    public void RunId_InvalidPortableSlug_IsRejected(string runId)
+    {
+        Assert.False(DashboardRunId.TryValidate(runId, out var errorMessage));
+        Assert.NotNull(errorMessage);
+    }
+
+    [Fact]
+    public async Task RunMode_ConfiguredRunId_IsUsedForDirectoryAndMetadata()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var runStore = CreateRunStore(CreateOptions(workspace, runId: "incident-42"));
+        await InitializeAndPublishRunAsync(runStore);
+        using var metadata = JsonDocument.Parse(File.ReadAllText(Path.Combine(runStore.RunDirectory, "run.json")));
+
+        Assert.Equal("incident-42", runStore.RunId);
+        Assert.Equal("incident-42", Path.GetFileName(runStore.RunDirectory));
+        Assert.Equal("incident-42", metadata.RootElement.GetProperty("RunId").GetString());
+    }
+
+    [Fact]
+    public void RunMode_RejectsExistingUnlockedConfiguredRunId()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace, runId: "incident-42");
+        using (var firstRunStore = CreateRunStore(options))
+        {
+        }
+
+        var exception = Assert.Throws<InvalidOperationException>(() => CreateRunStore(options));
+
+        Assert.Equal("Dashboard run ID 'incident-42' already exists. Choose a different run ID.", exception.Message);
     }
 
     [Fact]
@@ -781,6 +836,33 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task TrySelectRun_HoldsLeaseUntilDataSourceIsDisposed()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
+        string historicalRunId;
+
+        using (var historicalRunStore = CreateRunStore(options))
+        {
+            historicalRunId = historicalRunStore.RunId;
+            using var historicalTelemetryContext = await CreateTelemetryRepositoryAsync(historicalRunStore.DatabasePath, options);
+            historicalRunStore.PublishRun();
+        }
+
+        using var currentRunStore = CreateRunStore(options);
+        var historicalRun = Assert.IsType<DashboardRunDescriptor>(currentRunStore.GetRunById(historicalRunId));
+        using var dataSourcePool = new DashboardDataSourcePool(currentRunStore, CreateRepositoryFactory(options));
+        var dataSource = CreateDataSource(currentRunStore, dataSourcePool);
+
+        Assert.True(dataSource.TrySelectRun(historicalRunId));
+        Assert.True(historicalRun.IsLeased);
+
+        dataSource.Dispose();
+
+        Assert.False(historicalRun.IsLeased);
+    }
+
+    [Fact]
     public async Task SelectedHistoricalRun_SharesDatabaseAcrossDataSources()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
@@ -1207,7 +1289,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     private static IOptions<DashboardOptions> CreateOptions(
         TemporaryWorkspace workspace,
         string applicationName = "TestApp",
-        DashboardPersistenceMode persistenceMode = DashboardPersistenceMode.Run)
+        DashboardPersistenceMode persistenceMode = DashboardPersistenceMode.Run,
+        string? runId = null)
     {
         return Options.Create(new DashboardOptions
         {
@@ -1215,7 +1298,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
             Data = new DashboardDataOptions
             {
                 Directory = workspace.Path,
-                PersistenceMode = persistenceMode
+                PersistenceMode = persistenceMode,
+                RunId = runId
             }
         });
     }

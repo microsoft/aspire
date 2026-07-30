@@ -37,6 +37,26 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task StartCommand_RejectsInvalidRunId()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("start --run-id ../incident");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Contains("../incident", Assert.Single(interactionService.DisplayedErrors), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task StartCommand_Help_ShowsStartDebugSessionOptionInExtensionContext()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

@@ -147,6 +147,16 @@
         <target state="translated">タイムスタンプ</target>
         <note />
       </trans-unit>
+      <trans-unit id="HistoricalFollowNotSupported">
+        <source>--follow cannot be used with --run-id because historical runs are immutable.</source>
+        <target state="new">--follow cannot be used with --run-id because historical runs are immutable.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HistoricalRunNotFound">
+        <source>Dashboard run '{0}' was not found.</source>
+        <target state="new">Dashboard run '{0}' was not found.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="LimitMustBePositive">
         <source>The --limit value must be a positive number.</source>
         <target state="translated">--limit の値は正の数値である必要があります。</target>
@@ -165,6 +175,11 @@
       <trans-unit id="ResourceArgumentDescription">
         <source>Filter by resource name</source>
         <target state="needs-review-translation">リソース名でフィルター処理します。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RunIdOptionDescription">
+        <source>Query telemetry from the specified Dashboard run</source>
+        <target state="new">Query telemetry from the specified Dashboard run</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchOptionDescription">

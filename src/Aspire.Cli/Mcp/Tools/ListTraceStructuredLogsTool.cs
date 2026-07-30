@@ -38,6 +38,10 @@ internal sealed class ListTraceStructuredLogsTool(IDashboardInfoProvider dashboa
                 "search": {
                   "type": "string",
                   "description": "Full-text search to filter logs. Searches across log text, attribute values, names, source, IDs, and other fields."
+                                },
+                                "runId": {
+                                    "type": "string",
+                                    "description": "Dashboard run ID. Omit to query the current run."
                 }
               },
               "required": ["traceId"]
@@ -73,16 +77,17 @@ internal sealed class ListTraceStructuredLogsTool(IDashboardInfoProvider dashboa
         {
             search = searchElement.GetString();
         }
+        var runId = McpToolHelpers.GetOptionalStringArgument(arguments, "runId");
 
         try
         {
             using var client = TelemetryCommandHelpers.CreateApiClient(httpClientFactory, apiToken);
 
-            var resources = await TelemetryCommandHelpers.GetAllResourcesAsync(client, apiBaseUrl, cancellationToken).ConfigureAwait(false);
+            var resources = await TelemetryCommandHelpers.GetAllResourcesAsync(client, apiBaseUrl, cancellationToken, runId).ConfigureAwait(false);
 
             // Build the logs API URL with traceId filter
             // Fetch all logs for the trace from the API. Limiting of returned telemetry to the MCP caller happens later.
-            var url = DashboardUrls.TelemetryLogsApiUrl(apiBaseUrl, traceId: traceId, limit: TelemetryCommandHelpers.MaxTelemetryLimit, search: search);
+            var url = DashboardUrls.TelemetryLogsApiUrl(apiBaseUrl, traceId: traceId, limit: TelemetryCommandHelpers.MaxTelemetryLimit, search: search, runId: runId);
 
             logger.LogDebug("Fetching structured logs from {Url}", url);
 
@@ -125,9 +130,11 @@ internal sealed class ListTraceStructuredLogsTool(IDashboardInfoProvider dashboa
         catch (HttpRequestException ex)
         {
             logger.LogError(ex, "Failed to fetch structured logs for trace from Dashboard API");
-            var errorMessage = dashboardInfoProvider.IsDirectConnection
-                ? await TelemetryCommandHelpers.GetDashboardApiErrorMessageAsync(ex, apiBaseUrl, httpClientFactory, logger, cancellationToken)
-                : $"Failed to fetch structured logs for trace: {ex.Message}";
+            var errorMessage = runId is not null && ex.StatusCode == System.Net.HttpStatusCode.NotFound
+                ? TelemetryCommandHelpers.FormatHistoricalRunNotFound(runId)
+                : dashboardInfoProvider.IsDirectConnection
+                    ? await TelemetryCommandHelpers.GetDashboardApiErrorMessageAsync(ex, apiBaseUrl, httpClientFactory, logger, cancellationToken)
+                    : $"Failed to fetch structured logs for trace: {ex.Message}";
             throw new McpProtocolException(errorMessage, McpErrorCode.InternalError);
         }
     }

@@ -269,6 +269,54 @@ public class TelemetryApiTests
     }
 
     [Fact]
+    public async Task HistoricalRunSelection_UsesStrictSnapshotSemantics()
+    {
+        var dataDirectory = Directory.CreateTempSubdirectory("aspire-dashboard-api-");
+        try
+        {
+            await using (var historicalApp = CreatePersistentDashboard("historical-run"))
+            {
+                await historicalApp.StartAsync().DefaultTimeout();
+            }
+
+            await using var currentApp = CreatePersistentDashboard("current-run");
+            await currentApp.StartAsync().DefaultTimeout();
+            using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{currentApp.FrontendSingleEndPointAccessor().EndPoint}");
+
+            using var currentResponse = await httpClient.GetAsync("/api/telemetry/resources").DefaultTimeout();
+            using var historicalResponse = await httpClient.GetAsync("/api/telemetry/resources?runId=historical-run").DefaultTimeout();
+            using var missingResponse = await httpClient.GetAsync("/api/telemetry/resources?runId=missing-run").DefaultTimeout();
+            using var followResponse = await httpClient.GetAsync("/api/telemetry/logs?follow=true&runId=historical-run").DefaultTimeout();
+            using var consoleLogsResponse = await httpClient.GetAsync("/api/telemetry/console-logs?runId=historical-run").DefaultTimeout();
+
+            Assert.Equal(HttpStatusCode.OK, currentResponse.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, historicalResponse.StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, missingResponse.StatusCode);
+            Assert.Equal(HttpStatusCode.BadRequest, followResponse.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, consoleLogsResponse.StatusCode);
+
+            var consoleLogs = await consoleLogsResponse.Content.ReadFromJsonAsync(OtlpJsonSerializerContext.Default.ConsoleLogsApiResponse);
+            Assert.Empty(Assert.IsType<ConsoleLogsApiResponse>(consoleLogs).Logs);
+
+            DashboardWebApplication CreatePersistentDashboard(string runId)
+            {
+                return IntegrationTestHelpers.CreateDashboardWebApplication(_testOutputHelper, config =>
+                {
+                    config[DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = FrontendAuthMode.Unsecured.ToString();
+                    config[DashboardConfigNames.DashboardDataDirectoryName.ConfigKey] = dataDirectory.FullName;
+                    config[DashboardConfigNames.DashboardApplicationName.ConfigKey] = "TelemetryApiTests";
+                    config[DashboardConfigNames.DashboardPersistenceModeName.ConfigKey] = DashboardPersistenceMode.Run.ToString();
+                    config[DashboardConfigNames.DashboardRunIdName.ConfigKey] = runId;
+                });
+            }
+        }
+        finally
+        {
+            dataDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task GetSpans_ApiAuthModeUnsecured_AllowsAccessWithoutAuth()
     {
         // Arrange - Api auth mode is unsecured (default)

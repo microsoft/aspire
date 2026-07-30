@@ -41,7 +41,9 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
                                              IHostApplicationLifetime hostApplicationLifetime,
                                              IDistributedApplicationEventing eventing,
                                              CodespacesUrlRewriter codespaceUrlRewriter,
-                                             IFileSystemService directoryService
+                                             IFileSystemService directoryService,
+                                             DashboardRunIdentity runIdentity,
+                                             TimeProvider timeProvider
                                              ) : IDistributedApplicationEventingSubscriber, IAsyncDisposable
 {
     // Fallback defaults for framework versions and TFM
@@ -61,6 +63,8 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
     public Task OnBeforeStartAsync(BeforeStartEvent @event, CancellationToken cancellationToken)
     {
         Debug.Assert(executionContext.IsRunMode, "Dashboard resource should only be added in run mode");
+
+        ResolveRunIdentity();
 
         if (@event.Model.Resources.SingleOrDefault(r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName)) is { } dashboardResource)
         {
@@ -83,6 +87,42 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         _dashboardLogsTask = WatchDashboardLogsAsync(_dashboardLogsCts.Token);
 
         return Task.CompletedTask;
+    }
+
+    private void ResolveRunIdentity()
+    {
+        var persistenceMode = GetConfigurationValueWithFallback(
+            DashboardConfigNames.DashboardPersistenceModeName,
+            "Aspire:Dashboard:PersistenceMode",
+            defaultValue: "Run");
+
+        if (!string.Equals(persistenceMode, "Run", StringComparison.OrdinalIgnoreCase))
+        {
+            if (runIdentity.IsUserSpecified)
+            {
+                throw new DistributedApplicationException($"Dashboard run ID '{runIdentity.RunId}' requires dashboard persistence mode 'Run'.");
+            }
+
+            return;
+        }
+
+        runIdentity.RunId ??= DashboardRunId.Create(timeProvider.GetUtcNow());
+
+        var applicationName = GetConfigurationValueWithFallback(
+            DashboardConfigNames.DashboardApplicationName,
+            "AppHost:DashboardApplicationName",
+            transform: DashboardService.GetDashboardApplicationName) ?? "Aspire";
+        var dataRoot = GetConfigurationValueWithFallback(
+            DashboardConfigNames.DashboardDataDirectoryName,
+            DashboardConfigNames.DashboardDataDirectoryName.ConfigKey);
+        var applicationDirectory = DashboardRunStorage.GetApplicationDirectory(dataRoot, applicationName);
+        var runDirectory = Path.Combine(applicationDirectory, "runs", runIdentity.RunId);
+
+        if (Directory.Exists(runDirectory))
+        {
+            throw new DistributedApplicationException(
+                $"Dashboard run ID '{runIdentity.RunId}' already exists for application '{applicationName}'. Choose a different run ID.");
+        }
     }
 
     private static (string NetCoreVersion, string AspNetCoreVersion) GetAppHostFrameworkVersions()
@@ -613,6 +653,10 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             DashboardConfigNames.DashboardPersistenceModeName,
             "Aspire:Dashboard:PersistenceMode",
             defaultValue: "Run");
+        if (runIdentity.RunId is not null)
+        {
+            context.EnvironmentVariables[DashboardConfigNames.DashboardRunIdName.EnvVarName] = runIdentity.RunId;
+        }
 
         PopulateDashboardUrls(context);
 
@@ -751,6 +795,27 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         {
             context.EnvironmentVariables[configName.EnvVarName] = value;
         }
+    }
+
+    private string? GetConfigurationValueWithFallback(
+        ConfigName configName,
+        string fallbackConfigurationKey,
+        string? defaultValue = null,
+        Func<string, string>? transform = null)
+    {
+        var value = configuration[configName.EnvVarName];
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            return value;
+        }
+
+        value = configuration[fallbackConfigurationKey];
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return defaultValue;
+        }
+
+        return transform is null ? value : transform(value);
     }
 
     private class EndpointGenerationContext

@@ -1,11 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Net;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Mcp.Tools;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Tests.Utils;
+using Aspire.Otlp.Serialization;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -443,6 +447,81 @@ public class ListConsoleLogsToolTests
         // The qualifier value "error" is treated as a text fragment and matches
         Assert.Contains("level:error something failed", codeBlockContent);
         Assert.DoesNotContain("Normal operation", codeBlockContent);
+    }
+
+    [Fact]
+    public async Task ListConsoleLogsTool_WithRunId_FetchesHistoricalLogsFromDashboard()
+    {
+        var apiResponse = new ConsoleLogsApiResponse
+        {
+            Logs =
+            [
+                new ConsoleLogLineJson
+                {
+                    ResourceName = "api-service",
+                    LineNumber = 7,
+                    Content = "2025-01-15T10:30:00Z Historical failure",
+                    IsError = true
+                }
+            ],
+            TotalCount = 1
+        };
+        var responseJson = JsonSerializer.Serialize(apiResponse, OtlpJsonSerializerContext.Default.ConsoleLogsApiResponse);
+        string? requestedUrl = null;
+        using var handler = new MockHttpMessageHandler(request =>
+        {
+            requestedUrl = request.RequestUri!.ToString();
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(responseJson, Encoding.UTF8, "application/json")
+            };
+        });
+        var tool = new ListConsoleLogsTool(
+            new StaticDashboardInfoProvider("http://localhost:18888", "test-token"),
+            auxiliaryBackchannelMonitor: null,
+            new MockHttpClientFactory(handler),
+            NullLogger<ListConsoleLogsTool>.Instance);
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["resourceName"] = JsonDocument.Parse("\"api-service\"").RootElement,
+            ["search"] = JsonDocument.Parse("\"failure\"").RootElement,
+            ["runId"] = JsonDocument.Parse("\"incident-42\"").RootElement
+        };
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.IsError is null or false);
+        Assert.NotNull(requestedUrl);
+        Assert.Contains("/api/telemetry/console-logs", requestedUrl, StringComparison.Ordinal);
+        Assert.Contains("resource=api-service", requestedUrl, StringComparison.Ordinal);
+        Assert.Contains("search=failure", requestedUrl, StringComparison.Ordinal);
+        Assert.Contains("runId=incident-42", requestedUrl, StringComparison.Ordinal);
+        var textContent = Assert.IsType<ModelContextProtocol.Protocol.TextContentBlock>(Assert.Single(result.Content!));
+        Assert.Equal("Historical failure", ExtractCodeBlockContent(textContent.Text));
+    }
+
+    [Fact]
+    public async Task ListConsoleLogsTool_WithUnknownRunId_ThrowsClearError()
+    {
+        using var handler = new MockHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.NotFound)
+        {
+            Content = new StringContent("{}", Encoding.UTF8, "application/problem+json")
+        });
+        var tool = new ListConsoleLogsTool(
+            new StaticDashboardInfoProvider("http://localhost:18888", "test-token"),
+            auxiliaryBackchannelMonitor: null,
+            new MockHttpClientFactory(handler),
+            NullLogger<ListConsoleLogsTool>.Instance);
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["resourceName"] = JsonDocument.Parse("\"api-service\"").RootElement,
+            ["runId"] = JsonDocument.Parse("\"missing-run\"").RootElement
+        };
+
+        var exception = await Assert.ThrowsAsync<ModelContextProtocol.McpProtocolException>(
+            () => tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None).AsTask()).DefaultTimeout();
+
+        Assert.Contains("Dashboard run 'missing-run' was not found.", exception.Message, StringComparison.Ordinal);
     }
 
     private static string ExtractCodeBlockContent(string text)

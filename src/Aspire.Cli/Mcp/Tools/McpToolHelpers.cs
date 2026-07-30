@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Web;
 using Aspire.Cli.Backchannel;
@@ -15,6 +16,11 @@ namespace Aspire.Cli.Mcp.Tools;
 
 internal static class McpToolHelpers
 {
+    public static string? GetOptionalStringArgument(IReadOnlyDictionary<string, JsonElement>? arguments, string name) =>
+        arguments?.TryGetValue(name, out var element) == true && element.ValueKind == JsonValueKind.String
+            ? element.GetString()
+            : null;
+
     public static async Task<(string apiToken, string apiBaseUrl, string? dashboardBaseUrl)> GetDashboardInfoAsync(IAuxiliaryBackchannelMonitor auxiliaryBackchannelMonitor, ILogger logger, CancellationToken cancellationToken)
     {
         var connection = await AppHostConnectionHelper.GetSelectedConnectionAsync(auxiliaryBackchannelMonitor, logger, cancellationToken).ConfigureAwait(false);
