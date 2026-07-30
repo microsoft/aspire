@@ -94,7 +94,7 @@ tests/Aspire.Dashboard.Components.Tests/
 ├── Model/                    # Component model tests
 ├── Shared/                   # Setup helpers and test utilities
 │   ├── DashboardPageTestContext.cs
-│   ├── FluentUISetupHelpers.cs
+│   ├── DashboardSetupHelpers.cs
 │   ├── ResourceSetupHelpers.cs
 │   ├── MetricsSetupHelpers.cs
 │   ├── StructuredLogsSetupHelpers.cs
@@ -211,18 +211,19 @@ public partial class ResourcesTests : DashboardTestContext
 
 ## Shared Setup Helpers
 
-Dashboard services require extensive DI setup (telemetry, storage, localization, FluentUI JS interop mocks, etc.). Reuse existing shared setup methods to avoid duplicate registration logic. **When adding tests for a new area, add a new setup helper rather than duplicating setup across test classes.**
+Dashboard services require extensive DI setup (telemetry, storage, localization, and colocated JavaScript interop mocks). Reuse existing shared setup methods to avoid duplicate registration logic. **When adding tests for a new area, add a new setup helper rather than duplicating setup across test classes.**
 
 ### Setup Helper Index
 
 | Helper | Location | Purpose |
 |--------|----------|---------|
-| `FluentUISetupHelpers.AddCommonDashboardServices()` | `Shared/FluentUISetupHelpers.cs` | Registers core DI services shared by all dashboard pages (localization, storage, telemetry, theme, dialog, shortcuts, etc.) |
-| `FluentUISetupHelpers.SetupFluentUIComponents()` | `Shared/FluentUISetupHelpers.cs` | Calls `AddFluentUIComponents()` and configures the menu provider for tests |
-| `FluentUISetupHelpers.SetupDialogInfrastructure()` | `Shared/FluentUISetupHelpers.cs` | Combines common services + FluentUI components + dialog provider JS mocks |
-| `FluentUISetupHelpers.SetupFluentDataGrid()` | `Shared/FluentUISetupHelpers.cs` | Mocks FluentDataGrid JS interop |
-| `FluentUISetupHelpers.SetupFluentSearch()` | `Shared/FluentUISetupHelpers.cs` | Mocks FluentSearch JS interop |
-| `FluentUISetupHelpers.SetupFluentMenu()` | `Shared/FluentUISetupHelpers.cs` | Mocks FluentMenu JS interop |
+| `DashboardSetupHelpers.AddCommonDashboardServices()` | `Shared/DashboardSetupHelpers.cs` | Registers core DI services shared by all dashboard pages (localization, storage, telemetry, theme, dialog, shortcuts, etc.) |
+| `DashboardSetupHelpers.SetupDialogInfrastructure()` | `Shared/DashboardSetupHelpers.cs` | Combines common services with Deck dialog provider JS mocks |
+| `DashboardSetupHelpers.SetupDialogProvider()` | `Shared/DashboardSetupHelpers.cs` | Mocks dialog focus management, scroll locking, and cleanup |
+| `DashboardSetupHelpers.SetupMenu()` | `Shared/DashboardSetupHelpers.cs` | Mocks Deck menu positioning and lifecycle interop |
+| `DashboardSetupHelpers.SetupDeckPopover()` | `Shared/DashboardSetupHelpers.cs` | Mocks Deck popover positioning and lifecycle interop |
+| `DashboardSetupHelpers.SetupColumnResizer()` | `Shared/DashboardSetupHelpers.cs` | Mocks native table and CSS-grid column resizing |
+| `DashboardSetupHelpers.SetupUrlsColumnDisplay()` | `Shared/DashboardSetupHelpers.cs` | Mocks responsive URL overflow measurement |
 | `ResourceSetupHelpers.SetupResourcesPage()` | `Shared/ResourceSetupHelpers.cs` | Full setup for the Resources page |
 | `ResourceSetupHelpers.SetupResourceDetails()` | `Shared/ResourceSetupHelpers.cs` | Setup for ResourceDetails control |
 | `MetricsSetupHelpers.SetupMetricsPage()` | `Shared/MetricsSetupHelpers.cs` | Full setup for the Metrics page |
@@ -230,27 +231,18 @@ Dashboard services require extensive DI setup (telemetry, storage, localization,
 | `StructuredLogsSetupHelpers.SetupStructuredLogsDetails()` | `Shared/StructuredLogsSetupHelpers.cs` | Setup for structured log details |
 | `IntegrationTestHelpers.CreateLoggerFactory()` | `Shared/IntegrationTestHelpers.cs` | Creates `ILoggerFactory` wired to xUnit test output |
 
-### FluentUI JS Interop Mocks
+### Deck JS Interop Mocks
 
-FluentUI Blazor components require JavaScript interop. bUnit runs without a browser, so all JS calls must be mocked. Use the helpers from `FluentUISetupHelpers`:
+Some Deck controls use colocated JavaScript for browser-only behavior. bUnit runs without a browser, so those calls must be mocked. Use `DashboardSetupHelpers`:
 
 ```csharp
-// Each FluentUI component has a corresponding setup method
-FluentUISetupHelpers.SetupFluentDataGrid(context);
-FluentUISetupHelpers.SetupFluentSearch(context);
-FluentUISetupHelpers.SetupFluentMenu(context);
-FluentUISetupHelpers.SetupFluentDivider(context);
-FluentUISetupHelpers.SetupFluentAnchor(context);
-FluentUISetupHelpers.SetupFluentKeyCode(context);
-FluentUISetupHelpers.SetupFluentToolbar(context);
-FluentUISetupHelpers.SetupFluentOverflow(context);
-FluentUISetupHelpers.SetupFluentTab(context);
-FluentUISetupHelpers.SetupFluentList(context);
-FluentUISetupHelpers.SetupFluentCheckbox(context);
-FluentUISetupHelpers.SetupFluentTextField(context);
-FluentUISetupHelpers.SetupFluentInputLabel(context);
-FluentUISetupHelpers.SetupFluentAnchoredRegion(context);
-FluentUISetupHelpers.SetupFluentDialogProvider(context);
+DashboardSetupHelpers.SetupDialogProvider(context);
+DashboardSetupHelpers.SetupMenu(context);
+DashboardSetupHelpers.SetupDeckPopover(context);
+DashboardSetupHelpers.SetupDeckCheckbox(context);
+DashboardSetupHelpers.SetupCombobox(context);
+DashboardSetupHelpers.SetupColumnResizer(context);
+DashboardSetupHelpers.SetupUrlsColumnDisplay(context);
 ```
 
 ### Adding a New Setup Helper
@@ -269,12 +261,11 @@ internal static class MyFeatureSetupHelpers
     public static void SetupMyFeaturePage(TestContext context, IDashboardClient? dashboardClient = null)
     {
         // 1. Register common dashboard services
-        FluentUISetupHelpers.AddCommonDashboardServices(context);
+        DashboardSetupHelpers.AddCommonDashboardServices(context);
 
-        // 2. Setup FluentUI JS mocks for components used by the page
-        FluentUISetupHelpers.SetupFluentDataGrid(context);
-        FluentUISetupHelpers.SetupFluentSearch(context);
-        FluentUISetupHelpers.SetupFluentMenu(context);
+        // 2. Setup colocated JS mocks for components used by the page
+        DashboardSetupHelpers.SetupMenu(context);
+        DashboardSetupHelpers.SetupDeckPopover(context);
 
         // 3. Register page-specific services
         context.Services.AddSingleton<IDashboardClient>(dashboardClient ?? new TestDashboardClient());
@@ -433,15 +424,15 @@ var mock = new Mock<IDashboardClient>();
 var client = new TestDashboardClient(isEnabled: true, initialResources: resources);
 ```
 
-### DON'T: Register Services Manually When a Helper Exists
+### DON'T: Register Services or Colocated Modules Manually When a Helper Exists
 
 ```csharp
-// DON'T: Manual FluentUI setup
-var module = JSInterop.SetupModule("./_content/Microsoft.FluentUI.../FluentDataGrid.razor.js");
-module.SetupVoid("enableColumnResizing", _ => true);
+// DON'T: Duplicate a shared colocated-module setup
+var module = JSInterop.SetupModule("./Components/Controls/Grid/ColumnResizer.razor.js");
+module.SetupVoid("initialize", _ => true);
 
 // DO: Use the helper
-FluentUISetupHelpers.SetupFluentDataGrid(this);
+DashboardSetupHelpers.SetupColumnResizer(this);
 ```
 
 ## Running Dashboard Tests

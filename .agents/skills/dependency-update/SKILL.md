@@ -313,7 +313,6 @@ Some external dependencies have known constraints:
 - **`Humanizer.Core`** — Version 3.x ships a Roslyn analyzer that requires `System.Collections.Immutable` 9.0.0, which is incompatible with the .NET 8 SDK. Cannot update until the upstream issue is fixed ([Humanizr/Humanizer#1672](https://github.com/Humanizr/Humanizer/issues/1672)).
 - **`StreamJsonRpc`** — Version 2.24.x ships a Roslyn analyzer targeting Roslyn 4.14.0, incompatible with the .NET 8 SDK. Cannot update until the upstream issue is fixed ([microsoft/vs-streamjsonrpc#1399](https://github.com/microsoft/vs-streamjsonrpc/issues/1399)).
 - **`Azure.Monitor.OpenTelemetry.Exporter`** — Version 1.6.0 introduced AOT warnings. Hold at 1.5.0 until resolved. Version is in `eng/Versions.props`.
-- **`Microsoft.FluentUI.AspNetCore.Components`** and **`Microsoft.FluentUI.AspNetCore.Components.Icons`** — Must not be automatically updated. Updates to these packages often have breaking changes and require careful manual testing of the dashboard. Always flag these for human review and manual update.
 
 ## Important Constraints
 

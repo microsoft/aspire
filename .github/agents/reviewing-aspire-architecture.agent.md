@@ -154,7 +154,7 @@ Coverage beyond flaky patterns (already in test-review-guidelines).
 
 - Defer provisioning until application run or manifest write.
 - Rate-limit dashboard updates; avoid unnecessary data processing.
-- Minimize re-renders to avoid expensive `Expression.Compile` in FluentUI Blazor.
+- Minimize dashboard re-renders, especially in virtualized or templated grids where repeated expression compilation and render-tree construction are expensive.
 
 ---
 

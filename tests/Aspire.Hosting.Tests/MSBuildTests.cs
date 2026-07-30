@@ -1039,8 +1039,6 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
                 </packageSource>
                 <packageSource key="dotnet-public">
                   <package pattern="*" />
-                  <package pattern="Microsoft.FluentUI.AspNetCore.Components" />
-                  <package pattern="Microsoft.FluentUI.AspNetCore.Components.Icons" />
                 </packageSource>
                 <packageSource key="dotnet9">
                   <package pattern="*" />
