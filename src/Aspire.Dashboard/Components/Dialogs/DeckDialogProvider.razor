@@ -1,5 +1,5 @@
 @*
-    Deck dialog host, replacing FluentDialogProvider during the Fluent-removal phase. Subscribes to
+    Deck dialog host, replacing DialogProvider for the Deck redesign. Subscribes to
     the DeckDialogService and renders each open dialog as a modal (centered) or panel (edge-docked)
     with an overlay. Escape and overlay clicks dismiss the dialog unless suppressed. Each dialog's
     content component is rendered via DynamicComponent with the cascading DeckDialogInstance so it can

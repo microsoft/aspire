@@ -1,5 +1,5 @@
 @*
-    Deck-styled tree item, replacing FluentTreeItem during the Fluent-removal phase.
+    Deck-styled tree item, replacing TreeItem for the Deck redesign.
 
     Two shapes are supported, matching how the dashboard uses tree items:
       - Text set: the item shows Text as its label. If ChildContent is also provided it is the nested
@@ -98,7 +98,7 @@
     private bool HasChildren => Text is not null && ChildContent is not null;
 
     // Selected when the tree points at this item, or (before any selection) when it opted in via
-    // InitiallySelected. Matches FluentTreeItem's initial-selection highlight.
+    // InitiallySelected. Matches TreeItem's initial-selection highlight.
     private bool Selected => Tree is not null && (Tree.IsSelected(this) || (Tree.CurrentSelected is null && InitiallySelected));
 
     protected override void OnInitialized()

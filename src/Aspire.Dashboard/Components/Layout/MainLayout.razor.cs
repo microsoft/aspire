@@ -305,8 +305,8 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     public Task LaunchSettingsAsync() => LaunchSettingsAsync(GetDefaultReturnFocusElementId(SettingsButtonId));
 
-    // Desktop renders settings as a Deck right-side pane (SettingsPane) instead of the Fluent panel.
-    // Toggled from the top bar; mobile still uses LaunchSettingsAsync (Fluent dialog).
+    // Desktop renders settings as a Deck right-side pane (SettingsPane) instead of the the previous library panel.
+    // Toggled from the top bar; mobile still uses LaunchSettingsAsync (the previous library dialog).
     private async Task ToggleSettingsPaneAsync()
     {
         if (!_showSettingsPane)
@@ -325,8 +325,8 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         StateHasChanged();
     }
 
-    // Desktop renders help as a Deck right-side pane (HelpPane) instead of the Fluent dialog.
-    // Toggled from the top bar; mobile still uses LaunchHelpAsync (Fluent dialog).
+    // Desktop renders help as a Deck right-side pane (HelpPane) instead of the the previous library dialog.
+    // Toggled from the top bar; mobile still uses LaunchHelpAsync (the previous library dialog).
     private Task ToggleHelpPaneAsync()
     {
         _showHelpPane = !_showHelpPane;
@@ -340,7 +340,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         StateHasChanged();
     }
 
-    // Desktop renders "Manage data" as a Deck right-side pane (ManageDataPane) instead of the Fluent
+    // Desktop renders "Manage data" as a Deck right-side pane (ManageDataPane) instead of the the previous library
     // dialog. Opened from the settings pane's "Manage data" action, which closes settings first to
     // avoid stacking two panes / competing focus traps.
     private void OpenManageDataPane()
@@ -437,7 +437,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         switch (shortcut)
         {
             case AspireKeyboardShortcut.Help:
-                // Desktop uses the Deck help pane; mobile keeps the Fluent help dialog.
+                // Desktop uses the Deck help pane; mobile keeps the the previous library help dialog.
                 if (ViewportInformation.IsDesktop)
                 {
                     await ToggleHelpPaneAsync();
@@ -448,7 +448,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
                 }
                 break;
             case AspireKeyboardShortcut.Settings:
-                // Desktop uses the Deck settings pane; mobile keeps the Fluent settings dialog.
+                // Desktop uses the Deck settings pane; mobile keeps the the previous library settings dialog.
                 if (ViewportInformation.IsDesktop)
                 {
                     await ToggleSettingsPaneAsync();

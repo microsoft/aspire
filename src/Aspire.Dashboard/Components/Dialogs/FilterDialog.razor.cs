@@ -195,7 +195,7 @@ public partial class FilterDialog : IAsyncDisposable
 
         // Clearing the selected value and the combo box items together wasn't correctly clearing the selected value.
         // This is hacky, but adding a delay between the two operations puts the combo box in the right state.
-        // Limitation of FluentUI: https://github.com/microsoft/fluentui-blazor/issues/2708
+        // Limitation of the previous UI library: https://github.com/microsoft/aspire/issues/2708
         await Task.Delay(100);
         ValueChanged();
     }
@@ -220,7 +220,7 @@ public partial class FilterDialog : IAsyncDisposable
 
             // If no values match the filter, don't apply the filter.
             // This improves user experience and fixes some combobox issues.
-            // https://github.com/microsoft/fluentui-blazor/issues/4314#issuecomment-3577475233
+            // https://github.com/microsoft/aspire/issues/4314#issuecomment-3577475233
             _filteredValues = newValues.Any() ? newValues.Take(maxItems).ToList() : _allValues.Take(maxItems).ToList();
         }
         else

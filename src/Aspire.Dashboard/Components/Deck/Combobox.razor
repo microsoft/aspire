@@ -1,11 +1,11 @@
 @*
-    Deck-styled editable combobox, replacing FluentCombobox during the Fluent-removal phase.
+    Deck-styled editable combobox, replacing Combobox for the Deck redesign.
 
     It is an autocomplete text field: the caller filters Items in response to Value changes (via
     @bind-Value:after) and this control renders the current Items as a listbox popup. Selecting an
     option sets Value to the option's OptionValue. Options render through OptionTemplate when
     provided, otherwise their OptionText. Keyboard: Up/Down move the active option, Enter selects it,
-    Escape closes. Mirrors the subset of FluentCombobox the dashboard uses so call sites change little.
+    Escape closes. Mirrors the subset of Combobox the dashboard uses so call sites change little.
 *@
 @namespace Aspire.Dashboard.Components.Deck
 @typeparam TOption

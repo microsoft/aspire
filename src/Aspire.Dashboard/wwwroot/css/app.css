@@ -28,7 +28,7 @@
 }
 
 /* Group the end-slot items to the right: the first slot="end" child absorbs the free space; any
-   following end-slot siblings sit next to it (matching FluentToolbar's ::part(end) container). */
+   following end-slot siblings sit next to it. */
 .deck-toolbar > [slot="end"] {
     margin-left: auto;
 }
@@ -174,7 +174,7 @@
     --codeblock-background-color: var(--neutral-layer-4);
     --table-header-border-color: var(--neutral-stroke-rest);
     --table-body-border-color: #474747;
-    /* overrides of default fluentui-blazor styling */
+    /* overrides of default the previous UI library styling */
     --error: #E10B11 !important;
     color-scheme: dark;
     --property-grid-background-color: #333333;
@@ -227,26 +227,8 @@
     --accent-olive-text: #000;
 }
 
-.fluent-data-grid-row.hover:not([row-type='header'],[row-type='sticky-header']):hover td {
-    cursor: auto !important;
-}
-
-.enable-row-click .fluent-data-grid-row.hover:not([row-type='header'],[row-type='sticky-header'], .empty-content-row, .loading-content-row):hover td {
-    cursor: pointer !important;
-}
-
 [data-theme="light"] {
     color-scheme: light;
-}
-
-fluent-select.resource-list {
-    /* overrides of default fluentui-blazor styling */
-    --disabled-opacity: 0.7;
-}
-
-[data-theme="dark"] fluent-select.resource-list {
-    /* overrides of default fluentui-blazor styling */
-    --disabled-opacity: 0.85;
 }
 
 h1 {
@@ -306,60 +288,26 @@ h1 {
     min-width: 100%;
     overflow: auto;
 }
-
-.fluent-data-grid .empty-content-cell,
-.fluent-data-grid .loading-content-cell {
-    padding: calc(var(--design-unit) * 5px);
-    display: flex;
-    align-items: center;
-    height: auto !important; /* override height in td style attribute */
-    justify-content: center;
-}
 /*
     Default LoadingContent template has align-items set to start, so the
     text doesn't line up with the spinner properly. It is set via inline style
     so we need to use !important to override it.
 */
-.fluent-data-grid .loading-content-cell .stack-horizontal {
-    align-items: center !important;
-    column-gap: calc(var(--design-unit) * 2px) !important;
-}
 
 .custom-body-content {
     margin-right: 10px;
 }
 
-/* The fluent dialog's default fill color is too dark in our current dark theme.
+/* The legacy dialog's default fill color is too dark in our current dark theme.
    Setting it to the floating layer allows it to stand out more and doesn't impact light theme. */
-fluent-dialog::part(control) {
-    background: var(--dialog-background-color);
-    border: 1px solid var(--dialog-border-color);
-}
-
-fluent-dialog[class~="right"]::part(control) {
-    border-left-width: 1px !important;
-}
-
-fluent-dialog .deck-toolbar {
-    background-color: var(--dialog-background-color);
-}
 
 /*
     Changing the dialog's fill color means stealth buttons on the dialog have the wrong background, so change it to match
     Set to transparent instead of dialog background color so it looks good when inside a dialog's table header row (Manage Data).
 */
-fluent-dialog fluent-button[appearance=stealth]:not(:hover)::part(control),
-fluent-dialog fluent-button[appearance=lightweight]:not(:hover)::part(control),
-fluent-dialog fluent-anchor[appearance=stealth]:not(:hover)::part(control),
-fluent-dialog fluent-anchor[appearance=lightweight]:not(:hover)::part(control) {
-    background: transparent;
-}
 
 /* But changing the stealth button's background in dialogs means the stealth buttons used as headers for grid cells
    now have the wrong background. So change that back */
-fluent-dialog td[cell-type=columnheader] fluent-button[appearance=stealth]:not(:hover)::part(control) {
-    background: var(--fill-layer);
-}
 
 .pane-details-subtext {
     color: var(--foreground-subtext-rest);
@@ -397,11 +345,6 @@ td .long-inner-content {
     white-space: nowrap;
 }
 
-.fluent-popover-header,
-.fluent-popover-body {
-    color: var(--neutral-foreground-rest);
-}
-
 .subtext {
     color: var(--foreground-subtext-rest);
 }
@@ -412,17 +355,6 @@ td .long-inner-content {
 
 .validation-message {
     color: var(--error);
-}
-
-.selected-row,
-.selected-row fluent-button[appearance=lightweight]:not(:hover)::part(control),
-.selected-row fluent-anchor[appearance=lightweight]:not(:hover)::part(control) {
-    background-color: var(--neutral-fill-secondary-rest); /* Same color as the menu hover */
-}
-
-.selected-row fluent-button[appearance=lightweight]:hover::part(control),
-.selected-row fluent-anchor[appearance=lightweight]:hover::part(control){
-    background-color: var(--neutral-fill-stealth-rest); /* Essentially inverts the hover compared to an unselected row */
 }
 
 .severity-icon {
@@ -448,10 +380,6 @@ td .long-inner-content {
      overflow: hidden;
  }
 
-split-panels::part(handle) {
-    display: none;
-}
-
 div.error-counter-badge {
     padding: 3px 3px;
     color: var(--error-counter-badge-foreground-color) !important; /* color is applied directly to div style, so !important to override since we can't use a more specific selector */
@@ -469,33 +397,15 @@ layout > .header {
     flex-grow: 1;
 }
 
-
 kbd {
     color: unset;
     background-color: var(--kbd-background-color);
 }
 
-fluent-switch.table-switch::part(label) {
-     width: 160px;
-}
-
 /*
-    If ShowHover is enabled on a FluentDataGrid, we need to tweak the way anchors and buttons
+    If ShowHover is enabled on a DataGrid, we need to tweak the way anchors and buttons
     are colored when a row is hovered
 */
-.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover fluent-anchor[appearance=lightweight]::part(control):not(:hover),
-.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover fluent-anchor[appearance=stealth]::part(control):not(:hover),
-.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover fluent-button[appearance=lightweight]::part(control):not(:hover),
-.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover fluent-button[appearance=stealth]::part(control):not(:hover) {
-    background-color: var(--datagrid-hover-color);
-}
-
-.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover fluent-anchor[appearance=lightweight]::part(control):hover,
-.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover fluent-anchor[appearance=stealth]::part(control):hover,
-.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover fluent-button[appearance=lightweight]::part(control):hover,
-.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover fluent-button[appearance=stealth]::part(control):hover {
-    background-color: var(--fill-color);
-}
 
 .property-grid-container {
     grid-area: main;
@@ -504,63 +414,6 @@ fluent-switch.table-switch::part(label) {
     height: 100%;
     padding: calc(var(--design-unit) * 1px);
     padding-top: 0;
-}
-
-.property-grid-container fluent-accordion {
-    gap: calc(var(--design-unit) * 2px);
-    margin-bottom: calc(var(--design-unit) * 1px);
-    --fill-color: var(--property-grid-background-color);
-}
-
-.property-grid-container > fluent-accordion > fluent-accordion-item::part(heading) {
-    padding-left: calc(var(--design-unit) * 2px);
-}
-
-.property-grid-container fluent-accordion .fluent-data-grid {
-    --datagrid-hover-color: var(--neutral-layer-1-hover);
-}
-
-.property-grid-container fluent-accordion-item,
-.property-grid-container fluent-accordion-item::part(region) {
-    background-color: var(--property-grid-background-color);
-}
-
-/* This is a hack because we can't do a selector that selects inside of a ::part,
-   which is what we'd need to do to access `::part(heading):not(:hover) .icon`.
-   So instead we just change the color token the non-hovered state uses.
-*/
-.property-grid-container fluent-accordion-item::part(icon) {
-    --neutral-fill-stealth-rest-on-neutral-fill-layer-rest: var(--property-grid-background-color);
-}
-
-.property-grid-container fluent-accordion-item::part(region) {
-    padding: 0;
-    /* overflow hidden masks content in the item's rounded borders */
-    overflow: hidden;
-}
-
-.property-grid-container fluent-accordion-item::part(heading-content) {
-    font-weight: 600;
-    font-size: var(--type-ramp-plus-1-font-size);
-}
-
-.property-grid-container fluent-accordion .fluent-data-grid-row:last-of-type {
-    border-bottom: none;
-}
-
-.property-grid-container fluent-accordion .fluent-data-grid-row fluent-button[appearance=stealth]::part(control):not(:hover),
-.property-grid-container fluent-accordion .fluent-data-grid-row fluent-button[appearance=lightweight]::part(control):not(:hover) {
-    background-color: var(--fill-color);
-}
-
-.property-grid-container fluent-accordion .fluent-data-grid-row:is([row-type='header'],[row-type='sticky-header']) fluent-button[appearance=stealth]::part(control):hover,
-.property-grid-container fluent-accordion .fluent-data-grid-row:is([row-type='header'],[row-type='sticky-header']) fluent-button[appearance=lightweight]::part(control):hover {
-    background-color: var(--neutral-fill-stealth-hover-on-neutral-fill-layer-rest);
-}
-
-/* Under the current dark theme, the fluent-badge background color was too dark on --neutral-layer-1 */
-[data-theme="dark"] .property-grid-container fluent-accordion-item fluent-badge::part(control) {
-    background-color: var(--neutral-fill-active);
 }
 
 .property-grid-container tr:last-child td {
@@ -582,36 +435,20 @@ fluent-switch.table-switch::part(label) {
 /* Align the toast with the top of the body/bottom of the header
    and the right edge of the filter box
 */
-.layout .fluent-toast-provider.position-topright {
-    top: 50px;
-    right: calc(var(--design-unit) * 1.5px);
-}
-
 
 /* Some of the data-columns (e.g. logs and details in the resource page)
    should not have ellipsis as this is unnecessary and a bit distracting.
 
 */
-.fluent-data-grid .no-ellipsis {
-    text-overflow: unset;
-}
 
 .url-overflow {
     overflow-x: visible !important;
-}
-
-.url-overflow .fluent-overflow-more fluent-button {
-    vertical-align: middle;
 }
 
 .url-button {
     height: unset;
     font-size: var(--type-ramp-minus-1-font-size);
     line-height: var(--type-ramp-minus-1-line-height);
-}
-
-.url-button::part(control) {
-    padding: calc(((var(--design-unit) * 0.5) - var(--stroke-width)) * 1px) calc((var(--design-unit) - var(--stroke-width)) * 1px);
 }
 
 .mobile-toolbar {
@@ -765,10 +602,6 @@ fluent-switch.table-switch::part(label) {
     content: "-"
 }
 
-.fluent-data-grid {
-    height: auto !important; /* override height in table style attribute */
-}
-
 .main-grid-expand-container {
     display: inline-block;
     width: 18px;
@@ -792,15 +625,6 @@ fluent-switch.table-switch::part(label) {
     height: 24px;
     min-width: 18px;
     vertical-align: middle;
-}
-
-.main-grid .fluent-data-grid-row:not([row-type='sticky-header']) td.expand-col {
-    padding-left: 0;
-    border-left: 0;
-}
-
-.main-grid .fluent-data-grid-row:not([row-type='sticky-header'], .empty-content-row) td:first-child:not(.expand-col) {
-    padding-left: calc(((var(--design-unit)* 3) + var(--focus-stroke-width) - var(--stroke-width) + 5)* 1px);
 }
 
 /* Line up the first column header with the content. TODO: A bit of a mess. See if it can be improved */
@@ -831,10 +655,6 @@ fluent-switch.table-switch::part(label) {
     margin-right: 3px
 }
 
-.clear-button::part(control) {
-    padding: 0 calc((10 + (var(--design-unit) * 2 * var(--density))) * 1px);
-}
-
 .language-select {
     margin-bottom: 2px;
     min-width: 235px;
@@ -845,17 +665,10 @@ fluent-switch.table-switch::part(label) {
     overflow-y: auto;
 }
 
-.filter-menu-item::part(content) {
-    max-width: 300px;
-}
-
 /*
     Korean text can have bad wrapping behavior. See https://github.com/w3c/csswg-drafts/issues/4285
     This rule prevents Korean "Close" text in tooltip from wrapping. See https://github.com/microsoft/aspire/issues/8170
 */
-fluent-tooltip[anchor="dialog_close"] > div {
-    word-break: keep-all;
-}
 
 .block-warning {
     font-family: var(--body-font);
@@ -899,21 +712,6 @@ fluent-tooltip[anchor="dialog_close"] > div {
 
 .aspire-menu-container {
     --aspire-menu-max-width: 368px;
-}
-
-.aspire-menu-container fluent-menu-item::part(content) {
-    width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.aspire-menu-container fluent-menu fluent-menu {
-    max-width: var(--aspire-menu-max-width);
-}
-
-.overflow-fluent-menu-item::part(content) {
-    width: 100%;
-    text-overflow: ellipsis;
 }
 
 .filter-group > legend {

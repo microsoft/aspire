@@ -208,13 +208,13 @@ function ensureTerminalStyles() {
 .aspire-terminal-host {
   /*
    * --aspire-term-bg is the chrome around the framed terminal (the
-   * "stage"). Track the dashboard theme via FluentUI's neutral layer
-   * token so dark/light theme switches keep the surround in step with
-   * the rest of the page. The actual xterm canvas inside #terminal-body
-   * stays dark on purpose — terminals are conventionally dark and the
-   * frame is its own card.
+   * "stage"). Track the dashboard theme via the Deck surface token so
+   * dark/light theme switches keep the surround in step with the rest of
+   * the page. The actual xterm canvas inside #terminal-body stays dark on
+   * purpose — terminals are conventionally dark and the frame is its own
+   * card.
    */
-  --aspire-term-bg: var(--neutral-layer-2);
+  --aspire-term-bg: var(--bg-surface-2);
   --aspire-term-fg: #c9d1d9;
   --aspire-term-fg-muted: #8b949e;
   --aspire-term-accent: #58a6ff;

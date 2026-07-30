@@ -27,10 +27,6 @@
         "main";
 }
 
-::deep .details-container fluent-toolbar {
-    padding-left: calc(var(--design-unit) * 2px);
-}
-
 ::deep .details-container > header {
     height: auto;
     grid-row-start: 1;
@@ -49,10 +45,6 @@
     ::deep .details-container > header {
         background-color: var(--neutral-layer-4);
     }
-}
-
-::deep .details-container > header fluent-button[appearance=stealth]:not(:hover)::part(control) {
-    background-color: var(--neutral-layer-4);
 }
 
 ::deep .details-container > *:last-child {

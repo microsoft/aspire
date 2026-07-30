@@ -13,7 +13,7 @@ namespace Aspire.Dashboard.Components.Deck;
 /// </summary>
 /// <remarks>
 /// This mirrors the cascade in <see cref="ResourceStateViewModel"/>.GetStateIcon so the Deck-styled
-/// dashboard colors states identically to the legacy Fluent grid, but without depending on Fluent's
+/// dashboard colors states identically to the legacy the previous library grid, but without depending on the previous library's
 /// <c>Color</c>/<c>Icon</c> types. Keep the two in sync.
 /// </remarks>
 internal static class ResourceStateTone

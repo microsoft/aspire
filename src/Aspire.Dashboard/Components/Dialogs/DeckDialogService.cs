@@ -7,9 +7,9 @@ using Microsoft.AspNetCore.Components;
 namespace Aspire.Dashboard.Components.Dialogs;
 
 /// <summary>
-/// Deck-native dialog engine, replacing FluentUI's <c>IDialogService</c>/<c>FluentDialogProvider</c>.
+/// Deck-native dialog engine, replacing the previous UI library's <c>IDialogService</c>/<c>DialogProvider</c>.
 /// Tracks the currently open dialogs and raises <see cref="OnChanged"/> so a <c>DeckDialogProvider</c>
-/// can render them. The public API mirrors the subset of the Fluent dialog service that the dashboard
+/// can render them. The public API mirrors the subset of the the previous library dialog service that the dashboard
 /// uses (dialog, panel, message box, confirmation).
 /// </summary>
 public class DeckDialogService

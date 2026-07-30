@@ -1,5 +1,5 @@
 @*
-    Deck-styled form field label, replacing FluentInputLabel during the Fluent-removal phase.
+    Deck-styled form field label, replacing InputLabel for the Deck redesign.
     Renders a native <label> associated with a control via ForId, with an optional required
     indicator. Used standalone next to a sibling control (Select, tree, input). Unmatched
     attributes (e.g. slot, class) flow through so it can still be slotted into layout hosts.
@@ -16,7 +16,7 @@
     }
     @if (Required)
     {
-        @* Mirrors FluentInputLabel's required asterisk; decorative because the field itself is marked required. *@
+        @* Mirrors InputLabel's required asterisk; decorative because the field itself is marked required. *@
         <span class="deck-input-label__required" aria-hidden="true">*</span>
     }
     @ChildContent

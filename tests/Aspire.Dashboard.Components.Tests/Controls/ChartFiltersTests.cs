@@ -30,8 +30,8 @@ public class ChartFiltersTests
     [Fact]
     public void AreAllValuesSelected_SetFalse_DoesNotClearWhenPartiallySelected()
     {
-        // This test verifies the fix for the FluentCheckbox ThreeState race condition.
-        // FluentCheckbox with ThreeState=true can spuriously fire the setter with false
+        // This test verifies the fix for the Deck checkbox three-state race condition.
+        // A three-state checkbox can spuriously fire the setter with false
         // when the bound CheckState changes from true to null (intermediate state).
         // Our fix prevents clearing when AreAllValuesSelected is not true.
 
@@ -43,7 +43,7 @@ public class ChartFiltersTests
 
         Assert.Null(dimensionFilter.AreAllValuesSelected); // Partial selection = null
 
-        // Act - simulate FluentCheckbox spuriously firing setter with false
+        // Act - simulate the checkbox spuriously firing setter with false
         dimensionFilter.AreAllValuesSelected = false;
 
         // Assert - GET should still be selected (not cleared)

@@ -8,10 +8,6 @@
     gap: calc(var(--design-unit) * 1px);
 }
 
-::deep.span-details-layout > fluent-toolbar {
-    grid-area: toolbar;
-}
-
 ::deep .property-grid-container h4 {
     padding: calc(var(--design-unit) * 3px);
     margin-top: calc(var(--design-unit) * 1px);

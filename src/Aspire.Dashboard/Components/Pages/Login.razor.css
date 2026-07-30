@@ -2,7 +2,7 @@
    shared "Auth/Error" block in wwwroot/css/deck.css so Login, Error and NotFound stay visually
    consistent. Only the token-help tooltip content (Login-only) is styled here. */
 
-/* The token-help tooltip is a CSS hover/focus popover (replacing FluentTooltip). It anchors to the
+/* The token-help tooltip is a CSS hover/focus popover (replacing Tooltip). It anchors to the
    "where is my token?" link and opens above it, revealed on hover or keyboard focus of the link. */
 .token-help-anchor {
     position: relative;

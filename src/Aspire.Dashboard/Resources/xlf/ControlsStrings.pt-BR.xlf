@@ -112,6 +112,11 @@
         <target state="translated">Recolher todos</target>
         <note />
       </trans-unit>
+      <trans-unit id="DataGridHeaderCellResizeButtonText">
+        <source>Resize</source>
+        <target state="new">Resize</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DetailsColumnHeader">
         <source>Details</source>
         <target state="translated">Detalhes</target>
@@ -230,56 +235,6 @@
       <trans-unit id="EnvironmentVariablesShowVariableValues">
         <source>Show sensitive values</source>
         <target state="translated">Mostrar valores confidenciais</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellGrowAriaLabelText">
-        <source>Grow column width</source>
-        <target state="translated">Aumentar a largura da coluna</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellResetAriaLabelText">
-        <source>Reset column widths</source>
-        <target state="translated">Redefinir as larguras de coluna</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellResizeButtonText">
-        <source>Resize</source>
-        <target state="translated">Redimensionar</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellResizeDiscreteLabel">
-        <source>Column width</source>
-        <target state="translated">Largura da coluna</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellResizeLabel">
-        <source>Column width (in pixels)</source>
-        <target state="translated">Largura da coluna (em pixels)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellShrinkAriaLabelText">
-        <source>Shrink column width</source>
-        <target state="translated">Reduzir a largura da coluna</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellSortAscendingButtonText">
-        <source>Sort (ascending)</source>
-        <target state="translated">Classificar (crescente)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellSortButtonText">
-        <source>Sort</source>
-        <target state="translated">Classificar</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellSortDescendingButtonText">
-        <source>Sort (descending)</source>
-        <target state="translated">Classificar (decrescente)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellSubmitAriaLabelText">
-        <source>Set column widths</source>
-        <target state="translated">Definir as larguras de coluna</target>
         <note />
       </trans-unit>
       <trans-unit id="GenAIDetailsTitle">

@@ -442,7 +442,7 @@ public class ResourceDetailsTests : DashboardTestContext
         Assert.Contains(ControlsStrings.ResourceDetailsStateDescriptionHeader, resourcePropertyGrid.TextContent);
         Assert.Contains(string.Format(CultureInfo.InvariantCulture, Columns.StateColumnResourceWaitingFor, "nginx, redis"), resourcePropertyGrid.TextContent);
 
-        Assert.Empty(resourcePropertyGrid.QuerySelectorAll("fluent-anchor"));
+        Assert.Empty(resourcePropertyGrid.QuerySelectorAll("a"));
     }
 
     [Fact]

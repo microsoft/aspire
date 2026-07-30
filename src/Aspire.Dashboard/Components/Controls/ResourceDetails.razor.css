@@ -7,7 +7,3 @@
     overflow: auto;
     gap: calc(var(--design-unit) * 1px);
 }
-
-::deep.resource-details-layout > fluent-toolbar {
-    grid-area: toolbar;
-}

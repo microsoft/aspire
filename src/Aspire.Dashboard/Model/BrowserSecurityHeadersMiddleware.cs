@@ -30,7 +30,7 @@ internal sealed class BrowserSecurityHeadersMiddleware
         // Based on Blazor documentation recommendations:
         // https://learn.microsoft.com/aspnet/core/blazor/security/content-security-policy#server-side-blazor-apps
         // Changes:
-        // - style-src adds inline styles as they're used extensively by Blazor FluentUI.
+        // - style-src adds inline styles as they're used extensively by Blazor components.
         // - frame-src none added to prevent nesting in iframe.
         var content = "base-uri 'self'; " +
             "object-src 'none'; " +

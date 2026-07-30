@@ -1156,7 +1156,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             // matches the rest of the terminal toolbar in every supported
             // culture. Apply the localized label here, where we still have
             // access to IStringLocalizer<Resources.ConsoleLogs>, before
-            // handing the list to FluentSelect.
+            // handing the list to Select.
             var presets = await _terminalViewRef.GetSizePresetsAsync();
             _terminalSizePresets = presets
                 .Select(p => p.Value == "auto"

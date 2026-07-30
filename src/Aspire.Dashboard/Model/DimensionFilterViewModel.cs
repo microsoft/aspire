@@ -35,7 +35,7 @@ public class DimensionFilterViewModel
             else if (value is false)
             {
                 // Only clear if all values are currently selected.
-                // FluentCheckbox's three-state handling can spuriously fire the setter with false
+                // Checkbox's three-state handling can spuriously fire the setter with false
                 // when the state transitions from true to null (intermediate) due to individual
                 // checkbox changes. In that case, AreAllValuesSelected is already null/false,
                 // and we should not clear the remaining selections.

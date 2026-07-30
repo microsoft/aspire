@@ -18,30 +18,12 @@ function isElementTagName(element, tagName) {
     return element.tagName.toLowerCase() === tagName;
 }
 
-function getFluentMenuItemForTarget(element) {
-    // User could have clicked on either a path or svg (the image on the item) or the item itself
-    if (isElementTagName(element, "path")) {
-        return getFluentMenuItemForTarget(element.parentElement);
-    }
-
-    // in between the svg and fluent-menu-item is a span for the icon slot
-    const possibleMenuItem = element.parentElement?.parentElement;
-    if (possibleMenuItem && (isElementTagName(possibleMenuItem, "fluent-menu-item") || isElementTagName(possibleMenuItem, "button"))) {
-        return element.parentElement.parentElement;
-    }
-
-    if (isElementTagName(element, "fluent-menu-item") || isElementTagName(element, "button")) {
-        return element;
-    }
-
-    return null;
-}
-
 // Register a global click event listener to handle copy/open button clicks.
 // Required because an "onclick" attribute is denied by CSP.
 document.addEventListener("click", function (e) {
-    // The copy 'button' could either be a button or a menu item.
-    const targetElement = isElementTagName(e.target, "fluent-button") ? e.target : getFluentMenuItemForTarget(e.target);
+    // The copy/open control is a native button. The click may land on a child element (icon/svg),
+    // so walk up to the nearest ancestor carrying the data attribute.
+    const targetElement = e.target.closest("[data-copybutton], [data-openbutton]");
     if (targetElement) {
         if (targetElement.getAttribute("data-copybutton")) {
             buttonCopyTextToClipboard(targetElement);
@@ -163,29 +145,17 @@ window.copyTextToClipboard = function (id, text, precopy, postcopy) {
     const copyIcon = button.querySelector('.copy-icon');
     const checkmarkIcon = button.querySelector('.checkmark-icon');
 
-    const anchoredTooltip = document.querySelector(`fluent-tooltip[anchor="${id}"]`);
-    const tooltipDiv = anchoredTooltip ? anchoredTooltip.children[0] : null;
     navigator.clipboard.writeText(text)
         .then(() => {
-            if (tooltipDiv) {
-                tooltipDiv.innerText = postcopy;
-            }
             if (copyIcon && checkmarkIcon) {
                 copyIcon.style.display = 'none';
                 checkmarkIcon.style.display = '';
             }
         })
         .catch(() => {
-            if (tooltipDiv) {
-                tooltipDiv.innerText = 'Could not access clipboard';
-            }
         });
 
     button.dataset.copyTimeout = setTimeout(function () {
-        if (tooltipDiv) {
-            tooltipDiv.innerText = precopy;
-        }
-
         if (copyIcon && checkmarkIcon) {
             copyIcon.style.display = '';
             checkmarkIcon.style.display = 'none';
@@ -202,15 +172,13 @@ function isActiveElementInput() {
     const currentElement = document.activeElement;
     const tagName = currentElement.tagName.toLowerCase();
 
-    // fluent components may have shadow roots that contain inputs
-    return tagName === "input" || tagName === "textarea" || tagName.startsWith("fluent") ? isInputElement(currentElement, false) : false;
+    return tagName === "input" || tagName === "textarea" || tagName === "select" ? isInputElement(currentElement, false) : false;
 }
 
 function isInputElement(element, isRoot, isShadowRoot) {
     const tag = element.tagName.toLowerCase();
     // comes from https://developer.mozilla.org/en-US/docs/Web/API/Element/input_event
-    // fluent-select does not use <select /> element
-    if (tag === "input" || tag === "textarea" || tag === "select" || tag === "fluent-select") {
+    if (tag === "input" || tag === "textarea" || tag === "select") {
         return true;
     }
 

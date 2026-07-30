@@ -112,6 +112,11 @@
         <target state="translated">모두 축소</target>
         <note />
       </trans-unit>
+      <trans-unit id="DataGridHeaderCellResizeButtonText">
+        <source>Resize</source>
+        <target state="new">Resize</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DetailsColumnHeader">
         <source>Details</source>
         <target state="translated">세부 정보</target>
@@ -230,56 +235,6 @@
       <trans-unit id="EnvironmentVariablesShowVariableValues">
         <source>Show sensitive values</source>
         <target state="translated">민감한 값 표시</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellGrowAriaLabelText">
-        <source>Grow column width</source>
-        <target state="translated">열 너비 증가</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellResetAriaLabelText">
-        <source>Reset column widths</source>
-        <target state="translated">열 너비 다시 설정</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellResizeButtonText">
-        <source>Resize</source>
-        <target state="translated">크기 조정</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellResizeDiscreteLabel">
-        <source>Column width</source>
-        <target state="translated">열 너비</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellResizeLabel">
-        <source>Column width (in pixels)</source>
-        <target state="translated">열 너비(픽셀)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellShrinkAriaLabelText">
-        <source>Shrink column width</source>
-        <target state="translated">열 너비 축소</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellSortAscendingButtonText">
-        <source>Sort (ascending)</source>
-        <target state="translated">정렬(오름차순)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellSortButtonText">
-        <source>Sort</source>
-        <target state="translated">정렬</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellSortDescendingButtonText">
-        <source>Sort (descending)</source>
-        <target state="translated">정렬(내림차순)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellSubmitAriaLabelText">
-        <source>Set column widths</source>
-        <target state="translated">열 너비 설정</target>
         <note />
       </trans-unit>
       <trans-unit id="GenAIDetailsTitle">

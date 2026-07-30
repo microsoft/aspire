@@ -51,10 +51,6 @@
     line-height: 1;
 }
 
-.genai-visualizer-container ::deep .fluent-splitter::part(median) {
-    opacity: 0;
-}
-
 ::deep .genai-message-tree {
     --base-height-multiplier: 9;
     min-width: auto;

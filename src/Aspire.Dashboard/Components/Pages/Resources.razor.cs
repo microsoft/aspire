@@ -392,7 +392,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     }
 
     // Returns the flat, nesting-ordered list of resources to render in the Deck table. Mirrors the
-    // old FluentDataGrid ItemsProvider: filter, order with nested children grouped under parents,
+    // old DataGrid ItemsProvider: filter, order with nested children grouped under parents,
     // drop collapsed children and hidden resources. Default order is by type then name (interactive
     // column sorting was intentionally dropped in the Deck redesign).
     private List<ResourceGridViewModel> GetVisibleRows()
@@ -411,7 +411,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         return orderedResources;
     }
 
-    // Re-renders the Deck table from current state. Replaces the FluentDataGrid's data-refresh.
+    // Re-renders the Deck table from current state. Replaces the DataGrid's data-refresh.
     private Task RefreshGridAsync() => InvokeAsync(StateHasChanged);
 
     private void UpdateMenuButtons()

@@ -385,92 +385,11 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Grow column width.
-        /// </summary>
-        public static string FluentDataGridHeaderCellGrowAriaLabelText {
-            get {
-                return ResourceManager.GetString("FluentDataGridHeaderCellGrowAriaLabelText", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Reset column widths.
-        /// </summary>
-        public static string FluentDataGridHeaderCellResetAriaLabelText {
-            get {
-                return ResourceManager.GetString("FluentDataGridHeaderCellResetAriaLabelText", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Resize.
         /// </summary>
-        public static string FluentDataGridHeaderCellResizeButtonText {
+        public static string DataGridHeaderCellResizeButtonText {
             get {
-                return ResourceManager.GetString("FluentDataGridHeaderCellResizeButtonText", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Column width.
-        /// </summary>
-        public static string FluentDataGridHeaderCellResizeDiscreteLabel {
-            get {
-                return ResourceManager.GetString("FluentDataGridHeaderCellResizeDiscreteLabel", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Column width (in pixels).
-        /// </summary>
-        public static string FluentDataGridHeaderCellResizeLabel {
-            get {
-                return ResourceManager.GetString("FluentDataGridHeaderCellResizeLabel", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Shrink column width.
-        /// </summary>
-        public static string FluentDataGridHeaderCellShrinkAriaLabelText {
-            get {
-                return ResourceManager.GetString("FluentDataGridHeaderCellShrinkAriaLabelText", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Sort (ascending).
-        /// </summary>
-        public static string FluentDataGridHeaderCellSortAscendingButtonText {
-            get {
-                return ResourceManager.GetString("FluentDataGridHeaderCellSortAscendingButtonText", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Sort.
-        /// </summary>
-        public static string FluentDataGridHeaderCellSortButtonText {
-            get {
-                return ResourceManager.GetString("FluentDataGridHeaderCellSortButtonText", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Sort (descending).
-        /// </summary>
-        public static string FluentDataGridHeaderCellSortDescendingButtonText {
-            get {
-                return ResourceManager.GetString("FluentDataGridHeaderCellSortDescendingButtonText", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Set column widths.
-        /// </summary>
-        public static string FluentDataGridHeaderCellSubmitAriaLabelText {
-            get {
-                return ResourceManager.GetString("FluentDataGridHeaderCellSubmitAriaLabelText", resourceCulture);
+                return ResourceManager.GetString("DataGridHeaderCellResizeButtonText", resourceCulture);
             }
         }
         

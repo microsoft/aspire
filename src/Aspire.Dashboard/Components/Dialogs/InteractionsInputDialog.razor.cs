@@ -41,7 +41,7 @@ public partial class InteractionsInputDialog : IAsyncDisposable
     private ValidationMessageStore _validationMessages = default!;
     private List<InputViewModel> _inputDialogInputViewModels = default!;
 
-    // Stable DOM id per input field. The native <input>/<select> controls (and the FluentCombobox)
+    // Stable DOM id per input field. The native <input>/<select> controls (and the Combobox)
     // need an explicit id so the <label for> association, the secret-text type toggle, and the
     // initial-focus logic can address the correct element from C#/JS. The id is generated once per
     // input and kept stable across renders so focus/validation targets don't change underneath us.
@@ -165,7 +165,7 @@ public partial class InteractionsInputDialog : IAsyncDisposable
     }
 
     // The native <input>/<select> controls don't integrate with EditContext the way the previous
-    // Fluent input components did, so the change handlers below update the bound value and explicitly
+    // the previous library input components did, so the change handlers below update the bound value and explicitly
     // notify EditContext. That keeps live validation and InteractionInput.UpdateStateOnChange working.
     private void OnStringValueChanged(InputViewModel inputModel, ChangeEventArgs e)
     {

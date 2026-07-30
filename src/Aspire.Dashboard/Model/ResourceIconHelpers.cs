@@ -14,11 +14,11 @@ internal static class ResourceIconHelpers
     /// </summary>
     public static DeckIconName GetDeckIconForResource(ResourceViewModel resource)
     {
-        // A custom icon set by the AppHost via WithIconName. These are Fluent system-icon names
-        // (https://aka.ms/fluentui-system-icons); map the ones Aspire integrations commonly use to the
+        // A custom icon set by the AppHost via WithIconName. These are the previous library system-icon names
+        // (https://learn.microsoft.com/windows/apps/design/style/iconography/system-icons); map the ones Aspire integrations commonly use to the
         // nearest Deck glyph. Unknown names fall through to the resource-type icon below: Deck ships a
-        // fixed, single-stroke glyph set rather than the full Fluent icon library, so arbitrary names
-        // can't be resolved — and we intentionally don't reach back to Fluent for them.
+        // fixed, single-stroke glyph set rather than the full the previous library icon library, so arbitrary names
+        // can't be resolved — and we intentionally don't reach back to the previous library for them.
         if (!string.IsNullOrWhiteSpace(resource.IconName) && TryGetDeckIcon(resource.IconName, out var custom))
         {
             return custom;
@@ -39,7 +39,7 @@ internal static class ResourceIconHelpers
 
     /// <summary>
     /// Maps a health status to a Deck icon plus the Deck <c>icon-*</c> tone class that colors it.
-    /// Mirrors the legacy Fluent heart/heart-broken treatment.
+    /// Mirrors the legacy the previous library heart/heart-broken treatment.
     /// </summary>
     public static (DeckIconName icon, string toneClass) GetHealthStatusDeckIcon(HealthStatus? healthStatus)
     {
@@ -52,7 +52,7 @@ internal static class ResourceIconHelpers
         };
     }
 
-    // Maps a Fluent system-icon name (passed via WithIconName, or a command's IconName) to the nearest
+    // Maps a the previous library system-icon name (passed via WithIconName, or a command's IconName) to the nearest
     // Deck glyph. Comparison is case-insensitive. Returns false for names with no Deck equivalent so the
     // caller can fall back (to a resource-type icon, or to no icon for a command).
     public static bool TryGetDeckIcon(string iconName, out DeckIconName icon)

@@ -5,7 +5,7 @@ namespace Aspire.Dashboard.Components.Controls.Grid;
 
 /// <summary>
 /// Tracks the active sort column and direction for a Deck data table and applies the corresponding
-/// ordering. Replaces the Fluent data grid's built-in column sorting for bespoke native tables.
+/// ordering. Replaces the the previous library data grid's built-in column sorting for bespoke native tables.
 /// </summary>
 /// <typeparam name="TItem">The row item type.</typeparam>
 public sealed class GridSortState<TItem>

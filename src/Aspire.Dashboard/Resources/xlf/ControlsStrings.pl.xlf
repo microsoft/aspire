@@ -112,6 +112,11 @@
         <target state="translated">Zwiń wszystko</target>
         <note />
       </trans-unit>
+      <trans-unit id="DataGridHeaderCellResizeButtonText">
+        <source>Resize</source>
+        <target state="new">Resize</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DetailsColumnHeader">
         <source>Details</source>
         <target state="translated">Szczegóły</target>
@@ -230,56 +235,6 @@
       <trans-unit id="EnvironmentVariablesShowVariableValues">
         <source>Show sensitive values</source>
         <target state="translated">Pokaż wartości poufne</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellGrowAriaLabelText">
-        <source>Grow column width</source>
-        <target state="translated">Zwiększ szerokość kolumny</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellResetAriaLabelText">
-        <source>Reset column widths</source>
-        <target state="translated">Resetuj szerokości kolumn</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellResizeButtonText">
-        <source>Resize</source>
-        <target state="translated">Zmień rozmiar</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellResizeDiscreteLabel">
-        <source>Column width</source>
-        <target state="translated">Szerokość kolumny</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellResizeLabel">
-        <source>Column width (in pixels)</source>
-        <target state="translated">Szerokość kolumny (w pikselach)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellShrinkAriaLabelText">
-        <source>Shrink column width</source>
-        <target state="translated">Zmniejsz szerokość kolumny</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellSortAscendingButtonText">
-        <source>Sort (ascending)</source>
-        <target state="translated">Sortuj (rosnąco)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellSortButtonText">
-        <source>Sort</source>
-        <target state="translated">Sortuj</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellSortDescendingButtonText">
-        <source>Sort (descending)</source>
-        <target state="translated">Sortuj (malejąco)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FluentDataGridHeaderCellSubmitAriaLabelText">
-        <source>Set column widths</source>
-        <target state="translated">Ustaw szerokości kolumn</target>
         <note />
       </trans-unit>
       <trans-unit id="GenAIDetailsTitle">

@@ -130,7 +130,7 @@ public partial class ConsoleLogsTests
             });
         };
         var resourceSelect = cut.FindComponent<ResourceSelect>();
-        resourceSelect.Find("li[data-value='plain-resource']").Click();
+        await cut.InvokeAsync(() => resourceSelect.Find("li[data-value='plain-resource']").Click());
 
         cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == plainResource.Name);
         // LogViewer should be restored and TerminalView torn down.

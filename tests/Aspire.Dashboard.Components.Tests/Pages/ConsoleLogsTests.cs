@@ -151,7 +151,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         // Act 2
         logger.LogInformation("Changing resource.");
         var resourceSelect = cut.FindComponent<ResourceSelect>();
-        resourceSelect.Find("li[data-value='test-resource2']").Click();
+        await cut.InvokeAsync(() => resourceSelect.Find("li[data-value='test-resource2']").Click());
 
         // Assert 2
         logger.LogInformation("Waiting for selected resource.");

@@ -373,35 +373,8 @@
   <data name="PageToolbarLandmark" xml:space="preserve">
     <value>Page toolbar</value>
   </data>
-  <data name="FluentDataGridHeaderCellResizeLabel" xml:space="preserve">
-    <value>Column width (in pixels)</value>
-  </data>
-  <data name="FluentDataGridHeaderCellResizeDiscreteLabel" xml:space="preserve">
-    <value>Column width</value>
-  </data>
-  <data name="FluentDataGridHeaderCellSortButtonText" xml:space="preserve">
-    <value>Sort</value>
-  </data>
-  <data name="FluentDataGridHeaderCellSortAscendingButtonText" xml:space="preserve">
-    <value>Sort (ascending)</value>
-  </data>
-  <data name="FluentDataGridHeaderCellSortDescendingButtonText" xml:space="preserve">
-    <value>Sort (descending)</value>
-  </data>
-  <data name="FluentDataGridHeaderCellResizeButtonText" xml:space="preserve">
+  <data name="DataGridHeaderCellResizeButtonText" xml:space="preserve">
     <value>Resize</value>
-  </data>
-  <data name="FluentDataGridHeaderCellGrowAriaLabelText" xml:space="preserve">
-    <value>Grow column width</value>
-  </data>
-  <data name="FluentDataGridHeaderCellResetAriaLabelText" xml:space="preserve">
-    <value>Reset column widths</value>
-  </data>
-  <data name="FluentDataGridHeaderCellShrinkAriaLabelText" xml:space="preserve">
-    <value>Shrink column width</value>
-  </data>
-  <data name="FluentDataGridHeaderCellSubmitAriaLabelText" xml:space="preserve">
-    <value>Set column widths</value>
   </data>
   <data name="LabelEmpty" xml:space="preserve">
     <value>(Empty)</value>

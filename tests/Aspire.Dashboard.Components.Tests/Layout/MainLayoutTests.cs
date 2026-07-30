@@ -302,7 +302,7 @@ public partial class MainLayoutTests : DashboardTestContext
     public async Task Help_Desktop_OpensDeckPaneNotModalDialog(bool viaShortcut)
     {
         // On desktop the help button and the Help keyboard shortcut both open the Deck help pane
-        // (HelpPane), not the Fluent HelpDialog. (Mobile still uses the dialog.)
+        // (HelpPane), not the modal HelpDialog. (Mobile still uses the dialog.)
         DeckDialogParameters? capturedParameters = null;
         TestDialogService? dialogService = null;
         dialogService = new TestDialogService(onShowDialog: (_, parameters) =>
@@ -338,7 +338,7 @@ public partial class MainLayoutTests : DashboardTestContext
     public async Task Settings_Desktop_OpensDeckPaneNotModalDialog(bool viaShortcut)
     {
         // On desktop the settings button and the Settings keyboard shortcut both open the Deck
-        // settings pane (SettingsPane), not the Fluent SettingsDialog. (Mobile still uses the dialog.)
+        // settings pane (SettingsPane), not the modal SettingsDialog. (Mobile still uses the dialog.)
         DeckDialogParameters? capturedParameters = null;
         TestDialogService? dialogService = null;
         dialogService = new TestDialogService(onShowDialog: (_, parameters) =>

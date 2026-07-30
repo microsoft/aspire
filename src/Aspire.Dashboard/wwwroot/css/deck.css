@@ -105,11 +105,11 @@ a:focus-visible {
     "sidebar content";
   height: 100vh;
   overflow: hidden;
-  /* Anchor the Deck app background on the shell root (a class selector) so it wins over Fluent's
-     reboot.css `body` rule, which otherwise sets the body background to a Fluent neutral token
+  /* Anchor the Deck app background on the shell root (a class selector) so it wins over the previous library's
+     reboot.css `body` rule, which otherwise sets the body background to a the previous library neutral token
      (--neutral-fill-layer-rest / --fill-color). The transparent .app__content shows this through,
-     so without it the content area behind the page renders with the Fluent neutral (a dark band in
-     light mode when Fluent's baseLayerLuminance is out of sync with the Deck data-theme). */
+     so without it the content area behind the page renders with the the previous library neutral (a dark band in
+     light mode when the previous library's baseLayerLuminance is out of sync with the Deck data-theme). */
   background: var(--bg-app);
   color: var(--text);
 }
@@ -125,7 +125,7 @@ a:focus-visible {
   overflow: hidden;
   position: relative;
   min-width: 0;
-  /* Explicit Deck content background so the page area never falls back to the body's Fluent-overridden
+  /* Explicit Deck content background so the page area never falls back to the body's the previous library-overridden
      background (see .app note above). */
   background: var(--bg-app);
 }
@@ -1866,7 +1866,7 @@ table.data tbody tr.selected {
   pointer-events: none;
 }
 
-/* Resources table: nested-resource expand/collapse chevron (replaces the FluentDataGrid
+/* Resources table: nested-resource expand/collapse chevron (replaces the DataGrid
    expand button). The spacer keeps non-parent rows aligned with parent rows. */
 .row-expand {
   background: none;
@@ -2202,7 +2202,7 @@ table.data tbody tr.selected {
    the "Metrics" section earlier in this file; the rules below only adjust how
    those panes behave for the dashboard's tree selector + Plotly chart, which
    differ from Deck's flat list + uPlot chart. Subcomponent internals (the
-   FluentTreeView and ChartContainer) are styled with ::deep in
+   TreeView and ChartContainer) are styled with ::deep in
    Components/Pages/Metrics.razor.css. */
 .metrics-layout {
   /* Fill the page body so the list and detail panes scroll independently. */
@@ -2226,7 +2226,7 @@ table.data tbody tr.selected {
    bits: the toolbar row, the resource color bar, the level cell, severity row tinting and the
    message/actions columns. Scoped to `.deck-logs-table` so it can't affect the Resources table. */
 
-/* Toolbar row hosts the (still-Fluent) resource + log-level selects, filter menu, explain-errors
+/* Toolbar row hosts the (still-the previous library) resource + log-level selects, filter menu, explain-errors
    and pause/clear actions. Keep them vertically centered and wrapping on narrow viewports. */
 .deck-structured-toolbar {
   row-gap: 8px;
@@ -2307,7 +2307,7 @@ table.data.deck-logs-table tbody td.deck-logs-actions-col {
 /* === end StructuredLogs === */
 
 /* === Help === */
-/* Deck restyle for Components/Dialogs/HelpPane.razor (right-side pane replacing the Fluent
+/* Deck restyle for Components/Dialogs/HelpPane.razor (right-side pane replacing the the previous library
    HelpDialog). Reuses the shared Drawer chrome; the rules below cover the get-help link, the
    keyboard-shortcut categories and the <kbd> key chips. */
 .help-pane {
@@ -2388,9 +2388,9 @@ table.data.deck-logs-table tbody td.deck-logs-actions-col {
 /* === end Help === */
 
 /* === ManageData === */
-/* Deck restyle for Components/Dialogs/ManageDataPane.razor (right-side pane replacing the Fluent
+/* Deck restyle for Components/Dialogs/ManageDataPane.razor (right-side pane replacing the the previous library
    ManageDataDialog). Only the surrounding Drawer chrome is Deck here; the inner telemetry grid is
-   still Fluent (FluentDataGrid + action buttons) and is converted in the later Fluent-removal pass.
+   still the previous library (DataGrid + action buttons) and is converted in the later the previous library-removal pass.
    The pane is widened beyond the default drawer width so the two-column grid is usable, and the
    action buttons get Deck spacing. */
 .manage-data-pane {
@@ -2411,7 +2411,7 @@ table.data.deck-logs-table tbody td.deck-logs-actions-col {
 /* === end ManageData === */
 /* === Traces === */
 /* Styling for the Deck-converted Traces list and Trace detail pages. The single-trace
-   waterfall reuses the FluentDataGrid (see TraceDetail.razor.css) restyled toward the Deck
+   waterfall reuses the DataGrid (see TraceDetail.razor.css) restyled toward the Deck
    `wf` look; these rules cover the page chrome, the traces list table, and span tags. */
 
 /* Toolbar shared by the Traces list and Trace detail headers. Wraps so the many controls
@@ -2549,8 +2549,8 @@ table.data.deck-logs-table tbody td.deck-logs-actions-col {
 /* === end Traces === */
 
 /* === Icon utilities === */
-/* Semantic color helpers for DeckIcon (stroke uses currentColor), used while replacing Fluent's
-   `Color="Color.X"` icon coloring during the Fluent-removal phase. */
+/* Semantic color helpers for DeckIcon (stroke uses currentColor), used while replacing the previous library's
+   `Color="Color.X"` icon coloring during the the previous library-removal phase. */
 .icon-warning { color: var(--warning); }
 .icon-error { color: var(--error); }
 .icon-success { color: var(--success); }
@@ -2559,7 +2559,7 @@ table.data.deck-logs-table tbody td.deck-logs-actions-col {
 /* === end Icon utilities === */
 
 /* === Dividers === */
-/* Replaces FluentDivider during Fluent removal. Vertical is the toolbar/detail-header default;
+/* Replaces Divider during the previous library removal. Vertical is the toolbar/detail-header default;
    horizontal (an <hr>) is used for menu/list separators. */
 .deck-divider {
   border: none;
@@ -2579,8 +2579,8 @@ hr.deck-divider {
 }
 /* === end Dividers === */
 
-/* === Stacks (FluentStack replacement) === */
-/* Flex containers replacing FluentStack. Defaults mirror FluentStack: row direction,
+/* === Stacks (Stack replacement) === */
+/* Flex containers replacing Stack. Defaults mirror Stack: row direction,
    10px gaps, start alignment, full width. Per-instance gap/alignment/width overrides go
    inline on the element. */
 .deck-stack {
@@ -2597,9 +2597,9 @@ hr.deck-divider {
 }
 /* === end Stacks === */
 
-/* === Tabs (FluentTabs replacement) === */
+/* === Tabs (Tabs replacement) === */
 /* Underlined tab bar built from native buttons. The host wraps the bar + panels in a
-   single block so it occupies one grid/flex slot, exactly like the FluentTabs element
+   single block so it occupies one grid/flex slot, exactly like the Tabs element
    it replaces. */
 .deck-tabs-host {
   display: block;
@@ -2642,7 +2642,7 @@ hr.deck-divider {
 }
 /* === end Tabs === */
 
-/* === Checkbox (FluentCheckbox replacement) === */
+/* === Checkbox (Checkbox replacement) === */
 .deck-checkbox {
   display: flex;
   align-items: center;
@@ -2667,7 +2667,7 @@ hr.deck-divider {
 }
 /* === end Checkbox === */
 
-/* === Search highlight (FluentHighlighter replacement) ===
+/* === Search highlight (Highlighter replacement) ===
    Wraps the matched search substring rendered by the Deck Highlighter component. Uses a soft
    accent background so matches read as a Deck highlight rather than the browser-default yellow. */
 .deck-mark {
@@ -2678,7 +2678,7 @@ hr.deck-divider {
 }
 /* === end Search highlight === */
 
-/* === Accordion (FluentAccordion/FluentAccordionItem replacement) ===
+/* === Accordion (Accordion/AccordionItem replacement) ===
    Collapsible sections built on native <details>/<summary>. The default disclosure marker is
    replaced with a Deck caret that rotates when the item is open. */
 .deck-accordion {
@@ -2730,7 +2730,7 @@ hr.deck-divider {
 }
 /* === end Accordion === */
 
-/* === Hyperlink buttons (FluentButton Lightweight link-style replacement) === */
+/* === Hyperlink buttons (Button Lightweight link-style replacement) === */
 .button-hyperlink,
 .button-hyperlink-no-icon {
   display: inline-flex;
@@ -2769,7 +2769,7 @@ hr.deck-divider {
 }
 /* === end Deck clipboard-copy button === */
 
-/* === Deck input label (replaces FluentInputLabel) === */
+/* === Deck input label (replaces InputLabel) === */
 .deck-input-label {
   display: inline-flex;
   align-items: center;
@@ -2787,7 +2787,7 @@ hr.deck-divider {
 }
 /* === end Deck input label === */
 
-/* === Deck counter badge (replaces FluentCounterBadge) === */
+/* === Deck counter badge (replaces CounterBadge) === */
 .deck-counter-badge {
   position: relative;
   display: inline-flex;
@@ -2814,7 +2814,7 @@ hr.deck-divider {
 }
 /* === end Deck counter badge === */
 
-/* === Deck label (replaces FluentLabel) === */
+/* === Deck label (replaces Label) === */
 .deck-label {
   color: var(--text-primary, inherit);
 }
@@ -2825,7 +2825,7 @@ hr.deck-divider {
 }
 /* === end Deck label === */
 
-/* === Deck help-dialog shortcuts grid (replaces FluentGrid) === */
+/* === Deck help-dialog shortcuts grid (replaces Grid) === */
 .help-shortcuts-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -2838,7 +2838,7 @@ hr.deck-divider {
 }
 /* === end Deck help-dialog shortcuts grid === */
 
-/* === Deck tree (replaces FluentTreeView / FluentTreeItem) === */
+/* === Deck tree (replaces TreeView / TreeItem) === */
 .deck-tree {
   list-style: none;
   margin: 0;
@@ -2902,7 +2902,7 @@ hr.deck-divider {
 }
 /* === end Deck tree === */
 
-/* === Deck combobox (replaces FluentCombobox) === */
+/* === Deck combobox (replaces Combobox) === */
 .deck-combobox {
   position: relative;
   display: flex;
@@ -2945,7 +2945,7 @@ hr.deck-divider {
 }
 /* === end Deck combobox === */
 
-/* === Deck input with trailing icon (replaces FluentTextField slot="end") === */
+/* === Deck input with trailing icon (replaces TextField slot="end") === */
 .deck-input-with-end {
   position: relative;
   display: flex;
@@ -2972,13 +2972,13 @@ hr.deck-divider {
 }
 /* === end Deck input with trailing icon === */
 
-/* === Deck spacer (replaces FluentSpacer) === */
+/* === Deck spacer (replaces Spacer) === */
 .deck-spacer {
   flex: 1 1 auto;
 }
 /* === end Deck spacer === */
 
-/* === Deck full-screen overlay (replaces FluentOverlay click-catcher) === */
+/* === Deck full-screen overlay (replaces Overlay click-catcher) === */
 .deck-overlay {
   position: fixed;
   inset: 0;
@@ -2987,7 +2987,7 @@ hr.deck-divider {
 }
 /* === end Deck full-screen overlay === */
 
-/* === Deck dialog framework (replaces FluentDialogProvider / FluentDialog*) === */
+/* === Deck dialog framework (replaces DialogProvider / Dialog*) === */
 .deck-dialog-overlay {
   position: fixed;
   inset: 0;
@@ -3122,7 +3122,7 @@ hr.deck-divider {
 }
 /* === end Deck popover === */
 
-/* === Deck resource select (replaces FluentSelect in ResourceSelect) === */
+/* === Deck resource select (replaces Select in ResourceSelect) === */
 .deck-resource-select {
   position: relative;
   display: inline-block;
@@ -3179,7 +3179,7 @@ hr.deck-divider {
 }
 /* === end Deck resource select === */
 
-/* === Deck menu (replaces FluentMenu) === */
+/* === Deck menu (replaces Menu) === */
 /* Fixed-layer menu surface positioned in JS (see AspireMenu.razor.js). */
 .deck-menu {
   position: fixed;

@@ -205,14 +205,14 @@ public sealed class ManageDataDialogTests : DashboardTestContext
         Assert.Equal("checkbox", checkbox.GetAttribute("role"));
         Assert.Equal(ariaChecked, checkbox.GetAttribute("aria-checked"));
         Assert.Equal("0", checkbox.GetAttribute("tabindex"));
-        Assert.Empty(checkbox.QuerySelectorAll("fluent-button"));
+        Assert.Empty(checkbox.QuerySelectorAll("button"));
 
         return checkbox;
     }
 
     private static void AssertSelectionCheckboxCount(IRenderedComponent<ManageDataDialog> cut, int expectedCount)
     {
-        Assert.Empty(cut.FindAll("fluent-button[role='checkbox']"));
+        Assert.Empty(cut.FindAll("button[role='checkbox']"));
         Assert.Equal(expectedCount, GetSelectionCheckboxes(cut).Count);
     }
 
@@ -233,7 +233,7 @@ public sealed class ManageDataDialogTests : DashboardTestContext
 
     private static void AssertNoButtonHasAccessibleName(IRenderedComponent<ManageDataDialog> cut, string accessibleName) =>
         Assert.DoesNotContain(
-            cut.FindAll("fluent-button"),
+            cut.FindAll("button"),
             element =>
                 string.Equals(element.GetAttribute("title"), accessibleName, StringComparison.Ordinal) ||
                 string.Equals(element.GetAttribute("aria-label"), accessibleName, StringComparison.Ordinal));

@@ -10,9 +10,9 @@ using Microsoft.AspNetCore.Components;
 namespace Aspire.Dashboard.Components.Dialogs;
 
 /// <summary>
-/// Deck-style settings surface shown as a right-side pane (replaces the Fluent SettingsDialog panel).
+/// Deck-style settings surface shown as a right-side pane (replaces the the previous library SettingsDialog panel).
 /// Carries the same theme / language / time-format / manage-data settings; only the rendering surface
-/// differs. Manage-data still opens the existing Fluent dialog for now.
+/// differs. Manage-data still opens the existing the previous library dialog for now.
 /// </summary>
 public partial class SettingsPane : IDisposable
 {
@@ -29,7 +29,7 @@ public partial class SettingsPane : IDisposable
 
     /// <summary>
     /// Invoked when the user activates "Manage data". When set, the host opens the Deck
-    /// ManageDataPane; otherwise the pane falls back to the Fluent ManageDataDialog.
+    /// ManageDataPane; otherwise the pane falls back to the the previous library ManageDataDialog.
     /// </summary>
     [Parameter]
     public EventCallback OnManageData { get; set; }
@@ -128,7 +128,7 @@ public partial class SettingsPane : IDisposable
     private async Task LaunchManageDataAsync()
     {
         // On desktop the settings pane delegates "Manage data" to the host (MainLayout), which closes
-        // this pane and opens the Deck ManageDataPane. Fall back to the Fluent dialog if no host
+        // this pane and opens the Deck ManageDataPane. Fall back to the the previous library dialog if no host
         // handler is wired (keeps the surface usable in isolation).
         if (OnManageData.HasDelegate)
         {

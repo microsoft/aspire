@@ -6,7 +6,7 @@ using System.Globalization;
 namespace Aspire.Dashboard.Components.Controls.Grid;
 
 /// <summary>
-/// Translates a CSS <c>grid-template-columns</c> string (as callers previously passed to the Fluent
+/// Translates a CSS <c>grid-template-columns</c> string (as callers previously passed to the the previous library
 /// data grid, e.g. <c>"1fr 1fr 0.5fr"</c>) into per-column widths for a native table's
 /// <c>&lt;col&gt;</c> elements. Fractional tokens are converted to percentages; other tokens
 /// (e.g. <c>"200px"</c>, <c>"auto"</c>) are used verbatim.

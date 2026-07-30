@@ -20,7 +20,7 @@ namespace Aspire.Dashboard.Components.Interactions;
 /// while notifications stack as non-blocking <see cref="NotificationStack"/> toasts.
 /// </summary>
 /// <remarks>
-/// This replaces the previous Fluent <c>DialogService</c>/<c>MessageService</c> rendering. The
+/// This replaces the previous the previous library <c>DialogService</c>/<c>MessageService</c> rendering. The
 /// watch/queue/validation-update/Complete and server request semantics are unchanged — only the
 /// rendering surface differs — so dialogs still validate per field via the <c>update</c> action and
 /// notification replies still echo <c>Notification{result}</c>.

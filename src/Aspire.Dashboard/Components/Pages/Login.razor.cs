@@ -74,7 +74,7 @@ public partial class Login : IAsyncDisposable, IComponentWithTelemetry
         }
     }
 
-    // Mirrors the previous FluentTextField Immediate="true" behaviour: update the bound token on
+    // Mirrors the previous TextField Immediate="true" behaviour: update the bound token on
     // every key press and notify the EditContext so the field's validation message clears as the
     // user edits (the message store subscribes to OnFieldChanged in OnInitializedAsync).
     private void OnTokenInput(ChangeEventArgs e)

@@ -546,7 +546,7 @@ public partial class ManageDataDialog : IDeckDialogContentComponent, IAsyncDispo
         await OnTelemetryChangedAsync();
     }
 
-    // Maximum import upload size (100 MB), matching the previous FluentInputFile limit.
+    // Maximum import upload size (100 MB), matching the previous InputFile limit.
     private const long MaxImportFileSize = 100 * 1024 * 1024;
 
     private async Task OnImportFileChangeAsync(InputFileChangeEventArgs e)

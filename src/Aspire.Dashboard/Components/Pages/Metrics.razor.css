@@ -1,7 +1,7 @@
 /* Deck-style two-pane metrics layout. The .metrics-layout / .metric-list /
    .metric-detail tokens (and this page's overrides of them) live in deck.css;
    the rules below style the subcomponents rendered inside those panes — the
-   FluentTreeView selector and the Plotly ChartContainer — which require ::deep
+   TreeView selector and the Plotly ChartContainer — which require ::deep
    because they belong to child components. */
 ::deep .meter-name-title {
     overflow: hidden;
@@ -21,14 +21,14 @@
     text-decoration: underline;
 }
 
-/* Metric tree selector (FluentTreeView) hosted inside the Deck list panel. */
+/* Metric tree selector (TreeView) hosted inside the Deck list panel. */
 ::deep .metrics-tree {
     min-width: auto;
     width: 100%;
     padding: 6px;
 }
 
-/* ---- Plotly chart internals (kept from the original Fluent chart) ---- */
+/* ---- Plotly chart internals (kept from the original the previous library chart) ---- */
 ::deep .yaxislayer-above {
     transform: translate(-10px,0px);
 }
@@ -79,22 +79,6 @@
 
 ::deep .metrics-filters-section {
     margin-bottom: 15px;
-}
-
-::deep .fluent-popover-content {
-    overflow-wrap: normal;
-    word-break: normal;
-    max-height: 300px;
-    overflow-y: auto;
-    max-width: 400px;
-    min-width: 100px;
-    overflow-x: hidden;
-}
-
-::deep .fluent-popover-content div[part="header"] {
-    font-size: 16px;
-    line-height: normal;
-    margin-bottom: 8px;
 }
 
 ::deep .plotly-chart-container {

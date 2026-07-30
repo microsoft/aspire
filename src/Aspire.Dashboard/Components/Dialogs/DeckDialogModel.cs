@@ -7,9 +7,9 @@ using Microsoft.AspNetCore.Components;
 namespace Aspire.Dashboard.Components.Dialogs;
 
 /// <summary>
-/// Deck-native dialog framework primitives, replacing the FluentUI dialog service/provider used by
-/// the dashboard during the Fluent-removal phase. Distinct Deck-prefixed type names are used so this
-/// framework can coexist with the (still-present) <c>Microsoft.FluentUI.AspNetCore.Components</c>
+/// Deck-native dialog framework primitives, replacing the the previous UI library dialog service/provider used by
+/// the dashboard for the Deck redesign. Distinct Deck-prefixed type names are used so this
+/// framework can coexist with the (still-present) <c>Microsoft.the previous UI library.AspNetCore.Components</c>
 /// namespace that other, not-yet-converted components import through <c>_Imports.razor</c>.
 /// </summary>
 public enum DeckDialogAlignment

@@ -28,18 +28,11 @@
    to set overflow-x: clip on the grid to prevent an odd visual
    glitch with the menu when it is at the far right of the viewport
 */
-::deep .fluent-data-grid,
-::deep .fluent-data-grid-row {
-    min-width: min-content;
-}
 
 /* Ensures that any popups (e.g. menus) don't overflow past
    the right edge of the grid causing a visual flicker of
    the horizontal scrollbar appearing and disappearing
 */
-::deep .fluent-data-grid {
-    overflow-x: clip;
-}
 
 ::deep .resources-name-container {
     height: 24px;
@@ -70,10 +63,6 @@
         "resources-tab-content";
     grid-template-rows: auto 1fr;
     overflow: hidden;
-}
-
-::deep .resource-tabs fluent-tabs {
-    margin-left: calc(var(--design-unit) * 3px);
 }
 
 ::deep .resources-grid-container {

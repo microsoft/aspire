@@ -19,7 +19,7 @@ internal static class DashboardUIHelpers
     public const string MarkdownFormat = "markdown";
     public const string PropertiesFormat = "properties";
 
-    // The initial data fetch for a FluentDataGrid doesn't include a count of items to return.
+    // The initial data fetch for a DataGrid doesn't include a count of items to return.
     // The data grid doesn't specify a count because it doesn't know how many items fit in the UI.
     // Once it knows the height of items and the height of the grid then it specifies the desired item count
     // and then virtualization will fetch more data as needed. The problem with this is the initial fetch
@@ -72,7 +72,7 @@ internal static class DashboardUIHelpers
 
     public static string? ResolveTooltip(string value)
     {
-        // FluentSelects in the dashboard are wide enough to display at least 30 characters.
+        // Selects in the dashboard are wide enough to display at least 30 characters.
         // Only display a tooltip if the value length is greater.
         const int TooltipLengthThreshold = 30;
 

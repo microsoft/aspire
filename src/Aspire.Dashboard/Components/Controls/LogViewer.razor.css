@@ -23,10 +23,6 @@
     text-decoration: underline;
 }
 
-::deep .log-content > fluent-badge {
-    user-select: none;
-}
-
 ::deep .console-empty-message {
     gap: 8px;
     color: #fff;

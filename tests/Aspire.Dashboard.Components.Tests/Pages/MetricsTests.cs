@@ -349,7 +349,7 @@ public partial class MetricsTests : DashboardTestContext
 
         // Act 2
         var resourceSelect = cut.FindComponent<ResourceSelect>();
-        resourceSelect.Find("li[data-value='TestApp2']").Click();
+        cut.InvokeAsync(() => resourceSelect.Find("li[data-value='TestApp2']").Click());
 
         cut.WaitForAssertion(() => Assert.Equal("TestApp2", viewModel.SelectedResource.Name));
 

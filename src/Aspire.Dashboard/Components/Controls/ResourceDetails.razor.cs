@@ -77,7 +77,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
     private readonly Grid.GridSortState<DisplayedUrl> _urlSort = new();
     private readonly Grid.GridSortState<VolumeViewModel> _volumeSort = new();
 
-    // Column widths for the accordion tables, derived once from the fractional layouts the Fluent
+    // Column widths for the accordion tables, derived once from the fractional layouts the the previous library
     // grid previously used.
     private static readonly IReadOnlyList<string> s_standardColumnWidths = Grid.GridColumnWidths.Parse("1fr 1fr 0.5fr", 3);
     private static readonly IReadOnlyList<string> s_healthColumnWidths = Grid.GridColumnWidths.Parse("1fr 1fr 1.5fr", 3);
@@ -141,7 +141,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
 
     // Sort key selectors for the URL and volume tables, indexed by column. The address and text
     // columns both sort by the resolved URL (falling back to display text), matching the previous
-    // Fluent grid behavior.
+    // the previous library grid behavior.
     private static readonly IReadOnlyList<Func<DisplayedUrl, IComparable?>> s_urlSortKeys =
     [
         vm => vm.Url ?? vm.Text,

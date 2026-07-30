@@ -66,7 +66,7 @@ public partial class SettingsDialog : IDeckDialogContentComponent, IDisposable
 
     private async Task ThemeChangedAsync()
     {
-        // The field is being transiently set to null when the value changes. Maybe a bug in FluentUI?
+        // The field is being transiently set to null when the value changes. Maybe a bug in the previous UI library?
         // This should never be set to null by the dashboard so we can ignore null values.
         if (_currentSetting != null)
         {
@@ -100,7 +100,7 @@ public partial class SettingsDialog : IDeckDialogContentComponent, IDisposable
 
     private static void ValueChanged(string? value)
     {
-        // Do nothing. Required for FluentUI Blazor to trigger SelectedOptionChanged.
+        // Do nothing. Required for the previous UI library Blazor to trigger SelectedOptionChanged.
     }
 
     private async Task LaunchManageDataAsync()

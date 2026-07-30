@@ -46,7 +46,7 @@ public sealed class InputViewModel
                 .Select(option => new SelectViewModel<string> { Id = option.Key, Name = option.Value, })
                 .ToList();
 
-            // Only update the options if they have changed to avoid unnecessarily recreating the FluentSelect component.
+            // Only update the options if they have changed to avoid unnecessarily recreating the Select component.
             if (!OptionsEqual(SelectOptions, optionsVM))
             {
                 SelectOptions = optionsVM;
@@ -54,7 +54,7 @@ public sealed class InputViewModel
             }
 
             // Default to the first option if no placeholder is set, the value is empty, and custom choice is disabled.
-            // This is done so the input model value matches frontend behavior (FluentSelect defaults to the first option)
+            // This is done so the input model value matches frontend behavior (Select defaults to the first option)
             if (string.IsNullOrEmpty(input.Placeholder) && string.IsNullOrEmpty(input.Value) && optionsVM.Count > 0 && !input.AllowCustomChoice)
             {
                 input.Value = optionsVM[0].Id;
@@ -73,7 +73,7 @@ public sealed class InputViewModel
 
     /// <summary>
     /// A key unique per input that changes when <see cref="ChoiceVersion"/> changes.
-    /// Used as a Blazor <c>@key</c> on FluentSelect / FluentCombobox.
+    /// Used as a Blazor <c>@key</c> on Select / Combobox.
     /// </summary>
     public string InputKey => $"{Input.Name}_{ChoiceVersion}";
 
@@ -88,7 +88,7 @@ public sealed class InputViewModel
 
         // If no values match the filter, don't apply the filter.
         // This improves user experience and fixes some combobox issues.
-        // https://github.com/microsoft/fluentui-blazor/issues/4314#issuecomment-3577475233
+        // https://github.com/microsoft/aspire/issues/4314#issuecomment-3577475233
         if (!filteredValues.Any())
         {
             filteredValues = SelectOptions;
@@ -103,14 +103,14 @@ public sealed class InputViewModel
         set => Input.Value = value;
     }
 
-    // Used when binding to FluentCheckbox.
+    // Used when binding to Checkbox.
     public bool IsChecked
     {
         get => bool.TryParse(Input.Value, out var result) && result;
         set => Input.Value = value ? "true" : "false";
     }
 
-    // Used when binding to FluentNumberField.
+    // Used when binding to NumberField.
     public int? NumberValue
     {
         get => int.TryParse(Input.Value, CultureInfo.InvariantCulture, out var result) ? result : null;
