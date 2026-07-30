@@ -1,7 +1,8 @@
 ﻿@using Aspire.Dashboard.Resources
-@implements IDialogContentComponent
+@implements IDeckDialogContentComponent
 @inject IStringLocalizer<Dialogs> Loc
 
+<DeckDialogHeader />
 <a style="display: inline-block; margin-bottom: 5px;" href="https://aka.ms/aspire/dashboard" target="_blank" rel="noopener noreferrer">
     @Loc[nameof(Dialogs.HelpDialogGetHelpLinkText)]
 </a>

@@ -12,7 +12,7 @@ namespace Aspire.Dashboard.Components.Dialogs;
 /// can render them. The public API mirrors the subset of the Fluent dialog service that the dashboard
 /// uses (dialog, panel, message box, confirmation).
 /// </summary>
-public sealed class DeckDialogService
+public class DeckDialogService
 {
     private readonly List<DeckOpenDialog> _openDialogs = new();
 
@@ -23,34 +23,34 @@ public sealed class DeckDialogService
     public IReadOnlyList<DeckOpenDialog> OpenDialogs => _openDialogs;
 
     /// <summary>Shows a modal dialog rendering <typeparamref name="TDialog"/> with the given content.</summary>
-    public Task<IDeckDialogReference> ShowDialogAsync<TDialog>(object content, DeckDialogParameters parameters)
+    public virtual Task<IDeckDialogReference> ShowDialogAsync<TDialog>(object content, DeckDialogParameters parameters)
         where TDialog : IDeckDialogContentComponent
         => ShowCoreAsync(typeof(TDialog), content, parameters, DeckDialogType.Dialog);
 
     /// <summary>Shows a modal dialog rendering <typeparamref name="TDialog"/>.</summary>
-    public Task<IDeckDialogReference> ShowDialogAsync<TDialog>(DeckDialogParameters parameters)
+    public virtual Task<IDeckDialogReference> ShowDialogAsync<TDialog>(DeckDialogParameters parameters)
         where TDialog : IDeckDialogContentComponent
         => ShowCoreAsync(typeof(TDialog), content: null, parameters, DeckDialogType.Dialog);
 
     /// <summary>Shows a side panel rendering <typeparamref name="TDialog"/> with the given content.</summary>
-    public Task<IDeckDialogReference> ShowPanelAsync<TDialog>(object content, DeckDialogParameters parameters)
+    public virtual Task<IDeckDialogReference> ShowPanelAsync<TDialog>(object content, DeckDialogParameters parameters)
         where TDialog : IDeckDialogContentComponent
         => ShowCoreAsync(typeof(TDialog), content, parameters, DeckDialogType.Panel);
 
     /// <summary>Shows a side panel rendering <typeparamref name="TDialog"/>.</summary>
-    public Task<IDeckDialogReference> ShowPanelAsync<TDialog>(DeckDialogParameters parameters)
+    public virtual Task<IDeckDialogReference> ShowPanelAsync<TDialog>(DeckDialogParameters parameters)
         where TDialog : IDeckDialogContentComponent
         => ShowCoreAsync(typeof(TDialog), content: null, parameters, DeckDialogType.Panel);
 
     /// <summary>Shows a message box using the supplied content and actions.</summary>
-    public Task<IDeckDialogReference> ShowMessageBoxAsync(DeckDialogParameters<DeckMessageBoxContent> parameters)
+    public virtual Task<IDeckDialogReference> ShowMessageBoxAsync(DeckDialogParameters<DeckMessageBoxContent> parameters)
     {
         parameters.DialogType = DeckDialogType.MessageBox;
         return ShowCoreAsync(typeof(DeckMessageBox), parameters.Content, parameters, DeckDialogType.MessageBox);
     }
 
     /// <summary>Shows a simple confirmation message box with the provided message.</summary>
-    public Task<IDeckDialogReference> ShowConfirmationAsync(string message, string primaryText, string secondaryText)
+    public virtual Task<IDeckDialogReference> ShowConfirmationAsync(string message, string primaryText, string secondaryText)
     {
         var parameters = new DeckDialogParameters<DeckMessageBoxContent>
         {

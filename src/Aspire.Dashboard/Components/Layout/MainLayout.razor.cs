@@ -10,7 +10,6 @@ using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Layout;
@@ -29,7 +28,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     private IJSObjectReference? _keyboardHandlers;
     private DotNetObjectReference<ShortcutManager>? _shortcutManagerReference;
     private DotNetObjectReference<MainLayout>? _layoutReference;
-    private IDialogReference? _openPageDialog;
+    private IDeckDialogReference? _openPageDialog;
     private string? _pendingReturnFocusElementId;
     private bool _suppressNextDialogFocusRestore;
     private const string SettingsDialogId = "SettingsDialog";
@@ -221,7 +220,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     private async Task LaunchHelpAsync(string? returnFocusElementId)
     {
-        DialogParameters parameters = new()
+        DeckDialogParameters parameters = new()
         {
             Title = Loc[nameof(Resources.Layout.MainLayoutAspireDashboardHelpLink)],
             PrimaryAction = Loc[nameof(Resources.Layout.MainLayoutSettingsDialogClose)],
@@ -229,11 +228,11 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             SecondaryAction = null,
             TrapFocus = true,
             Modal = true,
-            Alignment = HorizontalAlignment.Center,
+            Alignment = DeckDialogAlignment.Default,
             Width = "700px",
             Height = "auto",
             Id = HelpDialogId,
-            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, _ => HandleDialogClose(GetVisibleReturnFocusElementId(returnFocusElementId, HelpButtonId)))
+            OnDialogClosing = EventCallback.Factory.Create<DeckDialogInstance>(this, _ => HandleDialogClose(GetVisibleReturnFocusElementId(returnFocusElementId, HelpButtonId)))
         };
 
         if (!await CloseOpenPageDialogForReplacementAsync(HelpDialogId).ConfigureAwait(true))
@@ -281,7 +280,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     public async Task LaunchAIAgentsAsync()
     {
-        DialogParameters parameters = new()
+        DeckDialogParameters parameters = new()
         {
             Title = Loc[nameof(Resources.Layout.MainLayoutLaunchAIAgents)],
             PrimaryAction = Loc[nameof(Resources.Layout.MainLayoutSettingsDialogClose)],
@@ -289,11 +288,11 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             SecondaryAction = null,
             TrapFocus = true,
             Modal = true,
-            Alignment = HorizontalAlignment.Center,
+            Alignment = DeckDialogAlignment.Default,
             Width = "700px",
             Height = "auto",
             Id = AIAgentsDialogId,
-            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, _ => HandleDialogClose())
+            OnDialogClosing = EventCallback.Factory.Create<DeckDialogInstance>(this, _ => HandleDialogClose())
         };
 
         if (!await CloseOpenPageDialogForReplacementAsync(AIAgentsDialogId).ConfigureAwait(true))
@@ -359,18 +358,18 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     private async Task LaunchSettingsAsync(string? returnFocusElementId)
     {
-        var parameters = new DialogParameters
+        var parameters = new DeckDialogParameters
         {
             Title = Loc[nameof(Resources.Layout.MainLayoutSettingsDialogTitle)],
             PrimaryAction = Loc[nameof(Resources.Layout.MainLayoutSettingsDialogClose)].Value,
             SecondaryAction = null,
             TrapFocus = true,
             Modal = true,
-            Alignment = HorizontalAlignment.Right,
+            Alignment = DeckDialogAlignment.End,
             Width = "300px",
             Height = "auto",
             Id = SettingsDialogId,
-            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, _ => HandleDialogClose(GetVisibleReturnFocusElementId(returnFocusElementId, SettingsButtonId)))
+            OnDialogClosing = EventCallback.Factory.Create<DeckDialogInstance>(this, _ => HandleDialogClose(GetVisibleReturnFocusElementId(returnFocusElementId, SettingsButtonId)))
         };
 
         if (!await CloseOpenPageDialogForReplacementAsync(SettingsDialogId).ConfigureAwait(true))
@@ -393,18 +392,18 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     public async Task LaunchNotificationsAsync()
     {
-        var parameters = new DialogParameters
+        var parameters = new DeckDialogParameters
         {
             Title = Loc[nameof(Resources.Layout.MainLayoutNotificationCenterTitle)],
             PrimaryAction = Loc[nameof(Resources.Layout.MainLayoutSettingsDialogClose)].Value,
             SecondaryAction = null,
             TrapFocus = true,
             Modal = true,
-            Alignment = HorizontalAlignment.Right,
+            Alignment = DeckDialogAlignment.End,
             Width = "350px",
             Height = "auto",
             Id = NotificationsDialogId,
-            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, _ => HandleDialogClose())
+            OnDialogClosing = EventCallback.Factory.Create<DeckDialogInstance>(this, _ => HandleDialogClose())
         };
 
         if (!await CloseOpenPageDialogForReplacementAsync(NotificationsDialogId).ConfigureAwait(true))

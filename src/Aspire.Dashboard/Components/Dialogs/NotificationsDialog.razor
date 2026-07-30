@@ -2,7 +2,8 @@
 @using Aspire.Dashboard.Utils
 @inject IStringLocalizer<Dialogs> Loc
 
-<FluentDialogBody>
+<DeckDialogHeader />
+<DeckDialogBody>
     <div class="notifications-container">
         @if (_notifications.Count == 0)
         {
@@ -26,4 +27,4 @@
             </div>
         }
     </div>
-</FluentDialogBody>
+</DeckDialogBody>

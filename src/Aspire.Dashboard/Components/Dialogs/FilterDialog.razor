@@ -1,11 +1,12 @@
 ﻿@using Aspire.Dashboard.Model
 @using Aspire.Dashboard.Model.Otlp
 @using Aspire.Dashboard.Resources
-@implements IDialogContentComponent<FilterDialogViewModel>
+@implements IDeckDialogContentComponent<FilterDialogViewModel>
 
 @inject IStringLocalizer<Dialogs> Loc
 @inject IStringLocalizer<StructuredFiltering> FilterLoc
 
+<DeckDialogHeader />
 <EditForm EditContext="@EditContext" OnValidSubmit="@Apply">
     <DataAnnotationsValidator />
 

@@ -162,7 +162,7 @@ internal static class FluentUISetupHelpers
         context.Services.AddSingleton<BrowserTimeProvider>(browserTimeProvider ?? new TestTimeProvider());
         context.Services.AddSingleton<TelemetryRepository>();
         context.Services.AddSingleton<PauseManager>();
-        context.Services.AddSingleton<IDialogService, DialogService>();
+        context.Services.AddScoped<Aspire.Dashboard.Components.Dialogs.DeckDialogService>();
         context.Services.AddSingleton<ILocalStorage>(localStorage ?? new TestLocalStorage());
         context.Services.AddSingleton<ISessionStorage>(sessionStorage ?? new TestSessionStorage());
         context.Services.AddSingleton<ShortcutManager>();
@@ -215,7 +215,7 @@ internal static class FluentUISetupHelpers
     {
         return context.Render(builder =>
         {
-            builder.OpenComponent<FluentDialogProvider>(0);
+            builder.OpenComponent<Aspire.Dashboard.Components.Dialogs.DeckDialogProvider>(0);
             builder.CloseComponent();
         });
     }

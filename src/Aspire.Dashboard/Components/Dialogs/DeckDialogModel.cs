@@ -87,8 +87,14 @@ public class DeckDialogParameters
     /// <summary>Text for the primary action button (null/empty hides it).</summary>
     public string? PrimaryAction { get; set; }
 
+    /// <summary>Whether the primary action button is enabled.</summary>
+    public bool PrimaryActionEnabled { get; set; } = true;
+
     /// <summary>Text for the secondary action button (null/empty hides it).</summary>
     public string? SecondaryAction { get; set; }
+
+    /// <summary>Whether the secondary action button is enabled.</summary>
+    public bool SecondaryActionEnabled { get; set; } = true;
 
     /// <summary>How the dialog is presented.</summary>
     public DeckDialogType DialogType { get; set; } = DeckDialogType.Dialog;
@@ -212,6 +218,9 @@ public sealed class DeckDialogInstance
 
     /// <summary>Closes the dialog as cancelled.</summary>
     public Task CloseAsync() => _close(DeckDialogResult.Cancel());
+
+    /// <summary>Closes the dialog as cancelled (alias for <see cref="CloseAsync()"/>).</summary>
+    public Task CancelAsync() => _close(DeckDialogResult.Cancel());
 
     /// <summary>Closes the dialog with the specified result.</summary>
     public Task CloseAsync(DeckDialogResult result) => _close(result);

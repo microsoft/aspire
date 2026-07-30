@@ -5,17 +5,17 @@
 @using Aspire.DashboardService.Proto.V1
 @using Dialogs = Aspire.Dashboard.Resources.Dialogs
 @using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons
-@implements IDialogContentComponent<InteractionsInputsDialogViewModel>
+@implements IDeckDialogContentComponent<InteractionsInputsDialogViewModel>
 
-<FluentDialogHeader ShowDismiss="@Dialog.Instance.Parameters.ShowDismiss">
+<DeckDialogHeader ShowDismiss="@Dialog.Instance.Parameters.ShowDismiss">
     <div class="deck-stack" style="align-items: center;">
         <Label Typo="pane-header">
             @Dialog.Instance.Parameters.Title
         </Label>
     </div>
-</FluentDialogHeader>
+</DeckDialogHeader>
 
-<FluentDialogBody Class="interaction-input-dialog">
+<DeckDialogBody Class="interaction-input-dialog">
     @if (!string.IsNullOrEmpty(Content.Message))
     {
         <div class="interaction-message">
@@ -211,9 +211,9 @@
         @* Hidden submit is so the form is submitted when the user presses enter. *@
         <button type="submit" style="display:none"></button>
     </EditForm>
-</FluentDialogBody>
+</DeckDialogBody>
 
-<FluentDialogFooter>
+<DeckDialogFooter>
     <button type="button" class="btn btn--primary" @onclick="@SubmitAsync">
         @Dialog.Instance.Parameters.PrimaryAction
     </button>
@@ -223,4 +223,4 @@
             @Dialog.Instance.Parameters.SecondaryAction
         </button>
     }
-</FluentDialogFooter>
+</DeckDialogFooter>

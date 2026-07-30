@@ -5,10 +5,10 @@ using System.Globalization;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Utils;
+using Aspire.Dashboard.Components.Deck;
+using Aspire.Dashboard.Components.Dialogs;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
-using Microsoft.FluentUI.AspNetCore.Components;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Model;
 
@@ -48,16 +48,16 @@ public static class TraceLinkHelpers
             using var cts = new CancellationTokenSource();
             using var registration = cancellationToken.Register(cts.Cancel);
 
-            var reference = await dialogService.ShowMessageBoxAsync(new DialogParameters<MessageBoxContent>()
+            var reference = await dialogService.ShowMessageBoxAsync(new DeckDialogParameters<DeckMessageBoxContent>()
             {
-                Content = new MessageBoxContent
+                Content = new DeckMessageBoxContent
                 {
-                    Intent = MessageBoxIntent.Info,
-                    Icon = new Icons.Filled.Size24.Info(),
-                    IconColor = Color.Info,
+                    Intent = DeckMessageIntent.Info,
+                    Icon = DeckIconName.Info,
+                    IconColor = "icon-info",
                     MarkupMessage = new MarkupString(unavailableText),
                 },
-                DialogType = DialogType.MessageBox,
+                DialogType = DeckDialogType.MessageBox,
                 PrimaryAction = string.Empty,
                 SecondaryAction = loc[nameof(Dialogs.OpenSpanDialogCancelButtonText)]
             }).ConfigureAwait(false);
@@ -72,7 +72,7 @@ public static class TraceLinkHelpers
                     {
                         await dispatcher(async () =>
                         {
-                            await reference.CloseAsync(DialogResult.Ok<bool>(true)).ConfigureAwait(false);
+                            await reference.CloseAsync(DeckDialogResult.Ok(true)).ConfigureAwait(false);
                         }).ConfigureAwait(false);
                     }
                     else

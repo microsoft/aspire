@@ -6,11 +6,10 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Components.Dialogs;
 
-public partial class SettingsDialog : IDialogContentComponent, IDisposable
+public partial class SettingsDialog : IDeckDialogContentComponent, IDisposable
 {
     private string? _currentSetting;
     private List<CultureInfo> _languageOptions = null!;
@@ -32,7 +31,7 @@ public partial class SettingsDialog : IDialogContentComponent, IDisposable
     public required DashboardDialogService DialogService { get; init; }
 
     [CascadingParameter]
-    public FluentDialog Dialog { get; set; } = default!;
+    public DeckDialogInstance Dialog { get; set; } = default!;
 
     [Inject]
     public required BrowserTimeProvider TimeProvider { get; init; }
@@ -110,7 +109,7 @@ public partial class SettingsDialog : IDialogContentComponent, IDisposable
         // "Maximum call stack size exceeded" error in the browser (see #14407).
         await Dialog.CloseAsync();
 
-        var parameters = new DialogParameters
+        var parameters = new DeckDialogParameters
         {
             Title = Loc[nameof(Dashboard.Resources.Dialogs.ManageDataDialogTitle)],
             PrimaryAction = Loc[nameof(Dashboard.Resources.Dialogs.DialogCloseButtonText)],

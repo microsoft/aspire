@@ -6,7 +6,6 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Components.Dialogs;
 
@@ -143,7 +142,7 @@ public partial class SettingsPane : IDisposable
             await OnClose.InvokeAsync();
         }
 
-        var parameters = new DialogParameters
+        var parameters = new DeckDialogParameters
         {
             Title = Loc[nameof(Dashboard.Resources.Dialogs.ManageDataDialogTitle)],
             PrimaryAction = Loc[nameof(Dashboard.Resources.Dialogs.DialogCloseButtonText)],

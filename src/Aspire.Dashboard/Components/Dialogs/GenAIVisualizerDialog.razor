@@ -2,9 +2,9 @@
 @using Aspire.Dashboard.Model.GenAI
 @using Aspire.Dashboard.Resources
 
-@implements IDialogContentComponent<GenAIVisualizerDialogViewModel>
+@implements IDeckDialogContentComponent<GenAIVisualizerDialogViewModel>
 
-<FluentDialogHeader ShowDismiss="true">
+<DeckDialogHeader ShowDismiss="true">
     <div class="dialog-title-grid">
         <DeckIcon Name="DeckIconName.Sparkle" Size="24" Style="grid-area: dialog-icon; align-self: center;" />
         <Label Typo="pane-header" Class="col-long-content" Style="grid-area: dialog-title;">
@@ -30,9 +30,9 @@
             </div>
         }
     </div>
-</FluentDialogHeader>
+</DeckDialogHeader>
 
-<FluentDialogBody>
+<DeckDialogBody>
     <div class="genai-visualizer-container">
         <ResizableSplitView Panel1Size="3fr"
                             Panel2Size="7fr"
@@ -459,9 +459,9 @@
             </Panel2>
         </ResizableSplitView>
     </div>
-</FluentDialogBody>
+</DeckDialogBody>
 
-<FluentDialogFooter Visible="false" />
+<DeckDialogFooter Visible="false" />
 
 @{
     RenderFragment RenderMessageSection(string title, List<GenAIItemViewModel> items, bool noMessageContent)

@@ -3,6 +3,7 @@
 
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Resize;
+using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
@@ -13,7 +14,6 @@ using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components.Components.Tooltip;
 using Microsoft.JSInterop;
 using Xunit;
@@ -192,12 +192,12 @@ public partial class MainLayoutTests : DashboardTestContext
     [InlineData(false, "dashboard-navigation-button", "SettingsDialog", "dashboard-navigation-button")]
     public async Task HeaderDialogClose_RestoresFocusToLaunchButton(bool isDesktop, string launchButtonId, string expectedDialogId, string expectedFocusId)
     {
-        DialogParameters? capturedParameters = null;
+        DeckDialogParameters? capturedParameters = null;
         TestDialogService? dialogService = null;
         dialogService = new TestDialogService(onShowDialog: (_, parameters) =>
         {
             capturedParameters = parameters;
-            return Task.FromResult<IDialogReference>(new DialogReference(parameters.Id, dialogService!));
+            return Task.FromResult<IDeckDialogReference>(new TestDialogReference(parameters.Id));
         });
 
         SetupMainLayoutServices(dialogService: dialogService);
@@ -246,12 +246,12 @@ public partial class MainLayoutTests : DashboardTestContext
         string expectedDialogId,
         string expectedFocusId)
     {
-        DialogParameters? capturedParameters = null;
+        DeckDialogParameters? capturedParameters = null;
         TestDialogService? dialogService = null;
         dialogService = new TestDialogService(onShowDialog: (_, parameters) =>
         {
             capturedParameters = parameters;
-            return Task.FromResult<IDialogReference>(new DialogReference(parameters.Id, dialogService!));
+            return Task.FromResult<IDeckDialogReference>(new TestDialogReference(parameters.Id));
         });
 
         SetupMainLayoutServices(dialogService: dialogService);
@@ -304,12 +304,12 @@ public partial class MainLayoutTests : DashboardTestContext
     {
         // On desktop the help button and the Help keyboard shortcut both open the Deck help pane
         // (HelpPane), not the Fluent HelpDialog. (Mobile still uses the dialog.)
-        DialogParameters? capturedParameters = null;
+        DeckDialogParameters? capturedParameters = null;
         TestDialogService? dialogService = null;
         dialogService = new TestDialogService(onShowDialog: (_, parameters) =>
         {
             capturedParameters = parameters;
-            return Task.FromResult<IDialogReference>(new DialogReference(parameters.Id, dialogService!));
+            return Task.FromResult<IDeckDialogReference>(new TestDialogReference(parameters.Id));
         });
 
         SetupMainLayoutServices(dialogService: dialogService);
@@ -340,12 +340,12 @@ public partial class MainLayoutTests : DashboardTestContext
     {
         // On desktop the settings button and the Settings keyboard shortcut both open the Deck
         // settings pane (SettingsPane), not the Fluent SettingsDialog. (Mobile still uses the dialog.)
-        DialogParameters? capturedParameters = null;
+        DeckDialogParameters? capturedParameters = null;
         TestDialogService? dialogService = null;
         dialogService = new TestDialogService(onShowDialog: (_, parameters) =>
         {
             capturedParameters = parameters;
-            return Task.FromResult<IDialogReference>(new DialogReference(parameters.Id, dialogService!));
+            return Task.FromResult<IDeckDialogReference>(new TestDialogReference(parameters.Id));
         });
 
         SetupMainLayoutServices(dialogService: dialogService);
@@ -373,7 +373,7 @@ public partial class MainLayoutTests : DashboardTestContext
         TestLocalStorage? localStorage = null,
         DashboardMessageService? messageService = null,
         Action<DashboardOptions>? configureOptions = null,
-        IDialogService? dialogService = null)
+        DeckDialogService? dialogService = null)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this, localStorage: localStorage, messageService: messageService);
 

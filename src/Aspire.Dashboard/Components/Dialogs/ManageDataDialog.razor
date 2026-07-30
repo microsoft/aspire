@@ -7,6 +7,7 @@
 @using Resources = Aspire.Dashboard.Resources.Resources
 @using Dialogs = Aspire.Dashboard.Resources.Dialogs
 
+<DeckDialogHeader />
 <div style="height: 44vh; overflow-y: auto;">
     <FluentDataGrid @ref="_dataGrid"
                     Items="@GetGridItems()"

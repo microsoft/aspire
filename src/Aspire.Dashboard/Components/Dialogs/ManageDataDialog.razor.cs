@@ -18,13 +18,10 @@ using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Dialogs;
 
-public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposable
+public partial class ManageDataDialog : IDeckDialogContentComponent, IAsyncDisposable
 {
     [Inject]
     public required BrowserTimeProvider TimeProvider { get; init; }
-
-    [Inject]
-    public required IDialogService DialogService { get; init; }
 
     [Inject]
     public required NavigationManager NavigationManager { get; init; }

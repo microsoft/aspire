@@ -89,6 +89,16 @@ For more information about using AI agents with the dashboard, including setting
         <target state="new">AI agents</target>
         <note />
       </trans-unit>
+      <trans-unit id="ConfirmationDialogCancelButtonText">
+        <source>No</source>
+        <target state="new">No</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfirmationDialogConfirmButtonText">
+        <source>Yes</source>
+        <target state="new">Yes</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DialogCloseButtonText">
         <source>Close</source>
         <target state="translated">Schließen</target>

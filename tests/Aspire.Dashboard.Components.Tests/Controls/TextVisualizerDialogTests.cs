@@ -42,7 +42,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
                            """;
 
         var cut = SetUpDialog(out var dialogService);
-        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawJson, string.Empty, false), []);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawJson, string.Empty, false), new DeckDialogParameters());
 
         var instance = cut.FindComponent<TextVisualizerDialog>().Instance;
 
@@ -63,7 +63,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
             """;
 
         var cut = SetUpDialog(out var dialogService);
-        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawXml, string.Empty, false), []);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawXml, string.Empty, false), new DeckDialogParameters());
         cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
 
         var instance = cut.FindComponent<TextVisualizerDialog>().Instance;
@@ -85,7 +85,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
 
         var content = new TextVisualizerDialogViewModel(rawXml, string.Empty, false);
         var cut = SetUpDialog(out var dialogService);
-        await dialogService.ShowDialogAsync<TextVisualizerDialog>(content, []);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(content, new DeckDialogParameters());
         cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
 
         var formatSelect = Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.Deck.Select<SelectViewModel<string>>>());
@@ -128,7 +128,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
             """;
 
         var cut = SetUpDialog(out var dialogService);
-        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawXml, string.Empty, false), []);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawXml, string.Empty, false), new DeckDialogParameters());
         cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
 
         var instance = cut.FindComponent<TextVisualizerDialog>().Instance;
@@ -144,7 +144,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
         const string rawText = """{{{{{{"test": 4}""";
 
         var cut = SetUpDialog(out var dialogService);
-        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, false), []);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, false), new DeckDialogParameters());
         cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
 
         var instance = cut.FindComponent<TextVisualizerDialog>().Instance;
@@ -160,7 +160,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
         const string rawText = "See https://aka.ms/aspire/container-runtime-unhealthy for more information.";
 
         var cut = SetUpDialog(out var dialogService);
-        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, false), []);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, false), new DeckDialogParameters());
         cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
 
         var link = cut.Find("a[href='https://aka.ms/aspire/container-runtime-unhealthy']");
@@ -174,7 +174,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
         var themeManager = new ThemeManager(new TestThemeResolver { EffectiveTheme = "Light" });
         var cut = SetUpDialog(out var dialogService, themeManager: themeManager);
         themeManager.EffectiveTheme = "Light";
-        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(xml, string.Empty, false), []);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(xml, string.Empty, false), new DeckDialogParameters());
         cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
 
         Assert.NotEmpty(cut.FindAll(".theme-a11y-light-min"));
@@ -192,7 +192,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
         var xml = @"<hello><!-- world --></hello>";
 
         var cut = SetUpDialog(out var dialogService);
-        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(xml, string.Empty, false), []);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(xml, string.Empty, false), new DeckDialogParameters());
         cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
 
         Assert.NotEmpty(cut.FindAll(".theme-a11y-dark-min"));
@@ -214,7 +214,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
         };
 
         var cut = SetUpDialog(out var dialogService, localStorage: localStorage);
-        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, ContainsSecret: true), []);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, ContainsSecret: true), new DeckDialogParameters());
         cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
 
         Assert.Single(cut.FindAll(".block-warning"));
@@ -236,7 +236,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
         var localStorage = new TestLocalStorage();
         localStorage.OnGetUnprotectedAsync = _ => new ValueTuple<bool, object>(true, new TextVisualizerDialog.TextVisualizerDialogSettings(SecretsWarningAcknowledged: true));
         var cut = SetUpDialog(out var dialogService, localStorage: localStorage);
-        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, ContainsSecret: true), []);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, ContainsSecret: true), new DeckDialogParameters());
         cut.WaitForAssertion(() => Assert.False(cut.FindComponent<TextVisualizerDialog>().Instance.ShowSecretsWarning));
 
         cut.WaitForAssertion(() => Assert.False(cut.FindComponent<TextVisualizerDialog>().Instance.ShowSecretsWarning));
@@ -250,7 +250,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
         const string rawText = """export VAR=value""";
 
         var cut = SetUpDialog(out var dialogService);
-        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, ContainsSecret: false, FixedFormat: DashboardUIHelpers.PropertiesFormat), []);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, ContainsSecret: false, FixedFormat: DashboardUIHelpers.PropertiesFormat), new DeckDialogParameters());
         cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
 
         var instance = cut.FindComponent<TextVisualizerDialog>().Instance;
@@ -269,7 +269,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
         const string rawText = """{"key": "value"}""";
 
         var cut = SetUpDialog(out var dialogService);
-        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, ContainsSecret: false, FixedFormat: DashboardUIHelpers.JsonFormat), []);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, ContainsSecret: false, FixedFormat: DashboardUIHelpers.JsonFormat), new DeckDialogParameters());
         cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
 
         var instance = cut.FindComponent<TextVisualizerDialog>().Instance;
@@ -279,7 +279,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
         Assert.True(instance.HasFixedFormat);
     }
 
-    private IRenderedFragment SetUpDialog(out IDialogService dialogService, ThemeManager? themeManager = null, TestLocalStorage? localStorage = null)
+    private IRenderedFragment SetUpDialog(out DeckDialogService dialogService, ThemeManager? themeManager = null, TestLocalStorage? localStorage = null)
     {
         FluentUISetupHelpers.SetupDialogInfrastructure(this, themeManager: themeManager, localStorage: localStorage);
 
@@ -293,7 +293,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
 
         var cut = FluentUISetupHelpers.RenderDialogProvider(this);
 
-        dialogService = Services.GetRequiredService<IDialogService>();
+        dialogService = Services.GetRequiredService<DeckDialogService>();
         return cut;
     }
 }

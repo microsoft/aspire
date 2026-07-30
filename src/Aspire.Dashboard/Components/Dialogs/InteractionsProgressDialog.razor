@@ -1,22 +1,22 @@
 @using Aspire.Dashboard.Model.Interaction
-@implements IDialogContentComponent<InteractionsProgressDialogViewModel>
+@implements IDeckDialogContentComponent<InteractionsProgressDialogViewModel>
 
 @if (!string.IsNullOrEmpty(Dialog.Instance.Parameters.Title))
 {
-    <FluentDialogHeader ShowDismiss="@Dialog.Instance.Parameters.ShowDismiss">
+    <DeckDialogHeader ShowDismiss="@Dialog.Instance.Parameters.ShowDismiss">
         <div class="deck-stack" style="align-items: center;">
             <Label Typo="pane-header">
                 @Dialog.Instance.Parameters.Title
             </Label>
         </div>
-    </FluentDialogHeader>
+    </DeckDialogHeader>
 }
 else
 {
-    <FluentDialogHeader Visible="false" />
+    <DeckDialogHeader Visible="false" />
 }
 
-<FluentDialogBody Class="interaction-progress-dialog">
+<DeckDialogBody Class="interaction-progress-dialog">
     <div class="progress-content">
         <div class="spinner" role="progressbar" aria-label="@Dialog.Instance.Parameters.Title"></div>
 
@@ -24,17 +24,17 @@ else
             @((MarkupString)Content.Message)
         </div>
     </div>
-</FluentDialogBody>
+</DeckDialogBody>
 
 @if (!string.IsNullOrEmpty(Dialog.Instance.Parameters.PrimaryAction))
 {
-    <FluentDialogFooter>
+    <DeckDialogFooter>
         <button type="button" class="btn" @onclick="@CancelAsync">
             @Dialog.Instance.Parameters.PrimaryAction
         </button>
-    </FluentDialogFooter>
+    </DeckDialogFooter>
 }
 else
 {
-    <FluentDialogFooter Visible="false" />
+    <DeckDialogFooter Visible="false" />
 }

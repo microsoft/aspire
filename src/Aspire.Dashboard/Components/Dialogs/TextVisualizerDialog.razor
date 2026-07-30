@@ -4,9 +4,9 @@
 
 @inject IStringLocalizer<Dialogs> Loc
 @inject IStringLocalizer<ControlsStrings> ControlsStringsLoc
-@implements IDialogContentComponent<Aspire.Dashboard.Model.TextVisualizerDialogViewModel>
+@implements IDeckDialogContentComponent<Aspire.Dashboard.Model.TextVisualizerDialogViewModel>
 
-<FluentDialogHeader ShowDismiss="true">
+<DeckDialogHeader ShowDismiss="true">
     <div class="dialog-title-grid">
         <DeckIcon Name="DeckIconName.SlideSearch" Size="24" Style="grid-area: dialog-icon; align-self: center;" />
         <Label Typo="pane-header" Class="col-long-content" Style="grid-area: dialog-title;">
@@ -30,9 +30,9 @@
             </div>
         }
     </div>
-</FluentDialogHeader>
+</DeckDialogHeader>
 
-<FluentDialogBody>
+<DeckDialogBody>
     <div class="text-visualizer-container">
         @if (IsTextContentDisplayed)
         {
@@ -91,6 +91,6 @@
             </div>
         </div>
     </div>
-</FluentDialogBody>
+</DeckDialogBody>
 
-<FluentDialogFooter Visible="false" />
+<DeckDialogFooter Visible="false" />

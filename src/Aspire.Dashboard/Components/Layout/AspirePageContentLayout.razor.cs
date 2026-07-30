@@ -3,8 +3,8 @@
 
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Resources;
+using Aspire.Dashboard.Components.Dialogs;
 using Microsoft.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Components.Layout;
 
@@ -46,7 +46,7 @@ public partial class AspirePageContentLayout : ComponentBase
     [Inject]
     public required DashboardDialogService DialogService { get; init; }
 
-    private IDialogReference? _toolbarPanel;
+    private IDeckDialogReference? _toolbarPanel;
 
     public bool IsToolbarPanelOpen => _toolbarPanel is not null;
 
@@ -77,16 +77,16 @@ public partial class AspirePageContentLayout : ComponentBase
             new MobileToolbar(
                 ToolbarSection!,
                 MobileToolbarButtonText ?? LayoutLoc[nameof(Resources.Layout.PageLayoutViewFilters)]),
-            new DialogParameters
+            new DeckDialogParameters
             {
-                Alignment = HorizontalAlignment.Center,
+                Alignment = DeckDialogAlignment.Default,
                 Title = MobileToolbarButtonText ?? ControlsStringsLoc[nameof(ControlsStrings.ChartContainerFiltersHeader)],
                 Width = "100%",
                 Height = "90%",
                 Modal = false,
                 PrimaryAction = null,
                 SecondaryAction = null,
-                OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, async () =>
+                OnDialogClosing = EventCallback.Factory.Create<DeckDialogInstance>(this, async () =>
                 {
                     await InvokeListenersAsync();
                     _toolbarPanel = null;

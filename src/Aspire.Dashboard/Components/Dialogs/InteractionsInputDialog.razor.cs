@@ -11,7 +11,6 @@ using Aspire.DashboardService.Proto.V1;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.Extensions.Localization;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Dialogs;
@@ -22,7 +21,7 @@ public partial class InteractionsInputDialog : IAsyncDisposable
     public InteractionsInputsDialogViewModel Content { get; set; } = default!;
 
     [CascadingParameter]
-    public FluentDialog Dialog { get; set; } = default!;
+    public DeckDialogInstance Dialog { get; set; } = default!;
 
     [Inject]
     public required IStringLocalizer<ControlsStrings> ControlsStringsLoc { get; init; }

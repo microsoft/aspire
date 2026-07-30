@@ -1,6 +1,6 @@
-﻿@implements IDialogContentComponent<AspirePageContentLayout.MobileToolbar>
+﻿@implements IDeckDialogContentComponent<AspirePageContentLayout.MobileToolbar>
 
-<FluentDialogBody>
+<DeckDialogBody>
     <div class="deck-stack deck-stack--vertical">
         @Content.ToolbarSection
     </div>
@@ -10,7 +10,7 @@
             disabled>
         @Content.MobileToolbarButtonText
     </button>
-</FluentDialogBody>
+</DeckDialogBody>
 
 @code {
     [Parameter]

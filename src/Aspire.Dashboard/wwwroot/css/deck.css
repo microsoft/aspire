@@ -3073,3 +3073,4 @@ hr.deck-divider {
   gap: 12px;
 }
 /* === end Deck dialog framework === */
+.icon-info { color: var(--accent); }

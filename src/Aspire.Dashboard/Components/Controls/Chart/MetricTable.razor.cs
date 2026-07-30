@@ -104,7 +104,7 @@ public partial class MetricTable : ChartBase
             Resources = Resources,
             Instrument = InstrumentViewModel.Instrument!
         };
-        var parameters = new DialogParameters
+        var parameters = new DeckDialogParameters
         {
             Title = DialogsLoc[nameof(Dashboard.Resources.Dialogs.ExemplarsDialogTitle)],
             PrimaryAction = DialogsLoc[nameof(Dashboard.Resources.Dialogs.DialogCloseButtonText)],

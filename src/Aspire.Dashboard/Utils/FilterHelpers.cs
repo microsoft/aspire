@@ -8,7 +8,6 @@ using Aspire.Dashboard.Resources;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Aspire.Dashboard.Components.Deck;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Utils;
 
@@ -97,18 +96,18 @@ public static class FilterHelpers
     public static async Task OpenFilterAsync(
         FieldTelemetryFilter? entry,
         DashboardDialogService dialogService,
-        EventCallback<DialogResult> onDialogResult,
+        EventCallback<DeckDialogResult> onDialogResult,
         List<string> propertyKeys,
         List<string> knownKeys,
         Func<string, Dictionary<string, int>> getFieldValues,
         IStringLocalizer<StructuredFiltering> filterLoc)
     {
         var title = entry is not null ? filterLoc[nameof(StructuredFiltering.DialogTitleEditFilter)] : filterLoc[nameof(StructuredFiltering.DialogTitleAddFilter)];
-        var parameters = new DialogParameters
+        var parameters = new DeckDialogParameters
         {
             OnDialogResult = onDialogResult,
             Title = title,
-            Alignment = HorizontalAlignment.Right,
+            Alignment = DeckDialogAlignment.End,
             PrimaryAction = null,
             SecondaryAction = null,
             Width = dialogService.IsDesktop ? "450px" : "100%"

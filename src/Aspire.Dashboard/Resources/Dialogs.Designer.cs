@@ -127,6 +127,24 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Yes.
+        /// </summary>
+        public static string ConfirmationDialogConfirmButtonText {
+            get {
+                return ResourceManager.GetString("ConfirmationDialogConfirmButtonText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No.
+        /// </summary>
+        public static string ConfirmationDialogCancelButtonText {
+            get {
+                return ResourceManager.GetString("ConfirmationDialogCancelButtonText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Details.
         /// </summary>
         public static string ExemplarsDialogDetailsColumnHeader {

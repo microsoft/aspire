@@ -337,6 +337,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.TryAddSingleton<Aspire.Dashboard.Terminal.ITerminalConnectionResolver, Aspire.Dashboard.Terminal.DefaultTerminalConnectionResolver>();
 
         builder.Services.AddScoped<DimensionManager>();
+        builder.Services.AddScoped<Aspire.Dashboard.Components.Dialogs.DeckDialogService>();
         builder.Services.AddScoped<DashboardDialogService>();
         builder.Services.AddScoped<ResourceMenuBuilder>();
         builder.Services.AddScoped<StructuredLogMenuBuilder>();

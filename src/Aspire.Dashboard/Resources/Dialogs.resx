@@ -229,6 +229,12 @@
   <data name="DialogCloseButtonText" xml:space="preserve">
     <value>Close</value>
   </data>
+  <data name="ConfirmationDialogConfirmButtonText" xml:space="preserve">
+    <value>Yes</value>
+  </data>
+  <data name="ConfirmationDialogCancelButtonText" xml:space="preserve">
+    <value>No</value>
+  </data>
   <data name="ExemplarsDialogTitle" xml:space="preserve">
     <value>Exemplars</value>
   </data>

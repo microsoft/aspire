@@ -14,7 +14,6 @@ using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Dialogs;
@@ -372,7 +371,7 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
     {
         var title = span.Name;
         var width = dialogService.IsDesktop ? "75vw" : "100vw";
-        var parameters = new DialogParameters
+        var parameters = new DeckDialogParameters
         {
             Title = title,
             Width = $"min(1000px, {width})",

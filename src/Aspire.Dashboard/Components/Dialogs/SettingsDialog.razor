@@ -2,7 +2,8 @@
 @using Humanizer
 @inject IStringLocalizer<Dialogs> Loc
 
-<FluentDialogBody>
+<DeckDialogHeader />
+<DeckDialogBody>
     <div class="deck-stack deck-stack--vertical" style="height: 100%; overflow-y: auto; row-gap: 12px;">
         <div class="input-container">
             <div class="settings-label">@Loc[nameof(Dialogs.SettingsDialogTheme)]</div>
@@ -89,4 +90,4 @@
             </div>
         </div>
     </div>
-</FluentDialogBody>
+</DeckDialogBody>

@@ -562,7 +562,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
             FilterLoc);
     }
 
-    private async Task HandleFilterDialog(DialogResult result)
+    private async Task HandleFilterDialog(DeckDialogResult result)
     {
         if (result.Data is FilterDialogResult filterResult && filterResult.Filter is FieldTelemetryFilter filter)
         {

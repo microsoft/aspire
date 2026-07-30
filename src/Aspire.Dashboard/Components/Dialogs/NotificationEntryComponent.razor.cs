@@ -4,7 +4,6 @@
 using Aspire.Dashboard.Components.Deck;
 using Aspire.Dashboard.Model;
 using Microsoft.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Components.Dialogs;
 
@@ -17,7 +16,7 @@ public partial class NotificationEntryComponent : ComponentBase
     public EventCallback OnDismiss { get; set; }
 
     [CascadingParameter]
-    public FluentDialog Dialog { get; set; } = default!;
+    public DeckDialogInstance Dialog { get; set; } = default!;
 
     [Inject]
     public required IServiceProvider Services { get; init; }
@@ -57,12 +56,12 @@ public partial class NotificationEntryComponent : ComponentBase
         {
             try
             {
-                Dialog.Hide();
+                await Dialog.Hide();
                 await primaryAction.OnClick(Services);
             }
             finally
             {
-                Dialog.Show();
+                await Dialog.Show();
             }
         }
     }

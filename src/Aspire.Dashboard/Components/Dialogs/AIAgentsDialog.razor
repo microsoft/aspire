@@ -1,16 +1,16 @@
 ﻿@using Aspire.Dashboard.Resources
 
-<FluentDialogHeader ShowDismiss="true">
+<DeckDialogHeader ShowDismiss="true">
     <div class="dialog-title-grid">
         <DeckIcon Name="DeckIconName.Sparkle" Size="24" Style="grid-area: dialog-icon; align-self: center;" />
         <Label Typo="pane-header" Class="col-long-content" Style="grid-area: dialog-title;">
             @Loc[nameof(Dialogs.AIAgentsDialogTitle)]
         </Label>
     </div>
-</FluentDialogHeader>
+</DeckDialogHeader>
 
-<FluentDialogBody Style="overflow-x: hidden">
+<DeckDialogBody Style="overflow-x: hidden">
     <div class="markdown-content">
         <MarkdownRenderer Markdown="@Description" MarkdownProcessor="@GetMarkdownProcessor()" SuppressParagraphOnNewLines="false" />
     </div>
-</FluentDialogBody>
+</DeckDialogBody>

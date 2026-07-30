@@ -16,7 +16,6 @@ using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web.Virtualization;
 using Microsoft.Extensions.Options;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Pages;
@@ -318,7 +317,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             FilterLoc);
     }
 
-    private async Task HandleFilterDialog(DialogResult result)
+    private async Task HandleFilterDialog(DeckDialogResult result)
     {
         if (result.Data is FilterDialogResult filterResult && filterResult.Filter is FieldTelemetryFilter filter)
         {

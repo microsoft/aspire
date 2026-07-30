@@ -8,7 +8,6 @@ using Aspire.Dashboard.Tests.Shared;
 using Aspire.DashboardService.Proto.V1;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Dialogs;
@@ -39,7 +38,7 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
             OnSubmitCallback = (_, _) => Task.CompletedTask
         };
 
-        await dialogService.ShowDialogAsync<InteractionsInputDialog>(viewModel, new DialogParameters
+        await dialogService.ShowDialogAsync<InteractionsInputDialog>(viewModel, new DeckDialogParameters
         {
             Title = "Upload"
         });
@@ -52,7 +51,7 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         });
     }
 
-    private IRenderedFragment SetUpDialog(out IDialogService dialogService)
+    private IRenderedFragment SetUpDialog(out DeckDialogService dialogService)
     {
         Services.AddSingleton<IDashboardClient>(new TestDashboardClient());
 
@@ -68,7 +67,7 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
 
         var cut = FluentUISetupHelpers.RenderDialogProvider(this);
 
-        dialogService = Services.GetRequiredService<IDialogService>();
+        dialogService = Services.GetRequiredService<DeckDialogService>();
         return cut;
     }
 }

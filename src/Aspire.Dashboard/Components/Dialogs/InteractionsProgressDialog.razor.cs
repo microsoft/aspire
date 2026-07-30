@@ -3,7 +3,6 @@
 
 using Aspire.Dashboard.Model.Interaction;
 using Microsoft.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Components.Dialogs;
 
@@ -13,10 +12,10 @@ public partial class InteractionsProgressDialog
     public InteractionsProgressDialogViewModel Content { get; set; } = default!;
 
     [CascadingParameter]
-    public FluentDialog Dialog { get; set; } = default!;
+    public DeckDialogInstance Dialog { get; set; } = default!;
 
     private async Task CancelAsync()
     {
-        await Dialog.CloseAsync(DialogResult.Ok("cancel"));
+        await Dialog.CloseAsync(DeckDialogResult.Ok("cancel"));
     }
 }

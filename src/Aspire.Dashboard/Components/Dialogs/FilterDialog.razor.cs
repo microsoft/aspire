@@ -8,7 +8,6 @@ using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Dialogs;
@@ -24,7 +23,7 @@ public partial class FilterDialog : IAsyncDisposable
         new SelectViewModel<FilterCondition> { Id = condition, Name = FieldTelemetryFilter.ConditionToString(condition, FilterLoc) };
 
     [CascadingParameter]
-    public FluentDialog? Dialog { get; set; }
+    public DeckDialogInstance? Dialog { get; set; }
 
     [Parameter]
     public FilterDialogViewModel Content { get; set; } = default!;
@@ -237,17 +236,17 @@ public partial class FilterDialog : IAsyncDisposable
 
     private void Enable()
     {
-        Dialog!.CloseAsync(DialogResult.Ok(new FilterDialogResult { Filter = Content.Filter, Enable = true }));
+        Dialog!.CloseAsync(DeckDialogResult.Ok(new FilterDialogResult { Filter = Content.Filter, Enable = true }));
     }
 
     private void Disable()
     {
-        Dialog!.CloseAsync(DialogResult.Ok(new FilterDialogResult { Filter = Content.Filter, Disable = true }));
+        Dialog!.CloseAsync(DeckDialogResult.Ok(new FilterDialogResult { Filter = Content.Filter, Disable = true }));
     }
 
     private void Delete()
     {
-        Dialog!.CloseAsync(DialogResult.Ok(new FilterDialogResult { Filter = Content.Filter, Delete = true }));
+        Dialog!.CloseAsync(DeckDialogResult.Ok(new FilterDialogResult { Filter = Content.Filter, Delete = true }));
     }
 
     private void Apply()
@@ -268,7 +267,7 @@ public partial class FilterDialog : IAsyncDisposable
             filter.Condition = _formModel.Condition!.Id;
             filter.Value = value;
 
-            Dialog!.CloseAsync(DialogResult.Ok(new FilterDialogResult() { Filter = filter, Delete = false }));
+            Dialog!.CloseAsync(DeckDialogResult.Ok(new FilterDialogResult() { Filter = filter, Delete = false }));
         }
         else
         {
@@ -279,7 +278,7 @@ public partial class FilterDialog : IAsyncDisposable
                 Value = value
             };
 
-            Dialog!.CloseAsync(DialogResult.Ok(new FilterDialogResult() { Filter = filter, Add = true }));
+            Dialog!.CloseAsync(DeckDialogResult.Ok(new FilterDialogResult() { Filter = filter, Add = true }));
         }
     }
 

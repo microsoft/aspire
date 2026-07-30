@@ -14,9 +14,9 @@
             {
                 @ChildContent
             }
-            else if (!string.IsNullOrEmpty(Title))
+            else if (EffectiveTitle is { Length: > 0 } title)
             {
-                <span class="deck-dialog__title">@Title</span>
+                <span class="deck-dialog__title">@title</span>
             }
         </div>
         @if (ShowDismiss ?? Dialog?.Parameters.ShowDismiss ?? true)
@@ -61,6 +61,9 @@
     public string? Style { get; set; }
 
     private string? DismissTitle => Dialog?.Parameters.DismissTitle;
+
+    // Falls back to the dialog's Title parameter so header-less dialogs still show their title.
+    private string? EffectiveTitle => Title ?? Dialog?.Parameters.Title;
 
     private async Task OnDismissAsync()
     {
