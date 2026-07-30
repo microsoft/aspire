@@ -4,7 +4,7 @@ import { ChildProcessWithoutNullStreams, spawn as spawnProcess } from 'child_pro
 import { spawnCliProcess } from '../debugger/languages/cli';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
-import { appHostDescribeMayNotBeSupported, appHostPathMustBeNonEmptyAbsolute, aspireCliCommandFailed, aspireCliCommandTimedOut, aspireCliDescribeNotSupported, aspireCliOutputParseFailed, aspireCommandOutputTruncated, aspireDescribeMinimumVersion, errorFetchingAppHosts, workspaceViewSelectedMultipleAppHosts, workspaceViewSelectedSingleAppHost } from '../loc/strings';
+import { appHostDescribeMayNotBeSupported, appHostDiscoveryProgress, appHostPathMustBeNonEmptyAbsolute, aspireCliCommandFailed, aspireCliCommandTimedOut, aspireCliDescribeNotSupported, aspireCliOutputParseFailed, aspireCommandOutputTruncated, aspireDescribeMinimumVersion, errorFetchingAppHosts, workspaceViewSelectedMultipleAppHosts, workspaceViewSelectedSingleAppHost } from '../loc/strings';
 import { AppHostCandidate, AppHostDiscoveryService, CandidateAppHostDisplayInfo, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate } from '../utils/appHostDiscovery';
 import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from '../utils/cliCompatibility';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
@@ -252,6 +252,7 @@ export class AppHostDataRepository {
     private _workspaceAppHostDiscoveryVersion = 0;
     private _workspaceAppHostDiscoveryInProgress = false;
     private _workspaceAppHostDiscoveryRefreshQueued = false;
+    private _workspaceAppHostDiscoveryProgressResolve: (() => void) | undefined;
     private _workspaceAppHostDiscoveryCancellationSource: vscode.CancellationTokenSource | undefined;
     private readonly _appHostDiscoveryChangeDisposable: vscode.Disposable;
     private readonly _workspaceFoldersChangeDisposable: vscode.Disposable;
@@ -374,6 +375,11 @@ export class AppHostDataRepository {
             return;
         }
         this._viewMode = mode;
+        if (mode === 'workspace') {
+            this._showWorkspaceAppHostDiscoveryProgress();
+        } else {
+            this._hideWorkspaceAppHostDiscoveryProgress();
+        }
         vscode.commands.executeCommand('setContext', 'aspire.viewMode', mode);
         this._clearErrors();
         // Re-scope the current `aspire ps` snapshot for the new view
@@ -388,6 +394,11 @@ export class AppHostDataRepository {
         }
         const wasDataActive = this._dataActive;
         this._panelVisible = visible;
+        if (visible) {
+            this._showWorkspaceAppHostDiscoveryProgress();
+        } else {
+            this._hideWorkspaceAppHostDiscoveryProgress();
+        }
         const becameDataActive = !wasDataActive && this._dataActive;
         const resumedFromInactive = becameDataActive && this._hasEverBeenDataActive;
         if (this._dataActive) {
@@ -709,6 +720,7 @@ export class AppHostDataRepository {
         const cancellationSource = new vscode.CancellationTokenSource();
         this._workspaceAppHostDiscoveryInProgress = true;
         this._workspaceAppHostDiscoveryCancellationSource = cancellationSource;
+        this._showWorkspaceAppHostDiscoveryProgress();
         const streamedCandidates: CandidateAppHostDisplayInfo[] = [];
         let incrementalCandidateUpdateTimer: ReturnType<typeof setTimeout> | undefined;
         const cancelIncrementalCandidateUpdate = (): void => {
@@ -784,6 +796,7 @@ export class AppHostDataRepository {
 
             this._workspaceAppHostDiscoveryCancellationSource = undefined;
             this._workspaceAppHostDiscoveryInProgress = false;
+            this._hideWorkspaceAppHostDiscoveryProgress();
             if (this._workspaceAppHostDiscoveryRefreshQueued && !this._disposed) {
                 this._workspaceAppHostDiscoveryRefreshQueued = false;
                 this._fetchWorkspaceAppHost({ forceRefresh: true });
@@ -798,6 +811,37 @@ export class AppHostDataRepository {
         this._workspaceAppHostDiscoveryCancellationSource?.dispose();
         this._workspaceAppHostDiscoveryCancellationSource = undefined;
         this._workspaceAppHostDiscoveryInProgress = false;
+        this._hideWorkspaceAppHostDiscoveryProgress();
+    }
+
+    private _showWorkspaceAppHostDiscoveryProgress(): void {
+        if (this._viewMode !== 'workspace'
+            || !this._panelVisible
+            || !this._workspaceAppHostDiscoveryInProgress
+            || this._workspaceAppHostDiscoveryProgressResolve) {
+            return;
+        }
+
+        void vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: appHostDiscoveryProgress,
+            cancellable: false,
+        }, () => new Promise<void>(resolve => {
+            if (this._viewMode !== 'workspace'
+                || !this._panelVisible
+                || !this._workspaceAppHostDiscoveryInProgress) {
+                resolve();
+                return;
+            }
+
+            this._workspaceAppHostDiscoveryProgressResolve = resolve;
+        }));
+    }
+
+    private _hideWorkspaceAppHostDiscoveryProgress(): void {
+        const resolve = this._workspaceAppHostDiscoveryProgressResolve;
+        this._workspaceAppHostDiscoveryProgressResolve = undefined;
+        resolve?.();
     }
 
     private _markWorkspaceAppHostDiscoveryPending(): void {
@@ -805,7 +849,9 @@ export class AppHostDataRepository {
         this._clearWorkspaceAppHostDiscovery();
         this._loadingWorkspace = true;
         this._updateLoadingContext();
-        this._updateWorkspaceContext({ clearLoading: false });
+        if (this._viewMode === 'workspace') {
+            this._updateWorkspaceContext({ clearLoading: false });
+        }
     }
 
     private _handleWorkspaceAppHostCandidates(appHostCandidates: readonly AppHostCandidate[], selectedAppHostPath: string | null): void {

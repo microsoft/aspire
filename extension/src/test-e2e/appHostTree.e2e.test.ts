@@ -49,6 +49,7 @@ suite('Aspire AppHost tree E2E', function () {
         const partialSection = await openAspireView();
         const partialItem = await waitForTreeItem(partialSection, getTreeAppHostLabel(partialState.state));
         assert.strictEqual(await partialItem.getLabel(), getTreeAppHostLabel(partialState.state));
+        await waitForWorkbenchText('Discovering AppHosts...');
 
         await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 30000, invocationCountBefore);
         const finalState = await waitForRepositoryIdle();

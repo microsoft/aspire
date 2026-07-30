@@ -3445,6 +3445,51 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('workspace discovery shows non-cancellable progress only while the workspace view is visible', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: () => discovery.promise,
+            dispose: () => { },
+        };
+        let progressCompleted = false;
+        const progressCancellationToken = {
+            isCancellationRequested: false,
+            onCancellationRequested: () => ({ dispose: () => { } }),
+        } as vscode.CancellationToken;
+        const withProgressStub = sinon.stub(vscode.window, 'withProgress').callsFake((options: any, task: any) =>
+            Promise.resolve(task({ report: () => { } }, progressCancellationToken))
+                .finally(() => progressCompleted = true));
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            repository.setPanelVisible(true);
+            await waitForCondition(() => withProgressStub.calledOnce, 'workspace discovery progress did not appear');
+
+            assert.deepStrictEqual(withProgressStub.firstCall.args[0], {
+                location: vscode.ProgressLocation.Notification,
+                title: 'Discovering AppHosts...',
+                cancellable: false,
+            });
+            assert.strictEqual(progressCompleted, false);
+
+            repository.setViewMode('global');
+            await waitForCondition(() => progressCompleted, 'workspace discovery progress did not close in global view');
+            assert.strictEqual(withProgressStub.callCount, 1);
+        } finally {
+            discovery.resolve([]);
+            repository.dispose();
+            withProgressStub.restore();
+            workspaceFoldersStub.restore();
+        }
+    });
+
     test('final discovery results replace a pending incremental update', async () => {
         const clock = sinon.useFakeTimers();
         const workspaceFolder = {
@@ -5675,7 +5720,7 @@ suite('AppHostDataRepository global polling', () => {
         repository.dispose();
     });
 
-    test('global describe streams are stopped when switching to workspace mode', async () => {
+    test('switching view mode reuses the existing ps and describe processes', async () => {
         const spawned: { args: string[]; process: TestChildProcess; options: any }[] = [];
         spawnStub.callsFake((_terminalProvider, _cliPath, args, options) => {
             const process = new TestChildProcess();
