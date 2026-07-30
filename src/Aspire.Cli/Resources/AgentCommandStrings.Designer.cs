@@ -178,6 +178,60 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Where should extension files be installed?.
+        /// </summary>
+        internal static string InitCommand_SelectExtensionLocations {
+            get {
+                return ResourceManager.GetString("InitCommand_SelectExtensionLocations", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Which extensions should be installed?.
+        /// </summary>
+        internal static string InitCommand_SelectExtensions {
+            get {
+                return ResourceManager.GetString("InitCommand_SelectExtensions", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Workspace.
+        /// </summary>
+        internal static string ExtensionLocation_GitHubName {
+            get {
+                return ResourceManager.GetString("ExtensionLocation_GitHubName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to GitHub Copilot canvas extensions for this workspace (.github/extensions).
+        /// </summary>
+        internal static string ExtensionLocation_GitHubDescription {
+            get {
+                return ResourceManager.GetString("ExtensionLocation_GitHubDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to User.
+        /// </summary>
+        internal static string ExtensionLocation_CopilotName {
+            get {
+                return ResourceManager.GetString("ExtensionLocation_CopilotName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to GitHub Copilot canvas extensions for the current user (~/.copilot/extensions).
+        /// </summary>
+        internal static string ExtensionLocation_CopilotDescription {
+            get {
+                return ResourceManager.GetString("ExtensionLocation_CopilotDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to The requested agent assets are not supported by any detected agent client..
         /// </summary>
         internal static string InitCommand_UnsupportedAssetsRequested {
@@ -246,6 +300,42 @@ namespace Aspire.Cli.Resources {
         internal static string InitCommand_FailedToInstallSkill {
             get {
                 return ResourceManager.GetString("InitCommand_FailedToInstallSkill", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Installed GitHub Copilot canvas extensions:.
+        /// </summary>
+        internal static string InitCommand_InstalledExtensionsSummary {
+            get {
+                return ResourceManager.GetString("InitCommand_InstalledExtensionsSummary", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Extensions: {0}.
+        /// </summary>
+        internal static string InitCommand_InstalledExtensionsSummaryExtensions {
+            get {
+                return ResourceManager.GetString("InitCommand_InstalledExtensionsSummaryExtensions", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Locations: {0}.
+        /// </summary>
+        internal static string InitCommand_InstalledExtensionsSummaryLocations {
+            get {
+                return ResourceManager.GetString("InitCommand_InstalledExtensionsSummaryLocations", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Failed to install {0} extension at {1}: {2}.
+        /// </summary>
+        internal static string InitCommand_FailedToInstallExtension {
+            get {
+                return ResourceManager.GetString("InitCommand_FailedToInstallExtension", resourceCulture);
             }
         }
 
@@ -606,6 +696,24 @@ namespace Aspire.Cli.Resources {
         internal static string InitCommand_SkillsOptionDescription {
             get {
                 return ResourceManager.GetString("InitCommand_SkillsOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Comma-separated list of extension locations to install (e.g. {0}), '{1}', or '{2}'.
+        /// </summary>
+        internal static string InitCommand_ExtensionLocationsOptionDescription {
+            get {
+                return ResourceManager.GetString("InitCommand_ExtensionLocationsOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Comma-separated list of extensions to install. Use '{0}' or '{1}'.
+        /// </summary>
+        internal static string InitCommand_ExtensionsOptionDescription {
+            get {
+                return ResourceManager.GetString("InitCommand_ExtensionsOptionDescription", resourceCulture);
             }
         }
 

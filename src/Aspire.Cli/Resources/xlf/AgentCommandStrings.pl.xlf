@@ -107,6 +107,26 @@
         <target state="needs-review-translation">Zarządzaj integracjami agentów sztucznej inteligencji.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ExtensionLocation_CopilotDescription">
+        <source>GitHub Copilot canvas extensions for the current user (~/.copilot/extensions)</source>
+        <target state="new">GitHub Copilot canvas extensions for the current user (~/.copilot/extensions)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ExtensionLocation_CopilotName">
+        <source>User</source>
+        <target state="new">User</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ExtensionLocation_GitHubDescription">
+        <source>GitHub Copilot canvas extensions for this workspace (.github/extensions)</source>
+        <target state="new">GitHub Copilot canvas extensions for this workspace (.github/extensions)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ExtensionLocation_GitHubName">
+        <source>Workspace</source>
+        <target state="new">Workspace</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_ConfigureMcpServer">
         <source>Install Aspire MCP server</source>
         <target state="new">Install Aspire MCP server</target>
@@ -122,9 +142,39 @@
         <target state="new">(configures detected agent environments)</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_ExtensionLocationsOptionDescription">
+        <source>Comma-separated list of extension locations to install (e.g. {0}), '{1}', or '{2}'</source>
+        <target state="new">Comma-separated list of extension locations to install (e.g. {0}), '{1}', or '{2}'</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ExtensionsOptionDescription">
+        <source>Comma-separated list of extensions to install. Use '{0}' or '{1}'</source>
+        <target state="new">Comma-separated list of extensions to install. Use '{0}' or '{1}'</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_FailedToInstallExtension">
+        <source>Failed to install {0} extension at {1}: {2}</source>
+        <target state="new">Failed to install {0} extension at {1}: {2}</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_FailedToInstallSkill">
         <source>Failed to install {0} skill at {1}: {2}</source>
         <target state="new">Failed to install {0} skill at {1}: {2}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_InstalledExtensionsSummary">
+        <source>Installed GitHub Copilot canvas extensions:</source>
+        <target state="new">Installed GitHub Copilot canvas extensions:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_InstalledExtensionsSummaryExtensions">
+        <source>Extensions: {0}</source>
+        <target state="new">Extensions: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_InstalledExtensionsSummaryLocations">
+        <source>Locations: {0}</source>
+        <target state="new">Locations: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledPlaywrightCli">
@@ -150,6 +200,16 @@
       <trans-unit id="InitCommand_PlaywrightCliSkipped">
         <source>Playwright CLI requires npm, which was not found on PATH. Skipping installation.</source>
         <target state="new">Playwright CLI requires npm, which was not found on PATH. Skipping installation.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SelectExtensionLocations">
+        <source>Where should extension files be installed?</source>
+        <target state="new">Where should extension files be installed?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SelectExtensions">
+        <source>Which extensions should be installed?</source>
+        <target state="new">Which extensions should be installed?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillLocationsOptionDescription">

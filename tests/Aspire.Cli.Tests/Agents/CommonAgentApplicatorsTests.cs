@@ -13,18 +13,20 @@ public class CommonAgentApplicatorsTests
     [Fact]
     public void AgentAssetLocation_All_ContainsAllLocations()
     {
-        Assert.Equal(4, AgentAssetLocation.All.Count);
+        Assert.Equal(6, AgentAssetLocation.All.Count);
         Assert.Contains(AgentAssetLocation.All, l => l == AgentAssetLocation.Standard);
         Assert.Contains(AgentAssetLocation.All, l => l == AgentAssetLocation.ClaudeCode);
         Assert.Contains(AgentAssetLocation.All, l => l == AgentAssetLocation.GitHubSkills);
         Assert.Contains(AgentAssetLocation.All, l => l == AgentAssetLocation.OpenCode);
+        Assert.Contains(AgentAssetLocation.All, l => l == AgentAssetLocation.GitHubExtensions);
+        Assert.Contains(AgentAssetLocation.All, l => l == AgentAssetLocation.CopilotExtensions);
     }
 
     [Fact]
     public void AgentAssetLocation_Standard_IsDefaultAndIncludesUserLevel()
     {
         Assert.True(AgentAssetLocation.Standard.IsDefault);
-        Assert.True(AgentAssetLocation.Standard.IncludeUserLevel);
+        Assert.Equal(AgentAssetLocationScope.Workspace | AgentAssetLocationScope.User, AgentAssetLocation.Standard.Scopes);
         Assert.Equal(Path.Combine(".agents", "skills"), AgentAssetLocation.Standard.RelativeDirectory);
     }
 
@@ -32,7 +34,7 @@ public class CommonAgentApplicatorsTests
     public void AgentAssetLocation_ClaudeCode_IsNotDefaultAndNoUserLevel()
     {
         Assert.False(AgentAssetLocation.ClaudeCode.IsDefault);
-        Assert.False(AgentAssetLocation.ClaudeCode.IncludeUserLevel);
+        Assert.Equal(AgentAssetLocationScope.Workspace, AgentAssetLocation.ClaudeCode.Scopes);
         Assert.Equal(Path.Combine(".claude", "skills"), AgentAssetLocation.ClaudeCode.RelativeDirectory);
     }
 
@@ -43,6 +45,27 @@ public class CommonAgentApplicatorsTests
         Assert.False(AgentAssetLocation.ClaudeCode.IsDefault);
         Assert.False(AgentAssetLocation.GitHubSkills.IsDefault);
         Assert.False(AgentAssetLocation.OpenCode.IsDefault);
+    }
+
+    [Fact]
+    public void AgentAssetLocation_Extensions_HaveSeparateWorkspaceAndUserScopes()
+    {
+        Assert.True(AgentAssetLocation.GitHubExtensions.IsDefault);
+        Assert.Equal(AgentAssetLocationScope.Workspace, AgentAssetLocation.GitHubExtensions.Scopes);
+        Assert.Equal(Path.Combine(".github", "extensions"), AgentAssetLocation.GitHubExtensions.RelativeDirectory);
+
+        Assert.False(AgentAssetLocation.CopilotExtensions.IsDefault);
+        Assert.Equal(AgentAssetLocationScope.User, AgentAssetLocation.CopilotExtensions.Scopes);
+        Assert.Equal(Path.Combine(".copilot", "extensions"), AgentAssetLocation.CopilotExtensions.RelativeDirectory);
+    }
+
+    [Fact]
+    public void AgentClient_OnlyCopilotCliSupportsExtensions()
+    {
+        Assert.Contains(AgentAssetKind.Extension, AgentClient.CopilotCli.SupportedAssetKinds);
+        Assert.DoesNotContain(AgentAssetKind.Extension, AgentClient.ClaudeCode.SupportedAssetKinds);
+        Assert.DoesNotContain(AgentAssetKind.Extension, AgentClient.VsCode.SupportedAssetKinds);
+        Assert.DoesNotContain(AgentAssetKind.Extension, AgentClient.OpenCode.SupportedAssetKinds);
     }
 
     [Fact]

@@ -9,7 +9,7 @@ namespace Aspire.Cli.Agents;
 internal sealed class AgentClient
 {
     /// <summary>GitHub Copilot CLI.</summary>
-    public static readonly AgentClient CopilotCli = new("GitHub Copilot CLI", [AgentAssetKind.Skill]);
+    public static readonly AgentClient CopilotCli = new("GitHub Copilot CLI", [AgentAssetKind.Skill, AgentAssetKind.Extension]);
 
     /// <summary>Anthropic Claude Code.</summary>
     public static readonly AgentClient ClaudeCode = new("Claude Code", [AgentAssetKind.Skill]);

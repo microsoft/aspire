@@ -21,7 +21,7 @@ internal sealed class AgentAssetLocation
         AgentCommandStrings.SkillLocation_StandardDescription,
         Path.Combine(".agents", "skills"),
         isDefault: true,
-        includeUserLevel: true,
+        scopes: AgentAssetLocationScope.Workspace | AgentAssetLocationScope.User,
         agentAssetKind: AgentAssetKind.Skill);
 
     /// <summary>
@@ -33,7 +33,7 @@ internal sealed class AgentAssetLocation
         AgentCommandStrings.SkillLocation_ClaudeCodeDescription,
         Path.Combine(".claude", "skills"),
         isDefault: false,
-        includeUserLevel: false,
+        scopes: AgentAssetLocationScope.Workspace,
         agentAssetKind: AgentAssetKind.Skill);
 
     /// <summary>
@@ -45,7 +45,7 @@ internal sealed class AgentAssetLocation
         AgentCommandStrings.SkillLocation_GitHubSkillsDescription,
         Path.Combine(".github", "skills"),
         isDefault: false,
-        includeUserLevel: false,
+        scopes: AgentAssetLocationScope.Workspace,
         agentAssetKind: AgentAssetKind.Skill);
 
     /// <summary>
@@ -57,17 +57,41 @@ internal sealed class AgentAssetLocation
         AgentCommandStrings.SkillLocation_OpenCodeDescription,
         Path.Combine(".opencode", "skill"),
         isDefault: false,
-        includeUserLevel: false,
+        scopes: AgentAssetLocationScope.Workspace,
         agentAssetKind: AgentAssetKind.Skill);
 
-    private AgentAssetLocation(string id, string displayName, string description, string relativeDirectory, bool isDefault, bool includeUserLevel, AgentAssetKind agentAssetKind)
+    /// <summary>
+    /// GitHub Copilot workspace extension location at <c>.github/extensions/</c>.
+    /// </summary>
+    public static readonly AgentAssetLocation GitHubExtensions = new(
+        "workspace",
+        AgentCommandStrings.ExtensionLocation_GitHubName,
+        AgentCommandStrings.ExtensionLocation_GitHubDescription,
+        Path.Combine(".github", "extensions"),
+        isDefault: true,
+        scopes: AgentAssetLocationScope.Workspace,
+        agentAssetKind: AgentAssetKind.Extension);
+
+    /// <summary>
+    /// GitHub Copilot user extension location at <c>~/.copilot/extensions/</c>.
+    /// </summary>
+    public static readonly AgentAssetLocation CopilotExtensions = new(
+        "user",
+        AgentCommandStrings.ExtensionLocation_CopilotName,
+        AgentCommandStrings.ExtensionLocation_CopilotDescription,
+        Path.Combine(".copilot", "extensions"),
+        isDefault: false,
+        scopes: AgentAssetLocationScope.User,
+        agentAssetKind: AgentAssetKind.Extension);
+
+    private AgentAssetLocation(string id, string displayName, string description, string relativeDirectory, bool isDefault, AgentAssetLocationScope scopes, AgentAssetKind agentAssetKind)
     {
         Id = id;
         DisplayName = displayName;
         Description = description;
         RelativeDirectory = relativeDirectory;
         IsDefault = isDefault;
-        IncludeUserLevel = includeUserLevel;
+        Scopes = scopes;
         AgentAssetKind = agentAssetKind;
     }
 
@@ -97,9 +121,9 @@ internal sealed class AgentAssetLocation
     public bool IsDefault { get; }
 
     /// <summary>
-    /// Gets whether this location also installs files at the user level (<c>~/</c>).
+    /// Gets the scopes in which this location installs files.
     /// </summary>
-    public bool IncludeUserLevel { get; }
+    public AgentAssetLocationScope Scopes { get; }
 
     /// <summary>
     /// Gets the kind of agent asset this location is for.
@@ -107,10 +131,27 @@ internal sealed class AgentAssetLocation
     public AgentAssetKind AgentAssetKind { get; }
 
     /// <summary>
-    /// Gets all available skill locations.
+    /// Gets all available agent asset locations.
     /// </summary>
-    public static IReadOnlyList<AgentAssetLocation> All { get; } = [Standard, ClaudeCode, GitHubSkills, OpenCode];
+    public static IReadOnlyList<AgentAssetLocation> All { get; } = [Standard, ClaudeCode, GitHubSkills, OpenCode, GitHubExtensions, CopilotExtensions];
 
     /// <inheritdoc />
     public override string ToString() => Id;
+}
+
+/// <summary>
+/// Specifies the roots against which an agent asset location is installed.
+/// </summary>
+[Flags]
+internal enum AgentAssetLocationScope
+{
+    /// <summary>
+    /// The asset is installed relative to the workspace root.
+    /// </summary>
+    Workspace = 1,
+
+    /// <summary>
+    /// The asset is installed relative to the user home directory.
+    /// </summary>
+    User = 2,
 }

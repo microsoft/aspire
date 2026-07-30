@@ -11,5 +11,10 @@ internal enum AgentAssetKind
     /// <summary>
     /// A skill asset.
     /// </summary>
-    Skill
+    Skill,
+
+    /// <summary>
+    /// A GitHub Copilot canvas extension asset.
+    /// </summary>
+    Extension
 }

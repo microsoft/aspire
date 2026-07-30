@@ -62,6 +62,8 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         Options.Add(s_workspaceRootOption);
         Options.Add(s_skillLocationsOption);
         Options.Add(s_skillsOption);
+        Options.Add(s_extensionLocationsOption);
+        Options.Add(s_extensionsOption);
     }
 
     private static readonly Option<string?> s_workspaceRootOption = new("--workspace-root")
@@ -87,6 +89,23 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         Recursive = true
     };
 
+    internal static readonly Option<string?> s_extensionLocationsOption = new("--extension-locations")
+    {
+        Description = string.Format(CultureInfo.InvariantCulture, AgentCommandStrings.InitCommand_ExtensionLocationsOptionDescription,
+            string.Join(",", AgentAssetLocation.All.Where(l => l.AgentAssetKind == AgentAssetKind.Extension).Select(l => l.Id)),
+            ConsoleInteractionService.AllChoice,
+            ConsoleInteractionService.NoneChoice),
+        Recursive = true
+    };
+
+    internal static readonly Option<string?> s_extensionsOption = new("--extensions")
+    {
+        Description = string.Format(CultureInfo.InvariantCulture, AgentCommandStrings.InitCommand_ExtensionsOptionDescription,
+            ConsoleInteractionService.AllChoice,
+            ConsoleInteractionService.NoneChoice),
+        Recursive = true
+    };
+
     /// <summary>
     /// Creates the asset and location prompt bindings for each supported asset kind.
     /// </summary>
@@ -97,6 +116,9 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             [AgentAssetKind.Skill] = new(
                 PromptBinding.Create(parseResult, s_skillLocationsOption),
                 PromptBinding.Create(parseResult, s_skillsOption)),
+            [AgentAssetKind.Extension] = new(
+                PromptBinding.Create(parseResult, s_extensionLocationsOption),
+                PromptBinding.Create(parseResult, s_extensionsOption)),
         };
     }
 
@@ -275,15 +297,20 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
                 continue;
             }
 
-            // --- Phase 1: Asset location selection ---
             var promptBindings = assetPromptBindings[assetKind];
+            var promptStrings = GetAssetPromptStrings(assetKind);
+            var cliDefinedAssets = AgentAssetDefinition.CliDefined
+                .Where(a => a.IsApplicableToLanguage(detectedLanguage) && a.AssetKind == assetKind)
+                .ToList();
+
+            // --- Phase 1: Asset location selection ---
             var assetLocationsBinding = promptBindings.Locations;
             var assetsBinding = promptBindings.Assets;
             var defaultLocationIds = string.Join(",", AgentAssetLocation.All.Where(l => l.AgentAssetKind == assetKind && l.IsDefault).Select(l => l.Id));
             var assetLocationsBindingWithDefault = assetLocationsBinding.WithDefault(defaultLocationIds);
 
             var selectedLocations = await InteractionService.PromptForSelectionsAsync(
-                AgentCommandStrings.InitCommand_SelectSkillLocations,
+                promptStrings.SelectLocations,
                 AgentAssetLocation.All.Where(l => l.AgentAssetKind == assetKind),
                 loc => $"{loc.DisplayName} — {loc.Description}",
                 preSelected: AgentAssetLocation.All.Where(l => l.AgentAssetKind == assetKind && l.IsDefault),
@@ -302,11 +329,9 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             if (selectedLocations.Count > 0)
             {
                 IReadOnlyList<AgentAssetDefinition> availableAssets;
-                if (ShouldSkipBundleCatalogResolution(assetsBinding))
+                if (assetKind is AgentAssetKind.Extension || ShouldSkipBundleCatalogResolution(assetsBinding))
                 {
-                    availableAssets = AgentAssetDefinition.CliDefined
-                        .Where(a => a.IsApplicableToLanguage(detectedLanguage) && a.AssetKind == assetKind)
-                        .ToList();
+                    availableAssets = cliDefinedAssets;
                 }
                 else
                 {
@@ -317,6 +342,11 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
                 // regardless of manifest order. OrdinalIgnoreCase matches the case-insensitive
                 // options parsing (eg --skills) used elsewhere.
                 availableAssets = [.. availableAssets.OrderBy(static s => s.Name, StringComparer.OrdinalIgnoreCase)];
+
+                if (availableAssets.Count == 0 && !IsExplicitSelection(assetsBinding))
+                {
+                    continue;
+                }
 
                 // Build prompt items: skills first, then MCP as a separate non-default item
                 var assetChoices = new List<object>();
@@ -362,7 +392,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
                 }
 
                 var selectedItems = await InteractionService.PromptForSelectionsAsync(
-                    AgentCommandStrings.InitCommand_SelectSkills,
+                    promptStrings.SelectAssets,
                     assetChoices,
                     item => item switch
                     {
@@ -413,22 +443,25 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
                         continue;
                     }
 
-                    var installResult = await InstallAgentAssetAsync(
-                        workspaceRoot,
-                        location.RelativeDirectory,
-                        asset,
-                        aspireSkillsBundle,
-                        isUserLevel: false,
-                        cancellationToken);
-                    hasErrors |= !installResult.Succeeded;
-                    if (installResult.UpdatedAsset is not null)
+                    if ((location.Scopes & AgentAssetLocationScope.Workspace) != 0)
                     {
-                        installedAssetsSummary.Add(installResult.UpdatedAsset);
+                        var installResult = await InstallAgentAssetAsync(
+                            workspaceRoot,
+                            location.RelativeDirectory,
+                            asset,
+                            aspireSkillsBundle,
+                            isUserLevel: false,
+                            cancellationToken);
+                        hasErrors |= !installResult.Succeeded;
+                        if (installResult.UpdatedAsset is not null)
+                        {
+                            installedAssetsSummary.Add(installResult.UpdatedAsset);
+                        }
                     }
 
-                    if (location.IncludeUserLevel)
+                    if ((location.Scopes & AgentAssetLocationScope.User) != 0)
                     {
-                        installResult = await InstallAgentAssetAsync(
+                        var installResult = await InstallAgentAssetAsync(
                             ExecutionContext.HomeDirectory,
                             location.RelativeDirectory,
                             asset,
@@ -663,14 +696,14 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
     private static bool WasExplicitlyRequested(AgentAssetPromptBindings bindings)
     {
         return IsExplicitSelection(bindings.Locations) || IsExplicitSelection(bindings.Assets);
+    }
 
-        static bool IsExplicitSelection(PromptBinding<string?> binding)
-        {
-            var (wasProvided, value, _) = PromptBinding.Resolve(binding);
-            return wasProvided &&
-                !string.IsNullOrWhiteSpace(value) &&
-                !string.Equals(value, ConsoleInteractionService.NoneChoice, StringComparison.OrdinalIgnoreCase);
-        }
+    private static bool IsExplicitSelection(PromptBinding<string?> binding)
+    {
+        var (wasProvided, value, _) = PromptBinding.Resolve(binding);
+        return wasProvided &&
+            !string.IsNullOrWhiteSpace(value) &&
+            !string.Equals(value, ConsoleInteractionService.NoneChoice, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -795,8 +828,14 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
+            var failureFormat = asset.AssetKind switch
+            {
+                AgentAssetKind.Skill => AgentCommandStrings.InitCommand_FailedToInstallSkill,
+                AgentAssetKind.Extension => AgentCommandStrings.InitCommand_FailedToInstallExtension,
+                _ => throw new UnreachableException($"Unexpected agent asset kind: {asset.AssetKind}"),
+            };
             InteractionService.DisplayError(
-                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_FailedToInstallSkill, asset.Name, fullDirectoryPath, ex.Message));
+                string.Format(CultureInfo.CurrentCulture, failureFormat, asset.Name, fullDirectoryPath, ex.Message));
             return new(Succeeded: false, UpdatedAsset: null);
         }
     }
@@ -823,6 +862,10 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
                     Heading: AgentCommandStrings.InitCommand_InstalledSkillsSummary,
                     Assets: AgentCommandStrings.InitCommand_InstalledSkillsSummarySkills,
                     Locations: AgentCommandStrings.InitCommand_InstalledSkillsSummaryLocations),
+                AgentAssetKind.Extension => (
+                    Heading: AgentCommandStrings.InitCommand_InstalledExtensionsSummary,
+                    Assets: AgentCommandStrings.InitCommand_InstalledExtensionsSummaryExtensions,
+                    Locations: AgentCommandStrings.InitCommand_InstalledExtensionsSummaryLocations),
                 _ => throw new UnreachableException($"Unexpected agent asset kind: {group.Key}"),
             };
 
@@ -833,6 +876,20 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             messageBuilder.Append(CultureInfo.CurrentCulture, $"  {string.Format(CultureInfo.CurrentCulture, summaryStrings.Locations, locations)}");
         }
         InteractionService.DisplayMessage(KnownEmojis.Robot, messageBuilder.ToString());
+    }
+
+    private static (string SelectLocations, string SelectAssets) GetAssetPromptStrings(AgentAssetKind assetKind)
+    {
+        return assetKind switch
+        {
+            AgentAssetKind.Skill => (
+                AgentCommandStrings.InitCommand_SelectSkillLocations,
+                AgentCommandStrings.InitCommand_SelectSkills),
+            AgentAssetKind.Extension => (
+                AgentCommandStrings.InitCommand_SelectExtensionLocations,
+                AgentCommandStrings.InitCommand_SelectExtensions),
+            _ => throw new UnreachableException($"Unexpected agent asset kind: {assetKind}"),
+        };
     }
 
     private static IReadOnlyList<string> GetUniqueValues(IEnumerable<string> values)
