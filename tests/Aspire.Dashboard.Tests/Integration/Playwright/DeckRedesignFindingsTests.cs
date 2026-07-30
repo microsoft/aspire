@@ -455,6 +455,101 @@ public class DeckRedesignFindingsTests : PlaywrightTestsBase<DashboardServerFixt
         });
     }
 
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ConsolidationB_PopoverModule_KeepsOpenOnOwnContentScrollButRepositionsOnAncestorScroll()
+    {
+        await RunTestAsync(async page =>
+        {
+            var errors = TrackConsoleErrors(page);
+            await GoHomeAsync(page);
+
+            var result = await page.EvaluateAsync<JsonElement>("""
+                async (moduleUrl) => {
+                    const mod = await import(moduleUrl);
+
+                    const closeCalls = [];
+                    const dotNet = { invokeMethodAsync: (name) => { closeCalls.push(name); return Promise.resolve(); } };
+
+                    const anchor = document.createElement('button');
+                    anchor.id = 'consolidationB-anchor';
+                    anchor.style.position = 'fixed';
+                    anchor.style.top = '300px';
+                    anchor.style.left = '100px';
+                    anchor.style.width = '40px';
+                    anchor.style.height = '20px';
+                    document.body.appendChild(anchor);
+
+                    const popover = document.createElement('div');
+                    popover.style.position = 'fixed';
+                    const body = document.createElement('div');
+                    body.className = 'popover__body';
+                    body.style.overflowY = 'auto';
+                    body.style.height = '40px';
+                    const tall = document.createElement('div');
+                    tall.style.height = '400px';
+                    body.appendChild(tall);
+                    popover.appendChild(body);
+                    document.body.appendChild(popover);
+
+                    mod.initialize(popover, 'consolidationB-anchor', dotNet);
+
+                    // 1) Scrolling the popover's OWN content must not dismiss it and must not reposition
+                    //    (the anchor hasn't moved). A capturing window listener still receives this.
+                    const topBeforeInternal = popover.style.top;
+                    body.dispatchEvent(new Event('scroll', { bubbles: false }));
+                    const closesAfterInternalScroll = closeCalls.length;
+                    const topAfterInternal = popover.style.top;
+
+                    // 2) An ancestor/page scroll after the anchor moves repositions the popover so it
+                    //    keeps following the anchor - and still never dismisses.
+                    anchor.style.top = '350px';
+                    document.dispatchEvent(new Event('scroll', { bubbles: false }));
+                    const closesAfterOuterScroll = closeCalls.length;
+                    const topAfterOuter = popover.style.top;
+
+                    // 3) Escape dismisses (anchor lifecycle preserved).
+                    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+                    const closesAfterEscape = closeCalls.length;
+
+                    // 4) Outside pointerdown dismisses (attached on the next tick via setTimeout(0)).
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                    const outside = document.createElement('button');
+                    outside.id = 'consolidationB-outside';
+                    document.body.appendChild(outside);
+                    outside.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+                    const closesAfterOutsidePointer = closeCalls.length;
+
+                    mod.dispose('consolidationB-anchor');
+
+                    return {
+                        closesAfterInternalScroll,
+                        topBeforeInternal,
+                        topAfterInternal,
+                        closesAfterOuterScroll,
+                        topAfterOuter,
+                        closesAfterEscape,
+                        closesAfterOutsidePointer
+                    };
+                }
+                """, DeckModuleUrl(page, "Components/Deck/Popover.razor.js"));
+
+            // Scrolling the popover's own content never dismisses it and never repositions it.
+            Assert.Equal(0, result.GetProperty("closesAfterInternalScroll").GetInt32());
+            Assert.Equal(result.GetProperty("topBeforeInternal").GetString(), result.GetProperty("topAfterInternal").GetString());
+
+            // An ancestor scroll repositions (top changes to follow the moved anchor) but still never dismisses.
+            Assert.Equal(0, result.GetProperty("closesAfterOuterScroll").GetInt32());
+            Assert.NotEqual(result.GetProperty("topAfterInternal").GetString(), result.GetProperty("topAfterOuter").GetString());
+
+            // Escape and outside pointerdown still dismiss the popover.
+            Assert.True(result.GetProperty("closesAfterEscape").GetInt32() >= 1);
+            Assert.True(result.GetProperty("closesAfterOutsidePointer").GetInt32() > result.GetProperty("closesAfterEscape").GetInt32());
+
+            AssertNoConsoleErrors(errors);
+        });
+    }
+
     private static async Task GoHomeAsync(IPage page)
     {
         await page.GotoAsync("/");
