@@ -10,31 +10,33 @@ namespace Aspire.Cli.Agents;
 /// <summary>
 /// Represents a skill that can be installed into a skill location.
 /// </summary>
-[DebuggerDisplay("Name = {Name}, Description = {Description}, IsDefault = {IsDefault}")]
-internal sealed class SkillDefinition
+[DebuggerDisplay("Name = {Name}, Description = {Description}, IsDefault = {IsDefault}, AssetKind = {AssetKind}")]
+internal sealed class AgentAssetDefinition
 {
     /// <summary>
     /// The Playwright CLI skill for browser automation.
     /// </summary>
-    public static readonly SkillDefinition PlaywrightCli = new(
+    public static readonly AgentAssetDefinition PlaywrightCli = new(
         "playwright-cli",
         AgentCommandStrings.SkillDescription_PlaywrightCli,
-        skillContent: null,
-        sourceKind: SkillSourceKind.ExternalInstaller, // Playwright is installed via PlaywrightCliInstaller, not a static file
+        assetContent: null,
+        sourceKind: AgentAssetSourceKind.ExternalInstaller, // Playwright is installed via PlaywrightCliInstaller, not a static file
         installExcludedRelativePaths: [],
-        isDefault: false);
+        isDefault: false,
+        assetKind: AgentAssetKind.Skill);
 
     /// <summary>
     /// The dotnet-inspect skill for querying .NET API surfaces.
     /// Only offered when the workspace contains a .NET AppHost.
     /// </summary>
-    public static readonly SkillDefinition DotnetInspect = new(
+    public static readonly AgentAssetDefinition DotnetInspect = new(
         CommonAgentApplicators.DotnetInspectSkillName,
         AgentCommandStrings.SkillDescription_DotnetInspect,
         CommonAgentApplicators.DotnetInspectSkillFileContent,
-        sourceKind: SkillSourceKind.Static,
+        sourceKind: AgentAssetSourceKind.Static,
         installExcludedRelativePaths: [],
         isDefault: false,
+        assetKind: AgentAssetKind.Skill,
         applicableLanguages: [KnownLanguageId.CSharp]);
 
     /// <summary>
@@ -43,7 +45,7 @@ internal sealed class SkillDefinition
     /// and standalone <c>aspire agent init</c> can still narrow that set with a predicate
     /// (see <c>AgentInitCommand.ExcludeOneTimeSetupSkillsFromDefaults</c>).
     /// </summary>
-    internal static SkillDefinition CreateAspireSkillsBundle(
+    internal static AgentAssetDefinition CreateAspireSkillsBundle(
         string name,
         string description,
         IReadOnlyList<string>? installExcludedRelativePaths = null,
@@ -52,24 +54,26 @@ internal sealed class SkillDefinition
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(description);
 
-        return new(
+        return new AgentAssetDefinition(
             name,
             description,
-            skillContent: null,
-            sourceKind: SkillSourceKind.AspireSkillsBundle,
+            assetContent: null,
+            sourceKind: AgentAssetSourceKind.AspireSkillsBundle,
             installExcludedRelativePaths: installExcludedRelativePaths ?? [],
             isDefault: true,
-            applicableLanguages);
+            assetKind: AgentAssetKind.Skill,
+            applicableLanguages: applicableLanguages);
     }
 
-    private SkillDefinition(string name, string description, string? skillContent, SkillSourceKind sourceKind, IReadOnlyList<string> installExcludedRelativePaths, bool isDefault, IReadOnlyList<string>? applicableLanguages = null)
+    private AgentAssetDefinition(string name, string description, string? assetContent, AgentAssetSourceKind sourceKind, IReadOnlyList<string> installExcludedRelativePaths, bool isDefault, AgentAssetKind assetKind, IReadOnlyList<string>? applicableLanguages = null)
     {
         Name = name;
         Description = description;
-        SkillContent = skillContent;
+        AssetContent = assetContent;
         SourceKind = sourceKind;
         InstallExcludedRelativePaths = installExcludedRelativePaths;
         IsDefault = isDefault;
+        AssetKind = assetKind;
         ApplicableLanguages = applicableLanguages ?? [];
     }
 
@@ -84,19 +88,19 @@ internal sealed class SkillDefinition
     public string Description { get; }
 
     /// <summary>
-    /// Gets the content for the top-level SKILL.md file when the skill is defined as a single-file bundle.
+    /// Gets the content for the top-level asset file when the asset is defined as a single-file bundle.
     /// </summary>
-    public string? SkillContent { get; }
+    public string? AssetContent { get; }
 
     /// <summary>
     /// Gets where the installable files for this skill come from.
     /// </summary>
-    public SkillSourceKind SourceKind { get; }
+    public AgentAssetSourceKind SourceKind { get; }
 
     /// <summary>
     /// Gets whether this skill has files that <c>aspire agent init</c> installs directly.
     /// </summary>
-    public bool HasInstallableFiles => SkillContent is not null || SourceKind is SkillSourceKind.AspireSkillsBundle;
+    public bool HasInstallableFiles => AssetContent is not null || SourceKind is AgentAssetSourceKind.AspireSkillsBundle;
 
     /// <summary>
     /// Gets relative paths that should be excluded when the skill is installed into a workspace.
@@ -123,6 +127,11 @@ internal sealed class SkillDefinition
     /// Gets whether this skill should be selected by default.
     /// </summary>
     public bool IsDefault { get; }
+    
+    /// <summary>
+    /// Gets the kind of asset this asset represents.
+    /// </summary>
+    public AgentAssetKind AssetKind { get; }
 
     /// <summary>
     /// Gets the set of language identifiers (from <see cref="KnownLanguageId"/>) this skill applies to.
@@ -175,7 +184,7 @@ internal sealed class SkillDefinition
     /// <summary>
     /// Gets CLI-defined skills that are not sourced from the Aspire skills bundle.
     /// </summary>
-    public static IReadOnlyList<SkillDefinition> CliDefined { get; } = [PlaywrightCli, DotnetInspect];
+    public static IReadOnlyList<AgentAssetDefinition> CliDefined { get; } = [PlaywrightCli, DotnetInspect];
 
     /// <inheritdoc />
     public override string ToString() => Name;
@@ -184,7 +193,7 @@ internal sealed class SkillDefinition
 /// <summary>
 /// Identifies where skill files are sourced from.
 /// </summary>
-internal enum SkillSourceKind
+internal enum AgentAssetSourceKind
 {
     /// <summary>
     /// The skill is represented by static content compiled into the CLI.

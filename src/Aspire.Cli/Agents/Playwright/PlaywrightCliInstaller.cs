@@ -321,12 +321,12 @@ internal sealed class PlaywrightCliInstaller(
     private static HashSet<string> SnapshotPlaywrightSkillDirs(string repoRoot)
     {
         var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var location in SkillLocation.All)
+        foreach (var location in AgentAssetLocation.All)
         {
-            var dir = Path.Combine(repoRoot, location.RelativeSkillDirectory, PlaywrightCliSkillName);
+            var dir = Path.Combine(repoRoot, location.RelativeDirectory, PlaywrightCliSkillName);
             if (Directory.Exists(dir))
             {
-                existing.Add(location.RelativeSkillDirectory);
+                existing.Add(location.RelativeDirectory);
             }
         }
         return existing;
@@ -371,19 +371,19 @@ internal sealed class PlaywrightCliInstaller(
         // Clean up playwright-cli directories that were created during this run
         // in locations the user didn't select. We only remove directories that
         // didn't exist before install — pre-existing content is never touched.
-        foreach (var location in SkillLocation.All)
+        foreach (var location in AgentAssetLocation.All)
         {
-            if (selectedSkillDirectories.Contains(location.RelativeSkillDirectory))
+            if (selectedSkillDirectories.Contains(location.RelativeDirectory))
             {
                 continue; // User selected this location — keep it
             }
 
-            if (preExistingLocations.Contains(location.RelativeSkillDirectory))
+            if (preExistingLocations.Contains(location.RelativeDirectory))
             {
                 continue; // Was already there before this run — leave it alone
             }
 
-            var skillDir = Path.Combine(repoRoot, location.RelativeSkillDirectory, PlaywrightCliSkillName);
+            var skillDir = Path.Combine(repoRoot, location.RelativeDirectory, PlaywrightCliSkillName);
             if (!Directory.Exists(skillDir))
             {
                 continue;
@@ -394,7 +394,7 @@ internal sealed class PlaywrightCliInstaller(
                 Directory.Delete(skillDir, recursive: true);
                 logger.LogDebug("Removed playwright-cli skills from unselected location: {SkillDir}", skillDir);
 
-                RemoveEmptyParentDirectories(skillDir, repoRoot, location.RelativeSkillDirectory, logger);
+                RemoveEmptyParentDirectories(skillDir, repoRoot, location.RelativeDirectory, logger);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {

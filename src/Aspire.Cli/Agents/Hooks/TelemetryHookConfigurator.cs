@@ -55,18 +55,18 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
 
     /// <inheritdoc />
     public async Task<TelemetryHookConfigurationResult> ConfigureAsync(
-        IReadOnlyCollection<AgentClientKind> detectedClients,
+        IReadOnlyCollection<AgentClient> detectedClients,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(detectedClients);
 
-        var configured = new List<AgentClientKind>();
+        var configured = new List<AgentClient>();
         var skipped = new List<TelemetryHookSkip>();
 
         // VS Code and OpenCode hook schemas are not yet verified, so they are intentionally not
         // configured here even though they are detected/marked. Only configure once per client kind.
         var supported = detectedClients
-            .Where(static c => c is AgentClientKind.CopilotCli or AgentClientKind.ClaudeCode)
+            .Where(static client => client == AgentClient.CopilotCli || client == AgentClient.ClaudeCode)
             .Distinct()
             .ToList();
 
@@ -80,30 +80,28 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
 
         foreach (var client in supported)
         {
-            switch (client)
+            if (client == AgentClient.CopilotCli)
             {
-                case AgentClientKind.CopilotCli:
-                    if (await TryConfigureCopilotAsync(scripts, cancellationToken))
-                    {
-                        configured.Add(client);
-                    }
-                    else
-                    {
-                        skipped.Add(new TelemetryHookSkip(client, TelemetryHookSkipReason.WriteFailed));
-                    }
-                    break;
-
-                case AgentClientKind.ClaudeCode:
-                    var claudeSkipReason = await ConfigureClaudeAsync(scripts, cancellationToken);
-                    if (claudeSkipReason is { } reason)
-                    {
-                        skipped.Add(new TelemetryHookSkip(client, reason));
-                    }
-                    else
-                    {
-                        configured.Add(client);
-                    }
-                    break;
+                if (await TryConfigureCopilotAsync(scripts, cancellationToken))
+                {
+                    configured.Add(client);
+                }
+                else
+                {
+                    skipped.Add(new TelemetryHookSkip(client, TelemetryHookSkipReason.WriteFailed));
+                }
+            }
+            else if (client == AgentClient.ClaudeCode)
+            {
+                var claudeSkipReason = await ConfigureClaudeAsync(scripts, cancellationToken);
+                if (claudeSkipReason is { } reason)
+                {
+                    skipped.Add(new TelemetryHookSkip(client, reason));
+                }
+                else
+                {
+                    configured.Add(client);
+                }
             }
         }
 

@@ -44,14 +44,19 @@ internal sealed class AspireSkillsInstaller(
 
     private static readonly TimeSpan s_defaultMaxCacheAge = TimeSpan.FromDays(7);
 
-    public Task<AspireSkillsInstallResult> InstallAsync(CancellationToken cancellationToken)
+    public Task<AspireSkillsInstallResult> InstallAsync(AgentAssetKind assetKind, CancellationToken cancellationToken)
     {
         return interactionService.ShowStatusAsync(
             AgentCommandStrings.AspireSkillsInstaller_InstallingStatus,
-            () => InstallCoreAsync(cancellationToken));
+            () => InstallCoreAsync(assetKind, cancellationToken));
     }
-    private async Task<AspireSkillsInstallResult> InstallCoreAsync(CancellationToken cancellationToken)
+    private async Task<AspireSkillsInstallResult> InstallCoreAsync(AgentAssetKind assetKind, CancellationToken cancellationToken)
     {
+        if (assetKind != AgentAssetKind.Skill)
+        {
+            throw new NotSupportedException("Only skill assets are supported.");
+        }
+
         using var activity = telemetry.StartReportedActivity("AspireSkillsInstaller.Install");
 
         var effectiveVersion = configuration[VersionOverrideKey];

@@ -67,26 +67,31 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
         _result = result;
     }
 
-    public async Task<AspireSkillsInstallResult> InstallAsync(CancellationToken cancellationToken)
+    public async Task<AspireSkillsInstallResult> InstallAsync(AgentAssetKind assetKind, CancellationToken cancellationToken)
     {
         if (_result is not null)
         {
             return _result;
         }
 
-        await EnsureBundleAsync(cancellationToken);
+        await EnsureBundleAsync(assetKind, cancellationToken);
         var bundle = await AspireSkillsBundle.LoadAsync(_bundleDirectory, cancellationToken);
         return AspireSkillsInstallResult.Installed(bundle);
     }
 
-    private async Task EnsureBundleAsync(CancellationToken cancellationToken)
+    private async Task EnsureBundleAsync(AgentAssetKind assetKind, CancellationToken cancellationToken)
     {
+        if (assetKind != AgentAssetKind.Skill)
+        {
+            throw new NotSupportedException("Only skill assets are supported.");
+        }
+
         if (_bundleDirectory.Exists)
         {
             return;
         }
 
-        var files = new Dictionary<(string SkillName, string RelativePath), string>
+        var files = new Dictionary<(string AssetName, string RelativePath), string>
         {
             [(CommonAgentApplicators.AspireSkillName, "SKILL.md")] =
                 """

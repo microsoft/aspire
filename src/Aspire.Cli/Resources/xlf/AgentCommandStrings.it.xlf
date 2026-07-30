@@ -182,6 +182,11 @@
         <target state="new">Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_UnsupportedAssetsRequested">
+        <source>The requested agent assets are not supported by any detected agent client.</source>
+        <target state="new">The requested agent assets are not supported by any detected agent client.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_WorkspaceRootOptionDescription">
         <source>Path to the workspace root directory</source>
         <target state="new">Path to the workspace root directory</target>

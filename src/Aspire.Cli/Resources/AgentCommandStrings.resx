@@ -102,6 +102,9 @@
   <data name="InitCommand_SelectSkills" xml:space="preserve">
     <value>Which skills should be installed?</value>
   </data>
+  <data name="InitCommand_UnsupportedAssetsRequested" xml:space="preserve">
+    <value>The requested agent assets are not supported by any detected agent client.</value>
+  </data>
   <data name="InitCommand_InstalledPlaywrightCli" xml:space="preserve">
     <value>Installed Playwright CLI.</value>
   </data>

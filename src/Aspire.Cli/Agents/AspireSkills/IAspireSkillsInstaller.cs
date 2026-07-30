@@ -11,5 +11,5 @@ internal interface IAspireSkillsInstaller
     /// <summary>
     /// Ensures the Aspire skills bundle is available in the local cache.
     /// </summary>
-    Task<AspireSkillsInstallResult> InstallAsync(CancellationToken cancellationToken);
+    Task<AspireSkillsInstallResult> InstallAsync(AgentAssetKind assetKind, CancellationToken cancellationToken);
 }

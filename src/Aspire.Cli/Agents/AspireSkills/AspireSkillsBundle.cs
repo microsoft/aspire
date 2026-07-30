@@ -92,31 +92,31 @@ internal sealed class AspireSkillsBundle
     }
 
     /// <summary>
-    /// Gets installable files for the specified skill.
+    /// Gets installable files for the specified agent asset.
     /// </summary>
-    public async Task<IReadOnlyList<SkillAssetFile>> GetSkillFilesAsync(SkillDefinition skill, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<AgentAssetFile>> GetAgentAssetFilesAsync(AgentAssetDefinition asset, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(skill);
+        ArgumentNullException.ThrowIfNull(asset);
 
-        var manifestSkill = _manifest.Skills.FirstOrDefault(s => string.Equals(s.Name, skill.Name, StringComparison.Ordinal));
+        var manifestSkill = _manifest.Skills.FirstOrDefault(s => string.Equals(s.Name, asset.Name, StringComparison.Ordinal));
         if (manifestSkill is null)
         {
-            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle does not contain skill '{0}'.", skill.Name));
+            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle does not contain asset '{0}'.", asset.Name));
         }
 
-        List<SkillAssetFile> files = [];
+        List<AgentAssetFile> files = [];
         var manifestFiles = manifestSkill.Files
-            ?? throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle skill '{0}' does not contain any files.", skill.Name));
+            ?? throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle asset '{0}' does not contain any files.", asset.Name));
         foreach (var manifestFile in manifestFiles.OrderBy(f => f.RelativePath, StringComparer.Ordinal))
         {
             var relativePath = NormalizeRelativePath(manifestFile.RelativePath!);
-            if (!skill.ShouldInstallFile(relativePath) || !ShouldInstallFile(manifestSkill, relativePath))
+            if (!asset.ShouldInstallFile(relativePath) || !ShouldInstallFile(manifestSkill, relativePath))
             {
                 continue;
             }
 
-            var fullPath = Path.Combine(_bundleDirectory.FullName, SkillsDirectoryName, skill.Name, relativePath);
-            files.Add(new SkillAssetFile(relativePath, await File.ReadAllTextAsync(fullPath, cancellationToken).ConfigureAwait(false)));
+            var fullPath = Path.Combine(_bundleDirectory.FullName, SkillsDirectoryName, asset.Name, relativePath);
+            files.Add(new AgentAssetFile(relativePath, await File.ReadAllTextAsync(fullPath, cancellationToken).ConfigureAwait(false)));
         }
 
         return files;
@@ -125,10 +125,10 @@ internal sealed class AspireSkillsBundle
     /// <summary>
     /// Gets the installable skill definitions declared by the bundle manifest.
     /// </summary>
-    public IReadOnlyList<SkillDefinition> GetSkillDefinitions()
+    public IReadOnlyList<AgentAssetDefinition> GetAgentAssetDefinitions()
     {
         return _manifest.Skills
-            .Select(static skill => SkillDefinition.CreateAspireSkillsBundle(
+            .Select(static skill => AgentAssetDefinition.CreateAspireSkillsBundle(
                 skill.Name!,
                 skill.Description!,
                 (skill.InstallExcludedRelativePaths ?? []).Select(NormalizeRelativePath).ToArray(),

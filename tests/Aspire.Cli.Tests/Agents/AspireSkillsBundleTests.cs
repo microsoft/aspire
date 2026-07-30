@@ -13,12 +13,12 @@ public class AspireSkillsBundleTests
     private const string AspireSkillDescription = "Aspire CLI commands and workflows for distributed apps";
     private const string AspireifySkillDescription = "One-time setup: wire up AppHost with discovered projects";
 
-    private static SkillDefinition AspireSkillDefinition => SkillDefinition.CreateAspireSkillsBundle(
+    private static AgentAssetDefinition AspireAgentAssetDefinition => AgentAssetDefinition.CreateAspireSkillsBundle(
         CommonAgentApplicators.AspireSkillName,
         AspireSkillDescription,
         installExcludedRelativePaths: ["evals"]);
 
-    private static SkillDefinition AspireifySkillDefinition => SkillDefinition.CreateAspireSkillsBundle(
+    private static AgentAssetDefinition AspireifyAgentAssetDefinition => AgentAssetDefinition.CreateAspireSkillsBundle(
         CommonAgentApplicators.AspireifySkillName,
         AspireifySkillDescription);
 
@@ -37,7 +37,7 @@ public class AspireSkillsBundleTests
             });
 
             var bundle = await AspireSkillsBundle.LoadAsync(new DirectoryInfo(bundleDirectory), CancellationToken.None);
-            var files = await bundle.GetSkillFilesAsync(AspireSkillDefinition, CancellationToken.None);
+            var files = await bundle.GetAgentAssetFilesAsync(AspireAgentAssetDefinition, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstaller.Version, bundle.Version);
             Assert.Contains(files, file => file.RelativePath == "SKILL.md");
@@ -51,7 +51,7 @@ public class AspireSkillsBundleTests
     }
 
     [Fact]
-    public async Task GetSkillDefinitions_ReturnsManifestSkills()
+    public async Task GetAgentAssetDefinitions_ReturnsManifestSkills()
     {
         var bundleDirectory = CreateTempDirectory();
 
@@ -64,12 +64,12 @@ public class AspireSkillsBundleTests
             });
 
             var bundle = await AspireSkillsBundle.LoadAsync(new DirectoryInfo(bundleDirectory), CancellationToken.None);
-            var skill = Assert.Single(bundle.GetSkillDefinitions());
+            var skill = Assert.Single(bundle.GetAgentAssetDefinitions());
 
             Assert.Equal(CommonAgentApplicators.AspireSkillName, skill.Name);
             Assert.Equal(AspireSkillDescription, skill.Description);
             Assert.True(skill.IsDefault);
-            Assert.Equal(SkillSourceKind.AspireSkillsBundle, skill.SourceKind);
+            Assert.Equal(AgentAssetSourceKind.AspireSkillsBundle, skill.SourceKind);
             Assert.Equal(["evals"], skill.InstallExcludedRelativePaths);
             Assert.Empty(skill.ApplicableLanguages);
         }
@@ -234,7 +234,7 @@ public class AspireSkillsBundleTests
             await File.WriteAllTextAsync(Path.Combine(bundleDirectory, "skill-manifest.json"), manifestJson);
 
             var bundle = await AspireSkillsBundle.LoadAsync(new DirectoryInfo(bundleDirectory), CancellationToken.None);
-            var files = await bundle.GetSkillFilesAsync(AspireifySkillDefinition, CancellationToken.None);
+            var files = await bundle.GetAgentAssetFilesAsync(AspireifyAgentAssetDefinition, CancellationToken.None);
 
             var skillFile = Assert.Single(files);
             Assert.Equal("SKILL.md", skillFile.RelativePath);

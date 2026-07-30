@@ -178,6 +178,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to The requested agent assets are not supported by any detected agent client..
+        /// </summary>
+        internal static string InitCommand_UnsupportedAssetsRequested {
+            get {
+                return ResourceManager.GetString("InitCommand_UnsupportedAssetsRequested", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Install Aspire MCP server.
         /// </summary>
         internal static string InitCommand_ConfigureMcpServer {

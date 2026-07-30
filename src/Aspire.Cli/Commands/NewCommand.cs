@@ -525,11 +525,10 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
         var workspaceRoot = new DirectoryInfo(templateResult.OutputPath ?? ExecutionContext.WorkingDirectory.FullName);
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, s_suppressAgentInitOption, defaultValue: true);
-        var skillLocationsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillLocationsOption);
-        var skillsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption);
+        var assetPromptBindings = AgentInitCommand.CreateAgentAssetPromptBindings(parseResult);
         // The template already produced the AppHost, so don't pre-select the one-time aspireify
         // wiring skill — users can still opt into it from the prompt.
-        var agentInitResult = await _agentInitCommand.PromptAndChainAsync(InteractionService, templateResult.ExitCode, workspaceRoot, agentInitBinding, skillLocationsBinding, skillsBinding, AgentInitCommand.ExcludeOneTimeSetupSkillsFromDefaults, cancellationToken);
+        var agentInitResult = await _agentInitCommand.PromptAndChainAsync(InteractionService, templateResult.ExitCode, workspaceRoot, agentInitBinding, assetPromptBindings, AgentInitCommand.ExcludeOneTimeSetupAssetsFromDefaults, cancellationToken);
 
         if (templateResult.OutputPath is not null && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _))
         {
