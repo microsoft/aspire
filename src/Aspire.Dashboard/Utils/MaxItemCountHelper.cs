@@ -4,7 +4,6 @@
 using System.Linq.Expressions;
 using System.Reflection;
 using Microsoft.AspNetCore.Components.Web.Virtualization;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Utils;
 
@@ -69,41 +68,5 @@ public static class VirtualizeHelper<TItem>
 
         s_setMaxItemCount(virtualize, max);
         return true;
-    }
-}
-
-public static class FluentDataGridHelper<TGridItem>
-{
-    private static readonly Func<FluentDataGrid<TGridItem>, Virtualize<(int, TGridItem)>>? s_getVirtualize =
-        CreateGetter();
-
-    private static Func<FluentDataGrid<TGridItem>, Virtualize<(int, TGridItem)>>? CreateGetter()
-    {
-        var type = typeof(FluentDataGrid<TGridItem>);
-        var field = type.GetField("_virtualizeComponent", BindingFlags.Instance | BindingFlags.NonPublic);
-
-        if (field == null)
-        {
-            return null;
-        }
-
-        var instance = Expression.Parameter(type, "dataGrid");
-        var body = Expression.Convert(Expression.Field(instance, field), typeof(Virtualize<(int, TGridItem)>));
-
-        return Expression.Lambda<Func<FluentDataGrid<TGridItem>, Virtualize<(int, TGridItem)>>> (body, instance).Compile();
-    }
-
-    private static Virtualize<(int, TGridItem)>? GetVirtualize(FluentDataGrid<TGridItem> dataGrid)
-        => s_getVirtualize?.Invoke(dataGrid);
-
-    public static bool TrySetMaxItemCount(FluentDataGrid<TGridItem> dataGrid, int max)
-    {
-        var virtualize = GetVirtualize(dataGrid);
-        if (virtualize == null)
-        {
-            return false;
-        }
-
-        return VirtualizeHelper<(int, TGridItem)>.TrySetMaxItemCount(virtualize, max);
     }
 }

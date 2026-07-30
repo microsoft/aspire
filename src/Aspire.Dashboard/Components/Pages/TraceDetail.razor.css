@@ -8,55 +8,84 @@
 
 ::deep .trace-view-grid {
     background: var(--bg-surface);
+    display: flex;
+    flex-direction: column;
 }
 
-::deep .trace-view-grid .fluent-data-grid-row:not([row-type='header']):hover .span-bar-label-detail {
-    display: inline !important;
+/* Header row and data rows are independent CSS grids that share the same grid-template-columns
+   (set inline from the column manager), so their cells line up into aligned columns. */
+::deep .trace-grid-header,
+::deep .trace-grid-row {
+    display: grid;
+    align-items: center;
 }
 
-::deep .trace-view-grid .fluent-data-grid-row:not([row-type='header']) {
+::deep .trace-grid-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    /* Sticky header / tick axis uses the Deck base surface so it doesn't render as a washed-out
+       light bar in the Deck dark theme. */
+    background: var(--bg-base);
+}
+
+::deep .trace-grid-header th:first-child,
+::deep .trace-grid-header .column-header:first-child {
+    margin-left: 5px;
+}
+
+::deep .trace-grid-row {
     background: transparent;
     border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    min-height: 32px;
 }
 
-/* Sticky header / tick axis uses the Deck base surface so it doesn't render as a washed-out
-   light bar in the Deck dark theme (Fluent's default header layer doesn't follow data-theme here). */
-::deep .trace-view-grid .fluent-data-grid-row[row-type='sticky-header'],
-::deep .trace-view-grid .fluent-data-grid-row[row-type='sticky-header'] th {
-    background: var(--bg-base);
+::deep .trace-view-grid.enable-row-click .trace-grid-row:hover {
+    background: var(--bg-hover);
+}
+
+::deep .trace-view-grid .trace-grid-row.selected-row {
+    background: var(--bg-active);
+}
+
+::deep .trace-grid-row:hover .span-bar-label-detail {
+    display: inline !important;
 }
 
 ::deep .trace-view-grid .tick-label {
     color: var(--text-muted);
 }
 
-::deep .fluent-data-grid-row[row-type='sticky-header'] th:first-child {
-    margin-left: 5px;
-}
-
-::deep .trace-view-grid .fluent-data-grid-row {
+::deep .trace-grid-row > [role='cell'],
+::deep .trace-grid-header > .column-header {
     padding: 0;
     border: 0;
-    align-items: center;
-}
-
-::deep .trace-view-grid td:not(.empty-content-cell) {
-    padding: 0;
-    border: 0;
-    border-radius: 0;
     vertical-align: middle;
+    min-width: 0;
+    overflow: hidden;
 }
 
-::deep .empty-content-cell {
-    margin-top: 8px;
-    border-top: calc(var(--stroke-width) * 1px) solid var(--neutral-stroke-divider-rest);
+::deep .trace-grid-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 28px;
+    text-align: center;
 }
 
 ::deep .trace-view-grid .column-header {
     padding: 0 !important;
-    min-height: 32px !important;
-    height: 32px !important;
+    min-height: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
     border-bottom: 0;
+    font-weight: 550;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
 }
 
 ::deep .ticks {
@@ -146,11 +175,9 @@
 }
 
 ::deep .selected-row .uninstrumented-peer,
-::deep .selected-row .fluent-data-grid-row:not([row-type='header']):hover .uninstrumented-peer,
-::deep .fluent-data-grid-row:not([row-type='header']):hover .uninstrumented-peer,
+::deep .trace-grid-row:hover .uninstrumented-peer,
 ::deep .selected-row .span-container .span-bar-label,
-::deep .selected-row .fluent-data-grid-row:not([row-type='header']):hover .span-container .span-bar-label,
-::deep .fluent-data-grid-row:not([row-type='header']):hover .span-container .span-bar-label {
+::deep .trace-grid-row:hover .span-container .span-bar-label {
     color: var(--neutral-foreground-rest);
 }
 

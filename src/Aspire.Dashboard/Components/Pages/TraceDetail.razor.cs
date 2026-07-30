@@ -17,7 +17,7 @@ using Aspire.Dashboard.Utils;
 using Aspire.Shared;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
-using Microsoft.FluentUI.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web.Virtualization;
 using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Pages;
@@ -39,7 +39,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     private List<OtlpResource> _resources = default!;
     private readonly List<string> _collapsedSpanIds = [];
     private string? _elementIdBeforeDetailsViewOpened;
-    private FluentDataGrid<SpanWaterfallViewModel> _dataGrid = null!;
+    private Virtualize<SpanWaterfallViewModel>? _virtualize;
     private GridColumnManager _manager = null!;
     private IList<GridColumn> _gridColumns = null!;
     private readonly List<MenuButtonItem> _traceActionsMenuItems = [];
@@ -119,7 +119,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
             {
                 UpdateDetailViewData();
                 await InvokeAsync(StateHasChanged);
-                await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+                await InvokeAsync(_virtualize.SafeRefreshDataAsync);
             }));
         }
 
@@ -165,21 +165,17 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     }
 
     // Internal to be used in unit tests
-    internal ValueTask<GridItemsProviderResult<SpanWaterfallViewModel>> GetData(GridItemsProviderRequest<SpanWaterfallViewModel> request)
+    internal ValueTask<ItemsProviderResult<SpanWaterfallViewModel>> GetData(ItemsProviderRequest request)
     {
         var visibleItems = GetVisibleSpanViewModels().ToList();
         var totalItemCount = visibleItems.Count;
         var startIndex = Math.Min(request.StartIndex, visibleItems.Count);
-        var count = Math.Min(request.Count ?? DashboardUIHelpers.DefaultDataGridResultCount, visibleItems.Count - startIndex);
+        var count = Math.Min(request.Count, visibleItems.Count - startIndex);
         var page = count > 0
             ? visibleItems.GetRange(startIndex, count)
             : [];
 
-        return ValueTask.FromResult(new GridItemsProviderResult<SpanWaterfallViewModel>
-        {
-            Items = page,
-            TotalItemCount = totalItemCount
-        });
+        return ValueTask.FromResult(new ItemsProviderResult<SpanWaterfallViewModel>(page, totalItemCount));
     }
 
     private IEnumerable<SpanWaterfallViewModel> GetVisibleSpanViewModels()
@@ -216,7 +212,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
         ClearSelectedDataIfNotVisible();
         await InvokeAsync(StateHasChanged);
-        await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+        await InvokeAsync(_virtualize.SafeRefreshDataAsync);
     }
 
     private string? GetPageTitle()
@@ -243,7 +239,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
             // If parameters change after render then the grid is automatically updated.
             // Explicitly update data grid to support navigating between traces via span links.
-            await _dataGrid.SafeRefreshDataAsync();
+            await _virtualize.SafeRefreshDataAsync();
 
         }
 
@@ -266,7 +262,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     {
         // Check to see whether max item count should be set on every render.
         // This is required because the data grid's virtualize component can be recreated on data change.
-        if (_dataGrid != null && FluentDataGridHelper<SpanWaterfallViewModel>.TrySetMaxItemCount(_dataGrid, 10_000))
+        if (_virtualize is not null && VirtualizeHelper<SpanWaterfallViewModel>.TrySetMaxItemCount(_virtualize, 10_000))
         {
             StateHasChanged();
         }
@@ -321,7 +317,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         ClearSelectedDataIfNotVisible();
         await InvokeAsync(StateHasChanged);
 
-        await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+        await InvokeAsync(_virtualize.SafeRefreshDataAsync);
     }
 
     private async Task OnFilterChangedAsync(string value)
@@ -335,7 +331,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         ClearSelectedDataIfNotVisible();
         await InvokeAsync(StateHasChanged);
 
-        await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+        await InvokeAsync(_virtualize.SafeRefreshDataAsync);
     }
 
     private void UpdateSubscription()
@@ -361,7 +357,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
                 {
                     UpdateDetailViewData();
                     StateHasChanged();
-                    await _dataGrid.SafeRefreshDataAsync();
+                    await _virtualize.SafeRefreshDataAsync();
                 }
                 else
                 {
@@ -413,7 +409,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     {
         UpdateDetailViewData();
         UpdateTraceActionsMenu();
-        await _dataGrid.SafeRefreshDataAsync();
+        await _virtualize.SafeRefreshDataAsync();
 
         await InvokeAsync(StateHasChanged);
     }
@@ -591,7 +587,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     {
         ClearSelectedDataIfNotVisible();
         await InvokeAsync(StateHasChanged);
-        await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+        await InvokeAsync(_virtualize.SafeRefreshDataAsync);
     }
 
     /// <summary>

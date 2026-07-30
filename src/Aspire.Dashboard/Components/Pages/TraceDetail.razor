@@ -83,30 +83,81 @@
         <div class="page__body">
             <div class="trace-waterfall">
                 <GridColumnManager @ref="_manager" Columns="@_gridColumns">
-                    <FluentDataGrid @ref="_dataGrid"
-                                    Virtualize="true"
-                                    GenerateHeader="GenerateHeaderOption.Sticky"
-                                    Class="main-grid trace-view-grid enable-row-click"
-                                    ResizableColumns="true"
-                                    ItemsProvider="@GetData"
-                                    TGridItem="SpanWaterfallViewModel"
-                                    RowClass="@GetRowClass"
-                                    GridTemplateColumns="@_manager.GetGridTemplateColumns()"
-                                    RowSize="DataGridRowSize.Small"
-                                    OverscanCount="100"
-                                    ShowHover="true"
-                                    ItemKey="@(r => r.Span.SpanId)"
-                                    OnRowClick="@(r => r.ExecuteOnDefault(d => OnShowPropertiesAsync(d, buttonId: null)))">
-                        <ChildContent>
-                            <AspireTemplateColumn ColumnId="@NameColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailNameHeader)]" Tooltip="true" TooltipText="@(c => c.GetTooltip(_resources))" Class="expand-col">
-                                @{
-                                    var isServerOrConsumer = context.Span.Kind == OtlpSpanKind.Server || context.Span.Kind == OtlpSpanKind.Consumer;
-                                    // Indent the span name based on the depth of the span.
-                                    var marginLeft = (context.Depth - 1) * 15;
+                @{
+                    var gridTemplateColumns = _manager.GetGridTemplateColumns();
+                    var nameColumnVisible = _manager.IsColumnVisible(NameColumn);
+                    var resourceColumnVisible = _manager.IsColumnVisible(ResourceColumn);
+                    var ticksColumnVisible = _manager.IsColumnVisible(TicksColumn);
+                    var actionsColumnVisible = _manager.IsColumnVisible(ActionsColumn);
+                    var hasSpans = GetVisibleSpanViewModels().Any();
+                }
+                @* The trace waterfall is a CSS grid rather than a table: every row shares the same
+                   grid-template-columns (from the column manager) so cells line up, and each cell's
+                   inner content (the tick ruler, span bars) uses its own nested grid. *@
+                <div class="main-grid trace-view-grid enable-row-click" role="table">
+                    <div class="trace-grid-header" role="row" style="grid-template-columns: @gridTemplateColumns;">
+                        @if (nameColumnVisible)
+                        {
+                            <div class="column-header expand-col" role="columnheader">@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailNameHeader)]</div>
+                        }
+                        @if (resourceColumnVisible)
+                        {
+                            <div class="column-header expand-col" role="columnheader">@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailResourceHeader)]</div>
+                        }
+                        @if (ticksColumnVisible)
+                        {
+                            <div class="column-header" role="columnheader">
+                                <div class="ticks">
+                                    @* First column starts at 0. We don't want to display the smallest unit (0μs) because that looks odd. Use the unit from the next column *@
+                                    <div class="tick" style="grid-column: 1;"></div>
+                                    <span class="tick-label" style="grid-column: 1;">@($"0{DurationFormatter.GetUnit(trace.Duration / 4)}")</span>
 
-                                    // We want to have consistent margin for both client and server spans.
-                                    string spanNameContainerStyle;
-                                    if (!isServerOrConsumer)
+                                    <div class="tick" style="grid-column: 2;"></div>
+                                    <span class="tick-label" style="grid-column: 2;">@DurationFormatter.FormatDuration(trace.Duration / 4, CultureInfo.CurrentCulture)</span>
+
+                                    <div class="tick" style="grid-column: 3;"></div>
+                                    <span class="tick-label" style="grid-column: 3;">@DurationFormatter.FormatDuration(trace.Duration / 4 * 2, CultureInfo.CurrentCulture)</span>
+
+                                    @* Grid column 4 shows two labels. Hide the left aligned label on mobile to avoid them overlapping *@
+                                    <div class="tick" style="grid-column: 4;"></div>
+                                    @if (_manager.ViewportInformation.IsDesktop)
+                                    {
+                                        <span class="tick-label" style="grid-column: 4;">@DurationFormatter.FormatDuration(trace.Duration / 4 * 3, CultureInfo.CurrentCulture)</span>
+                                    }
+
+                                    <span class="tick-label end-tick" style="grid-column: 4;">@DurationFormatter.FormatDuration(trace.Duration, CultureInfo.CurrentCulture)</span>
+                                    <div class="tick" style="grid-column: 5;"></div>
+                                </div>
+                            </div>
+                        }
+                        @if (actionsColumnVisible)
+                        {
+                            <div class="column-header no-ellipsis" role="columnheader">@ControlStringsLoc[nameof(ControlsStrings.ActionsColumnHeader)]</div>
+                        }
+                    </div>
+                    <div class="trace-grid-body">
+                        @if (!hasSpans)
+                        {
+                            <div class="trace-grid-empty cell-muted">
+                                <DeckIcon Name="DeckIconName.GanttChart" Size="24" />&nbsp;@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailNoSpans)]
+                            </div>
+                        }
+                        else
+                        {
+                            @* Virtualize streams span rows from GetData. @key preserves row focus across
+                               trace updates; ItemSize matches the small row height. *@
+                            <Virtualize @ref="_virtualize" ItemsProvider="@GetData" Context="context" ItemSize="32" OverscanCount="100" TItem="SpanWaterfallViewModel">
+                                <div class="trace-grid-row @GetRowClass(context)" role="row" style="grid-template-columns: @gridTemplateColumns;" @key="context.Span.SpanId"
+                                     @onclick="@(() => OnShowPropertiesAsync(context, buttonId: null))">
+                                    @if (nameColumnVisible)
+                                    {
+                                        var isServerOrConsumer = context.Span.Kind == OtlpSpanKind.Server || context.Span.Kind == OtlpSpanKind.Consumer;
+                                        // Indent the span name based on the depth of the span.
+                                        var marginLeft = (context.Depth - 1) * 15;
+
+                                        // We want to have consistent margin for both client and server spans.
+                                        string spanNameContainerStyle;
+                                        if (!isServerOrConsumer)
                                         {
                                             // Client span has 19px extra content:
                                             // - 5px extra margin-left
@@ -114,158 +165,141 @@
                                             // - 9px padding-left
                                             spanNameContainerStyle = $"margin-left: 5px; border-left-color: {TraceColorPalette.GetColorVariable(GetResourceName(context.Span.Source))}; border-left-width: 5px; border-left-style: solid; padding-left: 9px;";
                                         }
-                                    else
-                                    {
-                                        // Span with icon has 19px extra content:
-                                        // - 16px icon
-                                        // - 3px padding-left
-                                        spanNameContainerStyle = string.Empty;
-                                    }
-                                }
-
-                                <div class="span-overview-container">
-                                    <span @onclick:stopPropagation="true" style="margin-left: @(marginLeft)px;" class="main-grid-expand-container @(context.IsCollapsed ? "main-grid-collapsed" : "main-grid-expanded")">
-                                        @if (context.Children.Count > 0)
+                                        else
                                         {
-                                            <button type="button" aria-label="@ControlStringsLoc[nameof(ControlsStrings.ToggleNesting)]" class="icon-btn icon-btn--sm main-grid-expand-button" @onclick="@(() => OnToggleCollapse(context))">
-                                                <DeckIcon Name="DeckIconName.Chevron" Size="12" />
-                                            </button>
-                                        }
-                                    </span>
-                                    <span class="span-name-container" style="@spanNameContainerStyle">
-                                        @if (isServerOrConsumer)
-                                        {
-                                            <DeckIcon Class="span-kind-icon"
-                                                      Style="@($"color: {TraceColorPalette.GetColorVariable(GetResourceName(context.Span.Source))};")"
-                                                      Name="@(TraceHelpers.TryGetSpanIcon(context.Span) ?? DeckIconName.Settings)"
-                                                      Size="16" />
+                                            // Span with icon has 19px extra content:
+                                            // - 16px icon
+                                            // - 3px padding-left
+                                            spanNameContainerStyle = string.Empty;
                                         }
 
-                                        @if (context.IsError)
-                                        {
-                                            <DeckIcon Name="DeckIconName.ErrorCircle" Size="12" Class="trace-tag-icon icon-error" />
-                                        }
-                                        <Highlighter HighlightedText="@PageViewModel.Filter" Text="@context.Span.GetDisplaySummary()" />
-                                        @if (context.HasUninstrumentedPeer)
-                                        {
-                                            <span class="uninstrumented-peer">
-                                                @{
-                                                    DeckIconName icon;
-                                                    if (context.Span.Attributes.HasKey("db.system"))
+                                        <div class="expand-col" role="cell" title="@context.GetTooltip(_resources)">
+                                            <div class="span-overview-container">
+                                                <span @onclick:stopPropagation="true" style="margin-left: @(marginLeft)px;" class="main-grid-expand-container @(context.IsCollapsed ? "main-grid-collapsed" : "main-grid-expanded")">
+                                                    @if (context.Children.Count > 0)
                                                     {
-                                                        icon = DeckIconName.Database;
+                                                        <button type="button" aria-label="@ControlStringsLoc[nameof(ControlsStrings.ToggleNesting)]" class="icon-btn icon-btn--sm main-grid-expand-button" @onclick="@(() => OnToggleCollapse(context))">
+                                                            <DeckIcon Name="DeckIconName.Chevron" Size="12" />
+                                                        </button>
                                                     }
-                                                    else if (context.Span.Attributes.HasKey("messaging.system"))
+                                                </span>
+                                                <span class="span-name-container" style="@spanNameContainerStyle">
+                                                    @if (isServerOrConsumer)
                                                     {
-                                                        icon = DeckIconName.Mail;
+                                                        <DeckIcon Class="span-kind-icon"
+                                                                  Style="@($"color: {TraceColorPalette.GetColorVariable(GetResourceName(context.Span.Source))};")"
+                                                                  Name="@(TraceHelpers.TryGetSpanIcon(context.Span) ?? DeckIconName.Settings)"
+                                                                  Size="16" />
                                                     }
-                                                    else
+
+                                                    @if (context.IsError)
                                                     {
-                                                        // Everything else.
-                                                        icon = DeckIconName.ArrowCircleRight;
+                                                        <DeckIcon Name="DeckIconName.ErrorCircle" Size="12" Class="trace-tag-icon icon-error" />
                                                     }
-                                                }
-                                                <DeckIcon Name="icon"
-                                                    Size="16"
-                                                    Style="@($"color: {TraceColorPalette.GetColorVariable(context.UninstrumentedPeer)};")"
-                                                    Class="uninstrumented-peer-icon" />
-                                                <Highlighter HighlightedText="@PageViewModel.Filter" Text="@context.UninstrumentedPeer" />
-                                            </span>
-                                        }
-                                    </span>
-                                    <span @onclick:stopPropagation="true">
-                                        @if (IsGenAISpan(context))
-                                        {
-                                            <button type="button" class="icon-btn icon-btn--sm genai-details-button"
-                                                    title="@ControlStringsLoc[nameof(ControlsStrings.GenAIDetailsTitle)]"
-                                                    @onclick="() => OnGenAIClickedAsync(context.Span)">
-                                                <DeckIcon Name="DeckIconName.Sparkle" Size="20" Class="icon-accent" />
-                                            </button>
-                                        }
-                                    </span>
-                                </div>
-                            </AspireTemplateColumn>
-                            <AspireTemplateColumn ColumnId="@ResourceColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailResourceHeader)]" Tooltip="true" TooltipText="@(c => GetResourceName(c.Span.Source))" Class="expand-col">
-                                <div class="resource-name">
-                                    <Highlighter HighlightedText="@PageViewModel.Filter" Text="@GetResourceName(context.Span.Source)" />
-                                </div>
-                            </AspireTemplateColumn>
-                            <AspireTemplateColumn ColumnId="@TicksColumn" ColumnManager="@_manager">
-                                <HeaderCellItemTemplate>
-                                    <div class="ticks">
-                                        @* First column starts at 0. We don't want to display the smallest unit (0μs) because that looks odd. Use the unit from the next column *@
-                                        <div class="tick" style="grid-column: 1;"></div>
-                                        <span class="tick-label" style="grid-column: 1;">@($"0{DurationFormatter.GetUnit(trace.Duration / 4)}")</span>
-
-                                        <div class="tick" style="grid-column: 2;"></div>
-                                        <span class="tick-label" style="grid-column: 2;">@DurationFormatter.FormatDuration(trace.Duration / 4, CultureInfo.CurrentCulture)</span>
-
-                                        <div class="tick" style="grid-column: 3;"></div>
-                                        <span class="tick-label" style="grid-column: 3;">@DurationFormatter.FormatDuration(trace.Duration / 4 * 2, CultureInfo.CurrentCulture)</span>
-
-                                        @* Grid column 4 shows two labels. Hide the left aligned label on mobile to avoid them overlapping *@
-                                        <div class="tick" style="grid-column: 4;"></div>
-                                        @if (_manager.ViewportInformation.IsDesktop)
-                                        {
-                                            <span class="tick-label" style="grid-column: 4;">@DurationFormatter.FormatDuration(trace.Duration / 4 * 3, CultureInfo.CurrentCulture)</span>
-                                        }
-
-                                        <span class="tick-label end-tick" style="grid-column: 4;">@DurationFormatter.FormatDuration(trace.Duration, CultureInfo.CurrentCulture)</span>
-                                        <div class="tick" style="grid-column: 5;"></div>
-                                    </div>
-                                </HeaderCellItemTemplate>
-                                <ChildContent>
-                                    @{
-                                        var spanColor = @TraceColorPalette.GetColorVariable(GetResourceName(context.Span.Source));
-                                    }
-                                    <div class="ticks">
-                                        <div class="span-container" style="position: relative; grid-template-columns: @context.LeftOffset.ToString("F2", CultureInfo.InvariantCulture)% @context.Width.ToString("F2", CultureInfo.InvariantCulture)% min-content;">
-                                            <div class="span-button-container">
-                                                @foreach (var item in context.SpanLogs)
-                                                {
-                                                    var buttonId = $"{context.Span.SpanId}-{item.LogEntry.InternalId}";
-                                                    var eventName = StructureLogsDetailsViewModel.GetEventName(item.LogEntry, StructuredLogsLoc);
-                                                    var isSelected = SelectedData?.LogEntryViewModel?.LogEntry.InternalId == item.LogEntry.InternalId;
-                                                    var buttonColor = item.LogEntry.IsError ? "var(--error)" : spanColor;
-
-                                                    @* A native title tooltip shows the event summary on hover; clicking the button opens the full log entry details. *@
-                                                    <button id="@buttonId"
-                                                            title="@($"{eventName} - {item.LogEntry.Scope.Name}")"
-                                                            aria-label="@StructuredLogsLoc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsEntryDetails)]"
-                                                            class="@($"span-log-entry-button {(isSelected ? "span-log-entry-selected" : null)} {(item.LogEntry.IsError ? "span-log-entry-error" : null)}")"
-                                                            data-span-color="@spanColor"
-                                                            style="@($"left: {@item.LeftOffset.ToString("F2", CultureInfo.InvariantCulture)}%; --button-color: {buttonColor};")"
-                                                            @onclick="@(() => ToggleSpanLogsAsync(item.LogEntry))"
-                                                            @onclick:stopPropagation="true">
-                                                    </button>
-                                                }
-                                            </div>
-                                            <div class="span-bar" style="grid-column: 2; background: @spanColor;"></div>
-                                            <div class="span-bar-label @(context.LabelIsRight ? "span-bar-label-right" : "span-bar-label-left")">
-                                                <span class="span-bar-label-detail">@SpanWaterfallViewModel.GetTitle(context.Span, _resources)</span>
-                                                <span>@DurationFormatter.FormatDuration(context.Span.Duration, CultureInfo.CurrentCulture)</span>
+                                                    <Highlighter HighlightedText="@PageViewModel.Filter" Text="@context.Span.GetDisplaySummary()" />
+                                                    @if (context.HasUninstrumentedPeer)
+                                                    {
+                                                        <span class="uninstrumented-peer">
+                                                            @{
+                                                                DeckIconName icon;
+                                                                if (context.Span.Attributes.HasKey("db.system"))
+                                                                {
+                                                                    icon = DeckIconName.Database;
+                                                                }
+                                                                else if (context.Span.Attributes.HasKey("messaging.system"))
+                                                                {
+                                                                    icon = DeckIconName.Mail;
+                                                                }
+                                                                else
+                                                                {
+                                                                    // Everything else.
+                                                                    icon = DeckIconName.ArrowCircleRight;
+                                                                }
+                                                            }
+                                                            <DeckIcon Name="icon"
+                                                                Size="16"
+                                                                Style="@($"color: {TraceColorPalette.GetColorVariable(context.UninstrumentedPeer)};")"
+                                                                Class="uninstrumented-peer-icon" />
+                                                            <Highlighter HighlightedText="@PageViewModel.Filter" Text="@context.UninstrumentedPeer" />
+                                                        </span>
+                                                    }
+                                                </span>
+                                                <span @onclick:stopPropagation="true">
+                                                    @if (IsGenAISpan(context))
+                                                    {
+                                                        <button type="button" class="icon-btn icon-btn--sm genai-details-button"
+                                                                title="@ControlStringsLoc[nameof(ControlsStrings.GenAIDetailsTitle)]"
+                                                                @onclick="() => OnGenAIClickedAsync(context.Span)">
+                                                            <DeckIcon Name="DeckIconName.Sparkle" Size="20" Class="icon-accent" />
+                                                        </button>
+                                                    }
+                                                </span>
                                             </div>
                                         </div>
-                                        <div class="tick" style="grid-column: 1;"></div>
-                                        <div class="tick" style="grid-column: 2;"></div>
-                                        <div class="tick" style="grid-column: 3;"></div>
-                                        <div class="tick" style="grid-column: 4;"></div>
-                                        <div class="tick" style="grid-column: 5;"></div>
-                                    </div>
-                                </ChildContent>
-                            </AspireTemplateColumn>
-                            <AspireTemplateColumn ColumnId="@ActionsColumn" ColumnManager="@_manager" Title="@ControlStringsLoc[nameof(ControlsStrings.ActionsColumnHeader)]" Class="no-ellipsis">
-                                <div @onclick:stopPropagation="true" style="margin-left: 7px;">
-                                    <SpanActions SpanViewModel="@context"
-                                                 OnViewDetails="@((buttonId) => OnShowPropertiesAsync(context, buttonId))"
-                                                 OnLaunchGenAI="@OnGenAIClickedAsync" />
+                                    }
+                                    @if (resourceColumnVisible)
+                                    {
+                                        <div class="expand-col" role="cell" title="@GetResourceName(context.Span.Source)">
+                                            <div class="resource-name">
+                                                <Highlighter HighlightedText="@PageViewModel.Filter" Text="@GetResourceName(context.Span.Source)" />
+                                            </div>
+                                        </div>
+                                    }
+                                    @if (ticksColumnVisible)
+                                    {
+                                        var spanColor = @TraceColorPalette.GetColorVariable(GetResourceName(context.Span.Source));
+                                        <div role="cell">
+                                            <div class="ticks">
+                                                <div class="span-container" style="position: relative; grid-template-columns: @context.LeftOffset.ToString("F2", CultureInfo.InvariantCulture)% @context.Width.ToString("F2", CultureInfo.InvariantCulture)% min-content;">
+                                                    <div class="span-button-container">
+                                                        @foreach (var item in context.SpanLogs)
+                                                        {
+                                                            var buttonId = $"{context.Span.SpanId}-{item.LogEntry.InternalId}";
+                                                            var eventName = StructureLogsDetailsViewModel.GetEventName(item.LogEntry, StructuredLogsLoc);
+                                                            var isSelected = SelectedData?.LogEntryViewModel?.LogEntry.InternalId == item.LogEntry.InternalId;
+                                                            var buttonColor = item.LogEntry.IsError ? "var(--error)" : spanColor;
+
+                                                            @* A native title tooltip shows the event summary on hover; clicking the button opens the full log entry details. *@
+                                                            <button id="@buttonId"
+                                                                    title="@($"{eventName} - {item.LogEntry.Scope.Name}")"
+                                                                    aria-label="@StructuredLogsLoc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsEntryDetails)]"
+                                                                    class="@($"span-log-entry-button {(isSelected ? "span-log-entry-selected" : null)} {(item.LogEntry.IsError ? "span-log-entry-error" : null)}")"
+                                                                    data-span-color="@spanColor"
+                                                                    style="@($"left: {@item.LeftOffset.ToString("F2", CultureInfo.InvariantCulture)}%; --button-color: {buttonColor};")"
+                                                                    @onclick="@(() => ToggleSpanLogsAsync(item.LogEntry))"
+                                                                    @onclick:stopPropagation="true">
+                                                            </button>
+                                                        }
+                                                    </div>
+                                                    <div class="span-bar" style="grid-column: 2; background: @spanColor;"></div>
+                                                    <div class="span-bar-label @(context.LabelIsRight ? "span-bar-label-right" : "span-bar-label-left")">
+                                                        <span class="span-bar-label-detail">@SpanWaterfallViewModel.GetTitle(context.Span, _resources)</span>
+                                                        <span>@DurationFormatter.FormatDuration(context.Span.Duration, CultureInfo.CurrentCulture)</span>
+                                                    </div>
+                                                </div>
+                                                <div class="tick" style="grid-column: 1;"></div>
+                                                <div class="tick" style="grid-column: 2;"></div>
+                                                <div class="tick" style="grid-column: 3;"></div>
+                                                <div class="tick" style="grid-column: 4;"></div>
+                                                <div class="tick" style="grid-column: 5;"></div>
+                                            </div>
+                                        </div>
+                                    }
+                                    @if (actionsColumnVisible)
+                                    {
+                                        <div class="no-ellipsis" role="cell">
+                                            <div @onclick:stopPropagation="true" style="margin-left: 7px;">
+                                                <SpanActions SpanViewModel="@context"
+                                                             OnViewDetails="@((buttonId) => OnShowPropertiesAsync(context, buttonId))"
+                                                             OnLaunchGenAI="@OnGenAIClickedAsync" />
+                                            </div>
+                                        </div>
+                                    }
                                 </div>
-                            </AspireTemplateColumn>
-                        </ChildContent>
-                        <EmptyContent>
-                            <DeckIcon Name="DeckIconName.GanttChart" Size="24" />&nbsp;@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailNoSpans)]
-                        </EmptyContent>
-                    </FluentDataGrid>
+                            </Virtualize>
+                        }
+                    </div>
+                </div>
                 </GridColumnManager>
             </div>
         </div>
