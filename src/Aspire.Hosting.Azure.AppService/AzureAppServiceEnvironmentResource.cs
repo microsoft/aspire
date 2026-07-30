@@ -508,7 +508,13 @@ public class AzureAppServiceEnvironmentResource :
     public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference)
     {
         var resource = endpointReference.Resource;
-        return ReferenceExpression.Create($"{resource.Name.ToLowerInvariant()}-{WebSiteSuffix}.azurewebsites.net");
+        var websiteNamePrefix = resource.Name.ToLowerInvariant();
+        if (websiteNamePrefix.Length > AzureAppServiceWebSiteResource.MaxWebSiteNamePrefixLength)
+        {
+            websiteNamePrefix = websiteNamePrefix[..AzureAppServiceWebSiteResource.MaxWebSiteNamePrefixLength];
+        }
+
+        return ReferenceExpression.Create($"{websiteNamePrefix}-{WebSiteSuffix}.azurewebsites.net");
     }
 
     /// <inheritdoc/>

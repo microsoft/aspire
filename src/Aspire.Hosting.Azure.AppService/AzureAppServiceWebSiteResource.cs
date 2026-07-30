@@ -112,7 +112,7 @@ public class AzureAppServiceWebSiteResource : AzureProvisioningResource
     {
         var computerEnv = (AzureAppServiceEnvironmentResource)TargetResource.GetDeploymentTargetAnnotation()!.ComputeEnvironment!;
         var websiteSuffix = await computerEnv.WebSiteSuffix.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
-        return TruncateToMaxLength($"{TargetResource.Name.ToLowerInvariant()}-{websiteSuffix}", 60);
+        return $"{TruncateToMaxLength(TargetResource.Name.ToLowerInvariant(), MaxWebSiteNamePrefixLength)}-{websiteSuffix}";
     }
 
     private static string GetAppServiceWebsiteName(string websiteName, string? deploymentSlot = null)
@@ -141,4 +141,5 @@ public class AzureAppServiceWebSiteResource : AzureProvisioningResource
     // Source of truth: https://msazure.visualstudio.com/One/_git/AAPT-Antares-Websites?path=%2Fsrc%2FHosting%2FAdministrationService%2FMicrosoft.Web.Hosting.Administration.Api%2FCommonConstants.cs&_a=contents&version=GBdev
     internal const int MaxHostPrefixLengthWithSlot = 59;
     internal const int MaxWebSiteNamePrefixLengthWithSlot = 40;
+    internal const int MaxWebSiteNamePrefixLength = 46;
 }

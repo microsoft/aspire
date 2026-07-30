@@ -34,10 +34,11 @@ internal sealed class AzureAppServiceWebsiteContext(
     private AzureResourceInfrastructure? _infrastructure;
     public AzureResourceInfrastructure Infra => _infrastructure ?? throw new InvalidOperationException("Infra is not set");
 
-    // Naming the app service is globally unique (domain names), so we use the resource group ID to create a unique name
-    // within the naming spec for the app service.
-    private BicepValue<string> HostName => BicepFunction.Take(
-        BicepFunction.Interpolate($"{BicepFunction.ToLower(resource.Name)}-{AzureAppServiceEnvironmentResource.GetWebSiteSuffixBicep()}"), 60);
+    // Naming the app service is globally unique (domain names), so we use the resource group ID to create a unique suffix
+    // within the naming spec for the app service. Truncate the resource-name prefix before appending the suffix so that the
+    // suffix is never truncated away.
+    private BicepValue<string> HostName => BicepFunction.Interpolate(
+        $"{BicepFunction.Take(BicepFunction.ToLower(resource.Name), AzureAppServiceWebSiteResource.MaxWebSiteNamePrefixLength)}-{AzureAppServiceEnvironmentResource.GetWebSiteSuffixBicep()}");
 
     /// <summary>
     /// Gets the hostname for a deployment slot by appending the slot name to the base website name.

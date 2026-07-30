@@ -1125,6 +1125,31 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal("webSiteSuffix", output.Name);
     }
 
+    [Fact]
+    public async Task AppServiceWebsiteName_PreservesUniqueSuffixForLongResourceNames()
+    {
+        const string resourceName = "project-with-a-name-longer-than-forty-six-characters";
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var env = builder.AddAzureAppServiceEnvironment("env");
+        var project = builder
+            .AddProject<Project>(resourceName, launchProfileName: null)
+            .WithHttpEndpoint();
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var target = project.Resource.GetDeploymentTargetAnnotation();
+        Assert.NotNull(target);
+        var website = Assert.IsAssignableFrom<AzureProvisioningResource>(target.DeploymentTarget);
+        var (_, bicep) = await GetManifestWithBicep(website);
+
+        Assert.Contains($"name: '${{take(toLower('{resourceName}'), 46)}}-${{uniqueString(resourceGroup().id)}}'", bicep);
+
+        var hostAddress = env.Resource.GetHostAddressExpression(project.GetEndpoint("http"));
+        Assert.Equal("project-with-a-name-longer-than-forty-six-char-{0}.azurewebsites.net", hostAddress.Format);
+    }
+
     [Theory]
     [InlineData(EndpointProperty.Url, "https://project1-website123.azurewebsites.net")]
     [InlineData(EndpointProperty.Host, "project1-website123.azurewebsites.net")]
