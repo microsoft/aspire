@@ -16,7 +16,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Components.Tests.Shared;
 
@@ -24,44 +23,44 @@ internal static class ResourceSetupHelpers
 {
     public static void SetupResourceDetails(TestContext context)
     {
-        FluentUISetupHelpers.AddCommonDashboardServices(context);
+        DashboardSetupHelpers.AddCommonDashboardServices(context);
         context.Services.AddSingleton<IInstrumentUnitResolver, TestInstrumentUnitResolver>();
 
-        FluentUISetupHelpers.SetupFluentDivider(context);
-        FluentUISetupHelpers.SetupFluentSearch(context);
-        FluentUISetupHelpers.SetupFluentAnchor(context);
-        FluentUISetupHelpers.SetupFluentAnchoredRegion(context);
-        FluentUISetupHelpers.SetupFluentDataGrid(context);
-        FluentUISetupHelpers.SetupFluentKeyCode(context);
-        FluentUISetupHelpers.SetupFluentToolbar(context);
-        FluentUISetupHelpers.SetupFluentMenu(context);
+        DashboardSetupHelpers.SetupDivider(context);
+        DashboardSetupHelpers.SetupSearch(context);
+        DashboardSetupHelpers.SetupAnchor(context);
+        DashboardSetupHelpers.SetupAnchoredRegion(context);
+        DashboardSetupHelpers.SetupDataGrid(context);
+        DashboardSetupHelpers.SetupKeyCode(context);
+        DashboardSetupHelpers.SetupToolbar(context);
+        DashboardSetupHelpers.SetupMenu(context);
 
         context.JSInterop.SetupVoid("scrollToTop", _ => true);
     }
 
     public static void SetupResourcesPage(TestContext context, ViewportInformation viewport, IDashboardClient? dashboardClient = null, ILocalStorage? localStorage = null)
     {
-        FluentUISetupHelpers.SetupFluentDivider(context);
-        FluentUISetupHelpers.SetupFluentInputLabel(context);
-        FluentUISetupHelpers.SetupFluentDataGrid(context);
-        FluentUISetupHelpers.SetupFluentSearch(context);
-        FluentUISetupHelpers.SetupFluentKeyCode(context);
-        FluentUISetupHelpers.SetupFluentCheckbox(context);
-        FluentUISetupHelpers.SetupDeckCheckbox(context);
-        FluentUISetupHelpers.SetupDeckPopover(context);
-        FluentUISetupHelpers.SetupFluentAnchoredRegion(context);
-        FluentUISetupHelpers.SetupFluentToolbar(context);
-        FluentUISetupHelpers.SetupFluentTab(context);
-        FluentUISetupHelpers.SetupFluentOverflow(context);
-        FluentUISetupHelpers.SetupFluentMenu(context);
+        DashboardSetupHelpers.SetupDivider(context);
+        DashboardSetupHelpers.SetupInputLabel(context);
+        DashboardSetupHelpers.SetupDataGrid(context);
+        DashboardSetupHelpers.SetupSearch(context);
+        DashboardSetupHelpers.SetupKeyCode(context);
+        DashboardSetupHelpers.SetupCheckbox(context);
+        DashboardSetupHelpers.SetupDeckCheckbox(context);
+        DashboardSetupHelpers.SetupDeckPopover(context);
+        DashboardSetupHelpers.SetupAnchoredRegion(context);
+        DashboardSetupHelpers.SetupToolbar(context);
+        DashboardSetupHelpers.SetupTab(context);
+        DashboardSetupHelpers.SetupOverflow(context);
+        DashboardSetupHelpers.SetupMenu(context);
 
-        FluentUISetupHelpers.AddCommonDashboardServices(context, localStorage: localStorage);
+        DashboardSetupHelpers.AddCommonDashboardServices(context, localStorage: localStorage);
         context.Services.AddSingleton<ILogger<StructuredLogs>>(NullLogger<StructuredLogs>.Instance);
         context.Services.AddSingleton<StructuredLogsViewModel>();
         context.Services.AddScoped<DashboardCommandExecutor, DashboardCommandExecutor>();
         context.Services.AddSingleton<IDashboardClient>(dashboardClient ?? new TestDashboardClient(isEnabled: true, initialResources: [], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
 
-        FluentUISetupHelpers.SetupFluentUIComponents(context);
+        DashboardSetupHelpers.SetupUIComponents(context);
 
         var dimensionManager = context.Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);

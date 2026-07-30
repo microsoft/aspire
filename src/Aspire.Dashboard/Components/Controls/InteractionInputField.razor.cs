@@ -4,11 +4,10 @@
 using Aspire.Dashboard.Model.Interaction;
 using Aspire.Dashboard.Model.Markdown;
 using Microsoft.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Components;
 
-public partial class InteractionInputField : FluentComponentBase
+public partial class InteractionInputField : ComponentBase
 {
     [Parameter]
     public required string? ForId { get; set; }

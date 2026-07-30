@@ -13,7 +13,7 @@ public class AspireMenuButtonTests : DashboardTestContext
     [Fact]
     public void ToggleMenu_UpdatesAriaExpandedState()
     {
-        FluentUISetupHelpers.SetupFluentMenu(this);
+        DashboardSetupHelpers.SetupMenu(this);
 
         var cut = Render(builder =>
         {

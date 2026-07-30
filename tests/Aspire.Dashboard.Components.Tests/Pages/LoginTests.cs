@@ -48,12 +48,12 @@ public partial class LoginTests : DashboardTestContext
     {
         JSInterop.SetupModule("/Components/Pages/Login.razor.js");
 
-        FluentUISetupHelpers.SetupFluentAnchor(this);
-        FluentUISetupHelpers.SetupFluentTextField(this);
+        DashboardSetupHelpers.SetupAnchor(this);
+        DashboardSetupHelpers.SetupTextField(this);
 
         var loggerFactory = IntegrationTestHelpers.CreateLoggerFactory(_testOutputHelper);
 
-        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        DashboardSetupHelpers.AddCommonDashboardServices(this);
         Services.AddSingleton<ILoggerFactory>(loggerFactory);
         Services.AddSingleton<IDashboardClient>(new TestDashboardClient());
     }

@@ -146,7 +146,7 @@ public sealed class ManageDataDialogTests : DashboardTestContext
 
     private void SetupManageDataDialogServices(TestDashboardClient dashboardClient)
     {
-        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        DashboardSetupHelpers.AddCommonDashboardServices(this);
         Services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
         Services.AddOptions<DashboardOptions>().Configure(options => options.UI.DisableImport = true);
         Services.AddSingleton<IDashboardClient>(dashboardClient);
@@ -155,9 +155,9 @@ public sealed class ManageDataDialogTests : DashboardTestContext
         Services.AddSingleton<TelemetryExportService>();
         Services.AddSingleton<TelemetryImportService>();
 
-        FluentUISetupHelpers.SetupFluentUIComponents(this);
-        FluentUISetupHelpers.SetupFluentButton(this);
-        FluentUISetupHelpers.SetupFluentDataGrid(this);
+        DashboardSetupHelpers.SetupUIComponents(this);
+        DashboardSetupHelpers.SetupButton(this);
+        DashboardSetupHelpers.SetupDataGrid(this);
 
         SetupIconCheckboxJs();
     }

@@ -1,7 +1,7 @@
 ﻿@using Aspire.Dashboard.Model
 @using Aspire.Dashboard.Otlp.Model
 @using Aspire.Dashboard.Resources
-@using Microsoft.FluentUI.AspNetCore.Components.Extensions
+@using Humanizer
 @inject TimeProvider TimeProvider
 @inject IStringLocalizer<Dialogs> Loc
 
@@ -39,6 +39,6 @@
 
     @* Timestamp *@
     <div class="notification-entry-time">
-        @((TimeProvider.GetUtcNow() - Entry.Timestamp).ToTimeAgo())
+        @(Entry.Timestamp.Humanize(TimeProvider.GetUtcNow()))
     </div>
 </div>

@@ -4,11 +4,8 @@
 using System.Collections.Concurrent;
 using System.Text;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Resources;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.WebUtilities;
-using Microsoft.Extensions.Localization;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Utils;
 
@@ -36,27 +33,6 @@ internal static class DashboardUIHelpers
     public const int MaxHighlightedCommands = 2;
 
     public static readonly TimeSpan ToastTimeout = TimeSpan.FromMilliseconds(5000);
-
-    public static (ColumnResizeLabels resizeLabels, ColumnSortLabels sortLabels) CreateGridLabels(IStringLocalizer<ControlsStrings> loc)
-    {
-        var resizeLabels = ColumnResizeLabels.Default with
-        {
-            ExactLabel = loc[nameof(ControlsStrings.FluentDataGridHeaderCellResizeLabel)],
-            ResizeMenu = loc[nameof(ControlsStrings.FluentDataGridHeaderCellResizeButtonText)],
-            DiscreteLabel = loc[nameof(ControlsStrings.FluentDataGridHeaderCellResizeDiscreteLabel)],
-            GrowAriaLabel = loc[nameof(ControlsStrings.FluentDataGridHeaderCellGrowAriaLabelText)],
-            ResetAriaLabel = loc[nameof(ControlsStrings.FluentDataGridHeaderCellResetAriaLabelText)],
-            ShrinkAriaLabel = loc[nameof(ControlsStrings.FluentDataGridHeaderCellShrinkAriaLabelText)],
-            SubmitAriaLabel = loc[nameof(ControlsStrings.FluentDataGridHeaderCellSubmitAriaLabelText)]
-        };
-        var sortLabels = ColumnSortLabels.Default with
-        {
-            SortMenu = loc[nameof(ControlsStrings.FluentDataGridHeaderCellSortButtonText)],
-            SortMenuAscendingLabel = loc[nameof(ControlsStrings.FluentDataGridHeaderCellSortAscendingButtonText)],
-            SortMenuDescendingLabel = loc[nameof(ControlsStrings.FluentDataGridHeaderCellSortDescendingButtonText)]
-        };
-        return (resizeLabels, sortLabels);
-    }
 
     private static readonly ConcurrentDictionary<int, TextMask> s_cachedMasking = new();
 

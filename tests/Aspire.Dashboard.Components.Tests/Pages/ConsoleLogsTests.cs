@@ -827,20 +827,20 @@ public partial class ConsoleLogsTests : DashboardTestContext
 
     private void SetupConsoleLogsServices(TestDashboardClient? dashboardClient = null, TestTimeProvider? timeProvider = null)
     {
-        FluentUISetupHelpers.SetupFluentDivider(this);
-        FluentUISetupHelpers.SetupFluentInputLabel(this);
-        FluentUISetupHelpers.SetupFluentList(this);
-        FluentUISetupHelpers.SetupFluentSearch(this);
-        FluentUISetupHelpers.SetupFluentKeyCode(this);
-        FluentUISetupHelpers.SetupFluentMenu(this);
-        FluentUISetupHelpers.SetupFluentAnchor(this);
-        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
-        FluentUISetupHelpers.SetupFluentToolbar(this);
+        DashboardSetupHelpers.SetupDivider(this);
+        DashboardSetupHelpers.SetupInputLabel(this);
+        DashboardSetupHelpers.SetupList(this);
+        DashboardSetupHelpers.SetupSearch(this);
+        DashboardSetupHelpers.SetupKeyCode(this);
+        DashboardSetupHelpers.SetupMenu(this);
+        DashboardSetupHelpers.SetupAnchor(this);
+        DashboardSetupHelpers.SetupAnchoredRegion(this);
+        DashboardSetupHelpers.SetupToolbar(this);
 
         JSInterop.SetupVoid("initializeContinuousScroll");
         JSInterop.SetupVoid("resetContinuousScrollPosition");
 
-        FluentUISetupHelpers.AddCommonDashboardServices(this, browserTimeProvider: timeProvider);
+        DashboardSetupHelpers.AddCommonDashboardServices(this, browserTimeProvider: timeProvider);
 
         var loggerFactory = IntegrationTestHelpers.CreateLoggerFactory(_testOutputHelper);
 

@@ -14,7 +14,6 @@ using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.FluentUI.AspNetCore.Components.Components.Tooltip;
 using Microsoft.JSInterop;
 using Xunit;
 
@@ -300,7 +299,7 @@ public partial class MainLayoutTests : DashboardTestContext
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task Help_Desktop_OpensDeckPaneNotFluentDialog(bool viaShortcut)
+    public async Task Help_Desktop_OpensDeckPaneNotModalDialog(bool viaShortcut)
     {
         // On desktop the help button and the Help keyboard shortcut both open the Deck help pane
         // (HelpPane), not the Fluent HelpDialog. (Mobile still uses the dialog.)
@@ -336,7 +335,7 @@ public partial class MainLayoutTests : DashboardTestContext
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task Settings_Desktop_OpensDeckPaneNotFluentDialog(bool viaShortcut)
+    public async Task Settings_Desktop_OpensDeckPaneNotModalDialog(bool viaShortcut)
     {
         // On desktop the settings button and the Settings keyboard shortcut both open the Deck
         // settings pane (SettingsPane), not the Fluent SettingsDialog. (Mobile still uses the dialog.)
@@ -375,7 +374,7 @@ public partial class MainLayoutTests : DashboardTestContext
         Action<DashboardOptions>? configureOptions = null,
         DeckDialogService? dialogService = null)
     {
-        FluentUISetupHelpers.AddCommonDashboardServices(this, localStorage: localStorage, messageService: messageService);
+        DashboardSetupHelpers.AddCommonDashboardServices(this, localStorage: localStorage, messageService: messageService);
 
         if (dialogService is not null)
         {
@@ -385,7 +384,6 @@ public partial class MainLayoutTests : DashboardTestContext
         Services.AddOptions();
         Services.AddSingleton<IThemeResolver, TestThemeResolver>();
         Services.AddSingleton<IDashboardClient, TestDashboardClient>();
-        Services.AddSingleton<ITooltipService, TooltipService>();
         Services.Configure<DashboardOptions>(o =>
         {
             // Configure OTLP endpoint URLs so they can be parsed
@@ -396,13 +394,13 @@ public partial class MainLayoutTests : DashboardTestContext
             o.Otlp.TryParseOptions(out _);
         });
 
-        FluentUISetupHelpers.SetupFluentDialogProvider(this);
-        FluentUISetupHelpers.SetupFluentOverflow(this);
-        FluentUISetupHelpers.SetupFluentAnchor(this);
-        FluentUISetupHelpers.SetupFluentButton(this);
-        FluentUISetupHelpers.SetupFluentMenu(this);
-        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
-        FluentUISetupHelpers.SetupFluentDivider(this);
+        DashboardSetupHelpers.SetupDialogProvider(this);
+        DashboardSetupHelpers.SetupOverflow(this);
+        DashboardSetupHelpers.SetupAnchor(this);
+        DashboardSetupHelpers.SetupButton(this);
+        DashboardSetupHelpers.SetupMenu(this);
+        DashboardSetupHelpers.SetupAnchoredRegion(this);
+        DashboardSetupHelpers.SetupDivider(this);
 
         var themeModule = JSInterop.SetupModule("/js/app-theme.js");
 

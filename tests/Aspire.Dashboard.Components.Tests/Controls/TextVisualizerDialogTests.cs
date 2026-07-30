@@ -9,7 +9,6 @@ using Aspire.Dashboard.Utils;
 using Bunit;
 using Microsoft.AspNetCore.Components.Web.Virtualization;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Controls;
@@ -240,7 +239,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.False(cut.FindComponent<TextVisualizerDialog>().Instance.ShowSecretsWarning));
 
         cut.WaitForAssertion(() => Assert.False(cut.FindComponent<TextVisualizerDialog>().Instance.ShowSecretsWarning));
-        Assert.False(cut.HasComponent<FluentMessageBar>());
+        Assert.Empty(cut.FindAll(".block-warning"));
         Assert.True(cut.HasComponent<Virtualize<StringLogLine>>());
     }
 
@@ -281,17 +280,17 @@ public class TextVisualizerDialogTests : DashboardTestContext
 
     private IRenderedFragment SetUpDialog(out DeckDialogService dialogService, ThemeManager? themeManager = null, TestLocalStorage? localStorage = null)
     {
-        FluentUISetupHelpers.SetupDialogInfrastructure(this, themeManager: themeManager, localStorage: localStorage);
+        DashboardSetupHelpers.SetupDialogInfrastructure(this, themeManager: themeManager, localStorage: localStorage);
 
         var module = JSInterop.SetupModule("/Components/Controls/TextVisualizer.razor.js");
         module.SetupVoid();
 
-        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
-        FluentUISetupHelpers.SetupFluentInputLabel(this);
-        FluentUISetupHelpers.SetupFluentList(this);
-        FluentUISetupHelpers.SetupFluentMenu(this);
+        DashboardSetupHelpers.SetupAnchoredRegion(this);
+        DashboardSetupHelpers.SetupInputLabel(this);
+        DashboardSetupHelpers.SetupList(this);
+        DashboardSetupHelpers.SetupMenu(this);
 
-        var cut = FluentUISetupHelpers.RenderDialogProvider(this);
+        var cut = DashboardSetupHelpers.RenderDialogProvider(this);
 
         dialogService = Services.GetRequiredService<DeckDialogService>();
         return cut;

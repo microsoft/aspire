@@ -302,14 +302,14 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
 
     private IRenderedFragment SetUpDialog(out DashboardDialogService dialogService)
     {
-        FluentUISetupHelpers.SetupDialogInfrastructure(this);
-        FluentUISetupHelpers.SetupFluentTab(this);
-        FluentUISetupHelpers.SetupFluentOverflow(this);
+        DashboardSetupHelpers.SetupDialogInfrastructure(this);
+        DashboardSetupHelpers.SetupTab(this);
+        DashboardSetupHelpers.SetupOverflow(this);
 
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
 
-        var cut = FluentUISetupHelpers.RenderDialogProvider(this);
+        var cut = DashboardSetupHelpers.RenderDialogProvider(this);
 
         dialogService = Services.GetRequiredService<DashboardDialogService>();
         return cut;

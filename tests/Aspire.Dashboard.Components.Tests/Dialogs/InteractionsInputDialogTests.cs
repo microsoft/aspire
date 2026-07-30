@@ -56,17 +56,17 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
     {
         Services.AddSingleton<IDashboardClient>(new TestDashboardClient());
 
-        FluentUISetupHelpers.SetupDialogInfrastructure(this);
-        FluentUISetupHelpers.SetupFluentInputLabel(this);
-        FluentUISetupHelpers.SetupFluentTextField(this);
-        FluentUISetupHelpers.SetupFluentButton(this);
-        FluentUISetupHelpers.SetupFluentInputFile(this);
+        DashboardSetupHelpers.SetupDialogInfrastructure(this);
+        DashboardSetupHelpers.SetupInputLabel(this);
+        DashboardSetupHelpers.SetupTextField(this);
+        DashboardSetupHelpers.SetupButton(this);
+        DashboardSetupHelpers.SetupInputFile(this);
 
         var module = JSInterop.SetupModule("./Components/Dialogs/InteractionsInputDialog.razor.js");
         module.SetupVoid("togglePasswordVisibility", _ => true);
         module.SetupVoid("focusElement", _ => true);
 
-        var cut = FluentUISetupHelpers.RenderDialogProvider(this);
+        var cut = DashboardSetupHelpers.RenderDialogProvider(this);
 
         dialogService = Services.GetRequiredService<DeckDialogService>();
         return cut;

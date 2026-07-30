@@ -9,7 +9,6 @@ using Aspire.Dashboard.Tests;
 using Aspire.Dashboard.Tests.Shared;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Components.Tests.Shared;
 
@@ -17,16 +16,16 @@ internal static class StructuredLogsSetupHelpers
 {
     public static void SetupStructuredLogsDetails(TestContext context)
     {
-        FluentUISetupHelpers.AddCommonDashboardServices(context);
+        DashboardSetupHelpers.AddCommonDashboardServices(context);
         context.Services.AddSingleton<IInstrumentUnitResolver, TestInstrumentUnitResolver>();
         context.Services.AddSingleton<IDashboardClient>(new TestDashboardClient());
 
-        FluentUISetupHelpers.SetupFluentDivider(context);
-        FluentUISetupHelpers.SetupFluentSearch(context);
-        FluentUISetupHelpers.SetupFluentDataGrid(context);
-        FluentUISetupHelpers.SetupFluentKeyCode(context);
-        FluentUISetupHelpers.SetupFluentMenu(context);
-        FluentUISetupHelpers.SetupFluentToolbar(context);
-        FluentUISetupHelpers.SetupFluentAnchoredRegion(context);
+        DashboardSetupHelpers.SetupDivider(context);
+        DashboardSetupHelpers.SetupSearch(context);
+        DashboardSetupHelpers.SetupDataGrid(context);
+        DashboardSetupHelpers.SetupKeyCode(context);
+        DashboardSetupHelpers.SetupMenu(context);
+        DashboardSetupHelpers.SetupToolbar(context);
+        DashboardSetupHelpers.SetupAnchoredRegion(context);
     }
 }

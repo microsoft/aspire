@@ -200,19 +200,19 @@ public partial class StructuredLogsTests : DashboardTestContext
 
     private void SetupStructureLogsServices()
     {
-        FluentUISetupHelpers.SetupFluentDivider(this);
-        FluentUISetupHelpers.SetupFluentInputLabel(this);
-        FluentUISetupHelpers.SetupFluentDataGrid(this);
-        FluentUISetupHelpers.SetupFluentList(this);
-        FluentUISetupHelpers.SetupFluentSearch(this);
-        FluentUISetupHelpers.SetupFluentKeyCode(this);
-        FluentUISetupHelpers.SetupFluentMenu(this);
-        FluentUISetupHelpers.SetupFluentToolbar(this);
-        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+        DashboardSetupHelpers.SetupDivider(this);
+        DashboardSetupHelpers.SetupInputLabel(this);
+        DashboardSetupHelpers.SetupDataGrid(this);
+        DashboardSetupHelpers.SetupList(this);
+        DashboardSetupHelpers.SetupSearch(this);
+        DashboardSetupHelpers.SetupKeyCode(this);
+        DashboardSetupHelpers.SetupMenu(this);
+        DashboardSetupHelpers.SetupToolbar(this);
+        DashboardSetupHelpers.SetupAnchoredRegion(this);
 
         JSInterop.SetupVoid("initializeContinuousScroll");
 
-        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        DashboardSetupHelpers.AddCommonDashboardServices(this);
         Services.AddSingleton<ILogger<StructuredLogs>>(NullLogger<StructuredLogs>.Instance);
         Services.AddSingleton<StructuredLogsViewModel>();
     }

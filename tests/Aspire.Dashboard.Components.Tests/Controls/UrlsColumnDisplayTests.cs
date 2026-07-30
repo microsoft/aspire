@@ -18,7 +18,7 @@ public class UrlsColumnDisplayTests : DashboardTestContext
         const int totalUrls = 30;
 
         JSInterop.Mode = JSRuntimeMode.Loose;
-        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        DashboardSetupHelpers.AddCommonDashboardServices(this);
 
         var displayedUrls = CreateDisplayedUrls(totalUrls);
         var resource = ModelTestHelpers.CreateResource(resourceName: "test-resource", resourceType: "Project", state: KnownResourceState.Running);
@@ -48,7 +48,7 @@ public class UrlsColumnDisplayTests : DashboardTestContext
     {
         // Arrange
         JSInterop.Mode = JSRuntimeMode.Loose;
-        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        DashboardSetupHelpers.AddCommonDashboardServices(this);
 
         var displayedUrls = CreateDisplayedUrls(1);
         var resource = ModelTestHelpers.CreateResource(resourceName: "test-resource", resourceType: "Project", state: KnownResourceState.Running);

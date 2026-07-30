@@ -3,20 +3,11 @@
 
 using Aspire.Dashboard.Components;
 using Microsoft.AspNetCore.Components.Web.Virtualization;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Extensions;
 
 internal static class ComponentExtensions
 {
-    public static async Task SafeRefreshDataAsync<T>(this FluentDataGrid<T>? dataGrid)
-    {
-        if (dataGrid != null)
-        {
-            await dataGrid.RefreshDataAsync().ConfigureAwait(false);
-        }
-    }
-
     public static async Task SafeRefreshDataAsync<T>(this Virtualize<T>? virtualize)
     {
         if (virtualize != null)

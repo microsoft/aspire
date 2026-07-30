@@ -831,25 +831,25 @@ public partial class TraceDetailsTests : DashboardTestContext
 
     private void SetupTraceDetailsServices(ILoggerFactory? loggerFactory = null)
     {
-        FluentUISetupHelpers.SetupFluentOverflow(this);
-        FluentUISetupHelpers.SetupFluentDivider(this);
-        FluentUISetupHelpers.SetupFluentInputLabel(this);
-        FluentUISetupHelpers.SetupFluentDataGrid(this);
-        FluentUISetupHelpers.SetupFluentAnchor(this);
-        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
-        FluentUISetupHelpers.SetupFluentList(this);
+        DashboardSetupHelpers.SetupOverflow(this);
+        DashboardSetupHelpers.SetupDivider(this);
+        DashboardSetupHelpers.SetupInputLabel(this);
+        DashboardSetupHelpers.SetupDataGrid(this);
+        DashboardSetupHelpers.SetupAnchor(this);
+        DashboardSetupHelpers.SetupAnchoredRegion(this);
+        DashboardSetupHelpers.SetupList(this);
 
-        FluentUISetupHelpers.SetupFluentSearch(this);
-        FluentUISetupHelpers.SetupFluentTextField(this);
-        FluentUISetupHelpers.SetupFluentKeyCode(this);
-        FluentUISetupHelpers.SetupFluentToolbar(this);
-        FluentUISetupHelpers.SetupFluentMenu(this);
+        DashboardSetupHelpers.SetupSearch(this);
+        DashboardSetupHelpers.SetupTextField(this);
+        DashboardSetupHelpers.SetupKeyCode(this);
+        DashboardSetupHelpers.SetupToolbar(this);
+        DashboardSetupHelpers.SetupMenu(this);
 
         JSInterop.SetupVoid("initializeContinuousScroll");
 
         loggerFactory ??= NullLoggerFactory.Instance;
 
-        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        DashboardSetupHelpers.AddCommonDashboardServices(this);
         Services.AddSingleton<ILoggerFactory>(loggerFactory);
     }
 }

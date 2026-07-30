@@ -67,13 +67,13 @@ public class FilterDialogTests : DashboardTestContext
 
     private void SetupFilterDialogServices()
     {
-        FluentUISetupHelpers.AddCommonDashboardServices(this);
-        FluentUISetupHelpers.SetupFluentUIComponents(this);
-        FluentUISetupHelpers.SetupFluentInputLabel(this);
-        FluentUISetupHelpers.SetupFluentTextField(this);
-        FluentUISetupHelpers.SetupFluentButton(this);
-        FluentUISetupHelpers.SetupFluentList(this);
-        FluentUISetupHelpers.SetupFluentCombobox(this);
+        DashboardSetupHelpers.AddCommonDashboardServices(this);
+        DashboardSetupHelpers.SetupUIComponents(this);
+        DashboardSetupHelpers.SetupInputLabel(this);
+        DashboardSetupHelpers.SetupTextField(this);
+        DashboardSetupHelpers.SetupButton(this);
+        DashboardSetupHelpers.SetupList(this);
+        DashboardSetupHelpers.SetupCombobox(this);
     }
 
     private static FilterDialogViewModel CreateContent(FieldTelemetryFilter filter)

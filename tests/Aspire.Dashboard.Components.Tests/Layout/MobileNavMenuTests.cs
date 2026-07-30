@@ -54,7 +54,7 @@ public class MobileNavMenuTests : DashboardTestContext
 
     private IRenderedComponent<MobileNavMenu> RenderMobileNavMenu(string currentUrl)
     {
-        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        DashboardSetupHelpers.AddCommonDashboardServices(this);
         Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isEnabled: true));
         var module = JSInterop.SetupModule("./Components/Layout/MobileNavMenu.razor.js");
         module.SetupVoid("initializeMobileNavMenu", _ => true);

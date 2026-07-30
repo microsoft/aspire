@@ -12,7 +12,6 @@ using Aspire.Dashboard.Tests;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Components.Tests.Shared;
 
@@ -22,9 +21,9 @@ internal static class MetricsSetupHelpers
     {
         _ = context.JSInterop.SetupModule("/Components/Controls/Chart/MetricTable.razor.js");
 
-        FluentUISetupHelpers.SetupDeckCheckbox(context);
-        FluentUISetupHelpers.SetupFluentTab(context);
-        FluentUISetupHelpers.SetupFluentOverflow(context);
+        DashboardSetupHelpers.SetupDeckCheckbox(context);
+        DashboardSetupHelpers.SetupTab(context);
+        DashboardSetupHelpers.SetupOverflow(context);
 
         SetupPlotlyChart(context);
     }
@@ -40,21 +39,21 @@ internal static class MetricsSetupHelpers
 
     internal static void SetupMetricsPage(TestContext context, ISessionStorage? sessionStorage = null)
     {
-        FluentUISetupHelpers.SetupFluentDivider(context);
-        FluentUISetupHelpers.SetupFluentInputLabel(context);
-        FluentUISetupHelpers.SetupFluentDataGrid(context);
-        FluentUISetupHelpers.SetupFluentList(context);
-        FluentUISetupHelpers.SetupFluentSearch(context);
-        FluentUISetupHelpers.SetupFluentKeyCode(context);
-        FluentUISetupHelpers.SetupFluentTab(context);
-        FluentUISetupHelpers.SetupFluentOverflow(context);
-        FluentUISetupHelpers.SetupFluentMenu(context);
-        FluentUISetupHelpers.SetupFluentToolbar(context);
-        FluentUISetupHelpers.SetupFluentAnchoredRegion(context);
+        DashboardSetupHelpers.SetupDivider(context);
+        DashboardSetupHelpers.SetupInputLabel(context);
+        DashboardSetupHelpers.SetupDataGrid(context);
+        DashboardSetupHelpers.SetupList(context);
+        DashboardSetupHelpers.SetupSearch(context);
+        DashboardSetupHelpers.SetupKeyCode(context);
+        DashboardSetupHelpers.SetupTab(context);
+        DashboardSetupHelpers.SetupOverflow(context);
+        DashboardSetupHelpers.SetupMenu(context);
+        DashboardSetupHelpers.SetupToolbar(context);
+        DashboardSetupHelpers.SetupAnchoredRegion(context);
 
         SetupChartContainer(context);
 
-        FluentUISetupHelpers.AddCommonDashboardServices(context, sessionStorage: sessionStorage);
+        DashboardSetupHelpers.AddCommonDashboardServices(context, sessionStorage: sessionStorage);
         context.Services.AddSingleton<IThemeResolver, TestThemeResolver>();
         context.Services.AddSingleton<ThemeManager>();
     }

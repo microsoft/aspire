@@ -13,8 +13,8 @@ public class AspireMenuTests : DashboardTestContext
     [Fact]
     public void Open_RendersMenuItems_AndClosingRemovesThem()
     {
-        FluentUISetupHelpers.AddCommonDashboardServices(this);
-        FluentUISetupHelpers.SetupFluentMenu(this);
+        DashboardSetupHelpers.AddCommonDashboardServices(this);
+        DashboardSetupHelpers.SetupMenu(this);
 
         var items = new[]
         {
@@ -47,8 +47,8 @@ public class AspireMenuTests : DashboardTestContext
     [Fact]
     public void ClickItem_RestoreFocusOnItemClickTrue_FocusesAnchor()
     {
-        FluentUISetupHelpers.AddCommonDashboardServices(this);
-        FluentUISetupHelpers.SetupFluentMenu(this);
+        DashboardSetupHelpers.AddCommonDashboardServices(this);
+        DashboardSetupHelpers.SetupMenu(this);
 
         var anchor = "view-options-button";
         var itemClicked = false;
@@ -97,8 +97,8 @@ public class AspireMenuTests : DashboardTestContext
     [Fact]
     public void ClickItem_RestoreFocusOnItemClickFalse_DoesNotFocusAnchor()
     {
-        FluentUISetupHelpers.AddCommonDashboardServices(this);
-        FluentUISetupHelpers.SetupFluentMenu(this);
+        DashboardSetupHelpers.AddCommonDashboardServices(this);
+        DashboardSetupHelpers.SetupMenu(this);
 
         var anchor = "view-options-button";
         var itemClicked = false;

@@ -101,7 +101,7 @@ public class LogViewerTests : DashboardTestContext
 
     private void SetupLogViewerServices()
     {
-        FluentUISetupHelpers.AddCommonDashboardServices(this, browserTimeProvider: new TestTimeProvider());
+        DashboardSetupHelpers.AddCommonDashboardServices(this, browserTimeProvider: new TestTimeProvider());
         Services.AddLogging();
 
         JSInterop.SetupVoid("initializeContinuousScroll");
