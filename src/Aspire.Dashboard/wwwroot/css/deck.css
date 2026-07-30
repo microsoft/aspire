@@ -3178,3 +3178,79 @@ hr.deck-divider {
   cursor: not-allowed;
 }
 /* === end Deck resource select === */
+
+/* === Deck menu (replaces FluentMenu) === */
+/* Fixed-layer menu surface positioned in JS (see AspireMenu.razor.js). */
+.deck-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 64px;
+  padding: 4px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.24));
+}
+.deck-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.deck-menu__item:hover:not([disabled]),
+.deck-menu__item:focus-visible {
+  background: var(--bg-hover);
+  outline: none;
+}
+.deck-menu__item[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.deck-menu__item-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+.deck-menu__item-text {
+  flex: 1 1 auto;
+}
+.deck-menu__divider {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--border);
+}
+/* Nested submenus open to the right on hover/focus. */
+.deck-menu__item-wrapper {
+  position: relative;
+}
+.deck-menu__submenu-chevron {
+  transform: rotate(-90deg);
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+.deck-menu__submenu {
+  position: absolute;
+  top: 0;
+  left: 100%;
+  min-width: 64px;
+  padding: 4px;
+  margin-left: 2px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.24));
+  display: none;
+}
+.deck-menu__item-wrapper:hover > .deck-menu__submenu,
+.deck-menu__item-wrapper:focus-within > .deck-menu__submenu {
+  display: block;
+}
+/* === end Deck menu === */

@@ -3,15 +3,23 @@
 
 using Aspire.Dashboard.Model;
 using Microsoft.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components.Utilities;
 using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components;
 
-public partial class AspireMenu : FluentComponentBase, IAsyncDisposable
+public partial class AspireMenu : ComponentBase, IAsyncDisposable
 {
-    private FluentMenu? _menu;
+    private readonly string _menuId = $"aspire-menu-{Guid.NewGuid():N}";
+
+    private ElementReference _menuElement;
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<AspireMenu>? _selfRef;
+    private bool _initialized;
+
+    // Cursor coordinates for context (non-anchored) menus, set by OpenAsync.
+    private bool _useCursor;
+    private int _cursorX;
+    private int _cursorY;
 
     [Parameter]
     public string? Anchor { get; set; }
@@ -47,88 +55,68 @@ public partial class AspireMenu : FluentComponentBase, IAsyncDisposable
     [Inject]
     public required IJSRuntime JS { get; init; }
 
-    [Inject]
-    public required IServiceProvider ServiceProvider { get; init; }
-
-    // Each menu item is approximately 32px tall, plus 16px padding for the menu container.
-    private const int EstimatedItemHeight = 32;
-    private const int MenuVerticalPadding = 16;
-
-    private int CalculatedVerticalThreshold => VerticalThreshold ?? (Items.Count * EstimatedItemHeight + MenuVerticalPadding);
-
     public async Task CloseAsync()
     {
-        if (_menu is { } menu)
+        await SetOpenAsync(false);
+    }
+
+    /// <summary>
+    /// Opens the menu as a context menu positioned at the given cursor coordinates.
+    /// </summary>
+    public async Task OpenAsync(int screenWidth, int screenHeight, int clientX, int clientY)
+    {
+        _useCursor = true;
+        _cursorX = clientX;
+        _cursorY = clientY;
+
+        await SetOpenAsync(true);
+        StateHasChanged();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Open && !_initialized)
         {
-            await menu.CloseAsync();
+            _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Controls/AspireMenu.razor.js");
+            _selfRef ??= DotNetObjectReference.Create(this);
+
+            // Anchored button menus position relative to the anchor element; context menus position at
+            // the cursor coordinates supplied to OpenAsync.
+            var mode = _useCursor || !Anchored ? "cursor" : "anchor";
+            await _module.InvokeVoidAsync("initialize", _menuElement, _menuId, mode, Anchor, _cursorX, _cursorY, _selfRef);
+            _initialized = true;
+        }
+        else if (!Open && _initialized)
+        {
+            await DisposeInteropAsync();
+            _initialized = false;
+            _useCursor = false;
         }
     }
 
-    public async Task OpenAsync(int screenWidth, int screenHeight, int clientX, int clientY)
+    [JSInvokable]
+    public async Task CloseFromJs()
     {
-        if (_menu is { } menu)
+        if (Open)
         {
-            // Calculate the position to display the context menu using the cursor position (clientX, clientY)
-            // together with the screen width and height.
-            // The menu may need to be displayed above or left of the cursor to fit in the screen.
-            var left = 0;
-            var right = 0;
-            var top = 0;
-            var bottom = 0;
-
-            if (clientX + menu.HorizontalThreshold > screenWidth)
-            {
-                right = screenWidth - clientX;
-            }
-            else
-            {
-                left = clientX;
-            }
-
-            if (clientY + CalculatedVerticalThreshold > screenHeight)
-            {
-                bottom = screenHeight - clientY;
-            }
-            else
-            {
-                top = clientY;
-            }
-
-            // Overwrite the style. We don't want to add new position values each time the menu is opened.
-            Style = new StyleBuilder()
-                .AddStyle("left", $"{left}px", left != 0)
-                .AddStyle("right", $"{right}px", right != 0)
-                .AddStyle("top", $"{top}px", top != 0)
-                .AddStyle("bottom", $"{bottom}px", bottom != 0)
-                // Width values come from fluentui-blazor stylesheet; max-width uses an app CSS variable so nested submenus stay in sync.
-                // Explicitly set to override min-width: fit-content applied by library to some menus.
-                .AddStyle("max-width", "var(--aspire-menu-max-width)")
-                .AddStyle("min-width", "64px")
-                .Build();
-
-            await SetOpenAsync(true);
-
+            await SetOpenAsync(false);
             StateHasChanged();
         }
     }
 
     private async Task HandleItemClicked(MenuButtonItem item)
     {
-        if (item.OnClick is {} onClick)
+        if (item.OnClick is { } onClick)
         {
             await onClick();
         }
+
         await SetOpenAsync(false);
 
         if (RestoreFocusOnItemClick && !string.IsNullOrEmpty(Anchor))
         {
             await JS.InvokeVoidAsync("focusElement", Anchor);
         }
-    }
-
-    private async Task OnOpenChanged(bool open)
-    {
-        await SetOpenAsync(open);
     }
 
     private async Task SetOpenAsync(bool open)
@@ -141,20 +129,39 @@ public partial class AspireMenu : FluentComponentBase, IAsyncDisposable
         }
     }
 
-    public ValueTask DisposeAsync()
-    {
-        if (_menu is { } menu)
-        {
-            // Remove this workaround once FluentMenu unregisters itself: https://github.com/microsoft/aspire/issues/18852
-            if (ServiceProvider.GetService<IMenuService>() is { } menuService)
-            {
-                menuService.Remove(menu);
-                menuService.OnMenuUpdated();
-            }
+    // The menu is fixed-position and placed by JS. Constrain width so nested submenus stay in sync.
+    private const string MenuStyle = "max-width: var(--aspire-menu-max-width); min-width: 64px;";
 
-            _menu = null;
+    private async Task DisposeInteropAsync()
+    {
+        if (_module is not null)
+        {
+            try
+            {
+                await _module.InvokeVoidAsync("dispose", _menuId);
+            }
+            catch (JSDisconnectedException)
+            {
+                // Circuit already gone; nothing to clean up.
+            }
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await DisposeInteropAsync();
+
+        if (_module is not null)
+        {
+            try
+            {
+                await _module.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+            }
         }
 
-        return ValueTask.CompletedTask;
+        _selfRef?.Dispose();
     }
 }

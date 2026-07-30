@@ -224,7 +224,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         // Find and click the "Show hidden resources" menu item
         cut.WaitForAssertion(() =>
         {
-            var showHiddenMenuItem = cut.Find("fluent-menu-item:contains('" + Resources.ControlsStrings.ShowHiddenResources + "')");
+            var showHiddenMenuItem = cut.Find(".deck-menu__item:contains('" + Resources.ControlsStrings.ShowHiddenResources + "')");
             Assert.NotNull(showHiddenMenuItem);
             showHiddenMenuItem.Click();
         });
@@ -247,7 +247,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
 
         cut.WaitForAssertion(() =>
         {
-            var hideHiddenMenuItem = cut.Find("fluent-menu-item:contains('" + Resources.ControlsStrings.HideHiddenResources + "')");
+            var hideHiddenMenuItem = cut.Find(".deck-menu__item:contains('" + Resources.ControlsStrings.HideHiddenResources + "')");
             Assert.NotNull(hideHiddenMenuItem);
             hideHiddenMenuItem.Click();
         });
@@ -306,7 +306,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         // Assert: The "Show hidden resources" / "Hide hidden resources" menu item should NOT be present
         cut.WaitForAssertion(() =>
         {
-            var menuItems = cut.FindAll("fluent-menu-item");
+            var menuItems = cut.FindAll(".deck-menu__item");
             var hiddenResourcesMenuItems = menuItems.Where(item =>
             {
                 var text = item.TextContent;

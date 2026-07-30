@@ -34,7 +34,7 @@ internal static class FluentUISetupHelpers
 
     public static void SetupFluentMenu(TestContext context)
     {
-        var menuModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/Menu/FluentMenu.razor.js"));
+        var menuModule = context.JSInterop.SetupModule("./Components/Controls/AspireMenu.razor.js");
         menuModule.SetupVoid("initialize", _ => true);
         menuModule.SetupVoid("dispose", _ => true);
     }

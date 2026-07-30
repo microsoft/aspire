@@ -1,53 +1,65 @@
 ﻿@namespace Aspire.Dashboard.Components
 @using System.Collections.Immutable
-@inherits FluentComponentBase
 
-@* aspire-menu-container is added to the div parent of FluentMenu, not the FluentMenu *@
-<FluentMenu Class="aspire-menu-container" @ref="_menu" Anchor="@Anchor" Anchored="@Anchored" Open="@Open" OpenChanged="OnOpenChanged" Style="@Style" VerticalThreshold="@CalculatedVerticalThreshold" HorizontalThreshold="200">
-    @foreach (var item in Items)
-    {
-        @RenderMenuItem(item)
-    }
-</FluentMenu>
+@* Deck-styled menu replacing FluentMenu. When open, the menu renders as a fixed-position surface
+   positioned in JS (below its anchor, or at the cursor for context menus). Nested items become
+   CSS-driven submenus. Dismissal (outside click / Escape) and arrow-key focus live in the colocated
+   module (CSP-safe). *@
+@if (Open)
+{
+    <div @ref="_menuElement" class="deck-menu aspire-menu-container" role="menu" style="@MenuStyle">
+        @foreach (var item in Items)
+        {
+            @RenderMenuItem(item)
+        }
+    </div>
+}
 
 @code {
     private RenderFragment RenderMenuItem(MenuButtonItem item)
     {
         if (item.IsDivider)
         {
-            return @<Divider Orientation="horizontal" />;
+            return @<div class="deck-menu__divider" role="separator"></div>;
         }
-        else
-        {
-            var additionalMenuItemAttributes = new Dictionary<string, object>(item.AdditionalAttributes ?? ImmutableDictionary<string, object>.Empty)
-            {
-                { "title", !string.IsNullOrEmpty(item.Tooltip) ? item.Tooltip : item.Text ?? string.Empty }
-            };
 
-            return @<FluentMenuItem Id="@item.Id" Class="@item.Class" OnClick="() => HandleItemClicked(item)" Disabled="@item.IsDisabled" AdditionalAttributes="@additionalMenuItemAttributes" Label="@item.Text" MenuItems="@RenderNestedItems(item)">
-                @if (item.Icon is { } iconName)
-                {
-                    <span slot="start">
-                        <DeckIcon Name="iconName" Size="16" Style="vertical-align: text-bottom;" />
-                    </span>
-                }
-            </FluentMenuItem>;
+        var tooltip = !string.IsNullOrEmpty(item.Tooltip) ? item.Tooltip : item.Text ?? string.Empty;
+        var attributes = new Dictionary<string, object>(item.AdditionalAttributes ?? ImmutableDictionary<string, object>.Empty)
+        {
+            ["title"] = tooltip
+        };
+        var hasSubmenu = item.NestedMenuItems is { Count: > 0 };
+
+        if (hasSubmenu)
+        {
+            return @<div class="deck-menu__item-wrapper">
+                <button type="button" id="@item.Id" class="deck-menu__item deck-menu__item--has-submenu @item.Class" role="menuitem"
+                        aria-haspopup="true" disabled="@item.IsDisabled" @attributes="attributes">
+                    @RenderItemContent(item)
+                    <DeckIcon Name="DeckIconName.ChevronDown" Size="14" Class="deck-menu__submenu-chevron" />
+                </button>
+                <div class="deck-menu__submenu" role="menu">
+                    @foreach (var nestedItem in item.NestedMenuItems!)
+                    {
+                        @RenderMenuItem(nestedItem)
+                    }
+                </div>
+            </div>;
         }
+
+        return @<button type="button" id="@item.Id" class="deck-menu__item @item.Class" role="menuitem"
+                        disabled="@item.IsDisabled" @onclick="() => HandleItemClicked(item)" @attributes="attributes">
+            @RenderItemContent(item)
+        </button>;
     }
 
-    private RenderFragment? RenderNestedItems(MenuButtonItem item)
-    {
-        if (item.NestedMenuItems is null || item.NestedMenuItems.Count == 0)
+    private RenderFragment RenderItemContent(MenuButtonItem item) => @<text>
+        @if (item.Icon is { } iconName)
         {
-            return null;
+            <span class="deck-menu__item-icon">
+                <DeckIcon Name="iconName" Size="16" Style="vertical-align: text-bottom;" />
+            </span>
         }
-
-        // div is required because a single element has to be returned.
-        return @<div>
-            @foreach (var nestedItem in item.NestedMenuItems)
-            {
-                @RenderMenuItem(nestedItem)
-            }
-        </div>;
-    }
+        <span class="deck-menu__item-text">@item.Text</span>
+    </text>;
 }

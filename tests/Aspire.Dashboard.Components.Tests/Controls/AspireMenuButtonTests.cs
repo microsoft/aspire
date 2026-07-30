@@ -13,19 +13,14 @@ public class AspireMenuButtonTests : DashboardTestContext
     [Fact]
     public void ToggleMenu_UpdatesAriaExpandedState()
     {
-        FluentUISetupHelpers.SetupFluentUIComponents(this);
-        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
-        FluentUISetupHelpers.SetupFluentButton(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
 
         var cut = Render(builder =>
         {
-            builder.OpenComponent<Microsoft.FluentUI.AspNetCore.Components.FluentMenuProvider>(0);
-            builder.CloseComponent();
-            builder.OpenComponent<AspireMenuButton>(1);
-            builder.AddAttribute(2, nameof(AspireMenuButton.MenuButtonId), "view-options-button");
-            builder.AddAttribute(3, nameof(AspireMenuButton.Text), "View options");
-            builder.AddAttribute(4, nameof(AspireMenuButton.Items), new List<MenuButtonItem>
+            builder.OpenComponent<AspireMenuButton>(0);
+            builder.AddAttribute(1, nameof(AspireMenuButton.MenuButtonId), "view-options-button");
+            builder.AddAttribute(2, nameof(AspireMenuButton.Text), "View options");
+            builder.AddAttribute(3, nameof(AspireMenuButton.Items), new List<MenuButtonItem>
             {
                 new MenuButtonItem
                 {

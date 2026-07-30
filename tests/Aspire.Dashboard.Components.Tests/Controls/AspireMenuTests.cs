@@ -4,9 +4,6 @@
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Bunit;
-using Microsoft.AspNetCore.Components;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Controls;
@@ -14,49 +11,44 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 public class AspireMenuTests : DashboardTestContext
 {
     [Fact]
-    public async Task DisposeAsync_RemovesFluentMenuFromMenuProvider()
+    public void Open_RendersMenuItems_AndClosingRemovesThem()
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
-        FluentUISetupHelpers.SetupFluentUIComponents(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
-        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
 
-        var menuService = Services.GetRequiredService<IMenuService>();
-        var provider = RenderComponent<FluentMenuProvider>();
-        var menuHost = RenderComponent<CascadingValue<bool>>(builder =>
+        var items = new[]
         {
-            builder.Add(p => p.Value, false);
-            builder.AddChildContent<AspireMenu>(menuBuilder =>
-            {
-                menuBuilder.Add(p => p.Anchor, "menu-anchor");
-                menuBuilder.Add(p => p.Items, new[] { new MenuButtonItem { Text = "Item" } });
-            });
-        });
-        var menu = menuHost.FindComponent<FluentMenu>().Instance;
-        Assert.Contains(menu, menuService.Menus);
+            new MenuButtonItem { Text = "First" },
+            new MenuButtonItem { IsDivider = true },
+            new MenuButtonItem { Text = "Second" }
+        };
 
-        await menuHost.InvokeAsync(() => menuService.RefreshMenuAsync(menu.Id!, isOpen: true));
-
-        provider.WaitForAssertion(() => Assert.Single(provider.FindComponents<FluentMenu>()));
-
-        menuHost.SetParametersAndRender(builder =>
+        var open = false;
+        var cut = RenderComponent<AspireMenu>(builder =>
         {
-            builder.Add(p => p.Value, false);
-            builder.Add(p => p.ChildContent, (RenderFragment)(_ => { }));
+            builder.Add(p => p.Anchor, "menu-anchor");
+            builder.Add(p => p.Items, items);
+            builder.Add(p => p.Open, open);
         });
 
-        Assert.Empty(menuService.Menus);
-        provider.WaitForAssertion(() => Assert.Empty(provider.FindComponents<FluentMenu>()));
+        // Closed: nothing rendered.
+        Assert.Empty(cut.FindAll(".deck-menu__item"));
+
+        // Open: menu items (excluding the divider) render.
+        cut.SetParametersAndRender(builder => builder.Add(p => p.Open, true));
+        Assert.Equal(2, cut.FindAll(".deck-menu__item").Count);
+        Assert.Single(cut.FindAll(".deck-menu__divider"));
+
+        // Close again: items removed.
+        cut.SetParametersAndRender(builder => builder.Add(p => p.Open, false));
+        Assert.Empty(cut.FindAll(".deck-menu__item"));
     }
 
     [Fact]
     public void ClickItem_RestoreFocusOnItemClickTrue_FocusesAnchor()
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
-        FluentUISetupHelpers.SetupFluentUIComponents(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
-        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
-        FluentUISetupHelpers.SetupFluentButton(this);
 
         var anchor = "view-options-button";
         var itemClicked = false;
@@ -82,18 +74,16 @@ public class AspireMenuTests : DashboardTestContext
 
         var cut = Render(builder =>
         {
-            builder.OpenComponent<FluentMenuProvider>(0);
-            builder.CloseComponent();
-            builder.OpenComponent<AspireMenuButton>(1);
-            builder.AddAttribute(2, nameof(AspireMenuButton.MenuButtonId), anchor);
-            builder.AddAttribute(3, nameof(AspireMenuButton.Title), "View options");
-            builder.AddAttribute(4, nameof(AspireMenuButton.Items), items);
-            builder.AddAttribute(5, nameof(AspireMenuButton.RestoreFocusOnItemClick), true);
+            builder.OpenComponent<AspireMenuButton>(0);
+            builder.AddAttribute(1, nameof(AspireMenuButton.MenuButtonId), anchor);
+            builder.AddAttribute(2, nameof(AspireMenuButton.Title), "View options");
+            builder.AddAttribute(3, nameof(AspireMenuButton.Items), items);
+            builder.AddAttribute(4, nameof(AspireMenuButton.RestoreFocusOnItemClick), true);
             builder.CloseComponent();
         });
 
         cut.Find($"#{anchor}").Click();
-        cut.WaitForElement("fluent-menu-item").Click();
+        cut.WaitForElement(".deck-menu__item").Click();
 
         Assert.True(itemClicked);
         Assert.True(
@@ -108,10 +98,7 @@ public class AspireMenuTests : DashboardTestContext
     public void ClickItem_RestoreFocusOnItemClickFalse_DoesNotFocusAnchor()
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
-        FluentUISetupHelpers.SetupFluentUIComponents(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
-        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
-        FluentUISetupHelpers.SetupFluentButton(this);
 
         var anchor = "view-options-button";
         var itemClicked = false;
@@ -130,17 +117,15 @@ public class AspireMenuTests : DashboardTestContext
 
         var cut = Render(builder =>
         {
-            builder.OpenComponent<FluentMenuProvider>(0);
-            builder.CloseComponent();
-            builder.OpenComponent<AspireMenuButton>(1);
-            builder.AddAttribute(2, nameof(AspireMenuButton.MenuButtonId), anchor);
-            builder.AddAttribute(3, nameof(AspireMenuButton.Title), "View options");
-            builder.AddAttribute(4, nameof(AspireMenuButton.Items), items);
+            builder.OpenComponent<AspireMenuButton>(0);
+            builder.AddAttribute(1, nameof(AspireMenuButton.MenuButtonId), anchor);
+            builder.AddAttribute(2, nameof(AspireMenuButton.Title), "View options");
+            builder.AddAttribute(3, nameof(AspireMenuButton.Items), items);
             builder.CloseComponent();
         });
 
         cut.Find($"#{anchor}").Click();
-        cut.WaitForElement("fluent-menu-item").Click();
+        cut.WaitForElement(".deck-menu__item").Click();
 
         Assert.True(itemClicked);
         var focusElementInvocations = JSInterop.Invocations
@@ -148,5 +133,4 @@ public class AspireMenuTests : DashboardTestContext
             .ToArray();
         Assert.Empty(focusElementInvocations);
     }
-
 }

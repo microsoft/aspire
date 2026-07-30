@@ -16,7 +16,6 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Controls;
@@ -65,10 +64,7 @@ public class ResourceDetailsTests : DashboardTestContext
         await actionsButton.ClickAsync(new MouseEventArgs());
 
         var maskAllSwitch = cut.Find(".mask-all-switch");
-
-        // HACK. Calling OnClick on the element isn't triggering the event correctly. Instead, call OnClick on the component.
-        var item = cut.FindComponents<FluentMenuItem>().Single(s => s.Instance.Class == maskAllSwitch.Attributes["class"]!.Value);
-        await cut.InvokeAsync(() => item.Instance.OnClick.InvokeAsync(new MouseEventArgs()));
+        await cut.InvokeAsync(() => maskAllSwitch.Click());
 
         Assert.Collection(cut.Instance.FilteredEnvironmentVariables,
             e =>
@@ -155,10 +151,7 @@ public class ResourceDetailsTests : DashboardTestContext
         await actionsButton.ClickAsync(new MouseEventArgs());
 
         var maskAllSwitch = cut.Find(".mask-all-switch");
-
-        // HACK. Calling OnClick on the element isn't triggering the event correctly. Instead, call OnClick on the component.
-        var item = cut.FindComponents<FluentMenuItem>().Single(s => s.Instance.Class == maskAllSwitch.Attributes["class"]!.Value);
-        await cut.InvokeAsync(() => item.Instance.OnClick.InvokeAsync(new MouseEventArgs()));
+        await cut.InvokeAsync(() => maskAllSwitch.Click());
 
         Assert.Collection(cut.Instance.FilteredEnvironmentVariables,
             e =>
