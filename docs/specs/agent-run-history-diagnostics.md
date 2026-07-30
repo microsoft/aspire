@@ -21,6 +21,55 @@ Run IDs have the following properties:
 
 Persistence allows data to outlive the AppHost and Dashboard processes, but a query still needs a reachable Dashboard API associated with the same application and data directory. In the common workflow, the Dashboard for the current AppHost run serves both current and historical data.
 
+### Run ID flow
+
+The run ID follows two related paths: creation records the identity with a new persisted run, and later queries use that identity to select the same immutable data. An agent can repeat the creation path with different IDs and compare the resulting snapshots through any of the query clients.
+
+```mermaid
+flowchart TB
+	Agent[Agent or automation]
+
+	subgraph Create[Create and identify a run]
+		Launch[aspire start or aspire run<br/>--run-id incident-42]
+		CLI[Aspire CLI<br/>validate run ID]
+		AppHost[AppHost configuration<br/>ASPIRE_DASHBOARD_RUN_ID]
+		Hosting[Hosting dashboard startup<br/>resolve and preflight]
+		Dashboard[Dashboard options<br/>bind and validate]
+		RunStore[DashboardRunStore<br/>exclusive lock and metadata]
+		CurrentDb[(runs/incident-42/dashboard.db)]
+		Backchannel[AppHost backchannel<br/>effective run ID]
+		LaunchResult[Launch output<br/>runId: incident-42]
+
+		Launch --> CLI --> AppHost --> Hosting --> Dashboard --> RunStore --> CurrentDb
+		Hosting --> Backchannel --> CLI --> LaunchResult
+	end
+
+	Workload[Resources, console output,<br/>and OTLP telemetry] --> Dashboard
+	Agent --> Launch
+	LaunchResult --> Recorded[Agent records run ID<br/>with revision and reproduction]
+
+	subgraph Query[Query a current or historical run]
+		CliQuery[CLI logs and otel commands<br/>--run-id incident-42]
+		McpQuery[CLI MCP tools<br/>runId: incident-42]
+		HttpQuery[Direct HTTP client<br/>?runId=incident-42]
+		Api[Dashboard telemetry API<br/>strict run selection]
+		DataSource[Request-scoped data source<br/>read-only historical lease]
+		SelectedDb[(runs/selected-run/dashboard.db)]
+		Evidence[Filtered resources, logs,<br/>traces, and spans]
+
+		CliQuery --> Api
+		McpQuery --> Api
+		HttpQuery --> Api
+		Api --> DataSource --> SelectedDb --> Evidence
+	end
+
+	Recorded --> CliQuery
+	Recorded --> McpQuery
+	Recorded --> HttpQuery
+	CurrentDb -. retained run .-> SelectedDb
+	Evidence --> Compare[Agent compares evidence<br/>across named runs]
+```
+
 ## End-to-end investigation
 
 ### 1. Assign or capture the failing run ID
