@@ -290,6 +290,53 @@ public class PipelineOutputRegistryTests(ITestOutputHelper testOutputHelper)
         Assert.Contains("Output-path relocation requires each output to have an exclusive target path", exception.Message);
     }
 
+    [Theory]
+    [InlineData(WritableTargetOverlap.PrimaryWithOwnTarget)]
+    [InlineData(WritableTargetOverlap.NamedWritableWithPrimaryTarget)]
+    [InlineData(WritableTargetOverlap.PrimaryWritableWithNamedTarget)]
+    public void Prepare_RejectsRelocatedWritablePathOverlappingLogicalTarget(WritableTargetOverlap overlap)
+    {
+        var bootstrapConfiguration = new ConfigurationBuilder().Build();
+        using var fileSystem = new FileSystemService(bootstrapConfiguration);
+        var root = fileSystem.TempDirectory.CreateTempSubdirectory("pipeline-output-overlap-tests").Path;
+        var appHostDirectory = Path.Combine(root, "repo", "src", "AppHost");
+        var primaryTargetPath = Path.Combine(appHostDirectory, "aspire-output");
+        var namedTargetPath = Path.Combine(appHostDirectory, ".configgen");
+        var stagingPath = overlap == WritableTargetOverlap.NamedWritableWithPrimaryTarget
+            ? primaryTargetPath
+            : Path.Combine(root, "staging");
+        var primaryOutputPath = overlap switch
+        {
+            WritableTargetOverlap.PrimaryWithOwnTarget => primaryTargetPath,
+            WritableTargetOverlap.PrimaryWritableWithNamedTarget => namedTargetPath,
+            _ => Path.Combine(root, "staged-primary")
+        };
+        Directory.CreateDirectory(appHostDirectory);
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AppHost:Directory"] = appHostDirectory,
+                [PipelineOutputRegistry.StagingPathConfigurationKey] = stagingPath,
+                [PipelineOutputRegistry.TargetOutputPathConfigurationKey] = primaryTargetPath
+            })
+            .Build();
+        var pipelineOptions = Options.Create(new PipelineOptions { OutputPath = primaryOutputPath });
+        var outputService = new PipelineOutputService(pipelineOptions, configuration, fileSystem);
+        var registry = new PipelineOutputRegistry(configuration, outputService, pipelineOptions);
+        var step = CreateStep(
+            "publisher",
+            new PipelineOutputDefinition("inventory", ".configgen", PipelineOutputKind.Directory));
+
+        var exception = Assert.Throws<InvalidOperationException>(() => registry.Prepare([step]));
+
+        Assert.Contains("Relocated writable paths and logical target paths must be disjoint", exception.Message);
+        Assert.Contains("'aspire/primary'", exception.Message);
+        if (overlap is not WritableTargetOverlap.PrimaryWithOwnTarget)
+        {
+            Assert.Contains("'publisher/inventory'", exception.Message);
+        }
+    }
+
     [Fact]
     public void Prepare_RejectsNamedOutputEqualToPrimaryOutputWithoutRelocation()
     {
@@ -835,6 +882,13 @@ public class PipelineOutputRegistryTests(ITestOutputHelper testOutputHelper)
             primaryOutputPath,
             primaryTargetPath,
             stagingPath);
+    }
+
+    public enum WritableTargetOverlap
+    {
+        PrimaryWithOwnTarget,
+        NamedWritableWithPrimaryTarget,
+        PrimaryWritableWithNamedTarget
     }
 
     private sealed class RegistryFixture(

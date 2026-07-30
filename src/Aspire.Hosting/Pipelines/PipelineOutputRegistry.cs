@@ -374,9 +374,14 @@ internal sealed class PipelineOutputRegistry
         var outputs = _outputs.Values.Append(_primaryOutput).ToArray();
         for (var i = 0; i < outputs.Length; i++)
         {
+            var first = outputs[i];
+            if (_stagingPath is not null)
+            {
+                ValidateWritablePathDisjointFromTarget(first, first);
+            }
+
             for (var j = i + 1; j < outputs.Length; j++)
             {
-                var first = outputs[i];
                 var second = outputs[j];
 
                 if (TryGetPrimaryAndNamedOutput(first, second, out var primary, out var named) &&
@@ -404,13 +409,32 @@ internal sealed class PipelineOutputRegistry
                         $"'{second.PublisherName}/{second.Name}' have overlapping target paths.");
                 }
 
-                if (_stagingPath is not null && PathsOverlap(first.OutputPath, second.OutputPath))
+                if (_stagingPath is not null)
                 {
-                    throw new InvalidOperationException(
-                        $"Pipeline outputs '{first.PublisherName}/{first.Name}' and " +
-                        $"'{second.PublisherName}/{second.Name}' have overlapping writable paths.");
+                    if (PathsOverlap(first.OutputPath, second.OutputPath))
+                    {
+                        throw new InvalidOperationException(
+                            $"Pipeline outputs '{first.PublisherName}/{first.Name}' and " +
+                            $"'{second.PublisherName}/{second.Name}' have overlapping writable paths.");
+                    }
+
+                    ValidateWritablePathDisjointFromTarget(first, second);
+                    ValidateWritablePathDisjointFromTarget(second, first);
                 }
             }
+        }
+    }
+
+    private static void ValidateWritablePathDisjointFromTarget(
+        ResolvedPipelineOutput writable,
+        ResolvedPipelineOutput target)
+    {
+        if (PathsOverlap(writable.OutputPath, target.LogicalTargetPath))
+        {
+            throw new InvalidOperationException(
+                $"Pipeline output '{writable.PublisherName}/{writable.Name}' has a writable path that overlaps " +
+                $"the logical target path owned by '{target.PublisherName}/{target.Name}'. Relocated writable " +
+                $"paths and logical target paths must be disjoint.");
         }
     }
 
