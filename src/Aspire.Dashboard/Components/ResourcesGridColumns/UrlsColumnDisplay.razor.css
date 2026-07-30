@@ -1,15 +1,24 @@
 ::deep .url-overflow {
     display: flex;
+    flex-wrap: nowrap;
     align-items: center;
     gap: 6px;
     min-width: 0;
+    /* Overflowing items are clipped rather than wrapped until the measurer hides them. */
+    overflow: hidden;
 }
 
-/* The inline first URL truncates so the "+N" button stays visible. */
+/* Inline URL items keep their intrinsic width so the measurer can decide how many fit. */
+::deep .url-overflow-item {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+/* The first URL is always shown and truncates with an ellipsis if it's wider than the column. */
 ::deep .url-overflow-first {
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
     min-width: 0;
 }
 

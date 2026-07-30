@@ -13,37 +13,62 @@ else if (DisplayedUrls.Count == 1)
 }
 else if (DisplayedUrls.Count > 1)
 {
-    // Show the first URL inline and collapse the rest behind a "+N" button that opens a popover.
-    // Rendering only one inline element avoids the expensive forced reflow that rendering hundreds
-    // of URL elements used to cause (long enough to drop the SignalR connection).
-    var firstUrl = DisplayedUrls[0];
-    var overflowCount = DisplayedUrls.Count - 1;
+    // Render up to MaxRenderedUrls URLs inline and let a ResizeObserver-driven measurer (in the
+    // colocated JS module) decide how many actually fit. The first URL is always shown; the rest
+    // collapse into a "+N" popover as the column narrows. Capping the rendered count avoids the
+    // expensive forced reflow that rendering hundreds of URL elements used to cause (long enough to
+    // drop the SignalR connection); items beyond the cap always live in the popover.
+    var renderedUrls = DisplayedUrls.Take(MaxRenderedUrls).ToList();
 
-    <div class="url-container" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
-        <div class="url-overflow">
-            <span class="url-overflow-first">@WriteUrl(firstUrl)</span>
-            <button type="button"
-                    id="@_moreButtonId"
-                    class="btn btn--primary btn--sm url-button"
-                    @onclick="() => _popoverVisible = !_popoverVisible">
-                @($"+{overflowCount}")
-            </button>
+    // _visibleCount is the JS-measured number of the rendered items that fit; clamp defensively so we
+    // always show at least the first item and never index past what we rendered.
+    var visibleCount = Math.Clamp(_visibleCount, 1, renderedUrls.Count);
+
+    // Overflowed items are the measured-overflow rendered items plus everything past the cap.
+    var overflowItems = renderedUrls.Skip(visibleCount).Concat(DisplayedUrls.Skip(MaxRenderedUrls)).ToList();
+    var overflowCount = overflowItems.Count;
+
+    <div class="url-container" @ref="_container" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
+        <div class="url-overflow" data-url-overflow>
+            @for (var i = 0; i < renderedUrls.Count; i++)
+            {
+                var displayedUrl = renderedUrls[i];
+
+                // The JS measurer owns the inline visibility of each item (it toggles display), so we
+                // don't set it here — that keeps Blazor's diff from fighting the measurer's DOM edits.
+                <span class="url-overflow-item @(i == 0 ? "url-overflow-first" : null)" data-url-item>
+                    @WriteUrl(displayedUrl)
+                </span>
+            }
+            @if (overflowCount > 0)
+            {
+                <button type="button"
+                        id="@_moreButtonId"
+                        class="btn btn--primary btn--sm url-button"
+                        data-url-more
+                        @onclick="() => _popoverVisible = !_popoverVisible">
+                    @($"+{overflowCount}")
+                </button>
+            }
         </div>
-        <Popover AnchorId="@_moreButtonId" @bind-Open="_popoverVisible">
-            <Header>
-                @Loc[nameof(Resources.Columns.UrlsColumnDisplayOverflowTitle)]
-            </Header>
-            <Body>
-                <div class="url-popup">
-                    @foreach (var item in DisplayedUrls)
-                    {
-                        <div class="url-link">
-                            @WriteUrl(item)
-                        </div>
-                    }
-                </div>
-            </Body>
-        </Popover>
+        @if (overflowCount > 0)
+        {
+            <Popover AnchorId="@_moreButtonId" @bind-Open="_popoverVisible">
+                <Header>
+                    @Loc[nameof(Resources.Columns.UrlsColumnDisplayOverflowTitle)]
+                </Header>
+                <Body>
+                    <div class="url-popup">
+                        @foreach (var item in overflowItems)
+                        {
+                            <div class="url-link">
+                                @WriteUrl(item)
+                            </div>
+                        }
+                    </div>
+                </Body>
+            </Popover>
+        }
     </div>
 }
 
