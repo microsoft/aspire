@@ -9,117 +9,129 @@
 
 <DeckDialogHeader />
 <div style="height: 44vh; overflow-y: auto;">
-    <FluentDataGrid @ref="_dataGrid"
-                    Items="@GetGridItems()"
-                    ItemSize="46"
-                    Virtualize="true"
-                    GenerateHeader="GenerateHeaderOption.Sticky"
-                    GridTemplateColumns="2fr 1fr"
-                    TGridItem="ManageDataGridItem"
-                    OnRowClick="@OnRowClicked"
-                    ShowHover="true"
-                    ItemKey="@(item => GetItemKey(item))"
-                    Class="enable-row-click">
-        <ChildContent>
-            <TemplateColumn Title="@ControlsStringsLoc[nameof(ControlsStrings.NameColumnHeader)]">
-                <HeaderCellItemTemplate>
+    @{
+        var manageDataColumnWidths = GridColumnWidths.Parse("2fr 1fr", 2);
+        var gridItems = GetGridItems().ToList();
+    }
+    @* The manage-data dialog lists a bounded set of resources, so the table renders all rows in the
+       scrollable container rather than virtualizing. This keeps the sticky header select-all and the
+       per-row selection checkboxes always present. *@
+    <table class="data manage-data-grid enable-row-click">
+        <colgroup>
+            <col style="width: @manageDataColumnWidths[0]" />
+            <col style="width: @manageDataColumnWidths[1]" />
+        </colgroup>
+        <thead>
+            <tr>
+                <th>
                     @{
                         var headerSelectionLabel = GetHeaderSelectionLabel();
                     }
-                    <div style="display: flex; justify-content: flex-start;">
-                        <div style="width: calc(100% - 10px);">
-                            <div class="name-title-text">
-                                <IconCheckbox CheckState="@GetHeaderCheckboxState()"
-                                              Disabled="@(_resourceDataRows.Count == 0)"
-                                              AccessibleLabel="@headerSelectionLabel"
-                                              StopPropagation="false"
-                                              OnClick="OnSelectAllClicked" />
-                                @ControlsStringsLoc[nameof(ControlsStrings.NameColumnHeader)]
-                            </div>
-                        </div>
+                    <div class="name-title-text">
+                        <IconCheckbox CheckState="@GetHeaderCheckboxState()"
+                                      Disabled="@(_resourceDataRows.Count == 0)"
+                                      AccessibleLabel="@headerSelectionLabel"
+                                      StopPropagation="false"
+                                      OnClick="OnSelectAllClicked" />
+                        @ControlsStringsLoc[nameof(ControlsStrings.NameColumnHeader)]
                     </div>
-
-                </HeaderCellItemTemplate>
-                <ChildContent>
-                    @{
-                        var indent = context.Depth * 48;
-                    }
-                    <span class="resources-name-container" style="margin-left: @(indent)px;">
-                        @if (context.IsResourceRow && context.ResourceRow is not null)
-                        {
-                            var resourceDisplayName = GetResourceDisplayName(context.ResourceRow);
-                            var resourceSelectionLabel = resourceDisplayName;
-
-                            <span @onclick:stopPropagation="true" class="main-grid-expand-container @(IsResourceExpanded(context.ResourceRow.Name) ? "main-grid-expanded" : "main-grid-collapsed")">
-                                @if (context.ResourceRow.TelemetryData.Count > 0)
+                </th>
+                <th>@Loc[nameof(Dialogs.ManageDataSummaryColumnHeader)]</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (gridItems.Count == 0)
+            {
+                <tr>
+                    <td colspan="2" class="cell-muted" style="text-align: center; padding: 20px;">
+                        <DeckIcon Name="DeckIconName.AppGeneric" Size="24" />&nbsp;@Loc[nameof(Dialogs.ManageDataNoResources)]
+                    </td>
+                </tr>
+            }
+            else
+            {
+                @foreach (var context in gridItems)
+                {
+                    <tr class="clickable" @key="GetItemKey(context)" @onclick="() => OnRowClicked(context)">
+                        <td>
+                            @{
+                                var indent = context.Depth * 48;
+                            }
+                            <span class="resources-name-container" style="margin-left: @(indent)px;">
+                                @if (context.IsResourceRow && context.ResourceRow is not null)
                                 {
-                                    <button type="button"
-                                            class="icon-btn icon-btn--sm main-grid-expand-button"
-                                            @onclick="@(() => OnToggleExpand(context.ResourceRow))"
-                                            aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ToggleNesting)]">
-                                        <DeckIcon Name="DeckIconName.Chevron" Size="12" />
-                                    </button>
+                                    var resourceDisplayName = GetResourceDisplayName(context.ResourceRow);
+                                    var resourceSelectionLabel = resourceDisplayName;
+
+                                    <span @onclick:stopPropagation="true" class="main-grid-expand-container @(IsResourceExpanded(context.ResourceRow.Name) ? "main-grid-expanded" : "main-grid-collapsed")">
+                                        @if (context.ResourceRow.TelemetryData.Count > 0)
+                                        {
+                                            <button type="button"
+                                                    class="icon-btn icon-btn--sm main-grid-expand-button"
+                                                    @onclick="@(() => OnToggleExpand(context.ResourceRow))"
+                                                    aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ToggleNesting)]">
+                                                <DeckIcon Name="DeckIconName.Chevron" Size="12" />
+                                            </button>
+                                        }
+                                    </span>
+                                    <IconCheckbox CheckState="@GetResourceCheckboxState(context.ResourceRow)"
+                                                  AccessibleLabel="@resourceSelectionLabel"
+                                                  OnClick="@(() => OnSelectRowClicked(context.ResourceRow))" />
+                                    @if (context.ResourceRow.Resource is not null)
+                                    {
+                                        <ResourceNameDisplay Resource="context.ResourceRow.Resource" FilterText="" FormatName="GetResourceName" />
+                                    }
+                                    else if (context.ResourceRow.OtlpResource is not null)
+                                    {
+                                        @* Telemetry-only resource - display with default icon *@
+                                        <span class="resource-name-container">
+                                            @* Do this to trim significant whitespace so there isn't a space added between icon and text *@
+                                            @{
+                                                <DeckIcon Name="DeckIconName.Book"
+                                                          Size="16"
+                                                          Class="resource-icon"
+                                                          Style="@($"color: {ColorGenerator.Instance.GetColorVariableByKey(context.ResourceRow.Name)};")" />
+                                            }
+                                            <span class="resource-name-text">@resourceDisplayName</span>
+                                        </span>
+                                    }
+                                }
+                                else if (context.IsNestedRow && context.NestedRow is not null && context.ParentResourceName is not null)
+                                {
+                                    var dataTypeDisplayName = GetDataTypeDisplayName(context.NestedRow.DataType);
+                                    var parentResourceDisplayName = GetResourceDisplayName(context.ParentResourceName);
+                                    var dataTypeSelectionLabel = GetDataRowSelectionLabel(dataTypeDisplayName, parentResourceDisplayName);
+
+                                    <IconCheckbox CheckState="@GetDataRowCheckboxState(context.ParentResourceName, context.NestedRow.DataType)"
+                                                  AccessibleLabel="@dataTypeSelectionLabel"
+                                                  OnClick="@(() => OnSelectDataRowClicked(context.ParentResourceName, context.NestedRow.DataType))" />
+                                    <span class="cellText">@dataTypeDisplayName</span>
                                 }
                             </span>
-                            <IconCheckbox CheckState="@GetResourceCheckboxState(context.ResourceRow)"
-                                          AccessibleLabel="@resourceSelectionLabel"
-                                          OnClick="@(() => OnSelectRowClicked(context.ResourceRow))" />
-                            @if (context.ResourceRow.Resource is not null)
+                        </td>
+                        <td>
+                            @if (context.IsResourceRow && context.ResourceRow is not null)
                             {
-                                <ResourceNameDisplay Resource="context.ResourceRow.Resource" FilterText="" FormatName="GetResourceName" />
-                            }
-                            else if (context.ResourceRow.OtlpResource is not null)
-                            {
-                                @* Telemetry-only resource - display with default icon *@
-                                <span class="resource-name-container">
-                                    @* Do this to trim significant whitespace so there isn't a space added between icon and text *@
-                                    @{
-                                        <DeckIcon Name="DeckIconName.Book"
-                                                  Size="16"
-                                                  Class="resource-icon"
-                                                  Style="@($"color: {ColorGenerator.Instance.GetColorVariableByKey(context.ResourceRow.Name)};")" />
+                                <span @onclick:stopPropagation="true">
+                                    @foreach (var dataRow in context.ResourceRow.TelemetryData)
+                                    {
+                                        <button type="button"
+                                                class="icon-btn icon-btn--sm"
+                                                @onclick="@(() => NavigateToDataPage(dataRow))"
+                                                title="@GetDataTypeDisplayName(dataRow.DataType)"
+                                                aria-label="@GetDataTypeDisplayName(dataRow.DataType)"
+                                                style="margin-right: 4px;">
+                                            <DeckIcon Name="@dataRow.Icon" Size="16" />
+                                        </button>
                                     }
-                                    <span class="resource-name-text">@resourceDisplayName</span>
                                 </span>
                             }
-                        }
-                        else if (context.IsNestedRow && context.NestedRow is not null && context.ParentResourceName is not null)
-                        {
-                            var dataTypeDisplayName = GetDataTypeDisplayName(context.NestedRow.DataType);
-                            var parentResourceDisplayName = GetResourceDisplayName(context.ParentResourceName);
-                            var dataTypeSelectionLabel = GetDataRowSelectionLabel(dataTypeDisplayName, parentResourceDisplayName);
-
-                            <IconCheckbox CheckState="@GetDataRowCheckboxState(context.ParentResourceName, context.NestedRow.DataType)"
-                                          AccessibleLabel="@dataTypeSelectionLabel"
-                                          OnClick="@(() => OnSelectDataRowClicked(context.ParentResourceName, context.NestedRow.DataType))" />
-                            <span class="cellText">@dataTypeDisplayName</span>
-                        }
-                    </span>
-                </ChildContent>
-            </TemplateColumn>
-            <TemplateColumn Title="@Loc[nameof(Dialogs.ManageDataSummaryColumnHeader)]">
-                @if (context.IsResourceRow && context.ResourceRow is not null)
-                {
-                    <span @onclick:stopPropagation="true">
-                        @foreach (var dataRow in context.ResourceRow.TelemetryData)
-                        {
-                            <button type="button"
-                                    class="icon-btn icon-btn--sm"
-                                    @onclick="@(() => NavigateToDataPage(dataRow))"
-                                    title="@GetDataTypeDisplayName(dataRow.DataType)"
-                                    aria-label="@GetDataTypeDisplayName(dataRow.DataType)"
-                                    style="margin-right: 4px;">
-                                <DeckIcon Name="@dataRow.Icon" Size="16" />
-                            </button>
-                        }
-                    </span>
+                        </td>
+                    </tr>
                 }
-            </TemplateColumn>
-        </ChildContent>
-        <EmptyContent>
-            <DeckIcon Name="DeckIconName.AppGeneric" Size="24" />&nbsp;@Loc[nameof(Dialogs.ManageDataNoResources)]
-        </EmptyContent>
-    </FluentDataGrid>
+            }
+        </tbody>
+    </table>
 </div>
 
 <div class="button-container">
@@ -158,18 +170,15 @@
     @if (TelemetryImportService.IsImportEnabled)
     {
         <div>
-            <FluentInputFile AnchorId="import-button"
-                             DragDropZoneVisible="false"
-                             Accept=".zip,.json"
-                             Multiple="false"
-                             MaximumFileSize="@(100 * 1024 * 1024)"
-                             Mode="InputFileMode.SaveToTemporaryFolder"
-                             OnCompleted="OnInputFileCompleted"
-                             OnProgressChange="OnInputFileProgressChange" />
-            <button type="button" id="import-button" class="btn"
-                    disabled="@_isImporting"
-                    title="@Loc[nameof(Dialogs.SettingsImportButtonText)]"
-                    aria-label="@Loc[nameof(Dialogs.SettingsImportButtonText)]">
+            @* Native file input, visually hidden and triggered by the styled label below. Clicking the
+               label opens the browser file picker; the selected file is streamed to a temp file in the
+               change handler. *@
+            <InputFile OnChange="OnImportFileChangeAsync" accept=".zip,.json" id="import-file-input" class="visually-hidden" />
+            <label for="import-file-input"
+                   class="btn"
+                   style="@(_isImporting ? "pointer-events: none; opacity: 0.6;" : null)"
+                   title="@Loc[nameof(Dialogs.SettingsImportButtonText)]"
+                   aria-label="@Loc[nameof(Dialogs.SettingsImportButtonText)]">
                 @if (_isImporting)
                 {
                     <div class="spinner" role="progressbar" aria-label="Loading"></div>
@@ -179,7 +188,7 @@
                     <DeckIcon Name="DeckIconName.ArrowUpload" Size="16" />
                 }
                 @Loc[nameof(Dialogs.SettingsImportButtonText)]
-            </button>
+            </label>
         </div>
     }
 </div>

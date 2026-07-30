@@ -7,14 +7,12 @@ using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.ManageData;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Dialogs;
@@ -249,6 +247,6 @@ public sealed class ManageDataDialogTests : DashboardTestContext
 
     private static IReadOnlyList<IElement> GetSelectionCheckboxes(IRenderedComponent<ManageDataDialog> cut)
     {
-        return cut.FindComponent<FluentDataGrid<ManageDataGridItem>>().FindAll("[role='checkbox']");
+        return cut.FindAll(".manage-data-grid [role='checkbox']");
     }
 }

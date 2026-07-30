@@ -12,8 +12,8 @@ using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.Extensions.Localization;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Dialogs;
@@ -59,7 +59,6 @@ public partial class ManageDataDialog : IDeckDialogContentComponent, IAsyncDispo
     private readonly HashSet<(string ResourceName, AspireDataType DataType)> _selectedRows = [];
     private readonly CancellationTokenSource _cts = new();
     private Task? _resourceSubscriptionTask;
-    private FluentDataGrid<ManageDataGridItem>? _dataGrid;
     private bool _isExporting;
     private bool _isRemoving;
     private string? _errorMessage;
@@ -83,15 +82,9 @@ public partial class ManageDataDialog : IDeckDialogContentComponent, IAsyncDispo
 
     private async Task OnTelemetryChangedAsync()
     {
-        await InvokeAsync(async () =>
+        await InvokeAsync(() =>
         {
             UpdateData();
-
-            if (_dataGrid is not null)
-            {
-                await _dataGrid.SafeRefreshDataAsync();
-            }
-
             StateHasChanged();
         });
     }
@@ -186,14 +179,7 @@ public partial class ManageDataDialog : IDeckDialogContentComponent, IAsyncDispo
                     }
                 }
 
-                await InvokeAsync(async () =>
-                {
-                    if (_dataGrid is not null)
-                    {
-                        await _dataGrid.SafeRefreshDataAsync();
-                    }
-                    StateHasChanged();
-                });
+                await InvokeAsync(StateHasChanged);
             }
         });
     }
@@ -301,9 +287,8 @@ public partial class ManageDataDialog : IDeckDialogContentComponent, IAsyncDispo
         return items.AsQueryable();
     }
 
-    private void OnRowClicked(FluentDataGridRow<ManageDataGridItem> row)
+    private void OnRowClicked(ManageDataGridItem item)
     {
-        var item = row.Item;
         if (item is null)
         {
             return;
@@ -561,25 +546,54 @@ public partial class ManageDataDialog : IDeckDialogContentComponent, IAsyncDispo
         await OnTelemetryChangedAsync();
     }
 
-    private void OnInputFileProgressChange(FluentInputFileEventArgs args)
+    // Maximum import upload size (100 MB), matching the previous FluentInputFile limit.
+    private const long MaxImportFileSize = 100 * 1024 * 1024;
+
+    private async Task OnImportFileChangeAsync(InputFileChangeEventArgs e)
     {
+        var file = e.File;
+        if (file is null)
+        {
+            return;
+        }
+
         _isImporting = true;
         _errorMessage = null;
-    }
+        StateHasChanged();
 
-    private async Task OnInputFileCompleted(IEnumerable<FluentInputFileEventArgs> args)
-    {
         try
         {
-            var files = args.ToList();
-
-            foreach (var file in files)
+            // The import reads the archive with random access (zip central directory), which requires a
+            // seekable stream. The browser upload stream is forward-only, so stream it to a temp file
+            // first. Buffering a 100 MB upload in memory would be wasteful, hence a temp file rather
+            // than a MemoryStream.
+            var tempDirectory = Directory.CreateTempSubdirectory("aspire-import");
+            try
             {
-                if (file.LocalFile is not null)
+                var tempFilePath = Path.Combine(tempDirectory.FullName, "import" + Path.GetExtension(file.Name));
+
+                await using (var destination = File.Create(tempFilePath))
+                await using (var source = file.OpenReadStream(MaxImportFileSize))
                 {
-                    using var fileStream = file.LocalFile.OpenRead();
-                    await TelemetryImportService.ImportAsync(file.Name, fileStream, CancellationToken.None);
-                    await OnTelemetryChangedAsync();
+                    await source.CopyToAsync(destination, CancellationToken.None);
+                }
+
+                await using (var importStream = File.OpenRead(tempFilePath))
+                {
+                    await TelemetryImportService.ImportAsync(file.Name, importStream, CancellationToken.None);
+                }
+
+                await OnTelemetryChangedAsync();
+            }
+            finally
+            {
+                try
+                {
+                    tempDirectory.Delete(recursive: true);
+                }
+                catch
+                {
+                    // Best-effort cleanup of the temp upload; ignore failures.
                 }
             }
         }
