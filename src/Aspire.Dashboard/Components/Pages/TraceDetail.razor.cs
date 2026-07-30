@@ -42,8 +42,6 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     private Virtualize<SpanWaterfallViewModel>? _virtualize;
     private GridColumnManager _manager = null!;
     private IList<GridColumn> _gridColumns = null!;
-    private ElementReference _waterfallGrid;
-
     // Localized accessible label for the waterfall column resize handles.
     private string ResizeLabel => ControlStringsLoc[nameof(ControlsStrings.GridColumnResizeLabel)];
     private readonly List<MenuButtonItem> _traceActionsMenuItems = [];

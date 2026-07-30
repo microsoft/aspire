@@ -9,7 +9,8 @@ const registrations = new Map();
 const DEFAULT_MIN_WIDTH = 48;
 const KEYBOARD_STEP = 16;
 
-export function initialize(root, options) {
+export function initialize(marker, options) {
+    const root = marker?.previousElementSibling;
     if (!root) {
         return;
     }
@@ -21,10 +22,13 @@ export function initialize(root, options) {
 
     const cleanups = [];
 
-    const getHeaderCells = () => {
-        const headerRow = isTable
+    const getHeaderRow = () =>
+        isTable
             ? root.querySelector("thead tr")
             : root.querySelector("[data-resize-header]");
+
+    const getHeaderCells = () => {
+        const headerRow = getHeaderRow();
         if (!headerRow) {
             return [];
         }
@@ -44,7 +48,25 @@ export function initialize(root, options) {
         }
     };
 
-    const measureWidths = () => getHeaderCells().map((c) => c.getBoundingClientRect().width);
+    const measureWidths = () => {
+        if (!isTable) {
+            // CSS-grid item bounds exclude the gap between tracks. Feeding those bounds back into
+            // grid-template-columns would therefore shrink a track by the gap on every move event.
+            // Browsers expose the resolved track list as pixel values, which is the authoritative
+            // source for resizing the shared header/body template.
+            const headerRow = getHeaderRow();
+            if (headerRow) {
+                const tracks = getComputedStyle(headerRow).gridTemplateColumns
+                    .split(/\s+/)
+                    .map((value) => Number.parseFloat(value));
+                if (tracks.length > 0 && tracks.every(Number.isFinite)) {
+                    return tracks;
+                }
+            }
+        }
+
+        return getHeaderCells().map((cell) => cell.getBoundingClientRect().width);
+    };
 
     // Resize the pair (index, index+1) by dx pixels, clamping both to the minimum width so the total
     // width of the pair (and therefore the grid) stays constant.
@@ -92,7 +114,7 @@ export function initialize(root, options) {
             e.preventDefault();
             e.stopPropagation();
 
-            const startX = e.clientX;
+            let previousX = e.clientX;
             try {
                 handle.setPointerCapture(e.pointerId);
             } catch {
@@ -100,7 +122,9 @@ export function initialize(root, options) {
             }
 
             const onPointerMove = (moveEvent) => {
-                resizePair(index, moveEvent.clientX - startX);
+                const delta = moveEvent.clientX - previousX;
+                previousX = moveEvent.clientX;
+                resizePair(index, delta);
                 updateHandleValues(handle, index);
             };
             const onPointerUp = () => {

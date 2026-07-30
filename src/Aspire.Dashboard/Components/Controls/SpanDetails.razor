@@ -81,7 +81,7 @@
                 </PropertyGrid>
             </AccordionItem>
             <AccordionItem Heading="@Loc[nameof(ControlsStrings.SpanDetailsLinksHeader)]" Expanded="@_isSpanLinksExpanded" Count="@FilteredSpanLinks.Count()">
-                <table class="data span-links-grid multiline resizable-grid" @ref="_spanLinksTable">
+                <table class="data span-links-grid multiline resizable-grid">
                     <colgroup>
                         <col style="width: @s_spanLinkColumnWidths[0]" />
                         <col style="width: @s_spanLinkColumnWidths[1]" />
@@ -107,10 +107,10 @@
                         }
                     </tbody>
                 </table>
-                <ColumnResizer Target="_spanLinksTable" />
+                <ColumnResizer />
             </AccordionItem>
             <AccordionItem Heading="@Loc[nameof(ControlsStrings.SpanDetailsBacklinksHeader)]" Expanded="@_isSpanBacklinksExpanded" Count="@FilteredSpanBacklinks.Count()">
-                <table class="data span-links-grid multiline resizable-grid" @ref="_spanBacklinksTable">
+                <table class="data span-links-grid multiline resizable-grid">
                     <colgroup>
                         <col style="width: @s_spanLinkColumnWidths[0]" />
                         <col style="width: @s_spanLinkColumnWidths[1]" />
@@ -136,7 +136,7 @@
                         }
                     </tbody>
                 </table>
-                <ColumnResizer Target="_spanBacklinksTable" />
+                <ColumnResizer />
             </AccordionItem>
         </Accordion>
     </div>

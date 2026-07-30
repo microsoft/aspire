@@ -78,12 +78,6 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
     private readonly Grid.GridSortState<VolumeViewModel> _volumeSort = new();
 
     // Element references and resize label for the accordion tables' column resizing.
-    private ElementReference _urlsTable;
-    private ElementReference _volumesTable;
-    private ElementReference _relationshipsTable;
-    private ElementReference _backRelationshipsTable;
-    private ElementReference _healthTable;
-
     private string ResizeLabel => ControlStringsLoc[nameof(ControlsStrings.GridColumnResizeLabel)];
 
     // Column widths for the accordion tables, derived once from the fractional layouts the Deck

@@ -158,8 +158,6 @@ public partial class PropertyGrid<TItem> where TItem : IPropertyGridItem
 
     private string ResizeLabel => Loc[nameof(ControlsStrings.GridColumnResizeLabel)];
 
-    private ElementReference _tableElement;
-
     // Resizing is only wired up when a header is rendered (the handles live in the header row).
     private bool ShowResize => GenerateHeader != GridHeaderMode.None;
 

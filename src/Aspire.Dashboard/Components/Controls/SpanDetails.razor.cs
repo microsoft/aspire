@@ -83,9 +83,6 @@ public partial class SpanDetails : IDisposable
     private static readonly IReadOnlyList<string> s_spanLinkColumnWidths = GridColumnWidths.Parse("4fr 1fr", 2);
 
     // Element references for the span links/backlinks tables' column resizing.
-    private ElementReference _spanLinksTable;
-    private ElementReference _spanBacklinksTable;
-
     private string ResizeLabel => Loc[nameof(ControlsStrings.GridColumnResizeLabel)];
 
     private readonly CancellationTokenSource _cts = new();

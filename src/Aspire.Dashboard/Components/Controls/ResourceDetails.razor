@@ -34,7 +34,7 @@
                               ValueComponents="_valueComponents" />
             </AccordionItem>
             <AccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsUrlsHeader)]" Expanded="@_isUrlsExpanded" Count="@FilteredUrls.Count()">
-                <table class="data resource-details-grid resizable-grid" @ref="_urlsTable">
+                <table class="data resource-details-grid resizable-grid">
                     <colgroup>
                         <col style="width: @s_standardColumnWidths[0]" />
                         <col style="width: @s_standardColumnWidths[1]" />
@@ -77,13 +77,13 @@
                         }
                     </tbody>
                 </table>
-                <ColumnResizer Target="_urlsTable" />
+                <ColumnResizer />
             </AccordionItem>
             @if (Resource.IsContainer())
             {
                 <AccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsVolumesHeader)]" Expanded="@_isVolumesExpanded" Count="@FilteredVolumes.Count()">
 
-                    <table class="data resource-details-grid resizable-grid" @ref="_volumesTable">
+                    <table class="data resource-details-grid resizable-grid">
                         <colgroup>
                             <col style="width: @s_standardColumnWidths[0]" />
                             <col style="width: @s_standardColumnWidths[1]" />
@@ -127,11 +127,11 @@
                             }
                         </tbody>
                     </table>
-                    <ColumnResizer Target="_volumesTable" />
+                    <ColumnResizer />
                 </AccordionItem>
             }
             <AccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsReferences)]" Expanded="@_isRelationshipsExpanded" Count="@FilteredRelationships.Count()">
-                <table class="data resource-details-grid resizable-grid" @ref="_relationshipsTable">
+                <table class="data resource-details-grid resizable-grid">
                     <colgroup>
                         <col style="width: @s_standardColumnWidths[0]" />
                         <col style="width: @s_standardColumnWidths[1]" />
@@ -159,10 +159,10 @@
                         }
                     </tbody>
                 </table>
-                <ColumnResizer Target="_relationshipsTable" />
+                <ColumnResizer />
             </AccordionItem>
             <AccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsBackReferences)]" Expanded="@_isBackRelationshipsExpanded" Count="@FilteredBackRelationships.Count()">
-                <table class="data resource-details-grid resizable-grid" @ref="_backRelationshipsTable">
+                <table class="data resource-details-grid resizable-grid">
                     <colgroup>
                         <col style="width: @s_standardColumnWidths[0]" />
                         <col style="width: @s_standardColumnWidths[1]" />
@@ -190,11 +190,11 @@
                         }
                     </tbody>
                 </table>
-                <ColumnResizer Target="_backRelationshipsTable" />
+                <ColumnResizer />
             </AccordionItem>
             <AccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceHealthChecksHeader)]" Expanded="@_isHealthChecksExpanded" Count="@FilteredHealthReports.Count()">
 
-                <table class="data resource-details-grid resizable-grid" @ref="_healthTable">
+                <table class="data resource-details-grid resizable-grid">
                     <colgroup>
                         <col style="width: @s_healthColumnWidths[0]" />
                         <col style="width: @s_healthColumnWidths[1]" />
@@ -253,7 +253,7 @@
                         }
                     </tbody>
                 </table>
-                <ColumnResizer Target="_healthTable" />
+                <ColumnResizer />
             </AccordionItem>
             <AccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsEnvironmentVariablesHeader)]" Expanded="@_isEnvironmentVariablesExpanded" Count="@FilteredEnvironmentVariables.Count()">
                 <PropertyGrid TItem="EnvironmentVariableViewModel"

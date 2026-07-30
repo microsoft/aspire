@@ -106,7 +106,7 @@
                    container from the column manager) so cells line up, and each cell's inner content
                    (the tick ruler, span bars) uses its own nested grid. Column resizing rewrites that
                    single custom property, so the header and every row follow together. *@
-                <div class="main-grid trace-view-grid enable-row-click" role="table" @ref="_waterfallGrid" style="--trace-grid-columns: @gridTemplateColumns;">
+                <div class="main-grid trace-view-grid enable-row-click" role="table" style="--trace-grid-columns: @gridTemplateColumns;">
                     <div class="trace-grid-header" role="row" data-resize-header style="grid-template-columns: var(--trace-grid-columns);">
                         @if (nameColumnVisible)
                         {
@@ -328,7 +328,7 @@
                         }
                     </div>
                 </div>
-                <ColumnResizer Target="_waterfallGrid" GridColumnsVariable="--trace-grid-columns" />
+                <ColumnResizer GridColumnsVariable="--trace-grid-columns" />
                 </GridColumnManager>
             </div>
         </div>

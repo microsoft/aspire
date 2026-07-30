@@ -1,18 +1,17 @@
-@* Wires up Deck column resizing for a data grid. Renders nothing itself; on first render it imports
-   the colocated resize module and initializes it against the target element (a table, or a CSS-grid
-   container identified by a CSS custom property). Cleans up the JS listeners on disposal. *@
+@* Wires up Deck column resizing for the immediately preceding data grid. The marker gives the
+   component its own stable ElementReference; a parent ElementReference passed as a child parameter
+   is still its default value when parameters are assigned. Cleans up the JS listeners on disposal. *@
 @namespace Aspire.Dashboard.Components.Controls.Grid
 @implements IAsyncDisposable
 @inject IJSRuntime JS
 
+<span hidden aria-hidden="true" @ref="_marker"></span>
+
 @code {
     private readonly string _resizerId = $"grid-resizer-{Guid.NewGuid():N}";
     private IJSObjectReference? _module;
+    private ElementReference _marker;
     private bool _initialized;
-
-    /// <summary>The grid root element (a <c>&lt;table&gt;</c> or a CSS-grid container).</summary>
-    [Parameter, EditorRequired]
-    public ElementReference Target { get; set; }
 
     /// <summary>
     /// When resizing a CSS-grid container (rather than a table), the name of the CSS custom property
@@ -30,7 +29,7 @@
         if (firstRender && !_initialized)
         {
             _module = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Controls/Grid/ColumnResizer.razor.js");
-            await _module.InvokeVoidAsync("initialize", Target, new
+            await _module.InvokeVoidAsync("initialize", _marker, new
             {
                 id = _resizerId,
                 minWidth = MinWidth,
