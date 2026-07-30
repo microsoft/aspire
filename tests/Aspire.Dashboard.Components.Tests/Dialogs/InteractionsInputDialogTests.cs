@@ -45,9 +45,10 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
 
         cut.WaitForAssertion(() =>
         {
-            var browseButton = cut.Find("fluent-button[aria-label='Artifact']");
-            Assert.NotNull(browseButton.Id);
-            Assert.EndsWith("-FileUploadButton", browseButton.Id);
+            var browseButton = cut.Find("label.btn[aria-label='Artifact']");
+            var targetInputId = browseButton.GetAttribute("for");
+            Assert.NotNull(targetInputId);
+            Assert.EndsWith("-FileUploadButton", targetInputId);
         });
     }
 

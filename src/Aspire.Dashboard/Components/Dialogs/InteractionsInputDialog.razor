@@ -4,7 +4,6 @@
 @using Aspire.Dashboard.Components.Controls.Grid
 @using Aspire.DashboardService.Proto.V1
 @using Dialogs = Aspire.Dashboard.Resources.Dialogs
-@using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons
 @implements IDeckDialogContentComponent<InteractionsInputsDialogViewModel>
 
 <DeckDialogHeader ShowDismiss="@Dialog.Instance.Parameters.ShowDismiss">
@@ -168,13 +167,14 @@
                                                    InputViewModel="@localItem"
                                                    MarkdownProcessor="@_markdownProcessor"
                                                    Context="input">
-                                <FluentInputFile DragDropZoneVisible="false"
-                                                 Mode="InputFileMode.Stream"
-                                                 AnchorId="@inputId"
-                                                 Accept="@input.ViewModel.Input.FileFilter"
-                                                 Multiple="@input.ViewModel.Input.AllowMultipleFiles"
-                                                 MaximumFileSize="@GetMaxFileSize(input.ViewModel)"
-                                                 OnInputFileChange="@(args => OnInputFileChangeAsync(input.ViewModel, args))" />
+                                @* Native file input, visually hidden and triggered by the styled label
+                                   button below. The change handler streams each selected file to the
+                                   dashboard client. *@
+                                <InputFile id="@inputId"
+                                           class="visually-hidden"
+                                           accept="@input.ViewModel.Input.FileFilter"
+                                           multiple="@input.ViewModel.Input.AllowMultipleFiles"
+                                           OnChange="@(args => OnInputFileChangeAsync(input.ViewModel, args))" />
                                 @if (input.ViewModel.FileReferences.Any(f => f.Id is not null))
                                 {
                                     <div class="uploaded-files-list">
@@ -191,12 +191,10 @@
                                 }
                                 else
                                 {
-                                    <FluentButton Id="@inputId"
-                                                  Appearance="Appearance.Accent"
-                                                  IconStart="@(new Icons.Regular.Size16.FolderOpen())"
-                                                  aria-label="@input.ViewModel.Input.Label">
+                                    <label for="@inputId" class="btn btn--primary" aria-label="@input.ViewModel.Input.Label">
+                                        <DeckIcon Name="DeckIconName.ArrowUpload" Size="16" />
                                         @GetFileButtonText(input.ViewModel)
-                                    </FluentButton>
+                                    </label>
                                 }
                             </InteractionInputField>
                             break;
