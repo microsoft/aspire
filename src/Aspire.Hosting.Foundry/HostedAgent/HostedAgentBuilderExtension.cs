@@ -503,7 +503,7 @@ public static class HostedAgentResourceBuilderExtensions
         // Unlike referencing a first-class Azure resource, it does not give the consumer a managed
         // identity or any RBAC on the Foundry account, so calls to the agent's invocation endpoint
         // fail with 401/403 at runtime. Stamp a ReferenceRoleAssignmentAnnotation on the agent's
-        // target so AzureResourcePreparer grants the "Azure AI User" role on the owning Foundry
+        // target so AzureResourcePreparer grants the "Foundry User" role on the owning Foundry
         // account to every consumer that references this agent, and provisions the identity that
         // makes ACA inject AZURE_CLIENT_ID.
         StampHostedAgentConsumerRoleAnnotation(target, projectResource.Parent);
@@ -511,17 +511,17 @@ public static class HostedAgentResourceBuilderExtensions
 
     private static void StampHostedAgentConsumerRoleAnnotation(IResourceWithEnvironment target, FoundryResource account)
     {
-        // Grant only the "Azure AI User" role required to invoke the hosted agent. We deliberately do
+        // Grant only the "Foundry User" role required to invoke the hosted agent. We deliberately do
         // not union the account's default data-plane roles here:
         //  - A consumer that also references the account directly still receives those defaults through
         //    AzureResourcePreparer's normal reference walk (they are preserved when GetAllRoleAssignments
         //    unions per target).
         //  - A consumer that declares explicit role assignments on the account intentionally suppresses
         //    the account defaults; folding them back in here would defeat that suppression.
-        // So the minimal, least-privilege grant for a pure agent consumer is "Azure AI User" alone.
+        // So the minimal, least-privilege grant for a pure agent consumer is "Foundry User" alone.
         var roles = new HashSet<RoleDefinition>
         {
-            new(AzureHostedAgentResource.AzureAIUserRoleDefinitionId, "Azure AI User")
+            new(AzureHostedAgentResource.FoundryUserRoleDefinitionId, "Foundry User")
         };
 
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.

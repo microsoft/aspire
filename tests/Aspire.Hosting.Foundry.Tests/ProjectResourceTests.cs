@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Utils;
+using Azure.Provisioning.CognitiveServices;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Foundry.Tests;
@@ -233,6 +234,37 @@ public class ProjectResourceTests
 
         Assert.NotNull(project.Resource.CapabilityHostConfiguration);
         Assert.Same(foundry.Resource, project.Resource.CapabilityHostConfiguration.AzureOpenAI);
+    }
+
+    [Fact]
+    public async Task WithRoleAssignments_GrantsRoleToProjectIdentityOnParentAccount()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var foundryUserRole = (CognitiveServicesBuiltInRole)AzureHostedAgentResource.FoundryUserRoleDefinitionId;
+
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project")
+            .WithRoleAssignments(foundryUserRole);
+
+        var role = Assert.Single(project.Resource.ParentRoleAssignments);
+        Assert.Equal(AzureHostedAgentResource.FoundryUserRoleDefinitionId, role.Id);
+        Assert.Equal("Foundry User", role.Name);
+
+        await Verify(project.Resource.GetBicepTemplateString(), "bicep");
+    }
+
+    [Fact]
+    public void WithRoleAssignments_FoundryRoleMapsToFoundryUser()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project")
+            .WithRoleAssignments(FoundryRole.FoundryUser);
+
+        var role = Assert.Single(project.Resource.ParentRoleAssignments);
+        Assert.Equal(AzureHostedAgentResource.FoundryUserRoleDefinitionId, role.Id);
+        Assert.Equal("Foundry User", role.Name);
     }
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
