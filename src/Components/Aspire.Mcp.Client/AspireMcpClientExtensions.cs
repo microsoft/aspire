@@ -446,7 +446,7 @@ public static class AspireMcpClientExtensions
                     ? endpoint
                     : transportOptions.Endpoint;
                 var resolvedEndpoint = await ResolveEndpointAsync(endpointToResolve, serviceEndpointResolver, _creationCancellation.Token).ConfigureAwait(false);
-                transportOptions.Endpoint = resolvedEndpoint;
+                transportOptions.Endpoint = resolvedEndpoint.Endpoint;
                 McpClientSettings.ValidateEndpoint(transportOptions.Endpoint);
                 var clientOptions = new McpClientOptions();
                 foreach (var configureClientOptions in registrationOptions.ClientOptionsActions)
@@ -467,22 +467,36 @@ public static class AspireMcpClientExtensions
                     oauth.TokenCache ??= registrationOptions.OAuthTokenCache ??= new InMemoryTokenCache();
                     transportOptions.OAuth = oauth;
                 }
-                if (registrationOptions.BearerTokenProvider is not null)
+                if (resolvedEndpoint.RequestHost is null && registrationOptions.BearerTokenProvider is null)
+                {
+                    httpClient = httpClientFactory.CreateClient(httpClientName);
+                }
+                else
                 {
                     var innerHandler = httpMessageHandlerFactory.CreateHandler(httpClientName);
-                    httpClient = new HttpClient(new BearerTokenHttpMessageHandler(serviceProvider, registrationOptions.BearerTokenProvider, resolvedEndpoint)
+                    HttpMessageHandler handler = innerHandler;
+                    if (resolvedEndpoint.RequestHost is not null)
                     {
-                        InnerHandler = innerHandler,
-                    }, disposeHandler: true);
+                        handler = new HostHeaderHttpMessageHandler(resolvedEndpoint.Endpoint, resolvedEndpoint.RequestHost)
+                        {
+                            InnerHandler = handler,
+                        };
+                    }
+
+                    if (registrationOptions.BearerTokenProvider is not null)
+                    {
+                        handler = new BearerTokenHttpMessageHandler(serviceProvider, registrationOptions.BearerTokenProvider, resolvedEndpoint.Endpoint)
+                        {
+                            InnerHandler = handler,
+                        };
+                    }
+
+                    httpClient = new HttpClient(handler, disposeHandler: true);
                     var clientFactoryOptions = serviceProvider.GetRequiredService<IOptionsMonitor<HttpClientFactoryOptions>>().Get(httpClientName);
                     foreach (var configureClient in clientFactoryOptions.HttpClientActions)
                     {
                         configureClient(httpClient);
                     }
-                }
-                else
-                {
-                    httpClient = httpClientFactory.CreateClient(httpClientName);
                 }
                 transport = new HttpClientTransport(transportOptions, httpClient, loggerFactory, ownsHttpClient: true);
                 var client = await McpClient.CreateAsync(transport, clientOptions, loggerFactory: loggerFactory, cancellationToken: _creationCancellation.Token).ConfigureAwait(false);
@@ -514,45 +528,53 @@ public static class AspireMcpClientExtensions
                 : endpoint;
         }
 
-        private async Task<Uri> ResolveEndpointAsync(Uri endpoint, ServiceEndpointResolver? serviceEndpointResolver, CancellationToken cancellationToken)
+        private async Task<ResolvedEndpoint> ResolveEndpointAsync(Uri endpoint, ServiceEndpointResolver? serviceEndpointResolver, CancellationToken cancellationToken)
         {
             if (endpoint.Scheme is not "https+http")
             {
-                return endpoint;
+                return new(endpoint, RequestHost: null);
             }
 
             if (serviceEndpointResolver is null)
             {
-                return new UriBuilder(Uri.UriSchemeHttps, endpoint.Host, endpoint.Port, endpoint.AbsolutePath).Uri;
+                return new(new UriBuilder(Uri.UriSchemeHttps, endpoint.Host, endpoint.Port, endpoint.AbsolutePath).Uri, RequestHost: null);
             }
 
             var endpointSource = await serviceEndpointResolver.GetEndpointsAsync(endpoint.GetLeftPart(UriPartial.Authority), cancellationToken).ConfigureAwait(false);
-            var resolvedUris = endpointSource.Endpoints
-                .Select(serviceEndpoint => CreateResolvedEndpointUri(serviceEndpoint, endpoint))
-                .OfType<Uri>()
-                .Where(static uri => uri.Scheme is "http" or "https")
-                .GroupBy(static uri => uri.Scheme is "https" ? 0 : 1)
+            var resolvedEndpoints = endpointSource.Endpoints
+                .Select(serviceEndpoint => CreateResolvedEndpoint(serviceEndpoint, endpoint))
+                .OfType<ResolvedEndpoint>()
+                .Where(static endpoint => endpoint.Endpoint.Scheme is "http" or "https")
+                .GroupBy(static endpoint => endpoint.Endpoint.Scheme is "https" ? 0 : 1)
                 .OrderBy(static group => group.Key)
                 .FirstOrDefault()
                 ?.ToArray();
 
-            if (resolvedUris is null || resolvedUris.Length == 0)
+            if (resolvedEndpoints is null || resolvedEndpoints.Length == 0)
             {
                 throw new InvalidOperationException($"No HTTP or HTTPS endpoint was found for MCP service '{endpoint.Host}'.");
             }
 
-            return resolvedUris[GetNextEndpointIndex(resolvedUris.Length)];
+            return resolvedEndpoints[GetNextEndpointIndex(resolvedEndpoints.Length)];
         }
 
-        private static Uri? CreateResolvedEndpointUri(ServiceEndpoint serviceEndpoint, Uri endpoint)
+        private static ResolvedEndpoint? CreateResolvedEndpoint(ServiceEndpoint serviceEndpoint, Uri endpoint)
         {
             return serviceEndpoint.EndPoint switch
             {
-                UriEndPoint uriEndPoint => CreateResolvedEndpointUri(uriEndPoint.Uri, endpoint),
-                DnsEndPoint dnsEndPoint => CreateResolvedEndpointUri(endpoint, dnsEndPoint.Host, dnsEndPoint.Port),
-                IPEndPoint ipEndPoint => CreateResolvedEndpointUri(endpoint, serviceEndpoint.Features.Get<IHostNameFeature>()?.HostName ?? ipEndPoint.Address.ToString(), ipEndPoint.Port),
+                UriEndPoint uriEndPoint => new(CreateResolvedEndpointUri(uriEndPoint.Uri, endpoint), RequestHost: null),
+                DnsEndPoint dnsEndPoint => new(CreateResolvedEndpointUri(endpoint, dnsEndPoint.Host, dnsEndPoint.Port), RequestHost: null),
+                IPEndPoint ipEndPoint => CreateResolvedIpEndpoint(ipEndPoint, serviceEndpoint.Features.Get<IHostNameFeature>(), endpoint),
                 _ => null,
             };
+        }
+
+        private static ResolvedEndpoint CreateResolvedIpEndpoint(IPEndPoint ipEndPoint, IHostNameFeature? hostNameFeature, Uri endpoint)
+        {
+            var resolvedUri = CreateResolvedEndpointUri(endpoint, ipEndPoint.Address.ToString(), ipEndPoint.Port);
+            return string.IsNullOrWhiteSpace(hostNameFeature?.HostName)
+                ? new(resolvedUri, RequestHost: null)
+                : new(resolvedUri, hostNameFeature.HostName);
         }
 
         private static Uri CreateResolvedEndpointUri(Uri resolvedUri, Uri endpoint)
@@ -601,6 +623,24 @@ public static class AspireMcpClientExtensions
             var index = Interlocked.Increment(ref _endpointIndex);
 
             return (int)((uint)index % (uint)endpointCount);
+        }
+
+        private readonly record struct ResolvedEndpoint(Uri Endpoint, string? RequestHost);
+    }
+
+    private sealed class HostHeaderHttpMessageHandler(Uri mcpEndpoint, string requestHost) : DelegatingHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.RequestUri is { } requestUri &&
+                requestUri.Host.Equals(mcpEndpoint.Host, StringComparison.OrdinalIgnoreCase) &&
+                requestUri.Scheme.Equals(mcpEndpoint.Scheme, StringComparison.OrdinalIgnoreCase) &&
+                requestUri.Port == mcpEndpoint.Port)
+            {
+                request.Headers.Host = requestHost;
+            }
+
+            return base.SendAsync(request, cancellationToken);
         }
     }
 

@@ -536,7 +536,7 @@ public class AspireMcpClientExtensionsTests
     {
         var handler = new SuccessfulInitializationHandler();
         var builder = Host.CreateEmptyApplicationBuilder(null);
-        builder.Services.AddSingleton<IServiceEndpointProviderFactory>(new StaticServiceEndpointProviderFactory(endPoint));
+        builder.Services.AddSingleton<IServiceEndpointProviderFactory>(new StaticServiceEndpointProviderFactory(CreateServiceEndpoint(endPoint)));
         builder.Services.AddServiceDiscovery();
         builder.Services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => handler));
         builder.AddMcpClient("mcp");
@@ -547,6 +547,26 @@ public class AspireMcpClientExtensionsTests
 
         Assert.Null(exception);
         Assert.Contains(handler.RequestUris, uri => uri.ToString() == expectedEndpoint);
+    }
+
+    [Fact]
+    public async Task McpClientPreservesIpDestinationAndHostMetadataForPlatformServiceEndpoint()
+    {
+        var handler = new SuccessfulInitializationHandler();
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Services.AddSingleton<IServiceEndpointProviderFactory>(new StaticServiceEndpointProviderFactory(
+            CreateServiceEndpoint(new IPEndPoint(IPAddress.Parse("127.0.0.11"), 5001), hostName: "platform-mcp")));
+        builder.Services.AddServiceDiscovery();
+        builder.Services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => handler));
+        builder.AddMcpClient("mcp");
+
+        using var host = builder.Build();
+        var client = host.Services.GetRequiredService<McpClient>();
+        var exception = await Record.ExceptionAsync(async () => await client.PingAsync());
+
+        Assert.Null(exception);
+        Assert.Contains(handler.RequestUris, uri => uri.ToString() == "https://127.0.0.11:5001/mcp");
+        Assert.Contains(handler.RequestHosts, host => host == "platform-mcp");
     }
 
     [Fact]
@@ -871,6 +891,8 @@ public class AspireMcpClientExtensionsTests
     {
         public ConcurrentQueue<Uri> RequestUris { get; } = [];
 
+        public ConcurrentQueue<string?> RequestHosts { get; } = [];
+
         public ConcurrentQueue<string> RequestMethods { get; } = [];
 
         public bool Disposed { get; private set; }
@@ -878,6 +900,7 @@ public class AspireMcpClientExtensionsTests
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             RequestUris.Enqueue(request.RequestUri!);
+            RequestHosts.Enqueue(request.Headers.Host);
 
             if (request.Method == HttpMethod.Get)
             {
@@ -947,23 +970,39 @@ public class AspireMcpClientExtensionsTests
         }
     }
 
-    private sealed class StaticServiceEndpointProviderFactory(params EndPoint[] endPoints) : IServiceEndpointProviderFactory
+    private static ServiceEndpoint CreateServiceEndpoint(EndPoint endPoint, string? hostName = null)
+    {
+        var features = new FeatureCollection();
+        if (!string.IsNullOrWhiteSpace(hostName))
+        {
+            features.Set<IHostNameFeature>(new HostNameFeature(hostName));
+        }
+
+        return ServiceEndpoint.Create(endPoint, features);
+    }
+
+    private sealed class HostNameFeature(string hostName) : IHostNameFeature
+    {
+        public string HostName { get; } = hostName;
+    }
+
+    private sealed class StaticServiceEndpointProviderFactory(params ServiceEndpoint[] serviceEndpoints) : IServiceEndpointProviderFactory
     {
         public bool TryCreateProvider(ServiceEndpointQuery query, [NotNullWhen(true)] out IServiceEndpointProvider? provider)
         {
-            provider = new StaticServiceEndpointProvider(endPoints);
+            provider = new StaticServiceEndpointProvider(serviceEndpoints);
 
             return true;
         }
     }
 
-    private sealed class StaticServiceEndpointProvider(EndPoint[] endPoints) : IServiceEndpointProvider
+    private sealed class StaticServiceEndpointProvider(ServiceEndpoint[] serviceEndpoints) : IServiceEndpointProvider
     {
         public ValueTask PopulateAsync(IServiceEndpointBuilder endpoints, CancellationToken cancellationToken)
         {
-            foreach (var endPoint in endPoints)
+            foreach (var serviceEndpoint in serviceEndpoints)
             {
-                endpoints.Endpoints.Add(ServiceEndpoint.Create(endPoint, new FeatureCollection()));
+                endpoints.Endpoints.Add(serviceEndpoint);
             }
 
             return ValueTask.CompletedTask;
