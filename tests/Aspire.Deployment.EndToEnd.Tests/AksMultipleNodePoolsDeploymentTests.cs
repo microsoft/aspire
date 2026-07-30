@@ -115,9 +115,9 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 // AKS environment with multiple node pools
 var aks = builder.AddAzureKubernetesEnvironment("aks")
-    .WithSystemNodePool("Standard_D2as_v5", minCount: 1, maxCount: 2);
+    .WithSystemNodePool("Standard_D2s_v5", minCount: 1, maxCount: 2);
 
-var workerPool = aks.AddNodePool("workers", "Standard_D2as_v5", 1, 3);
+var workerPool = aks.AddNodePool("workers", "Standard_D2s_v5", 1, 3);
 """);
 
             // Pin apiservice to the worker node pool
@@ -136,7 +136,9 @@ var workerPool = aks.AddNodePool("workers", "Standard_D2as_v5", 1, 3);
             await auto.WaitForSuccessPromptAsync(counter);
 
             // Step 8: Set environment variables for deployment
-            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
+            // Unset the job-level Azure__Location=westus3 the CI workflow injects: on Linux it coexists
+            // with AZURE__LOCATION (case-sensitive env) and .NET config may bind the inherited westus3 instead.
+            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && unset Azure__Location && export AZURE__LOCATION=centralus && export AZURE__RESOURCEGROUP={resourceGroupName}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 

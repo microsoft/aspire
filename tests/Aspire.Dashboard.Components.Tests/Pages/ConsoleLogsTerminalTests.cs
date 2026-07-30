@@ -38,11 +38,11 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 public partial class ConsoleLogsTests
 {
     [Fact]
-    public async Task TerminalResource_Selected_RendersBothViews_DefaultsToConsole()
+    public async Task TerminalResource_Live_Selected_RendersBothViews_DefaultsToTerminal()
     {
         var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
         var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
-        var terminalResource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1);
+        var terminalResource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1, state: KnownResourceState.Running);
         var dashboardClient = new TestDashboardClient(
             isEnabled: true,
             consoleLogsChannelProvider: _ => consoleLogsChannel,
@@ -73,17 +73,224 @@ public partial class ConsoleLogsTests
 
         // Both views are mounted concurrently for terminal-enabled resources
         // so the View dropdown can flip between them without tearing down
-        // the JS terminal or the LogViewer subscription. The initial active
-        // view is Console — that way any pre-PTY hosting messages (WaitFor)
-        // are visible immediately.
+        // the JS terminal or the LogViewer subscription.
         Assert.Single(cut.FindComponents<TerminalView>());
         Assert.Single(cut.FindComponents<LogViewer>());
+
+        // The resource is live (Running), so its PTY is active — the page
+        // defaults to the Terminal view because that's the surface the user
+        // navigated to see.
+        Assert.Equal(ConsoleLogs.ConsoleLogsView.Terminal, instance.ActiveViewForTest);
 
         var terminalView = cut.FindComponents<TerminalView>()[0].Instance;
         Assert.Equal(terminalResource.DisplayName, terminalView.ResourceName);
         Assert.Equal(0, terminalView.ReplicaIndex);
 
         await Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task TerminalResource_ViewPicker_MarksActiveViewAsChecked()
+    {
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var terminalResource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1, state: KnownResourceState.Running);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [terminalResource]);
+
+        SetupConsoleLogsServices(dashboardClient);
+        SetupTerminalViewJsInterop();
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: "terminal-resource"));
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "terminal-resource");
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+
+        var instance = cut.Instance;
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == terminalResource.Name);
+        cut.WaitForState(() => cut.FindComponents<TerminalView>().Count > 0);
+
+        // The view-toggle items are the first two entries in the menu, added in
+        // Console-then-Terminal order (see UpdateMenuButtons). Both are modeled as
+        // checkable menu items so assistive technology can announce the selection;
+        // the live resource defaults to Terminal, so only the Terminal item is
+        // checked.
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Terminal);
+        Assert.Equal(MenuItemRole.MenuItemCheckbox, instance.LogsMenuItemsForTest[0].Role);
+        Assert.Equal(MenuItemRole.MenuItemCheckbox, instance.LogsMenuItemsForTest[1].Role);
+        Assert.False(instance.LogsMenuItemsForTest[0].Checked);
+        Assert.True(instance.LogsMenuItemsForTest[1].Checked);
+
+        // Switching to Console moves the checked state to the Console item.
+        await cut.InvokeAsync(() => instance.HandleViewChangedForTestAsync(nameof(ConsoleLogs.ConsoleLogsView.Console)));
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Console);
+        Assert.True(instance.LogsMenuItemsForTest[0].Checked);
+        Assert.False(instance.LogsMenuItemsForTest[1].Checked);
+    }
+
+    [Fact]
+    public async Task TerminalResource_NotLive_Selected_RendersBothViews_DefaultsToConsole()
+    {
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        // A terminal-enabled resource that is still Waiting has no live PTY yet,
+        // so pre-PTY hosting messages (WaitFor, startup failures) belong on the
+        // Console view. The page must NOT flip to Terminal until the resource is
+        // running.
+        var terminalResource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1, state: KnownResourceState.Waiting);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [terminalResource]);
+
+        SetupConsoleLogsServices(dashboardClient);
+        SetupTerminalViewJsInterop();
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: "terminal-resource"));
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "terminal-resource");
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+
+        var instance = cut.Instance;
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == terminalResource.Name);
+        cut.WaitForState(() => cut.FindComponents<TerminalView>().Count > 0);
+
+        // Both views mount regardless of state so a later Running transition
+        // doesn't need to re-create the terminal, but the non-live resource
+        // stays on Console.
+        Assert.Single(cut.FindComponents<TerminalView>());
+        Assert.Single(cut.FindComponents<LogViewer>());
+        Assert.Equal(ConsoleLogs.ConsoleLogsView.Console, instance.ActiveViewForTest);
+
+        await Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task TerminalResource_NotLive_Selected_ThenGoesLive_StaysOnConsole()
+    {
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        // The Terminal default is latched at resource-selection time, not on
+        // every state update. A Waiting terminal resource the user has already
+        // selected (and is reading on Console) must stay on Console when it
+        // later transitions to Running via a resource-channel update — otherwise
+        // the view would yank out from under the user the moment the PTY comes
+        // up. This locks down the resetView gate in SubscribeAsync against a
+        // future change that re-defaults on state-update renders.
+        var terminalResource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1, state: KnownResourceState.Waiting);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [terminalResource]);
+
+        SetupConsoleLogsServices(dashboardClient);
+        SetupTerminalViewJsInterop();
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: "terminal-resource"));
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "terminal-resource");
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+
+        var instance = cut.Instance;
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == terminalResource.Name);
+        cut.WaitForState(() => cut.FindComponents<TerminalView>().Count > 0);
+
+        // The non-live resource starts on Console.
+        Assert.Equal(ConsoleLogs.ConsoleLogsView.Console, instance.ActiveViewForTest);
+
+        // The same resource transitions Waiting -> Running through the resource
+        // subscription — the production path that background-processes state
+        // changes. This is an Upsert of an already-selected resource, not a
+        // selection change, so it must not re-apply the selection-time default.
+        var runningResource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1, state: KnownResourceState.Running);
+        resourceChannel.Writer.TryWrite([
+            new ResourceViewModelChange(ResourceViewModelChangeType.Upsert, runningResource)
+        ]);
+
+        // Wait until the page has actually applied the Running snapshot so the
+        // assertion below can't pass just because the update hasn't arrived yet.
+        cut.WaitForState(() => instance.GetResourceSnapshotForTest("terminal-resource")?.KnownState == KnownResourceState.Running);
+
+        // The running default only applies on the initial selection, so the view
+        // must still be Console after the live transition.
+        Assert.Equal(ConsoleLogs.ConsoleLogsView.Console, instance.ActiveViewForTest);
+    }
+
+    [Fact]
+    public async Task TerminalResource_Live_ManualConsoleSelection_SurvivesFilterChange()
+    {
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var terminalResource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1, state: KnownResourceState.Running);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [terminalResource]);
+
+        SetupConsoleLogsServices(dashboardClient);
+        SetupTerminalViewJsInterop();
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: "terminal-resource"));
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "terminal-resource");
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+
+        var instance = cut.Instance;
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == terminalResource.Name);
+        cut.WaitForState(() => cut.FindComponents<TerminalView>().Count > 0);
+
+        // The live resource defaults to Terminal, then the user deliberately
+        // picks Console from the ⋯ menu.
+        Assert.Equal(ConsoleLogs.ConsoleLogsView.Terminal, instance.ActiveViewForTest);
+        await cut.InvokeAsync(() => instance.HandleViewChangedForTestAsync(nameof(ConsoleLogs.ConsoleLogsView.Console)));
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Console);
+
+        // Clearing the console logs raises ConsoleLogsManager.OnFiltersChanged,
+        // which re-enters SubscribeAsync. That refresh must preserve the user's
+        // manual Console selection rather than snapping the running resource back
+        // to Terminal.
+        var consoleLogsManager = Services.GetRequiredService<ConsoleLogsManager>();
+        await cut.InvokeAsync(() => consoleLogsManager.UpdateFiltersAsync(ConsoleLogsFilters.CreateClearAll(DateTime.UtcNow)));
+
+        Assert.Equal(ConsoleLogs.ConsoleLogsView.Console, instance.ActiveViewForTest);
     }
 
     [Fact]
@@ -232,7 +439,10 @@ public partial class ConsoleLogsTests
         // pass the enum-based tests while producing a broken UI.
         var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
         var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
-        var terminalResource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1);
+        // Use a non-live (Waiting) terminal resource so the page starts on the
+        // Console view; a Running resource would default straight to Terminal
+        // (its PTY is live) and we want to exercise the Console→Terminal flip.
+        var terminalResource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1, state: KnownResourceState.Waiting);
         var dashboardClient = new TestDashboardClient(
             isEnabled: true,
             consoleLogsChannelProvider: _ => consoleLogsChannel,
@@ -369,7 +579,7 @@ public partial class ConsoleLogsTests
         module.Setup<TerminalSizePreset[]>("getSizePresets").SetResult([]);
     }
 
-    private static ResourceViewModel CreateTerminalResource(string resourceName, int replicaIndex, int replicaCount)
+    private static ResourceViewModel CreateTerminalResource(string resourceName, int replicaIndex, int replicaCount, KnownResourceState state = KnownResourceState.Running)
     {
         // WithTerminal() stamps these three properties onto the resource
         // snapshot in DashboardServiceData.cs (covered by
@@ -385,7 +595,7 @@ public partial class ConsoleLogsTests
 
         return ModelTestHelpers.CreateResource(
             resourceName: resourceName,
-            state: KnownResourceState.Running,
+            state: state,
             properties: properties);
     }
 

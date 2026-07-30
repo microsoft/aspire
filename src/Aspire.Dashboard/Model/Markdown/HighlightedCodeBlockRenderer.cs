@@ -95,7 +95,7 @@ public class HighlightedCodeBlockRenderer : HtmlObjectRenderer<CodeBlock>
         renderer.Writer.Write(@"<div class=""code-block"">");
 
         renderer.Writer.Write(@"<div class=""code-title"">");
-        renderer.Writer.Write(title);
+        renderer.WriteEscape(title);
         renderer.Writer.Write("</div>");
 
         renderer.Writer.Write(@"<div class=""code-buttons-anchor"">");
