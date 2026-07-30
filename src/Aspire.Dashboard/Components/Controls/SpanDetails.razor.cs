@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Controls.Grid;
 using Aspire.Dashboard.Components.Controls.PropertyValues;
 using Aspire.Dashboard.Components.Deck;
 using Aspire.Dashboard.Components.Pages;
@@ -11,7 +12,6 @@ using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Controls;
@@ -78,8 +78,8 @@ public partial class SpanDetails : IDisposable
     private SpanDetailsViewModel? _viewModel;
     private Dictionary<string, ComponentMetadata>? _valueComponents;
 
-    private ColumnResizeLabels _resizeLabels = ColumnResizeLabels.Default;
-    private ColumnSortLabels _sortLabels = ColumnSortLabels.Default;
+    // Column widths for the span links/backlinks tables, derived from the previous "4fr 1fr" layout.
+    private static readonly IReadOnlyList<string> s_spanLinkColumnWidths = GridColumnWidths.Parse("4fr 1fr", 2);
 
     private readonly CancellationTokenSource _cts = new();
 
@@ -92,7 +92,6 @@ public partial class SpanDetails : IDisposable
     protected override void OnInitialized()
     {
         TelemetryContextProvider.Initialize(TelemetryContext);
-        (_resizeLabels, _sortLabels) = DashboardUIHelpers.CreateGridLabels(Loc);
     }
 
     private void UpdateSpanActionsMenu()

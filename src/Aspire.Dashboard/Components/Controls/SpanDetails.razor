@@ -81,52 +81,60 @@
                 </PropertyGrid>
             </AccordionItem>
             <AccordionItem Heading="@Loc[nameof(ControlsStrings.SpanDetailsLinksHeader)]" Expanded="@_isSpanLinksExpanded" Count="@FilteredSpanLinks.Count()">
-                <FluentDataGrid ColumnResizeLabels="@_resizeLabels"
-                                ColumnSortLabels="@_sortLabels"
-                                HeaderCellAsButtonWithMenu="true"
-                                ResizeType="DataGridResizeType.Discrete"
-                                ResizableColumns="true"
-                                TGridItem="SpanLinkViewModel"
-                                Items="@FilteredSpanLinks"
-                                Style="width:100%"
-                                RowSize="DataGridRowSize.Medium"
-                                GridTemplateColumns="4fr 1fr"
-                                ShowHover="true"
-                                Multiline="true">
-                    <TemplateColumn Title="@Loc[nameof(ControlsStrings.SpanDetailsSpanColumnHeader)]">
-                        @WriteSpanLink(context)
-                    </TemplateColumn>
-                    <TemplateColumn Title="@Loc[nameof(ControlsStrings.SpanDetailsDetailsColumnHeader)]">
-                        <button type="button" class="button-hyperlink" @onclick="@(() => OnViewDetailsAsync(context))">
-                            <DeckIcon Name="DeckIconName.GanttChart" Size="16" />
-                            @OtlpHelpers.ToShortenedId(context.SpanId)
-                            </button>
-                    </TemplateColumn>
-                </FluentDataGrid>
+                <table class="data span-links-grid multiline">
+                    <colgroup>
+                        <col style="width: @s_spanLinkColumnWidths[0]" />
+                        <col style="width: @s_spanLinkColumnWidths[1]" />
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th>@Loc[nameof(ControlsStrings.SpanDetailsSpanColumnHeader)]</th>
+                            <th>@Loc[nameof(ControlsStrings.SpanDetailsDetailsColumnHeader)]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var context in FilteredSpanLinks)
+                        {
+                            <tr>
+                                <td>@WriteSpanLink(context)</td>
+                                <td>
+                                    <button type="button" class="button-hyperlink" @onclick="@(() => OnViewDetailsAsync(context))">
+                                        <DeckIcon Name="DeckIconName.GanttChart" Size="16" />
+                                        @OtlpHelpers.ToShortenedId(context.SpanId)
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             </AccordionItem>
             <AccordionItem Heading="@Loc[nameof(ControlsStrings.SpanDetailsBacklinksHeader)]" Expanded="@_isSpanBacklinksExpanded" Count="@FilteredSpanBacklinks.Count()">
-                <FluentDataGrid ColumnResizeLabels="@_resizeLabels"
-                                ColumnSortLabels="@_sortLabels"
-                                HeaderCellAsButtonWithMenu="true"
-                                ResizeType="DataGridResizeType.Discrete"
-                                ResizableColumns="true"
-                                TGridItem="SpanLinkViewModel"
-                                Items="@FilteredSpanBacklinks"
-                                Style="width:100%"
-                                RowSize="DataGridRowSize.Medium"
-                                GridTemplateColumns="4fr 1fr"
-                                ShowHover="true"
-                                Multiline="true">
-                    <TemplateColumn Title="@Loc[nameof(ControlsStrings.SpanDetailsSpanColumnHeader)]">
-                        @WriteSpanLink(context)
-                    </TemplateColumn>
-                    <TemplateColumn Title="@Loc[nameof(ControlsStrings.SpanDetailsDetailsColumnHeader)]">
-                        <button type="button" class="button-hyperlink" @onclick="@(() => OnViewDetailsAsync(context))">
-                            <DeckIcon Name="DeckIconName.GanttChart" Size="16" />
-                            @OtlpHelpers.ToShortenedId(context.SpanId)
-                            </button>
-                    </TemplateColumn>
-                </FluentDataGrid>
+                <table class="data span-links-grid multiline">
+                    <colgroup>
+                        <col style="width: @s_spanLinkColumnWidths[0]" />
+                        <col style="width: @s_spanLinkColumnWidths[1]" />
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th>@Loc[nameof(ControlsStrings.SpanDetailsSpanColumnHeader)]</th>
+                            <th>@Loc[nameof(ControlsStrings.SpanDetailsDetailsColumnHeader)]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var context in FilteredSpanBacklinks)
+                        {
+                            <tr>
+                                <td>@WriteSpanLink(context)</td>
+                                <td>
+                                    <button type="button" class="button-hyperlink" @onclick="@(() => OnViewDetailsAsync(context))">
+                                        <DeckIcon Name="DeckIconName.GanttChart" Size="16" />
+                                        @OtlpHelpers.ToShortenedId(context.SpanId)
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             </AccordionItem>
         </Accordion>
     </div>
