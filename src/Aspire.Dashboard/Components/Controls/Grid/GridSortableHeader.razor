@@ -1,0 +1,42 @@
+@* Renders a header cell for a Deck data table. When sortable, the cell is a borderless button that
+   toggles client-side sorting and shows an ascending/descending arrow. Sort state is owned by the
+   parent component; this control only renders the affordance and raises OnClick. *@
+
+<th class="@Class" aria-sort="@AriaSort">
+    @if (Sortable)
+    {
+        <button type="button" class="column-sort-button" @onclick="OnClick">
+            <span>@Title</span>
+            @if (IsSorted)
+            {
+                <DeckIcon Name="@(Ascending ? DeckIconName.ArrowUp : DeckIconName.ArrowDown)" Size="12" />
+            }
+        </button>
+    }
+    else
+    {
+        @Title
+    }
+</th>
+
+@code {
+    [Parameter]
+    public string? Title { get; set; }
+
+    [Parameter]
+    public string? Class { get; set; }
+
+    [Parameter]
+    public bool Sortable { get; set; } = true;
+
+    [Parameter]
+    public bool IsSorted { get; set; }
+
+    [Parameter]
+    public bool Ascending { get; set; } = true;
+
+    [Parameter]
+    public EventCallback OnClick { get; set; }
+
+    private string AriaSort => !IsSorted ? "none" : Ascending ? "ascending" : "descending";
+}

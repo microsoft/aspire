@@ -34,184 +34,221 @@
                               ValueComponents="_valueComponents" />
             </AccordionItem>
             <AccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsUrlsHeader)]" Expanded="@_isUrlsExpanded" Count="@FilteredUrls.Count()">
-                <FluentDataGrid TGridItem="DisplayedUrl"
-                                ItemKey="@(vm => ((IPropertyGridItem)vm).Key)"
-                                Items="@FilteredUrls"
-                                ColumnResizeLabels="@_resizeLabels"
-                                ColumnSortLabels="@_sortLabels"
-                                HeaderCellAsButtonWithMenu="true"
-                                ResizableColumns="true"
-                                ResizeType="DataGridResizeType.Discrete"
-                                Style="width:100%"
-                                RowSize="DataGridRowSize.Medium"
-                                GridTemplateColumns="1fr 1fr 0.5fr"
-                                ShowHover="true">
-                    <AspireTemplateColumn Sortable="true" SortBy="@_urlValueSort" Title="@ControlStringsLoc[nameof(ControlsStrings.LinkAddressColumnHeader)]">
-                        <GridValue ValueDescription="@ControlStringsLoc[nameof(ControlsStrings.LinkAddressColumnHeader)]"
-                                   Value="@context.OriginalUrlString"
-                                   ValueTemplate="@(_ => RenderAddressValue(context, _filter))"
-                                   EnableHighlighting="@(!string.IsNullOrEmpty(_filter))"
-                                   IsMaskedChanged="@(_ => OnValueMaskedChanged(context))"
-                                   HighlightText="@_filter" />
-                    </AspireTemplateColumn>
-                    <AspireTemplateColumn Sortable="true" SortBy="@_urlValueSort" Title="@ControlStringsLoc[nameof(ControlsStrings.LinkTextColumnHeader)]">
-                        <GridValue ValueDescription="@ControlStringsLoc[nameof(ControlsStrings.LinkTextColumnHeader)]"
-                                   Value="@context.DisplayName"
-                                   ValueTemplate="@(_ => RenderTextValue(context, _filter))"
-                                   EnableHighlighting="@(!string.IsNullOrEmpty(_filter) && !string.IsNullOrEmpty(context.DisplayName))"
-                                   IsMaskedChanged="@(_ => OnValueMaskedChanged(context))"
-                                   HighlightText="@_filter" />
-                    </AspireTemplateColumn>
-                    <AspireTemplateColumn Sortable="true" SortBy="@(GridSort<DisplayedUrl>.ByAscending(i => i.Name))" Title="@ControlStringsLoc[nameof(ControlsStrings.EndpointNameColumnHeader)]">
-                        <GridValue ValueDescription="@ControlStringsLoc[nameof(ControlsStrings.EndpointNameColumnHeader)]"
-                                   Value="@context.Name"
-                                   EnableHighlighting="@(!string.IsNullOrEmpty(_filter))"
-                                   HighlightText="@_filter" />
-                    </AspireTemplateColumn>
-                </FluentDataGrid>
+                <table class="data resource-details-grid">
+                    <colgroup>
+                        <col style="width: @s_standardColumnWidths[0]" />
+                        <col style="width: @s_standardColumnWidths[1]" />
+                        <col style="width: @s_standardColumnWidths[2]" />
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <GridSortableHeader Title="@ControlStringsLoc[nameof(ControlsStrings.LinkAddressColumnHeader)]" IsSorted="_urlSort.IsSorted(0)" Ascending="_urlSort.Ascending" OnClick="() => SortUrls(0)" />
+                            <GridSortableHeader Title="@ControlStringsLoc[nameof(ControlsStrings.LinkTextColumnHeader)]" IsSorted="_urlSort.IsSorted(1)" Ascending="_urlSort.Ascending" OnClick="() => SortUrls(1)" />
+                            <GridSortableHeader Title="@ControlStringsLoc[nameof(ControlsStrings.EndpointNameColumnHeader)]" IsSorted="_urlSort.IsSorted(2)" Ascending="_urlSort.Ascending" OnClick="() => SortUrls(2)" />
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var context in _urlSort.Apply(FilteredUrls, s_urlSortKeys))
+                        {
+                            <tr @key="((IPropertyGridItem)context).Key">
+                                <td>
+                                    <GridValue ValueDescription="@ControlStringsLoc[nameof(ControlsStrings.LinkAddressColumnHeader)]"
+                                               Value="@context.OriginalUrlString"
+                                               ValueTemplate="@(_ => RenderAddressValue(context, _filter))"
+                                               EnableHighlighting="@(!string.IsNullOrEmpty(_filter))"
+                                               IsMaskedChanged="@(_ => OnValueMaskedChanged(context))"
+                                               HighlightText="@_filter" />
+                                </td>
+                                <td>
+                                    <GridValue ValueDescription="@ControlStringsLoc[nameof(ControlsStrings.LinkTextColumnHeader)]"
+                                               Value="@context.DisplayName"
+                                               ValueTemplate="@(_ => RenderTextValue(context, _filter))"
+                                               EnableHighlighting="@(!string.IsNullOrEmpty(_filter) && !string.IsNullOrEmpty(context.DisplayName))"
+                                               IsMaskedChanged="@(_ => OnValueMaskedChanged(context))"
+                                               HighlightText="@_filter" />
+                                </td>
+                                <td>
+                                    <GridValue ValueDescription="@ControlStringsLoc[nameof(ControlsStrings.EndpointNameColumnHeader)]"
+                                               Value="@context.Name"
+                                               EnableHighlighting="@(!string.IsNullOrEmpty(_filter))"
+                                               HighlightText="@_filter" />
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             </AccordionItem>
             @if (Resource.IsContainer())
             {
                 <AccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsVolumesHeader)]" Expanded="@_isVolumesExpanded" Count="@FilteredVolumes.Count()">
 
-                    <FluentDataGrid TGridItem="VolumeViewModel"
-                                    ItemKey="@(vm => ((IPropertyGridItem)vm).Key)"
-                                    Items="@FilteredVolumes"
-                                    ColumnResizeLabels="@_resizeLabels"
-                                    ColumnSortLabels="@_sortLabels"
-                                    HeaderCellAsButtonWithMenu="true"
-                                    ResizableColumns="true"
-                                    ResizeType="DataGridResizeType.Discrete"
-                                    Style="width:100%"
-                                    RowSize="DataGridRowSize.Medium"
-                                    GridTemplateColumns="1fr 1fr 0.5fr"
-                                    ShowHover="true">
-                        <AspireTemplateColumn Sortable="true" SortBy="@(GridSort<VolumeViewModel>.ByAscending(i => i.Source))" Title="@ControlStringsLoc[nameof(ControlsStrings.NameColumnHeader)]">
-                            <GridValue ValueDescription="@ControlStringsLoc[nameof(ControlsStrings.NameColumnHeader)]"
-                                       Value="@context.Source"
-                                       EnableHighlighting="@(!string.IsNullOrEmpty(_filter))"
-                                       HighlightText="@_filter" />
-                        </AspireTemplateColumn>
-                        <AspireTemplateColumn Sortable="true" SortBy="@(GridSort<VolumeViewModel>.ByAscending(i => i.Target))" Title="@ControlStringsLoc[nameof(ControlsStrings.VolumePathColumnHeader)]">
-                            <GridValue ValueDescription="@ControlStringsLoc[nameof(ControlsStrings.VolumePathColumnHeader)]"
-                                       Value="@context.Target"
-                                       EnableHighlighting="@(!string.IsNullOrEmpty(_filter))"
-                                       HighlightText="@_filter" />
-                        </AspireTemplateColumn>
-                        <AspireTemplateColumn Sortable="true" SortBy="@(GridSort<VolumeViewModel>.ByAscending(i => i.MountType))" Title="@ControlStringsLoc[nameof(ControlsStrings.VolumeMountTypeColumnHeader)]">
-                            <GridValue ValueDescription="@ControlStringsLoc[nameof(ControlsStrings.VolumeMountTypeColumnHeader)]"
-                                       Value="@context.MountType.Humanize()">
-                                <ContentBeforeValue>
-                                    @if (context.IsReadOnly)
-                                    {
-                                        <DeckIcon Name="DeckIconName.Lock" Size="16" Class="volume-mount-type-icon" />
-                                    }
-                                </ContentBeforeValue>
-                            </GridValue>
-                        </AspireTemplateColumn>
-                    </FluentDataGrid>
+                    <table class="data resource-details-grid">
+                        <colgroup>
+                            <col style="width: @s_standardColumnWidths[0]" />
+                            <col style="width: @s_standardColumnWidths[1]" />
+                            <col style="width: @s_standardColumnWidths[2]" />
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <GridSortableHeader Title="@ControlStringsLoc[nameof(ControlsStrings.NameColumnHeader)]" IsSorted="_volumeSort.IsSorted(0)" Ascending="_volumeSort.Ascending" OnClick="() => SortVolumes(0)" />
+                                <GridSortableHeader Title="@ControlStringsLoc[nameof(ControlsStrings.VolumePathColumnHeader)]" IsSorted="_volumeSort.IsSorted(1)" Ascending="_volumeSort.Ascending" OnClick="() => SortVolumes(1)" />
+                                <GridSortableHeader Title="@ControlStringsLoc[nameof(ControlsStrings.VolumeMountTypeColumnHeader)]" IsSorted="_volumeSort.IsSorted(2)" Ascending="_volumeSort.Ascending" OnClick="() => SortVolumes(2)" />
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var context in _volumeSort.Apply(FilteredVolumes, s_volumeSortKeys))
+                            {
+                                <tr @key="((IPropertyGridItem)context).Key">
+                                    <td>
+                                        <GridValue ValueDescription="@ControlStringsLoc[nameof(ControlsStrings.NameColumnHeader)]"
+                                                   Value="@context.Source"
+                                                   EnableHighlighting="@(!string.IsNullOrEmpty(_filter))"
+                                                   HighlightText="@_filter" />
+                                    </td>
+                                    <td>
+                                        <GridValue ValueDescription="@ControlStringsLoc[nameof(ControlsStrings.VolumePathColumnHeader)]"
+                                                   Value="@context.Target"
+                                                   EnableHighlighting="@(!string.IsNullOrEmpty(_filter))"
+                                                   HighlightText="@_filter" />
+                                    </td>
+                                    <td>
+                                        <GridValue ValueDescription="@ControlStringsLoc[nameof(ControlsStrings.VolumeMountTypeColumnHeader)]"
+                                                   Value="@context.MountType.Humanize()">
+                                            <ContentBeforeValue>
+                                                @if (context.IsReadOnly)
+                                                {
+                                                    <DeckIcon Name="DeckIconName.Lock" Size="16" Class="volume-mount-type-icon" />
+                                                }
+                                            </ContentBeforeValue>
+                                        </GridValue>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
                 </AccordionItem>
             }
             <AccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsReferences)]" Expanded="@_isRelationshipsExpanded" Count="@FilteredRelationships.Count()">
-                <FluentDataGrid ColumnResizeLabels="@_resizeLabels"
-                                ColumnSortLabels="@_sortLabels"
-                                HeaderCellAsButtonWithMenu="true"
-                                ResizeType="DataGridResizeType.Discrete"
-                                TGridItem="ResourceDetailRelationshipViewModel"
-                                Items="@FilteredRelationships"
-                                ItemKey="r => r.ResourceName"
-                                ResizableColumns="true"
-                                Style="width:100%"
-                                RowSize="DataGridRowSize.Medium"
-                                GridTemplateColumns="1fr 1fr 0.5fr"
-                                ShowHover="true">
-                    <TemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsResourceHeader)]">
-                        <ResourceNameValue Resource="@context.Resource" Value="@context.ResourceName" FormatName="@FormatName" />
-                    </TemplateColumn>
-                    <TemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsTypeHeader)]" TooltipText="@(c => string.Join(", ", c.Types))">
-                        @string.Join(", ", context.Types)
-                    </TemplateColumn>
-                    <TemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]" Class="no-ellipsis">
-                        <button type="button" class="button-hyperlink-no-icon" @onclick="@(() => OnViewRelationshipAsync(context))">@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]</button>
-                    </TemplateColumn>
-                </FluentDataGrid>
+                <table class="data resource-details-grid">
+                    <colgroup>
+                        <col style="width: @s_standardColumnWidths[0]" />
+                        <col style="width: @s_standardColumnWidths[1]" />
+                        <col style="width: @s_standardColumnWidths[2]" />
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th>@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsResourceHeader)]</th>
+                            <th>@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsTypeHeader)]</th>
+                            <th class="no-ellipsis">@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var context in FilteredRelationships)
+                        {
+                            <tr @key="context.ResourceName">
+                                <td>
+                                    <ResourceNameValue Resource="@context.Resource" Value="@context.ResourceName" FormatName="@FormatName" />
+                                </td>
+                                <td title="@string.Join(", ", context.Types)">@string.Join(", ", context.Types)</td>
+                                <td class="no-ellipsis">
+                                    <button type="button" class="button-hyperlink-no-icon" @onclick="@(() => OnViewRelationshipAsync(context))">@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             </AccordionItem>
             <AccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsBackReferences)]" Expanded="@_isBackRelationshipsExpanded" Count="@FilteredBackRelationships.Count()">
-                <FluentDataGrid ColumnResizeLabels="@_resizeLabels"
-                                ColumnSortLabels="@_sortLabels"
-                                HeaderCellAsButtonWithMenu="true"
-                                ResizeType="DataGridResizeType.Discrete"
-                                TGridItem="ResourceDetailRelationshipViewModel"
-                                Items="@FilteredBackRelationships"
-                                ItemKey="r => r.ResourceName"
-                                ResizableColumns="true"
-                                Style="width:100%"
-                                RowSize="DataGridRowSize.Medium"
-                                GridTemplateColumns="1fr 1fr 0.5fr"
-                                ShowHover="true">
-                    <TemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsResourceHeader)]">
-                        <ResourceNameValue Resource="@context.Resource" Value="@context.ResourceName" FormatName="@FormatName" />
-                    </TemplateColumn>
-                    <TemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsTypeHeader)]" TooltipText="@(c => string.Join(", ", c.Types))">
-                        @string.Join(", ", context.Types)
-                    </TemplateColumn>
-                    <TemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]" Class="no-ellipsis">
-                        <button type="button" class="button-hyperlink-no-icon" @onclick="@(() => OnViewRelationshipAsync(context))">@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]</button>
-                    </TemplateColumn>
-                </FluentDataGrid>
+                <table class="data resource-details-grid">
+                    <colgroup>
+                        <col style="width: @s_standardColumnWidths[0]" />
+                        <col style="width: @s_standardColumnWidths[1]" />
+                        <col style="width: @s_standardColumnWidths[2]" />
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th>@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsResourceHeader)]</th>
+                            <th>@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsTypeHeader)]</th>
+                            <th class="no-ellipsis">@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var context in FilteredBackRelationships)
+                        {
+                            <tr @key="context.ResourceName">
+                                <td>
+                                    <ResourceNameValue Resource="@context.Resource" Value="@context.ResourceName" FormatName="@FormatName" />
+                                </td>
+                                <td title="@string.Join(", ", context.Types)">@string.Join(", ", context.Types)</td>
+                                <td class="no-ellipsis">
+                                    <button type="button" class="button-hyperlink-no-icon" @onclick="@(() => OnViewRelationshipAsync(context))">@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             </AccordionItem>
             <AccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceHealthChecksHeader)]" Expanded="@_isHealthChecksExpanded" Count="@FilteredHealthReports.Count()">
 
-                <FluentDataGrid ColumnResizeLabels="@_resizeLabels"
-                                ColumnSortLabels="@_sortLabels"
-                                HeaderCellAsButtonWithMenu="true"
-                                ResizeType="DataGridResizeType.Discrete"
-                                Items="@FilteredHealthReports"
-                                ItemKey="r => r.Name"
-                                ResizableColumns="true"
-                                Style="width:100%"
-                                RowSize="DataGridRowSize.Medium"
-                                GridTemplateColumns="1fr 1fr 1.5fr"
-                                ShowHover="true">
-                    <AspireTemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.NameColumnHeader)]" Class="nameColumn">
-                        <GridValue ValueDescription="@ControlStringsLoc[nameof(ControlsStrings.NameColumnHeader)]"
-                                   Value="@context.Name"
-                                   EnableHighlighting="@(!string.IsNullOrEmpty(_filter))"
-                                   HighlightText="@_filter" />
-                    </AspireTemplateColumn>
-                    <AspireTemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.StateColumnHeader)]" Class="stateColumn">
-                        <GridValue ValueDescription="@ControlStringsLoc[nameof(ControlsStrings.StateColumnHeader)]"
-                                   Value="@GetHealthStatusWithTime(context)"
-                                   ToolTip="@GetHealthStatusTooltip(context)"
-                                   EnableHighlighting="@(!string.IsNullOrEmpty(_filter))"
-                                   HighlightText="@_filter"
-                                   TextVisualizerTitle="@context.Name">
-                            <ContentBeforeValue>
-                                @if (context.HealthStatus is null)
-                                {
-                                    <div class="spinner severity-icon" style="display: inline-block;" role="progressbar" aria-label="Loading"></div>
-                                }
-                                else
-                                {
-                                    (DeckIconName iconName, string toneClass) = ResourceIconHelpers.GetHealthStatusDeckIcon(context.HealthStatus);
+                <table class="data resource-details-grid">
+                    <colgroup>
+                        <col style="width: @s_healthColumnWidths[0]" />
+                        <col style="width: @s_healthColumnWidths[1]" />
+                        <col style="width: @s_healthColumnWidths[2]" />
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th class="nameColumn">@ControlStringsLoc[nameof(ControlsStrings.NameColumnHeader)]</th>
+                            <th class="stateColumn">@ControlStringsLoc[nameof(ControlsStrings.StateColumnHeader)]</th>
+                            <th class="detailsColumn">@ControlStringsLoc[nameof(ControlsStrings.DetailsColumnHeader)]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var context in FilteredHealthReports)
+                        {
+                            <tr @key="context.Name">
+                                <td class="nameColumn">
+                                    <GridValue ValueDescription="@ControlStringsLoc[nameof(ControlsStrings.NameColumnHeader)]"
+                                               Value="@context.Name"
+                                               EnableHighlighting="@(!string.IsNullOrEmpty(_filter))"
+                                               HighlightText="@_filter" />
+                                </td>
+                                <td class="stateColumn">
+                                    <GridValue ValueDescription="@ControlStringsLoc[nameof(ControlsStrings.StateColumnHeader)]"
+                                               Value="@GetHealthStatusWithTime(context)"
+                                               ToolTip="@GetHealthStatusTooltip(context)"
+                                               EnableHighlighting="@(!string.IsNullOrEmpty(_filter))"
+                                               HighlightText="@_filter"
+                                               TextVisualizerTitle="@context.Name">
+                                        <ContentBeforeValue>
+                                            @if (context.HealthStatus is null)
+                                            {
+                                                <div class="spinner severity-icon" style="display: inline-block;" role="progressbar" aria-label="Loading"></div>
+                                            }
+                                            else
+                                            {
+                                                (DeckIconName iconName, string toneClass) = ResourceIconHelpers.GetHealthStatusDeckIcon(context.HealthStatus);
 
-                                    <DeckIcon Name="@iconName" Size="16" Class="@($"severity-icon {toneClass}")" />
-                                }
-                            </ContentBeforeValue>
-                        </GridValue>
-                    </AspireTemplateColumn>
-                    <AspireTemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.DetailsColumnHeader)]" Class="detailsColumn">
-                        <GridValue ValueDescription="@ControlStringsLoc[nameof(ControlsStrings.DetailsColumnHeader)]"
-                                   Value="@(context.HealthStatus is null ? Loc[nameof(Aspire.Dashboard.Resources.Resources.WaitingForHealthDataMessage)] : context.DisplayedDescription)"
-                                   EnableHighlighting="@(!string.IsNullOrEmpty(_filter))"
-                                   HighlightText="@_filter"
-                                   TextVisualizerTitle="@context.Name">
-                            <ContentInButtonArea>
-                                <ExceptionDetails ExceptionText="@context.ExceptionText" />
-                            </ContentInButtonArea>
-                        </GridValue>
-                    </AspireTemplateColumn>
-                </FluentDataGrid>
+                                                <DeckIcon Name="@iconName" Size="16" Class="@($"severity-icon {toneClass}")" />
+                                            }
+                                        </ContentBeforeValue>
+                                    </GridValue>
+                                </td>
+                                <td class="detailsColumn">
+                                    <GridValue ValueDescription="@ControlStringsLoc[nameof(ControlsStrings.DetailsColumnHeader)]"
+                                               Value="@(context.HealthStatus is null ? Loc[nameof(Aspire.Dashboard.Resources.Resources.WaitingForHealthDataMessage)] : context.DisplayedDescription)"
+                                               EnableHighlighting="@(!string.IsNullOrEmpty(_filter))"
+                                               HighlightText="@_filter"
+                                               TextVisualizerTitle="@context.Name">
+                                        <ContentInButtonArea>
+                                            <ExceptionDetails ExceptionText="@context.ExceptionText" />
+                                        </ContentInButtonArea>
+                                    </GridValue>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             </AccordionItem>
             <AccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsEnvironmentVariablesHeader)]" Expanded="@_isEnvironmentVariablesExpanded" Count="@FilteredEnvironmentVariables.Count()">
                 <PropertyGrid TItem="EnvironmentVariableViewModel"

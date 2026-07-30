@@ -3074,3 +3074,23 @@ hr.deck-divider {
 }
 /* === end Deck dialog framework === */
 .icon-info { color: var(--accent); }
+
+/* === Deck data table: sortable header === */
+/* Borderless sort button that inherits the uppercase muted header styling from `table.data thead th`
+   so a sortable column header looks identical to a static one, plus a direction arrow. Shared by the
+   PropertyGrid and any bespoke Deck table that sorts columns client-side. */
+.column-sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+/* === end Deck data table: sortable header === */

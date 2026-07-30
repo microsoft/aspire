@@ -12,19 +12,3 @@
 .property-grid-table td.multiline-text {
     overflow-x: hidden !important;
 }
-
-/* Sort affordance: a borderless button that keeps the uppercase header styling from table.data. */
-.column-sort-button {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    background: none;
-    border: none;
-    padding: 0;
-    margin: 0;
-    font: inherit;
-    color: inherit;
-    text-transform: inherit;
-    letter-spacing: inherit;
-    cursor: pointer;
-}

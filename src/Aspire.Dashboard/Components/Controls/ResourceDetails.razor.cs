@@ -15,7 +15,6 @@ using Aspire.Shared;
 using Google.Protobuf.WellKnownTypes;
 using Humanizer;
 using Microsoft.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Controls;
@@ -75,8 +74,13 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
     private readonly HashSet<string> _unmaskedItemNames = new();
     private const string StateDescriptionPropertyKey = "resource-state-description";
 
-    private ColumnResizeLabels _resizeLabels = ColumnResizeLabels.Default;
-    private ColumnSortLabels _sortLabels = ColumnSortLabels.Default;
+    private readonly Grid.GridSortState<DisplayedUrl> _urlSort = new();
+    private readonly Grid.GridSortState<VolumeViewModel> _volumeSort = new();
+
+    // Column widths for the accordion tables, derived once from the fractional layouts the Fluent
+    // grid previously used.
+    private static readonly IReadOnlyList<string> s_standardColumnWidths = Grid.GridColumnWidths.Parse("1fr 1fr 0.5fr", 3);
+    private static readonly IReadOnlyList<string> s_healthColumnWidths = Grid.GridColumnWidths.Parse("1fr 1fr 1.5fr", 3);
 
     internal IQueryable<EnvironmentVariableViewModel> FilteredEnvironmentVariables =>
         Resource.Environment
@@ -135,7 +139,32 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
         set { _isMaskAllChecked = value; }
     }
 
-    private readonly GridSort<DisplayedUrl> _urlValueSort = GridSort<DisplayedUrl>.ByAscending(vm => vm.Url ?? vm.Text);
+    // Sort key selectors for the URL and volume tables, indexed by column. The address and text
+    // columns both sort by the resolved URL (falling back to display text), matching the previous
+    // Fluent grid behavior.
+    private static readonly IReadOnlyList<Func<DisplayedUrl, IComparable?>> s_urlSortKeys =
+    [
+        vm => vm.Url ?? vm.Text,
+        vm => vm.Url ?? vm.Text,
+        vm => vm.Name
+    ];
+
+    private static readonly IReadOnlyList<Func<VolumeViewModel, IComparable?>> s_volumeSortKeys =
+    [
+        vm => vm.Source,
+        vm => vm.Target,
+        vm => vm.MountType
+    ];
+
+    private void SortUrls(int columnIndex)
+    {
+        _urlSort.Toggle(columnIndex);
+    }
+
+    private void SortVolumes(int columnIndex)
+    {
+        _volumeSort.Toggle(columnIndex);
+    }
 
     protected override void OnParametersSet()
     {
@@ -259,7 +288,6 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
     protected override void OnInitialized()
     {
         TelemetryContextProvider.Initialize(TelemetryContext);
-        (_resizeLabels, _sortLabels) = DashboardUIHelpers.CreateGridLabels(ControlStringsLoc);
     }
 
     private void UpdateResourceActionsMenu()
