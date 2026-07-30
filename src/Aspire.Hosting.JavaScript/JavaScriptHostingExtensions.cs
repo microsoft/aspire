@@ -1082,50 +1082,13 @@ public static partial class JavaScriptHostingExtensions
 
     private static IResourceBuilder<TResource> WithDenoDefaults<TResource>(this IResourceBuilder<TResource> builder) where TResource : JavaScriptAppResource
     {
-        builder.WithEnvironment(context =>
-            {
-                if (context.ExecutionContext.IsPublishMode)
-                {
-                    return;
-                }
-
-                var configuredHttpEndpoint = builder.ApplicationBuilder.Configuration.GetString(
-                    KnownConfigNames.DashboardOtlpHttpEndpointUrl,
-                    KnownConfigNames.Legacy.DashboardOtlpHttpEndpointUrl);
-                if (!string.IsNullOrWhiteSpace(configuredHttpEndpoint))
-                {
-                    return;
-                }
-
-                DistributedApplicationModel? model;
-                try
-                {
-                    model = context.ExecutionContext.Services.GetService<DistributedApplicationModel>();
-                }
-                catch (InvalidOperationException)
-                {
-                    // Environment evaluation in tests can run before a service provider exists. Treat that the
-                    // same as a model without a dashboard so callers get the Deno-specific diagnostic below.
-                    model = null;
-                }
-
-                var hasDashboardHttpEndpoint = model?.Resources
-                    .OfType<IResourceWithEndpoints>()
-                    .Any(r => r.Name == KnownResourceNames.AspireDashboard &&
-                        r.GetEndpoint(KnownEndpointNames.OtlpHttpEndpointName).Exists) is true;
-                if (!hasDashboardHttpEndpoint)
-                {
-                    throw new InvalidOperationException(
-                        $"Deno resource '{builder.Resource.Name}' requires an OTLP HTTP/protobuf endpoint, but the application has no dashboard HTTP OTLP endpoint and ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL is not configured.");
-                }
-            })
-            .WithOtlpExporter(OtlpProtocol.HttpProtobuf)
+        builder.WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf)
             .WithRequiredCommandsFromPackageManager("deno")
             // Deno has first-class, built-in OpenTelemetry support. Setting OTEL_DENO=true enables automatic export
-            // of traces, metrics, and logs to the OTLP endpoint configured by WithOtlpExporter, with no
-            // application-level SDK required. Unlike the Node/Bun variants (which need an in-process OpenTelemetry
-            // SDK), this is the headline Deno hosting win. Once an OTLP HTTP endpoint is configured, the
-            // instrumentation tolerates a temporarily unavailable collector without blocking workload execution.
+            // of traces, metrics, and logs with no application-level SDK required. Enable it only when an OTLP HTTP
+            // endpoint is available; dashboard-free AppHosts remain valid and should not require an observability
+            // backend merely because they host a Deno workload. Publish mode retains the setting because deployment
+            // targets resolve the exporter endpoint from the OtlpExporterAnnotation.
             //
             // Deno's native exporter sends OTLP as Protobuf over HTTP, so request that dashboard endpoint instead
             // of Aspire's default gRPC preference.
@@ -1136,7 +1099,14 @@ public static partial class JavaScriptHostingExtensions
             // `deno run --help=unstable` and is only a backward-compat no-op. OTEL_DENO accepts only the literal
             // "true"/"false" (not "1"), which is what we emit.
             // See https://docs.deno.com/runtime/fundamentals/open_telemetry/
-            .WithEnvironment("OTEL_DENO", "true")
+            .WithEnvironment(context =>
+            {
+                if (context.ExecutionContext.IsPublishMode ||
+                    context.EnvironmentVariables.ContainsKey(KnownOtelConfigNames.ExporterOtlpEndpoint))
+                {
+                    context.EnvironmentVariables["OTEL_DENO"] = "true";
+                }
+            })
             // Deno honors NODE_ENV in its Node-compatibility mode (npm: specifier resolution, package.json
             // "exports" conditions) the same way Node/Bun do. Mirror the Bun defaults so npm-compat behaves.
             // See https://docs.deno.com/runtime/reference/env_variables/

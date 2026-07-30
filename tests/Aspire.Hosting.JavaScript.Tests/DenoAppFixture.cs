@@ -57,11 +57,6 @@ public abstract class DenoAppFixtureBase(
             _builder.Configuration["ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"] = "https://localhost:0";
             _builder.Configuration["AppHost:DashboardApiKey"] = DenoTelemetryFixture.DashboardApiKey;
         }
-        else
-        {
-            // Deno's native exporter requires HTTP/protobuf even when the dashboard is intentionally absent.
-            _builder.Configuration["ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"] = "http://localhost:4318";
-        }
 
         _denoAppPath = CreateDenoApp();
 

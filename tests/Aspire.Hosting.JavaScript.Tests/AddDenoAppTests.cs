@@ -2326,19 +2326,19 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AddDenoApp_FailsBeforeStartWithActionableMessageWhenHttpOtlpIsUnavailable()
+    public async Task AddDenoApp_RemainsRunnableWithoutDashboardOrExternalOtlpEndpoint()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.DisableDashboard = true,
+            outputHelper);
         var denoApp = builder.AddDenoApp("denoapp", ".", "main.ts");
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => EnvironmentVariableEvaluator
-                .GetEnvironmentVariablesAsync(denoApp.Resource, DistributedApplicationOperation.Run)
-                .AsTask());
+        var environment = await EnvironmentVariableEvaluator
+            .GetEnvironmentVariablesAsync(denoApp.Resource, DistributedApplicationOperation.Run);
 
         Assert.Equal(
-            "Deno resource 'denoapp' requires an OTLP HTTP/protobuf endpoint, but the application has no dashboard HTTP OTLP endpoint and ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL is not configured.",
-            exception.Message);
+            [new("NODE_ENV", "production")],
+            environment.OrderBy(pair => pair.Key));
     }
 
 #pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only

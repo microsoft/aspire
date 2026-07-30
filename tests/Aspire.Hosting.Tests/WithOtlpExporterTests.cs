@@ -75,6 +75,24 @@ public class WithOtlpExporterTests
         );
     }
 
+    [Fact]
+    public async Task OptionalHttpOtlpSkipsEnvironmentWhenEndpointIsUnavailable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(options => options.DisableDashboard = true);
+
+        var container = builder.AddResource(new ContainerResource("testSource"))
+            .WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf);
+        using var app = builder.Build();
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            container.Resource,
+            serviceProvider: app.Services).DefaultTimeout();
+
+        Assert.Empty(config);
+        var annotation = Assert.Single(container.Resource.Annotations.OfType<OtlpExporterAnnotation>());
+        Assert.Equal(OtlpProtocol.HttpProtobuf, annotation.RequiredProtocol);
+    }
+
     [InlineData(default, "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL", "otlp-grpc", "http2", 52000, "grpc")]
     [InlineData(OtlpProtocol.HttpProtobuf, "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL", "otlp-http", null, 53000, "http/protobuf")]
     [InlineData(OtlpProtocol.HttpJson, "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL", "otlp-http", null, 53000, "http/json")]
