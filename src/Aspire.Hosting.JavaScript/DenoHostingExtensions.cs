@@ -932,16 +932,19 @@ public static partial class JavaScriptHostingExtensions
 
         if (deno is not null)
         {
+            if (deno.RuntimeArgs.Any(argument =>
+                argument == "--env-file" ||
+                argument.StartsWith("--env-file=", StringComparison.Ordinal)))
+            {
+                throw new InvalidOperationException(
+                    "Generated Deno Dockerfiles do not support '--env-file' because dotenv files can contain secrets that would be copied into the container image. Use Aspire environment variables or secret parameters, or provide a custom Dockerfile that handles the file securely.");
+            }
+
             // The Docker build context is the app directory, so a path that is absolute or escapes the app
             // directory is never copied into the image and would break both `deno cache` and the entrypoint.
             ThrowIfPathEscapesDenoBuildContext(deno.ConfigFile, nameof(WithDenoConfig));
             ThrowIfPathEscapesDenoBuildContext(deno.ImportMap, nameof(WithDenoImportMap));
             ThrowIfPathEscapesDenoBuildContext(deno.Lock, nameof(WithDenoLock));
-
-            foreach (var environmentFile in GetDenoEnvironmentFiles(deno.RuntimeArgs))
-            {
-                ThrowIfPathEscapesDenoBuildContext(environmentFile, nameof(WithDenoRuntimeArgs));
-            }
         }
     }
 
@@ -1384,25 +1387,6 @@ public static partial class JavaScriptHostingExtensions
             : endpoint.Property(EndpointProperty.TargetPort);
 
         return new(host, port);
-    }
-
-    private static IEnumerable<string> GetDenoEnvironmentFiles(IEnumerable<string> runtimeArgs)
-    {
-        foreach (var argument in runtimeArgs)
-        {
-            if (argument == "--env-file")
-            {
-                yield return ".env";
-                continue;
-            }
-
-            const string EnvFilePrefix = "--env-file=";
-            if (argument.StartsWith(EnvFilePrefix, StringComparison.Ordinal) &&
-                argument.Length > EnvFilePrefix.Length)
-            {
-                yield return ToDenoContainerPath(argument[EnvFilePrefix.Length..]);
-            }
-        }
     }
 
     private sealed record DenoServeEndpointArguments(string Host, object Port);

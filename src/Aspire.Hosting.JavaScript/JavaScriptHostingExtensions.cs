@@ -921,7 +921,7 @@ public static partial class JavaScriptHostingExtensions
                     // local .git, dotenv files, and Aspire output out of the image.
                     if (dockerfileContext.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation))
                     {
-                        dockerfileBuildAnnotation.BuildContextIgnoreContent ??= BuildDenoBuildContextIgnoreContent(dockerfileContext.Resource);
+                        dockerfileBuildAnnotation.BuildContextIgnoreContent ??= DefaultDenoBuildContextIgnoreContent;
                     }
 
                     ThrowIfUnsupportedDenoDockerfileOptions(dockerfileContext.Resource);
@@ -1078,47 +1078,6 @@ public static partial class JavaScriptHostingExtensions
         }
 
         return resourceBuilder;
-    }
-
-    private static string BuildDenoBuildContextIgnoreContent(IResource resource)
-    {
-        if (!resource.TryGetLastAnnotation<DenoCommandLineAnnotation>(out var deno))
-        {
-            return DefaultDenoBuildContextIgnoreContent;
-        }
-
-        var environmentFiles = GetDenoEnvironmentFiles(deno.RuntimeArgs)
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-        if (environmentFiles.Length == 0)
-        {
-            return DefaultDenoBuildContextIgnoreContent;
-        }
-
-        foreach (var environmentFile in environmentFiles)
-        {
-            ThrowIfDenoEnvironmentFileIsUnsafeForDockerignore(environmentFile);
-        }
-
-        // The default ignore protects dotenv secrets, but an explicit --env-file is a request to ship
-        // that file. Dockerignore negations preserve the secure default while admitting only named files.
-        return $"{DefaultDenoBuildContextIgnoreContent.TrimEnd('\r', '\n')}\n{string.Join('\n', environmentFiles.Select(file => $"!{file}"))}";
-    }
-
-    private static void ThrowIfDenoEnvironmentFileIsUnsafeForDockerignore(string path)
-    {
-        // Generated negations have the form "!relative/path.env". Dockerignore treats line breaks as new
-        // patterns and these characters as pattern syntax, so accepting them could re-include files other
-        // than the explicitly requested dotenv file.
-        if (string.IsNullOrEmpty(path) ||
-            path.Any(char.IsControl) ||
-            path.AsSpan().IndexOfAny("*?[]!#") >= 0 ||
-            char.IsWhiteSpace(path[0]) ||
-            char.IsWhiteSpace(path[^1]))
-        {
-            throw new InvalidOperationException(
-                "The environment file configured with WithDenoRuntimeArgs cannot be represented as a literal generated Dockerignore pattern. Use a relative path without leading or trailing whitespace, control characters, or Dockerignore metacharacters (*, ?, [, ], !, or #), or provide a custom Dockerfile.");
-        }
     }
 
     private static IResourceBuilder<TResource> WithDenoDefaults<TResource>(this IResourceBuilder<TResource> builder) where TResource : JavaScriptAppResource
