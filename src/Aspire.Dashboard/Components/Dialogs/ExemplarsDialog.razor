@@ -8,28 +8,54 @@
 
 <DeckDialogHeader />
 <div style="max-height: 44vh; overflow-y: auto;">
-    <FluentDataGrid Items="@MetricView"
-                    RowSize="DataGridRowSize.Medium"
-                    GridTemplateColumns="2fr 1fr 1fr 1fr"
-                    TGridItem="ChartExemplar">
-        <ChildContent>
-            <TemplateColumn Title="@Loc[nameof(Dialogs.ExemplarsDialogTraceColumnHeader)]" TooltipText="@(context => GetTitle(context))" Tooltip="true">
-                <span style="padding-left:5px; border-left-width: 5px; border-left-style: solid; border-left-color: @(context.Span != null ? ColorGenerator.Instance.GetColorVariableByKey(OtlpResource.GetResourceName(context.Span.Source, Content.Resources)) : "transparent");">
-                    @GetTitle(context)
-                </span>
-            </TemplateColumn>
-            <TemplateColumn Title="@Loc[nameof(Dialogs.ExemplarsDialogTimestampColumnHeader)]" TooltipText="@(context => FormatHelpers.FormatDateTime(TimeProvider, TimeProvider.ToLocal(context.Start), MillisecondsDisplay.None, CultureInfo.CurrentCulture))" Tooltip="true">
-                @FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, TimeProvider.ToLocal(context.Start), MillisecondsDisplay.Truncated)
-            </TemplateColumn>
-            <TemplateColumn Title="@Loc[nameof(Dialogs.ExemplarsDialogValueColumnHeader)]">
-                @FormatMetricValue(context.Value)
-            </TemplateColumn>
-            <TemplateColumn Title="@Loc[nameof(Dialogs.ExemplarsDialogDetailsColumnHeader)]">
-                <FluentButton Appearance="Appearance.Lightweight" OnClick="@(() => OnViewDetailsAsync(context))">View</FluentButton>
-            </TemplateColumn>
-        </ChildContent>
-        <EmptyContent>
-            <DeckIcon Name="DeckIconName.ChartMultiple" Size="24" />&nbsp;@Loc[nameof(ControlsStrings.MetricTableNoMetricsFound)]
-        </EmptyContent>
-    </FluentDataGrid>
+    @{
+        var exemplars = MetricView.ToList();
+        var columnWidths = GridColumnWidths.Parse("2fr 1fr 1fr 1fr", 4);
+    }
+    <table class="data exemplars-grid">
+        <colgroup>
+            <col style="width: @columnWidths[0]" />
+            <col style="width: @columnWidths[1]" />
+            <col style="width: @columnWidths[2]" />
+            <col style="width: @columnWidths[3]" />
+        </colgroup>
+        <thead>
+            <tr>
+                <th>@Loc[nameof(Dialogs.ExemplarsDialogTraceColumnHeader)]</th>
+                <th>@Loc[nameof(Dialogs.ExemplarsDialogTimestampColumnHeader)]</th>
+                <th>@Loc[nameof(Dialogs.ExemplarsDialogValueColumnHeader)]</th>
+                <th>@Loc[nameof(Dialogs.ExemplarsDialogDetailsColumnHeader)]</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (exemplars.Count == 0)
+            {
+                <tr>
+                    <td colspan="4" class="cell-muted" style="text-align: center; padding: 20px;">
+                        <DeckIcon Name="DeckIconName.ChartMultiple" Size="24" />&nbsp;@Loc[nameof(ControlsStrings.MetricTableNoMetricsFound)]
+                    </td>
+                </tr>
+            }
+            else
+            {
+                @foreach (var context in exemplars)
+                {
+                    <tr>
+                        <td title="@GetTitle(context)">
+                            <span style="padding-left:5px; border-left-width: 5px; border-left-style: solid; border-left-color: @(context.Span != null ? ColorGenerator.Instance.GetColorVariableByKey(OtlpResource.GetResourceName(context.Span.Source, Content.Resources)) : "transparent");">
+                                @GetTitle(context)
+                            </span>
+                        </td>
+                        <td title="@FormatHelpers.FormatDateTime(TimeProvider, TimeProvider.ToLocal(context.Start), MillisecondsDisplay.None, CultureInfo.CurrentCulture)">
+                            @FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, TimeProvider.ToLocal(context.Start), MillisecondsDisplay.Truncated)
+                        </td>
+                        <td>@FormatMetricValue(context.Value)</td>
+                        <td>
+                            <button type="button" class="button-hyperlink-no-icon" @onclick="@(() => OnViewDetailsAsync(context))">View</button>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
 </div>
