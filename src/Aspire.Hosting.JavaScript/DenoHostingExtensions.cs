@@ -43,6 +43,10 @@ public static partial class JavaScriptHostingExtensions
         string[] values)
     {
         ArgumentNullException.ThrowIfNull(builder);
+        if (!Enum.IsDefined(kind))
+        {
+            throw new ArgumentOutOfRangeException(nameof(kind), kind, "The permission kind must be a defined DenoPermissionKind value.");
+        }
 
         // The caller owns the params array and can keep mutating it after this call. Permissions are only read
         // when the command line is materialized (publish, or resource start), so holding the caller's array by
@@ -109,6 +113,7 @@ public static partial class JavaScriptHostingExtensions
     /// <param name="kind">The permission to grant.</param>
     /// <param name="values">Optional values that scope the permission. When empty, all access of the selected kind is allowed.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="kind"/> is not a defined <see cref="DenoPermissionKind"/> value.</exception>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     [Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -120,6 +125,7 @@ public static partial class JavaScriptHostingExtensions
     /// <param name="kind">The permission to deny.</param>
     /// <param name="values">Optional values that scope the permission. When empty, all access of the selected kind is denied.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="kind"/> is not a defined <see cref="DenoPermissionKind"/> value.</exception>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     [Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -286,6 +292,7 @@ public static partial class JavaScriptHostingExtensions
     /// <param name="mode">The inspector mode to enable.</param>
     /// <param name="hostPort">The optional inspector host:port value.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="mode"/> is not a defined <see cref="DenoInspectMode"/> value.</exception>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     [Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -295,6 +302,11 @@ public static partial class JavaScriptHostingExtensions
         string? hostPort = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
+        if (!Enum.IsDefined(mode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(mode), mode, "The inspect mode must be a defined DenoInspectMode value.");
+        }
+
         var annotation = GetOrAddDenoAnnotation(builder);
         annotation.Inspect = mode;
         annotation.InspectHostPort = string.IsNullOrEmpty(hostPort) ? null : hostPort;
@@ -577,19 +589,25 @@ public static partial class JavaScriptHostingExtensions
     private static void AppendPermissionFlags(List<object> args, DenoCommandLineAnnotation deno, bool usePublishDefaultPermissions)
     {
         var hasGranularAllow = deno.Permissions.Any(p => !p.Deny);
-        // Default (AllowAll == null): grant -A only when the caller has not opted into any granular allow flag.
-        var emitAllowAll = deno.AllowAll ?? !hasGranularAllow;
 
-        // Keep local execution permissive for parity with Node/Bun, but do not discard Deno's
-        // deny-by-default security model in a published image. A caller who explicitly configures
-        // allow-all or any granular permission keeps that exact policy.
-        if (usePublishDefaultPermissions && deno.AllowAll is null && deno.Permissions.Count == 0)
+        // Keep local execution permissive for parity with Node/Bun, but default published images to only
+        // network and environment access. Deny-only configuration narrows that publish-safe baseline; it must
+        // not switch the baseline to -A and broaden access merely because a deny flag was added.
+        if (usePublishDefaultPermissions && deno.AllowAll is null && !hasGranularAllow)
         {
             args.Add("--allow-net");
             args.Add("--allow-env");
+
+            foreach (var permission in OrderPermissions(deno.Permissions).Where(p => p.Deny))
+            {
+                args.Add(FormatPermission(permission));
+            }
+
             return;
         }
 
+        // Default (AllowAll == null): grant -A only when the caller has not opted into any granular allow flag.
+        var emitAllowAll = deno.AllowAll ?? !hasGranularAllow;
         if (emitAllowAll)
         {
             args.Add("-A");
@@ -1044,7 +1062,7 @@ public static partial class JavaScriptHostingExtensions
 
     // Deno options that Aspire emits as a separate flag/value pair where the value is a path that must be
     // rewritten to its container form.
-    private static readonly string[] s_denoContainerPathFlags = ["--config", "-c", "--import-map", "--lock"];
+    private static readonly string[] s_denoContainerPathFlags = ["--cert", "--config", "-c", "--import-map", "--lock"];
     private static readonly string[] s_denoContainerPathListFlags =
         ["--allow-read", "--deny-read", "--allow-write", "--deny-write", "--allow-ffi", "--deny-ffi"];
 

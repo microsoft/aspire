@@ -336,6 +336,25 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task VerifyDockerfile_DenyOnlyPermissionsNarrowPublishDefaults()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+
+        var app = builder.AddDenoApp("js", appDir, "main.ts")
+            .WithDenoDeny(DenoPermissionKind.Read, @"secrets\private");
+        await ManifestUtils.GetManifest(app.Resource, workspace.Path);
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
+        Assert.Equal(
+            """ENTRYPOINT ["deno","run","--allow-net","--allow-env","--deny-read=secrets/private","--cached-only","main.ts"]""",
+            GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
+    }
+
+    [Fact]
     public async Task VerifyDockerfile_ExplicitPublishPermissionsArePreservedAndNormalized()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -422,6 +441,51 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             "RUN deno cache --cert ca.pem --no-remote --vendor=true main.ts",
             GetDockerfileLine(dockerfileContents, "RUN deno cache"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task VerifyDockerfile_CertificatePathsAreNormalizedForLinuxContainers(bool inlineValue)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+        File.WriteAllText(Path.Combine(appDir, "main.ts"), "console.log(1);");
+
+        var app = builder.AddDenoApp("js", appDir, "main.ts");
+        if (inlineValue)
+        {
+            app.WithDenoRuntimeArgs(@"--cert=certs\ca.pem");
+        }
+        else
+        {
+            app.WithDenoRuntimeArgs("--cert", @"certs\ca.pem");
+        }
+
+        await ManifestUtils.GetManifest(app.Resource, workspace.Path);
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
+        if (inlineValue)
+        {
+            Assert.Equal(
+                "RUN deno cache --cert=certs/ca.pem main.ts",
+                GetDockerfileLine(dockerfileContents, "RUN deno cache"));
+            Assert.Equal(
+                """ENTRYPOINT ["deno","run","--allow-net","--allow-env","--cached-only","--cert=certs/ca.pem","main.ts"]""",
+                GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
+        }
+        else
+        {
+            Assert.Equal(
+                "RUN deno cache --cert certs/ca.pem main.ts",
+                GetDockerfileLine(dockerfileContents, "RUN deno cache"));
+            Assert.Equal(
+                """ENTRYPOINT ["deno","run","--allow-net","--allow-env","--cached-only","--cert","certs/ca.pem","main.ts"]""",
+                GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
+        }
     }
 
     [Fact]
@@ -1230,6 +1294,32 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         Assert.Equal("builder", exception.ParamName);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void WithDenoPermission_RejectsUndefinedKind(bool deny)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var denoApp = builder.AddDenoApp("denoapp", AppContext.BaseDirectory, "main.ts");
+
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+        {
+            if (deny)
+            {
+                denoApp.WithDenoDeny((DenoPermissionKind)42);
+            }
+            else
+            {
+                denoApp.WithDenoAllow((DenoPermissionKind)42);
+            }
+        });
+
+        Assert.Equal("kind", exception.ParamName);
+        Assert.Equal(
+            "The permission kind must be a defined DenoPermissionKind value. (Parameter 'kind')\nActual value was 42.",
+            exception.Message.ReplaceLineEndings("\n"));
+    }
+
     [Fact]
     public void WithDenoInstallFalseDoesNotCreateInstallerWhenNoneExists()
     {
@@ -1660,6 +1750,14 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task WithDenoDenyOnly_DefaultRunKeepsBlanketGrant()
+    {
+        var args = await GetDenoArgsAsync(d => d.WithDenoDeny(DenoPermissionKind.Read, "/secrets"));
+
+        Assert.Equal(["run", "-A", "--deny-read=/secrets", "main.ts"], args);
+    }
+
+    [Fact]
     public async Task WithDenoGranularPermissions_EmitInCanonicalOrderWithValues()
     {
         // Configured out of canonical order and across allow/deny to prove deterministic ordering
@@ -1824,6 +1922,21 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
             .WithDenoInspect(hostPort: "127.0.0.1:9229"));
 
         Assert.Equal(["run", "--inspect=127.0.0.1:9229", "main.ts"], args);
+    }
+
+    [Fact]
+    public void WithDenoInspect_RejectsUndefinedMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var denoApp = builder.AddDenoApp("denoapp", AppContext.BaseDirectory, "main.ts");
+
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(
+            () => denoApp.WithDenoInspect((DenoInspectMode)42));
+
+        Assert.Equal("mode", exception.ParamName);
+        Assert.Equal(
+            "The inspect mode must be a defined DenoInspectMode value. (Parameter 'mode')\nActual value was 42.",
+            exception.Message.ReplaceLineEndings("\n"));
     }
 
     [Fact]
