@@ -59,6 +59,16 @@ internal sealed class PipelineOutputRegistry
                 $"Configuration values '{StagingPathConfigurationKey}' and '{TargetOutputPathConfigurationKey}' must be specified together.");
         }
 
+        // Verification paths cross the CLI/AppHost process boundary, so they must not depend
+        // on either process's current working directory.
+        if (hasStagingPath &&
+            (!Path.IsPathFullyQualified(configuredStagingPath!) ||
+             !Path.IsPathFullyQualified(configuredPrimaryTargetPath!)))
+        {
+            throw new InvalidOperationException(
+                $"Configuration values '{StagingPathConfigurationKey}' and '{TargetOutputPathConfigurationKey}' must be fully qualified paths.");
+        }
+
         _stagingPath = NormalizeOptionalPath(configuredStagingPath, AppHostDirectory);
 
         var primaryOutputPath = Path.GetFullPath(outputService.GetOutputDirectory());
@@ -169,9 +179,12 @@ internal sealed class PipelineOutputRegistry
                 .ToArray();
             if (unsupportedSteps.Length > 0)
             {
-                throw new InvalidOperationException(
+                var exception = new InvalidOperationException(
                     $"Pipeline execution cannot be authorized because these selected steps do not support output-path relocation: " +
                     $"{string.Join(", ", unsupportedSteps.Select(name => $"'{name}'"))}.");
+                _executionState = PipelineOutputExecutionState.Failed;
+                _executionAuthorized.TrySetException(exception);
+                throw exception;
             }
 
             _executionAuthorized.TrySetResult();
@@ -366,12 +379,22 @@ internal sealed class PipelineOutputRegistry
                 var first = outputs[i];
                 var second = outputs[j];
 
-                if (_stagingPath is null && TryGetPrimaryAndNamedOutput(first, second, out var primary, out var named) &&
+                if (TryGetPrimaryAndNamedOutput(first, second, out var primary, out var named) &&
                     primary.Kind == PipelineOutputKind.Directory &&
                     !PathEquals(primary.LogicalTargetPath, named.LogicalTargetPath) &&
                     IsNestedPath(named.LogicalTargetPath, primary.LogicalTargetPath))
                 {
-                    continue;
+                    if (_stagingPath is null)
+                    {
+                        continue;
+                    }
+
+                    // Relocation stages outputs independently, so nested target paths would have
+                    // competing ownership when the staged artifacts are moved to their destinations.
+                    throw new InvalidOperationException(
+                        $"Pipeline output '{named.PublisherName}/{named.Name}' has a target path nested under " +
+                        $"'{primary.PublisherName}/{primary.Name}'. Output-path relocation requires each output " +
+                        $"to have an exclusive target path.");
                 }
 
                 if (PathsOverlap(first.LogicalTargetPath, second.LogicalTargetPath))

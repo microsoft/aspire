@@ -361,7 +361,7 @@ internal class AppHostRpcTarget(
 #pragma warning restore ASPIREPIPELINES004
     }
 
-    public Task<AuthorizePipelineExecutionResponse> AuthorizePipelineExecutionAsync(
+    public async Task<AuthorizePipelineExecutionResponse> AuthorizePipelineExecutionAsync(
         AuthorizePipelineExecutionRequest? request = null,
         CancellationToken cancellationToken = default)
     {
@@ -369,14 +369,14 @@ internal class AppHostRpcTarget(
             nameof(AuthorizePipelineExecutionAsync),
             streaming: false,
             request?.TraceContext);
-        _ = cancellationToken;
 
         var registry = serviceProvider.GetRequiredService<PipelineOutputRegistry>();
+        await registry.WaitForPreparationAsync(cancellationToken).ConfigureAwait(false);
         registry.AuthorizeExecution();
 
-        return Task.FromResult(new AuthorizePipelineExecutionResponse
+        return new AuthorizePipelineExecutionResponse
         {
             IsAuthorized = true
-        });
+        };
     }
 }

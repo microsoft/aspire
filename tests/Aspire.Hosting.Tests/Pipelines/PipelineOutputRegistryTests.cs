@@ -62,6 +62,38 @@ public class PipelineOutputRegistryTests(ITestOutputHelper testOutputHelper)
         Assert.Contains("must be specified together", exception.Message);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Registry_RejectsRelativeRelocationConfiguration(bool configureRelativeStagingPath)
+    {
+        var bootstrapConfiguration = new ConfigurationBuilder().Build();
+        using var fileSystem = new FileSystemService(bootstrapConfiguration);
+        var root = fileSystem.TempDirectory.CreateTempSubdirectory("pipeline-relocation-configuration-tests").Path;
+        var appHostDirectory = Path.Combine(root, "AppHost");
+        Directory.CreateDirectory(appHostDirectory);
+        var configurationValues = new Dictionary<string, string?>
+        {
+            ["AppHost:Directory"] = appHostDirectory,
+            [PipelineOutputRegistry.StagingPathConfigurationKey] = configureRelativeStagingPath
+                ? "staging"
+                : Path.Combine(root, "staging"),
+            [PipelineOutputRegistry.TargetOutputPathConfigurationKey] = configureRelativeStagingPath
+                ? Path.Combine(root, "target")
+                : "target"
+        };
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(configurationValues)
+            .Build();
+        var pipelineOptions = Options.Create(new PipelineOptions { OutputPath = Path.Combine(root, "primary") });
+        var outputService = new PipelineOutputService(pipelineOptions, configuration, fileSystem);
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => new PipelineOutputRegistry(configuration, outputService, pipelineOptions));
+
+        Assert.Contains("must be fully qualified paths", exception.Message);
+    }
+
     [Fact]
     public async Task MarkExecutionFailed_UnblocksPreparationWait()
     {
@@ -125,7 +157,7 @@ public class PipelineOutputRegistryTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void AuthorizeExecution_RejectsStepWithoutRelocationSupport()
+    public async Task AuthorizeExecution_RejectsStepWithoutRelocationSupport()
     {
         using var fixture = CreateRegistry(relocate: true);
         var step = new PipelineStep
@@ -134,11 +166,14 @@ public class PipelineOutputRegistryTests(ITestOutputHelper testOutputHelper)
             Action = _ => Task.CompletedTask
         };
         fixture.Registry.Prepare([step]);
+        var authorizationTask = fixture.Registry.WaitForExecutionAuthorizationAsync(CancellationToken.None);
 
         var exception = Assert.Throws<InvalidOperationException>(fixture.Registry.AuthorizeExecution);
+        var waitException = await Assert.ThrowsAsync<InvalidOperationException>(() => authorizationTask);
 
         Assert.Contains("'legacy-publisher'", exception.Message);
-        Assert.Equal(PipelineOutputExecutionState.Prepared, fixture.Registry.GetExecutionState());
+        Assert.Same(exception, waitException);
+        Assert.Equal(PipelineOutputExecutionState.Failed, fixture.Registry.GetExecutionState());
     }
 
     [Fact]
@@ -237,6 +272,22 @@ public class PipelineOutputRegistryTests(ITestOutputHelper testOutputHelper)
         var exception = Assert.Throws<InvalidOperationException>(() => fixture.Registry.Prepare([step]));
 
         Assert.Contains("aspire/primary", exception.Message);
+    }
+
+    [Fact]
+    public void Prepare_RejectsNamedOutputInsidePrimaryOutputWithRelocation()
+    {
+        using var fixture = CreateRegistry(relocate: true);
+        var step = CreateStep(
+            "publisher",
+            new PipelineOutputDefinition(
+                "nested",
+                Path.Combine("aspire-output", "nested"),
+                PipelineOutputKind.Directory));
+
+        var exception = Assert.Throws<InvalidOperationException>(() => fixture.Registry.Prepare([step]));
+
+        Assert.Contains("Output-path relocation requires each output to have an exclusive target path", exception.Message);
     }
 
     [Fact]
@@ -460,6 +511,39 @@ public class PipelineOutputRegistryTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task AuthorizePipelineExecutionAsync_WaitsForPreparation()
+    {
+        var bootstrapConfiguration = new ConfigurationBuilder().Build();
+        using var fileSystem = new FileSystemService(bootstrapConfiguration);
+        var root = fileSystem.TempDirectory.CreateTempSubdirectory("pipeline-authorization-race-tests").Path;
+        var appHostDirectory = Path.Combine(root, "repo", "src", "AppHost");
+        var stagingPath = Path.Combine(root, "staging");
+        var primaryTargetPath = Path.Combine(appHostDirectory, "aspire-output");
+        var primaryOutputPath = Path.Combine(stagingPath, "primary");
+        Directory.CreateDirectory(appHostDirectory);
+
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = appHostDirectory,
+            testOutputHelper,
+            "AppHost:Operation=publish",
+            $"Pipeline:Step={WellKnownPipelineSteps.PublishManifest}",
+            $"Pipeline:OutputPath={primaryOutputPath}",
+            $"{PipelineOutputRegistry.StagingPathConfigurationKey}={stagingPath}",
+            $"{PipelineOutputRegistry.TargetOutputPathConfigurationKey}={primaryTargetPath}");
+        using var app = builder.Build();
+        var rpcTarget = app.Services.GetRequiredService<AppHostRpcTarget>();
+
+        var authorizationTask = rpcTarget.AuthorizePipelineExecutionAsync(cancellationToken: CancellationToken.None);
+        Assert.False(authorizationTask.IsCompleted);
+
+        await app.StartAsync();
+
+        var authorization = await authorizationTask.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.True(authorization.IsAuthorized);
+        await app.WaitForShutdownAsync().WaitAsync(TimeSpan.FromSeconds(10));
+    }
+
+    [Fact]
     public async Task PipelineExecuteAsync_WaitsForAuthorizationBeforeSteps()
     {
         var bootstrapConfiguration = new ConfigurationBuilder().Build();
@@ -586,6 +670,8 @@ public class PipelineOutputRegistryTests(ITestOutputHelper testOutputHelper)
             $"Pipeline:OutputPath={primaryOutputPath}",
             $"{PipelineOutputRegistry.StagingPathConfigurationKey}={stagingPath}",
             $"{PipelineOutputRegistry.TargetOutputPathConfigurationKey}={primaryTargetPath}");
+        var activityReporter = new TestPipelineActivityReporter(testOutputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter>(activityReporter);
         builder.AddContainer("api", "alpine")
             .WithDockerfileBuilder(appHostDirectory, context => context.Builder.From("alpine"));
         using var app = builder.Build();
@@ -605,7 +691,11 @@ public class PipelineOutputRegistryTests(ITestOutputHelper testOutputHelper)
         Assert.False(File.Exists(primaryTargetPath));
         Assert.False(File.Exists(Path.Combine(appHostDirectory, "api.Dockerfile")));
 
-        await app.StopAsync();
+        await app.WaitForShutdownAsync().WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(PipelineOutputExecutionState.Failed, registry.GetExecutionState());
+        Assert.True(activityReporter.CompletePublishCalled);
+        Assert.Equal(exception.Message, activityReporter.CompletionMessage);
+        Assert.Equal(CompletionState.CompletedWithError, activityReporter.ResultCompletionState);
     }
 
     [Fact]

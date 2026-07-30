@@ -1039,7 +1039,9 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                 {
                     PipelineContext = context,
                     ReportingStep = reportingStep,
-                    Outputs = new PipelineStepOutputResolver(context.Services, step)
+                    // Before-start runs before the publish execution plan is prepared, so output
+                    // paths are intentionally unavailable on this sequential execution path.
+                    Outputs = UnavailablePipelineOutputResolver.Instance
                 };
 
                 try

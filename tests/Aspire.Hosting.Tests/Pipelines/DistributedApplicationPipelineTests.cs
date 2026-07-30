@@ -37,6 +37,31 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     }
 
     [Fact]
+    public async Task ExecuteStepSequentiallyAsync_UsesUnavailableOutputResolver()
+    {
+        using var builder = CreatePipelineTestBuilder();
+        var pipeline = new DistributedApplicationPipeline();
+        pipeline.AddStep(new PipelineStep
+        {
+            Name = "before-start-output-reader",
+            RequiredBySteps = [WellKnownPipelineSteps.BeforeStart],
+            Action = context =>
+            {
+                _ = context.Outputs.PrimaryOutput;
+                return Task.CompletedTask;
+            }
+        });
+        using var app = builder.Build();
+        var context = CreateDeployingContext(app);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => pipeline.ExecuteStepSequentiallyAsync(WellKnownPipelineSteps.BeforeStart, context));
+
+        var outputException = Assert.IsType<InvalidOperationException>(exception.InnerException);
+        Assert.Equal("Pipeline outputs are only available while a pipeline step is executing.", outputException.Message);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_WithSingleStep_ExecutesStep()
     {
         using var builder = CreatePipelineTestBuilder();
