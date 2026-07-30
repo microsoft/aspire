@@ -16,10 +16,11 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 /// </summary>
 public sealed class VnetSqlServerConnectivityDeploymentTests(ITestOutputHelper output)
 {
-    private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(40);
+    // The inner step waits (deploy alone allows 30 minutes) sum to more than 40 minutes under CI
+    // contention, and the SQL probe below adds another 8, so the outer budget has to exceed their sum.
+    private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(50);
 
     [Fact]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/18892")]
     public async Task DeployStarterTemplateWithSqlServerPrivateEndpoint()
     {
         using var cts = new CancellationTokenSource(s_testTimeout);
