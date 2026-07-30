@@ -394,6 +394,15 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Resize column width. Use the left and right arrow keys to shrink or grow the column..
+        /// </summary>
+        public static string GridColumnResizeLabel {
+            get {
+                return ResourceManager.GetString("GridColumnResizeLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to GenAI details.
         /// </summary>
         public static string GenAIDetailsTitle {

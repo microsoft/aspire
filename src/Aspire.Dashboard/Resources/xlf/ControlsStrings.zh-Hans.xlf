@@ -157,6 +157,11 @@
         <target state="translated">导出 .env</target>
         <note />
       </trans-unit>
+      <trans-unit id="GridColumnResizeLabel">
+        <source>Resize column width. Use the left and right arrow keys to shrink or grow the column.</source>
+        <target state="new">Resize column width. Use the left and right arrow keys to shrink or grow the column.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourceDetailsHealthHeader">
         <source>Health</source>
         <target state="new">Health</target>

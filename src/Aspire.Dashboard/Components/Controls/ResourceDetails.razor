@@ -34,7 +34,7 @@
                               ValueComponents="_valueComponents" />
             </AccordionItem>
             <AccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsUrlsHeader)]" Expanded="@_isUrlsExpanded" Count="@FilteredUrls.Count()">
-                <table class="data resource-details-grid">
+                <table class="data resource-details-grid resizable-grid" @ref="_urlsTable">
                     <colgroup>
                         <col style="width: @s_standardColumnWidths[0]" />
                         <col style="width: @s_standardColumnWidths[1]" />
@@ -42,8 +42,8 @@
                     </colgroup>
                     <thead>
                         <tr>
-                            <GridSortableHeader Title="@ControlStringsLoc[nameof(ControlsStrings.LinkAddressColumnHeader)]" IsSorted="_urlSort.IsSorted(0)" Ascending="_urlSort.Ascending" OnClick="() => SortUrls(0)" />
-                            <GridSortableHeader Title="@ControlStringsLoc[nameof(ControlsStrings.LinkTextColumnHeader)]" IsSorted="_urlSort.IsSorted(1)" Ascending="_urlSort.Ascending" OnClick="() => SortUrls(1)" />
+                            <GridSortableHeader Title="@ControlStringsLoc[nameof(ControlsStrings.LinkAddressColumnHeader)]" IsSorted="_urlSort.IsSorted(0)" Ascending="_urlSort.Ascending" OnClick="() => SortUrls(0)" Resizable="true" ColumnIndex="0" ResizeLabel="@ResizeLabel" />
+                            <GridSortableHeader Title="@ControlStringsLoc[nameof(ControlsStrings.LinkTextColumnHeader)]" IsSorted="_urlSort.IsSorted(1)" Ascending="_urlSort.Ascending" OnClick="() => SortUrls(1)" Resizable="true" ColumnIndex="1" ResizeLabel="@ResizeLabel" />
                             <GridSortableHeader Title="@ControlStringsLoc[nameof(ControlsStrings.EndpointNameColumnHeader)]" IsSorted="_urlSort.IsSorted(2)" Ascending="_urlSort.Ascending" OnClick="() => SortUrls(2)" />
                         </tr>
                     </thead>
@@ -77,12 +77,13 @@
                         }
                     </tbody>
                 </table>
+                <ColumnResizer Target="_urlsTable" />
             </AccordionItem>
             @if (Resource.IsContainer())
             {
                 <AccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsVolumesHeader)]" Expanded="@_isVolumesExpanded" Count="@FilteredVolumes.Count()">
 
-                    <table class="data resource-details-grid">
+                    <table class="data resource-details-grid resizable-grid" @ref="_volumesTable">
                         <colgroup>
                             <col style="width: @s_standardColumnWidths[0]" />
                             <col style="width: @s_standardColumnWidths[1]" />
@@ -90,8 +91,8 @@
                         </colgroup>
                         <thead>
                             <tr>
-                                <GridSortableHeader Title="@ControlStringsLoc[nameof(ControlsStrings.NameColumnHeader)]" IsSorted="_volumeSort.IsSorted(0)" Ascending="_volumeSort.Ascending" OnClick="() => SortVolumes(0)" />
-                                <GridSortableHeader Title="@ControlStringsLoc[nameof(ControlsStrings.VolumePathColumnHeader)]" IsSorted="_volumeSort.IsSorted(1)" Ascending="_volumeSort.Ascending" OnClick="() => SortVolumes(1)" />
+                                <GridSortableHeader Title="@ControlStringsLoc[nameof(ControlsStrings.NameColumnHeader)]" IsSorted="_volumeSort.IsSorted(0)" Ascending="_volumeSort.Ascending" OnClick="() => SortVolumes(0)" Resizable="true" ColumnIndex="0" ResizeLabel="@ResizeLabel" />
+                                <GridSortableHeader Title="@ControlStringsLoc[nameof(ControlsStrings.VolumePathColumnHeader)]" IsSorted="_volumeSort.IsSorted(1)" Ascending="_volumeSort.Ascending" OnClick="() => SortVolumes(1)" Resizable="true" ColumnIndex="1" ResizeLabel="@ResizeLabel" />
                                 <GridSortableHeader Title="@ControlStringsLoc[nameof(ControlsStrings.VolumeMountTypeColumnHeader)]" IsSorted="_volumeSort.IsSorted(2)" Ascending="_volumeSort.Ascending" OnClick="() => SortVolumes(2)" />
                             </tr>
                         </thead>
@@ -126,10 +127,11 @@
                             }
                         </tbody>
                     </table>
+                    <ColumnResizer Target="_volumesTable" />
                 </AccordionItem>
             }
             <AccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsReferences)]" Expanded="@_isRelationshipsExpanded" Count="@FilteredRelationships.Count()">
-                <table class="data resource-details-grid">
+                <table class="data resource-details-grid resizable-grid" @ref="_relationshipsTable">
                     <colgroup>
                         <col style="width: @s_standardColumnWidths[0]" />
                         <col style="width: @s_standardColumnWidths[1]" />
@@ -137,8 +139,8 @@
                     </colgroup>
                     <thead>
                         <tr>
-                            <th>@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsResourceHeader)]</th>
-                            <th>@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsTypeHeader)]</th>
+                            <th class="resizable-column">@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsResourceHeader)]<ColumnResizeHandle ColumnIndex="0" Label="@ResizeLabel" /></th>
+                            <th class="resizable-column">@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsTypeHeader)]<ColumnResizeHandle ColumnIndex="1" Label="@ResizeLabel" /></th>
                             <th class="no-ellipsis">@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]</th>
                         </tr>
                     </thead>
@@ -157,9 +159,10 @@
                         }
                     </tbody>
                 </table>
+                <ColumnResizer Target="_relationshipsTable" />
             </AccordionItem>
             <AccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsBackReferences)]" Expanded="@_isBackRelationshipsExpanded" Count="@FilteredBackRelationships.Count()">
-                <table class="data resource-details-grid">
+                <table class="data resource-details-grid resizable-grid" @ref="_backRelationshipsTable">
                     <colgroup>
                         <col style="width: @s_standardColumnWidths[0]" />
                         <col style="width: @s_standardColumnWidths[1]" />
@@ -167,8 +170,8 @@
                     </colgroup>
                     <thead>
                         <tr>
-                            <th>@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsResourceHeader)]</th>
-                            <th>@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsTypeHeader)]</th>
+                            <th class="resizable-column">@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsResourceHeader)]<ColumnResizeHandle ColumnIndex="0" Label="@ResizeLabel" /></th>
+                            <th class="resizable-column">@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsTypeHeader)]<ColumnResizeHandle ColumnIndex="1" Label="@ResizeLabel" /></th>
                             <th class="no-ellipsis">@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]</th>
                         </tr>
                     </thead>
@@ -187,10 +190,11 @@
                         }
                     </tbody>
                 </table>
+                <ColumnResizer Target="_backRelationshipsTable" />
             </AccordionItem>
             <AccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceHealthChecksHeader)]" Expanded="@_isHealthChecksExpanded" Count="@FilteredHealthReports.Count()">
 
-                <table class="data resource-details-grid">
+                <table class="data resource-details-grid resizable-grid" @ref="_healthTable">
                     <colgroup>
                         <col style="width: @s_healthColumnWidths[0]" />
                         <col style="width: @s_healthColumnWidths[1]" />
@@ -198,8 +202,8 @@
                     </colgroup>
                     <thead>
                         <tr>
-                            <th class="nameColumn">@ControlStringsLoc[nameof(ControlsStrings.NameColumnHeader)]</th>
-                            <th class="stateColumn">@ControlStringsLoc[nameof(ControlsStrings.StateColumnHeader)]</th>
+                            <th class="nameColumn resizable-column">@ControlStringsLoc[nameof(ControlsStrings.NameColumnHeader)]<ColumnResizeHandle ColumnIndex="0" Label="@ResizeLabel" /></th>
+                            <th class="stateColumn resizable-column">@ControlStringsLoc[nameof(ControlsStrings.StateColumnHeader)]<ColumnResizeHandle ColumnIndex="1" Label="@ResizeLabel" /></th>
                             <th class="detailsColumn">@ControlStringsLoc[nameof(ControlsStrings.DetailsColumnHeader)]</th>
                         </tr>
                     </thead>
@@ -249,6 +253,7 @@
                         }
                     </tbody>
                 </table>
+                <ColumnResizer Target="_healthTable" />
             </AccordionItem>
             <AccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsEnvironmentVariablesHeader)]" Expanded="@_isEnvironmentVariablesExpanded" Count="@FilteredEnvironmentVariables.Count()">
                 <PropertyGrid TItem="EnvironmentVariableViewModel"

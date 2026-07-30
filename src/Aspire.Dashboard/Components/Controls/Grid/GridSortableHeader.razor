@@ -1,8 +1,10 @@
 @* Renders a header cell for a Deck data table. When sortable, the cell is a borderless button that
-   toggles client-side sorting and shows an ascending/descending arrow. Sort state is owned by the
-   parent component; this control only renders the affordance and raises OnClick. *@
+   toggles client-side sorting and shows an ascending/descending arrow. When resizable, a focusable
+   separator handle is rendered on the cell's trailing edge that the ColumnResizer wires up for
+   pointer/keyboard resizing. Sort state is owned by the parent component. *@
+@namespace Aspire.Dashboard.Components.Controls.Grid
 
-<th class="@Class" aria-sort="@AriaSort">
+<th class="@ThClass" aria-sort="@AriaSort">
     @if (Sortable)
     {
         <button type="button" class="column-sort-button" @onclick="OnClick">
@@ -16,6 +18,10 @@
     else
     {
         @Title
+    }
+    @if (Resizable)
+    {
+        <ColumnResizeHandle ColumnIndex="@ColumnIndex" Label="@ResizeLabel" />
     }
 </th>
 
@@ -38,5 +44,24 @@
     [Parameter]
     public EventCallback OnClick { get; set; }
 
-    private string AriaSort => !IsSorted ? "none" : Ascending ? "ascending" : "descending";
+    /// <summary>Whether this header renders a trailing-edge resize handle.</summary>
+    [Parameter]
+    public bool Resizable { get; set; }
+
+    /// <summary>Zero-based index of this column; the handle resizes columns <c>ColumnIndex</c> and <c>ColumnIndex + 1</c>.</summary>
+    [Parameter]
+    public int ColumnIndex { get; set; }
+
+    /// <summary>Localized accessible label for the resize handle.</summary>
+    [Parameter]
+    public string? ResizeLabel { get; set; }
+
+    // The resize handle is absolutely positioned against the header cell.
+    private string? ThClass => string.IsNullOrEmpty(Class)
+        ? (Resizable ? "resizable-column" : null)
+        : (Resizable ? $"{Class} resizable-column" : Class);
+
+    // aria-sort is only meaningful on sortable columns; omit it entirely otherwise so non-sortable
+    // headers don't advertise a sort affordance they don't have.
+    private string? AriaSort => !Sortable ? null : !IsSorted ? "none" : Ascending ? "ascending" : "descending";
 }

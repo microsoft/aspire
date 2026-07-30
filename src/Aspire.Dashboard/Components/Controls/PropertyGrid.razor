@@ -7,7 +7,7 @@
     var (nameWidth, valueWidth) = GetColumnWidths();
 }
 <div class="property-grid">
-    <table class="@TableCssClass">
+    <table class="@TableCssClass" @ref="_tableElement">
         <colgroup>
             <col style="width: @nameWidth" />
             <col style="width: @valueWidth" />
@@ -16,38 +16,21 @@
         {
             <thead class="@(GenerateHeader == GridHeaderMode.Sticky ? "sticky" : null)">
                 <tr>
-                    <th class="nameColumn" aria-sort="@GetAriaSort(0)">
-                        @if (IsNameSortable)
-                        {
-                            <button type="button" class="column-sort-button" @onclick="() => OnHeaderClicked(0)">
-                                <span>@NameColumnTitleText</span>
-                                @if (_sortColumnIndex == 0)
-                                {
-                                    <DeckIcon Name="@(_sortAscending ? DeckIconName.ArrowUp : DeckIconName.ArrowDown)" Size="12" />
-                                }
-                            </button>
-                        }
-                        else
-                        {
-                            @NameColumnTitleText
-                        }
-                    </th>
-                    <th class="valueColumn" aria-sort="@GetAriaSort(1)">
-                        @if (IsValueSortable)
-                        {
-                            <button type="button" class="column-sort-button" @onclick="() => OnHeaderClicked(1)">
-                                <span>@ValueColumnTitleText</span>
-                                @if (_sortColumnIndex == 1)
-                                {
-                                    <DeckIcon Name="@(_sortAscending ? DeckIconName.ArrowUp : DeckIconName.ArrowDown)" Size="12" />
-                                }
-                            </button>
-                        }
-                        else
-                        {
-                            @ValueColumnTitleText
-                        }
-                    </th>
+                    <GridSortableHeader Class="nameColumn"
+                                        Title="@NameColumnTitleText"
+                                        Sortable="@IsNameSortable"
+                                        IsSorted="_sortColumnIndex == 0"
+                                        Ascending="_sortAscending"
+                                        OnClick="() => OnHeaderClicked(0)"
+                                        Resizable="true"
+                                        ColumnIndex="0"
+                                        ResizeLabel="@ResizeLabel" />
+                    <GridSortableHeader Class="valueColumn"
+                                        Title="@ValueColumnTitleText"
+                                        Sortable="@IsValueSortable"
+                                        IsSorted="_sortColumnIndex == 1"
+                                        Ascending="_sortAscending"
+                                        OnClick="() => OnHeaderClicked(1)" />
                 </tr>
             </thead>
         }
@@ -79,4 +62,8 @@
             }
         </tbody>
     </table>
+    @if (ShowResize)
+    {
+        <ColumnResizer Target="_tableElement" />
+    }
 </div>

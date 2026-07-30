@@ -168,6 +168,24 @@ internal static class DashboardSetupHelpers
         var splitViewModule = context.JSInterop.SetupModule("./Components/Controls/ResizableSplitView.razor.js");
         splitViewModule.SetupVoid("initializeSplitView", _ => true);
         splitViewModule.SetupVoid("disposeSplitView", _ => true);
+
+        SetupColumnResizer(context);
+        SetupUrlsColumnDisplay(context);
+    }
+
+    public static void SetupColumnResizer(TestContext context)
+    {
+        var resizerModule = context.JSInterop.SetupModule("./Components/Controls/Grid/ColumnResizer.razor.js");
+        resizerModule.SetupVoid("initialize", _ => true);
+        resizerModule.SetupVoid("dispose", _ => true);
+    }
+
+    public static void SetupUrlsColumnDisplay(TestContext context)
+    {
+        var urlsModule = context.JSInterop.SetupModule("./Components/ResourcesGridColumns/UrlsColumnDisplay.razor.js");
+        urlsModule.SetupVoid("initialize", _ => true);
+        urlsModule.SetupVoid("measure", _ => true);
+        urlsModule.SetupVoid("dispose", _ => true);
     }
 
     public static void SetupDialogInfrastructure(

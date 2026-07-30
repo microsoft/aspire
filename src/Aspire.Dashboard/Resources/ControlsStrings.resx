@@ -376,6 +376,9 @@
   <data name="DataGridHeaderCellResizeButtonText" xml:space="preserve">
     <value>Resize</value>
   </data>
+  <data name="GridColumnResizeLabel" xml:space="preserve">
+    <value>Resize column width. Use the left and right arrow keys to shrink or grow the column.</value>
+  </data>
   <data name="LabelEmpty" xml:space="preserve">
     <value>(Empty)</value>
   </data>

@@ -90,23 +90,47 @@
                     var ticksColumnVisible = _manager.IsColumnVisible(TicksColumn);
                     var actionsColumnVisible = _manager.IsColumnVisible(ActionsColumn);
                     var hasSpans = GetVisibleSpanViewModels().Any();
+
+                    // Assign a zero-based position to each visible column so resize handles know which
+                    // adjacent pair they resize. Only columns that have a following visible column get a
+                    // handle (the last column has nothing to resize against).
+                    var visibleColumnCount = 0;
+                    var nameColumnIndex = nameColumnVisible ? visibleColumnCount++ : -1;
+                    var resourceColumnIndex = resourceColumnVisible ? visibleColumnCount++ : -1;
+                    var ticksColumnIndex = ticksColumnVisible ? visibleColumnCount++ : -1;
+                    var actionsColumnIndex = actionsColumnVisible ? visibleColumnCount++ : -1;
+                    bool IsResizable(int columnIndex) => columnIndex >= 0 && columnIndex < visibleColumnCount - 1;
                 }
                 @* The trace waterfall is a CSS grid rather than a table: every row shares the same
-                   grid-template-columns (from the column manager) so cells line up, and each cell's
-                   inner content (the tick ruler, span bars) uses its own nested grid. *@
-                <div class="main-grid trace-view-grid enable-row-click" role="table">
-                    <div class="trace-grid-header" role="row" style="grid-template-columns: @gridTemplateColumns;">
+                   grid-template-columns (published as the --trace-grid-columns custom property on the
+                   container from the column manager) so cells line up, and each cell's inner content
+                   (the tick ruler, span bars) uses its own nested grid. Column resizing rewrites that
+                   single custom property, so the header and every row follow together. *@
+                <div class="main-grid trace-view-grid enable-row-click" role="table" @ref="_waterfallGrid" style="--trace-grid-columns: @gridTemplateColumns;">
+                    <div class="trace-grid-header" role="row" data-resize-header style="grid-template-columns: var(--trace-grid-columns);">
                         @if (nameColumnVisible)
                         {
-                            <div class="column-header expand-col" role="columnheader">@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailNameHeader)]</div>
+                            <div class="column-header expand-col @(IsResizable(nameColumnIndex) ? "resizable-column" : null)" role="columnheader">
+                                @Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailNameHeader)]
+                                @if (IsResizable(nameColumnIndex))
+                                {
+                                    <ColumnResizeHandle ColumnIndex="@nameColumnIndex" Label="@ResizeLabel" />
+                                }
+                            </div>
                         }
                         @if (resourceColumnVisible)
                         {
-                            <div class="column-header expand-col" role="columnheader">@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailResourceHeader)]</div>
+                            <div class="column-header expand-col @(IsResizable(resourceColumnIndex) ? "resizable-column" : null)" role="columnheader">
+                                @Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailResourceHeader)]
+                                @if (IsResizable(resourceColumnIndex))
+                                {
+                                    <ColumnResizeHandle ColumnIndex="@resourceColumnIndex" Label="@ResizeLabel" />
+                                }
+                            </div>
                         }
                         @if (ticksColumnVisible)
                         {
-                            <div class="column-header" role="columnheader">
+                            <div class="column-header @(IsResizable(ticksColumnIndex) ? "resizable-column" : null)" role="columnheader">
                                 <div class="ticks">
                                     @* First column starts at 0. We don't want to display the smallest unit (0μs) because that looks odd. Use the unit from the next column *@
                                     <div class="tick" style="grid-column: 1;"></div>
@@ -128,6 +152,10 @@
                                     <span class="tick-label end-tick" style="grid-column: 4;">@DurationFormatter.FormatDuration(trace.Duration, CultureInfo.CurrentCulture)</span>
                                     <div class="tick" style="grid-column: 5;"></div>
                                 </div>
+                                @if (IsResizable(ticksColumnIndex))
+                                {
+                                    <ColumnResizeHandle ColumnIndex="@ticksColumnIndex" Label="@ResizeLabel" />
+                                }
                             </div>
                         }
                         @if (actionsColumnVisible)
@@ -147,7 +175,7 @@
                             @* Virtualize streams span rows from GetData. @key preserves row focus across
                                trace updates; ItemSize matches the small row height. *@
                             <Virtualize @ref="_virtualize" ItemsProvider="@GetData" Context="context" ItemSize="32" OverscanCount="100" TItem="SpanWaterfallViewModel">
-                                <div class="trace-grid-row @GetRowClass(context)" role="row" style="grid-template-columns: @gridTemplateColumns;" @key="context.Span.SpanId"
+                                <div class="trace-grid-row @GetRowClass(context)" role="row" style="grid-template-columns: var(--trace-grid-columns);" @key="context.Span.SpanId"
                                      @onclick="@(() => OnShowPropertiesAsync(context, buttonId: null))">
                                     @if (nameColumnVisible)
                                     {
@@ -300,6 +328,7 @@
                         }
                     </div>
                 </div>
+                <ColumnResizer Target="_waterfallGrid" GridColumnsVariable="--trace-grid-columns" />
                 </GridColumnManager>
             </div>
         </div>

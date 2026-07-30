@@ -77,8 +77,17 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
     private readonly Grid.GridSortState<DisplayedUrl> _urlSort = new();
     private readonly Grid.GridSortState<VolumeViewModel> _volumeSort = new();
 
-    // Column widths for the accordion tables, derived once from the fractional layouts the the previous library
-    // grid previously used.
+    // Element references and resize label for the accordion tables' column resizing.
+    private ElementReference _urlsTable;
+    private ElementReference _volumesTable;
+    private ElementReference _relationshipsTable;
+    private ElementReference _backRelationshipsTable;
+    private ElementReference _healthTable;
+
+    private string ResizeLabel => ControlStringsLoc[nameof(ControlsStrings.GridColumnResizeLabel)];
+
+    // Column widths for the accordion tables, derived once from the fractional layouts the Deck
+    // grid uses.
     private static readonly IReadOnlyList<string> s_standardColumnWidths = Grid.GridColumnWidths.Parse("1fr 1fr 0.5fr", 3);
     private static readonly IReadOnlyList<string> s_healthColumnWidths = Grid.GridColumnWidths.Parse("1fr 1fr 1.5fr", 3);
 

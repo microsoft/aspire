@@ -1,0 +1,33 @@
+@* A focusable separator handle rendered on a header cell's trailing edge. The ColumnResizer module
+   discovers handles by their <c>data-resize-handle</c> attribute and wires up pointer/keyboard
+   resizing; this component only renders the accessible affordance. The handle must live inside a
+   positioned header cell (one that carries the <c>resizable-column</c> / <c>column-header</c> class)
+   so it can be absolutely positioned against the column boundary. *@
+@namespace Aspire.Dashboard.Components.Controls.Grid
+
+<button type="button"
+        class="column-resize-handle"
+        role="separator"
+        aria-orientation="vertical"
+        tabindex="0"
+        data-resize-handle
+        data-column-index="@ColumnIndex"
+        aria-label="@Label"
+        title="@Label"
+        @onclick:stopPropagation="true"
+        @onmousedown:stopPropagation="true">
+</button>
+
+@code {
+    /// <summary>
+    /// Zero-based index of the column this handle belongs to. The handle resizes columns
+    /// <c>ColumnIndex</c> and <c>ColumnIndex + 1</c>, so it is only rendered for columns that have a
+    /// following column.
+    /// </summary>
+    [Parameter]
+    public int ColumnIndex { get; set; }
+
+    /// <summary>Localized accessible label describing the resize affordance.</summary>
+    [Parameter]
+    public string? Label { get; set; }
+}

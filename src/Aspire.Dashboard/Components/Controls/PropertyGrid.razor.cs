@@ -156,11 +156,22 @@ public partial class PropertyGrid<TItem> where TItem : IPropertyGridItem
     private string NameColumnTitleText => NameColumnTitle ?? Loc[nameof(ControlsStrings.NameColumnHeader)];
     private string ValueColumnTitleText => ValueColumnTitle ?? Loc[nameof(ControlsStrings.PropertyGridValueColumnHeader)];
 
+    private string ResizeLabel => Loc[nameof(ControlsStrings.GridColumnResizeLabel)];
+
+    private ElementReference _tableElement;
+
+    // Resizing is only wired up when a header is rendered (the handles live in the header row).
+    private bool ShowResize => GenerateHeader != GridHeaderMode.None;
+
     private string TableCssClass
     {
         get
         {
             var css = "data property-grid-table";
+            if (ShowResize)
+            {
+                css += " resizable-grid";
+            }
             if (Multiline)
             {
                 css += " multiline";
@@ -230,17 +241,6 @@ public partial class PropertyGrid<TItem> where TItem : IPropertyGridItem
             _sortColumnIndex = columnIndex;
             _sortAscending = true;
         }
-    }
-
-    // aria-sort value for the header cell, matching WAI-ARIA grid semantics.
-    private string GetAriaSort(int columnIndex)
-    {
-        if (_sortColumnIndex != columnIndex)
-        {
-            return "none";
-        }
-
-        return _sortAscending ? "ascending" : "descending";
     }
 
     // Return null if empty so GridValue knows there is no template.

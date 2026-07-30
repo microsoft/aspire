@@ -1,0 +1,58 @@
+@* Wires up Deck column resizing for a data grid. Renders nothing itself; on first render it imports
+   the colocated resize module and initializes it against the target element (a table, or a CSS-grid
+   container identified by a CSS custom property). Cleans up the JS listeners on disposal. *@
+@namespace Aspire.Dashboard.Components.Controls.Grid
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+@code {
+    private readonly string _resizerId = $"grid-resizer-{Guid.NewGuid():N}";
+    private IJSObjectReference? _module;
+    private bool _initialized;
+
+    /// <summary>The grid root element (a <c>&lt;table&gt;</c> or a CSS-grid container).</summary>
+    [Parameter, EditorRequired]
+    public ElementReference Target { get; set; }
+
+    /// <summary>
+    /// When resizing a CSS-grid container (rather than a table), the name of the CSS custom property
+    /// that holds the grid-template-columns value (e.g. <c>--trace-grid-columns</c>).
+    /// </summary>
+    [Parameter]
+    public string? GridColumnsVariable { get; set; }
+
+    /// <summary>Minimum column width, in pixels.</summary>
+    [Parameter]
+    public int MinWidth { get; set; } = 48;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_initialized)
+        {
+            _module = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Controls/Grid/ColumnResizer.razor.js");
+            await _module.InvokeVoidAsync("initialize", Target, new
+            {
+                id = _resizerId,
+                minWidth = MinWidth,
+                gridColumnsVar = GridColumnsVariable
+            });
+            _initialized = true;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is not null)
+        {
+            try
+            {
+                await _module.InvokeVoidAsync("dispose", _resizerId);
+                await _module.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // Circuit already gone; nothing to clean up.
+            }
+        }
+    }
+}

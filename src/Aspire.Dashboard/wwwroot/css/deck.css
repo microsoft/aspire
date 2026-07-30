@@ -3254,3 +3254,53 @@ hr.deck-divider {
   display: block;
 }
 /* === end Deck menu === */
+
+/* === Deck data table: column resizing === */
+/* Resizable tables use a fixed layout so the <col> widths the resizer sets are authoritative. */
+table.data.resizable-grid {
+  table-layout: fixed;
+}
+/* Header cells that own a resize handle anchor it to their trailing edge. */
+.resizable-column,
+.trace-view-grid .column-header {
+  position: relative;
+}
+/* Trace waterfall header cells clip their content (overflow: hidden), so keep the handle inside the
+   cell's trailing edge rather than straddling the boundary like table headers do. */
+.trace-view-grid .column-header > .column-resize-handle {
+  right: 0;
+}
+/* A thin draggable strip on the column boundary. Widened hit area, subtle line on hover/focus. */
+.column-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  width: 9px;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  cursor: col-resize;
+  z-index: 3;
+  touch-action: none;
+}
+.column-resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 15%;
+  bottom: 15%;
+  left: 4px;
+  width: 2px;
+  border-radius: 1px;
+  background: transparent;
+  transition: background 0.1s ease;
+}
+.column-resize-handle:hover::after,
+.column-resize-handle:focus-visible::after {
+  background: var(--accent);
+}
+.column-resize-handle:focus-visible {
+  outline: none;
+}
+/* === end Deck data table: column resizing === */
