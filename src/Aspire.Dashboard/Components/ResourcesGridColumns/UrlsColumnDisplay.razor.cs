@@ -31,4 +31,7 @@ public partial class UrlsColumnDisplay
     public required IStringLocalizer<Columns> Loc { get; init; }
 
     private bool _popoverVisible;
+
+    // Stable id for the "+N" overflow button so the popover can anchor to it.
+    private readonly string _moreButtonId = $"urls-more-{Guid.NewGuid():N}";
 }

@@ -1,31 +1,30 @@
-::deep.url-list {
-    margin: 0;
-    padding: 0;
+::deep .url-overflow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
 }
 
-::deep.url-list li {
+/* The inline first URL truncates so the "+N" button stays visible. */
+::deep .url-overflow-first {
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
+    min-width: 0;
+}
+
+::deep .url-button {
+    flex: 0 0 auto;
+}
+
+::deep .url-popup {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+::deep .url-link {
     overflow: hidden;
     text-overflow: ellipsis;
-}
-
-::deep.url-link {
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-::deep .fluent-popover-content {
-    overflow-wrap: normal;
-    word-break: normal;
-    max-height: 300px;
-    overflow-y: auto;
-    max-width: 400px;
-    overflow-x: hidden;
-    cursor: default;
-}
-
-::deep .fluent-popover-content div[part="header"] {
-    font-size: 16px;
-    line-height: normal;
-    margin-bottom: 8px;
+    white-space: nowrap;
 }

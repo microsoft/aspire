@@ -183,12 +183,10 @@
 }
 <AspireMenu @bind-Open="_contextMenuOpen" @ref="_contextMenu" Anchor="resources-page-body-id" Anchored="false" Items="_contextMenuItems" />
 
-@* Filter popover (kept as-is for now; opened by the Deck filter button above). *@
-<FluentPopover AnchorId="resourceFilterButton"
-               @bind-Open="_isFilterPopupVisible"
-               AutoFocus="true"
-               FixedPlacement="true"
-               Class="resources-filter-popup">
+@* Filter popover, opened by the Deck filter button above. *@
+<Popover AnchorId="resourceFilterButton"
+         @bind-Open="_isFilterPopupVisible"
+         Class="resources-filter-popup">
     <Body>
         <ResourceFilters ResourceStates="@PageViewModel.ResourceStatesToVisibility"
                          ResourceTypes="@PageViewModel.ResourceTypesToVisibility"
@@ -196,7 +194,7 @@
                          OnAllFilterVisibilityCheckedChangedAsync="@OnAllFilterVisibilityCheckedChangedAsync"
                          OnResourceFilterVisibilityChangedAsync="@OnResourceFilterVisibilityChangedAsync" />
     </Body>
-</FluentPopover>
+</Popover>
 
 @* On desktop, resource details open in a Deck-style right-side drawer overlay. *@
 @if (ViewportInformation.IsDesktop && PageViewModel.SelectedResource is { } selectedResource)

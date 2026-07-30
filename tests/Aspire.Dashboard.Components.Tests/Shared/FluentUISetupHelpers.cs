@@ -122,6 +122,13 @@ internal static class FluentUISetupHelpers
         checkboxModule.SetupVoid("setIndeterminate", _ => true);
     }
 
+    public static void SetupDeckPopover(TestContext context)
+    {
+        var popoverModule = context.JSInterop.SetupModule("./Components/Deck/Popover.razor.js");
+        popoverModule.SetupVoid("initialize", _ => true);
+        popoverModule.SetupVoid("dispose", _ => true);
+    }
+
     public static void SetupFluentTextField(TestContext context)
     {
         var textboxModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/TextField/FluentTextField.razor.js"));

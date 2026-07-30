@@ -5,7 +5,6 @@ using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Controls;
@@ -13,14 +12,12 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 public class UrlsColumnDisplayTests : DashboardTestContext
 {
     [Fact]
-    public void Render_MoreThanMaxUrls_CapsRenderedOverflowItems()
+    public void Render_MultipleUrls_ShowsFirstUrlInlineAndOverflowButton()
     {
         // Arrange
         const int totalUrls = 30;
-        const int maxRenderedUrls = 20;
 
         JSInterop.Mode = JSRuntimeMode.Loose;
-        FluentUISetupHelpers.SetupFluentOverflow(this);
         FluentUISetupHelpers.AddCommonDashboardServices(this);
 
         var displayedUrls = CreateDisplayedUrls(totalUrls);
@@ -35,21 +32,25 @@ public class UrlsColumnDisplayTests : DashboardTestContext
         });
 
         // Assert
-        var overflowItems = cut.FindComponents<FluentOverflowItem>();
-        Assert.Equal(maxRenderedUrls, overflowItems.Count);
+        // Only the first URL is rendered inline; the rest are collapsed behind the overflow button.
+        // This keeps DOM element count low so a large URL set can't trigger a reflow that drops the
+        // SignalR connection.
+        var inlineLinks = cut.FindAll(".url-overflow-first a");
+        Assert.Single(inlineLinks);
+        Assert.Equal("Endpoint 0", inlineLinks[0].TextContent);
+
+        var overflowButton = cut.Find(".url-button");
+        Assert.Equal($"+{totalUrls - 1}", overflowButton.TextContent.Trim());
     }
 
     [Fact]
-    public void Render_ExactlyMaxUrls_RendersAllItems()
+    public void Render_SingleUrl_ShowsNoOverflowButton()
     {
         // Arrange
-        const int totalUrls = 20;
-
         JSInterop.Mode = JSRuntimeMode.Loose;
-        FluentUISetupHelpers.SetupFluentOverflow(this);
         FluentUISetupHelpers.AddCommonDashboardServices(this);
 
-        var displayedUrls = CreateDisplayedUrls(totalUrls);
+        var displayedUrls = CreateDisplayedUrls(1);
         var resource = ModelTestHelpers.CreateResource(resourceName: "test-resource", resourceType: "Project", state: KnownResourceState.Running);
 
         // Act
@@ -61,8 +62,10 @@ public class UrlsColumnDisplayTests : DashboardTestContext
         });
 
         // Assert
-        var overflowItems = cut.FindComponents<FluentOverflowItem>();
-        Assert.Equal(totalUrls, overflowItems.Count);
+        Assert.Empty(cut.FindAll(".url-button"));
+        var links = cut.FindAll(".url-container a");
+        Assert.Single(links);
+        Assert.Equal("Endpoint 0", links[0].TextContent);
     }
 
     private static List<DisplayedUrl> CreateDisplayedUrls(int count)

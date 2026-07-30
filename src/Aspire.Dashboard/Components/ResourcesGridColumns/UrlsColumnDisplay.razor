@@ -13,57 +13,37 @@ else if (DisplayedUrls.Count == 1)
 }
 else if (DisplayedUrls.Count > 1)
 {
-    // Only render a limited number of items in the FluentOverflow to avoid expensive
-    // browser layout calculations. Rendering all items as DOM elements triggers a forced
-    // reflow long enough to kill the SignalR connection when there are hundreds of URLs.
-    var maxRenderedUrls = 20;
-    var renderedUrls = DisplayedUrls.Take(maxRenderedUrls).ToList();
-    var preOverflowedCount = DisplayedUrls.Count - renderedUrls.Count;
+    // Show the first URL inline and collapse the rest behind a "+N" button that opens a popover.
+    // Rendering only one inline element avoids the expensive forced reflow that rendering hundreds
+    // of URL elements used to cause (long enough to drop the SignalR connection).
+    var firstUrl = DisplayedUrls[0];
+    var overflowCount = DisplayedUrls.Count - 1;
 
     <div class="url-container" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
-        <FluentOverflow Class="url-overflow">
-            <ChildContent>
-                @for (var i = 0; i < renderedUrls.Count; i++)
-                {
-                    var displayedUrl = renderedUrls[i];
-
-                    // Always display the first item by setting a fixed value.
-                    <FluentOverflowItem Data="displayedUrl" Fixed="@(i == 0 ? OverflowItemFixed.Ellipsis : OverflowItemFixed.None)">
-                        @WriteUrl(displayedUrl)
-                    </FluentOverflowItem>
-                }
-            </ChildContent>
-            <MoreButtonTemplate Context="overflow">
-                <div @onclick:stopPropagation="true" @onkeydown:stopPropagation="true" style="display:inherit;">
-                    <FluentButton Appearance="Appearance.Accent" OnClick="() => _popoverVisible = !_popoverVisible" Class="url-button">
-                        @($"+{overflow.ItemsOverflow.Count() + preOverflowedCount}")
-                    </FluentButton>
+        <div class="url-overflow">
+            <span class="url-overflow-first">@WriteUrl(firstUrl)</span>
+            <button type="button"
+                    id="@_moreButtonId"
+                    class="btn btn--primary btn--sm url-button"
+                    @onclick="() => _popoverVisible = !_popoverVisible">
+                @($"+{overflowCount}")
+            </button>
+        </div>
+        <Popover AnchorId="@_moreButtonId" @bind-Open="_popoverVisible">
+            <Header>
+                @Loc[nameof(Resources.Columns.UrlsColumnDisplayOverflowTitle)]
+            </Header>
+            <Body>
+                <div class="url-popup">
+                    @foreach (var item in DisplayedUrls)
+                    {
+                        <div class="url-link">
+                            @WriteUrl(item)
+                        </div>
+                    }
                 </div>
-            </MoreButtonTemplate>
-            <OverflowTemplate Context="overflow">
-                @{
-                    var items = overflow.ItemsOverflow.Select(i => (DisplayedUrl)i.Data!).Concat(DisplayedUrls.Skip(maxRenderedUrls)).ToList();
-                }
-                <div @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
-                    @* Each item is approximately 36px tall, plus 48px for the header and container padding. The popover body has a CSS max-height of 300px. *@
-                    <FluentPopover AnchorId="@overflow.IdMoreButton" @bind-Open="_popoverVisible" VerticalThreshold="@(Math.Min(items.Count * 36 + 48, 300))" AutoFocus="false">
-                        <Header>
-                            @Loc[nameof(Resources.Columns.UrlsColumnDisplayOverflowTitle)]
-                        </Header>
-                        <Body>
-                            <div class="url-popup">
-                                @foreach (var item in items)
-                                {
-                                <div class="url-link">
-                                    @WriteUrl(item)
-                                </div>
-                                }
-                            </div>
-                        </Body>
-                    </FluentPopover>
-                </div>
-            </OverflowTemplate>
-        </FluentOverflow>
+            </Body>
+        </Popover>
     </div>
 }
 
