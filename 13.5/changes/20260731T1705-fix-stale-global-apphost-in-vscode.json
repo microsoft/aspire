@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The VS Code extension now correctly prunes a stale global AppHost entry after a debug stop when workspace discovery polling is temporarily unavailable. Stop tracking is now source-aware, ensuring the global view reflects the true AppHost state once polling resumes.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-07-31T17:05:58Z",
+  "lastMergedAt": "2026-07-31T17:05:58Z",
+  "name": "Fix stale global AppHost entry in VS Code after debug stop",
+  "owner": "adamint",
+  "prs": [
+    18594
+  ]
+}

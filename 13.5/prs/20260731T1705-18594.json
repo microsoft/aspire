@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Bug fix for stale global AppHost entry in VS Code extension after debug stop with polling downtime",
+  "mergedAt": "2026-07-31T17:05:58Z",
+  "number": 18594,
+  "runDate": "2026-07-31T18:30:06Z",
+  "status": "included",
+  "title": "Fix stale VS Code global AppHost after debug stop"
+}
