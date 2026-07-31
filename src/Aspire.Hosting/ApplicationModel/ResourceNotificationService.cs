@@ -585,9 +585,9 @@ public class ResourceNotificationService : IDisposable
             .Distinct(StringComparers.ResourceName)
             .ToArray();
 
-        // This is a model-level update, so it reaches every instance (replica) of the resource. "NotStarted" is
-        // only safe to transition when there is a single instance to update - see CanTransitionToWaiting.
-        var allowNotStarted = !resource.TryGetInstances(out var instances) || instances.Length == 1;
+        // This is a model-level update, so it reaches every instance of the resource. "NotStarted" is only safe
+        // to transition for resources that have no DCP instances at all - see CanTransitionToWaiting.
+        var allowNotStarted = !resource.TryGetInstances(out _);
 
         return PublishUpdateAsync(resource, s =>
             CanTransitionToWaiting(s.State?.Text, allowNotStarted)
@@ -604,20 +604,23 @@ public class ResourceNotificationService : IDisposable
     /// while its dependencies are being awaited.
     /// </summary>
     /// <remarks>
-    /// This is an allow-list of the states that mean "has not started yet". It ensures that resources/replicas that are
+    /// This is an allow-list of the states that mean "has not started yet". It ensures that resources/instances that are
     /// in running, stopping, or in one of terminal states cannot be transitioned to waiting.
     ///
-    /// Transition from <see cref="KnownResourceStates.NotStarted"/> is conditional. It must be allowed for custom resources that drive
-    /// their own startup: they can publish <see cref="BeforeResourceStartedEvent"/> from <c>OnInitializeResource</c>, so
-    /// they are still in the initial state supplied by <c>WithInitialState</c> when the wait is published, rather than
-    /// having been moved to "Starting" by the orchestrator first. Omitting it silently skipped the transition and, in
-    /// turn, the wait itself. See https://github.com/microsoft/aspire/issues/17453.
+    /// Transition from <see cref="KnownResourceStates.NotStarted"/> is conditional, and only allowed for resources that
+    /// have no DCP instances, which is exactly the set of resources that drive their own startup. Those resources can
+    /// publish <see cref="BeforeResourceStartedEvent"/> from <c>OnInitializeResource</c>, so they are still in the
+    /// initial state supplied by <c>WithInitialState</c> when the wait is published, rather than having been moved to
+    /// "Starting" by the orchestrator first. Omitting it silently skipped the transition and, in turn, the wait itself.
+    /// See https://github.com/microsoft/aspire/issues/17453.
     ///
-    /// Transition from <see cref="KnownResourceStates.NotStarted"/> must not be allowed 
-    /// when the resource has more than one instance, because the wait is published as a
-    /// model-level update that reaches every replica. Replicas are started individually (a start request moves only that
-    /// replica to "Starting"), so a replica that is still "NotStarted" is one that was deliberately not started - for
-    /// example with <c>WithExplicitStart</c> - and relabeling it "Waiting" would misreport it and disable its start command.
+    /// DCP-managed resources never need it: the orchestrator publishes "Starting" for the instance that is being started
+    /// before <see cref="BeforeResourceStartedEvent"/> is raised. Allowing it for them would be actively harmful, because
+    /// the wait is published as a model-level update that reaches every instance, while instances are started
+    /// individually. An instance that is still "NotStarted" is one that was deliberately not started - for example with
+    /// <c>WithExplicitStart</c> - and relabeling it "Waiting" would misreport it and make its start command a no-op
+    /// (<c>ApplicationOrchestrator.StartResourceAsync</c> reads "Waiting" as proof that startup is already in flight).
+    /// The public <see cref="WaitForDependenciesAsync"/> can be called on such a resource by any integration.
     /// </remarks>
     private static bool CanTransitionToWaiting(string? state, bool allowNotStarted) =>
         state is null

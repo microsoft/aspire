@@ -112,25 +112,34 @@ internal sealed class ApplicationOrchestrator
         // This happens when resource start command is run, which forces the status to "Starting".
         //
         // A resource instance has to be observed in "Waiting" first, and then leave it, for a non-"Waiting" state
-        // to count as the release signal. The tracking is per resource id because WaitForResourceAsync only
-        // filters on the model resource name, so this predicate is fed events for every replica.
-        // Both halves of the condition matter:
+        // to count as the release signal. WaitForResourceAsync only filters on the model resource name, so this
+        // predicate is fed events for every instance, and both halves of the condition matter:
         //   - Without "was seen waiting", the very first replayed event of a resource that never entered
         //     "Waiting" satisfies the predicate, and the resource starts with unmet dependencies.
-        //   - Without the per-id scoping, a sibling replica reporting a non-"Waiting" state releases a wait that
-        //     nobody asked to be released.
+        //   - Without the per-id scoping, a sibling instance reporting a non-"Waiting" state releases a wait that
+        //     nobody asked to be released. The rebuild command relies on this: it moves non-waiting replicas to
+        //     "Building" while intentionally leaving waiting replicas alone, precisely so that waiting replicas
+        //     don't get unblocked and launch the old binary mid-build (see CommandsConfigurationExtensions).
         //
-        // The wait itself is still per BeforeResourceStartedEvent rather than per replica, because the event
-        // does not carry the resource id.
-        // Force-starting any replica that was waiting therefore releases the wait for the whole resource.
+        // When the event identifies the instance being started, events from all other instances are ignored
+        // outright. Otherwise a force-start of one replica would release the wait of a sibling replica that the
+        // user never asked to start. ResourceInstanceId is null when the event covers the resource as a whole:
+        // either the resource has no instances, or a replicated resource is being started as a group and all of
+        // its replicas legitimately share this single wait.
         //
         // Important: call WaitForResourceAsync before WaitForDependenciesAsync, because the latter can complete synchronously 
         // if there are no dependencies to wait for, and the transition from Waiting to Starting will be lost.
+        var startingInstanceId = @event.ResourceInstanceId;
         var waitingResourceIds = new ConcurrentDictionary<string, bool>(StringComparers.ResourceName);
         var waitForNonWaitingStateTask = _notificationService.WaitForResourceAsync(
             @event.Resource.Name,
             e =>
             {
+                if (startingInstanceId is not null && !StringComparers.ResourceName.Equals(e.ResourceId, startingInstanceId))
+                {
+                    return false;
+                }
+
                 if (e.Snapshot.State?.Text == KnownResourceStates.Waiting)
                 {
                     _ = waitingResourceIds.TryAdd(e.ResourceId, true);
@@ -246,7 +255,10 @@ internal sealed class ApplicationOrchestrator
                 break;
         }
 
-        var beforeResourceStartedEvent = new BeforeResourceStartedEvent(context.Resource, _serviceProvider);
+        var beforeResourceStartedEvent = new BeforeResourceStartedEvent(context.Resource, _serviceProvider)
+        {
+            ResourceInstanceId = context.DcpResourceName
+        };
         await _eventing.PublishAsync(beforeResourceStartedEvent, context.CancellationToken).ConfigureAwait(false);
 
         static Task PublishUpdateAsync(ResourceNotificationService notificationService, IResource resource, string? resourceId, Func<CustomResourceSnapshot, CustomResourceSnapshot> stateFactory)

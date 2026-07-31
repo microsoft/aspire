@@ -582,7 +582,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         var builder = DistributedApplication.CreateBuilder();
         builder.WithTestAndResourceLogging(testOutputHelper);
 
-        var blockerReleased = new TaskCompletionSource();
+        var blockerReleased = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var blocker = AddSelfDrivenResource(builder, "blocker", blockerReleased.Task);
         var waiter = AddSelfDrivenResource(builder, "waiter").WaitFor(blocker);
 
@@ -618,7 +618,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         var builder = DistributedApplication.CreateBuilder();
         builder.WithTestAndResourceLogging(testOutputHelper);
 
-        var dependencyReleased = new TaskCompletionSource();
+        var dependencyReleased = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var dependency = AddSelfDrivenResource(builder, "dependency", dependencyReleased.Task);
         var waiter = builder.AddResource(new CustomResourceWithWaitSupport("waiter")).WaitFor(dependency);
 
@@ -660,7 +660,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         var builder = DistributedApplication.CreateBuilder();
         builder.WithTestAndResourceLogging(testOutputHelper);
 
-        var dependencyReleased = new TaskCompletionSource();
+        var dependencyReleased = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var dependency = AddSelfDrivenResource(builder, "dependency", dependencyReleased.Task);
         var waiter = builder.AddResource(new CustomResourceWithWaitSupport("waiter")).WaitFor(dependency);
         waiter.Resource.Annotations.Add(new DcpInstancesAnnotation([
@@ -720,7 +720,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         var builder = DistributedApplication.CreateBuilder();
         builder.WithTestAndResourceLogging(testOutputHelper);
 
-        var dependencyReleased = new TaskCompletionSource();
+        var dependencyReleased = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var dependency = AddSelfDrivenResource(builder, "dependency", dependencyReleased.Task);
         var waiter = builder.AddResource(new CustomResourceWithWaitSupport("waiter")).WaitFor(dependency);
         waiter.Resource.Annotations.Add(new DcpInstancesAnnotation([
@@ -769,7 +769,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         var builder = DistributedApplication.CreateBuilder();
         builder.WithTestAndResourceLogging(testOutputHelper);
 
-        var dependencyReleased = new TaskCompletionSource();
+        var dependencyReleased = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var dependency = AddSelfDrivenResource(builder, "dependency", dependencyReleased.Task);
         var waiter = builder.AddResource(new CustomResourceWithWaitSupport("waiter")).WaitFor(dependency);
         waiter.Resource.Annotations.Add(new DcpInstancesAnnotation([
@@ -813,6 +813,77 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ForceStartingOneReplicaDoesNotReleaseAnotherReplicasWait()
+    {
+        // Each individually started replica gets its own BeforeResourceStartedEvent, but WaitForResourceAsync
+        // filters only on the model resource name, so every one of those waits is fed events for every replica.
+        // Forcing replica B out of "Waiting" with the start command must not release replica A's wait - the user
+        // only asked for B, and A would otherwise start with unmet dependencies.
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var dependencyReleased = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var dependency = AddSelfDrivenResource(builder, "dependency", dependencyReleased.Task);
+        var waiter = builder.AddResource(new CustomResourceWithWaitSupport("waiter")).WaitFor(dependency);
+        waiter.Resource.Annotations.Add(new DcpInstancesAnnotation([
+            new DcpInstance("waiter-abc123", "abc123", 0),
+            new DcpInstance("waiter-def456", "def456", 1)
+        ]));
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var dcpExecutor = new TestDcpExecutor();
+        dcpExecutor.AddResource(waiter.Resource, "waiter-abc123");
+        dcpExecutor.AddResource(waiter.Resource, "waiter-def456");
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events, applicationEventing: builder.Eventing, dcpExecutor: dcpExecutor);
+        await appOrchestrator.RunApplicationAsync();
+
+        await events.PublishAsync(new OnResourcesPreparedContext(CancellationToken.None));
+
+        await PublishReplicaStatesAsync(resourceNotificationService, waiter.Resource, KnownResourceStates.NotStarted);
+
+        // Both replicas are started, so both end up waiting on the same dependency.
+        var startingFirstReplicaTask = events.PublishAsync(new OnResourceStartingContext(
+            CancellationToken.None, KnownResourceTypes.Executable, waiter.Resource, "waiter-abc123"));
+
+        await resourceNotificationService.WaitForResourceAsync(
+            waiter.Resource.Name,
+            e => e.ResourceId == "waiter-abc123" && e.Snapshot.State?.Text == KnownResourceStates.Waiting,
+            TestContext.Current.CancellationToken).DefaultTimeout();
+
+        var startingSecondReplicaTask = events.PublishAsync(new OnResourceStartingContext(
+            CancellationToken.None, KnownResourceTypes.Executable, waiter.Resource, "waiter-def456"));
+
+        await resourceNotificationService.WaitForResourceAsync(
+            waiter.Resource.Name,
+            e => e.ResourceId == "waiter-def456" && e.Snapshot.State?.Text == KnownResourceStates.Waiting,
+            TestContext.Current.CancellationToken).DefaultTimeout();
+
+        // Stand in for the user invoking the start command on the second replica to force it past the wait.
+        await appOrchestrator.StartResourceAsync("waiter-def456", TestContext.Current.CancellationToken).DefaultTimeout();
+
+        // The replica was already waiting, so the start was served by moving it to "Starting" rather than by DCP.
+        Assert.Empty(dcpExecutor.StartedResources);
+
+        await startingSecondReplicaTask.DefaultTimeout();
+
+        // Negative assertion: give the first replica's wait a chance to be released incorrectly. This can only
+        // ever produce a false pass, never a false failure - with a model-wide release flag the wait is abandoned
+        // as soon as the second replica leaves "Waiting".
+        await Task.Delay(TimeSpan.FromMilliseconds(250), TestContext.Current.CancellationToken);
+        Assert.False(startingFirstReplicaTask.IsCompleted, "Force-starting one replica must not release another replica's dependency wait.");
+
+        dependencyReleased.SetResult();
+
+        await startingFirstReplicaTask.DefaultTimeout();
+    }
+
+    [Fact]
     public async Task ResourceForcedOutOfWaitingStopsWaitingForItsDependency()
     {
         // The Start command forces a waiting resource to start by moving it from "Waiting" to "Starting"
@@ -821,7 +892,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         var builder = DistributedApplication.CreateBuilder();
         builder.WithTestAndResourceLogging(testOutputHelper);
 
-        var blockerReleased = new TaskCompletionSource();
+        var blockerReleased = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var blocker = AddSelfDrivenResource(builder, "blocker", blockerReleased.Task);
         var waiter = AddSelfDrivenResource(builder, "waiter").WaitFor(blocker);
 
@@ -862,7 +933,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         var builder = DistributedApplication.CreateBuilder();
         builder.WithTestAndResourceLogging(testOutputHelper);
 
-        var blockerReleased = new TaskCompletionSource();
+        var blockerReleased = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var blocker = AddSelfDrivenResource(builder, "blocker", blockerReleased.Task);
         var waiter = AddSelfDrivenResource(builder, "waiter").WaitFor(blocker);
 
@@ -877,11 +948,21 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
 
         // Stand in for the Start command, firing as soon as the waiting state is stored. PublishUpdateAsync
         // stores the snapshot synchronously, so a tight poll observes "Waiting" well before any watcher started
-        // afterwards could - which is exactly the window the fix has to cover. Losing the poll only ever
-        // produces a false pass, never a false failure.
+        // afterwards could - which is exactly the window the fix has to cover. A delay-based poll or a watcher
+        // subscription would only see "Waiting" after the orchestrator had already subscribed, so the regression
+        // would go unnoticed. Losing the poll only ever produces a false pass, never a false failure.
         var cancellationToken = TestContext.Current.CancellationToken;
         var forceStartTask = Task.Run(async () =>
         {
+            // Wait for the waiter's initial snapshot first so the tight poll below only spins across the short
+            // window in which the dependency wait is set up, rather than for the whole of application startup.
+            // "Waiting" is tolerated as well: if the poll is late the snapshot has already moved on, and the
+            // loop below exits immediately.
+            await resourceNotificationService.WaitForResourceAsync(
+                waiter.Resource.Name,
+                [KnownResourceStates.NotStarted, KnownResourceStates.Waiting],
+                cancellationToken);
+
             while (!resourceNotificationService.TryGetCurrentState(waiter.Resource.Name, out var waiterEvent)
                 || waiterEvent.Snapshot.State?.Text != KnownResourceStates.Waiting)
             {
@@ -915,7 +996,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         var builder = DistributedApplication.CreateBuilder();
         builder.WithTestAndResourceLogging(testOutputHelper);
 
-        var referencedReleased = new TaskCompletionSource();
+        var referencedReleased = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var referenced = AddSelfDrivenResource(builder, "referenced", referencedReleased.Task);
         var connectionString = builder.AddConnectionString("cs", ReferenceExpression.Create($"Endpoint={referenced.Resource}"));
 
