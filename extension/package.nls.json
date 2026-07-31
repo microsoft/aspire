@@ -135,6 +135,7 @@
   "aspire-vscode.strings.failedToGetConfigInfo": "Failed to get Aspire config info (exit code: {0}). Try updating the Aspire CLI with: aspire update",
   "aspire-vscode.strings.failedToParseConfigInfo": "Failed to parse Aspire config info: {0}. Try updating the Aspire CLI with: aspire update",
   "aspire-vscode.strings.errorGettingConfigInfo": "Error getting Aspire config info: {0}. Try updating the Aspire CLI with: aspire update",
+  "aspire-vscode.strings.configInfoTimedOut": "Aspire config info timed out after {0} seconds.",
   "aspire-vscode.strings.selectDefaultLaunchApphost": "Select the default AppHost to launch when starting an Aspire debug session",
   "aspire-vscode.strings.doYouWantToSetDefaultApphost": "Do you want to set {0} as the default AppHost for this workspace?",
   "aspire-vscode.strings.doYouWantToSelectDefaultApphost": "Do you want to select the default AppHost for this workspace?",

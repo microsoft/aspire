@@ -1,10 +1,13 @@
 import * as vscode from 'vscode';
+import type { ChildProcessWithoutNullStreams } from 'child_process';
 import { AspireTerminalProvider } from './AspireTerminalProvider';
 import { spawnCliProcess } from '../debugger/languages/cli';
 import { extensionLogOutputChannel } from './logging';
 import { ConfigInfo, FeatureInfo, PropertyInfo, SettingsSchema } from '../types/configInfo';
 import * as strings from '../loc/strings';
 import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from './cliCompatibility';
+
+const configInfoTimeoutMs = 30_000;
 
 type RawFeatureInfo = Partial<FeatureInfo> & {
     Name?: unknown;
@@ -97,75 +100,128 @@ export class ConfigInfoProvider {
 
     private _fetchConfigInfo(suppressErrors: boolean): Promise<ConfigInfo | null> {
         return new Promise<ConfigInfo | null>((resolve) => {
-            // Resolve the cli path here (not in the constructor) so a missing CLI is handled by the
-            // same error path as a failed spawn rather than throwing during construction.
-            this._terminalProvider.getAspireCliExecutablePath().then(cliPath => {
-                const workingDirectory = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-                const runConfigInfo = (args: string[], allowNoLogoRetry: boolean) => {
-                    let output = '';
-                    let stderr = '';
+            let childProcess: ChildProcessWithoutNullStreams | undefined;
+            let settled = false;
+            let timeout: ReturnType<typeof setTimeout> | undefined;
+            const settle = (result: ConfigInfo | null) => {
+                if (settled) {
+                    return;
+                }
 
-                    spawnCliProcess(this._terminalProvider, cliPath, args, {
-                        stdoutCallback: (data) => {
-                            output += data;
-                        },
-                        stderrCallback: (data) => {
-                            stderr += data;
-                        },
-                        exitCallback: (code) => {
-                            if (code !== 0) {
-                                if (allowNoLogoRetry && isNoLogoUnsupportedOutput(args, output, stderr)) {
-                                    extensionLogOutputChannel.info(`Installed Aspire CLI does not recognize ${noLogoOption}; retrying config info without it.`);
-                                    runConfigInfo(removeRootNoLogoOption(args), false);
-                                    return;
-                                }
+                settled = true;
+                if (timeout) {
+                    clearTimeout(timeout);
+                }
+                resolve(result);
+            };
+            const reportError = (error: unknown) => {
+                if (settled) {
+                    return;
+                }
 
-                                if (stderr) {
-                                    extensionLogOutputChannel.error(`aspire config info stderr: ${stderr}`);
-                                }
-                                extensionLogOutputChannel.error(strings.failedToGetConfigInfo(code ?? -1));
-                                if (!suppressErrors) {
-                                    vscode.window.showErrorMessage(strings.failedToGetConfigInfo(code ?? -1));
-                                }
-                                resolve(null);
-                                return;
-                            }
-
-                            try {
-                                const configInfo = parseConfigInfoOutput(output);
-                                extensionLogOutputChannel.info(`Got config info: ${configInfo.availableFeatures.length} features available`);
-                                resolve(configInfo);
-                            } catch (error) {
-                                if (stderr) {
-                                    extensionLogOutputChannel.error(`aspire config info stderr: ${stderr}`);
-                                }
-                                extensionLogOutputChannel.error(strings.failedToParseConfigInfo(error));
-                                if (!suppressErrors) {
-                                    vscode.window.showErrorMessage(strings.failedToParseConfigInfo(error));
-                                }
-                                resolve(null);
-                            }
-                        },
-                        errorCallback: (error) => {
-                            extensionLogOutputChannel.error(strings.errorGettingConfigInfo(error));
-                            if (!suppressErrors) {
-                                vscode.window.showErrorMessage(strings.errorGettingConfigInfo(error));
-                            }
-                            resolve(null);
-                        },
-                        workingDirectory,
-                        noExtensionVariables: true
-                    });
-                };
-
-                runConfigInfo(['config', 'info', '--json', noLogoOption], true);
-            }, error => {
                 extensionLogOutputChannel.error(strings.errorGettingConfigInfo(error));
                 if (!suppressErrors) {
                     vscode.window.showErrorMessage(strings.errorGettingConfigInfo(error));
                 }
-                resolve(null);
-            });
+                settle(null);
+            };
+
+            // Capability detection runs during extension startup. Bound the CLI probe so a wedged
+            // process or executable-path lookup cannot block AppHost discovery indefinitely.
+            timeout = setTimeout(() => {
+                const message = strings.configInfoTimedOut(configInfoTimeoutMs / 1000);
+                extensionLogOutputChannel.warn(message);
+                if (!suppressErrors) {
+                    vscode.window.showErrorMessage(message);
+                }
+                settle(null);
+
+                if (childProcess && !childProcess.killed) {
+                    try {
+                        if (!childProcess.kill()) {
+                            extensionLogOutputChannel.warn('Failed to stop timed-out aspire config info command.');
+                        }
+                    }
+                    catch (error) {
+                        extensionLogOutputChannel.warn(`Failed to stop timed-out aspire config info command: ${error}`);
+                    }
+                }
+            }, configInfoTimeoutMs);
+
+            // Resolve the cli path here (not in the constructor) so a missing CLI is handled by the
+            // same error path as a failed spawn rather than throwing during construction.
+            this._terminalProvider.getAspireCliExecutablePath().then(cliPath => {
+                if (settled) {
+                    return;
+                }
+
+                const workingDirectory = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+                const runConfigInfo = (args: string[], allowNoLogoRetry: boolean) => {
+                    if (settled) {
+                        return;
+                    }
+
+                    let output = '';
+                    let stderr = '';
+
+                    try {
+                        childProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
+                            stdoutCallback: (data) => {
+                                output += data;
+                            },
+                            stderrCallback: (data) => {
+                                stderr += data;
+                            },
+                            exitCallback: (code) => {
+                                if (settled) {
+                                    return;
+                                }
+
+                                if (code !== 0) {
+                                    if (allowNoLogoRetry && isNoLogoUnsupportedOutput(args, output, stderr)) {
+                                        extensionLogOutputChannel.info(`Installed Aspire CLI does not recognize ${noLogoOption}; retrying config info without it.`);
+                                        runConfigInfo(removeRootNoLogoOption(args), false);
+                                        return;
+                                    }
+
+                                    if (stderr) {
+                                        extensionLogOutputChannel.error(`aspire config info stderr: ${stderr}`);
+                                    }
+                                    extensionLogOutputChannel.error(strings.failedToGetConfigInfo(code ?? -1));
+                                    if (!suppressErrors) {
+                                        vscode.window.showErrorMessage(strings.failedToGetConfigInfo(code ?? -1));
+                                    }
+                                    settle(null);
+                                    return;
+                                }
+
+                                try {
+                                    const configInfo = parseConfigInfoOutput(output);
+                                    extensionLogOutputChannel.info(`Got config info: ${configInfo.availableFeatures.length} features available`);
+                                    settle(configInfo);
+                                } catch (error) {
+                                    if (stderr) {
+                                        extensionLogOutputChannel.error(`aspire config info stderr: ${stderr}`);
+                                    }
+                                    extensionLogOutputChannel.error(strings.failedToParseConfigInfo(error));
+                                    if (!suppressErrors) {
+                                        vscode.window.showErrorMessage(strings.failedToParseConfigInfo(error));
+                                    }
+                                    settle(null);
+                                }
+                            },
+                            errorCallback: reportError,
+                            workingDirectory,
+                            noExtensionVariables: true
+                        });
+                    }
+                    catch (error) {
+                        reportError(error);
+                    }
+                };
+
+                runConfigInfo(['config', 'info', '--json', noLogoOption], true);
+            }, reportError);
         });
     }
 }

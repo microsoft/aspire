@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import type { ChildProcessWithoutNullStreams } from 'child_process';
-import { getConfigInfo, parseConfigInfoOutput } from '../utils/configInfoProvider';
+import { ConfigInfoProvider, getConfigInfo, parseConfigInfoOutput } from '../utils/configInfoProvider';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import * as cliModule from '../debugger/languages/cli';
 
@@ -152,5 +152,40 @@ suite('configInfoProvider tests', () => {
         assert.ok(configInfo);
         assert.deepStrictEqual(spawnStub.firstCall.args[2], ['config', 'info', '--json', '--nologo']);
         assert.deepStrictEqual(spawnStub.secondCall.args[2], ['config', 'info', '--json']);
+    });
+
+    test('getConfigInfo stops a hung CLI after timeout', async () => {
+        const clock = sinon.useFakeTimers();
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => '/usr/bin/aspire',
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        let errorCallback: ((error: Error) => void) | undefined;
+        const kill = sinon.stub().callsFake(() => {
+            errorCallback?.(new Error('Process terminated.'));
+            return true;
+        });
+        sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+            errorCallback = options?.errorCallback;
+            return {
+                killed: false,
+                kill,
+            } as unknown as ChildProcessWithoutNullStreams;
+        });
+        const showErrorMessage = sinon.stub(vscode.window, 'showErrorMessage');
+        const provider = new ConfigInfoProvider(terminalProvider);
+
+        try {
+            const configInfoPromise = provider.getConfigInfo();
+            await clock.tickAsync(30_000);
+
+            assert.strictEqual(await configInfoPromise, null);
+            assert.strictEqual(kill.callCount, 1);
+            assert.strictEqual(showErrorMessage.callCount, 1);
+            assert.strictEqual(showErrorMessage.firstCall.args[0], 'Aspire config info timed out after 30 seconds.');
+        }
+        finally {
+            clock.restore();
+        }
     });
 });

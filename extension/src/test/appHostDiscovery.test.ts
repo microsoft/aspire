@@ -1572,6 +1572,51 @@ suite('AppHost discovery', () => {
             }
         });
 
+        test('falls back to project files when CLI path resolution times out', async () => {
+            const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-apphost-discovery-'));
+            try {
+                stubFileSystemWatchers(sandbox);
+                sandbox.stub(vscode.workspace, 'getConfiguration').returns({
+                    get: <T>(key: string, defaultValue: T) => key === 'appHostDiscoveryTimeoutMs' ? 1000 as T : defaultValue,
+                } as vscode.WorkspaceConfiguration);
+                const clock = sandbox.useFakeTimers();
+                const appHostProjectPath = path.join(tempDir, 'AppHost', 'AppHost.csproj');
+                fs.mkdirSync(path.dirname(appHostProjectPath), { recursive: true });
+                fs.writeFileSync(appHostProjectPath, '<Project Sdk="Aspire.AppHost.Sdk/13.5.0" />');
+                findFilesStub.callsFake(async (include: vscode.GlobPattern) => {
+                    const pattern = typeof include === 'string' ? include : include.pattern;
+                    return pattern.endsWith('*.csproj') ? [vscode.Uri.file(appHostProjectPath)] : [];
+                });
+                const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess');
+                const getCliPath = sandbox.stub().returns(new Promise<string>(() => { }));
+                const terminalProvider = {
+                    getAspireCliExecutablePath: getCliPath,
+                    createEnvironment: () => ({}),
+                } as unknown as AspireTerminalProvider;
+                const service = new AppHostDiscoveryService(terminalProvider);
+
+                try {
+                    const discovery = service.discover(makeWorkspaceFolder(tempDir));
+                    await clock.tickAsync(1000);
+
+                    assert.deepStrictEqual(await discovery, [{
+                        path: vscode.Uri.file(appHostProjectPath).fsPath,
+                        language: 'csharp',
+                        status: 'buildable',
+                    }]);
+                    assert.strictEqual(getCliPath.callCount, 1);
+                    assert.strictEqual(spawnStub.callCount, 0);
+                }
+                finally {
+                    service.dispose();
+                    clock.restore();
+                }
+            }
+            finally {
+                fs.rmSync(tempDir, { recursive: true, force: true });
+            }
+        });
+
         test('falls back to project files when malformed config blocks CLI discovery', async () => {
             const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-apphost-discovery-'));
             try {
