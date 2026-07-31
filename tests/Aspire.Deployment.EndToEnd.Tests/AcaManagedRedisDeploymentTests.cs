@@ -159,9 +159,11 @@ builder.Build().Run();
             await auto.RunCommandAsync($"cd {AspireCliShellCommandHelpers.QuoteBashArg($"{projectName}.AppHost")}", counter);
 
             // Step 11: Set environment variables for deployment
-            // Use eastus for Azure Managed Redis availability zone support
+            // Use eastus for Azure Managed Redis availability zone support.
+            // Unset the job-level Azure__Location=westus3 the CI workflow injects first: on Linux it coexists
+            // with AZURE__LOCATION (case-sensitive env) and .NET config may bind the inherited westus3 instead.
             await auto.RunCommandAsync(
-                $"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=eastus AZURE__RESOURCEGROUP={AspireCliShellCommandHelpers.QuoteBashArg(resourceGroupName)}",
+                $"unset ASPIRE_PLAYGROUND && unset Azure__Location && export AZURE__LOCATION=eastus AZURE__RESOURCEGROUP={AspireCliShellCommandHelpers.QuoteBashArg(resourceGroupName)}",
                 counter);
 
             // Step 12: Deploy to Azure Container Apps
