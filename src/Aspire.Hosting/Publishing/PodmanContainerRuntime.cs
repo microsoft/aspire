@@ -167,13 +167,17 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
             arguments += $" --format \"{format}\"";
         }
 
-        // Add output support if specified
-        if (!string.IsNullOrEmpty(options?.OutputPath))
-        {
-            // Extract resource name from imageName for the file name
-            var resourceName = imageName.Split('/').Last().Split(':').First();
-            arguments += $" --output \"{Path.Combine(options.OutputPath, resourceName)}.tar\"";
-        }
+        // Archive output is deliberately NOT handled here.
+        //
+        // `podman build` has no image-archive output flag. Its `--output`/`-o` is a *filesystem* export
+        // (`-o type=local,dest=...`), not the image-archive equivalent of
+        // `docker buildx build --output type=oci,dest=...`, and it is rejected outright when talking to
+        // a remote/machine-backed service:
+        //   Error: '--output' option is not supported in remote mode
+        // The image-archive equivalent is a normal tagged build followed by `podman save`, which
+        // RunPodmanSaveAsync performs once the build below succeeds.
+        // See https://docs.podman.io/en/latest/markdown/podman-build.1.html and
+        // https://docs.podman.io/en/latest/markdown/podman-save.1.html
 
         // Add build arguments if specified
         arguments += BuildArgumentsString(buildArguments);
@@ -213,6 +217,62 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
                 processResult.ProcessOutput,
                 processResult.TotalProcessOutputLineCount);
         }
+
+        if (!string.IsNullOrEmpty(options?.OutputPath))
+        {
+            await RunPodmanSaveAsync(imageName, options, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Exports an already-built image to an archive, which is how Podman produces the equivalent of
+    /// <c>docker buildx build --output type=oci,dest=...</c>.
+    /// </summary>
+    private async Task RunPodmanSaveAsync(string imageName, ContainerImageBuildOptions options, CancellationToken cancellationToken)
+    {
+        var arguments = BuildSaveArguments(imageName, options);
+
+        var processResult = await ExecuteContainerCommandWithResultAsync(
+            arguments,
+            "Podman save for {ImageName} failed with exit code {ExitCode}.",
+            "Podman save for {ImageName} succeeded.",
+            cancellationToken,
+            new object[] { imageName },
+            retainOutput: true).ConfigureAwait(false);
+
+        if (processResult.ExitCode != 0)
+        {
+            throw new ProcessFailedException(
+                $"Podman save failed with exit code {processResult.ExitCode}.",
+                processResult.ExitCode,
+                processResult.ProcessOutput,
+                processResult.TotalProcessOutputLineCount);
+        }
+    }
+
+    /// <summary>
+    /// Builds the <c>podman save</c> arguments that export <paramref name="imageName"/> to an image archive.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// save --format "oci-archive" --output "/out/myapp-latest.tar" "myapp:latest"
+    /// </code>
+    /// </example>
+    internal static string BuildSaveArguments(string imageName, ContainerImageBuildOptions options)
+    {
+        var format = options.ImageFormat switch
+        {
+            ContainerImageFormat.Oci => "oci-archive",
+            // The .NET SDK and Docker both treat an unspecified format as the Docker manifest type.
+            ContainerImageFormat.Docker or null => "docker-archive",
+            _ => throw new ArgumentOutOfRangeException(nameof(options), options.ImageFormat, "Invalid container image format")
+        };
+
+        // Derive the archive path through DockerContainerRuntime's helper so both runtimes write the same
+        // file for the same resource.
+        var archivePath = DockerContainerRuntime.GetArchivePath(options.OutputPath!, imageName);
+
+        return $"save --format \"{format}\" --output \"{archivePath}\" \"{imageName}\"";
     }
 
     public override async Task BuildImageAsync(string contextPath, string dockerfilePath, ContainerImageBuildOptions? options, Dictionary<string, string?> buildArguments, Dictionary<string, BuildImageSecretValue> buildSecrets, string? stage, CancellationToken cancellationToken)

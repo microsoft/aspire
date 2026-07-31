@@ -41,7 +41,7 @@ public class ConformanceTests : ConformanceTests<TestDbContext, OracleEntityFram
         new("Microsoft.EntityFrameworkCore.Migrations"),
     ];
 
-    protected override bool CanConnectToServer => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker);
+    protected override bool CanConnectToServer => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.ContainerRuntime);
 
     protected override string ValidJsonConfig => """
         {
@@ -98,7 +98,7 @@ public class ConformanceTests : ConformanceTests<TestDbContext, OracleEntityFram
     {
         _containerFixture = containerFixture;
         _testOutputHelper = testOutputHelper;
-        ConnectionString = (_containerFixture is not null && RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker))
+        ConnectionString = (_containerFixture is not null && RequiresFeatureAttribute.IsFeatureSupported(TestFeature.ContainerRuntime))
                                         ? _containerFixture.GetConnectionString()
                                         : "Server=localhost;User ID=oracle;Password=oracle;Database=FREEPDB1";
     }
@@ -126,7 +126,7 @@ public class ConformanceTests : ConformanceTests<TestDbContext, OracleEntityFram
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public void TracingEnablesTheRightActivitySource()
     {
         RemoteInvokeWithLogging(static connectionStringToUse =>
@@ -135,7 +135,7 @@ public class ConformanceTests : ConformanceTests<TestDbContext, OracleEntityFram
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public void TracingHasSemanticConventions()
     {
         RemoteInvokeWithLogging(static connectionStringToUse =>

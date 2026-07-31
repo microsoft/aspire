@@ -25,7 +25,7 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
             : options?.ImageName ?? throw new ArgumentException("ImageName must be provided in options.", nameof(options));
 
         string? builderName = null;
-        var resourceName = imageName.Replace('/', '-').Replace(':', '-');
+        var resourceName = GetArchiveResourceName(imageName);
 
         // Docker requires a custom buildkit instance for the image when
         // targeting the OCI format so we construct it and remove it here.
@@ -69,7 +69,7 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
 
                 if (!string.IsNullOrEmpty(options?.OutputPath))
                 {
-                    var archivePath = ResourceExtensions.GetContainerImageArchivePath(options.OutputPath, resourceName, imageTag: null);
+                    var archivePath = GetArchivePath(options.OutputPath, imageName);
                     outputType += $",dest={archivePath}";
                 }
 
@@ -151,6 +151,19 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
     {
         return await CheckDockerDaemonAsync(cancellationToken).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Flattens a <c>&lt;registry&gt;/&lt;repository&gt;:&lt;tag&gt;</c> image name into a single file-name-safe
+    /// segment, so neither the tag nor any repository segment turns into a directory.
+    /// </summary>
+    internal static string GetArchiveResourceName(string imageName) => imageName.Replace('/', '-').Replace(':', '-');
+
+    /// <summary>
+    /// Gets the archive file path for an image. <see cref="PodmanContainerRuntime"/> must agree with this,
+    /// otherwise the two runtimes write archives to different paths for the same resource.
+    /// </summary>
+    internal static string GetArchivePath(string outputPath, string imageName)
+        => ResourceExtensions.GetContainerImageArchivePath(outputPath, GetArchiveResourceName(imageName), imageTag: null);
 
     private async Task<bool> CheckDockerDaemonAsync(CancellationToken cancellationToken)
     {

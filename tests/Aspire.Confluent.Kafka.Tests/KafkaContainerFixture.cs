@@ -88,7 +88,7 @@ public partial class KafkaContainerFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        if (RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker))
+        if (RequiresFeatureAttribute.IsFeatureSupported(TestFeature.ContainerRuntime))
         {
             Container = new ConfluentLocalKafkaBuilder().Build();
             await Container.StartAsync();

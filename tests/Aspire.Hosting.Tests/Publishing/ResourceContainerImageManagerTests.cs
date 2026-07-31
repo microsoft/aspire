@@ -19,7 +19,7 @@ namespace Aspire.Hosting.Tests.Publishing;
 public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 {
     [Fact]
-    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
     public async Task CanBuildImageFromProjectResource()
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(output);
@@ -48,7 +48,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
     public async Task CanBuildImageFromProjectResourceWithCustomBaseImage()
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(output);
@@ -81,7 +81,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
     public async Task CanBuildImageFromDockerfileResource()
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(output);
@@ -115,7 +115,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
     public async Task CanBuildImageFromProjectResourceWithOptions()
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(output);
@@ -154,7 +154,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
     public async Task CanBuildImageFromProjectResource_WithDockerImageFormat()
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(output);
@@ -184,7 +184,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
     public async Task CanBuildImageFromProjectResource_WithLinuxArm64Platform()
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(output);
@@ -214,7 +214,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
     public async Task CanBuildImageFromDockerfileResource_WithCustomOutputPath()
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(output);
@@ -254,7 +254,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
     public async Task CanBuildImageFromDockerfileResource_WithAllOptionsSet()
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(output);
@@ -298,7 +298,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
     [Theory]
     [InlineData(ContainerImageFormat.Docker)]
     [InlineData(ContainerImageFormat.Oci)]
-    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
     public async Task CanBuildImageFromProjectResource_WithDifferentImageFormats(ContainerImageFormat imageFormat)
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(output);
@@ -330,7 +330,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
     [Theory]
     [InlineData(ContainerTargetPlatform.LinuxAmd64)]
     [InlineData(ContainerTargetPlatform.LinuxArm64)]
-    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
     public async Task CanBuildImageFromProjectResource_WithDifferentTargetPlatforms(ContainerTargetPlatform targetPlatform)
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(output);
@@ -360,7 +360,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
     public async Task BuildImageAsync_WithNullOptions_UsesDefaults()
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(output);
@@ -406,7 +406,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
     public async Task CanBuildImageFromDockerfileResource_WithTrailingSlashContextPath()
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(output);
@@ -449,7 +449,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: false);
-        builder.Services.AddKeyedSingleton<IContainerRuntime>("docker", fakeContainerRuntime);
+        builder.Services.AddFakeContainerRuntime(fakeContainerRuntime);
 
         var testResource = builder.AddContainer("test-image", "test-image:latest");
 
@@ -473,7 +473,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: true);
-        builder.Services.AddKeyedSingleton<IContainerRuntime>("docker", fakeContainerRuntime);
+        builder.Services.AddFakeContainerRuntime(fakeContainerRuntime);
 
         var testResource = builder.AddContainer("test-image", "test-image:latest");
 
@@ -503,7 +503,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         // Create a fake container runtime that would fail if called
         var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: true);
-        builder.Services.AddKeyedSingleton<IContainerRuntime>("docker", fakeContainerRuntime);
+        builder.Services.AddFakeContainerRuntime(fakeContainerRuntime);
 
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
             .WithContainerBuildOptions(ctx =>
@@ -538,7 +538,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         // Create a fake container runtime that tracks health check calls
         var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: false);
-        builder.Services.AddKeyedSingleton<IContainerRuntime>("docker", fakeContainerRuntime);
+        builder.Services.AddFakeContainerRuntime(fakeContainerRuntime);
 
         using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync(output);
         var tempContextPath = tempDockerfileContext.ContextPath;
@@ -569,7 +569,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         // Create a fake container runtime that captures the actual context path used
         var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: false);
-        builder.Services.AddKeyedSingleton<IContainerRuntime>("docker", fakeContainerRuntime);
+        builder.Services.AddFakeContainerRuntime(fakeContainerRuntime);
 
         using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync(output);
         var tempContextPath = tempDockerfileContext.ContextPath;
@@ -609,7 +609,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
-        builder.Services.AddKeyedSingleton<IContainerRuntime>("docker", new FakeContainerRuntime(shouldFail: true));
+        builder.Services.AddFakeContainerRuntime(new FakeContainerRuntime(shouldFail: true));
 
         using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync(output);
         var tempContextPath = tempDockerfileContext.ContextPath;
@@ -680,7 +680,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         });
 
         var fakeContainerRuntime = new FakeContainerRuntime(name: "PODMAN");
-        builder.Services.AddSingleton<IContainerRuntimeResolver>(fakeContainerRuntime);
+        builder.Services.AddFakeContainerRuntime(fakeContainerRuntime);
 
         using var workspace = TemporaryWorkspace.Create(output);
 
@@ -708,7 +708,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
     public async Task CanBuildImageFromDockerfileWithBuildArgsSecretsAndStage()
     {
         using var builder = TestDistributedApplicationBuilder.Create(output);
@@ -721,7 +721,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         // Create a fake container runtime to capture build arguments and secrets
         var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: false);
-        builder.Services.AddKeyedSingleton<IContainerRuntime>("docker", fakeContainerRuntime);
+        builder.Services.AddFakeContainerRuntime(fakeContainerRuntime);
 
         using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync(output);
         var tempContextPath = tempDockerfileContext.ContextPath;
@@ -783,7 +783,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         // Create a fake container runtime to capture build arguments
         var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: false);
-        builder.Services.AddKeyedSingleton<IContainerRuntime>("docker", fakeContainerRuntime);
+        builder.Services.AddFakeContainerRuntime(fakeContainerRuntime);
 
         using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync(output);
         var tempContextPath = tempDockerfileContext.ContextPath;
@@ -893,7 +893,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         // Create a fake container runtime to capture build secrets
         var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: false);
-        builder.Services.AddKeyedSingleton<IContainerRuntime>("docker", fakeContainerRuntime);
+        builder.Services.AddFakeContainerRuntime(fakeContainerRuntime);
 
         using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync(output);
         var tempContextPath = tempDockerfileContext.ContextPath;
@@ -940,7 +940,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         // Create a fake container runtime to capture build secrets
         var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: false);
-        builder.Services.AddKeyedSingleton<IContainerRuntime>("docker", fakeContainerRuntime);
+        builder.Services.AddFakeContainerRuntime(fakeContainerRuntime);
 
         using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync(output);
         var tempContextPath = tempDockerfileContext.ContextPath;
@@ -1324,7 +1324,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         // Use FakeContainerRuntime that simulates Docker not running
         var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: false, isRunning: false);
-        builder.Services.AddKeyedSingleton<IContainerRuntime>("docker", fakeContainerRuntime);
+        builder.Services.AddFakeContainerRuntime(fakeContainerRuntime);
 
         using var workspace = TemporaryWorkspace.Create(output);
 
@@ -1376,7 +1376,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         // Use FakeContainerRuntime that simulates Docker not running
         var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: false, isRunning: false);
-        builder.Services.AddKeyedSingleton<IContainerRuntime>("docker", fakeContainerRuntime);
+        builder.Services.AddFakeContainerRuntime(fakeContainerRuntime);
 
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
             .WithContainerBuildOptions(ctx =>
@@ -1412,7 +1412,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         // Use FakeContainerRuntime that simulates Docker not running
         var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: false, isRunning: false);
-        builder.Services.AddKeyedSingleton<IContainerRuntime>("docker", fakeContainerRuntime);
+        builder.Services.AddFakeContainerRuntime(fakeContainerRuntime);
 
         using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync(output);
         var tempContextPath = tempDockerfileContext.ContextPath;
@@ -1447,7 +1447,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         // Use FakeContainerRuntime that simulates Docker not running
         var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: false, isRunning: false);
-        builder.Services.AddKeyedSingleton<IContainerRuntime>("docker", fakeContainerRuntime);
+        builder.Services.AddFakeContainerRuntime(fakeContainerRuntime);
 
         using var workspace = TemporaryWorkspace.Create(output);
 
@@ -1490,7 +1490,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         // Use FakeContainerRuntime that simulates Docker not running
         var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: false, isRunning: false);
-        builder.Services.AddKeyedSingleton<IContainerRuntime>("docker", fakeContainerRuntime);
+        builder.Services.AddFakeContainerRuntime(fakeContainerRuntime);
 
         // Project without any destination set should default to requiring Docker
         var servicea = builder.AddProject<Projects.ServiceA>("servicea");
@@ -1511,8 +1511,8 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
-    public async Task DockerBuildFailureIncludesProcessOutputInException()
+    [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
+    public async Task ContainerBuildFailureIncludesProcessOutputInException()
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(output);
 
@@ -1542,9 +1542,13 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         Assert.NotEqual(0, ex.ExitCode);
         Assert.NotEmpty(ex.ProcessOutput);
 
+        // Each runtime prefixes the failure with its own display name ("Docker build failed…",
+        // "Podman build failed…"), so resolve whichever one actually ran.
+        var containerRuntime = await app.Services.GetRequiredService<IContainerRuntimeResolver>().ResolveAsync(cts.Token);
+
         var newlineIndex = ex.Message.IndexOf(Environment.NewLine, StringComparison.Ordinal);
         Assert.NotEqual(-1, newlineIndex);
-        Assert.Equal($"Docker build failed with exit code {ex.ExitCode}.", ex.Message[..newlineIndex]);
+        Assert.Equal($"{containerRuntime.Name} build failed with exit code {ex.ExitCode}.", ex.Message[..newlineIndex]);
         Assert.Equal(ex.GetFormattedOutput(), ex.Message[(newlineIndex + Environment.NewLine.Length)..]);
     }
 }

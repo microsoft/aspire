@@ -11,7 +11,7 @@ namespace Aspire.Hosting.Keycloak.Tests;
 public class KeycloakFunctionalTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public Task Keycloak_WithPersistentLifetime_ReusesContainer()
     {
         return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
