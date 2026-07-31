@@ -1,0 +1,17 @@
+{
+  "id": "templates-canewandbuild-roslyn-methodnotfound-macos",
+  "type": "flaky-test",
+  "title": "Flaky: CanNewAndBuild(aspire-mstest, Net8) fails with Roslyn Method not found TryGetMaxCharCount on macOS",
+  "test_name": "Aspire.Templates.Tests.MSTest_NewUpAndBuildSupportProjectTemplatesTests.CanNewAndBuild(templateName: \"aspire-mstest\", extraTestCreationArgs: \"\", sdk: Net8, tfm: Net8, error: null)",
+  "error_pattern": "CSC : error CS1504: Source file '...GlobalUsings.g.cs' could not be opened -- Method not found: 'Boolean Microsoft.CodeAnalysis.EncodingExtensions.TryGetMaxCharCount(System.Text.Encoding, Int64, Int32 ByRef)'. Build FAILED.\nat Aspire.Templates.Tests.CommandResult.EnsureExitCode\nat Aspire.Templates.Tests.AspireProject.BuildAsync\nat Aspire.Templates.Tests.NewUpAndBuildSupportProjectTemplatesBase.CanNewAndBuildActual",
+  "occurrences": [
+    {
+      "run_id": 30654518872,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/30654518872",
+      "job": "Tests / Templates-MSTest_NewUpAndBuildSupportProjectTemplatesTests / Templates-MSTest_NewUpAndBuildSupportProjectTemplatesTests (macos-latest)",
+      "pr_number": 18947,
+      "observed_at": "2026-07-31T18:51:06Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/18950"
+}

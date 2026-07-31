@@ -1,0 +1,38 @@
+{
+  "run_id": 30654518872,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/30654518872",
+  "analyzed_at": "2026-07-31T18:51:06Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 18947,
+    "title": "Update dependencies from microsoft/dcp",
+    "author": "dotnet-maestro[bot]",
+    "state": "closed",
+    "head_branch": "darc-main-e18d6b74-1785-4504-bf2c-c2c1dd77b12f",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18947"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Templates-MSTest_NewUpAndBuildSupportProjectTemplatesTests / Templates-MSTest_NewUpAndBuildSupportProjectTemplatesTests (macos-latest)",
+      "id": 91237597004,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/30654518872/job/91237597004",
+      "classification": "flaky-test",
+      "reason": "The test failed with CS1504 Roslyn method-not-found error (TryGetMaxCharCount) on the macOS runner's net8.0 SDK, indicating a toolchain/Roslyn DLL version mismatch on the runner. The PR only updates DCP dependency versions and does not touch Roslyn or SDK packages.",
+      "failed_steps": ["Run nuget dependent tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Templates.Tests.MSTest_NewUpAndBuildSupportProjectTemplatesTests.CanNewAndBuild(templateName: \"aspire-mstest\", extraTestCreationArgs: \"\", sdk: Net8, tfm: Net8, error: null)",
+      "job": "Tests / Templates-MSTest_NewUpAndBuildSupportProjectTemplatesTests / Templates-MSTest_NewUpAndBuildSupportProjectTemplatesTests (macos-latest)",
+      "error": "Aspire.Templates.Tests.ToolCommandException : Expected 0 exit code but got 1: /Users/runner/work/aspire/aspire/artifacts/bin/dotnet-8/dotnet build ... CSC : error CS1504: Source file '...new_build_aspire_mstest_hrfk54zh_wdo.AppHost.GlobalUsings.g.cs' could not be opened -- Method not found: 'Boolean Microsoft.CodeAnalysis.EncodingExtensions.TryGetMaxCharCount(System.Text.Encoding, Int64, Int32 ByRef)'.",
+      "stack_trace": "at Aspire.Templates.Tests.CommandResult.EnsureExitCode(Int32 expectedExitCode, String messagePrefix, Boolean suppressOutput) in /_/tests/Shared/TemplatesTesting/CommandResult.cs:line 36\n   at Aspire.Templates.Tests.CommandResult.EnsureSuccessful(String messagePrefix, Boolean suppressOutput) in /_/tests/Shared/TemplatesTesting/CommandResult.cs:line 20\n   at Aspire.Templates.Tests.AspireProject.BuildAsync(String[] extraBuildArgs, CancellationToken token, String workingDirectory) in /_/tests/Shared/TemplatesTesting/AspireProject.cs:line 347",
+      "classification": "flaky",
+      "reason": "The failure is a Roslyn DLL version mismatch (Method not found: TryGetMaxCharCount) on the macOS net8.0 SDK toolchain, not related to the DCP dependency updates in the PR. Only 1 of 17 tests in this job failed. The PR does not modify any Roslyn or SDK packages."
+    }
+  ],
+  "causes": ["templates-canewandbuild-roslyn-methodnotfound-macos"]
+}
