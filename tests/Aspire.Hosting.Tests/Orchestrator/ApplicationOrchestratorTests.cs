@@ -722,7 +722,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
 
         var dependencyReleased = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var dependency = AddSelfDrivenResource(builder, "dependency", dependencyReleased.Task);
-        var waiter = builder.AddResource(new CustomResourceWithWaitSupport("waiter")).WaitFor(dependency);
+        var waiter = builder.AddResource(new CustomResourceWithWaitSupport("waiter")).WaitFor(dependency).WithExplicitStart();
         waiter.Resource.Annotations.Add(new DcpInstancesAnnotation([
             new DcpInstance("waiter-abc123", "abc123", 0),
             new DcpInstance("waiter-def456", "def456", 1)
@@ -771,7 +771,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
 
         var dependencyReleased = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var dependency = AddSelfDrivenResource(builder, "dependency", dependencyReleased.Task);
-        var waiter = builder.AddResource(new CustomResourceWithWaitSupport("waiter")).WaitFor(dependency);
+        var waiter = builder.AddResource(new CustomResourceWithWaitSupport("waiter")).WaitFor(dependency).WithExplicitStart();
         waiter.Resource.Annotations.Add(new DcpInstancesAnnotation([
             new DcpInstance("waiter-abc123", "abc123", 0),
             new DcpInstance("waiter-def456", "def456", 1)
