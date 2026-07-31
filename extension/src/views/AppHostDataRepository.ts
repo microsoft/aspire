@@ -439,16 +439,16 @@ export class AppHostDataRepository {
 
     refresh(): void {
         this._clearErrors();
-        this._runtimeSnapshotAfterWorkspaceDiscovery = false;
-        if (this._viewMode === 'global') {
-            this._loadingGlobal = true;
+        this._setGlobalLoading(true);
+        if (this._viewMode === 'workspace') {
+            this._runtimeSnapshotAfterWorkspaceDiscovery = false;
+            // A workspace refresh should observe AppHost/config files written by tools even when
+            // the file watcher has not delivered an invalidation event yet.
+            this._markWorkspaceAppHostDiscoveryPending();
+            this._fetchWorkspaceAppHost({ forceRefresh: true });
+        } else {
+            this._loadingWorkspace = true;
         }
-        // A user-triggered refresh should observe AppHost/config files written by tools
-        // even when the file watcher has not delivered an invalidation event yet.
-        // Refresh only needs to re-pull discovery + the authoritative `ps` snapshot and let
-        // reconcile preserve streams for still-rendered hosts.
-        this._markWorkspaceAppHostDiscoveryPending();
-        this._fetchWorkspaceAppHost({ forceRefresh: true });
         this._reconcileDescribes();
         if (this._dataActive) {
             this._refreshAppHostsFromAuthoritativeSnapshot();
@@ -848,8 +848,8 @@ export class AppHostDataRepository {
         this._workspaceAppHostDiscoveryComplete = false;
         this._clearWorkspaceAppHostDiscovery();
         this._loadingWorkspace = true;
-        this._updateLoadingContext();
         if (this._viewMode === 'workspace') {
+            this._updateLoadingContext();
             this._updateWorkspaceContext({ clearLoading: false });
         }
     }
@@ -884,35 +884,33 @@ export class AppHostDataRepository {
             }
             this._workspaceAppHostDescription = workspaceViewSelectedMultipleAppHosts(buildableAppHostCandidates.length);
             extensionLogOutputChannel.info(`Workspace contains ${buildableAppHostCandidates.length} buildable AppHosts`);
-            this._syncPolling();
-            // Re-scope the current `aspire ps` snapshot now that discovery has resolved the workspace
-            // candidate paths. This refreshes the view AND clears the workspace "Searching…" loading
-            // state immediately (discovery is now complete). Without it, loading would linger until the
-            // next `aspire ps --follow` change, which may never arrive when the running set is already
-            // stable — leaving the workspace view stuck on "Searching…" until the user toggles view mode.
-            this._handlePsSnapshot(this._appHosts, { force: true });
-            return;
-        }
+        } else {
+            const selectedAppHostCandidate = selectedAppHostPath
+                ? buildableAppHostCandidates.find(candidate => isMatchingAppHostPath(candidate.path, selectedAppHostPath))
+                : buildableAppHostCandidates[0];
+            if (!selectedAppHostCandidate) {
+                this._clearWorkspaceAppHostDiscovery();
+                this._syncPolling();
+                this._updateWorkspaceContext({ clearLoading: true });
+                return;
+            }
 
-        const selectedAppHostCandidate = selectedAppHostPath
-            ? buildableAppHostCandidates.find(candidate => isMatchingAppHostPath(candidate.path, selectedAppHostPath))
-            : buildableAppHostCandidates[0];
-        if (selectedAppHostCandidate) {
             this._setWorkspaceAppHostCandidatePaths(buildableAppHostCandidates);
             this._setWorkspaceAppHostPath(selectedAppHostCandidate.path, buildableAppHostCandidates);
             this._workspaceAppHostDescription = workspaceViewSelectedSingleAppHost(formatAppHostLanguage(selectedAppHostCandidate.language));
             extensionLogOutputChannel.info(`Workspace apphost resolved: ${selectedAppHostCandidate.path} (${selectedAppHostCandidate.language}, ${selectedAppHostCandidate.status})`);
-            this._syncPolling();
-            // Force a re-scope so the workspace view refreshes and the loading state clears immediately
-            // once discovery resolves the candidate, without waiting for the next ps change (see the
-            // multi-candidate branch above for the full rationale).
-            this._handlePsSnapshot(this._appHosts, { force: true });
-            return;
         }
 
-        this._clearWorkspaceAppHostDiscovery();
         this._syncPolling();
-        this._updateWorkspaceContext({ clearLoading: true });
+        const workspaceLoadingChanged = this._loadingWorkspace;
+        this._loadingWorkspace = false;
+        if (this._viewMode === 'workspace') {
+            // Re-scope the stable ps snapshot now that discovery has resolved the candidates.
+            this._handlePsSnapshot(this._appHosts, { force: true });
+            if (workspaceLoadingChanged) {
+                this._updateLoadingContext();
+            }
+        }
     }
 
     private _isCurrentWorkspaceDiscovery(discoveryVersion: number, workspaceFolder: vscode.WorkspaceFolder): boolean {
@@ -1473,11 +1471,19 @@ export class AppHostDataRepository {
             || selectedResources.some(resource => Boolean(resource.dashboardUrl))
             || workspaceAppHosts.some(appHost => Boolean(appHost.dashboardUrl));
         const hasWorkspaceCandidates = this._workspaceAppHostCandidatePaths.length > 0;
+        const clearLoading = options?.clearLoading ?? (hasResources || hasWorkspaceAppHost || hasRunningAppHosts || hasWorkspaceCandidates);
+
+        if (this._viewMode !== 'workspace') {
+            if (clearLoading) {
+                this._loadingWorkspace = false;
+            }
+            return;
+        }
+
         vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', !hasWorkspaceAppHost && !hasResources && !hasRunningAppHosts && !hasWorkspaceCandidates);
         // Keep this distinct from `noAppHosts`, which also considers discovered idle
         // candidates that have no live dashboard URL.
         vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasDashboardUrl);
-        const clearLoading = options?.clearLoading ?? (hasResources || hasWorkspaceAppHost || hasRunningAppHosts || hasWorkspaceCandidates);
         if (this._loadingWorkspace && clearLoading) {
             this._loadingWorkspace = false;
             this._updateLoadingContext();
@@ -1555,7 +1561,7 @@ export class AppHostDataRepository {
                 const errorMessage = errorFetchingAppHosts(String(error));
                 extensionLogOutputChannel.warn(errorMessage);
                 this._setPsError(errorMessage);
-                this._clearLoadingForCurrentView();
+                this._clearLoading();
                 this._supportsPsFollow = false;
                 this._startPsIntervalPolling(false);
             }
@@ -1640,7 +1646,12 @@ export class AppHostDataRepository {
         }
 
         this._psFollowStartPending = false;
-        this._clearGlobalLoading();
+        this._setGlobalLoading(false);
+        if (this._viewMode === 'global') {
+            const hasDashboardUrl = this._appHosts.some(appHost => Boolean(appHost.dashboardUrl));
+            vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', this._appHosts.length === 0);
+            vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasDashboardUrl);
+        }
     }
 
     private _fetchAppHosts(): void {
@@ -1656,7 +1667,7 @@ export class AppHostDataRepository {
                 this._setPsError(undefined);
                 this._handlePsOutput(stdout);
             } else {
-                this._clearLoadingForCurrentView();
+                this._clearLoading();
                 this._setPsError(errorFetchingAppHosts(stderr || `exit code ${code}`));
             }
             this._fetchInProgress = false;
@@ -1698,7 +1709,7 @@ export class AppHostDataRepository {
                     this._setPsError(undefined);
                     this._handlePsOutput(stdout);
                 } else {
-                    this._clearLoadingForCurrentView();
+                    this._clearLoading();
                     this._setPsError(errorFetchingAppHosts(stderr || `exit code ${code}`));
                 }
             }
@@ -1723,23 +1734,27 @@ export class AppHostDataRepository {
         vscode.commands.executeCommand('setContext', 'aspire.loading', isLoading);
     }
 
-    private _clearGlobalLoading(): void {
-        if (this._viewMode !== 'global' || !this._loadingGlobal) {
+    private _setGlobalLoading(isLoading: boolean): void {
+        const loadingChanged = this._loadingGlobal !== isLoading;
+        this._loadingGlobal = isLoading;
+        if (this._viewMode !== 'global') {
             return;
         }
 
-        const hasDashboardUrl = this._appHosts.some(appHost => Boolean(appHost.dashboardUrl));
-        this._loadingGlobal = false;
+        if (loadingChanged) {
+            this._onDidChangeData.fire();
+        }
         this._updateLoadingContext();
-        vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', this._appHosts.length === 0);
-        vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasDashboardUrl);
     }
 
-    private _clearLoadingForCurrentView(): void {
-        if (this._viewMode === 'workspace') {
-            this._loadingWorkspace = false;
-        } else {
-            this._loadingGlobal = false;
+    private _clearLoading(): void {
+        const loadingChanged = this._viewMode === 'workspace'
+            ? this._loadingWorkspace
+            : this._loadingGlobal;
+        this._loadingWorkspace = false;
+        this._loadingGlobal = false;
+        if (loadingChanged) {
+            this._onDidChangeData.fire();
         }
         this._updateLoadingContext();
     }
@@ -1806,7 +1821,23 @@ export class AppHostDataRepository {
                 ? parsed
                 : this._applyPsDelta(parsed);
 
-            this._handlePsSnapshot(appHosts);
+            const completesGlobalLoading = this._loadingGlobal;
+            // A fresh ps result wins the workspace loading race when it finds a workspace host,
+            // or when discovery has finished and an empty result is therefore authoritative.
+            const completesWorkspaceLoading = this._loadingWorkspace
+                && (this._workspaceAppHostDiscoveryComplete || appHosts.some(appHost => this._isWorkspaceAppHost(appHost)));
+            if (completesWorkspaceLoading) {
+                this._loadingWorkspace = false;
+            }
+            this._handlePsSnapshot(appHosts, { force: completesWorkspaceLoading && this._viewMode === 'workspace' });
+            if (completesWorkspaceLoading && this._viewMode === 'workspace') {
+                this._updateLoadingContext();
+            }
+            if (completesGlobalLoading) {
+                // Clear the loading context only after the tree has been invalidated with the fresh
+                // snapshot, otherwise VS Code can briefly render a blank global view.
+                this._setGlobalLoading(false);
+            }
         } catch (e) {
             extensionLogOutputChannel.warn(`Failed to parse aspire ps output: ${e}`);
         }
@@ -1870,26 +1901,15 @@ export class AppHostDataRepository {
         this._appHostsSnapshot = appHostsSnapshot;
 
         if (this._viewMode === 'workspace') {
-            const discoveryPending = !this._workspaceAppHostDiscoveryComplete;
             if (appHostsChanged || workspaceAppHostChanged || force || this._loadingWorkspace) {
-                this._updateWorkspaceContext({ clearLoading: !discoveryPending || workspaceAppHosts.length > 0 });
+                this._updateWorkspaceContext({ clearLoading: false });
             }
         } else {
-            const wasLoading = this._loadingGlobal;
-            if (wasLoading) {
-                this._loadingGlobal = false;
-            }
-            if (appHostsChanged || force || wasLoading) {
+            if (appHostsChanged || force) {
                 const hasDashboardUrl = this._appHosts.some(appHost => Boolean(appHost.dashboardUrl));
                 vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', this._appHosts.length === 0);
                 vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasDashboardUrl);
                 this._onDidChangeData.fire();
-            }
-            if (wasLoading) {
-                // Keep the loading welcome visible until the tree has been invalidated with the
-                // fresh snapshot. Clearing the context first leaves a blank frame while VS Code
-                // schedules the tree refresh.
-                this._updateLoadingContext();
             }
         }
     }

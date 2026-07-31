@@ -5099,6 +5099,85 @@ suite('AppHostDataRepository global polling', () => {
         }
     });
 
+    test('workspace discovery does not update the visible global view', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const candidate = {
+            path: '/workspace/AppHost.csproj',
+            language: 'csharp',
+            status: 'buildable',
+        } as const;
+        const discoveryChanges = new vscode.EventEmitter<vscode.WorkspaceFolder>();
+        const rediscovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        let onIncrementalCandidate: ((candidate: CandidateAppHostDisplayInfo) => void) | undefined;
+        const discoverStub = sinon.stub();
+        discoverStub.onFirstCall().resolves([]);
+        discoverStub.onSecondCall().callsFake((_workspaceFolder, _forceRefresh, _cancellationToken, onCandidate) => {
+            onIncrementalCandidate = onCandidate;
+            return rediscovery.promise;
+        });
+        const discoveryService = {
+            discover: discoverStub,
+            onDidChangeCandidates: discoveryChanges.event,
+            dispose: () => discoveryChanges.dispose(),
+        } as unknown as AppHostDiscoveryService;
+        let psFollowOptions: any;
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ps' && args.includes('--follow')) {
+                psFollowOptions = options;
+            }
+            return new TestChildProcess();
+        });
+        const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
+        const workspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').value([workspaceFolder]);
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+        let dataChanges = 0;
+        const dataSubscription = repository.onDidChangeData(() => dataChanges++);
+
+        try {
+            await waitForAppHostDiscovery();
+            repository.activate();
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForCondition(() => psFollowOptions !== undefined, 'global ps watch did not start');
+            assert.strictEqual(repository.isLoading, false);
+
+            executeCommandStub.resetHistory();
+            dataChanges = 0;
+            discoveryChanges.fire(workspaceFolder);
+            await waitForCondition(() => onIncrementalCandidate !== undefined, 'workspace rediscovery did not start');
+
+            assert.ok(onIncrementalCandidate);
+            onIncrementalCandidate(candidate);
+            await waitForCondition(
+                () => repository.workspaceAppHostCandidatePaths.length === 1,
+                'incremental workspace candidate was not applied');
+
+            rediscovery.resolve([candidate]);
+            await waitForAppHostDiscovery();
+
+            const visibleContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext'
+                && (call.args[1] === 'aspire.loading'
+                    || call.args[1] === 'aspire.noAppHosts'
+                    || call.args[1] === 'aspire.noRunningAppHosts'));
+            assert.deepStrictEqual(visibleContextCalls, []);
+            assert.strictEqual(dataChanges, 0);
+            assert.strictEqual(repository.viewMode, 'global');
+            assert.strictEqual(repository.isLoading, false);
+            assert.deepStrictEqual(repository.appHosts, []);
+        } finally {
+            dataSubscription.dispose();
+            repository.dispose();
+            executeCommandStub.restore();
+            workspaceFoldersStub.restore();
+            discoveryChanges.dispose();
+        }
+    });
+
     test('global panel starts ps follow and updates from streamed AppHost deltas', async () => {
         const childProcess = new TestChildProcess();
         spawnStub.returns(childProcess);

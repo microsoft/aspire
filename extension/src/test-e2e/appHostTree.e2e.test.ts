@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 import { findRunningAppHost, getCommandInvocationCount, getResources, getTerminalCommandCount, getTreeAppHostLabel, isSamePath, waitForCommandOutcome, waitForDashboardUrl, waitForExtensionState, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
-import { executeE2eControlCommand, getCliWrapperInvocationCount, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, touchPrimaryAppHostProject, writeDelayedPsCliWrapper, writeStreamingDiscoveryCliWrapper, writeTrackedStreamingDiscoveryCliWrapper } from './helpers/fixtures';
+import { executeE2eControlCommand, getCliWrapperInvocationCount, getCliWrapperInvocations, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, touchPrimaryAppHostProject, writeDelayedPsCliWrapper, writeStreamingDiscoveryCliWrapper, writeTrackedDelayedPsCliWrapper, writeTrackedStreamingDiscoveryCliWrapper } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { cancelActiveInput, clickTreeItem, executeCommandFromPalette, openAspireView, waitForTreeItem, waitForWorkbenchText } from './helpers/vscode';
 
@@ -101,7 +101,7 @@ suite('Aspire AppHost tree E2E', function () {
         await waitForRepositoryIdle();
     });
 
-    test('global refresh shows loading until AppHost state is fresh', async () => {
+    test('global refresh pulls authoritative AppHost state without workspace discovery', async () => {
         await openAspireView();
         await waitForRepositoryIdle();
         await executeE2eControlCommand({ name: 'switchToGlobalView' });
@@ -109,7 +109,8 @@ suite('Aspire AppHost tree E2E', function () {
             file => file.state.viewMode === 'global' && !file.state.isRepositoryLoading,
             'global AppHost view to become idle');
 
-        await setE2eCliPathForE2E(writeDelayedPsCliWrapper());
+        const wrapper = writeTrackedDelayedPsCliWrapper();
+        await setE2eCliPathForE2E(wrapper.cliPath);
         await executeE2eControlCommand({ name: 'globalRefreshAppHosts' }, { waitFor: 'started' });
 
         const loadingState = await waitForExtensionState(
@@ -124,6 +125,50 @@ suite('Aspire AppHost tree E2E', function () {
             'fresh global AppHost state',
             30000);
         assert.strictEqual(freshState.state.isRepositoryLoading, false);
+
+        const invocations = getCliWrapperInvocations(wrapper.invocationLogPath);
+        assert.ok(
+            invocations.some(args => args[0] === 'ps' && !args.includes('--follow')),
+            'global refresh should pull an authoritative ps snapshot');
+        assert.ok(
+            invocations.every(args => args[0] !== 'ls'),
+            'global refresh should not start workspace discovery');
+    });
+
+    test('global refresh clears loading after switching to the workspace view', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+        await executeE2eControlCommand({ name: 'switchToGlobalView' });
+        await waitForExtensionState(
+            file => file.state.viewMode === 'global' && !file.state.isRepositoryLoading,
+            'global AppHost view to become idle');
+
+        await setE2eCliPathForE2E(writeDelayedPsCliWrapper(3_000));
+        await executeE2eControlCommand({ name: 'globalRefreshAppHosts' }, { waitFor: 'started' });
+        await waitForExtensionState(
+            file => file.state.viewMode === 'global' && file.state.isRepositoryLoading,
+            'global AppHost refresh loading state',
+            30000);
+
+        await executeE2eControlCommand({ name: 'switchToWorkspaceView' });
+        const workspaceLoadingState = await waitForExtensionState(
+            file => file.state.viewMode === 'workspace' && file.state.isRepositoryLoading,
+            'workspace view to retain the shared ps refresh loading state',
+            30000);
+        assert.strictEqual(workspaceLoadingState.state.isRepositoryLoading, true);
+
+        const freshWorkspaceState = await waitForExtensionState(
+            file => file.state.viewMode === 'workspace' && !file.state.isRepositoryLoading,
+            'fresh ps snapshot to clear workspace loading',
+            30000);
+        assert.strictEqual(freshWorkspaceState.state.isRepositoryLoading, false);
+
+        await executeE2eControlCommand({ name: 'switchToGlobalView' });
+        const freshGlobalState = await waitForExtensionState(
+            file => file.state.viewMode === 'global' && !file.state.isRepositoryLoading,
+            'completed ps snapshot to clear hidden global loading',
+            30000);
+        assert.strictEqual(freshGlobalState.state.isRepositoryLoading, false);
     });
 
     test('running AppHosts appear before slow discovery results', async () => {

@@ -256,6 +256,27 @@ export function writeDelayedPsCliWrapper(delayMs = 1_500): string {
     return writeCliWrapper('aspire-delayed-ps', { psSnapshotDelayMs: delayMs });
 }
 
+export function writeTrackedDelayedPsCliWrapper(delayMs = 1_500): { cliPath: string; invocationLogPath: string } {
+    const invocationLogPath = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers', 'delayed-ps-invocations.log');
+    removePath(invocationLogPath, { force: true });
+    const cliPath = writeCliWrapper('aspire-tracked-delayed-ps', {
+        invocationLogPath,
+        psSnapshotDelayMs: delayMs,
+    });
+    return { cliPath, invocationLogPath };
+}
+
+export function getCliWrapperInvocations(invocationLogPath: string): string[][] {
+    if (!fs.existsSync(invocationLogPath)) {
+        return [];
+    }
+
+    return fs.readFileSync(invocationLogPath, 'utf8')
+        .split(/\r?\n/)
+        .filter(line => line.length > 0)
+        .map(line => JSON.parse(line) as string[]);
+}
+
 export async function restoreWorkspaceCliPath(): Promise<void> {
     await writeWorkspaceCliPath(getCliPath());
 }
@@ -693,6 +714,7 @@ function writeCliWrapper(
         streamedLsDelayMs?: number;
         streamedLsInitialDelayMs?: number;
         streamedLsInvocationLogPath?: string;
+        invocationLogPath?: string;
         psSnapshotDelayMs?: number;
     },
 ): string {
@@ -704,6 +726,7 @@ function writeCliWrapper(
 const { spawnSync } = require('child_process');
 const realCli = ${JSON.stringify(getCliPath())};
 const args = process.argv.slice(2);
+${options.invocationLogPath === undefined ? '' : `require('fs').appendFileSync(${JSON.stringify(options.invocationLogPath)}, JSON.stringify(args) + '\\n');`}
 
 if (args.includes('--include-disabled-commands')) {
   console.error('simulated old CLI does not support --include-disabled-commands');
