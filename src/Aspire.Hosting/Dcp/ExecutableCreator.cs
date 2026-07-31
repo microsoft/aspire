@@ -348,8 +348,10 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                     // those args with Aspire's default `dotnet run --project ...` wrapper.
                     if (executableAnnotation is null)
                     {
-                        var projectLaunchConfiguration = new ProjectLaunchConfiguration();
-                        projectLaunchConfiguration.ProjectPath = projectMetadata.ProjectPath;
+                        var projectLaunchConfiguration = new ProjectLaunchConfiguration
+                        {
+                            ProjectPath = projectMetadata.ProjectPath
+                        };
 
                         // `dotnet watch` does not work with file-based apps yet, so we have to use `dotnet run` in that case
                         if (_configuration.GetBool("DOTNET_WATCH") is not true || projectMetadata.IsFileBasedApp)

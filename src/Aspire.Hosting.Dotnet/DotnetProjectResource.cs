@@ -4,6 +4,8 @@
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 
+#pragma warning disable ASPIREPROJECTS001 // ProjectLaunchDefaultsAnnotation is experimental.
+
 namespace Aspire.Hosting.Dotnet;
 
 /// <summary>
@@ -20,7 +22,16 @@ namespace Aspire.Hosting.Dotnet;
 /// <param name="workingDirectory">The working directory for the app, typically the directory containing the project or <c>.cs</c> file.</param>
 [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 [AspireExport(ExposeProperties = true)]
-public class DotnetProjectResource(string name, string workingDirectory)
-    : ExecutableResource(name, "dotnet", workingDirectory), IResourceWithServiceDiscovery
+public class DotnetProjectResource : ExecutableResource, IResourceWithServiceDiscovery
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DotnetProjectResource"/> class.
+    /// </summary>
+    /// <param name="name">The name of the resource in the application model.</param>
+    /// <param name="workingDirectory">The working directory for the app, typically the directory containing the project or <c>.cs</c> file.</param>
+    public DotnetProjectResource(string name, string workingDirectory) : base(name, "dotnet", workingDirectory)
+    {
+        // Ensure uniform C# project defaults, including the Rebuild command and Kestrel endpoint wiring.
+        Annotations.Add(new ProjectLaunchDefaultsAnnotation());
+    }
 }

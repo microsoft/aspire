@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPROJECTS001 // ProjectLaunchDefaultsAnnotation is experimental.
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Radius.Publishing;
 using System.Net.Sockets;
@@ -67,7 +69,7 @@ public class RadiusServiceDiscoveryTests
         var resource = new ProjectResource("webapp");
         var https = new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "https", name: "https");
         resource.Annotations.Add(https);
-        resource.Annotations.OfType<ProjectLaunchDefaultsAnnotation>().Single().DefaultHttpsEndpoint = https;
+        resource.Annotations.Add(new ProjectLaunchDefaultsAnnotation { DefaultHttpsEndpoint = https });
 
         Assert.Null(RadiusServiceDiscovery.ResolveServicePort(resource, "https"));
     }

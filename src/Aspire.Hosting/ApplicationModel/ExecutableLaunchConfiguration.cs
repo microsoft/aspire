@@ -60,7 +60,8 @@ public static class KnownLaunchConfigurationTypes
 /// </para>
 /// <para>
 /// Integrations create a derived type and supply it through
-/// <see cref="ResourceBuilderExtensions.WithDebugSupport{T, TLaunchConfiguration}"/>.
+/// <see cref="ResourceBuilderExtensions.WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, TLaunchConfiguration}, string, Action{CommandLineArgsCallbackContext})"/>
+/// or its asynchronous overload.
 /// </para>
 /// </remarks>
 /// <param name="type">The launch configuration type identifier, for example <see cref="KnownLaunchConfigurationTypes.Project"/>.</param>
@@ -90,7 +91,7 @@ public class ExecutableLaunchConfiguration(string type)
     /// Defaults to <see cref="ExecutableLaunchMode.Debug"/> when a debugger is attached to the app host
     /// and <see cref="ExecutableLaunchMode.NoDebug"/> otherwise. The mode requested by the IDE for the
     /// current debug session is passed to the producer callback of
-    /// <see cref="ResourceBuilderExtensions.WithDebugSupport{T, TLaunchConfiguration}"/>.
+    /// <see cref="ResourceBuilderExtensions.WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, TLaunchConfiguration}, string, Action{CommandLineArgsCallbackContext})"/>.
     /// </remarks>
     [JsonPropertyName("mode")]
     public string Mode { get; set; } = System.Diagnostics.Debugger.IsAttached ? ExecutableLaunchMode.Debug : ExecutableLaunchMode.NoDebug;
@@ -123,5 +124,5 @@ public sealed class ProjectLaunchConfiguration() : ExecutableLaunchConfiguration
     /// Gets or sets the fully-qualified path to the project file or file-based app to launch.
     /// </summary>
     [JsonPropertyName("project_path")]
-    public string ProjectPath { get; set; } = string.Empty;
+    public required string ProjectPath { get; set; }
 }

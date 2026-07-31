@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPROJECTS001 // ProjectLaunchDefaultsAnnotation is experimental.
+
 using System.Globalization;
 using System.Text;
 using Aspire.Hosting.Orchestrator;
@@ -124,8 +126,14 @@ internal static class CommandsConfigurationExtensions
 
         if (resource.HasAnnotationOfType<ProjectLaunchDefaultsAnnotation>())
         {
-            var projectMetadata = resource.Annotations.OfType<IProjectMetadata>().SingleOrDefault();
-            if (projectMetadata is null || !projectMetadata.IsFileBasedApp)
+            // A file-based app is compiled as part of `dotnet run --file`, so every start already
+            // rebuilds it and an explicit Rebuild command would be redundant and confusing.
+            // AddRebuilderResource skips file-based apps for the same reason.
+            //
+            // Metadata is resolved last-wins, matching the rest of the app model. A marked resource
+            // carrying no metadata at all keeps the command: that is only reachable by constructing a
+            // .NET resource type directly, and the command reports the missing rebuilder when invoked.
+            if (!resource.TryGetLastAnnotation<IProjectMetadata>(out var projectMetadata) || !projectMetadata.IsFileBasedApp)
             {
                 AddRebuildCommand(resource);
             }

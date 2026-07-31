@@ -26,12 +26,23 @@ public static class ProjectResourceExtensions
     /// </summary>
     /// <param name="projectResource">The project resource.</param>
     /// <returns>The project metadata.</returns>
+    /// <remarks>
+    /// When a resource carries more than one <see cref="IProjectMetadata"/> annotation the last one wins:
+    /// an annotation added later is treated as an intentional override of an earlier one. This matches how
+    /// project metadata is resolved everywhere else in the app model (manifest publishing, image building,
+    /// launch profile resolution, and orchestrator object creation all use the last annotation).
+    /// </remarks>
     /// <exception cref="InvalidOperationException">Thrown when the project resource doesn't have project metadata.</exception>
     [AspireExportIgnore(Reason = "Project metadata is a .NET-specific contract and is not part of the ATS surface.")]
     public static IProjectMetadata GetProjectMetadata(this ProjectResource projectResource)
     {
         ArgumentNullException.ThrowIfNull(projectResource);
 
-        return projectResource.Annotations.OfType<IProjectMetadata>().Single();
+        if (!projectResource.TryGetLastAnnotation<IProjectMetadata>(out var projectMetadata))
+        {
+            throw new InvalidOperationException($"Resource '{projectResource.Name}' does not carry an {nameof(IProjectMetadata)} annotation.");
+        }
+
+        return projectMetadata;
     }
 }

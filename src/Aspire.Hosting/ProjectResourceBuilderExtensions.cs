@@ -480,8 +480,8 @@ public static class ProjectResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(options);
 
         // Validated eagerly so callers get a clear, resource-specific error instead of a generic
-        // "Sequence contains no elements" exception later when GetConfiguration() does .Single() on
-        // this same annotation type.
+        // "Sequence contains no elements" exception later when GetConfiguration() resolves this same
+        // annotation type.
         if (!builder.Resource.TryGetLastAnnotation<IProjectMetadata>(out _))
         {
             throw new InvalidOperationException(
@@ -490,16 +490,28 @@ public static class ProjectResourceBuilderExtensions
         }
 
         // Carries the per-endpoint state the wiring below needs, and marks the resource as
-        // ".NET-launched" for core features such as the Rebuild command. ProjectResource adds this in its
-        // constructor, so reuse the existing annotation rather than adding a second one.
+        // ".NET-launched" for core features such as the Rebuild command.
         if (!builder.Resource.TryGetLastAnnotation<ProjectLaunchDefaultsAnnotation>(out var launchDefaults))
         {
             launchDefaults = new ProjectLaunchDefaultsAnnotation();
             builder.WithAnnotation(launchDefaults);
         }
 
+        // Applying the defaults twice is rejected rather than ignored because most of the settings and infrastructure
+        // added below are not idempotent.
+        if (launchDefaults.Applied)
+        {
+            throw new InvalidOperationException(
+                $"Project defaults have already been applied to resource '{builder.Resource.Name}'. " +
+                $"{nameof(WithProjectDefaults)} can only be called once per resource, and {nameof(AddProject)}, " +
+                $"{nameof(AddCSharpApp)} and AddDotnetProject already call it. " +
+                $"Pass {nameof(ProjectResourceOptions)} to the method that adds the resource instead.");
+        }
+
+        launchDefaults.Applied = true;
+
         builder.WithDebugSupport(
-            (mode, ct) => Task.FromResult(ProjectLaunchConfigurationFactory.Create(builder.Resource, mode)),
+            mode => ProjectLaunchConfigurationFactory.Create(builder.Resource, mode),
             KnownLaunchConfigurationTypes.Project);
 
         // File-based apps (a bare .cs file) are a .NET 10 SDK feature. The check lives here rather than in
@@ -507,7 +519,7 @@ public static class ProjectResourceBuilderExtensions
         // resolving the SDK version shells out to `dotnet --version`.
         builder.OnBeforeResourceStarted(async (r, e, ct) =>
         {
-            if (r.Annotations.OfType<IProjectMetadata>().SingleOrDefault() is not { IsFileBasedApp: true } projectMetadata)
+            if (!r.TryGetLastAnnotation<IProjectMetadata>(out var projectMetadata) || !projectMetadata.IsFileBasedApp)
             {
                 return;
             }
@@ -1011,7 +1023,12 @@ public static class ProjectResourceBuilderExtensions
 
     private static IConfiguration GetConfiguration(IResource projectResource)
     {
-        var projectMetadata = projectResource.Annotations.OfType<IProjectMetadata>().Single();
+        // Last-wins, matching how project metadata is resolved everywhere else in the app model:
+        // an annotation added later is an intentional override of an earlier one.
+        if (!projectResource.TryGetLastAnnotation<IProjectMetadata>(out var projectMetadata))
+        {
+            throw new InvalidOperationException($"Resource '{projectResource.Name}' does not carry an {nameof(IProjectMetadata)} annotation.");
+        }
 
         // For testing
         if (projectMetadata.Configuration is { } configuration)
@@ -1042,8 +1059,7 @@ public static class ProjectResourceBuilderExtensions
     private static void AddRebuilderResource<TProjectResource>(IResourceBuilder<TProjectResource> builder, TProjectResource projectResource)
         where TProjectResource : class, IResource
     {
-        var projectMetadata = projectResource.Annotations.OfType<IProjectMetadata>().SingleOrDefault();
-        if (projectMetadata is null || projectMetadata.IsFileBasedApp)
+        if (!projectResource.TryGetLastAnnotation<IProjectMetadata>(out var projectMetadata) || projectMetadata.IsFileBasedApp)
         {
             return;
         }

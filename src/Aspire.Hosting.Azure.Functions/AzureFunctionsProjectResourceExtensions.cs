@@ -189,7 +189,7 @@ public static class AzureFunctionsProjectResourceExtensions
         var functionsBuilder = builder.AddResource(resource)
             .WithAnnotation(projectMetadata)
             .WithAnnotation(new AzureFunctionsAnnotation())
-            .WithDebugSupport((mode, ct) => Task.FromResult(new AzureFunctionsLaunchConfiguration { ProjectPath = projectMetadata.ProjectPath, Mode = mode }), "azure-functions");
+            .WithDebugSupport(mode => new AzureFunctionsLaunchConfiguration { ProjectPath = projectMetadata.ProjectPath, Mode = mode }, "azure-functions");
 #pragma warning restore ASPIREEXTENSION001
 
         // Only validate Azure Functions Core Tools in run mode (not during publish)

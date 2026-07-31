@@ -180,6 +180,21 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void AddLifeCycleCommands_DirectlyConstructedDotnetProjectResource_RestartHasDetailedProjectDescription()
+    {
+        // The type has a public constructor, so it can be added with AddResource instead of
+        // AddDotnetProject. It is still a .NET app launched via the SDK, so the constructor carries the
+        // project-defaults annotation and the resource gets the same treatment as ProjectResource.
+        var resource = new DotnetProjectResource("testapp", AppContext.BaseDirectory);
+        resource.AddLifeCycleCommands();
+
+        var restartCommand = resource.Annotations.OfType<ResourceCommandAnnotation>().Single(a => a.Name == KnownResourceCommands.RestartCommand);
+
+        Assert.Equal(CommandStrings.RestartProjectDescription, restartCommand.DisplayDescription);
+        Assert.Contains(resource.Annotations.OfType<ResourceCommandAnnotation>(), a => a.Name == KnownResourceCommands.RebuildCommand);
+    }
+
+    [Fact]
     public async Task AddDotnetProject_DebugAnnotator_ProducesProjectLaunchConfiguration()
     {
         // The "project" SupportsDebuggingAnnotation must produce a ProjectLaunchConfiguration carrying the
@@ -308,7 +323,7 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         var projectPath = Path.Combine(builder.AppHostDirectory, "MyService", "MyService.csproj");
         var app = builder.AddDotnetProject("svc", projectPath, o => o.ExcludeLaunchProfile = true)
                          .WithArgs("--config", "prod.yaml")
-                         .WithDebugSupport((_, _) => Task.FromResult(new ExecutableLaunchConfiguration("custom")), "custom");
+                         .WithDebugSupport(_ => new ExecutableLaunchConfiguration("custom"), "custom");
 
         using var application = builder.Build();
         var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource, application.Services);
@@ -341,7 +356,7 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         var projectPath = Path.Combine(builder.AppHostDirectory, "MyService", "MyService.csproj");
         var app = builder.AddDotnetProject("svc", projectPath, o => o.ExcludeLaunchProfile = true)
                          .WithArgs("--config", "prod.yaml")
-                         .WithDebugSupport((_, _) => Task.FromResult(new ExecutableLaunchConfiguration("custom")), "custom", ctx => ctx.Args.Add("rewritten-arg"));
+                         .WithDebugSupport(_ => new ExecutableLaunchConfiguration("custom"), "custom", ctx => ctx.Args.Add("rewritten-arg"));
 
         using var application = builder.Build();
         var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource, application.Services);

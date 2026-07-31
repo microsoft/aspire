@@ -85,6 +85,35 @@ public class ResourceSnapshotBuilderTests
     }
 
     [Fact]
+    public void ProjectSnapshotUsesTheLastProjectMetadataAnnotation()
+    {
+        // Project metadata is resolved last-wins across the app model, so a ProjectResource carrying an
+        // overriding annotation has to survive snapshot generation instead of throwing
+        // "Sequence contains more than one matching element" from GetProjectMetadata().
+        var project = new ProjectResource("project");
+        project.Annotations.Add(new TestProjectMetadata());
+        project.Annotations.Add(new OverrideTestProjectMetadata());
+
+        var executable = Executable.Create("project", "dotnet");
+        executable.Annotate(DcpCustomResource.ResourceNameAnnotation, project.Name);
+        executable.Status = new ExecutableStatus
+        {
+            EffectiveArgs = ["run"],
+            ProcessId = 1234
+        };
+
+        var snapshot = CreateSnapshotBuilder(new Dictionary<string, IResource>
+        {
+            [project.Name] = project
+        }).ToSnapshot(executable, CreatePreviousSnapshot());
+
+        // Both the path and the launch profile must come from the overriding annotation, proving the
+        // whole metadata object is resolved last-wins rather than merged.
+        Assert.Equal("/app/override.csproj", GetProperty(snapshot, KnownProperties.Project.Path).Value);
+        Assert.Equal("http", GetProperty(snapshot, KnownProperties.Project.LaunchProfile).Value);
+    }
+
+    [Fact]
     public void ExecutableWithProjectMetadataSnapshotAddsProjectPropertiesAndPreservesCustomResourceType()
     {
         // A plain ExecutableResource that carries IProjectMetadata (e.g. DotnetProjectResource, an
@@ -274,6 +303,24 @@ public class ResourceSnapshotBuilderTests
             Profiles =
             {
                 ["https"] = new LaunchProfile
+                {
+                    CommandName = "Project"
+                }
+            }
+        };
+    }
+
+    private sealed class OverrideTestProjectMetadata : IProjectMetadata
+    {
+        public string ProjectPath => "/app/override.csproj";
+
+        // Launch settings are supplied inline so launch profile resolution never falls back to reading
+        // Properties/launchSettings.json from disk for this fake project path.
+        public LaunchSettings LaunchSettings { get; } = new()
+        {
+            Profiles =
+            {
+                ["http"] = new LaunchProfile
                 {
                     CommandName = "Project"
                 }

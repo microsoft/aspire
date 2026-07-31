@@ -4750,16 +4750,65 @@ public static class ResourceBuilderExtensions
     /// <summary>
     /// Adds support for debugging the resource in VS Code when running in an extension host.
     /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <typeparam name="TLaunchConfiguration">The launch configuration type produced for the resource, typically derived from <see cref="ExecutableLaunchConfiguration"/>.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="launchConfigurationProducer">Launch configuration producer for the resource. It is passed the launch mode (one of the values on <see cref="ExecutableLaunchMode"/>) and produces the configuration that is handed to the IDE.</param>
+    /// <param name="launchConfigurationType">The type tag of the launch configuration (as sent to the IDE).</param>
+    /// <param name="argsCallback">Optional callback to add or modify command line arguments when running in an extension host. Useful if the entrypoint is usually provided as an argument to the resource executable.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <exception cref="ArgumentException">
+    /// <typeparamref name="TLaunchConfiguration"/> is a <see cref="Task"/> or <see cref="ValueTask"/>, which means an
+    /// asynchronous producer was written without the <see cref="CancellationToken"/> parameter and bound to this
+    /// overload. Use <see cref="WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, CancellationToken, Task{TLaunchConfiguration}}, string, Action{CommandLineArgsCallbackContext})"/> instead.
+    /// </exception>
+    /// <remarks>
+    /// Aspire invokes the launch configuration producer while preparing and creating the underlying orchestrator objects, and may invoke it
+    /// several times for the same resource. Use
+    /// <see cref="WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, CancellationToken, Task{TLaunchConfiguration}}, string, Action{CommandLineArgsCallbackContext})"/>
+    /// when the configuration has to be resolved from work that is itself asynchronous, for example in the presence of 
+    /// build-argument callbacks contributed by other annotations.
+    /// </remarks>
+    [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Generic debug launch configuration support is not part of the ATS surface.")]
+    public static IResourceBuilder<T> WithDebugSupport<T, TLaunchConfiguration>(this IResourceBuilder<T> builder, Func<string, TLaunchConfiguration> launchConfigurationProducer, string launchConfigurationType, Action<CommandLineArgsCallbackContext>? argsCallback = null)
+        where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(launchConfigurationProducer);
+
+        if (typeof(Task).IsAssignableFrom(typeof(TLaunchConfiguration)) || IsValueTask(typeof(TLaunchConfiguration)))
+        {
+            throw new ArgumentException(
+                $"The launch configuration producer returns '{typeof(TLaunchConfiguration)}'. An asynchronous producer must take a {nameof(CancellationToken)} " +
+                $"parameter so that it binds to the asynchronous {nameof(WithDebugSupport)} overload; otherwise the task itself is used as the launch configuration.",
+                nameof(launchConfigurationProducer));
+        }
+
+        return builder.WithDebugSupport((mode, _) => Task.FromResult(launchConfigurationProducer(mode)), launchConfigurationType, argsCallback);
+
+        static bool IsValueTask(Type type)
+            => type == typeof(ValueTask) || (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ValueTask<>));
+    }
+
+    /// <summary>
+    /// Adds support for debugging the resource in VS Code when running in an extension host, 
+    /// using a launch configuration that is produced asynchronously.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <typeparam name="TLaunchConfiguration">The launch configuration type produced for the resource, typically derived from <see cref="ExecutableLaunchConfiguration"/>.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <param name="launchConfigurationProducer">Launch configuration producer for the resource. It is passed the launch mode (one of the values on <see cref="ExecutableLaunchMode"/>) and produces the configuration that is handed to the IDE.</param>
     /// <param name="launchConfigurationType">The type of the resource.</param>
     /// <param name="argsCallback">Optional callback to add or modify command line arguments when running in an extension host. Useful if the entrypoint is usually provided as an argument to the resource executable.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
-    /// The producer is asynchronous so an integration can resolve the launch configuration from callbacks
-    /// that are themselves asynchronous (for example build-argument callbacks contributed by other
-    /// annotations). Aspire invokes it while preparing and creating the underlying orchestrator objects,
-    /// which means a producer that only computes values synchronously can simply return
-    /// <see cref="Task.FromResult{TResult}(TResult)"/>.
+    /// Use this overload when the launch configuration has to be resolved from work that is itself asynchronous, for
+    /// example in the presence of build-argument callbacks contributed by other annotations. Aspire invokes the producer while preparing
+    /// and creating the underlying orchestrator objects, and may invoke it several times for the same resource. 
+    /// A producer that computes everything synchronously should use
+    /// <see cref="WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, TLaunchConfiguration}, string, Action{CommandLineArgsCallbackContext})"/>
+    /// instead.
     /// </remarks>
     [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Generic debug launch configuration support is not part of the ATS surface.")]
@@ -4775,6 +4824,7 @@ public static class ResourceBuilderExtensions
         }
 
         var supportsDebuggingAnnotation = SupportsDebuggingAnnotation.Create(
+            builder.Resource.Name,
             launchConfigurationType,
             launchConfigurationProducer,
             rewritesArgumentsForDebugging: argsCallback is not null && builder is IResourceBuilder<IResourceWithArgs>

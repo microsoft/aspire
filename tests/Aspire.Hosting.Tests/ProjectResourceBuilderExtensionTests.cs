@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIREPROJECTS001 // WithProjectDefaults is experimental.
+#pragma warning disable ASPIREEXTENSION001 // Debug support APIs are experimental.
 
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -44,6 +45,63 @@ public class ProjectResourceBuilderExtensionTests
 
         Assert.Contains(nameof(IProjectMetadata), exception.Message);
         Assert.Contains(executable.Resource.Name, exception.Message);
+    }
+
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run)]
+    [InlineData(DistributedApplicationOperation.Publish)]
+    public void WithProjectDefaultsThrowsWhenAppliedTwice(DistributedApplicationOperation operation)
+    {
+        // Now that WithProjectDefaults is public, a caller can reach it again on a resource that
+        // AddProject already applied it to. Almost all of the wiring is append-only: in run mode the
+        // second pass tries to add a second "{name}-rebuilder" resource, which fails on the duplicate
+        // name, and in both modes the debug support and environment callbacks would be duplicated.
+        using var builder = TestDistributedApplicationBuilder.Create(operation);
+
+        var project = builder.AddProject<TestProject>("project", options => options.ExcludeLaunchProfile = true);
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => project.WithProjectDefaults(new ProjectResourceOptions { LaunchProfileName = "https" }));
+
+        Assert.Contains("already been applied", exception.Message);
+        Assert.Contains(project.Resource.Name, exception.Message);
+    }
+
+    [Fact]
+    public void WithProjectDefaultsAppliesToAProjectResourceThatWasAddedDirectly()
+    {
+        // ProjectResource adds ProjectLaunchDefaultsAnnotation in its constructor, so the "already
+        // applied" guard must key off the flag on the annotation rather than its presence.
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var project = builder.AddResource(new ProjectResource("project"))
+                             .WithAnnotation<IProjectMetadata>(new TestProject())
+                             .WithProjectDefaults(new ProjectResourceOptions { ExcludeLaunchProfile = true });
+
+        Assert.Single(project.Resource.Annotations.OfType<ProjectLaunchDefaultsAnnotation>());
+    }
+
+    [Fact]
+    public async Task WithProjectDefaultsUsesTheLastProjectMetadataAnnotation()
+    {
+        // Project metadata is resolved last-wins everywhere else in the app model, so a resource
+        // carrying an overriding annotation must not trip a "Sequence contains more than one element"
+        // exception from the project-defaults wiring.
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var project = builder.AddResource(new ProjectResource("project"))
+                             .WithAnnotation<IProjectMetadata>(new TestProject())
+                             .WithAnnotation<IProjectMetadata>(new OverrideTestProject())
+                             .WithProjectDefaults(new ProjectResourceOptions { ExcludeLaunchProfile = true });
+
+        var launchConfiguration = Assert.IsType<ProjectLaunchConfiguration>(
+            await project.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.NoDebug));
+
+        Assert.Equal("override.csproj", launchConfiguration.ProjectPath);
+
+        // The public accessor must agree with the project-defaults wiring, otherwise the same resource
+        // shape throws later on the DCP snapshot / image build / manifest paths that go through it.
+        Assert.Equal("override.csproj", project.Resource.GetProjectMetadata().ProjectPath);
     }
 
     [Fact]
@@ -148,5 +206,10 @@ public class ProjectResourceBuilderExtensionTests
     private sealed class TestProject : IProjectMetadata
     {
         public string ProjectPath => "test.csproj";
+    }
+
+    private sealed class OverrideTestProject : IProjectMetadata
+    {
+        public string ProjectPath => "override.csproj";
     }
 }

@@ -990,6 +990,28 @@ public class ProjectResourceTests(ITestOutputHelper outputHelper)
         Assert.Same(NameValidationPolicyAnnotation.None, policy);
     }
 
+    [Fact]
+    public void GetProjectMetadataReturnsTheLastAnnotationWhenSeveralArePresent()
+    {
+        // Project metadata is resolved last-wins across the app model, so the public accessor must agree
+        // with the annotation-based consumers rather than rejecting an overriding annotation.
+        var resource = new ProjectResource("projectName");
+        resource.Annotations.Add(new TestProject());
+        resource.Annotations.Add(new OverrideTestProject());
+
+        Assert.Equal("override-path", resource.GetProjectMetadata().ProjectPath);
+    }
+
+    [Fact]
+    public void GetProjectMetadataThrowsWhenTheResourceHasNoProjectMetadata()
+    {
+        var resource = new ProjectResource("projectName");
+
+        var exception = Assert.Throws<InvalidOperationException>(resource.GetProjectMetadata);
+        Assert.Contains("projectName", exception.Message);
+        Assert.Contains(nameof(IProjectMetadata), exception.Message);
+    }
+
     internal static IDistributedApplicationBuilder CreateBuilder(string[]? args = null, DistributedApplicationOperation operation = DistributedApplicationOperation.Publish)
     {
         var resolvedArgs = new List<string>();
@@ -1013,6 +1035,11 @@ public class ProjectResourceTests(ITestOutputHelper outputHelper)
         public string ProjectPath => "another-path";
 
         public LaunchSettings? LaunchSettings { get; set; }
+    }
+
+    private sealed class OverrideTestProject : IProjectMetadata
+    {
+        public string ProjectPath => "override-path";
     }
 
     internal abstract class BaseProjectWithProfileAndConfig : IProjectMetadata

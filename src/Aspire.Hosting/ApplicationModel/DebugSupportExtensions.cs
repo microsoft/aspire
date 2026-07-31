@@ -84,7 +84,8 @@ public static class DebugSupportExtensions
     /// <remarks>
     /// <para>
     /// Launch configuration is created by invoking the producer callback passed to
-    /// <see cref="ResourceBuilderExtensions.WithDebugSupport{T, TLaunchConfiguration}"/>,
+    /// <see cref="ResourceBuilderExtensions.WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, TLaunchConfiguration}, string, Action{CommandLineArgsCallbackContext})"/>
+    /// (or its asynchronous overload),
     /// which owns the complete configuration; Aspire serializes the result as-is. 
     /// The configuration is produced fresh on each call; it is not a singleton.
     /// Aspire may call the producer several times for the same resource.
