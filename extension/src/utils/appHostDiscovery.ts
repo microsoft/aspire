@@ -257,9 +257,29 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                 this._getAspireCliExecutablePath(cancellationToken),
             ]);
             cliPath = resolvedCliPath;
-            const appHosts = lsJsonStreamSupported
-                ? await this._discoverWithLsStream(cliPath, workspaceFolder, reportCandidateProgress, cancellationToken)
-                : await this._discoverWithLs(cliPath, workspaceFolder, cancellationToken);
+            let appHosts: CandidateAppHostDisplayInfo[];
+            if (lsJsonStreamSupported) {
+                try {
+                    appHosts = await this._discoverWithLsStream(cliPath, workspaceFolder, reportCandidateProgress, cancellationToken);
+                }
+                catch (streamError) {
+                    this._throwIfDisposed();
+                    throwIfCancellationRequested(cancellationToken);
+                    extensionLogOutputChannel.warn(`aspire ls streaming discovery failed, retrying without --stream: ${formatErrorMessage(streamError)}`);
+
+                    try {
+                        appHosts = await this._discoverWithLs(cliPath, workspaceFolder, cancellationToken);
+                    }
+                    catch (bufferedError) {
+                        this._throwIfDisposed();
+                        throwIfCancellationRequested(cancellationToken);
+                        throw new Error(`aspire ls streaming discovery failed: ${formatErrorMessage(streamError)}\naspire ls buffered fallback failed: ${formatErrorMessage(bufferedError)}`);
+                    }
+                }
+            }
+            else {
+                appHosts = await this._discoverWithLs(cliPath, workspaceFolder, cancellationToken);
+            }
 
             extensionLogOutputChannel.info(`Discovered ${appHosts.length} AppHost candidate(s) via aspire ls`);
             return { source: 'ls', candidates: appHosts };

@@ -781,17 +781,20 @@ suite('AppHost discovery', () => {
                 await clock.tickAsync(5_000);
                 await waitForMicrotasks();
                 await clock.tickAsync(5_000);
+                await waitForMicrotasks();
+                await clock.tickAsync(5_000);
 
                 await assert.rejects(discovery, /timed out after 5 seconds/);
                 assert.deepStrictEqual(killedArgs, [
                     ['ls', '--format', 'json', '--stream', '--nologo'],
+                    ['ls', '--format', 'json', '--nologo'],
                     ['extension', 'get-apphosts', '--nologo'],
                 ]);
 
                 hangCli = false;
                 const retryResult = await service.discover(workspaceFolder);
                 assert.deepStrictEqual(retryResult, []);
-                assert.strictEqual(spawnStub.callCount, 3);
+                assert.strictEqual(spawnStub.callCount, 4);
             }
             finally {
                 service.dispose();
@@ -1161,7 +1164,6 @@ suite('AppHost discovery', () => {
         test('generic CLI errors do not disable streamed discovery', async () => {
             const watcherCallbacks = stubFileSystemWatchers(sandbox);
             const clock = sandbox.useFakeTimers();
-            const legacyCandidatePath = buildPath('workspace', 'Legacy', 'AppHost.csproj');
             const streamCandidate = {
                 path: buildPath('workspace', 'Stream', 'AppHost.csproj'),
                 language: 'csharp',
@@ -1190,25 +1192,13 @@ suite('AppHost discovery', () => {
                     options?.stdoutCallback?.(JSON.stringify([bufferedCandidate]));
                     options?.exitCallback?.(0);
                 }
-                else {
-                    options?.stdoutCallback?.(JSON.stringify({
-                        selected_project_file: legacyCandidatePath,
-                        all_project_file_candidates: [legacyCandidatePath],
-                    }));
-                    options?.exitCallback?.(0);
-                }
                 return { kill: () => { } } as any;
             });
             const service = new AppHostDiscoveryService(makeTerminalProvider());
             const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
 
             try {
-                assert.deepStrictEqual(await service.discover(workspaceFolder), [{
-                    path: legacyCandidatePath,
-                    language: 'csharp',
-                    status: 'buildable',
-                    selected: true,
-                }]);
+                assert.deepStrictEqual(await service.discover(workspaceFolder), [bufferedCandidate]);
 
                 watcherCallbacks[0]();
                 await clock.tickAsync(250);
@@ -1216,7 +1206,7 @@ suite('AppHost discovery', () => {
 
                 assert.deepStrictEqual(observedArgs, [
                     ['ls', '--format', 'json', '--stream', '--nologo'],
-                    ['extension', 'get-apphosts', '--nologo'],
+                    ['ls', '--format', 'json', '--nologo'],
                     ['ls', '--format', 'json', '--stream', '--nologo'],
                 ]);
             }
@@ -1277,6 +1267,9 @@ suite('AppHost discovery', () => {
                     options?.stdoutCallback?.(`${JSON.stringify(candidate)}\n`);
                     options?.lineCallback?.(JSON.stringify(candidate));
                     options?.exitCallback?.(1);
+                } else if (args[0] === 'ls') {
+                    options?.stderrCallback?.('buffered discovery unavailable');
+                    options?.exitCallback?.(1);
                 } else {
                     options?.stderrCallback?.('legacy discovery unavailable');
                     options?.exitCallback?.(1);
@@ -1289,7 +1282,7 @@ suite('AppHost discovery', () => {
                 await assert.rejects(
                     service.discover(makeWorkspaceFolder(buildPath('workspace'))),
                     {
-                        message: 'aspire ls discovery failed: exit code 1\naspire extension get-apphosts fallback failed: legacy discovery unavailable',
+                        message: 'aspire ls discovery failed: aspire ls streaming discovery failed: exit code 1\naspire ls buffered fallback failed: buffered discovery unavailable\naspire extension get-apphosts fallback failed: legacy discovery unavailable',
                     });
             }
             finally {
@@ -1297,23 +1290,27 @@ suite('AppHost discovery', () => {
             }
         });
 
-        test('truncated streamed output falls back instead of completing partially', async () => {
+        test('truncated streamed output falls back to buffered discovery instead of completing partially', async () => {
             stubFileSystemWatchers(sandbox);
             const streamedCandidate = {
                 path: buildPath('workspace', 'Partial', 'AppHost.csproj'),
                 language: 'csharp',
                 status: 'buildable',
             };
-            const fallbackPath = buildPath('workspace', 'Fallback', 'AppHost.csproj');
+            const bufferedCandidate = {
+                path: buildPath('workspace', 'Fallback', 'apphost.ts'),
+                language: 'typescript/nodejs',
+                status: 'buildable',
+                selected: true,
+            };
+            const observedArgs: string[][] = [];
             sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
+                observedArgs.push(args);
                 if (args.includes('--stream')) {
                     options?.lineCallback?.(JSON.stringify(streamedCandidate));
                     options?.lineCallback?.('{"path":');
-                } else {
-                    options?.stdoutCallback?.(JSON.stringify({
-                        selected_project_file: fallbackPath,
-                        all_project_file_candidates: [fallbackPath],
-                    }));
+                } else if (args[0] === 'ls') {
+                    options?.stdoutCallback?.(JSON.stringify([bufferedCandidate]));
                     options?.exitCallback?.(0);
                 }
                 return { kill: () => { } } as any;
@@ -1327,14 +1324,12 @@ suite('AppHost discovery', () => {
                     false,
                     undefined,
                     candidate => observed.push(candidate));
-
                 assert.deepStrictEqual(observed, [streamedCandidate]);
-                assert.deepStrictEqual(result, [{
-                    path: fallbackPath,
-                    language: 'csharp',
-                    status: 'buildable',
-                    selected: true,
-                }]);
+                assert.deepStrictEqual(result, [bufferedCandidate]);
+                assert.deepStrictEqual(observedArgs, [
+                    ['ls', '--format', 'json', '--stream', '--nologo'],
+                    ['ls', '--format', 'json', '--nologo'],
+                ]);
             }
             finally {
                 service.dispose();
@@ -1527,7 +1522,7 @@ suite('AppHost discovery', () => {
             try {
                 await assert.rejects(
                     service.discover(makeWorkspaceFolder(buildPath('workspace'))),
-                    /aspire ls discovery failed: ls --format json --stream failed\naspire extension get-apphosts fallback failed: extension get-apphosts failed/);
+                    /aspire ls discovery failed: aspire ls streaming discovery failed: ls --format json --stream failed\naspire ls buffered fallback failed: ls --format json failed\naspire extension get-apphosts fallback failed: extension get-apphosts failed/);
             }
             finally {
                 service.dispose();
@@ -1558,8 +1553,10 @@ suite('AppHost discovery', () => {
             try {
                 const result = await service.discover(makeWorkspaceFolder(buildPath('workspace')));
 
-                assert.deepStrictEqual(spawnStub.getCall(1).args[2], ['extension', 'get-apphosts', '--nologo']);
-                assert.deepStrictEqual(spawnStub.getCall(2).args[2], ['extension', 'get-apphosts']);
+                assert.deepStrictEqual(spawnStub.getCall(0).args[2], ['ls', '--format', 'json', '--stream', '--nologo']);
+                assert.deepStrictEqual(spawnStub.getCall(1).args[2], ['ls', '--format', 'json', '--nologo']);
+                assert.deepStrictEqual(spawnStub.getCall(2).args[2], ['extension', 'get-apphosts', '--nologo']);
+                assert.deepStrictEqual(spawnStub.getCall(3).args[2], ['extension', 'get-apphosts']);
                 assert.deepStrictEqual(result, [{
                     path: appHostPath,
                     language: 'csharp',
