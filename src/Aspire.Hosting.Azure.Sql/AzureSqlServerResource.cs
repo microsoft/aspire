@@ -340,7 +340,19 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
                 DECLARE @sid VARBINARY(16) = CONVERT(VARBINARY(16), @id);
                 DECLARE @castId NVARCHAR(MAX) = CONVERT(VARCHAR(MAX), @sid, 1);
                 
-                DECLARE @existingSid VARBINARY(85) = (SELECT sid FROM sys.database_principals WHERE name = @name);
+                -- Reconciliation below can drop and recreate the principal, so run the whole sequence as a
+                -- single unit. XACT_ABORT rolls the transaction back on any error, so a failure between
+                -- DROP USER and CREATE USER cannot leave the database with no user for this identity.
+                SET XACT_ABORT ON;
+                BEGIN TRANSACTION;
+                
+                -- Only external (Entra) users are considered, because that is the only kind this script
+                -- creates. sys.database_principals also holds SQL users, Windows users, roles and dbo, and
+                -- any of those sharing this name would have a different sid and so look stale - dropping a
+                -- principal we do not own, along with its permissions. Ignoring them leaves @existingSid
+                -- null, so CREATE USER below fails with 'Msg 15023: User already exists in current
+                -- database', which is a visible failure rather than a destructive one.
+                DECLARE @existingSid VARBINARY(85) = (SELECT sid FROM sys.database_principals WHERE name = @name AND type = 'E');
                 
                 -- A user left over from an earlier deployment can carry a stale SID, because deleting and
                 -- recreating a managed identity keeps the name but changes the object id. Granting a role to
@@ -369,6 +381,8 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
                 -- Assign roles to the user. ALTER ROLE ... ADD MEMBER is a no-op when the principal is already a member.
                 DECLARE @role1 NVARCHAR(MAX) = N'ALTER ROLE db_owner ADD MEMBER ' + QUOTENAME(@name);
                 EXEC (@role1);
+                
+                COMMIT TRANSACTION;
                 
                 "@
                 # Note: the string terminator must not have whitespace before it, therefore it is not indented.
