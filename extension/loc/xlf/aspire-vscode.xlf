@@ -208,6 +208,9 @@
     <trans-unit id="aspire-vscode.strings.disconnectingFromSession">
       <source xml:lang="en">Disconnecting from Aspire debug session... Child processes will be stopped.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostDiscoveryProgress">
+      <source xml:lang="en">Discovering AppHosts...</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.dismissLabel">
       <source xml:lang="en">Dismiss</source>
     </trans-unit>
