@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Immutable;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Utils;
 using Aspire.Hosting.Tests.Utils;
@@ -1183,6 +1184,74 @@ public class ResourceNotificationTests
         {
             _stoppingCts.Dispose();
         }
+    }
+
+    [Fact]
+    public async Task PublishUpdateAsyncSkipsSnapshotsThatDidNotChange()
+    {
+        var resource = new CustomResource("myResource");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with { State = "SomeState" }).DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState("myResource", out var initial));
+
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with { State = "SomeState" }).DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState("myResource", out var unchanged));
+        Assert.Equal(initial.Snapshot.Version, unchanged.Snapshot.Version);
+
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with { State = "SomeOtherState" }).DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState("myResource", out var changed));
+        Assert.True(changed.Snapshot.Version > initial.Snapshot.Version, "A real change should publish a new version.");
+        Assert.Equal("SomeOtherState", changed.Snapshot.State?.Text);
+    }
+
+    [Fact]
+    public async Task PublishUpdateAsyncSkipsUnchangedSnapshotsWithRebuiltCollections()
+    {
+        var resource = new CustomResource("myResource");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        // Producers rebuild the snapshot collections every time. ImmutableArray equality compares the
+        // underlying array reference, and a property value can itself be a collection, so this is the
+        // case that plain record equality gets wrong. List<T> is covered explicitly because it does
+        // not implement IStructuralEquatable: it is the shape DCP uses for effective arguments.
+        static CustomResourceSnapshot BuildSnapshot(CustomResourceSnapshot snapshot) => snapshot with
+        {
+            State = "SomeState",
+            Properties =
+            [
+                new("Ports", ImmutableArray.Create(8080, 8081)),
+                new("Args", new List<string> { "--verbose", "--port", "8080" }),
+                new("Tags", new[] { "a", "b" })
+            ],
+            Urls = [new UrlSnapshot("ep", "http://localhost:8080", IsInternal: false)],
+            EnvironmentVariables = [new("Key", "Value", IsFromSpec: true)]
+        };
+
+        await notificationService.PublishUpdateAsync(resource, BuildSnapshot).DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState("myResource", out var initial));
+
+        await notificationService.PublishUpdateAsync(resource, BuildSnapshot).DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState("myResource", out var unchanged));
+        Assert.Equal(initial.Snapshot.Version, unchanged.Snapshot.Version);
+
+        await notificationService.PublishUpdateAsync(resource, snapshot => BuildSnapshot(snapshot) with
+        {
+            Properties =
+            [
+                new("Ports", ImmutableArray.Create(8080, 8081)),
+                new("Args", new List<string> { "--verbose", "--port", "9090" }),
+                new("Tags", new[] { "a", "b" })
+            ]
+        }).DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState("myResource", out var changed));
+        Assert.True(changed.Snapshot.Version > initial.Snapshot.Version, "A changed value inside a List<T> property should publish a new version.");
     }
 
     private static string[] GetWaitingForDependencies(ResourceEvent resourceEvent)

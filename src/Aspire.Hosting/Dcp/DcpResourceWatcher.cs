@@ -39,6 +39,14 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
 
     private readonly ConcurrentDictionary<string, (CancellationTokenSource Cancellation, Task Task)> _logStreams = new();
     private readonly ConcurrentDictionary<string, PendingFollowLogDeduplication> _pendingFollowLogDeduplications = new();
+
+    // Last resource version seen for each DCP object, keyed by (object kind, object name). Used to
+    // recognize and drop watch replays. See ProcessResourceChange.
+    private readonly ConcurrentDictionary<(string Kind, string Name), string?> _resourceVersions = new();
+
+    // Holds names of resources that reached terminal state and logs have already been flushed for them. 
+    // Prevents re-reading DCP's log store every time an already-terminal resource is reported again.
+    private readonly ConcurrentDictionary<string, bool> _allLogsFlushed = new();
     private Task? _resourceWatchTask;
 
     private readonly record struct LogInformationEntry(string ResourceName, bool? LogsAvailable, bool? HasSubscribers);
@@ -265,6 +273,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                     }
 
                     _pendingFollowLogDeduplications.TryRemove(resource.Metadata.Name, out _);
+                    _allLogsFlushed.TryRemove(resource.Metadata.Name, out _);
 
                     // TODO: Handle resource deletion
                     if (_logger.IsEnabled(LogLevel.Trace))
@@ -293,12 +302,25 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                     // Only do this when a subscriber is active. Without subscribers there is no caller
                     // depending on the ordering, and GetAllAsync can still query DCP's external log
                     // store later without this extra read on every terminal transition.
-                    if (HasLogsAvailable(resource) &&
-                        status.State is not null &&
-                        KnownResourceStates.TerminalStates.Contains(status.State) &&
-                        _loggerService.HasActiveSubscribers(resource.Metadata.Name))
+                    //
+                    // Flush at most once for resources in terminal state. Every further notification for a resource
+                    // that is already terminal describes logs we have read, and the flush is awaited
+                    // while holding the watcher's single output semaphore, so repeating it stalls the
+                    // Container, Executable, ContainerExec, Service and Endpoint watches alike for up
+                    // to TerminalLogFlushTimeout. The marker is cleared below if the resource is restarted, 
+                    // so a restarted resource is flushed again when it terminates.
+                    if (status.State is not null && KnownResourceStates.TerminalStates.Contains(status.State))
                     {
-                        await FlushCurrentLogsAsync(resource, status, _shutdownToken).ConfigureAwait(false);
+                        if (HasLogsAvailable(resource) &&
+                            _loggerService.HasActiveSubscribers(resource.Metadata.Name) &&
+                            _allLogsFlushed.TryAdd(resource.Metadata.Name, true))
+                        {
+                            await FlushCurrentLogsAsync(resource, status, _shutdownToken).ConfigureAwait(false);
+                        }
+                    }
+                    else
+                    {
+                        _allLogsFlushed.TryRemove(resource.Metadata.Name, out _);
                     }
 
                     await _executorEvents.PublishAsync(new OnResourceChangedContext(_shutdownToken, resourceType, appModelResource, resource.Metadata.Name, status, s => snapshotFactory(resource, s))).ConfigureAwait(false);
@@ -710,20 +732,55 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         }
     }
 
-    private static bool ProcessResourceChange<T>(ConcurrentDictionary<string, T> map, WatchEventType watchEventType, T resource)
-            where T : CustomResource
+    private bool ProcessResourceChange<T>(ConcurrentDictionary<string, T> map, WatchEventType watchEventType, T resource)
+            where T : CustomResource, IKubernetesStaticMetadata
     {
+        var resourceKey = (T.ObjectKind, resource.Metadata.Name);
+
         switch (watchEventType)
         {
             case WatchEventType.Added:
-                map.TryAdd(resource.Metadata.Name, resource);
-                break;
-
             case WatchEventType.Modified:
+                // DCP watches are torn down and re-established every few minutes (see
+                // KubernetesService.WatchAsync, which wraps the watch in PeriodicRestartAsyncEnumerable).
+                // A watch is backed by a list-and-watch request, so each fresh watch re-delivers every
+                // object that currently exists, and those replays are indistinguishable from real
+                // updates. Without this check a resource that never changes again - a container stuck
+                // in FailedToStart, for example - keeps producing snapshot versions and keeps re-reading
+                // DCP's log store for as long as the AppHost runs.
+                // See https://github.com/microsoft/aspire/issues/18869.
+                //
+                // resourceVersion is the standard mechanism for detecting this: the server changes it
+                // whenever the stored object changes and leaves it alone otherwise, so a replay of an
+                // unchanged object carries the version we have already seen.
+                // https://kubernetes.io/docs/reference/using-api/api-concepts/#resource-versions
+                var resourceVersion = resource.Metadata.ResourceVersion;
+
+                // The value is opaque, so it is only compared for equality; ordering is explicitly not defined. 
+                // An empty value means the server did not supply one, which is treated as "cannot tell", 
+                // so the event is processed rather than risk suppressing a real change.
+                if (!string.IsNullOrEmpty(resourceVersion) &&
+                    _resourceVersions.TryGetValue(resourceKey, out var previousResourceVersion) &&
+                    string.Equals(previousResourceVersion, resourceVersion, StringComparison.Ordinal))
+                {
+                    if (_logger.IsEnabled(LogLevel.Trace))
+                    {
+                        _logger.LogTrace("Ignoring {ResourceKind} resource {ResourceName} reported by the DCP watch because its resource version {ResourceVersion} is unchanged.", T.ObjectKind, resource.Metadata.Name, resourceVersion);
+                    }
+
+                    return false;
+                }
+
+                // Added is treated like Modified rather than using TryAdd. A watch restart replays
+                // existing objects as Added, and if such an object changed while the watch was down,
+                // keeping the stale instance would leave the map disagreeing with both the version
+                // recorded here and the snapshot published to subscribers.
+                _resourceVersions[resourceKey] = resourceVersion;
                 map[resource.Metadata.Name] = resource;
                 break;
 
             case WatchEventType.Deleted:
+                _resourceVersions.TryRemove(resourceKey, out _);
                 map.Remove(resource.Metadata.Name, out _);
                 break;
 

@@ -1679,6 +1679,262 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ResourceWatch_ResourceWithoutResourceVersionIsAlwaysProcessed()
+    {
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        builder.AddContainer("database", "image");
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var observedStates = new ConcurrentQueue<string?>();
+
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceChangedContext>(context =>
+        {
+            if (context.Resource.Name == "database")
+            {
+                observedStates.Enqueue(context.Status.State);
+            }
+
+            return Task.CompletedTask;
+        });
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, events: events);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+
+        container.Status = new ContainerStatus { State = ContainerState.Running };
+        kubernetesService.PushResourceModified(container);
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => observedStates.Contains(ContainerState.Running),
+            "The state change to Running should be reported.");
+
+        // Without a resource version there is no way to tell a replay from a change, so the watcher
+        // must fall back to processing the event. Suppressing it instead would freeze the resource.
+        container.Metadata.ResourceVersion = null;
+        container.Status = new ContainerStatus { State = ContainerState.Exited };
+        kubernetesService.PushResourceUnchanged(container);
+        kubernetesService.PushResourceUnchanged(container);
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => observedStates.Count(s => s == ContainerState.Exited) == 2,
+            "Events without a resource version should always be processed.");
+    }
+
+    [Fact]
+    public async Task ResourceWatch_UnchangedResourceNotificationIsIgnored()
+    {
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        builder.AddContainer("database", "image");
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var observedStates = new ConcurrentQueue<string?>();
+
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceChangedContext>(context =>
+        {
+            if (context.Resource.Name == "database")
+            {
+                observedStates.Enqueue(context.Status.State);
+            }
+
+            return Task.CompletedTask;
+        });
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, events: events);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+
+        container.Status = new ContainerStatus { State = ContainerState.Running };
+        kubernetesService.PushResourceModified(container);
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => observedStates.Contains(ContainerState.Running),
+            "The state change to Running should be reported.");
+
+        // Re-delivering the resource without a new resource version means nothing was stored, so it
+        // does not describe a change no matter which event type carries it.
+        kubernetesService.PushResourceUnchanged(container);
+        kubernetesService.PushResourceUnchanged(container, k8s.WatchEventType.Added);
+
+        // Pushing a real change afterwards acts as a barrier: the container watch is processed in
+        // order, so once Exited is observed the replays above have already been handled or dropped.
+        container.Status = new ContainerStatus { State = ContainerState.Exited };
+        kubernetesService.PushResourceModified(container);
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => observedStates.Contains(ContainerState.Exited),
+            "The state change to Exited should be reported.");
+
+        AssertStatesReportedAfter(observedStates, ContainerState.Running, ContainerState.Exited);
+    }
+
+    [Fact]
+    public async Task ResourceWatch_WatchRestartDoesNotRepublishUnchangedResources()
+    {
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        builder.AddContainer("database", "image");
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var observedStates = new ConcurrentQueue<string?>();
+
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceChangedContext>(context =>
+        {
+            if (context.Resource.Name == "database")
+            {
+                observedStates.Enqueue(context.Status.State);
+            }
+
+            return Task.CompletedTask;
+        });
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, events: events);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+
+        // Park the container in a terminal state it will never leave, which is the situation
+        // described in https://github.com/microsoft/aspire/issues/18869.
+        container.Status = new ContainerStatus { State = ContainerState.FailedToStart };
+        kubernetesService.PushResourceModified(container);
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => observedStates.Contains(ContainerState.FailedToStart),
+            "The state change to FailedToStart should be reported.");
+
+        // Re-establishing a watch replays every existing object, over and over for as long as the
+        // AppHost runs. None of those replays describe a change.
+        kubernetesService.SimulateWatchRestart();
+        kubernetesService.SimulateWatchRestart();
+
+        // A real change afterwards acts as a barrier: the container watch is processed in order, so
+        // once Exited is observed the replays above have already been handled or dropped.
+        container.Status = new ContainerStatus { State = ContainerState.Exited };
+        kubernetesService.PushResourceModified(container);
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => observedStates.Contains(ContainerState.Exited),
+            "The state change to Exited should be reported.");
+
+        AssertStatesReportedAfter(observedStates, ContainerState.FailedToStart, ContainerState.Exited);
+    }
+
+    [Fact]
+    public async Task ResourceWatch_TerminalLogsAreFlushedOnlyOncePerTerminalPeriod()
+    {
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        builder.AddContainer("database", "image");
+
+        // A FailedToStart resource is flushed with a non-follow stream, so counting non-follow
+        // stream opens counts terminal log flushes without picking up normal log streaming.
+        var flushStreamOpens = 0;
+        var kubernetesService = new TestKubernetesService(startStreamWithFollow: (obj, logStreamType, follow) =>
+        {
+            if (follow == false)
+            {
+                Interlocked.Increment(ref flushStreamOpens);
+            }
+
+            return new MemoryStream();
+        });
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var resourceLoggerService = new ResourceLoggerService();
+
+        string? dcpResourceName = null;
+        var flushesAtNotification = new ConcurrentQueue<int>();
+
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceChangedContext>(context =>
+        {
+            // The flush completes before the resource change is published, so the count read here
+            // includes any flush performed for this notification.
+            if (context.DcpResourceName == dcpResourceName && context.Status.State == ContainerState.FailedToStart)
+            {
+                flushesAtNotification.Enqueue(Volatile.Read(ref flushStreamOpens));
+            }
+
+            return Task.CompletedTask;
+        });
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, resourceLoggerService: resourceLoggerService, events: events);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+        dcpResourceName = container.Metadata.Name;
+
+        using var subscription = resourceLoggerService.Subscribe(dcpResourceName, _ => { });
+
+        container.Status = new ContainerStatus { State = ContainerState.FailedToStart };
+        kubernetesService.PushResourceModified(container);
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => flushesAtNotification.Count == 1,
+            "The terminal state should be reported.");
+
+        // A later change to a resource that is already terminal describes logs that were already
+        // read, so it must not trigger another read of the DCP log store.
+        container.Status = new ContainerStatus { State = ContainerState.FailedToStart, ExitCode = 1 };
+        kubernetesService.PushResourceModified(container);
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => flushesAtNotification.Count == 2,
+            "The follow-up change should be reported.");
+
+        var flushes = flushesAtNotification.ToArray();
+        Assert.True(flushes[0] > 0, "Entering the terminal state should flush the current logs.");
+        Assert.Equal(flushes[0], flushes[1]);
+    }
+
+    /// <summary>
+    /// Asserts that the only states reported after the first occurrence of <paramref name="afterState"/>
+    /// are <paramref name="expectedStates"/>.
+    /// </summary>
+    /// <remarks>
+    /// Anchoring on a state instead of clearing the queue keeps the assertion independent of the
+    /// notifications raised while the app was starting, without racing against the watcher. The queue
+    /// must not be cleared here: <see cref="ConcurrentQueue{T}.Clear"/> is not safe to call while
+    /// another thread is still enqueuing.
+    /// </remarks>
+    private static void AssertStatesReportedAfter(ConcurrentQueue<string?> observedStates, string afterState, params string?[] expectedStates)
+    {
+        var states = observedStates.ToArray();
+        var anchor = Array.IndexOf(states, afterState);
+
+        Assert.True(anchor >= 0, $"Expected '{afterState}' to be reported but saw: {string.Join(", ", states)}");
+        Assert.Equal(expectedStates, states.Skip(anchor + 1));
+    }
+
+    [Fact]
     public async Task ResourceLogging_SystemStream_FormatsWithSysPrefix()
     {
         var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
