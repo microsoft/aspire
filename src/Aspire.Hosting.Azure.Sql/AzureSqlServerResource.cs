@@ -320,7 +320,21 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
             scriptResource.EnvironmentVariables.Add(new ScriptEnvironmentVariable() { Name = "PRINCIPALNAME", Value = roleAssignmentContext.PrincipalName });
             scriptResource.EnvironmentVariables.Add(new ScriptEnvironmentVariable() { Name = "ID", Value = userId });
 
-            scriptResource.ScriptContent = $$"""
+            scriptResource.ScriptContent = PrincipalReconciliationScript;
+
+            foreach (var d in dependsOn)
+            {
+                scriptResource.DependsOn.Add(d);
+            }
+
+            infra.Add(scriptResource);
+        }
+    }
+
+    // The PowerShell that the deployment script runs to provision the managed identity's database
+    // principal. Held as a constant so tests can pull the T-SQL out of it and execute it against a
+    // real SQL Server, rather than only asserting that the expected text reaches the generated bicep.
+    internal const string PrincipalReconciliationScript = """
                 $sqlServerFqdn = "$env:DBSERVER"
                 $sqlDatabaseName = "$env:DBNAME"
                 $principalName = "$env:PRINCIPALNAME"
@@ -465,15 +479,6 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
                     }
                 }
                 """;
-
-            foreach (var d in dependsOn)
-            {
-                scriptResource.DependsOn.Add(d);
-            }
-
-            infra.Add(scriptResource);
-        }
-    }
 
     internal ReferenceExpression BuildJdbcConnectionString(string? databaseName = null)
     {
