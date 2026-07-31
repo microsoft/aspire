@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Buffers.Text;
 using System.Text;
 using System.Text.Json;
 using YamlDotNet.Core;
@@ -47,8 +48,9 @@ internal static class SealedSecretManifest
     /// Reads, validates, and returns the manifest metadata plus the exact validated bytes.
     /// </summary>
     /// <exception cref="InvalidOperationException">
-    /// The manifest is missing, unreadable, malformed, has no <c>metadata.name</c>, or is not a
-    /// single encrypted Bitnami <c>SealedSecret</c> document (<c>ASPIRERADIUS044</c>); or it embeds
+    /// The manifest is missing, unreadable, malformed, has no <c>metadata.name</c>, has no non-empty
+    /// <c>spec.encryptedData</c> mapping of standard-base64 sealed values, or is not a single
+    /// encrypted Bitnami <c>SealedSecret</c> document (<c>ASPIRERADIUS044</c>); or it embeds
     /// a plaintext <c>Secret</c> in a <c>last-applied-configuration</c> annotation
     /// (<c>ASPIRERADIUS063</c>).
     /// </exception>
@@ -95,7 +97,8 @@ internal static class SealedSecretManifest
     /// <paramref name="manifestPath"/>.
     /// </summary>
     /// <exception cref="InvalidOperationException">
-    /// The manifest is missing, unreadable, has no <c>metadata.name</c>, or is not a single
+    /// The manifest is missing, unreadable, has no <c>metadata.name</c>, has no non-empty
+    /// <c>spec.encryptedData</c> mapping of standard-base64 sealed values, or is not a single
     /// encrypted Bitnami <c>SealedSecret</c> document (<c>ASPIRERADIUS044</c>); or it embeds a
     /// plaintext <c>Secret</c> in a <c>last-applied-configuration</c> annotation
     /// (<c>ASPIRERADIUS063</c>).
@@ -194,6 +197,10 @@ internal static class SealedSecretManifest
         // copied verbatim into publish artifacts and re-applied — defeating sealing. Reject it.
         RejectPlaintextLastAppliedAnnotation(storeName, manifestPath, root);
 
+        // Runs after the leak gates above so a manifest that both leaks cleartext and has a malformed
+        // payload still reports the more specific ASPIRERADIUS063/plaintext diagnostic.
+        ValidateEncryptedData(storeName, manifestPath, root);
+
         if (!TryGetNode(root, "metadata", out var metadataNode) || metadataNode is not YamlMappingNode metadata)
         {
             throw CreateInvalidManifestException(
@@ -234,6 +241,71 @@ internal static class SealedSecretManifest
 
         return new Metadata(namespaceWasExplicit ? ns! : defaultNamespace, name!, namespaceWasExplicit);
     }
+
+    // Requires the sealed payload to actually be present and well-formed:
+    //
+    //   spec:
+    //     encryptedData:
+    //       username: AgBy3i4OJSWK+PiTySYZZA9rO43cGDEq...   # standard base64
+    //
+    // Without this gate a manifest with a missing, scalar, empty, or plaintext-looking
+    // spec.encryptedData passes publish validation and is copied verbatim into the artifact, even
+    // though this path promises a structurally valid encrypted manifest.
+    //
+    // This is intentionally stricter than the upstream CRD, which permits an empty encryptedData and
+    // template-only objects: this integration already rejects plaintext spec.template.data, so a
+    // SealedSecret with no sealed payload can never populate a store here.
+    // https://github.com/bitnami-labs/sealed-secrets
+    private static void ValidateEncryptedData(string storeName, string manifestPath, YamlMappingNode root)
+    {
+        if (!TryGetNode(root, "spec", out var specNode) || specNode is not YamlMappingNode spec)
+        {
+            throw CreateInvalidManifestException(
+                storeName,
+                manifestPath,
+                "has no spec mapping with sealed values under spec.encryptedData. Seal the secret with kubeseal.");
+        }
+
+        if (!TryGetNode(spec, "encryptedData", out var encryptedDataNode) ||
+            encryptedDataNode is not YamlMappingNode encryptedData ||
+            encryptedData.Children.Count == 0)
+        {
+            throw CreateInvalidManifestException(
+                storeName,
+                manifestPath,
+                "has no non-empty spec.encryptedData mapping of sealed values. Seal the secret with kubeseal.");
+        }
+
+        foreach (var (keyNode, valueNode) in encryptedData.Children)
+        {
+            // ValidateStructure already rejects non-scalar mapping keys, so the key is a scalar here;
+            // read it defensively for the diagnostic message only.
+            var key = (keyNode as YamlScalarNode)?.Value ?? "<non-scalar>";
+
+            // kubeseal writes each value with Go's base64.StdEncoding and the controller decodes it the
+            // same way, so anything that is not a standard-base64 scalar cannot be a sealed value. This
+            // does not prove the value is ciphertext (plaintext can be valid base64), but it fails
+            // closed on the shapes the CRD never produces: nested mappings/sequences, empty/whitespace
+            // values, and most implicit non-string scalars (`123`, `~`). It cannot reject a short plain
+            // scalar that happens to be valid base64 (`true`), and a minimum length is deliberately not
+            // enforced because the ciphertext length is not a documented part of the format.
+            // https://github.com/bitnami-labs/sealed-secrets/blob/main/pkg/apis/sealedsecrets/v1alpha1/sealedsecret_expansion.go
+            if (valueNode is not YamlScalarNode { Value: { Length: > 0 } value } ||
+                !IsStandardBase64(value))
+            {
+                throw CreateInvalidManifestException(
+                    storeName,
+                    manifestPath,
+                    $"has a spec.encryptedData entry '{key}' that is not a non-empty standard-base64 encoded sealed " +
+                    "value. Seal the secret with kubeseal instead of writing the value by hand.");
+            }
+        }
+    }
+
+    private static bool IsStandardBase64(string value) =>
+        // Base64.IsValid validates without allocating a decode buffer (the ciphertext can be large).
+        // It ignores whitespace, so require a non-zero decoded length to reject a whitespace-only value.
+        Base64.IsValid(value, out var decodedLength) && decodedLength > 0;
 
     private static bool ContainsPlaintextTemplateData(YamlMappingNode template, string field) =>
         TryGetNode(template, field, out var value) && HasContent(value);

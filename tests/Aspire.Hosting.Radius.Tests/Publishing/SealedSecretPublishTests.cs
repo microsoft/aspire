@@ -31,7 +31,7 @@ public class SealedSecretPublishTests : IDisposable
             $"  namespace: {ns}\n" +
             "spec:\n" +
             "  encryptedData:\n" +
-            "    username: AgByCIPHERTEXTONLY\n");
+            "    username: AgByCIPHERTEXTONLYxx\n");
         return path;
     }
 
@@ -60,7 +60,7 @@ public class SealedSecretPublishTests : IDisposable
         Assert.Contains("Applications.Core/secretStores@2023-10-01-preview", bicep);
         Assert.Contains("resource: 'app/db-creds'", bicep);
         // The encrypted manifest is not inlined into the Bicep; no ciphertext or @secure() param.
-        Assert.DoesNotContain("AgByCIPHERTEXTONLY", bicep);
+        Assert.DoesNotContain("AgByCIPHERTEXTONLYxx", bicep);
         Assert.DoesNotContain("@secure()", bicep);
     }
 
@@ -93,6 +93,31 @@ public class SealedSecretPublishTests : IDisposable
                     s.WithSealedSecret(missing, "key"))));
 
         Assert.Contains("ASPIRERADIUS044", ex.Message);
+    }
+
+    [Fact]
+    public void WithSealedSecret_ManifestWithoutSealedPayload_FailsPublish_ASPIRERADIUS044()
+    {
+        // The manifest is copied verbatim into the publish artifact, so a SealedSecret carrying no
+        // sealed payload must be rejected during publish rather than shipped and failing at deploy.
+        var manifest = Path.Combine(_dir, "no-payload.sealed.yaml");
+        File.WriteAllText(manifest,
+            "apiVersion: bitnami.com/v1alpha1\n" +
+            "kind: SealedSecret\n" +
+            "metadata:\n" +
+            "  name: db-creds\n" +
+            "  namespace: app\n" +
+            "spec:\n" +
+            "  encryptedData:\n" +
+            "    username: hunter2!\n");
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            GenerateStoreBicep(env =>
+                env.WithSecretStore("db-creds", RadiusSecretStoreType.Generic, s =>
+                    s.WithSealedSecret(manifest, "username"))));
+
+        Assert.Contains("ASPIRERADIUS044", ex.Message);
+        Assert.Contains("spec.encryptedData", ex.Message);
     }
 
     [Fact]

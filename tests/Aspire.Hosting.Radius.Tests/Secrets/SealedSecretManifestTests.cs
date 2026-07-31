@@ -29,7 +29,7 @@ public class SealedSecretManifestTests : IDisposable
             "  namespace: app\n" +
             "spec:\n" +
             "  encryptedData:\n" +
-            "    username: AgBcipher\n");
+            "    username: AgBjaXBoZXI=\n");
 
         var metadata = SealedSecretManifest.ReadMetadata("store", path, "env-default");
 
@@ -48,7 +48,7 @@ public class SealedSecretManifestTests : IDisposable
             "  name: db-creds\n" +
             "spec:\n" +
             "  encryptedData:\n" +
-            "    username: AgBcipher\n");
+            "    username: AgBjaXBoZXI=\n");
 
         var metadata = SealedSecretManifest.ReadMetadata("store", path, "env-default");
 
@@ -70,7 +70,7 @@ public class SealedSecretManifestTests : IDisposable
             "  namespace: real-ns\n" +
             "spec:\n" +
             "  encryptedData:\n" +
-            "    username: AgBcipher\n" +
+            "    username: AgBjaXBoZXI=\n" +
             "  template:\n" +
             "    metadata:\n" +
             "      name: decoy-name\n" +
@@ -107,7 +107,7 @@ public class SealedSecretManifestTests : IDisposable
             "  namespace: app\n" +
             "spec:\n" +
             "  encryptedData:\n" +
-            "    username: AgBcipher\n");
+            "    username: AgBjaXBoZXI=\n");
 
         var ex = Assert.Throws<InvalidOperationException>(
             () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
@@ -129,7 +129,7 @@ public class SealedSecretManifestTests : IDisposable
             $"  name: {name}\n" +
             "spec:\n" +
             "  encryptedData:\n" +
-            "    username: AgBcipher\n");
+            "    username: AgBjaXBoZXI=\n");
 
         var ex = Assert.Throws<InvalidOperationException>(
             () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
@@ -150,7 +150,7 @@ public class SealedSecretManifestTests : IDisposable
             $"  namespace: {longNamespace}\n" +
             "spec:\n" +
             "  encryptedData:\n" +
-            "    username: AgBcipher\n");
+            "    username: AgBjaXBoZXI=\n");
 
         var ex = Assert.Throws<InvalidOperationException>(
             () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
@@ -266,7 +266,10 @@ public class SealedSecretManifestTests : IDisposable
             "kind: SealedSecret\n" +
             "metadata:\n" +
             "  name: db-creds\n" +
-            "  namespace: app\n");
+            "  namespace: app\n" +
+            "spec:\n" +
+            "  encryptedData:\n" +
+            "    username: AgBjaXBoZXI=\n");
 
         var metadata = SealedSecretManifest.ReadMetadata("store", path, "env-default");
 
@@ -396,7 +399,7 @@ public class SealedSecretManifestTests : IDisposable
             "    kubectl.kubernetes.io/last-applied-configuration: '{\"apiVersion\":\"v1\",\"kind\":\"Secret\",\"metadata\":{\"name\":\"db-creds\"},\"data\":{\"password\":\"c2VjcmV0\"}}'\n" +
             "spec:\n" +
             "  encryptedData:\n" +
-            "    password: AgBcipher\n");
+            "    password: AgBjaXBoZXI=\n");
 
         var ex = Assert.Throws<InvalidOperationException>(
             () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
@@ -414,7 +417,7 @@ public class SealedSecretManifestTests : IDisposable
             "  name: db-creds\n" +
             "spec:\n" +
             "  encryptedData:\n" +
-            "    password: AgBcipher\n" +
+            "    password: AgBjaXBoZXI=\n" +
             "  template:\n" +
             "    metadata:\n" +
             "      name: db-creds\n" +
@@ -440,7 +443,7 @@ public class SealedSecretManifestTests : IDisposable
             "    kubectl.kubernetes.io/last-applied-configuration: 'not-json{'\n" +
             "spec:\n" +
             "  encryptedData:\n" +
-            "    password: AgBcipher\n");
+            "    password: AgBjaXBoZXI=\n");
 
         var ex = Assert.Throws<InvalidOperationException>(
             () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
@@ -465,7 +468,7 @@ public class SealedSecretManifestTests : IDisposable
             "        password: c2VjcmV0\n" +
             "spec:\n" +
             "  encryptedData:\n" +
-            "    password: AgBcipher\n");
+            "    password: AgBjaXBoZXI=\n");
 
         var ex = Assert.Throws<InvalidOperationException>(
             () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
@@ -487,7 +490,7 @@ public class SealedSecretManifestTests : IDisposable
             "    kubectl.kubernetes.io/last-applied-configuration: '{\"kind\":\"Secret\",\"metadata\":{\"name\":\"db-creds\"},\"data\":\"c2VjcmV0\"}'\n" +
             "spec:\n" +
             "  encryptedData:\n" +
-            "    password: AgBcipher\n");
+            "    password: AgBjaXBoZXI=\n");
 
         var ex = Assert.Throws<InvalidOperationException>(
             () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
@@ -529,10 +532,10 @@ public class SealedSecretManifestTests : IDisposable
             "  name: db-creds\n" +
             "  namespace: app\n" +
             "  annotations:\n" +
-            "    kubectl.kubernetes.io/last-applied-configuration: '{\"apiVersion\":\"bitnami.com/v1alpha1\",\"kind\":\"SealedSecret\",\"metadata\":{\"name\":\"db-creds\"},\"spec\":{\"encryptedData\":{\"password\":\"AgBcipher\"},\"template\":{\"data\":{\"password\":\"c2VjcmV0\"}}}}'\n" +
+            "    kubectl.kubernetes.io/last-applied-configuration: '{\"apiVersion\":\"bitnami.com/v1alpha1\",\"kind\":\"SealedSecret\",\"metadata\":{\"name\":\"db-creds\"},\"spec\":{\"encryptedData\":{\"password\":\"AgBjaXBoZXI=\"},\"template\":{\"data\":{\"password\":\"c2VjcmV0\"}}}}'\n" +
             "spec:\n" +
             "  encryptedData:\n" +
-            "    password: AgBcipher\n");
+            "    password: AgBjaXBoZXI=\n");
 
         var ex = Assert.Throws<InvalidOperationException>(
             () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
@@ -553,7 +556,7 @@ public class SealedSecretManifestTests : IDisposable
             "    kubectl.kubernetes.io/last-applied-configuration: '{\"kind\":\"SealedSecret\",\"spec\":{\"template\":{\"stringData\":{\"password\":\"secret\"}}}}'\n" +
             "spec:\n" +
             "  encryptedData:\n" +
-            "    password: AgBcipher\n");
+            "    password: AgBjaXBoZXI=\n");
 
         var ex = Assert.Throws<InvalidOperationException>(
             () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
@@ -572,10 +575,10 @@ public class SealedSecretManifestTests : IDisposable
             "  name: db-creds\n" +
             "  namespace: app\n" +
             "  annotations:\n" +
-            "    kubectl.kubernetes.io/last-applied-configuration: '{\"kind\":\"SealedSecret\",\"spec\":{\"encryptedData\":{\"password\":\"AgBcipher\"},\"template\":{\"data\":{}}}}'\n" +
+            "    kubectl.kubernetes.io/last-applied-configuration: '{\"kind\":\"SealedSecret\",\"spec\":{\"encryptedData\":{\"password\":\"AgBjaXBoZXI=\"},\"template\":{\"data\":{}}}}'\n" +
             "spec:\n" +
             "  encryptedData:\n" +
-            "    password: AgBcipher\n");
+            "    password: AgBjaXBoZXI=\n");
 
         var metadata = SealedSecretManifest.ReadMetadata("store", path, "env-default");
 
@@ -594,10 +597,10 @@ public class SealedSecretManifestTests : IDisposable
             "  name: db-creds\n" +
             "  namespace: app\n" +
             "  annotations:\n" +
-            "    kubectl.kubernetes.io/last-applied-configuration: '{\"apiVersion\":\"bitnami.com/v1alpha1\",\"kind\":\"SealedSecret\",\"metadata\":{\"name\":\"db-creds\"},\"spec\":{\"encryptedData\":{\"password\":\"AgBcipher\"}}}'\n" +
+            "    kubectl.kubernetes.io/last-applied-configuration: '{\"apiVersion\":\"bitnami.com/v1alpha1\",\"kind\":\"SealedSecret\",\"metadata\":{\"name\":\"db-creds\"},\"spec\":{\"encryptedData\":{\"password\":\"AgBjaXBoZXI=\"}}}'\n" +
             "spec:\n" +
             "  encryptedData:\n" +
-            "    password: AgBcipher\n");
+            "    password: AgBjaXBoZXI=\n");
 
         var metadata = SealedSecretManifest.ReadMetadata("store", path, "env-default");
 
@@ -619,7 +622,7 @@ public class SealedSecretManifestTests : IDisposable
             "    kubectl.kubernetes.io/last-applied-configuration: '{\"apiVersion\":\"v1\",\"kind\":\"Secret\",\"metadata\":{\"name\":\"db-creds\"}}'\n" +
             "spec:\n" +
             "  encryptedData:\n" +
-            "    password: AgBcipher\n");
+            "    password: AgBjaXBoZXI=\n");
 
         var metadata = SealedSecretManifest.ReadMetadata("store", path, "env-default");
 
@@ -643,7 +646,7 @@ public class SealedSecretManifestTests : IDisposable
             "    kubectl.kubernetes.io/last-applied-configuration: '{\"kind\":\"Secret\",\"data\":{\"password\":\"c2VjcmV0\"},\"kind\":\"SealedSecret\"}'\n" +
             "spec:\n" +
             "  encryptedData:\n" +
-            "    password: AgBcipher\n");
+            "    password: AgBjaXBoZXI=\n");
 
         var ex = Assert.Throws<InvalidOperationException>(
             () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
@@ -665,7 +668,7 @@ public class SealedSecretManifestTests : IDisposable
             "    kubectl.kubernetes.io/last-applied-configuration: '{\"metadata\":{\"name\":\"db-creds\"},\"data\":{\"password\":\"c2VjcmV0\"}}'\n" +
             "spec:\n" +
             "  encryptedData:\n" +
-            "    password: AgBcipher\n");
+            "    password: AgBjaXBoZXI=\n");
 
         var ex = Assert.Throws<InvalidOperationException>(
             () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
@@ -687,7 +690,7 @@ public class SealedSecretManifestTests : IDisposable
             "    kubectl.kubernetes.io/last-applied-configuration: '{\"kind\":{\"nested\":\"SealedSecret\"},\"data\":{\"password\":\"c2VjcmV0\"}}'\n" +
             "spec:\n" +
             "  encryptedData:\n" +
-            "    password: AgBcipher\n");
+            "    password: AgBjaXBoZXI=\n");
 
         var ex = Assert.Throws<InvalidOperationException>(
             () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
@@ -709,7 +712,142 @@ public class SealedSecretManifestTests : IDisposable
             "    kubectl.kubernetes.io/last-applied-configuration: '{\"kind\":\"Secret\",\"data\":{},\"data\":{\"password\":\"c2VjcmV0\"}}'\n" +
             "spec:\n" +
             "  encryptedData:\n" +
-            "    password: AgBcipher\n");
+            "    password: AgBjaXBoZXI=\n");
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
+
+        Assert.Contains("ASPIRERADIUS063", ex.Message);
+    }
+
+    [Theory]
+    // No spec at all.
+    [InlineData(
+        "apiVersion: bitnami.com/v1alpha1\n" +
+        "kind: SealedSecret\n" +
+        "metadata:\n" +
+        "  name: db-creds\n")]
+    // spec is a scalar rather than a mapping.
+    [InlineData(
+        "apiVersion: bitnami.com/v1alpha1\n" +
+        "kind: SealedSecret\n" +
+        "metadata:\n" +
+        "  name: db-creds\n" +
+        "spec: nonsense\n")]
+    // spec has no encryptedData.
+    [InlineData(
+        "apiVersion: bitnami.com/v1alpha1\n" +
+        "kind: SealedSecret\n" +
+        "metadata:\n" +
+        "  name: db-creds\n" +
+        "spec:\n" +
+        "  template:\n" +
+        "    metadata:\n" +
+        "      name: db-creds\n")]
+    // encryptedData is a scalar.
+    [InlineData(
+        "apiVersion: bitnami.com/v1alpha1\n" +
+        "kind: SealedSecret\n" +
+        "metadata:\n" +
+        "  name: db-creds\n" +
+        "spec:\n" +
+        "  encryptedData: AgBjaXBoZXI=\n")]
+    // encryptedData is a sequence.
+    [InlineData(
+        "apiVersion: bitnami.com/v1alpha1\n" +
+        "kind: SealedSecret\n" +
+        "metadata:\n" +
+        "  name: db-creds\n" +
+        "spec:\n" +
+        "  encryptedData:\n" +
+        "    - AgBjaXBoZXI=\n")]
+    // encryptedData is an empty mapping: nothing is sealed, so the store can never be populated.
+    [InlineData(
+        "apiVersion: bitnami.com/v1alpha1\n" +
+        "kind: SealedSecret\n" +
+        "metadata:\n" +
+        "  name: db-creds\n" +
+        "spec:\n" +
+        "  encryptedData: {}\n")]
+    public void ReadMetadata_MissingOrMalformedEncryptedData_Throws_ASPIRERADIUS044(string yaml)
+    {
+        var path = Write(yaml);
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
+
+        Assert.Contains("ASPIRERADIUS044", ex.Message);
+        Assert.Contains("spec.encryptedData", ex.Message);
+    }
+
+    [Theory]
+    // Empty and whitespace-only values carry no sealed material.
+    [InlineData("password: ''")]
+    [InlineData("password: '   '")]
+    // A key with no value parses as a null scalar.
+    [InlineData("password:")]
+    [InlineData("password: ~")]
+    // Implicit non-string scalars are not values the CRD ever produces. (A plain scalar such as
+    // `true` is intentionally NOT covered: it is indistinguishable from valid standard base64, and
+    // requiring a minimum length would encode an undocumented assumption about the Bitnami wire format.)
+    [InlineData("password: 123")]
+    // kubeseal writes standard base64; a hand-written plaintext value is rejected.
+    [InlineData("password: hunter2!")]
+    [InlineData("password: not base64")]
+    // Nested structures instead of a sealed scalar.
+    [InlineData("password:\n      inner: AgBjaXBoZXI=")]
+    [InlineData("password:\n      - AgBjaXBoZXI=")]
+    public void ReadMetadata_InvalidEncryptedDataValue_Throws_ASPIRERADIUS044(string entry)
+    {
+        var path = Write(
+            "apiVersion: bitnami.com/v1alpha1\n" +
+            "kind: SealedSecret\n" +
+            "metadata:\n" +
+            "  name: db-creds\n" +
+            "spec:\n" +
+            "  encryptedData:\n" +
+            $"    {entry}\n");
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
+
+        Assert.Contains("ASPIRERADIUS044", ex.Message);
+        Assert.Contains("spec.encryptedData", ex.Message);
+    }
+
+    [Fact]
+    public void ReadMetadata_MultipleSealedValues_IsAllowed()
+    {
+        // Every entry is validated, not just the first one.
+        var path = Write(
+            "apiVersion: bitnami.com/v1alpha1\n" +
+            "kind: SealedSecret\n" +
+            "metadata:\n" +
+            "  name: db-creds\n" +
+            "spec:\n" +
+            "  encryptedData:\n" +
+            "    username: AgBjaXBoZXI=\n" +
+            "    password: AgBvdGhlcmNpcGhlcg==\n");
+
+        var metadata = SealedSecretManifest.ReadMetadata("store", path, "env-default");
+
+        Assert.Equal("db-creds", metadata.Name);
+    }
+
+    [Fact]
+    public void ReadMetadata_PlaintextEncryptedData_TakesPrecedenceOverLastAppliedLeak()
+    {
+        // A manifest that both leaks cleartext through the annotation and has a malformed payload must
+        // still report the more specific ASPIRERADIUS063 leak diagnostic.
+        var path = Write(
+            "apiVersion: bitnami.com/v1alpha1\n" +
+            "kind: SealedSecret\n" +
+            "metadata:\n" +
+            "  name: db-creds\n" +
+            "  annotations:\n" +
+            "    kubectl.kubernetes.io/last-applied-configuration: '{\"kind\":\"Secret\",\"data\":{\"password\":\"c2VjcmV0\"}}'\n" +
+            "spec:\n" +
+            "  encryptedData: {}\n");
 
         var ex = Assert.Throws<InvalidOperationException>(
             () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));

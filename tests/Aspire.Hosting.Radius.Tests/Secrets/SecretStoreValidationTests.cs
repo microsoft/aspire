@@ -68,7 +68,7 @@ public class SecretStoreValidationTests : IDisposable
             namespaceYaml +
             "spec:\n" +
             "  encryptedData:\n" +
-            "    password: AgBcipher\n");
+            "    password: AgBjaXBoZXI=\n");
 
         return path;
     }
