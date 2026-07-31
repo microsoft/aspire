@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREPIPELINES004
 
 using System.Text.Json;
 using Aspire.Hosting.Pipelines;
@@ -27,12 +26,8 @@ internal static class ManifestPublishingExtensions
     {
         var step = new PipelineStep
         {
-            Name = WellKnownPipelineSteps.PublishManifest,
+            Name = "publish-manifest",
             Description = "Publishes the Aspire application model as a JSON manifest file.",
-            // A legacy file target can emit Dockerfiles and Bicep modules beside the manifest.
-            // Those siblings are not represented by the single-file primary output, so only the
-            // directory form can safely participate in relocated publishing.
-            OutputPathRelocationSupportEvaluator = primaryOutput => primaryOutput.Kind == PipelineOutputKind.Directory,
             Action = async context =>
             {
                 var loggerFactory = context.Services.GetRequiredService<ILoggerFactory>();
@@ -43,12 +38,21 @@ internal static class ManifestPublishingExtensions
                 if (pipelineOptions.Value.OutputPath == null)
                 {
                     throw new DistributedApplicationException(
-                        "The '--output-path [path]' option was not specified even though manifest publishing was requested.");
+                        "The '--output-path [path]' option was not specified even though manifest publishing was requested."
+                        );
                 }
 
-                var primaryOutput = context.Outputs.PrimaryOutput;
-                var outputPath = GetManifestPath(primaryOutput.OutputPath, primaryOutput.Kind);
-                var logicalManifestPath = GetManifestPath(primaryOutput.LogicalTargetPath, primaryOutput.Kind);
+                var outputPath = pipelineOptions.Value.OutputPath;
+
+                if (!outputPath.EndsWith(".json", StringComparison.Ordinal))
+                {
+                    // If the manifest path ends with .json we assume that the output path was specified
+                    // as a filename. If not, we assume that the output path was specified as a directory
+                    // and append aspire-manifest.json to the path. This is so that we retain backwards
+                    // compatibility with AZD, but also support manifest publishing via the Aspire CLI
+                    // where the output path is a directory (since not all publishers use a manifest).
+                    outputPath = Path.Combine(outputPath, "aspire-manifest.json");
+                }
 
                 var parentDirectory = Directory.GetParent(outputPath);
                 if (!Directory.Exists(parentDirectory!.FullName))
@@ -60,12 +64,8 @@ internal static class ManifestPublishingExtensions
                 using var stream = new FileStream(outputPath, FileMode.Create);
                 using var jsonWriter = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
 
-                var publishingContext = new ManifestPublishingContext(
-                    executionContext,
-                    outputPath,
-                    logicalManifestPath,
-                    jsonWriter,
-                    context.CancellationToken);
+                var manifestPath = outputPath;
+                var publishingContext = new ManifestPublishingContext(executionContext, manifestPath, jsonWriter, context.CancellationToken);
 
                 await publishingContext.WriteModel(context.Model, context.CancellationToken).ConfigureAwait(false);
 
@@ -76,17 +76,5 @@ internal static class ManifestPublishingExtensions
         pipeline.AddStep(step);
 
         return pipeline;
-    }
-
-    private static string GetManifestPath(string outputPath, PipelineOutputKind kind)
-    {
-        if (kind == PipelineOutputKind.File)
-        {
-            return outputPath;
-        }
-
-        // The registry preserves the legacy direct-manifest file-path contract by assigning
-        // File kind. Shared primary outputs are directories and use the standard manifest name.
-        return Path.Combine(outputPath, "aspire-manifest.json");
     }
 }

@@ -508,7 +508,7 @@ internal sealed class TestCommand : BaseCommand
     internal override bool RequiresCliPackageMetadata => _prefetchesCliPackages;
 
     public TestCommand(bool prefetchesTemplatePackages = false, bool prefetchesCliPackages = false)
-        : base("test", "Test command", new CommonCommandServices(null!, null!, null!, null!, null!, null!, null!, null!))
+        : base("test", "Test command", new CommonCommandServices(null!, null!, null!, null!, null!, null!, null!, null!, null!))
     {
         _prefetchesTemplatePackages = prefetchesTemplatePackages;
         _prefetchesCliPackages = prefetchesCliPackages;

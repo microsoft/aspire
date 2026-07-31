@@ -16,6 +16,14 @@ internal interface IGitRepository
     Task<DirectoryInfo?> GetRootAsync(CancellationToken cancellationToken);
 
     /// <summary>
+    /// Gets the root directory of the Git repository containing the specified directory, if one exists.
+    /// </summary>
+    /// <param name="searchRoot">The directory from which to search for a Git repository.</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
+    /// <returns>The root directory of the Git repository, or null if the directory is not in a Git repository or Git is not installed.</returns>
+    Task<DirectoryInfo?> GetRootAsync(DirectoryInfo searchRoot, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Gets the set of files that git considers part of the repository within the specified
     /// search root: tracked files (<c>--cached</c>) plus untracked files that are not ignored
     /// by <c>.gitignore</c>, <c>.git/info/exclude</c>, or the user's global excludes

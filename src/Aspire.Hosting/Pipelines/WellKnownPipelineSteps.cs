@@ -105,6 +105,4 @@ public static class WellKnownPipelineSteps
     /// </summary>
     [AspireValue("WellKnownPipelineSteps")]
     public const string DestroyPrereq = "destroy-prereq";
-
-    internal const string PublishManifest = "publish-manifest";
 }

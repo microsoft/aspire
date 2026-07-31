@@ -32,8 +32,6 @@ public class BackchannelContractTests
         typeof(ExecuteResourceCommandRequest),
         typeof(WaitForResourceRequest),
         typeof(GetPipelineStepsRequest),
-        typeof(GetPipelineOutputsRequest),
-        typeof(AuthorizePipelineExecutionRequest),
         typeof(GetTerminalInfoRequest),
         typeof(ListTerminalsRequest),
     ];
@@ -52,12 +50,7 @@ public class BackchannelContractTests
         typeof(StopAppHostResponse),
         typeof(ExecuteResourceCommandResponse),
         typeof(WaitForResourceResponse),
-        typeof(PipelineStepInfo),
         typeof(GetPipelineStepsResponse),
-        typeof(PipelineOutputInfo),
-        typeof(PipelineOutputStepInfo),
-        typeof(GetPipelineOutputsResponse),
-        typeof(AuthorizePipelineExecutionResponse),
         typeof(GetTerminalInfoResponse),
         typeof(TerminalReplicaInfo),
         typeof(TerminalPeerInfo),
@@ -113,9 +106,6 @@ public class BackchannelContractTests
                 type.Name != "McpToolContentItem" &&
                 type.Name != "ResourceLogLine" &&
                 type.Name != "ResourceLogBatch" &&
-                type.Name != "PipelineStepInfo" &&
-                type.Name != "PipelineOutputInfo" &&
-                type.Name != "PipelineOutputStepInfo" &&
                 type.Name != "TerminalReplicaInfo" &&
                 type.Name != "TerminalPeerInfo" &&
                 type.Name != "TerminalSummary")

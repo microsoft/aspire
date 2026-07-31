@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIREDOCKERFILEBUILDER001
 #pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREPIPELINES004
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIREEXTENSION001
 #pragma warning disable ASPIRECOMMAND001
@@ -1370,7 +1369,6 @@ public static partial class JavaScriptHostingExtensions
             {
                 Name = validationStepName,
                 Description = $"Validates that JavaScript app '{resource.Name}' does not publish an ignored run script with an existing Dockerfile.",
-                SupportsOutputPathRelocation = true,
                 RequiredBySteps = [WellKnownPipelineSteps.Build, WellKnownPipelineSteps.Publish],
                 Resource = containerBuilder.Resource,
                 Action = _ =>

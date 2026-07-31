@@ -8,6 +8,7 @@ using Aspire.Cli.Tests.TestServices;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Aspire.Cli.Utils;
+using Aspire.Hosting;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -166,9 +167,19 @@ public class PublishCommandTests(ITestOutputHelper outputHelper)
     {
         // Arrange
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory(Path.Combine("src", "AppHost"));
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.GitRepositoryFactory = (sp) => new TestGitRepository
+            {
+                GetRootFromDirectoryAsyncCallback = (searchRoot, cancellationToken) =>
+                {
+                    Assert.Equal(appHostDirectory.FullName, searchRoot.FullName);
+                    return Task.FromResult<DirectoryInfo?>(workspace.WorkspaceRoot);
+                }
+            };
 
             options.DotNetCliRunnerFactory = (sp) =>
             {
@@ -187,6 +198,8 @@ public class PublishCommandTests(ITestOutputHelper outputHelper)
                 runner.RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
                 {
                     Assert.True(options.NoLaunchProfile);
+                    Assert.NotNull(env);
+                    Assert.Equal(workspace.WorkspaceRoot.FullName, env[KnownConfigNames.PublicationRoot]);
 
                     if (args.Any(a => a == "inspect"))
                     {
@@ -223,7 +236,7 @@ public class PublishCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
 
         // Act
-        var result = command.Parse("publish");
+        var result = command.Parse(["publish", "--apphost", appHostFile.FullName]);
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert

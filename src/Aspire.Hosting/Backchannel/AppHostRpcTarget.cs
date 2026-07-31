@@ -229,8 +229,7 @@ internal class AppHostRpcTarget(
         _ = cancellationToken;
         return Task.FromResult(new string[] {
             "baseline.v2",
-            "pipeline-steps.v1",
-            "pipeline-outputs.v1"
+            "pipeline-steps.v1"
             });
     }
 #pragma warning restore CA1822
@@ -322,61 +321,6 @@ internal class AppHostRpcTarget(
                 Tags = [.. step.Tags],
                 ResourceName = step.Resource?.Name
             }).ToArray()
-        };
-    }
-
-    public async Task<GetPipelineOutputsResponse> GetPipelineOutputsAsync(
-        GetPipelineOutputsRequest? request = null,
-        CancellationToken cancellationToken = default)
-    {
-        using var activity = profilingTelemetry.StartJsonRpcServerCall(
-            nameof(GetPipelineOutputsAsync),
-            streaming: false,
-            request?.TraceContext);
-#pragma warning disable ASPIREPIPELINES004
-        var registry = serviceProvider.GetRequiredService<PipelineOutputRegistry>();
-        await registry.WaitForPreparationAsync(cancellationToken).ConfigureAwait(false);
-        var outputs = registry.GetOutputs();
-        var steps = registry.GetSelectedSteps();
-
-        return new GetPipelineOutputsResponse
-        {
-            AppHostDirectory = registry.AppHostDirectory,
-            State = registry.GetExecutionState().ToString(),
-            Steps = steps.Select(step => new PipelineOutputStepInfo
-            {
-                Name = step.Name,
-                SupportsOutputPathRelocation = registry.SupportsOutputPathRelocation(step)
-            }).ToArray(),
-            Outputs = outputs.Select(output => new PipelineOutputInfo
-            {
-                IsPrimary = output.IsPrimary,
-                PublisherName = output.PublisherName,
-                Name = output.Name,
-                Kind = output.Kind.ToString(),
-                OutputPath = output.OutputPath,
-                LogicalTargetPath = output.LogicalTargetPath
-            }).ToArray()
-        };
-#pragma warning restore ASPIREPIPELINES004
-    }
-
-    public async Task<AuthorizePipelineExecutionResponse> AuthorizePipelineExecutionAsync(
-        AuthorizePipelineExecutionRequest? request = null,
-        CancellationToken cancellationToken = default)
-    {
-        using var activity = profilingTelemetry.StartJsonRpcServerCall(
-            nameof(AuthorizePipelineExecutionAsync),
-            streaming: false,
-            request?.TraceContext);
-
-        var registry = serviceProvider.GetRequiredService<PipelineOutputRegistry>();
-        await registry.WaitForPreparationAsync(cancellationToken).ConfigureAwait(false);
-        registry.AuthorizeExecution();
-
-        return new AuthorizePipelineExecutionResponse
-        {
-            IsAuthorized = true
         };
     }
 }

@@ -6,6 +6,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Utils;
 
@@ -13,14 +14,14 @@ internal static class PublishingContextUtils
 {
     public static string GetEnvironmentOutputPath(PipelineStepContext context, IComputeEnvironmentResource environment)
     {
-        var primaryOutputPath = context.Outputs.PrimaryOutput.OutputPath;
+        var outputService = context.Services.GetRequiredService<IPipelineOutputService>();
         if (context.Model.Resources.OfType<IComputeEnvironmentResource>().Count() > 1)
         {
             // If there are multiple compute environments, use resource-specific output path
-            return Path.Combine(primaryOutputPath, environment.Name);
+            return outputService.GetOutputDirectory(environment);
         }
 
         // If there is only one compute environment, use the root output path
-        return primaryOutputPath;
+        return outputService.GetOutputDirectory();
     }
 }

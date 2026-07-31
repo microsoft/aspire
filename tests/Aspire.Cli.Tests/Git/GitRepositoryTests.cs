@@ -16,6 +16,23 @@ namespace Aspire.Cli.Tests.Git;
 public class GitRepositoryTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public async Task GetRootAsync_FromNestedDirectory_ReturnsRepositoryRoot()
+    {
+        await GitTestHelper.EnsureGitAvailableAsync();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await workspace.InitializeGitAsync().DefaultTimeout();
+        var searchRoot = workspace.WorkspaceRoot.CreateSubdirectory(Path.Combine("src", "AppHost"));
+        var executionContext = workspace.CreateExecutionContext();
+        using var profilingTelemetry = CreateProfilingTelemetry();
+        var repo = new GitRepository(executionContext, new TestEnvironment(), NullLogger<GitRepository>.Instance, profilingTelemetry);
+
+        var result = await repo.GetRootAsync(searchRoot, CancellationToken.None).DefaultTimeout();
+
+        Assert.NotNull(result);
+        Assert.Equal(workspace.WorkspaceRoot.FullName, result.FullName);
+    }
+
+    [Fact]
     public async Task GetIncludedFilesAsync_OutsideRepo_ReturnsNull()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
