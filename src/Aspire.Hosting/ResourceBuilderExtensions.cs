@@ -4732,7 +4732,7 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrWhiteSpace(iconName);
 
-        return builder.WithAnnotation(new ResourceIconAnnotation(iconName, iconVariant));
+        return builder.WithAnnotation(new ResourceIconAnnotation(iconName, iconVariant), ResourceAnnotationMutationBehavior.Replace);
     }
 
     /// <summary>

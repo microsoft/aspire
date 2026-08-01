@@ -654,6 +654,7 @@ public static class AzureStorageExtensions
 
         return builder.ApplicationBuilder
             .AddResource(resource)
+            .WithIconName("Mail")
             .WithHealthCheck(healthCheckKey)
             .OnConnectionStringAvailable(async (containerResource, @event, ct) =>
             {
