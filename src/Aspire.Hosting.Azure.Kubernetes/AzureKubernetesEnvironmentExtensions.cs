@@ -131,7 +131,8 @@ public static class AzureKubernetesEnvironmentExtensions
             }
         }));
 
-        return builder.AddResource(resource);
+        return builder.AddResource(resource)
+            .WithIconName("ServerMultiple");
     }
 
     /// <summary>

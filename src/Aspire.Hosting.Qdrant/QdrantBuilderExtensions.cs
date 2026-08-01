@@ -71,6 +71,7 @@ public static class QdrantBuilderExtensions
         return builder.AddResource(qdrant)
             .WithImage(QdrantContainerImageTags.Image, QdrantContainerImageTags.Tag)
             .WithImageRegistry(QdrantContainerImageTags.Registry)
+            .WithIconName("DatabaseSearch")
             .WithHttpEndpoint(port: grpcPort, targetPort: QdrantPortGrpc, name: QdrantServerResource.PrimaryEndpointName)
             .WithEndpoint(QdrantServerResource.PrimaryEndpointName, endpoint =>
             {

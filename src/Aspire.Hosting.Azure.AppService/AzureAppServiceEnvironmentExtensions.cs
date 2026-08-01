@@ -298,7 +298,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
 
         // Create the resource builder first, then attach the registry to avoid recreating builders
         var appServiceEnvBuilder = builder.ExecutionContext.IsPublishMode
-            ? builder.AddResource(resource)
+            ? builder.AddResource(resource).WithIconName("Globe")
             : builder.CreateResourceBuilder(resource);
 
         appServiceEnvBuilder.WithCrossScopeAcrPullIdentity(

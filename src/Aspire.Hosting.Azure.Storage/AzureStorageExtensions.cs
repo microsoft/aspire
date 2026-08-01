@@ -160,6 +160,7 @@ public static class AzureStorageExtensions
         var resource = new AzureStorageResource(name, configureInfrastructure);
 
         return builder.AddResource(resource)
+            .WithIconName("HardDrive")
             .WithDefaultRoleAssignments(StorageBuiltInRole.GetBuiltInRoleName,
                 StorageBuiltInRole.StorageBlobDataContributor,
                 StorageBuiltInRole.StorageTableDataContributor,
@@ -495,6 +496,7 @@ public static class AzureStorageExtensions
 
         return builder.ApplicationBuilder
             .AddResource(resource)
+            .WithIconName("FolderOpen")
             .WithHealthCheck(healthCheckKey)
             .OnConnectionStringAvailable(async (containerResource, @event, ct) =>
             {
@@ -525,7 +527,8 @@ public static class AzureStorageExtensions
         builder.Resource.DataLakeFileSystems.Add(resource);
 
         return builder.ApplicationBuilder
-            .AddResource(resource);
+            .AddResource(resource)
+            .WithIconName("FolderOpen");
     }
 
     /// <summary>
@@ -561,7 +564,7 @@ public static class AzureStorageExtensions
             name: healthCheckKey);
 
         return builder.ApplicationBuilder
-            .AddResource(resource).WithHealthCheck(healthCheckKey);
+            .AddResource(resource).WithIconName("FolderOpen").WithHealthCheck(healthCheckKey);
     }
 
     /// <summary>
@@ -792,6 +795,7 @@ public static class AzureStorageExtensions
 
         return builder.ApplicationBuilder
             .AddResource(resource)
+            .WithIconName("DocumentMultiple")
             .WithHealthCheck(healthCheckKey)
             .OnConnectionStringAvailable(async (blobs, @event, ct) =>
             {
@@ -804,13 +808,15 @@ public static class AzureStorageExtensions
         var resource = new AzureDataLakeStorageResource(name, builder.Resource);
 
         return builder.ApplicationBuilder
-            .AddResource(resource);
+            .AddResource(resource)
+            .WithIconName("HardDrive");
     }
 
     private static IResourceBuilder<AzureTableStorageResource> CreateTableService(IResourceBuilder<AzureStorageResource> builder, string name)
     {
         var resource = new AzureTableStorageResource(name, builder.Resource);
-        return builder.ApplicationBuilder.AddResource(resource);
+        return builder.ApplicationBuilder.AddResource(resource)
+            .WithIconName("TableSimple");
     }
 
     private static IResourceBuilder<AzureQueueStorageResource> CreateQueueService(IResourceBuilder<AzureStorageResource> builder, string name)
@@ -831,6 +837,7 @@ public static class AzureStorageExtensions
 
         return builder.ApplicationBuilder
             .AddResource(resource)
+            .WithIconName("Mail")
             .WithHealthCheck(healthCheckKey)
             .OnConnectionStringAvailable(async (queues, @event, ct) =>
             {

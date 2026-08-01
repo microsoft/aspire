@@ -35,7 +35,8 @@ public static class DurableTaskResourceExtensions
 
         scheduler.Annotations.Add(ManifestPublishingCallbackAnnotation.Ignore);
 
-        return builder.AddResource(scheduler);
+        return builder.AddResource(scheduler)
+            .WithIconName("CalendarClock");
     }
 
     /// <summary>
@@ -220,7 +221,8 @@ public static class DurableTaskResourceExtensions
 
         hub.Annotations.Add(ManifestPublishingCallbackAnnotation.Ignore);
 
-        var hubBuilder = builder.ApplicationBuilder.AddResource(hub);
+        var hubBuilder = builder.ApplicationBuilder.AddResource(hub)
+            .WithIconName("CalendarClock");
 
         hubBuilder.OnResourceReady(
             async (r, e, ct) =>

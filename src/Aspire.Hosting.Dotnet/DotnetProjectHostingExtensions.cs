@@ -124,6 +124,7 @@ public static class DotnetProjectHostingExtensions
 
         var resource = builder.AddResource(app)
                               .WithAnnotation(projectMetadata)
+                              .WithIconName("CodeCsRectangle")
                               .WithProjectDefaults(options);
 
         // Build the `dotnet run` command line for a non-debug launch of a DotnetProjectResource:

@@ -114,7 +114,8 @@ public static class AzureApplicationInsightsExtensions
 
         var resource = new AzureApplicationInsightsResource(name, configureInfrastructure);
 
-        var rb = builder.AddResource(resource);
+        var rb = builder.AddResource(resource)
+            .WithIconName("ChartMultiple");
 
         if (logAnalyticsWorkspace != null)
         {

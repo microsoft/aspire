@@ -106,7 +106,8 @@ public static class AzureVirtualNetworkExtensions
             return builder.CreateResourceBuilder(resource);
         }
 
-        return builder.AddResource(resource);
+        return builder.AddResource(resource)
+            .WithIconName("Router");
     }
 
     private static void ConfigureVirtualNetwork(AzureResourceInfrastructure infra)
