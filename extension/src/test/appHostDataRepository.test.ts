@@ -5082,6 +5082,16 @@ suite('AppHostDataRepository global polling', () => {
             assert.strictEqual(repository.appHosts[0].appHostPath, runningAppHost.appHostPath);
             assert.ok(dataChanges > changesBeforeRefresh, 'loading must invalidate the global tree');
 
+            completionEvents.length = 0;
+            psFollowOptions.lineCallback(JSON.stringify({
+                ...runningAppHost,
+                dashboardUrl: 'http://localhost:18888',
+            }));
+            await waitForCondition(() => repository.appHosts[0].dashboardUrl !== undefined, 'global AppHost ps delta was not applied during refresh');
+
+            assert.strictEqual(repository.isLoading, true, 'ps --follow deltas must not complete authoritative refresh loading');
+            assert.deepStrictEqual(completionEvents, []);
+
             const changesWhileLoading = dataChanges;
             completionEvents.length = 0;
             psSnapshotOptions.stdoutCallback(JSON.stringify([runningAppHost]));

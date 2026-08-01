@@ -1596,7 +1596,7 @@ export class AppHostDataRepository {
                 }
 
                 this._setPsError(undefined);
-                this._handlePsOutput(line);
+                this._handlePsOutput(line, false);
             },
             stderrCallback: (data) => {
                 psFollowStderr.append(data);
@@ -1664,7 +1664,7 @@ export class AppHostDataRepository {
         this._runPsCommand(args, (code, stdout, stderr) => {
             if (code === 0) {
                 this._setPsError(undefined);
-                this._handlePsOutput(stdout);
+                this._handlePsOutput(stdout, true);
             } else {
                 this._clearLoading();
                 this._setPsError(errorFetchingAppHosts(stderr || `exit code ${code}`));
@@ -1706,7 +1706,7 @@ export class AppHostDataRepository {
             if (!this._disposed && (force || this._dataActive)) {
                 if (code === 0) {
                     this._setPsError(undefined);
-                    this._handlePsOutput(stdout);
+                    this._handlePsOutput(stdout, true);
                 } else {
                     this._clearLoading();
                     this._setPsError(errorFetchingAppHosts(stderr || `exit code ${code}`));
@@ -1813,14 +1813,14 @@ export class AppHostDataRepository {
         }
     }
 
-    private _handlePsOutput(stdout: string): void {
+    private _handlePsOutput(stdout: string, canCompleteGlobalLoading: boolean): void {
         try {
             const parsed: AppHostDisplayInfo[] | AppHostDisplayInfo = JSON.parse(stdout);
             const appHosts = Array.isArray(parsed)
                 ? parsed
                 : this._applyPsDelta(parsed);
 
-            const completesGlobalLoading = this._loadingGlobal;
+            const completesGlobalLoading = canCompleteGlobalLoading && this._loadingGlobal;
             // A fresh ps result wins the workspace loading race when it finds a workspace host,
             // or when discovery has finished and an empty result is therefore authoritative.
             const completesWorkspaceLoading = this._loadingWorkspace
