@@ -559,7 +559,8 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
         Assert.NotEmpty(cosmos.Resource.Annotations.OfType<OtlpExporterAnnotation>());
 
         // ENABLE_OTLP_EXPORTER activates the emulator's built-in exporter; it must be set alongside the annotation.
-        var config = await GetEnvironmentVariablesFromCallbacksAsync(cosmos.Resource);
+        using var serviceProvider = builder.Services.BuildServiceProvider();
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(cosmos.Resource, DistributedApplicationOperation.Run, serviceProvider);
         Assert.True(config.TryGetValue("ENABLE_OTLP_EXPORTER", out var enableOtlp));
         Assert.Equal("true", enableOtlp?.ToString());
     }
@@ -921,7 +922,8 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
 
         // The vNext emulator does not read AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE; persistence is
         // enabled implicitly by mounting the volume at /data.
-        var config = await GetEnvironmentVariablesFromCallbacksAsync(cosmos.Resource);
+        using var serviceProvider = builder.Services.BuildServiceProvider();
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(cosmos.Resource, DistributedApplicationOperation.Run, serviceProvider);
         Assert.DoesNotContain("AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE", config.Keys);
     }
 
@@ -978,7 +980,8 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
         Assert.Equal(1234, endpoint.TargetPort);
         Assert.Equal(9999, endpoint.Port);
 
-        var config = await GetEnvironmentVariablesFromCallbacksAsync(cosmos.Resource);
+        using var serviceProvider = builder.Services.BuildServiceProvider();
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(cosmos.Resource, DistributedApplicationOperation.Run, serviceProvider);
         Assert.True(config.TryGetValue("ENABLE_EXPLORER", out var enableExplorer));
         Assert.Equal("true", enableExplorer);
     }
@@ -1007,7 +1010,8 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
         var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsPreviewEmulator();
 
         // The vNext image enables the Data Explorer by default; Aspire disables it unless WithDataExplorer is called.
-        var config = await GetEnvironmentVariablesFromCallbacksAsync(cosmos.Resource);
+        using var serviceProvider = builder.Services.BuildServiceProvider();
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(cosmos.Resource, DistributedApplicationOperation.Run, serviceProvider);
         Assert.True(config.TryGetValue("ENABLE_EXPLORER", out var enableExplorer));
         Assert.Equal("false", enableExplorer);
     }
@@ -1245,38 +1249,6 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
 
         var explorerUrl = Assert.Single(urls, u => u.Endpoint?.EndpointName == "data-explorer");
         Assert.Equal("Data Explorer", explorerUrl.DisplayText);
-    }
-
-    private static async Task<IDictionary<string, object>> GetEnvironmentVariablesFromCallbacksAsync(IResource resource)
-    {
-        var executionContext = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run));
-        var envVars = new Dictionary<string, object>();
-        var callbackContext = new EnvironmentCallbackContext(executionContext, resource, envVars);
-
-        foreach (var annotation in resource.Annotations.OfType<EnvironmentCallbackAnnotation>())
-        {
-            try
-            {
-                await annotation.Callback(callbackContext);
-            }
-            catch (Exception ex) when (IsMissingDcpOptionsResolution(ex))
-            {
-                // Some callbacks (for example OTLP endpoint URL resolution) require DCP services that are
-                // unavailable in this unit-test context. Keep evaluating so tests can assert static env vars.
-            }
-        }
-
-        return envVars;
-    }
-
-    private static bool IsMissingDcpOptionsResolution(Exception ex)
-    {
-        return ex switch
-        {
-            InvalidOperationException ioe => ioe.Message.Contains("Aspire.Hosting.Dcp.DcpOptions", StringComparison.Ordinal),
-            AggregateException ae => ae.InnerExceptions.All(IsMissingDcpOptionsResolution),
-            _ => false
-        };
     }
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
