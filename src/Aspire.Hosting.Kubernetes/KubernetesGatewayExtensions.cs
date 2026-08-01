@@ -46,7 +46,7 @@ public static class KubernetesGatewayExtensions
         }
 
         return builder.ApplicationBuilder.AddResource(gateway)
-            .WithIconName("ArrowRouting")
+            .WithIconName("GlobeArrowForward")
             .ExcludeFromManifest();
     }
 
