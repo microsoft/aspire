@@ -550,13 +550,29 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void RunAsPreviewEmulatorAppliesOtlpExporterAnnotation()
+    public async Task RunAsPreviewEmulatorAppliesOtlpExporterAnnotation()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var cosmos = builder.AddAzureCosmosDB("cosmos")
                            .RunAsPreviewEmulator();
 
         Assert.NotEmpty(cosmos.Resource.Annotations.OfType<OtlpExporterAnnotation>());
+
+        // ENABLE_OTLP_EXPORTER activates the emulator's built-in exporter; it must be set alongside the annotation.
+        // Run callbacks individually: some (e.g. OTLP endpoint URL) require full DCP context unavailable in unit tests,
+        // so we tolerate failures and verify only the static env var we care about.
+        var executionContext = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run));
+        var envVars = new Dictionary<string, object>();
+        var callbackContext = new EnvironmentCallbackContext(executionContext, cosmos.Resource, envVars);
+
+        foreach (var annotation in cosmos.Resource.Annotations.OfType<EnvironmentCallbackAnnotation>())
+        {
+            try { await annotation.Callback(callbackContext); }
+            catch { /* skip callbacks that require full DCP/OTLP context */ }
+        }
+
+        Assert.True(envVars.TryGetValue("ENABLE_OTLP_EXPORTER", out var enableOtlp));
+        Assert.Equal("true", enableOtlp?.ToString());
     }
 
     [Fact]
