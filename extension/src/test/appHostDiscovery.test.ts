@@ -4,6 +4,7 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { EventEmitter } from 'events';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import * as cliModule from '../debugger/languages/cli';
@@ -517,13 +518,17 @@ suite('AppHost discovery', () => {
 
         test('kills in-flight CLI process when disposed', async () => {
             stubFileSystemWatchers(sandbox);
-            const childProcess = {
+            const childProcess = Object.assign(new EventEmitter(), {
                 killed: false,
-                kill: sandbox.stub().callsFake(() => {
-                    childProcess.killed = true;
-                    return true;
-                }),
-            };
+                exitCode: null,
+                signalCode: null,
+                kill: sandbox.stub(),
+            });
+            childProcess.kill.callsFake(() => {
+                childProcess.killed = true;
+                childProcess.emit('exit', null);
+                return true;
+            });
             const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').returns(childProcess as any);
             const service = new AppHostDiscoveryService(makeTerminalProvider());
             const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
@@ -757,14 +762,18 @@ suite('AppHost discovery', () => {
             const killedArgs: string[][] = [];
             let hangCli = true;
             const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
-                const childProcess = {
+                const childProcess = Object.assign(new EventEmitter(), {
                     killed: false,
-                    kill: sandbox.stub().callsFake(() => {
-                        childProcess.killed = true;
-                        killedArgs.push(args);
-                        return true;
-                    }),
-                };
+                    exitCode: null,
+                    signalCode: null,
+                    kill: sandbox.stub(),
+                });
+                childProcess.kill.callsFake(() => {
+                    childProcess.killed = true;
+                    killedArgs.push(args);
+                    childProcess.emit('exit', null);
+                    return true;
+                });
                 if (!hangCli) {
                     options?.stdoutCallback?.('[]');
                     options?.exitCallback?.(0);
@@ -865,14 +874,18 @@ suite('AppHost discovery', () => {
             const killedArgs: string[][] = [];
             let streamOptions: cliModule.SpawnProcessOptions | undefined;
             sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
-                const childProcess = {
+                const childProcess = Object.assign(new EventEmitter(), {
                     killed: false,
-                    kill: sandbox.stub().callsFake(() => {
-                        childProcess.killed = true;
-                        killedArgs.push(args);
-                        return true;
-                    }),
-                };
+                    exitCode: null,
+                    signalCode: null,
+                    kill: sandbox.stub(),
+                });
+                childProcess.kill.callsFake(() => {
+                    childProcess.killed = true;
+                    killedArgs.push(args);
+                    childProcess.emit('exit', null);
+                    return true;
+                });
 
                 if (args.includes('--stream')) {
                     streamOptions = options;

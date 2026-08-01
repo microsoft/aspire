@@ -1,4 +1,6 @@
 import * as assert from 'assert';
+import nodeChildProcess = require('child_process');
+import { EventEmitter } from 'events';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import type { ChildProcessWithoutNullStreams } from 'child_process';
@@ -161,16 +163,21 @@ suite('configInfoProvider tests', () => {
             createEnvironment: () => ({}),
         } as unknown as AspireTerminalProvider;
         let errorCallback: ((error: Error) => void) | undefined;
+        let childProcess: EventEmitter;
         const kill = sinon.stub().callsFake(() => {
             errorCallback?.(new Error('Process terminated.'));
+            childProcess.emit('exit', null);
             return true;
         });
         sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
             errorCallback = options?.errorCallback;
-            return {
+            childProcess = Object.assign(new EventEmitter(), {
                 killed: false,
+                exitCode: null,
+                signalCode: null,
                 kill,
-            } as unknown as ChildProcessWithoutNullStreams;
+            });
+            return childProcess as unknown as ChildProcessWithoutNullStreams;
         });
         const showErrorMessage = sinon.stub(vscode.window, 'showErrorMessage');
         const provider = new ConfigInfoProvider(terminalProvider);
@@ -185,6 +192,58 @@ suite('configInfoProvider tests', () => {
             assert.strictEqual(showErrorMessage.firstCall.args[0], 'Aspire config info timed out after 30 seconds.');
         }
         finally {
+            clock.restore();
+        }
+    });
+
+    test('getConfigInfo terminates the Windows CLI process tree after timeout', async () => {
+        const clock = sinon.useFakeTimers();
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => 'C:\\tools\\aspire.cmd',
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        const kill = sinon.stub().returns(true);
+        const childProcess = Object.assign(new EventEmitter(), {
+            pid: 4242,
+            killed: false,
+            exitCode: null,
+            signalCode: null,
+            kill,
+        });
+        sinon.stub(cliModule, 'spawnCliProcess').returns(childProcess as unknown as ChildProcessWithoutNullStreams);
+        const taskkillCalls: Array<{ command: string; args: string[]; stdio: unknown; windowsHide: boolean | undefined }> = [];
+        const spawnProcessStub = sinon.stub(nodeChildProcess, 'spawn').callsFake((command: string, args?: readonly string[], options?: nodeChildProcess.SpawnOptions) => {
+            taskkillCalls.push({
+                command,
+                args: [...(args ?? [])],
+                stdio: options?.stdio,
+                windowsHide: options?.windowsHide,
+            });
+
+            return Object.assign(new EventEmitter(), {
+                unref: () => { },
+            }) as nodeChildProcess.ChildProcess;
+        });
+        const provider = new ConfigInfoProvider(terminalProvider);
+
+        try {
+            const configInfoPromise = provider.getConfigInfo({ suppressErrors: true });
+            await clock.tickAsync(30_000);
+
+            assert.strictEqual(await configInfoPromise, null);
+            assert.deepStrictEqual(taskkillCalls, [{
+                command: 'taskkill.exe',
+                args: ['/pid', '4242', '/t'],
+                stdio: 'ignore',
+                windowsHide: true,
+            }]);
+            assert.strictEqual(kill.callCount, 0);
+            childProcess.emit('exit', null);
+        }
+        finally {
+            spawnProcessStub.restore();
+            platformStub.restore();
             clock.restore();
         }
     });

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { ChildProcessWithoutNullStreams } from 'child_process';
 import { AspireTerminalProvider } from './AspireTerminalProvider';
-import { spawnCliProcess } from '../debugger/languages/cli';
+import { spawnCliProcess, terminateCliProcess } from '../debugger/languages/cli';
 import { extensionLogOutputChannel } from './logging';
 import { ConfigInfo, FeatureInfo, PropertyInfo, SettingsSchema } from '../types/configInfo';
 import * as strings from '../loc/strings';
@@ -136,15 +136,8 @@ export class ConfigInfoProvider {
                 }
                 settle(null);
 
-                if (childProcess && !childProcess.killed) {
-                    try {
-                        if (!childProcess.kill()) {
-                            extensionLogOutputChannel.warn('Failed to stop timed-out aspire config info command.');
-                        }
-                    }
-                    catch (error) {
-                        extensionLogOutputChannel.warn(`Failed to stop timed-out aspire config info command: ${error}`);
-                    }
+                if (childProcess) {
+                    terminateCliProcess(childProcess, 'timed-out aspire config info command');
                 }
             }, configInfoTimeoutMs);
 

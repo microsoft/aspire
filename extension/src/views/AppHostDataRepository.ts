@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { ChildProcessWithoutNullStreams, spawn as spawnProcess } from 'child_process';
-import { spawnCliProcess } from '../debugger/languages/cli';
+import { ChildProcessWithoutNullStreams } from 'child_process';
+import { spawnCliProcess, terminateCliProcess } from '../debugger/languages/cli';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { appHostDescribeMayNotBeSupported, appHostDiscoveryProgress, appHostPathMustBeNonEmptyAbsolute, aspireCliCommandFailed, aspireCliCommandTimedOut, aspireCliDescribeNotSupported, aspireCliOutputParseFailed, aspireCommandOutputTruncated, aspireDescribeMinimumVersion, errorFetchingAppHosts, workspaceViewSelectedMultipleAppHosts, workspaceViewSelectedSingleAppHost } from '../loc/strings';
@@ -185,7 +185,6 @@ interface RunCliCommandOptions {
 }
 
 export class AppHostDataRepository {
-    private static readonly _processShutdownGracePeriodMs = 5000;
     private static readonly _appHostStopRefreshDelayMs = 400;
     private static readonly _appHostStopRefreshMaxAttempts = 75;
     private static readonly _oneShotCommandTimeoutMs = 30000;
@@ -1378,7 +1377,7 @@ export class AppHostDataRepository {
                 if (cliProcess) {
                     this._oneShotProcesses.delete(cliProcess);
                     if (cliProcess.exitCode === null && !cliProcess.killed) {
-                        this._terminateProcess(cliProcess, command);
+                        terminateCliProcess(cliProcess, command);
                     }
                 }
                 callback();
@@ -1430,7 +1429,7 @@ export class AppHostDataRepository {
 
     private _stopOneShotProcesses(): void {
         for (const process of this._oneShotProcesses) {
-            this._terminateProcess(process, 'one-shot aspire command');
+            terminateCliProcess(process, 'one-shot aspire command');
         }
         this._oneShotProcesses.clear();
     }
@@ -1449,7 +1448,7 @@ export class AppHostDataRepository {
         if (stream.process) {
             const childProcess = stream.process;
             stream.process = undefined;
-            this._terminateProcess(childProcess, `aspire describe --follow (${appHostPath})`, { suppressTimeoutWarning: true });
+            terminateCliProcess(childProcess, `aspire describe --follow (${appHostPath})`, { suppressTimeoutWarning: true });
         }
     }
 
@@ -1536,7 +1535,7 @@ export class AppHostDataRepository {
             extensionLogOutputChannel.info(`aspire ps polling stopped`);
         }
         for (const psProcess of this._psProcesses) {
-            this._terminateProcess(psProcess, 'aspire ps');
+            terminateCliProcess(psProcess, 'aspire ps');
         }
         this._psProcesses.clear();
     }
@@ -2003,85 +2002,6 @@ export class AppHostDataRepository {
         }
     }
 
-    private _terminateProcess(childProcess: ChildProcessWithoutNullStreams, description: string, options?: { suppressTimeoutWarning?: boolean }): void {
-        let exited = childProcess.exitCode !== null || childProcess.signalCode !== null;
-        let forceKillTimer: ReturnType<typeof setTimeout> | undefined;
-        const cleanup = () => {
-            exited = true;
-            childProcess.off('close', cleanup);
-            childProcess.off('exit', cleanup);
-            if (forceKillTimer) {
-                clearTimeout(forceKillTimer);
-                forceKillTimer = undefined;
-            }
-        };
-
-        if (!exited) {
-            childProcess.once('close', cleanup);
-            childProcess.once('exit', cleanup);
-        } else {
-            return;
-        }
-
-        try {
-            if (!childProcess.killed) {
-                const signalSent = this._terminateProcessTree(childProcess, false);
-                if (!signalSent) {
-                    cleanup();
-                    return;
-                }
-            }
-        } catch (error) {
-            extensionLogOutputChannel.warn(`Failed to stop ${description}: ${error}`);
-            cleanup();
-            return;
-        }
-
-        if (!exited) {
-            forceKillTimer = setTimeout(() => {
-                if (exited) {
-                    return;
-                }
-
-                if (!options?.suppressTimeoutWarning) {
-                    extensionLogOutputChannel.warn(`${description} did not exit within ${AppHostDataRepository._processShutdownGracePeriodMs}ms; forcing termination.`);
-                }
-                try {
-                    const signalSent = this._terminateProcessTree(childProcess, true);
-                    if (!signalSent) {
-                        cleanup();
-                    }
-                } catch (error) {
-                    extensionLogOutputChannel.warn(`Failed to force stop ${description}: ${error}`);
-                    cleanup();
-                }
-            }, AppHostDataRepository._processShutdownGracePeriodMs);
-            forceKillTimer.unref();
-        }
-    }
-
-    private _terminateProcessTree(childProcess: ChildProcessWithoutNullStreams, force: boolean): boolean {
-        if (process.platform !== 'win32' || childProcess.pid === undefined) {
-            return childProcess.kill(force ? 'SIGKILL' : undefined);
-        }
-
-        const args = ['/pid', String(childProcess.pid), '/t'];
-        if (force) {
-            args.push('/f');
-        }
-
-        const taskkill = spawnProcess('taskkill.exe', args, {
-            stdio: 'ignore',
-            windowsHide: true,
-        });
-        taskkill.on('error', error => {
-            extensionLogOutputChannel.warn(`Failed to stop process tree for PID ${childProcess.pid}: ${error}`);
-            childProcess.kill();
-        });
-        taskkill.unref();
-
-        return true;
-    }
 }
 
 export function shortenPath(filePath: string): string {

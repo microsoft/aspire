@@ -2,7 +2,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as vscode from 'vscode';
 import type { ChildProcessWithoutNullStreams } from 'child_process';
-import { spawnCliProcess } from '../debugger/languages/cli';
+import { spawnCliProcess, terminateCliProcess } from '../debugger/languages/cli';
 import { AspireTerminalProvider } from './AspireTerminalProvider';
 import { aspireConfigFileName, getAppHostPathFromConfig, readJsonFile } from './cliTypes';
 import { isNoLogoUnsupportedOutput, noLogoOption } from './cliCompatibility';
@@ -598,18 +598,10 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             let inactivityTimeout: ReturnType<typeof setTimeout> | undefined;
             let overallTimeout: ReturnType<typeof setTimeout> | undefined;
             const cancel = (error: Error) => {
-                if (childProcess && !childProcess.killed) {
-                    try {
-                        if (!childProcess.kill()) {
-                            extensionLogOutputChannel.warn(`Failed to stop AppHost discovery command: aspire ${cliArgs.join(' ')}`);
-                        }
-                    }
-                    catch (killError) {
-                        extensionLogOutputChannel.warn(`Failed to stop AppHost discovery command: ${killError}`);
-                    }
-                }
-
                 settle(() => reject(error));
+                if (childProcess) {
+                    terminateCliProcess(childProcess, `AppHost discovery command: aspire ${cliArgs.join(' ')}`);
+                }
             };
             const cleanup = () => {
                 if (inactivityTimeout) {

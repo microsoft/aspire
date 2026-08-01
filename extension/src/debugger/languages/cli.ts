@@ -6,6 +6,8 @@ import * as readline from 'readline';
 import * as vscode from 'vscode';
 import { EnvironmentVariables } from "../../utils/environment";
 
+const processShutdownGracePeriodMs = 5_000;
+
 export interface SpawnProcessOptions {
     stdoutCallback?: (data: string) => void;
     stderrCallback?: (data: string) => void;
@@ -157,6 +159,86 @@ export function spawnCliProcess(terminalProvider: AspireTerminalProvider, comman
     });
 
     return child;
+}
+
+export function terminateCliProcess(childProcess: ChildProcessWithoutNullStreams, description: string, options?: { suppressTimeoutWarning?: boolean }): void {
+    let exited = childProcess.exitCode !== null || childProcess.signalCode !== null;
+    let forceKillTimer: ReturnType<typeof setTimeout> | undefined;
+    const cleanup = () => {
+        exited = true;
+        childProcess.off('close', cleanup);
+        childProcess.off('exit', cleanup);
+        if (forceKillTimer) {
+            clearTimeout(forceKillTimer);
+            forceKillTimer = undefined;
+        }
+    };
+
+    if (!exited) {
+        childProcess.once('close', cleanup);
+        childProcess.once('exit', cleanup);
+    } else {
+        return;
+    }
+
+    try {
+        if (!childProcess.killed) {
+            const signalSent = terminateCliProcessTree(childProcess, false);
+            if (!signalSent) {
+                cleanup();
+                return;
+            }
+        }
+    } catch (error) {
+        extensionLogOutputChannel.warn(`Failed to stop ${description}: ${error}`);
+        cleanup();
+        return;
+    }
+
+    if (!exited) {
+        forceKillTimer = setTimeout(() => {
+            if (exited) {
+                return;
+            }
+
+            if (!options?.suppressTimeoutWarning) {
+                extensionLogOutputChannel.warn(`${description} did not exit within ${processShutdownGracePeriodMs}ms; forcing termination.`);
+            }
+            try {
+                const signalSent = terminateCliProcessTree(childProcess, true);
+                if (!signalSent) {
+                    cleanup();
+                }
+            } catch (error) {
+                extensionLogOutputChannel.warn(`Failed to force stop ${description}: ${error}`);
+                cleanup();
+            }
+        }, processShutdownGracePeriodMs);
+        forceKillTimer.unref();
+    }
+}
+
+function terminateCliProcessTree(childProcess: ChildProcessWithoutNullStreams, force: boolean): boolean {
+    if (process.platform !== 'win32' || childProcess.pid === undefined) {
+        return childProcess.kill(force ? 'SIGKILL' : undefined);
+    }
+
+    const args = ['/pid', String(childProcess.pid), '/t'];
+    if (force) {
+        args.push('/f');
+    }
+
+    const taskkill = spawn('taskkill.exe', args, {
+        stdio: 'ignore',
+        windowsHide: true,
+    });
+    taskkill.on('error', error => {
+        extensionLogOutputChannel.warn(`Failed to stop process tree for PID ${childProcess.pid}: ${error}`);
+        childProcess.kill();
+    });
+    taskkill.unref();
+
+    return true;
 }
 
 function redactCliSpawnArgs(args: string[] | undefined): string[] {
