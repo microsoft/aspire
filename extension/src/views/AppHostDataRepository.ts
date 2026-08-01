@@ -1839,6 +1839,10 @@ export class AppHostDataRepository {
             }
         } catch (e) {
             extensionLogOutputChannel.warn(`Failed to parse aspire ps output: ${e}`);
+            if (canCompleteGlobalLoading) {
+                this._clearLoading();
+                this._setPsError(errorFetchingAppHosts(String(e)));
+            }
         }
     }
 

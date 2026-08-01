@@ -5109,6 +5109,45 @@ suite('AppHostDataRepository global polling', () => {
         }
     });
 
+    test('global refresh clears loading and reports malformed snapshot output', async () => {
+        const psFollowProcess = new TestChildProcess();
+        const psSnapshotProcess = new TestChildProcess();
+        let psFollowOptions: any;
+        let psSnapshotOptions: any;
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ps' && args.includes('--follow')) {
+                psFollowOptions = options;
+                return psFollowProcess;
+            }
+            if (args[0] === 'ps') {
+                psSnapshotOptions = options;
+                return psSnapshotProcess;
+            }
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForCondition(() => psFollowOptions !== undefined, 'global ps watch did not start');
+
+            repository.refresh();
+            await waitForCondition(() => psSnapshotOptions !== undefined, 'global refresh snapshot did not start');
+            assert.strictEqual(repository.isLoading, true);
+
+            psSnapshotOptions.stdoutCallback('{ malformed json');
+            psSnapshotOptions.exitCallback(0);
+            await waitForCondition(() => !repository.isLoading, 'global refresh loading did not clear after malformed output');
+
+            assert.ok(repository.errorMessage, 'malformed successful snapshot must surface an error');
+            assert.match(repository.errorMessage, /^Error fetching running AppHosts:/);
+        } finally {
+            repository.dispose();
+        }
+    });
+
     test('workspace discovery does not update the visible global view', async () => {
         const workspaceFolder = {
             uri: vscode.Uri.file('/workspace'),
