@@ -151,6 +151,34 @@ public class AspireSkillsInstallerTests
     }
 
     [Fact]
+    public async Task InstallAsync_WhenRemoteFetchFeatureIsDisabled_UsesEmbeddedExtensionBundle()
+    {
+        var rootDirectory = CreateTempDirectory();
+
+        try
+        {
+            var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
+            var embeddedBundleProvider = new EmbeddedAspireSkillsBundleProvider(NullLogger<EmbeddedAspireSkillsBundleProvider>.Instance);
+            var features = new TestFeatures().SetFeature(KnownFeatures.AspireSkillsRemoteFetchEnabled, false);
+            var installer = CreateInstaller(
+                executionContext,
+                embeddedBundleProvider: embeddedBundleProvider,
+                features: features);
+
+            var result = await installer.InstallAsync(AgentAssetKind.Extension, CancellationToken.None);
+
+            Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
+            var bundle = Assert.IsType<AspireSkillsBundle>(result.Bundle);
+            Assert.Equal(AgentAssetKind.Extension, bundle.AssetKind);
+            Assert.Contains(bundle.GetAgentAssetDefinitions(), asset => asset.Name == "aspire-doctor");
+        }
+        finally
+        {
+            Directory.Delete(rootDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task InstallAsync_WhenRemoteFetchFeatureIsDisabledAndCacheExists_UsesCacheWithoutNetwork()
     {
         var rootDirectory = CreateTempDirectory();
@@ -181,16 +209,20 @@ public class AspireSkillsInstallerTests
         }
     }
 
-    [Fact]
-    public void EmbeddedAspireSkillsBundleProvider_OpensSnapshotResource()
+    [Theory]
+    [InlineData((int)AgentAssetKind.Skill, "aspire-skills-v0.0.1.tgz")]
+    [InlineData((int)AgentAssetKind.Extension, "aspire-extensions-v0.0.1.tgz")]
+    public void EmbeddedAspireSkillsBundleProvider_OpensSnapshotResource(int assetKindValue, string assetName)
     {
+        var assetKind = (AgentAssetKind)assetKindValue;
         var provider = new EmbeddedAspireSkillsBundleProvider(NullLogger<EmbeddedAspireSkillsBundleProvider>.Instance);
 
-        var metadata = Assert.IsType<EmbeddedAspireSkillsBundleMetadata>(provider.Metadata);
-        using var archiveStream = Assert.IsAssignableFrom<Stream>(provider.OpenArchive());
+        var metadata = Assert.IsType<EmbeddedBundleMetadata>(provider.GetMetadata(assetKind));
+        using var archiveStream = Assert.IsAssignableFrom<Stream>(provider.OpenArchive(assetKind));
 
         Assert.Equal(AspireSkillsInstaller.Version, metadata.Version);
         Assert.Equal(AspireSkillsInstaller.GitHubRepository, metadata.Repository);
+        Assert.Equal(assetName, metadata.AssetName);
         Assert.Equal(metadata.Sha256, ComputeSha256(archiveStream));
     }
 
@@ -247,6 +279,46 @@ public class AspireSkillsInstallerTests
             Assert.NotNull(assetRequestUri);
             Assert.Contains("/microsoft/aspire-skills/releases/tags/v0.0.1", releaseRequestUri.AbsolutePath);
             Assert.Equal("https://downloads.example.test/aspire-skills-v0.0.1.tgz", assetRequestUri.AbsoluteUri);
+        }
+        finally
+        {
+            Directory.Delete(rootDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task InstallAsync_WhenExtensionBundleIsAvailable_UsesExtensionArtifactAndCache()
+    {
+        var rootDirectory = CreateTempDirectory();
+
+        try
+        {
+            var archiveBytes = await CreateExtensionBundleArchiveBytesAsync();
+            var handler = new MockHttpMessageHandler(request =>
+            {
+                if (request.RequestUri!.AbsolutePath.EndsWith("/releases/tags/v0.0.1", StringComparison.Ordinal))
+                {
+                    return CreateJsonResponse(CreateGitHubReleaseJson("aspire-extensions-v0.0.1.tgz", "https://downloads.example.test/aspire-extensions-v0.0.1.tgz"));
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(archiveBytes)
+                };
+            });
+            var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
+            var installer = CreateInstaller(executionContext, httpMessageHandler: handler);
+
+            var result = await installer.InstallAsync(AgentAssetKind.Extension, CancellationToken.None);
+
+            Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
+            Assert.NotNull(result.Bundle);
+            Assert.Equal(AgentAssetKind.Extension, result.Bundle.AssetKind);
+            Assert.True(File.Exists(Path.Combine(
+                executionContext.CacheDirectory.FullName,
+                "aspire-extensions",
+                AspireSkillsInstaller.Version,
+                "extension-manifest.json")));
         }
         finally
         {
@@ -338,7 +410,7 @@ public class AspireSkillsInstallerTests
         try
         {
             var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
-            embeddedBundleProvider.Metadata = new EmbeddedAspireSkillsBundleMetadata
+            embeddedBundleProvider.Metadata = new EmbeddedBundleMetadata
             {
                 Version = AspireSkillsInstaller.Version,
                 Repository = AspireSkillsInstaller.GitHubRepository,
@@ -377,7 +449,7 @@ public class AspireSkillsInstallerTests
             // stamped ">=13.4.0 <13.5.0"). The embedded path must still install the bundle —
             // otherwise an offline user with a version-mismatched embedded snapshot would lose
             // access to all bundled skills.
-            var staleSupports = new SkillBundleSupports
+            var staleSupports = new BundleSupports
             {
                 AspireCli = ">=0.0.1 <0.0.2",
                 AspireSdk = ">=0.0.1 <0.0.2"
@@ -414,7 +486,7 @@ public class AspireSkillsInstallerTests
             // must not force a re-install on every invocation.
             await CreateCachedBundleAsync(
                 cachedBundleDirectory,
-                supports: new SkillBundleSupports
+                supports: new BundleSupports
                 {
                     AspireCli = ">=0.0.1 <0.0.2",
                     AspireSdk = ">=0.0.1 <0.0.2"
@@ -442,10 +514,12 @@ public class AspireSkillsInstallerTests
         IEmbeddedAspireSkillsBundleProvider? embeddedBundleProvider = null,
         IFeatures? features = null)
     {
+        var effectiveEmbeddedBundleProvider = embeddedBundleProvider ?? new TestEmbeddedAspireSkillsBundleProvider();
         return new AspireSkillsInstaller(
             githubArtifactAttestationVerifier ?? new TestGitHubArtifactAttestationVerifier(),
             new MockHttpClientFactory(httpMessageHandler ?? new MockHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound))),
-            embeddedBundleProvider ?? new TestEmbeddedAspireSkillsBundleProvider(),
+            new AspireSkillsBundleProvider(),
+            effectiveEmbeddedBundleProvider,
             new TestInteractionService(),
             executionContext,
             configuration ?? new ConfigurationBuilder().Build(),
@@ -457,7 +531,7 @@ public class AspireSkillsInstallerTests
             NullLogger<AspireSkillsInstaller>.Instance);
     }
 
-    private static async Task CreateCachedBundleAsync(string bundleDirectory, SkillBundleSupports? supports = null)
+    private static async Task CreateCachedBundleAsync(string bundleDirectory, BundleSupports? supports = null)
     {
         var skillDirectory = Path.Combine(bundleDirectory, "skills", CommonAgentApplicators.AspireSkillName);
         Directory.CreateDirectory(skillDirectory);
@@ -473,19 +547,19 @@ public class AspireSkillsInstallerTests
             # Aspire
             """);
 
-        var manifest = new SkillBundleManifest
+        var manifest = new BundleManifest
         {
             Version = AspireSkillsInstaller.Version,
             Supports = supports ?? CreateSupports(),
-            Skills =
+            Assets =
             [
-                new SkillBundleSkill
+                new BundleAsset
                 {
                     Name = CommonAgentApplicators.AspireSkillName,
                     Description = AspireSkillDescription,
                     Files =
                     [
-                        new SkillBundleFile
+                        new BundleFile
                         {
                             RelativePath = "SKILL.md",
                             Sha256 = ComputeSha256(skillPath)
@@ -495,20 +569,25 @@ public class AspireSkillsInstallerTests
             ]
         };
 
-        var manifestJson = JsonSerializer.Serialize(manifest, AspireSkillsJsonSerializerContext.Default.SkillBundleManifest);
+        var manifestJson = JsonSerializer.Serialize(new
+        {
+            version = manifest.Version,
+            supports = manifest.Supports,
+            skills = manifest.Assets
+        });
         await File.WriteAllTextAsync(Path.Combine(bundleDirectory, "skill-manifest.json"), manifestJson);
     }
 
-    private static SkillBundleSupports CreateSupports()
+    private static BundleSupports CreateSupports()
     {
-        return new SkillBundleSupports
+        return new BundleSupports
         {
             AspireCli = ">=0.0.0 <999.0.0",
             AspireSdk = ">=0.0.0 <999.0.0"
         };
     }
 
-    private static async Task<byte[]> CreateBundleArchiveBytesAsync(SkillBundleSupports? supports = null)
+    private static async Task<byte[]> CreateBundleArchiveBytesAsync(BundleSupports? supports = null)
     {
         var rootDirectory = CreateTempDirectory();
 
@@ -516,6 +595,62 @@ public class AspireSkillsInstallerTests
         {
             var bundleDirectory = Path.Combine(rootDirectory, $"aspire-skills-v{AspireSkillsInstaller.Version}");
             await CreateCachedBundleAsync(bundleDirectory, supports);
+
+            await using var archiveStream = new MemoryStream();
+            await using (var gzipStream = new GZipStream(archiveStream, CompressionLevel.SmallestSize, leaveOpen: true))
+            {
+                TarFile.CreateFromDirectory(bundleDirectory, gzipStream, includeBaseDirectory: true);
+            }
+
+            return archiveStream.ToArray();
+        }
+        finally
+        {
+            Directory.Delete(rootDirectory, recursive: true);
+        }
+    }
+
+    private static async Task<byte[]> CreateExtensionBundleArchiveBytesAsync()
+    {
+        var rootDirectory = CreateTempDirectory();
+
+        try
+        {
+            const string extensionName = "aspire-canvas";
+            var bundleDirectory = Path.Combine(rootDirectory, $"aspire-extensions-v{AspireSkillsInstaller.Version}");
+            var extensionDirectory = Path.Combine(bundleDirectory, "extensions", extensionName);
+            Directory.CreateDirectory(extensionDirectory);
+            var extensionPath = Path.Combine(extensionDirectory, "extension.mjs");
+            await File.WriteAllTextAsync(extensionPath, "export default {};");
+
+            var manifest = new BundleManifest
+            {
+                Version = AspireSkillsInstaller.Version,
+                Supports = CreateSupports(),
+                Assets =
+                [
+                    new BundleAsset
+                    {
+                        Name = extensionName,
+                        Description = "Aspire canvas extension",
+                        Files =
+                        [
+                            new BundleFile
+                            {
+                                RelativePath = "extension.mjs",
+                                Sha256 = ComputeSha256(extensionPath)
+                            }
+                        ]
+                    }
+                ]
+            };
+            var manifestJson = JsonSerializer.Serialize(new
+            {
+                version = manifest.Version,
+                supports = manifest.Supports,
+                extensions = manifest.Assets
+            });
+            await File.WriteAllTextAsync(Path.Combine(bundleDirectory, "extension-manifest.json"), manifestJson);
 
             await using var archiveStream = new MemoryStream();
             await using (var gzipStream = new GZipStream(archiveStream, CompressionLevel.SmallestSize, leaveOpen: true))
@@ -542,12 +677,12 @@ public class AspireSkillsInstallerTests
         return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
     }
 
-    private static async Task<TestEmbeddedAspireSkillsBundleProvider> CreateEmbeddedBundleProviderAsync(SkillBundleSupports? supports = null)
+    private static async Task<TestEmbeddedAspireSkillsBundleProvider> CreateEmbeddedBundleProviderAsync(BundleSupports? supports = null)
     {
         var archiveBytes = await CreateBundleArchiveBytesAsync(supports);
         return new TestEmbeddedAspireSkillsBundleProvider
         {
-            Metadata = new EmbeddedAspireSkillsBundleMetadata
+            Metadata = new EmbeddedBundleMetadata
             {
                 Version = AspireSkillsInstaller.Version,
                 Repository = AspireSkillsInstaller.GitHubRepository,
@@ -629,13 +764,18 @@ public class AspireSkillsInstallerTests
 
     private sealed class TestEmbeddedAspireSkillsBundleProvider : IEmbeddedAspireSkillsBundleProvider
     {
-        public EmbeddedAspireSkillsBundleMetadata? Metadata { get; set; }
+        public EmbeddedBundleMetadata? Metadata { get; set; }
 
         public byte[]? ArchiveBytes { get; init; }
 
         public bool OpenArchiveCalled { get; private set; }
 
-        public Stream? OpenArchive()
+        public EmbeddedBundleMetadata? GetMetadata(AgentAssetKind assetKind)
+        {
+            return Metadata;
+        }
+
+        public Stream? OpenArchive(AgentAssetKind assetKind)
         {
             OpenArchiveCalled = true;
             return ArchiveBytes is null ? null : new MemoryStream(ArchiveBytes, writable: false);

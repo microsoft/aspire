@@ -40,14 +40,15 @@ internal sealed class AgentAssetDefinition
         applicableLanguages: [KnownLanguageId.CSharp]);
 
     /// <summary>
-    /// Creates a skill definition sourced from the Aspire skills bundle. All bundle-sourced
-    /// skills are pre-selected by default in the install prompt; callers like <c>aspire new</c>
+    /// Creates an agent asset definition sourced from an Aspire skills bundle. All bundle-sourced
+    /// assets are pre-selected by default in the install prompt; callers like <c>aspire new</c>
     /// and standalone <c>aspire agent init</c> can still narrow that set with a predicate
-    /// (see <c>AgentInitCommand.ExcludeOneTimeSetupSkillsFromDefaults</c>).
+    /// (see <c>AgentInitCommand.ExcludeOneTimeSetupAgentAssetsFromDefaults</c>).
     /// </summary>
     internal static AgentAssetDefinition CreateAspireSkillsBundle(
         string name,
         string description,
+        AgentAssetKind kind,
         IReadOnlyList<string>? installExcludedRelativePaths = null,
         IReadOnlyList<string>? applicableLanguages = null)
     {
@@ -61,7 +62,7 @@ internal sealed class AgentAssetDefinition
             sourceKind: AgentAssetSourceKind.AspireSkillsBundle,
             installExcludedRelativePaths: installExcludedRelativePaths ?? [],
             isDefault: true,
-            assetKind: AgentAssetKind.Skill,
+            assetKind: kind,
             applicableLanguages: applicableLanguages);
     }
 
@@ -196,17 +197,17 @@ internal sealed class AgentAssetDefinition
 internal enum AgentAssetSourceKind
 {
     /// <summary>
-    /// The skill is represented by static content compiled into the CLI.
+    /// The asset is represented by static content compiled into the CLI.
     /// </summary>
     Static,
 
     /// <summary>
-    /// The skill is installed from the external Aspire skills bundle.
+    /// The asset is installed from the external Aspire skills bundle.
     /// </summary>
     AspireSkillsBundle,
 
     /// <summary>
-    /// The skill is managed by a dedicated external installer.
+    /// The asset is managed by a dedicated external installer.
     /// </summary>
     ExternalInstaller
 }

@@ -329,7 +329,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             if (selectedLocations.Count > 0)
             {
                 IReadOnlyList<AgentAssetDefinition> availableAssets;
-                if (assetKind is AgentAssetKind.Extension || ShouldSkipBundleCatalogResolution(assetsBinding))
+                if (ShouldSkipBundleCatalogResolution(assetsBinding))
                 {
                     availableAssets = cliDefinedAssets;
                 }

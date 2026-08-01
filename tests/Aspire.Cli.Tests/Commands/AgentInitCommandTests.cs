@@ -87,7 +87,10 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
                 CultureInfo.CurrentCulture,
                 AgentCommandStrings.InitCommand_InstalledSkillsSummarySkills,
                 $"{CommonAgentApplicators.AspireSkillName}, {CommonAgentApplicators.AspireDeploymentSkillName}, {FakeAspireSkillsInstaller.AspireInitSkillName}, {FakeAspireSkillsInstaller.AspireMonitoringSkillName}, {FakeAspireSkillsInstaller.AspireOrchestrationSkillName}")}",
-            $"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummaryLocations, ".agents/skills, ~/.agents/skills")}");
+            $"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummaryLocations, ".agents/skills, ~/.agents/skills")}",
+            AgentCommandStrings.InitCommand_InstalledExtensionsSummary,
+            $"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledExtensionsSummaryExtensions, FakeAspireSkillsInstaller.AspireCanvasExtensionName)}",
+            $"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledExtensionsSummaryLocations, ".github/extensions")}");
         var message = Assert.Single(interactionService.DisplayedMessages, displayedMessage => displayedMessage.Emoji.Equals(KnownEmojis.Robot));
         Assert.Equal(expectedSummary, message.Message);
         Assert.DoesNotContain(
@@ -838,7 +841,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var bundleDirectory = new DirectoryInfo(Path.Combine(workspaceRoot.FullName, $".test-aspire-skills-bundle-{Guid.NewGuid():N}"));
         Directory.CreateDirectory(bundleDirectory.FullName);
 
-        var manifestSkills = new List<SkillBundleSkill>();
+        var manifestSkills = new List<BundleAsset>();
         foreach (var (name, description) in skills)
         {
             var skillDirectory = Path.Combine(bundleDirectory.FullName, "skills", name);
@@ -853,13 +856,13 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
                 # {{name}}
                 """);
 
-            manifestSkills.Add(new SkillBundleSkill
+            manifestSkills.Add(new BundleAsset
             {
                 Name = name,
                 Description = description,
                 Files =
                 [
-                    new SkillBundleFile
+                    new BundleFile
                     {
                         RelativePath = "SKILL.md",
                         Sha256 = ComputeSha256(skillPath)
@@ -868,20 +871,31 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             });
         }
 
-        var manifest = new SkillBundleManifest
+        var manifest = new BundleManifest
         {
             Version = AspireSkillsInstaller.Version,
-            Supports = new SkillBundleSupports
+            Supports = new BundleSupports
             {
                 AspireCli = ">=0.0.0 <999.0.0",
                 AspireSdk = ">=0.0.0 <999.0.0"
             },
-            Skills = [.. manifestSkills]
+            Assets = [.. manifestSkills]
         };
 
-        var manifestJson = JsonSerializer.Serialize(manifest, AspireSkillsJsonSerializerContext.Default.SkillBundleManifest);
+        var manifestJson = JsonSerializer.Serialize(new
+        {
+            version = manifest.Version,
+            supports = manifest.Supports,
+            skills = manifest.Assets
+        });
         await File.WriteAllTextAsync(Path.Combine(bundleDirectory.FullName, "skill-manifest.json"), manifestJson);
-        return await AspireSkillsBundle.LoadAsync(bundleDirectory, CancellationToken.None);
+        return await new AspireSkillsBundleProvider().LoadAsync(
+            AgentAssetKind.Skill,
+            bundleDirectory,
+            AspireSkillsInstaller.Version,
+            AspireSkillsInstaller.Version,
+            skipCompatibilityCheck: false,
+            CancellationToken.None);
     }
 
     private static string ComputeSha256(string path)

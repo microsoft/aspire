@@ -14,47 +14,57 @@ internal interface IEmbeddedAspireSkillsBundleProvider
     /// <summary>
     /// Gets metadata for the embedded Aspire skills bundle snapshot.
     /// </summary>
-    EmbeddedAspireSkillsBundleMetadata? Metadata { get; }
+    EmbeddedBundleMetadata? GetMetadata(AgentAssetKind assetKind);
 
     /// <summary>
     /// Opens the embedded Aspire skills bundle archive.
     /// </summary>
-    Stream? OpenArchive();
+    Stream? OpenArchive(AgentAssetKind assetKind);
 }
 
 internal sealed class EmbeddedAspireSkillsBundleProvider : IEmbeddedAspireSkillsBundleProvider
 {
-    private const string ArchiveResourceName = "aspire-skills.bundle.tgz";
-    private const string MetadataResourceName = "aspire-skills.metadata.json";
-
     private readonly ILogger<EmbeddedAspireSkillsBundleProvider> _logger;
-    private readonly Lazy<EmbeddedAspireSkillsBundleMetadata?> _metadata;
 
     public EmbeddedAspireSkillsBundleProvider(ILogger<EmbeddedAspireSkillsBundleProvider> logger)
     {
         _logger = logger;
-        _metadata = new Lazy<EmbeddedAspireSkillsBundleMetadata?>(LoadMetadata);
     }
 
-    public EmbeddedAspireSkillsBundleMetadata? Metadata => _metadata.Value;
-
-    public Stream? OpenArchive()
+    public EmbeddedBundleMetadata? GetMetadata(AgentAssetKind assetKind)
     {
-        var stream = typeof(EmbeddedAspireSkillsBundleProvider).Assembly.GetManifestResourceStream(ArchiveResourceName);
+        var resourceName = BundleDescriptor.GetDescriptor(assetKind).EmbeddedMetadataResourceName;
+        if (resourceName is null)
+        {
+            return null;
+        }
+
+        return LoadMetadata(resourceName);
+    }
+
+    public Stream? OpenArchive(AgentAssetKind assetKind)
+    {
+        var resourceName = BundleDescriptor.GetDescriptor(assetKind).EmbeddedArchiveResourceName;
+        if (resourceName is null)
+        {
+            return null;
+        }
+
+        var stream = typeof(EmbeddedAspireSkillsBundleProvider).Assembly.GetManifestResourceStream(resourceName);
         if (stream is null)
         {
-            _logger.LogDebug("Embedded Aspire skills archive resource {ResourceName} was not found.", ArchiveResourceName);
+            _logger.LogDebug("Embedded Aspire skills archive resource {ResourceName} was not found.", resourceName);
         }
 
         return stream;
     }
 
-    private EmbeddedAspireSkillsBundleMetadata? LoadMetadata()
+    private EmbeddedBundleMetadata? LoadMetadata(string resourceName)
     {
-        using var stream = typeof(EmbeddedAspireSkillsBundleProvider).Assembly.GetManifestResourceStream(MetadataResourceName);
+        using var stream = typeof(EmbeddedAspireSkillsBundleProvider).Assembly.GetManifestResourceStream(resourceName);
         if (stream is null)
         {
-            _logger.LogDebug("Embedded Aspire skills metadata resource {ResourceName} was not found.", MetadataResourceName);
+            _logger.LogDebug("Embedded Aspire skills metadata resource {ResourceName} was not found.", resourceName);
             return null;
         }
 
@@ -62,18 +72,18 @@ internal sealed class EmbeddedAspireSkillsBundleProvider : IEmbeddedAspireSkills
         {
             var metadata = JsonSerializer.Deserialize(
                 stream,
-                AspireSkillsJsonSerializerContext.Default.EmbeddedAspireSkillsBundleMetadata);
+                AspireSkillsJsonSerializerContext.Default.EmbeddedBundleMetadata);
 
             if (metadata is null)
             {
-                _logger.LogDebug("Embedded Aspire skills metadata resource {ResourceName} was empty.", MetadataResourceName);
+                _logger.LogDebug("Embedded Aspire skills metadata resource {ResourceName} was empty.", resourceName);
             }
 
             return metadata;
         }
         catch (JsonException ex)
         {
-            _logger.LogWarning(ex, "Embedded Aspire skills metadata resource {ResourceName} could not be parsed.", MetadataResourceName);
+            _logger.LogWarning(ex, "Embedded Aspire skills metadata resource {ResourceName} could not be parsed.", resourceName);
             return null;
         }
     }

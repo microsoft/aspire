@@ -49,6 +49,7 @@ internal sealed class FakeNpmProvenanceChecker : INpmProvenanceChecker
 /// </summary>
 internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
 {
+    internal const string AspireCanvasExtensionName = "aspire-canvas";
     internal const string AspireInitSkillName = "aspire-init";
     internal const string AspireMonitoringSkillName = "aspire-monitoring";
     internal const string AspireOrchestrationSkillName = "aspire-orchestration";
@@ -74,20 +75,30 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
             return _result;
         }
 
-        await EnsureBundleAsync(assetKind, cancellationToken);
-        var bundle = await AspireSkillsBundle.LoadAsync(_bundleDirectory, cancellationToken);
+        var bundleDirectory = assetKind is AgentAssetKind.Skill
+            ? _bundleDirectory
+            : new DirectoryInfo($"{_bundleDirectory.FullName}-extensions");
+        await EnsureBundleAsync(assetKind, bundleDirectory, cancellationToken);
+        var bundle = await new AspireSkillsBundleProvider().LoadAsync(
+            assetKind,
+            bundleDirectory,
+            AspireSkillsInstaller.Version,
+            AspireSkillsInstaller.Version,
+            skipCompatibilityCheck: false,
+            cancellationToken);
         return AspireSkillsInstallResult.Installed(bundle);
     }
 
-    private async Task EnsureBundleAsync(AgentAssetKind assetKind, CancellationToken cancellationToken)
+    private static async Task EnsureBundleAsync(AgentAssetKind assetKind, DirectoryInfo bundleDirectory, CancellationToken cancellationToken)
     {
-        if (assetKind != AgentAssetKind.Skill)
+        if (bundleDirectory.Exists)
         {
-            throw new NotSupportedException("Only skill assets are supported.");
+            return;
         }
 
-        if (_bundleDirectory.Exists)
+        if (assetKind is AgentAssetKind.Extension)
         {
+            await EnsureExtensionBundleAsync(bundleDirectory, cancellationToken);
             return;
         }
 
@@ -154,47 +165,93 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
 
         foreach (var ((skillName, relativePath), content) in files)
         {
-            var path = Path.Combine(_bundleDirectory.FullName, "skills", skillName, relativePath);
+            var path = Path.Combine(bundleDirectory.FullName, "skills", skillName, relativePath);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await File.WriteAllTextAsync(path, content, cancellationToken);
         }
 
-        var manifest = new SkillBundleManifest
+        var manifest = new BundleManifest
         {
             Version = AspireSkillsInstaller.Version,
-            Supports = new SkillBundleSupports
+            Supports = new BundleSupports
             {
                 AspireCli = ">=0.0.0 <999.0.0",
                 AspireSdk = ">=0.0.0 <999.0.0"
             },
-            Skills =
+            Assets =
             [
-                CreateSkill(CommonAgentApplicators.AspireSkillName, ["evals"], files),
-                CreateSkill(CommonAgentApplicators.AspireifySkillName, ["evals"], files),
-                CreateSkill(CommonAgentApplicators.AspireDeploymentSkillName, ["evals"], files),
-                CreateSkill(AspireInitSkillName, ["evals"], files),
-                CreateSkill(AspireMonitoringSkillName, ["evals"], files),
-                CreateSkill(AspireOrchestrationSkillName, ["evals"], files)
+                CreateSkill(bundleDirectory, CommonAgentApplicators.AspireSkillName, ["evals"], files),
+                CreateSkill(bundleDirectory, CommonAgentApplicators.AspireifySkillName, ["evals"], files),
+                CreateSkill(bundleDirectory, CommonAgentApplicators.AspireDeploymentSkillName, ["evals"], files),
+                CreateSkill(bundleDirectory, AspireInitSkillName, ["evals"], files),
+                CreateSkill(bundleDirectory, AspireMonitoringSkillName, ["evals"], files),
+                CreateSkill(bundleDirectory, AspireOrchestrationSkillName, ["evals"], files)
             ]
         };
 
-        var manifestJson = JsonSerializer.Serialize(manifest, AspireSkillsJsonSerializerContext.Default.SkillBundleManifest);
-        await File.WriteAllTextAsync(Path.Combine(_bundleDirectory.FullName, "skill-manifest.json"), manifestJson, cancellationToken);
+        var manifestJson = JsonSerializer.Serialize(new
+        {
+            version = manifest.Version,
+            supports = manifest.Supports,
+            skills = manifest.Assets
+        });
+        await File.WriteAllTextAsync(Path.Combine(bundleDirectory.FullName, "skill-manifest.json"), manifestJson, cancellationToken);
     }
 
-    private SkillBundleSkill CreateSkill(string skillName, string[] installExcludedRelativePaths, Dictionary<(string SkillName, string RelativePath), string> files)
+    private static async Task EnsureExtensionBundleAsync(DirectoryInfo bundleDirectory, CancellationToken cancellationToken)
     {
-        return new SkillBundleSkill
+        var extensionDirectory = Path.Combine(bundleDirectory.FullName, "extensions", AspireCanvasExtensionName);
+        Directory.CreateDirectory(extensionDirectory);
+        var extensionPath = Path.Combine(extensionDirectory, "extension.mjs");
+        await File.WriteAllTextAsync(extensionPath, "export default {};", cancellationToken);
+
+        var manifest = new BundleManifest
+        {
+            Version = AspireSkillsInstaller.Version,
+            Supports = new BundleSupports
+            {
+                AspireCli = ">=0.0.0 <999.0.0",
+                AspireSdk = ">=0.0.0 <999.0.0"
+            },
+            Assets =
+            [
+                new BundleAsset
+                {
+                    Name = AspireCanvasExtensionName,
+                    Description = "Aspire canvas extension",
+                    Files =
+                    [
+                        new BundleFile
+                        {
+                            RelativePath = "extension.mjs",
+                            Sha256 = ComputeSha256(extensionPath)
+                        }
+                    ]
+                }
+            ]
+        };
+        var manifestJson = JsonSerializer.Serialize(new
+        {
+            version = manifest.Version,
+            supports = manifest.Supports,
+            extensions = manifest.Assets
+        });
+        await File.WriteAllTextAsync(Path.Combine(bundleDirectory.FullName, "extension-manifest.json"), manifestJson, cancellationToken);
+    }
+
+    private static BundleAsset CreateSkill(DirectoryInfo bundleDirectory, string skillName, string[] installExcludedRelativePaths, Dictionary<(string SkillName, string RelativePath), string> files)
+    {
+        return new BundleAsset
         {
             Name = skillName,
             Description = $"{skillName} skill",
             InstallExcludedRelativePaths = installExcludedRelativePaths,
             Files = files
                 .Where(entry => string.Equals(entry.Key.SkillName, skillName, StringComparison.Ordinal))
-                .Select(entry => new SkillBundleFile
+                .Select(entry => new BundleFile
                 {
                     RelativePath = entry.Key.RelativePath,
-                    Sha256 = ComputeSha256(Path.Combine(_bundleDirectory.FullName, "skills", skillName, entry.Key.RelativePath))
+                    Sha256 = ComputeSha256(Path.Combine(bundleDirectory.FullName, "skills", skillName, entry.Key.RelativePath))
                 })
                 .ToArray()
         };

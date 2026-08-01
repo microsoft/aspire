@@ -94,7 +94,8 @@ public class CommonAgentApplicatorsTests
     {
         var bundleSkill = AgentAssetDefinition.CreateAspireSkillsBundle(
             "aspire-monitoring",
-            "Observe Aspire apps with logs, traces, metrics, and resource state");
+            "Observe Aspire apps with logs, traces, metrics, and resource state",
+            AgentAssetKind.Skill);
 
         Assert.True(bundleSkill.IsApplicableToLanguage(null));
         Assert.True(bundleSkill.IsApplicableToLanguage(new LanguageId(KnownLanguageId.CSharp)));
@@ -124,9 +125,9 @@ public class CommonAgentApplicatorsTests
     {
         Assert.All(
             [
-                AgentAssetDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireSkillName, "Aspire CLI commands and workflows for distributed apps"),
-                AgentAssetDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireifySkillName, "One-time setup: wire up AppHost with discovered projects"),
-                AgentAssetDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireDeploymentSkillName, "Aspire deployment target selection, preflight, publish, and deploy workflows")
+                AgentAssetDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireSkillName, "Aspire CLI commands and workflows for distributed apps", AgentAssetKind.Skill),
+                AgentAssetDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireifySkillName, "One-time setup: wire up AppHost with discovered projects", AgentAssetKind.Skill),
+                AgentAssetDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireDeploymentSkillName, "Aspire deployment target selection, preflight, publish, and deploy workflows", AgentAssetKind.Skill)
             ],
             skill =>
             {
@@ -162,6 +163,7 @@ public class CommonAgentApplicatorsTests
         var bundleSkill = AgentAssetDefinition.CreateAspireSkillsBundle(
             CommonAgentApplicators.AspireSkillName,
             "Aspire CLI commands and workflows for distributed apps",
+            AgentAssetKind.Skill,
             installExcludedRelativePaths: [Path.Combine("evals")]);
 
         Assert.Contains(bundleSkill.InstallExcludedRelativePaths, path => path == Path.Combine("evals"));

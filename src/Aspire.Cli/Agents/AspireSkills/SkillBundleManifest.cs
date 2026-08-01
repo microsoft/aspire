@@ -7,21 +7,48 @@ using System.Text.Json.Serialization;
 namespace Aspire.Cli.Agents.AspireSkills;
 
 /// <summary>
-/// Describes a published Aspire skills bundle.
+/// Describes a published bundle from aspire-skills.
 /// </summary>
-internal sealed class SkillBundleManifest
+internal sealed class BundleManifest
 {
     public string? Version { get; init; }
 
-    public SkillBundleSupports? Supports { get; init; }
+    public BundleSupports? Supports { get; init; }
 
-    public SkillBundleSkill[] Skills { get; init; } = [];
+    public BundleAsset[] Assets { get; init; } = [];
 }
 
 /// <summary>
-/// Describes the Aspire versions supported by a skills bundle.
+/// Represents the JSON document for a published bundle manifest.
 /// </summary>
-internal sealed class SkillBundleSupports
+internal sealed class BundleManifestDocument
+{
+    public string? Version { get; init; }
+
+    public BundleSupports? Supports { get; init; }
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement> AssetCollections { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public BundleManifest ToManifest(string assetsPropertyName)
+    {
+        var assets = AssetCollections.TryGetValue(assetsPropertyName, out var assetsJson)
+            ? assetsJson.Deserialize(AspireSkillsJsonSerializerContext.Default.BundleAssetArray) ?? []
+            : [];
+
+        return new BundleManifest
+        {
+            Version = Version,
+            Supports = Supports,
+            Assets = assets
+        };
+    }
+}
+
+/// <summary>
+/// Describes the Aspire versions supported by a bundle from aspire-skills.
+/// </summary>
+internal sealed class BundleSupports
 {
     public string? AspireCli { get; init; }
 
@@ -29,9 +56,9 @@ internal sealed class SkillBundleSupports
 }
 
 /// <summary>
-/// Describes a single skill in an Aspire skills bundle.
+/// Describes a single asset in a bundle from aspire-skills.
 /// </summary>
-internal sealed class SkillBundleSkill
+internal sealed class BundleAsset
 {
     public string? Name { get; init; }
 
@@ -41,13 +68,13 @@ internal sealed class SkillBundleSkill
 
     public string[] InstallExcludedRelativePaths { get; init; } = [];
 
-    public SkillBundleFile[] Files { get; init; } = [];
+    public BundleFile[] Files { get; init; } = [];
 }
 
 /// <summary>
-/// Describes a single file in an Aspire skills bundle.
+/// Describes a single file in a bundle from aspire-skills.
 /// </summary>
-internal sealed class SkillBundleFile
+internal sealed class BundleFile
 {
     public string? RelativePath { get; init; }
 
@@ -57,7 +84,7 @@ internal sealed class SkillBundleFile
 /// <summary>
 /// Describes the Aspire skills bundle archive embedded in the CLI.
 /// </summary>
-internal sealed class EmbeddedAspireSkillsBundleMetadata
+internal sealed class EmbeddedBundleMetadata
 {
     public string? Version { get; init; }
 
@@ -78,8 +105,10 @@ internal sealed class EmbeddedAspireSkillsBundleMetadata
     ReadCommentHandling = JsonCommentHandling.Skip,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     PropertyNameCaseInsensitive = true)]
-[JsonSerializable(typeof(SkillBundleManifest))]
-[JsonSerializable(typeof(EmbeddedAspireSkillsBundleMetadata))]
+[JsonSerializable(typeof(BundleManifestDocument))]
+[JsonSerializable(typeof(BundleSupports))]
+[JsonSerializable(typeof(BundleAsset[]))]
+[JsonSerializable(typeof(EmbeddedBundleMetadata))]
 internal sealed partial class AspireSkillsJsonSerializerContext : JsonSerializerContext
 {
 }
