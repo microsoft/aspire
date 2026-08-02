@@ -618,22 +618,28 @@ public class RedisFunctionalTests(ITestOutputHelper testOutputHelper)
 
     static async Task AcceptRedisInsightEula(HttpClient client, CancellationToken ct)
     {
-        var jsonContent = JsonContent.Create(new
+        // RedisInsight may not be ready to accept requests immediately after entering the Running state.
+        // Retry both the PATCH and the verification GET to handle transient connection errors during startup.
+        var pipeline = new ResiliencePipelineBuilder()
+                            .AddRetry(new() { MaxRetryAttempts = 10, BackoffType = DelayBackoffType.Linear, Delay = TimeSpan.FromSeconds(2) })
+                            .Build();
+
+        await pipeline.ExecuteAsync(async ct =>
         {
-            agreements = new
+            var jsonContent = JsonContent.Create(new
             {
-                eula = true,
-                analytics = false,
-                notifications = false,
-                encryption = false,
-            }
-        });
+                agreements = new
+                {
+                    eula = true,
+                    analytics = false,
+                    notifications = false,
+                    encryption = false,
+                }
+            });
 
-        var apiUrl = $"/api/settings";
-
-        var response = await client.PatchAsync(apiUrl, jsonContent, ct);
-
-        response.EnsureSuccessStatusCode();
+            var response = await client.PatchAsync("/api/settings", jsonContent, ct);
+            response.EnsureSuccessStatusCode();
+        }, ct);
 
         await EnsureRedisInsightEulaAccepted(client, ct);
     }
