@@ -59,12 +59,12 @@ public static class TestDistributedApplicationBuilder
 
     private static IDistributedApplicationTestingBuilder CreateCore(string[] args, Action<DistributedApplicationOptions>? configureOptions, ITestOutputHelper? testOutputHelper = null)
     {
-        var builder = DistributedApplicationTestingBuilder.Create(args, (applicationOptions, hostBuilderOptions) => configureOptions?.Invoke(applicationOptions));
+        // Disable the resilience handler added by DistributedApplicationTestingBuilder.Create() by default.
+        // Resilience retry policies can cause intermittent test failures by retrying requests that should fail fast,
+        // masking real issues and making tests non-deterministic.
+        Environment.SetEnvironmentVariable("ASPIRE_TESTING_DISABLE_HTTP_CLIENT", "true");
 
-        // TODO: consider centralizing this to DistributedApplicationFactory by default once consumers have a way to opt-out
-        // E.g., once https://github.com/dotnet/extensions/pull/5801 is released.
-        // Discussion: https://github.com/microsoft/aspire/pull/7335/files#r1936799460
-        builder.Services.ConfigureHttpClientDefaults(http => http.AddStandardResilienceHandler());
+        var builder = DistributedApplicationTestingBuilder.Create(args, (applicationOptions, hostBuilderOptions) => configureOptions?.Invoke(applicationOptions));
 
         builder.Services.AddSingleton<ApplicationOrchestratorProxy>(sp => new ApplicationOrchestratorProxy(sp.GetRequiredService<ApplicationOrchestrator>()));
         if (testOutputHelper is not null)
