@@ -10,7 +10,7 @@ using SystemCommand = System.CommandLine.Command;
 
 namespace Aspire.Cli.NuGet;
 
-internal sealed class NuGetPackagePrefetcher(ILogger<NuGetPackagePrefetcher> logger, CliExecutionContext executionContext, IFeatures features, IPackagingService packagingService, ICliUpdateNotifier cliUpdateNotifier) : BackgroundService
+internal sealed class NuGetPackagePrefetcher(ILogger<NuGetPackagePrefetcher> logger, TimeProvider timeProvider, CliExecutionContext executionContext, IFeatures features, IPackagingService packagingService, ICliUpdateNotifier cliUpdateNotifier) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -108,7 +108,7 @@ internal sealed class NuGetPackagePrefetcher(ILogger<NuGetPackagePrefetcher> log
     {
         try
         {
-            return await executionContext.CommandSelected.Task.WaitAsync(cancellationToken);
+            return await executionContext.CommandSelected.Task.WaitAsync(Timeout.InfiniteTimeSpan, timeProvider, cancellationToken);
         }
         catch (OperationCanceledException)
         {

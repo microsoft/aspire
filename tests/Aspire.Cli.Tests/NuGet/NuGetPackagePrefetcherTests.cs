@@ -4,13 +4,16 @@
 using System.CommandLine;
 using System.Diagnostics;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Testing;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Cli.Tests.NuGet;
 
@@ -74,7 +77,6 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
     public async Task PrefetchingCancellationDueToShutdownLogsCleanMessage()
     {
         var sink = new TestSink();
-        var logger = new TestLogger<NuGetPackagePrefetcher>(new TestLoggerFactory(sink, enabled: true));
 
         using var stoppingCts = new CancellationTokenSource();
         var executionContext = CreateExecutionContext();
@@ -129,12 +131,12 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
             }
         };
 
-        var prefetcher = new NuGetPackagePrefetcher(
-            logger,
+        var prefetcher = CreatePrefetcher(
             executionContext,
             features,
             packagingService,
-            updateNotifier);
+            updateNotifier,
+            sink);
 
         await prefetcher.StartAsync(stoppingCts.Token).DefaultTimeout();
 
@@ -148,7 +150,6 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
     public async Task TemplatePrefetchingNonCancellationExceptionLogsExceptionDetails()
     {
         var sink = new TestSink();
-        var logger = new TestLogger<NuGetPackagePrefetcher>(new TestLoggerFactory(sink, enabled: true));
 
         var executionContext = CreateExecutionContext();
         executionContext.CommandSelected.TrySetResult(new TestCommand("new"));
@@ -170,12 +171,12 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
             }
         };
 
-        var prefetcher = new NuGetPackagePrefetcher(
-            logger,
+        var prefetcher = CreatePrefetcher(
             executionContext,
             new TestFeatures(),
             packagingService,
-            new TestCliUpdateNotifier());
+            new TestCliUpdateNotifier(),
+            sink);
 
         await prefetcher.StartAsync(CancellationToken.None).DefaultTimeout();
 
@@ -241,8 +242,7 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
             }
         };
 
-        var prefetcher = new NuGetPackagePrefetcher(
-            CreateLogger(new TestSink()),
+        var prefetcher = CreatePrefetcher(
             executionContext,
             features,
             packagingService,
@@ -258,8 +258,8 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
 
     // Command selection happens in BaseCommand's action, which the host reaches only after the first-run
     // banner has played. The banner spends 1660ms in fixed delays, so a prefetcher that gave up waiting
-    // after a second would fall back to the null default and prefetch for `ls`/`ps` anyway. The delay below
-    // is the point of the test: it has to outlast the timeout that used to be here.
+    // after a second would fall back to the null default and prefetch for `ls`/`ps` anyway. Advance the
+    // clock past that former timeout before selecting the command.
     [Fact]
     public async Task CommandSelectedAfterABannerLengthDelayStillDisablesPrefetching()
     {
@@ -268,6 +268,7 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var executionContext = CreateExecutionContext();
+        var timeProvider = new FakeTimeProvider();
 
         var features = new TestFeatures();
         features.SetFeature(KnownFeatures.UpdateNotificationsEnabled, true);
@@ -292,16 +293,18 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
             }
         };
 
-        var prefetcher = new NuGetPackagePrefetcher(
-            CreateLogger(new TestSink()),
+        var prefetcher = CreatePrefetcher(
             executionContext,
             features,
             packagingService,
-            updateNotifier);
+            updateNotifier,
+            timeProvider: timeProvider);
 
         await prefetcher.StartAsync(CancellationToken.None).DefaultTimeout();
 
-        await Task.Delay(TimeSpan.FromMilliseconds(1500));
+        // The removed timeout was one second. 1500ms crosses that boundary without coupling
+        // this test to every delay that contributes to the banner's full 1660ms duration.
+        timeProvider.Advance(TimeSpan.FromMilliseconds(1500));
 
         executionContext.CommandSelected.TrySetResult(provider.GetRequiredService<LsCommand>());
 
@@ -360,8 +363,7 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
             }
         };
 
-        var prefetcher = new NuGetPackagePrefetcher(
-            CreateLogger(new TestSink()),
+        var prefetcher = CreatePrefetcher(
             executionContext,
             features,
             packagingService,
@@ -376,6 +378,23 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
 
         Assert.True(templateFinished.Task.IsCompletedSuccessfully);
         Assert.True(cliFinished.Task.IsCompletedSuccessfully);
+    }
+
+    private static NuGetPackagePrefetcher CreatePrefetcher(
+        CliExecutionContext executionContext,
+        IFeatures features,
+        IPackagingService packagingService,
+        ICliUpdateNotifier updateNotifier,
+        TestSink? sink = null,
+        TimeProvider? timeProvider = null)
+    {
+        return new NuGetPackagePrefetcher(
+            CreateLogger(sink ?? new TestSink()),
+            timeProvider ?? TimeProvider.System,
+            executionContext,
+            features,
+            packagingService,
+            updateNotifier);
     }
 
     private static TestLogger<NuGetPackagePrefetcher> CreateLogger(TestSink sink)
