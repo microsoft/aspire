@@ -20,10 +20,12 @@ internal sealed class NuGetPackagePrefetcher(ILogger<NuGetPackagePrefetcher> log
         var shouldPrefetchTemplates = ShouldPrefetchTemplatePackages(command);
         var shouldPrefetchCli = ShouldPrefetchCliPackages(command);
 
+        var prefetchTasks = new List<Task>(capacity: 2);
+
         // Prefetch template packages if needed
         if (shouldPrefetchTemplates)
         {
-            _ = Task.Run(async () =>
+            prefetchTasks.Add(Task.Run(async () =>
             {
                 try
                 {
@@ -46,13 +48,13 @@ internal sealed class NuGetPackagePrefetcher(ILogger<NuGetPackagePrefetcher> log
                     // background service will exit gracefully. Code paths that depend on this
                     // data will handle the absence of pre-fetched packages gracefully.
                 }
-            }, stoppingToken);
+            }, stoppingToken));
         }
 
         // Prefetch CLI packages if needed
         if (shouldPrefetchCli)
         {
-            _ = Task.Run(async () =>
+            prefetchTasks.Add(Task.Run(async () =>
             {
                 if (features.IsFeatureEnabled(KnownFeatures.UpdateNotificationsEnabled, true))
                 {
@@ -72,7 +74,20 @@ internal sealed class NuGetPackagePrefetcher(ILogger<NuGetPackagePrefetcher> log
                         logger.LogDebug(ex, "Non-fatal error while prefetching CLI packages. This is not critical to the operation of the CLI.");
                     }
                 }
-            }, stoppingToken);
+            }, stoppingToken));
+        }
+
+        // Stay running until the prefetches finish. BackgroundService.StopAsync cancels stoppingToken and
+        // then awaits this method, so the CLI cannot exit while a prefetch still owns a NuGet search child
+        // process: cancellation tears that child down instead of orphaning it.
+        try
+        {
+            await Task.WhenAll(prefetchTasks);
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            // Task.Run cancels a queued callback outright when shutdown wins the race to the token,
+            // which surfaces here rather than in the per-prefetch handlers above.
         }
     }
 
