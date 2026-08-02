@@ -19,7 +19,7 @@ internal sealed class LsCommand : BaseCommand, IPackageMetaPrefetchingCommand
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
 
     /// <summary>
-    /// LsCommand lists resources of a running AppHost and never uses template package metadata.
+    /// LsCommand discovers candidate AppHost project files and never uses template package metadata.
     /// </summary>
     public bool PrefetchesTemplatePackageMetadata => false;
 

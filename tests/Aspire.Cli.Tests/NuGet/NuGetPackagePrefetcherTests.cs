@@ -256,6 +256,62 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
         Assert.False(cliStarted);
     }
 
+    // Command selection happens in BaseCommand's action, which the host reaches only after the first-run
+    // banner has played. The banner spends 1660ms in fixed delays, so a prefetcher that gave up waiting
+    // after a second would fall back to the null default and prefetch for `ls`/`ps` anyway. The delay below
+    // is the point of the test: it has to outlast the timeout that used to be here.
+    [Fact]
+    public async Task CommandSelectedAfterABannerLengthDelayStillDisablesPrefetching()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var executionContext = CreateExecutionContext();
+
+        var features = new TestFeatures();
+        features.SetFeature(KnownFeatures.UpdateNotificationsEnabled, true);
+
+        var templateStarted = false;
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ =>
+            {
+                templateStarted = true;
+                return Task.FromResult(Enumerable.Empty<PackageChannel>());
+            }
+        };
+
+        var cliStarted = false;
+        var updateNotifier = new TestCliUpdateNotifier
+        {
+            CheckForCliUpdatesAsyncCallback = (_, _) =>
+            {
+                cliStarted = true;
+                return Task.CompletedTask;
+            }
+        };
+
+        var prefetcher = new NuGetPackagePrefetcher(
+            CreateLogger(new TestSink()),
+            executionContext,
+            features,
+            packagingService,
+            updateNotifier);
+
+        await prefetcher.StartAsync(CancellationToken.None).DefaultTimeout();
+
+        await Task.Delay(TimeSpan.FromMilliseconds(1500));
+
+        executionContext.CommandSelected.TrySetResult(provider.GetRequiredService<LsCommand>());
+
+        await prefetcher.ExecuteTask!.DefaultTimeout();
+        await prefetcher.StopAsync(CancellationToken.None).DefaultTimeout();
+
+        Assert.False(templateStarted);
+        Assert.False(cliStarted);
+    }
+
     [Fact]
     public async Task InFlightPrefetchingCompletesBeforeTheServiceStops()
     {
