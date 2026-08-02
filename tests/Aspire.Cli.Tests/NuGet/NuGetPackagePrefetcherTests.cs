@@ -185,6 +185,11 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
         await prefetcher.StopAsync(CancellationToken.None).DefaultTimeout();
     }
 
+    // The tests below resolve the real commands and drive the real NuGetPackagePrefetcher rather than
+    // going through TestNuGetPrefetcher at the bottom of this file. That helper re-implements the
+    // production prefetch decision instead of calling it, and has already drifted from it: its
+    // IsRuntimeOnlyCommand is missing "do". Tests written against the copy pass no matter what the
+    // production code decides, which is exactly the behaviour these tests need to pin down.
     [Theory]
     [InlineData(typeof(LsCommand))]
     [InlineData(typeof(PsCommand))]
