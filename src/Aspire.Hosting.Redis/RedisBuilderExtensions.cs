@@ -320,6 +320,7 @@ public static class RedisBuilderExtensions
                 .WithImage(RedisContainerImageTags.RedisInsightImage, RedisContainerImageTags.RedisInsightTag)
                 .WithImageRegistry(RedisContainerImageTags.RedisInsightRegistry)
                 .WithHttpEndpoint(targetPort: 5540, name: "http")
+                .WithHttpHealthCheck("/api/settings", endpointName: "http")
                 .WithEnvironment(context =>
                 {
                     var redisInstances = builder.ApplicationBuilder.Resources.OfType<RedisResource>();

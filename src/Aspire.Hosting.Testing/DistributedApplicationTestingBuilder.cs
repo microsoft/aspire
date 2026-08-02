@@ -350,11 +350,13 @@ public static class DistributedApplicationTestingBuilder
                 DistributedApplicationFactory.ConfigureBuilder(args, applicationOptions, hostBuilderOptions, appAssembly, configureBuilder);
             });
 
-            if (!builder.Configuration.GetValue(KnownConfigNames.TestingDisableHttpClient, false))
-            {
-                builder.Services.AddHttpClient();
-                builder.Services.ConfigureHttpClientDefaults(http => http.AddStandardResilienceHandler());
-            }
+            // Experiment: disable the resilience handler unconditionally to surface tests that rely on it.
+            // Previously this was gated behind ASPIRE_TESTING_DISABLE_HTTP_CLIENT.
+            //if (!builder.Configuration.GetValue(KnownConfigNames.TestingDisableHttpClient, false))
+            //{
+            //    builder.Services.AddHttpClient();
+            //    builder.Services.ConfigureHttpClientDefaults(http => http.AddStandardResilienceHandler());
+            //}
 
             return builder;
 

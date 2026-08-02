@@ -186,7 +186,7 @@ public class RedisFunctionalTests(ITestOutputHelper testOutputHelper)
         await app.StartAsync();
 
         var rns = app.Services.GetRequiredService<ResourceNotificationService>();
-        await rns.WaitForResourceAsync(redisInsightBuilder.Resource.Name, KnownResourceStates.Running).WaitAsync(cts.Token);
+        await rns.WaitForResourceHealthyAsync(redisInsightBuilder.Resource.Name, cts.Token);
 
         var client = app.CreateHttpClient(redisInsightBuilder.Resource.Name, "http");
 
@@ -521,7 +521,7 @@ public class RedisFunctionalTests(ITestOutputHelper testOutputHelper)
                 await app.StartAsync();
 
                 var rns = app.Services.GetRequiredService<ResourceNotificationService>();
-                await rns.WaitForResourceAsync(redisInsightBuilder1.Resource.Name, KnownResourceStates.Running).WaitAsync(cts.Token);
+                await rns.WaitForResourceHealthyAsync(redisInsightBuilder1.Resource.Name, cts.Token);
 
                 try
                 {
@@ -556,7 +556,7 @@ public class RedisFunctionalTests(ITestOutputHelper testOutputHelper)
                 await app.StartAsync();
 
                 var rns = app.Services.GetRequiredService<ResourceNotificationService>();
-                await rns.WaitForResourceAsync(redisInsightBuilder2.Resource.Name, KnownResourceStates.Running).WaitAsync(cts.Token);
+                await rns.WaitForResourceHealthyAsync(redisInsightBuilder2.Resource.Name, cts.Token);
 
                 try
                 {
@@ -618,28 +618,19 @@ public class RedisFunctionalTests(ITestOutputHelper testOutputHelper)
 
     static async Task AcceptRedisInsightEula(HttpClient client, CancellationToken ct)
     {
-        // RedisInsight may not be ready to accept requests immediately after entering the Running state.
-        // Retry both the PATCH and the verification GET to handle transient connection errors during startup.
-        var pipeline = new ResiliencePipelineBuilder()
-                            .AddRetry(new() { MaxRetryAttempts = 10, BackoffType = DelayBackoffType.Linear, Delay = TimeSpan.FromSeconds(2) })
-                            .Build();
-
-        await pipeline.ExecuteAsync(async ct =>
+        var jsonContent = JsonContent.Create(new
         {
-            var jsonContent = JsonContent.Create(new
+            agreements = new
             {
-                agreements = new
-                {
-                    eula = true,
-                    analytics = false,
-                    notifications = false,
-                    encryption = false,
-                }
-            });
+                eula = true,
+                analytics = false,
+                notifications = false,
+                encryption = false,
+            }
+        });
 
-            var response = await client.PatchAsync("/api/settings", jsonContent, ct);
-            response.EnsureSuccessStatusCode();
-        }, ct);
+        var response = await client.PatchAsync("/api/settings", jsonContent, ct);
+        response.EnsureSuccessStatusCode();
 
         await EnsureRedisInsightEulaAccepted(client, ct);
     }
