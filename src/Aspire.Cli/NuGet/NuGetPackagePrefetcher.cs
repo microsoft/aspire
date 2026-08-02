@@ -77,17 +77,21 @@ internal sealed class NuGetPackagePrefetcher(ILogger<NuGetPackagePrefetcher> log
             }, stoppingToken));
         }
 
-        // Stay running until the prefetches finish. BackgroundService.StopAsync cancels stoppingToken and
-        // then awaits this method, so the CLI cannot exit while a prefetch still owns a NuGet search child
-        // process: cancellation tears that child down instead of orphaning it.
+        await PreventOrphanedPrefetchingAsync(prefetchTasks, stoppingToken);
+    }
+
+    /// <summary>
+    /// Holds the service open until prefetching finishes, so the CLI cannot exit and leave a NuGet
+    /// search child process behind.
+    /// </summary>
+    private static async Task PreventOrphanedPrefetchingAsync(List<Task> prefetchTasks, CancellationToken stoppingToken)
+    {
         try
         {
             await Task.WhenAll(prefetchTasks);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
-            // Task.Run cancels a queued callback outright when shutdown wins the race to the token,
-            // which surfaces here rather than in the per-prefetch handlers above.
         }
     }
 
