@@ -20,6 +20,10 @@ internal abstract class BaseCommand : Command
 
     protected virtual bool UpdateNotificationsEnabled { get; }
 
+    internal virtual bool PrefetchesTemplatePackageMetadata => false;
+
+    internal virtual bool PrefetchesCliPackageMetadata => UpdateNotificationsEnabled;
+
     /// <summary>
     /// Gets the help group for this command.
     /// When null, the command appears in the "Other Commands:" catch-all section.
@@ -57,8 +61,7 @@ internal abstract class BaseCommand : Command
         Telemetry = services.Telemetry;
         SetAction((Func<ParseResult, CancellationToken, Task<int>>)(async (parseResult, cancellationToken) =>
         {
-            // Set the command on the execution context so background services can access it
-            _executionContext.Command = this;
+            SelectForExecution(parseResult);
 
             // Route human-readable output to stderr when JSON is requested so
             // that only machine-readable data appears on stdout.
@@ -76,6 +79,16 @@ internal abstract class BaseCommand : Command
                 await FlushExtensionInteractionServiceAsync(InteractionService).ConfigureAwait(false);
             }
         }));
+    }
+
+    internal void SelectForExecution(ParseResult parseResult)
+    {
+        PrepareForExecution(parseResult);
+        _executionContext.Command = this;
+    }
+
+    internal virtual void PrepareForExecution(ParseResult parseResult)
+    {
     }
 
     private async Task<int> HandleCommandAsync(ParseResult parseResult, CancellationToken cancellationToken, CommonCommandServices services)

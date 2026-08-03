@@ -1,6 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#if DEBUG
+using Aspire.Cli.Commands;
+#endif
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
 using Aspire.Shared;
@@ -44,7 +47,11 @@ internal class CliUpdateNotifier(
     ILogger<CliUpdateNotifier> logger,
     INuGetPackageCache nuGetPackageCache,
     IInteractionService interactionService,
-    IProcessPathProvider processPathProvider) : ICliUpdateNotifier
+    IProcessPathProvider processPathProvider
+#if DEBUG
+    , CliExecutionContext? executionContext = null
+#endif
+    ) : ICliUpdateNotifier
 {
     private IEnumerable<Shared.NuGetPackageCli>? _availablePackages;
 
@@ -55,6 +62,9 @@ internal class CliUpdateNotifier(
 
     public void NotifyIfUpdateAvailable()
     {
+#if DEBUG
+        ValidateCliPackageMetadataPrefetching();
+#endif
         var status = GetCachedVersionStatus();
         if (status.LatestVersion is not null)
         {
@@ -86,7 +96,22 @@ internal class CliUpdateNotifier(
     }
 
     public bool IsUpdateAvailable()
-        => GetCachedVersionStatus().LatestVersion is not null;
+    {
+#if DEBUG
+        ValidateCliPackageMetadataPrefetching();
+#endif
+        return GetCachedVersionStatus().LatestVersion is not null;
+    }
+
+#if DEBUG
+    private void ValidateCliPackageMetadataPrefetching()
+    {
+        if (executionContext?.Command is BaseCommand { PrefetchesCliPackageMetadata: false } command)
+        {
+            throw new InvalidOperationException($"Command '{command.Name}' consumes cached CLI package metadata but does not enable {nameof(BaseCommand.PrefetchesCliPackageMetadata)}.");
+        }
+    }
+#endif
 
     protected virtual SemVersion? GetCurrentVersion()
     {

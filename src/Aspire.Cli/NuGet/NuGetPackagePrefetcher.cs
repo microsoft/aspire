@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Utils;
@@ -117,33 +118,8 @@ internal sealed class NuGetPackagePrefetcher(ILogger<NuGetPackagePrefetcher> log
     }
 
     private static bool ShouldPrefetchTemplatePackages(SystemCommand? command)
-    {
-        // If the command implements IPackageMetaPrefetchingCommand, use its setting
-        if (command is IPackageMetaPrefetchingCommand prefetchingCommand)
-        {
-            return prefetchingCommand.PrefetchesTemplatePackageMetadata;
-        }
-
-        // Default behavior: prefetch templates for all commands except run, publish, deploy
-        // Because of this: https://github.com/microsoft/aspire/issues/6956
-        return command is null || !IsRuntimeOnlyCommand(command);
-    }
+        => command is BaseCommand { PrefetchesTemplatePackageMetadata: true };
 
     private static bool ShouldPrefetchCliPackages(SystemCommand? command)
-    {
-        // If the command implements IPackageMetaPrefetchingCommand, use its setting
-        if (command is IPackageMetaPrefetchingCommand prefetchingCommand)
-        {
-            return prefetchingCommand.PrefetchesCliPackageMetadata;
-        }
-
-        // Default behavior: always prefetch CLI packages for update notifications
-        return true;
-    }
-
-    private static bool IsRuntimeOnlyCommand(SystemCommand command)
-    {
-        var commandName = command.Name;
-        return commandName is "run" or "publish" or "deploy" or "do";
-    }
+        => command is BaseCommand { PrefetchesCliPackageMetadata: true };
 }

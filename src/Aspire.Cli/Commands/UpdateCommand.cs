@@ -24,6 +24,8 @@ internal sealed class UpdateCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
 
+    internal override bool PrefetchesCliPackageMetadata => true;
+
     private readonly IProjectLocator _projectLocator;
     private readonly IPackagingService _packagingService;
     private readonly IAppHostProjectFactory _projectFactory;

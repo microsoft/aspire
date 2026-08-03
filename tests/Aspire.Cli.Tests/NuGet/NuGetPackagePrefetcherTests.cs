@@ -32,46 +32,56 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
         Assert.Same(testCommand, executionContext.Command);
     }
 
-    [Theory]
-    [InlineData("run", true)]
-    [InlineData("publish", true)]
-    [InlineData("deploy", true)]
-    [InlineData("new", false)]
-    [InlineData("add", false)]
-    public void ShouldPrefetchTemplatePackagesReturnsCorrectValueForRuntimeCommands(string commandName, bool expectSkipTemplatePackages)
+    [Fact]
+    public void NewCommandsDefaultToNoPackageMetadataPrefetching()
     {
-        var command = new TestCommand(commandName);
-        
-        // Create test prefetcher to access static method
-        bool shouldPrefetch = TestNuGetPrefetcher.TestShouldPrefetchTemplatePackages(command);
-        bool shouldSkip = !shouldPrefetch;
-        
-        Assert.Equal(expectSkipTemplatePackages, shouldSkip);
+        var command = new TestCommand();
+
+        Assert.False(command.PrefetchesTemplatePackageMetadata);
+        Assert.False(command.PrefetchesCliPackageMetadata);
+    }
+
+#if DEBUG
+    [Fact]
+    public async Task TemplatePackageMetadataConsumptionRequiresPrefetchCapabilityInTests()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.NuGetPackageCacheFactory = _ => new FakeNuGetPackageCache();
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<LsCommand>();
+        command.SelectForExecution(command.Parse("ls"));
+        var channel = (await provider.GetRequiredService<IPackagingService>().GetChannelsAsync()).First();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            channel.GetTemplatePackagesAsync(workspace.WorkspaceRoot, CancellationToken.None));
+
+        Assert.Contains(nameof(BaseCommand.PrefetchesTemplatePackageMetadata), exception.Message);
     }
 
     [Fact]
-    public void ShouldPrefetchTemplatePackagesWithNullCommandReturnsTrueForDefaultBehavior()
+    public async Task CachedCliPackageMetadataConsumptionRequiresPrefetchCapabilityInTests()
     {
-        bool shouldPrefetch = TestNuGetPrefetcher.TestShouldPrefetchTemplatePackages(null);
-        
-        Assert.True(shouldPrefetch);
-    }
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.NuGetPackageCacheFactory = _ => new FakeNuGetPackageCache();
+        });
+        using var provider = services.BuildServiceProvider();
 
-    [Fact]
-    public void NewCommandImplementsIPackageMetaPrefetchingCommand()
-    {
-        // This test verifies that NewCommand correctly implements the interface
-        Assert.True(typeof(IPackageMetaPrefetchingCommand).IsAssignableFrom(typeof(NewCommand)));
-    }
+        var command = provider.GetRequiredService<LsCommand>();
+        command.SelectForExecution(command.Parse("ls"));
+        var updateNotifier = provider.GetRequiredService<ICliUpdateNotifier>();
 
-    [Fact]
-    public void PackageMetaPrefetchingCommandDefaultsToTrueForBothPackageTypes()
-    {
-        var testCommandWithInterface = new TestCommandWithInterface();
-        
-        Assert.True(testCommandWithInterface.PrefetchesTemplatePackageMetadata);
-        Assert.True(testCommandWithInterface.PrefetchesCliPackageMetadata);
+        var exception = Assert.Throws<InvalidOperationException>(() => updateNotifier.IsUpdateAvailable());
+        Assert.Contains(nameof(BaseCommand.PrefetchesCliPackageMetadata), exception.Message);
+
+        _ = await updateNotifier.GetVersionStatusAsync(workspace.WorkspaceRoot, CancellationToken.None);
     }
+#endif
 
     [Fact]
     public async Task PrefetchingCancellationDueToShutdownLogsCleanMessage()
@@ -80,7 +90,7 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
 
         using var stoppingCts = new CancellationTokenSource();
         var executionContext = CreateExecutionContext();
-        executionContext.CommandSelected.TrySetResult(new TestCommand("new"));
+        executionContext.CommandSelected.TrySetResult(new TestCommand(prefetchesTemplatePackages: true, prefetchesCliPackages: true));
 
         var features = new TestFeatures();
         features.SetFeature(KnownFeatures.UpdateNotificationsEnabled, true);
@@ -152,7 +162,7 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
         var sink = new TestSink();
 
         var executionContext = CreateExecutionContext();
-        executionContext.CommandSelected.TrySetResult(new TestCommand("new"));
+        executionContext.CommandSelected.TrySetResult(new TestCommand(prefetchesTemplatePackages: true, prefetchesCliPackages: true));
 
         var ex = new InvalidOperationException("Something went wrong");
         var packagingService = new TestPackagingService
@@ -186,74 +196,53 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
         await prefetcher.StopAsync(CancellationToken.None).DefaultTimeout();
     }
 
-    // The tests below resolve the real commands and drive the real NuGetPackagePrefetcher rather than
-    // going through TestNuGetPrefetcher at the bottom of this file. That helper re-implements the
-    // production prefetch decision instead of calling it, and has already drifted from it: its
-    // IsRuntimeOnlyCommand is missing "do". Tests written against the copy pass no matter what the
-    // production code decides, which is exactly the behaviour these tests need to pin down.
     [Theory]
-    [InlineData(typeof(LsCommand))]
-    [InlineData(typeof(PsCommand))]
-    public void ReadOnlyCommandsDisablePackageMetadataPrefetching(Type commandType)
+    [InlineData(typeof(NewCommand), true, true)]
+    [InlineData(typeof(InitCommand), true, true)]
+    [InlineData(typeof(AddCommand), false, true)]
+    [InlineData(typeof(PublishCommand), false, true)]
+    [InlineData(typeof(UpdateCommand), false, true)]
+    [InlineData(typeof(RunCommand), false, true)]
+    [InlineData(typeof(LsCommand), false, false)]
+    [InlineData(typeof(PsCommand), false, false)]
+    [InlineData(typeof(IntegrationListCommand), false, false)]
+    [InlineData(typeof(IntegrationSearchCommand), false, false)]
+    [InlineData(typeof(DoctorCommand), false, false)]
+    [InlineData(typeof(IntegrationCommand), false, false)]
+    public async Task CommandsStartExpectedPackageMetadataPrefetching(Type commandType, bool expectedTemplatePrefetch, bool expectedCliPrefetch)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
-        var command = provider.GetRequiredService(commandType);
+        var command = Assert.IsAssignableFrom<BaseCommand>(provider.GetRequiredService(commandType));
 
-        var prefetchingCommand = Assert.IsAssignableFrom<IPackageMetaPrefetchingCommand>(command);
-        Assert.False(prefetchingCommand.PrefetchesTemplatePackageMetadata);
-        Assert.False(prefetchingCommand.PrefetchesCliPackageMetadata);
+        await AssertPrefetchingAsync(provider, command, command.Name, expectedTemplatePrefetch, expectedCliPrefetch);
     }
 
-    [Theory]
-    [InlineData(typeof(LsCommand))]
-    [InlineData(typeof(PsCommand))]
-    public async Task ReadOnlyCommandsStartNoPrefetching(Type commandType)
+    [Fact]
+    public async Task GeneratedTemplateCommandStartsBothPackageMetadataPrefetches()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
-        var executionContext = CreateExecutionContext();
-        executionContext.CommandSelected.TrySetResult((Command)provider.GetRequiredService(commandType));
+        var newCommand = provider.GetRequiredService<NewCommand>();
+        var templateCommand = Assert.IsType<TemplateCommand>(newCommand.Subcommands.First());
 
-        var features = new TestFeatures();
-        features.SetFeature(KnownFeatures.UpdateNotificationsEnabled, true);
+        await AssertPrefetchingAsync(provider, templateCommand, templateCommand.Name, expectedTemplatePrefetch: true, expectedCliPrefetch: true);
+    }
 
-        var templateStarted = false;
-        var packagingService = new TestPackagingService
-        {
-            GetChannelsAsyncCallback = _ =>
-            {
-                templateStarted = true;
-                return Task.FromResult(Enumerable.Empty<PackageChannel>());
-            }
-        };
+    [Fact]
+    public async Task DetachedRunStartsNoPackageMetadataPrefetching()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
 
-        var cliStarted = false;
-        var updateNotifier = new TestCliUpdateNotifier
-        {
-            CheckForCliUpdatesAsyncCallback = (_, _) =>
-            {
-                cliStarted = true;
-                return Task.CompletedTask;
-            }
-        };
+        var command = provider.GetRequiredService<RunCommand>();
 
-        var prefetcher = CreatePrefetcher(
-            executionContext,
-            features,
-            packagingService,
-            updateNotifier);
-
-        await prefetcher.StartAsync(CancellationToken.None).DefaultTimeout();
-        await prefetcher.ExecuteTask!.DefaultTimeout();
-        await prefetcher.StopAsync(CancellationToken.None).DefaultTimeout();
-
-        Assert.False(templateStarted);
-        Assert.False(cliStarted);
+        await AssertPrefetchingAsync(provider, command, "run --detach", expectedTemplatePrefetch: false, expectedCliPrefetch: false);
     }
 
     // Command selection happens in BaseCommand's action, which the host reaches only after the first-run
@@ -319,7 +308,7 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
     public async Task InFlightPrefetchingCompletesBeforeTheServiceStops()
     {
         var executionContext = CreateExecutionContext();
-        executionContext.CommandSelected.TrySetResult(new TestCommand("new"));
+        executionContext.CommandSelected.TrySetResult(new TestCommand(prefetchesTemplatePackages: true, prefetchesCliPackages: true));
 
         var features = new TestFeatures();
         features.SetFeature(KnownFeatures.UpdateNotificationsEnabled, true);
@@ -397,6 +386,48 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
             updateNotifier);
     }
 
+    private static async Task AssertPrefetchingAsync(
+        IServiceProvider provider,
+        BaseCommand command,
+        string commandLine,
+        bool expectedTemplatePrefetch,
+        bool expectedCliPrefetch)
+    {
+        var features = new TestFeatures();
+        features.SetFeature(KnownFeatures.UpdateNotificationsEnabled, true);
+
+        var templateStarted = false;
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ =>
+            {
+                templateStarted = true;
+                return Task.FromResult(Enumerable.Empty<PackageChannel>());
+            }
+        };
+
+        var cliStarted = false;
+        var updateNotifier = new TestCliUpdateNotifier
+        {
+            CheckForCliUpdatesAsyncCallback = (_, _) =>
+            {
+                cliStarted = true;
+                return Task.CompletedTask;
+            }
+        };
+
+        var executionContext = provider.GetRequiredService<CliExecutionContext>();
+        var prefetcher = CreatePrefetcher(executionContext, features, packagingService, updateNotifier);
+
+        await prefetcher.StartAsync(CancellationToken.None).DefaultTimeout();
+        command.SelectForExecution(command.Parse(commandLine));
+        await prefetcher.ExecuteTask!.DefaultTimeout();
+        await prefetcher.StopAsync(CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(expectedTemplatePrefetch, templateStarted);
+        Assert.Equal(expectedCliPrefetch, cliStarted);
+    }
+
     private static TestLogger<NuGetPackagePrefetcher> CreateLogger(TestSink sink)
         => new(new TestLoggerFactory(sink, enabled: true));
 
@@ -407,61 +438,20 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
     }
 }
 
-// Test helper class to expose static methods for testing
-internal static class TestNuGetPrefetcher
-{
-    public static bool TestShouldPrefetchTemplatePackages(BaseCommand? command)
-    {
-        // If the command implements IPackageMetaPrefetchingCommand, use its setting
-        if (command is IPackageMetaPrefetchingCommand prefetchingCommand)
-        {
-            return prefetchingCommand.PrefetchesTemplatePackageMetadata;
-        }
-
-        // Default behavior: prefetch templates for all commands except run, publish, deploy
-        return command is null || !IsRuntimeOnlyCommand(command);
-    }
-
-    public static bool TestShouldPrefetchCliPackages(BaseCommand? command)
-    {
-        // If the command implements IPackageMetaPrefetchingCommand, use its setting
-        if (command is IPackageMetaPrefetchingCommand prefetchingCommand)
-        {
-            return prefetchingCommand.PrefetchesCliPackageMetadata;
-        }
-
-        // Default behavior: always prefetch CLI packages for update notifications
-        return true;
-    }
-
-    private static bool IsRuntimeOnlyCommand(BaseCommand command)
-    {
-        var commandName = command.Name;
-        return commandName is "run" or "publish" or "deploy";
-    }
-}
-
-// Test command implementations
 internal sealed class TestCommand : BaseCommand
 {
-    public TestCommand(string name = "test") : base(name, "Test command", new CommonCommandServices(null!, null!, null!, null!, null!, null!, null!, null!))
-    {
-    }
+    private readonly bool _prefetchesTemplatePackages;
+    private readonly bool _prefetchesCliPackages;
 
-    protected override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
-    {
-        return Task.FromResult(CommandResult.Success());
-    }
-}
+    internal override bool PrefetchesTemplatePackageMetadata => _prefetchesTemplatePackages;
+    internal override bool PrefetchesCliPackageMetadata => _prefetchesCliPackages;
 
-internal sealed class TestCommandWithInterface : BaseCommand, IPackageMetaPrefetchingCommand
-{
-    public TestCommandWithInterface() : base("test-interface", "Test command with interface", new CommonCommandServices(null!, null!, null!, null!, null!, null!, null!, null!))
+    public TestCommand(bool prefetchesTemplatePackages = false, bool prefetchesCliPackages = false)
+        : base("test", "Test command", new CommonCommandServices(null!, null!, null!, null!, null!, null!, null!, null!))
     {
+        _prefetchesTemplatePackages = prefetchesTemplatePackages;
+        _prefetchesCliPackages = prefetchesCliPackages;
     }
-
-    public bool PrefetchesTemplatePackageMetadata => true;
-    public bool PrefetchesCliPackageMetadata => true;
 
     protected override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
