@@ -43,7 +43,7 @@ public sealed class AzureBicepResourceScope
     /// </summary>
     /// <param name="subscription">The subscription identifier for subscription-level resources.</param>
     /// <returns>A new <see cref="AzureBicepResourceScope"/> scoped to the subscription.</returns>
-    public static AzureBicepResourceScope ForSubscription(object subscription)
+    public static AzureBicepResourceScope CreateForSubscription(object subscription)
     {
         ArgumentNullException.ThrowIfNull(subscription);
 
@@ -54,7 +54,7 @@ public sealed class AzureBicepResourceScope
     /// Creates a scope for tenant-level resources in the current tenant.
     /// </summary>
     /// <returns>A new <see cref="AzureBicepResourceScope"/> scoped to the current tenant.</returns>
-    public static AzureBicepResourceScope ForTenant()
+    public static AzureBicepResourceScope CreateForTenant()
     {
         return new AzureBicepResourceScope(resourceGroup: null, subscription: null, isTenantScope: true);
     }
@@ -80,14 +80,14 @@ public sealed class AzureBicepResourceScope
 
         if (annotation.IsTenantScope)
         {
-            return ForTenant();
+            return CreateForTenant();
         }
 
         return (annotation.ResourceGroup, annotation.Subscription) switch
         {
             ({ } resourceGroup, { } subscription) => new AzureBicepResourceScope(resourceGroup, subscription),
             ({ } resourceGroup, null) => new AzureBicepResourceScope(resourceGroup),
-            (null, { } subscription) => ForSubscription(subscription),
+            (null, { } subscription) => CreateForSubscription(subscription),
             _ => null
         };
     }
