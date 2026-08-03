@@ -2366,8 +2366,12 @@ function makeCancellationToken(): vscode.CancellationToken {
 }
 
 async function waitForMicrotasks(): Promise<void> {
-    await Promise.resolve();
-    await Promise.resolve();
+    // Flush enough microtask ticks for the multi-await discovery startup path
+    // (CLI path -> config-info capability probe -> aspire ls) to reach process spawn.
+    // Avoid a real timer because several tests install sinon fake timers.
+    for (let i = 0; i < 20; i++) {
+        await Promise.resolve();
+    }
 }
 
 function emitLsStream(options: cliModule.SpawnProcessOptions | undefined, entries: readonly unknown[]): void {
