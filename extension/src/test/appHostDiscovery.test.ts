@@ -762,13 +762,17 @@ suite('AppHost discovery', () => {
         test('repeated project changes do not restart active discovery', async () => {
             const watcherCallbacks = stubFileSystemWatchers(sandbox);
             const clock = sandbox.useFakeTimers();
-            const childProcess = {
+            const childProcess = Object.assign(new EventEmitter(), {
                 killed: false,
-                kill: sandbox.stub().callsFake(() => {
-                    childProcess.killed = true;
-                    return true;
-                }),
-            };
+                exitCode: null,
+                signalCode: null,
+                kill: sandbox.stub(),
+            });
+            childProcess.kill.callsFake(() => {
+                childProcess.killed = true;
+                childProcess.emit('exit', null);
+                return true;
+            });
             sandbox.stub(cliModule, 'spawnCliProcess').returns(childProcess as any);
             const service = new AppHostDiscoveryService(makeTerminalProvider());
             const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
