@@ -978,6 +978,10 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     }
 
     getChildren(element?: TreeElement): TreeElement[] {
+        if (!element && this._repository.isLoading) {
+            return [];
+        }
+
         if (this._repository.viewMode === 'workspace') {
             return this._getWorkspaceChildren(element);
         }
@@ -988,10 +992,6 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
     private _getWorkspaceChildren(element?: TreeElement): TreeElement[] {
         if (!element) {
-            if (this._repository.isLoading) {
-                return [];
-            }
-
             const workspaceResources = [...this._repository.workspaceResources];
             const workspaceAppHost = this._repository.workspaceAppHost;
             const workspaceCandidatePaths = this._repository.workspaceAppHostCandidatePaths ?? [];
@@ -1166,10 +1166,6 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
     private _getGlobalChildren(element?: TreeElement): TreeElement[] {
         if (!element) {
-            if (this._repository.isLoading) {
-                return [];
-            }
-
             const appHosts = this._repository.appHosts;
             const labels = shortenPaths(appHosts.map(appHost => appHost.appHostPath));
             return appHosts.map((appHost, index) => new AppHostItem(appHost, labels[index], this._repository.workspaceAppHostDescription, this._isStoppingAppHost(appHost.appHostPath)));
