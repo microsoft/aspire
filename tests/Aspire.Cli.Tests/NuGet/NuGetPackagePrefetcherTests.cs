@@ -57,7 +57,7 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
         command.SelectForExecution(command.Parse("ls"));
         var channel = (await provider.GetRequiredService<IPackagingService>().GetChannelsAsync()).First();
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<PackageMetadataPrefetchingValidationException>(() =>
             channel.GetTemplatePackagesAsync(workspace.WorkspaceRoot, CancellationToken.None));
 
         Assert.Contains(nameof(BaseCommand.PrefetchesTemplatePackageMetadata), exception.Message);
@@ -77,10 +77,30 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
         command.SelectForExecution(command.Parse("ls"));
         var updateNotifier = provider.GetRequiredService<ICliUpdateNotifier>();
 
-        var exception = Assert.Throws<InvalidOperationException>(() => updateNotifier.IsUpdateAvailable());
+        var exception = Assert.Throws<PackageMetadataPrefetchingValidationException>(() => updateNotifier.IsUpdateAvailable());
         Assert.Contains(nameof(BaseCommand.PrefetchesCliPackageMetadata), exception.Message);
 
         _ = await updateNotifier.GetVersionStatusAsync(workspace.WorkspaceRoot, CancellationToken.None);
+    }
+#endif
+
+#if !DEBUG
+    [Fact]
+    public async Task PackageMetadataConsumptionWithoutPrefetchCapabilityDoesNotThrowInReleaseBuilds()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.NuGetPackageCacheFactory = _ => new FakeNuGetPackageCache();
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<LsCommand>();
+        command.SelectForExecution(command.Parse("ls"));
+        var channel = (await provider.GetRequiredService<IPackagingService>().GetChannelsAsync()).First();
+
+        _ = await channel.GetTemplatePackagesAsync(workspace.WorkspaceRoot, CancellationToken.None);
+        _ = provider.GetRequiredService<ICliUpdateNotifier>().IsUpdateAvailable();
     }
 #endif
 

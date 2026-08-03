@@ -5,6 +5,7 @@ using System.CommandLine;
 using System.CommandLine.Help;
 using System.Globalization;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
@@ -217,6 +218,10 @@ internal abstract class BaseCommand : Command
             try
             {
                 services.UpdateNotifier.NotifyIfUpdateAvailable();
+            }
+            catch (PackageMetadataPrefetchingValidationException)
+            {
+                throw;
             }
             catch
             {

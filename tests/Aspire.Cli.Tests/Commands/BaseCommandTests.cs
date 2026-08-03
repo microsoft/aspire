@@ -4,6 +4,9 @@
 using System.Globalization;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
+#if DEBUG
+using Aspire.Cli.NuGet;
+#endif
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -111,6 +114,56 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(0, testInteractionService.DisplayEmptyLineCount);
     }
+
+#if DEBUG
+    [Fact]
+    public async Task BaseCommand_UpdateNotificationValidationFailureEscapesInDebugBuilds()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var expectedException = new PackageMetadataPrefetchingValidationException("Package metadata prefetching validation failed.");
+        var testNotifier = new TestCliUpdateNotifier
+        {
+            NotifyIfUpdateAvailableCallback = () => throw expectedException
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliUpdateNotifierFactory = _ => testNotifier;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("stop");
+        var action = Assert.IsAssignableFrom<System.CommandLine.Invocation.AsynchronousCommandLineAction>(result.Action);
+
+        var actualException = await Assert.ThrowsAsync<PackageMetadataPrefetchingValidationException>(() => action.InvokeAsync(result, TestContext.Current.CancellationToken));
+
+        Assert.Same(expectedException, actualException);
+    }
+#endif
+
+#if !DEBUG
+    [Fact]
+    public async Task BaseCommand_UpdateNotificationFailureIsIgnoredInReleaseBuilds()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var testNotifier = new TestCliUpdateNotifier
+        {
+            NotifyIfUpdateAvailableCallback = () => throw new InvalidOperationException("Update notification failed.")
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliUpdateNotifierFactory = _ => testNotifier;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("stop");
+
+        _ = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.True(testNotifier.NotifyWasCalled);
+    }
+#endif
 
     [Theory]
     [InlineData("run --format json", false)]

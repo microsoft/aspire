@@ -1,12 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Globalization;
 using System.Security;
 using Aspire.Cli.Acquisition;
-#if DEBUG
 using Aspire.Cli.Commands;
-#endif
 using Aspire.Cli.Configuration;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Resources;
@@ -267,19 +266,16 @@ internal class PackagingService : IPackagingService
         return Task.FromResult<IEnumerable<PackageChannel>>(channels);
     }
 
-#if DEBUG
-    private Action? TemplatePackageMetadataPrefetchingValidation => ValidateTemplatePackageMetadataPrefetching;
+    private Action TemplatePackageMetadataPrefetchingValidation => () => ValidateTemplatePackageMetadataPrefetching();
 
+    [Conditional("DEBUG")]
     private void ValidateTemplatePackageMetadataPrefetching()
     {
         if (_executionContext.Command is BaseCommand { PrefetchesTemplatePackageMetadata: false } command)
         {
-            throw new InvalidOperationException($"Command '{command.Name}' consumes template package metadata but does not enable {nameof(BaseCommand.PrefetchesTemplatePackageMetadata)}.");
+            throw new PackageMetadataPrefetchingValidationException($"Command '{command.Name}' consumes template package metadata but does not enable {nameof(BaseCommand.PrefetchesTemplatePackageMetadata)}.");
         }
     }
-#else
-    private static Action? TemplatePackageMetadataPrefetchingValidation => null;
-#endif
 
     private string? TryGetProcessPathForPrInstallDiscovery()
     {

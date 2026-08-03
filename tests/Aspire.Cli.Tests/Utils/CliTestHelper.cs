@@ -400,12 +400,8 @@ internal sealed class CliServiceCollectionTestOptions
         var nuGetPackageCache = serviceProvider.GetRequiredService<INuGetPackageCache>();
         var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
         var processPathProvider = serviceProvider.GetRequiredService<IProcessPathProvider>();
-    #if DEBUG
         var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
         return new CliUpdateNotifier(logger, nuGetPackageCache, interactionService, processPathProvider, executionContext);
-    #else
-        return new CliUpdateNotifier(logger, nuGetPackageCache, interactionService, processPathProvider);
-    #endif
     };
 
     public Func<IServiceProvider, IAddCommandPrompter> AddCommandPrompterFactory { get; set; } = (IServiceProvider serviceProvider) =>
