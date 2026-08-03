@@ -24,7 +24,7 @@ public class OrleansProviderTypeTests
         var silo = builder.AddContainer("silo", "image")
             .WithReference(orleans);
 
-        var config = await GetEnvironmentVariablesAsync(silo.Resource, builder);
+        var config = await TestUtils.GetEnvironmentVariablesAsync(silo.Resource, builder);
 
         Assert.Equal("TestProvider", config["Orleans__Clustering__ProviderType"]);
         Assert.Equal("provider", config["Orleans__Clustering__ServiceKey"]);
@@ -46,7 +46,7 @@ public class OrleansProviderTypeTests
         var silo = builder.AddContainer("silo", "image")
             .WithReference(orleans);
 
-        var config = await GetEnvironmentVariablesAsync(silo.Resource, builder);
+        var config = await TestUtils.GetEnvironmentVariablesAsync(silo.Resource, builder);
 
         Assert.Equal("Redis", config["Orleans__Clustering__ProviderType"]);
         Assert.Equal("provider", config["Orleans__Clustering__ServiceKey"]);
@@ -61,11 +61,11 @@ public class OrleansProviderTypeTests
         {
             ConnectionString = "connectionString"
         })
-            .WithOrleansProviderType("Redis")
-            .WithOrleansProviderType("AdoNet");
+            .WithOrleansProviderType("AdoNet")
+            .WithOrleansProviderType("Redis");
 
         var annotation = Assert.Single(provider.Resource.Annotations.OfType<OrleansProviderTypeAnnotation>());
-        Assert.Equal("AdoNet", annotation.ProviderType);
+        Assert.Equal("Redis", annotation.ProviderType);
 
         var orleans = builder.AddOrleans("orleans")
             .WithClustering(provider);
@@ -73,9 +73,9 @@ public class OrleansProviderTypeTests
         var silo = builder.AddContainer("silo", "image")
             .WithReference(orleans);
 
-        var config = await GetEnvironmentVariablesAsync(silo.Resource, builder);
+        var config = await TestUtils.GetEnvironmentVariablesAsync(silo.Resource, builder);
 
-        Assert.Equal("AdoNet", config["Orleans__Clustering__ProviderType"]);
+        Assert.Equal("Redis", config["Orleans__Clustering__ProviderType"]);
     }
 
     [Fact]
@@ -122,26 +122,5 @@ public class OrleansProviderTypeTests
             ? Assert.Throws<ArgumentNullException>(action)
             : Assert.Throws<ArgumentException>(action);
         Assert.Equal(nameof(providerType), exception.ParamName);
-    }
-
-    private sealed class TestProviderResource(string name) : Resource(name), IResourceWithConnectionString
-    {
-        public string? ConnectionString { get; init; }
-
-        public ReferenceExpression ConnectionStringExpression =>
-            ReferenceExpression.Create($"{ConnectionString}");
-    }
-
-    private static async Task<Dictionary<string, object>> GetEnvironmentVariablesAsync(IResource resource, IDistributedApplicationBuilder builder)
-    {
-        var env = new Dictionary<string, object>();
-        var context = new EnvironmentCallbackContext(builder.ExecutionContext, resource, env);
-
-        foreach (var callback in resource.Annotations.OfType<EnvironmentCallbackAnnotation>())
-        {
-            await callback.Callback(context).ConfigureAwait(false);
-        }
-
-        return env;
     }
 }
