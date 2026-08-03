@@ -143,6 +143,24 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("StateColumnResourceNotStarted", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Resource is waiting for parameter values..
+        /// </summary>
+        public static string StateColumnResourceUnresolvedParameters {
+            get {
+                return ResourceManager.GetString("StateColumnResourceUnresolvedParameters", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Waiting for parameters: {0}..
+        /// </summary>
+        public static string StateColumnResourceUnresolvedParametersList {
+            get {
+                return ResourceManager.GetString("StateColumnResourceUnresolvedParametersList", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Resource is waiting for dependencies..

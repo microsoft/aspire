@@ -543,10 +543,7 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(value);
 
-        if (value is IValueWithReferences valueWithReferences)
-        {
-            WalkAndLinkResourceReferences(builder, valueWithReferences.References);
-        }
+        WalkAndLinkResourceReferences(builder, [value]);
 
         return builder.WithEnvironment(context =>
         {
@@ -573,11 +570,7 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(value);
 
-        // Check if the value has resource references and link them
-        if (value is IValueWithReferences valueWithReferences)
-        {
-            WalkAndLinkResourceReferences(builder, valueWithReferences.References);
-        }
+        WalkAndLinkResourceReferences(builder, [value]);
 
         return builder.WithEnvironment(context =>
         {
@@ -1117,6 +1110,20 @@ public static class ResourceBuilderExtensions
         // Determine what to inject based on the annotation on the destination resource
         builder.Resource.TryGetLastAnnotation<ReferenceEnvironmentInjectionAnnotation>(out var injectionAnnotation);
         var flags = injectionAnnotation?.Flags ?? ReferenceEnvironmentInjectionFlags.All;
+
+        var injectedValues = new List<object>();
+        if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.ConnectionString))
+        {
+            injectedValues.Add(resource.ConnectionStringExpression);
+        }
+
+        if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.ConnectionProperties))
+        {
+            injectedValues.AddRange(resource.GetConnectionProperties().Select(static property => property.Value));
+            injectedValues.AddRange(resource.Annotations.OfType<ConnectionPropertyAnnotation>().Select(static annotation => annotation.Value));
+        }
+
+        WalkAndLinkResourceReferences(builder, injectedValues);
 
         return builder.WithEnvironment(context =>
         {
@@ -4519,7 +4526,8 @@ public static class ResourceBuilderExtensions
             {
                 AddReference(resourceBuilder.Resource);
             }
-            else if (value is IValueWithReferences valueWithReferences)
+
+            if (value is IValueWithReferences valueWithReferences)
             {
                 foreach (var reference in valueWithReferences.References)
                 {

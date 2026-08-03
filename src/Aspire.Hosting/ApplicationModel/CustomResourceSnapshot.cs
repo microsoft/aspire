@@ -465,6 +465,11 @@ public static class KnownResourceStates
     public static readonly string Waiting = nameof(Waiting);
 
     /// <summary>
+    /// The unresolved parameters state. Useful for showing that a resource is waiting for parameter values.
+    /// </summary>
+    public static readonly string UnresolvedParameters = nameof(UnresolvedParameters);
+
+    /// <summary>
     /// The not started state. Useful for showing the resource was created without being started.
     /// </summary>
     public static readonly string NotStarted = nameof(NotStarted);

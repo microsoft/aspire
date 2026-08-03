@@ -33,6 +33,27 @@ public sealed class ParameterProcessor(
     private CancellationTokenSource? _allParametersResolvedCts;
     private Task? _parameterResolutionTask;
 
+    internal event Func<ParameterResource, Task>? ParameterBecameUnresolved;
+
+    internal bool HasUnresolvedParameters
+    {
+        get
+        {
+            lock (_resolutionTaskLock)
+            {
+                return _unresolvedParameters.Count > 0;
+            }
+        }
+    }
+
+    internal bool IsParameterUnresolved(ParameterResource parameterResource)
+    {
+        lock (_resolutionTaskLock)
+        {
+            return _unresolvedParameters.Contains(parameterResource);
+        }
+    }
+
     /// <summary>
     /// Initializes parameter resources and handles unresolved parameters if interaction service is available.
     /// </summary>
@@ -52,7 +73,7 @@ public sealed class ParameterProcessor(
 
         // If interaction service is available, we can handle unresolved parameters.
         // This will allow the user to provide values for parameters that could not be initialized.
-        if (interactionService.IsAvailable && _unresolvedParameters.Count > 0)
+        if (interactionService.IsAvailable && HasUnresolvedParameters)
         {
             // Start the loop that will allow the user to specify values for unresolved parameters.
             var task = EnsureParameterResolutionTaskRunningAsync();
@@ -76,7 +97,7 @@ public sealed class ParameterProcessor(
                 {
                     try
                     {
-                        await HandleUnresolvedParametersAsync(_unresolvedParameters, cts.Token).ConfigureAwait(false);
+                        await HandleTrackedUnresolvedParametersAsync(cts.Token).ConfigureAwait(false);
                         logger.LogDebug("All unresolved parameters have been handled successfully.");
                     }
                     catch (Exception ex)
@@ -162,7 +183,7 @@ public sealed class ParameterProcessor(
             {
                 // If interaction service is available, we can prompt the user to provide a value.
                 // Add the parameter to unresolved parameters list.
-                _unresolvedParameters.Add(parameterResource);
+                AddUnresolvedParameter(parameterResource);
 
                 loggerService.GetLogger(parameterResource)
                     .LogWarning("Parameter resource {ResourceName} could not be initialized. Waiting for user input.", parameterResource.Name);
@@ -427,7 +448,7 @@ public sealed class ParameterProcessor(
             bool.TryParse(sv, out var s) && s;
 
         await ApplyParameterValueAsync(parameterResource, value, shouldSave, cancellationToken).ConfigureAwait(false);
-        OnParameterResolved(_unresolvedParameters, parameterResource);
+        OnParameterResolved(parameterResource);
 
         return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceSetParameter, parameterResource.Name) };
     }
@@ -459,17 +480,12 @@ public sealed class ParameterProcessor(
             }
 
             // Add the parameter back to unresolved parameters
-            if (!_unresolvedParameters.Contains(parameterResource))
+            if (AddUnresolvedParameter(parameterResource, resetCompletedValueTask: true))
             {
-                _unresolvedParameters.Add(parameterResource);
-
-                // Reset the WaitForValueTcs so the parameter can be resolved again
-                var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-                tcs.SetException(new MissingParameterValueException("Parameter value has been deleted."));
-                parameterResource.WaitForValueTcs = tcs;
-
                 // Update the parameter's state to show it's missing a value
                 await UpdateParameterStateAsync(parameterResource, "Parameter value has been deleted", new(KnownResourceStates.ValueMissing, KnownResourceStateStyles.Warn)).ConfigureAwait(false);
+
+                await NotifyParameterBecameUnresolvedAsync(parameterResource).ConfigureAwait(false);
 
                 // Start the resolution task if it's not running
                 _ = EnsureParameterResolutionTaskRunningAsync();
@@ -519,13 +535,38 @@ public sealed class ParameterProcessor(
     }
 
     // Internal for testing purposes - allows passing specific parameters to test.
-    internal async Task HandleUnresolvedParametersAsync(IList<ParameterResource> unresolvedParameters, CancellationToken cancellationToken)
+    internal Task HandleUnresolvedParametersAsync(IList<ParameterResource> unresolvedParameters, CancellationToken cancellationToken)
+    {
+        return HandleUnresolvedParametersCoreAsync(
+            () => [.. unresolvedParameters],
+            parameter => unresolvedParameters.Remove(parameter),
+            cancellationToken);
+    }
+
+    private Task HandleTrackedUnresolvedParametersAsync(CancellationToken cancellationToken)
+    {
+        return HandleUnresolvedParametersCoreAsync(
+            GetUnresolvedParametersSnapshot,
+            OnParameterResolved,
+            cancellationToken);
+    }
+
+    private async Task HandleUnresolvedParametersCoreAsync(
+        Func<ParameterResource[]> getUnresolvedParametersSnapshot,
+        Action<ParameterResource> onParameterResolved,
+        CancellationToken cancellationToken)
     {
         var stateModified = false;
 
         // This method will continue in a loop until all unresolved parameters are resolved.
-        while (unresolvedParameters.Count > 0)
+        while (true)
         {
+            var unresolvedParameterSnapshot = getUnresolvedParametersSnapshot();
+            if (unresolvedParameterSnapshot.Length == 0)
+            {
+                break;
+            }
+
             var showNotification = executionContext.IsRunMode;
             var showSaveToSecrets = executionContext.IsRunMode;
 
@@ -552,7 +593,7 @@ public sealed class ParameterProcessor(
                 // Now we build up a new form base on the unresolved parameters.
                 var resourceInputs = new List<(ParameterResource ParameterResource, InteractionInput Input)>();
 
-                foreach (var parameter in unresolvedParameters)
+                foreach (var parameter in unresolvedParameterSnapshot)
                 {
                     // Create an input for each unresolved parameter.
                     var input = parameter.CreateInput();
@@ -609,7 +650,7 @@ public sealed class ParameterProcessor(
                         }
 
                         // Remove the parameter from unresolved parameters list.
-                        OnParameterResolved(unresolvedParameters, parameter);
+                        onParameterResolved(parameter);
                     }
                 }
             }
@@ -621,13 +662,76 @@ public sealed class ParameterProcessor(
         }
     }
 
-    private void OnParameterResolved(IList<ParameterResource> unresolvedParameters, ParameterResource parameter)
+    private void OnParameterResolved(ParameterResource parameter)
     {
-        unresolvedParameters.Remove(parameter);
-
-        if (unresolvedParameters.Count == 0)
+        CancellationTokenSource? allParametersResolvedCts = null;
+        lock (_resolutionTaskLock)
         {
-            _allParametersResolvedCts?.Cancel();
+            _unresolvedParameters.Remove(parameter);
+            if (_unresolvedParameters.Count == 0)
+            {
+                allParametersResolvedCts = _allParametersResolvedCts;
+                _allParametersResolvedCts = null;
+                _parameterResolutionTask = null;
+            }
+        }
+
+        allParametersResolvedCts?.Cancel();
+    }
+
+    private bool AddUnresolvedParameter(ParameterResource parameterResource, bool resetCompletedValueTask = false)
+    {
+        lock (_resolutionTaskLock)
+        {
+            if (_unresolvedParameters.Contains(parameterResource))
+            {
+                return false;
+            }
+
+            // A completed task represents the deleted value and must be replaced before the parameter becomes
+            // visible as unresolved. Preserve a pending task so existing waiters receive the replacement value.
+            if (resetCompletedValueTask &&
+                (parameterResource.WaitForValueTcs is null || parameterResource.WaitForValueTcs.Task.IsCompleted))
+            {
+                parameterResource.WaitForValueTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+
+            _unresolvedParameters.Add(parameterResource);
+            return true;
+        }
+    }
+
+    private async Task NotifyParameterBecameUnresolvedAsync(ParameterResource parameterResource)
+    {
+        if (ParameterBecameUnresolved is not { } parameterBecameUnresolved)
+        {
+            return;
+        }
+
+        foreach (Func<ParameterResource, Task> handler in parameterBecameUnresolved.GetInvocationList())
+        {
+            try
+            {
+                await handler(parameterResource).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to publish unresolved state for parameter {ParameterName}.", parameterResource.Name);
+            }
+        }
+    }
+
+    private ParameterResource[] GetUnresolvedParametersSnapshot()
+    {
+        lock (_resolutionTaskLock)
+        {
+            if (_unresolvedParameters.Count == 0)
+            {
+                // Allow a concurrent deletion after this point to start a new resolution loop.
+                _parameterResolutionTask = null;
+            }
+
+            return [.. _unresolvedParameters];
         }
     }
 
@@ -661,6 +765,15 @@ public sealed class ParameterProcessor(
 
     private async Task UpdateParameterStateAsync(ParameterResource parameterResource, string value, ResourceStateSnapshot? state)
     {
+        // Referenced parameters do not have to be model resources, so distinct instances can share a name.
+        // The notification service has one snapshot per resource name; keep the first instance as its owner
+        // while still processing every instance's value task and unresolved state.
+        if (notificationService.TryGetCurrentState(parameterResource.Name, out var currentState) &&
+            !ReferenceEquals(currentState.Resource, parameterResource))
+        {
+            return;
+        }
+
         await notificationService.PublishUpdateAsync(parameterResource, s =>
         {
             return s with

@@ -391,6 +391,30 @@ public class WithEnvironmentTests
     }
 
     [Fact]
+    public void GenericWithEnvironmentLinksResourceAndNestedReferences()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var parameter = builder.AddParameter("parameter");
+        var source = builder.AddResource(new ReferencingTestResource("source", parameter.Resource));
+        var target = builder.AddProject<ProjectA>("target")
+                            .WithEnvironment("TEST_VAR", source.Resource);
+
+        Assert.True(target.Resource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships));
+        Assert.Collection(relationships,
+            relationship =>
+            {
+                Assert.Equal("Reference", relationship.Type);
+                Assert.Same(source.Resource, relationship.Resource);
+            },
+            relationship =>
+            {
+                Assert.Equal("Reference", relationship.Type);
+                Assert.Same(parameter.Resource, relationship.Resource);
+            });
+    }
+
+    [Fact]
     public async Task GenericWithEnvironmentHandlesResourceReferences()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -502,6 +526,12 @@ public class WithEnvironmentTests
     {
         public ReferenceExpression ConnectionStringExpression =>
             ReferenceExpression.Create($"{connectionString}");
+    }
+
+    private sealed class ReferencingTestResource(string name, ParameterResource parameter) : Resource(name), IResourceWithConnectionString
+    {
+        public ReferenceExpression ConnectionStringExpression =>
+            ReferenceExpression.Create($"{parameter}");
     }
 
     private sealed class ProjectA : IProjectMetadata

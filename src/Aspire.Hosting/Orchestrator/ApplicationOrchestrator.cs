@@ -63,6 +63,7 @@ internal sealed class ApplicationOrchestrator
         _serviceProvider = serviceProvider;
         _executionContext = executionContext;
         _parameterProcessor = parameterProcessor;
+        _parameterProcessor.ParameterBecameUnresolved += OnParameterBecameUnresolved;
         var dashboardUrl = dashboardOptions.Value.DashboardUrl?.Split(';', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
         Uri.TryCreate(dashboardUrl, UriKind.Absolute, out _dashboardUri);
 
@@ -70,6 +71,7 @@ internal sealed class ApplicationOrchestrator
         dcpExecutorEvents.Subscribe<OnResourceChangedContext>(OnResourceChanged);
         dcpExecutorEvents.Subscribe<OnEndpointsAllocatedContext>(OnEndpointsAllocated);
         dcpExecutorEvents.Subscribe<OnResourceStartingContext>(OnResourceStarting);
+        dcpExecutorEvents.Subscribe<OnResourceBeforeStartContext>(OnResourceBeforeStart);
         dcpExecutorEvents.Subscribe<OnConnectionStringAvailableContext>(OnConnectionStringAvailable);
         dcpExecutorEvents.Subscribe<OnResourceFailedToStartContext>(OnResourceFailedToStart);
 
@@ -109,16 +111,20 @@ internal sealed class ApplicationOrchestrator
         // This happens when resource start command is run, which forces the status to "Starting".
         var waitForNonWaitingStateTask = _notificationService.WaitForResourceAsync(
             @event.Resource.Name,
-            e => e.Snapshot.State?.Text != KnownResourceStates.Waiting,
+            e => e.Snapshot.State?.Text != KnownResourceStates.Waiting &&
+                e.Snapshot.State?.Text != KnownResourceStates.UnresolvedParameters,
             cts.Token);
 
         try
         {
             var completedTask = await Task.WhenAny(waitForDependenciesTask, waitForNonWaitingStateTask).ConfigureAwait(false);
-            if (completedTask.IsFaulted)
+            await completedTask.ConfigureAwait(false);
+
+            if (ReferenceEquals(completedTask, waitForDependenciesTask))
             {
-                // Make error visible from completed task.
-                await completedTask.ConfigureAwait(false);
+                // Normal dependency completion does not bypass parameter blocking. Wait until the startup
+                // blocker reducer moves the resource out of both informational waiting states.
+                await waitForNonWaitingStateTask.ConfigureAwait(false);
             }
         }
         catch (Exception ex)
@@ -209,15 +215,199 @@ internal sealed class ApplicationOrchestrator
                 break;
         }
 
-        var beforeResourceStartedEvent = new BeforeResourceStartedEvent(context.Resource, _serviceProvider);
-        await _eventing.PublishAsync(beforeResourceStartedEvent, context.CancellationToken).ConfigureAwait(false);
+        await PublishUnresolvedParametersStateAsync(context).ConfigureAwait(false);
+    }
 
-        static Task PublishUpdateAsync(ResourceNotificationService notificationService, IResource resource, string? resourceId, Func<CustomResourceSnapshot, CustomResourceSnapshot> stateFactory)
+    private Task OnResourceBeforeStart(OnResourceBeforeStartContext context)
+    {
+        var beforeResourceStartedEvent = new BeforeResourceStartedEvent(context.Resource, _serviceProvider);
+        return _eventing.PublishAsync(beforeResourceStartedEvent, context.CancellationToken);
+    }
+
+    private static Task PublishUpdateAsync(ResourceNotificationService notificationService, IResource resource, string? resourceId, Func<CustomResourceSnapshot, CustomResourceSnapshot> stateFactory)
+    {
+        return resourceId != null
+            ? notificationService.PublishUpdateAsync(resource, resourceId, stateFactory)
+            : notificationService.PublishUpdateAsync(resource, stateFactory);
+    }
+
+    private async Task PublishUnresolvedParametersStateAsync(OnResourceStartingContext context)
+    {
+        // Avoid walking references unless parameter processing found at least one value that is still
+        // waiting for user input.
+        if (!_parameterProcessor.HasUnresolvedParameters)
         {
-            return resourceId != null
-                ? notificationService.PublishUpdateAsync(resource, resourceId, stateFactory)
-                : notificationService.PublishUpdateAsync(resource, stateFactory);
+            return;
         }
+
+        // Launch callbacks must run after BeforeResourceStartedEvent and only once per start. Declarative
+        // references and the resource's own value expression provide the dependencies needed here without
+        // evaluating those callbacks early.
+        var unresolvedParameters = GetReferencedParameters(context.Resource)
+            .Where(_parameterProcessor.IsParameterUnresolved)
+            .OrderBy(static parameter => parameter.Name, StringComparers.ResourceName)
+            .ToArray();
+
+        if (unresolvedParameters.Length == 0)
+        {
+            return;
+        }
+
+        await PublishUnresolvedParametersUpdateAsync(context.Resource, context.DcpResourceName, unresolvedParameters, allowStartingState: true).ConfigureAwait(false);
+
+        // The launch configuration remains the authoritative startup gate and awaits these same parameter
+        // tasks. This monitor only keeps the informational state and parameter-name list up to date.
+        _ = MonitorUnresolvedParametersAsync(context.Resource, context.DcpResourceName, unresolvedParameters, context.CancellationToken);
+    }
+
+    private static IEnumerable<ParameterResource> GetReferencedParameters(IResource resource)
+    {
+        var parameters = new HashSet<ParameterResource>(ReferenceEqualityComparer.Instance);
+        var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
+
+        foreach (var relationship in resource.Annotations.OfType<ResourceRelationshipAnnotation>())
+        {
+            if (relationship.Type == KnownRelationshipTypes.Reference && relationship.Resource is ParameterResource parameter)
+            {
+                parameters.Add(parameter);
+            }
+        }
+
+        Walk(resource);
+        return parameters;
+
+        void Walk(object? value)
+        {
+            if (value is null || !visited.Add(value))
+            {
+                return;
+            }
+
+            if (value is ParameterResource parameter)
+            {
+                parameters.Add(parameter);
+            }
+
+            if (value is IValueWithReferences valueWithReferences)
+            {
+                foreach (var reference in valueWithReferences.References)
+                {
+                    Walk(reference);
+                }
+            }
+        }
+    }
+
+    private async Task MonitorUnresolvedParametersAsync(
+        IResource resource,
+        string? resourceId,
+        ParameterResource[] unresolvedParameters,
+        CancellationToken cancellationToken)
+    {
+        var remainingParameters = unresolvedParameters.ToHashSet();
+
+        // Parameters can complete concurrently. Serialize removal and publication so every snapshot contains
+        // a consistent list and a later completion cannot overwrite a newer list with stale data.
+        using var updateLock = new SemaphoreSlim(1, 1);
+
+        try
+        {
+            await Task.WhenAll(unresolvedParameters.Select(WaitForParameterAsync)).ConfigureAwait(false);
+
+            async Task WaitForParameterAsync(ParameterResource parameter)
+            {
+                var parameterTask = parameter.WaitForValueTcs!.Task;
+                try
+                {
+                    await parameterTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch
+                {
+                    // A completed parameter task no longer blocks startup. The normal resource
+                    // startup path reports the parameter failure separately.
+                }
+
+                await updateLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    remainingParameters.Remove(parameter);
+                    await PublishUnresolvedParametersUpdateAsync(resource, resourceId, remainingParameters).ConfigureAwait(false);
+                }
+                finally
+                {
+                    updateLock.Release();
+                }
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to update unresolved parameters for resource '{ResourceName}'.", resource.Name);
+        }
+    }
+
+    private async Task OnParameterBecameUnresolved(ParameterResource parameter)
+    {
+        foreach (var resource in _model.Resources)
+        {
+            var unresolvedParameters = GetReferencedParameters(resource)
+                .Where(_parameterProcessor.IsParameterUnresolved)
+                .ToArray();
+            if (!unresolvedParameters.Any(candidate => ReferenceEquals(candidate, parameter)))
+            {
+                continue;
+            }
+
+            await PublishUnresolvedParametersUpdateAsync(resource, resourceId: null, unresolvedParameters, allowStartingState: true).ConfigureAwait(false);
+            _ = MonitorUnresolvedParametersAsync(resource, resourceId: null, unresolvedParameters, _shutdownCancellation.Token);
+        }
+    }
+
+    private Task PublishUnresolvedParametersUpdateAsync(
+        IResource resource,
+        string? resourceId,
+        IReadOnlyCollection<ParameterResource> unresolvedParameters,
+        bool allowStartingState = false)
+    {
+        CustomResourceSnapshot UpdateSnapshot(CustomResourceSnapshot snapshot)
+        {
+            // The initial update may replace Starting. Monitor updates are accepted only while this method
+            // still owns the state, preventing late parameter completion from regressing Running or terminal states.
+            var isUnresolvedParametersState = string.Equals(snapshot.State?.Text, KnownResourceStates.UnresolvedParameters, StringComparisons.ResourceState);
+            var canEnterUnresolvedParametersState = allowStartingState &&
+                (string.Equals(snapshot.State?.Text, KnownResourceStates.Starting, StringComparisons.ResourceState) ||
+                 string.Equals(snapshot.State?.Text, KnownResourceStates.Waiting, StringComparisons.ResourceState));
+            if (!isUnresolvedParametersState && !canEnterUnresolvedParametersState)
+            {
+                return snapshot;
+            }
+
+            if (unresolvedParameters.Count == 0)
+            {
+                // Parameter blocking is finished, but normal DCP startup is still in progress.
+                return ResourceNotificationService.UpdateStartupBlocker(snapshot, KnownProperties.Resource.UnresolvedParameters, []);
+            }
+
+            var parameterNames = unresolvedParameters
+                .Select(static parameter => parameter.Name)
+                .Distinct(StringComparers.ResourceName)
+                .Order(StringComparers.ResourceName)
+                .ToArray();
+
+            return ResourceNotificationService.UpdateStartupBlocker(snapshot, KnownProperties.Resource.UnresolvedParameters, parameterNames);
+        }
+
+        // Scope the update to the DCP resource instance when one is known; replicated/grouped starts publish
+        // through the model resource because their starting event does not identify a single instance.
+        return resourceId is not null
+            ? _notificationService.PublishUpdateAsync(resource, resourceId, UpdateSnapshot)
+            : _notificationService.PublishUpdateAsync(resource, UpdateSnapshot);
     }
 
     private async Task OnResourcesPrepared(OnResourcesPreparedContext context)
@@ -641,8 +831,16 @@ internal sealed class ApplicationOrchestrator
 
     private async Task PublishResourcesInitialStateAsync(CancellationToken cancellationToken)
     {
-        // Initialize all parameter resources up front
-        await _parameterProcessor.InitializeParametersAsync(_model.Resources.OfType<ParameterResource>(), waitForResolution: false).ConfigureAwait(false);
+        // Parameters referenced by declarative environment variables and arguments aren't necessarily added
+        // to the model, but their reference relationships let us initialize them without invoking callbacks.
+        var parameterResources = _model.Resources.OfType<ParameterResource>()
+            .Concat(_model.Resources
+                .SelectMany(static resource => resource.Annotations.OfType<ResourceRelationshipAnnotation>())
+                .Where(static relationship => relationship.Type == KnownRelationshipTypes.Reference)
+                .Select(static relationship => relationship.Resource)
+                .OfType<ParameterResource>())
+            .Distinct<ParameterResource>(ReferenceEqualityComparer.Instance);
+        await _parameterProcessor.InitializeParametersAsync(parameterResources, waitForResolution: false).ConfigureAwait(false);
 
         // Publish the initial state of the resources that have a snapshot annotation.
         foreach (var resource in _model.Resources)
