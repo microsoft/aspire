@@ -796,7 +796,10 @@ internal sealed class TestBundleService(bool isBundle) : IBundleService
 
     public Exception? EnsureExtractedException { get; set; }
 
-    public Task EnsureExtractedAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    public Func<CancellationToken, Task>? EnsureExtractedAsyncCallback { get; set; }
+
+    public Task EnsureExtractedAsync(CancellationToken cancellationToken = default)
+        => EnsureExtractedAsyncCallback?.Invoke(cancellationToken) ?? Task.CompletedTask;
 
     public Task<BundleExtractResult> ExtractAsync(string destinationPath, bool force = false, CancellationToken cancellationToken = default)
         => Task.FromResult(isBundle ? BundleExtractResult.AlreadyUpToDate : BundleExtractResult.NoPayload);

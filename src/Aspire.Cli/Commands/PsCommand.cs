@@ -8,6 +8,7 @@ using System.Text.Json.Serialization;
 using System.Threading.Channels;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
@@ -68,9 +69,20 @@ internal sealed partial class PsCommandJsonContext : JsonSerializerContext
     });
 }
 
-internal sealed partial class PsCommand : BaseCommand
+internal sealed partial class PsCommand : BaseCommand, IPackageMetaPrefetchingCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
+
+    /// <summary>
+    /// PsCommand lists running AppHosts and never uses template package metadata.
+    /// </summary>
+    public bool PrefetchesTemplatePackageMetadata => false;
+
+    /// <summary>
+    /// PsCommand does not display update notifications, so it does not need CLI package metadata.
+    /// </summary>
+    public bool PrefetchesCliPackageMetadata => false;
+
     private readonly IAuxiliaryBackchannelMonitor _backchannelMonitor;
     private readonly IEnvironment _environment;
     private readonly OrphanedAppHostCollector _collector;

@@ -7947,6 +7947,14 @@ public class DistributedApplicationExecutionContext extends HandleWrapperBase {
         return DistributedApplicationOperation.fromValue((String) result);
     }
 
+    /** Describes how the AppHost is being run. Only meaningful when `Operation` is `Run`; otherwise every aspect holds its default value. */
+    public RunConfiguration runConfiguration() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/DistributedApplicationExecutionContext.runConfiguration", reqArgs);
+        return RunConfiguration.fromMap((Map<String, Object>) result);
+    }
+
     /** The `IServiceProvider` for the AppHost. */
     public IServiceProvider serviceProvider() {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -21663,6 +21671,36 @@ public class ResourceUrlsEditor extends HandleWrapperBase {
 
 }
 
+// ===== RunConfiguration.java =====
+// RunConfiguration.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** RunConfiguration DTO. */
+public class RunConfiguration implements JsonSerializable {
+    private Boolean watchEnabled;
+
+    public Boolean getWatchEnabled() { return watchEnabled; }
+    public void setWatchEnabled(Boolean value) { this.watchEnabled = value; }
+
+    @SuppressWarnings("unchecked")
+    public static RunConfiguration fromMap(Map<String, Object> map) {
+        var value = new RunConfiguration();
+        var watchEnabledValue = map.get("WatchEnabled");
+        value.setWatchEnabled(watchEnabledValue == null ? null : (Boolean) watchEnabledValue);
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("WatchEnabled", AspireClient.serializeValue(watchEnabled));
+        return map;
+    }
+}
+
 // ===== TestCallbackContext.java =====
 // TestCallbackContext.java - GENERATED CODE - DO NOT EDIT
 
@@ -29281,6 +29319,7 @@ public final class WithVolumeOptions {
 .aspire/modules/ResourceUrlAnnotation.java
 .aspire/modules/ResourceUrlsCallbackContext.java
 .aspire/modules/ResourceUrlsEditor.java
+.aspire/modules/RunConfiguration.java
 .aspire/modules/TestCallbackContext.java
 .aspire/modules/TestCollectionContext.java
 .aspire/modules/TestConfigDto.java

@@ -5,6 +5,7 @@ using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
@@ -13,9 +14,19 @@ using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
 
-internal sealed class LsCommand : BaseCommand
+internal sealed class LsCommand : BaseCommand, IPackageMetaPrefetchingCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
+
+    /// <summary>
+    /// LsCommand discovers candidate AppHost project files and never uses template package metadata.
+    /// </summary>
+    public bool PrefetchesTemplatePackageMetadata => false;
+
+    /// <summary>
+    /// LsCommand does not display update notifications, so it does not need CLI package metadata.
+    /// </summary>
+    public bool PrefetchesCliPackageMetadata => false;
 
     private readonly IProjectLocator _projectLocator;
     private readonly CliExecutionContext _executionContext;

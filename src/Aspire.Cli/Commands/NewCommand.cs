@@ -5,6 +5,7 @@ using System.CommandLine;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.RegularExpressions;
+using Aspire.Cli.Bundles;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
@@ -27,6 +28,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
     private readonly INewCommandPrompter _prompter;
     private readonly ITemplateProvider _templateProvider;
     private readonly ITemplate[] _templates;
+    private readonly IBundleService _bundleService;
     private readonly IPackagingService _packagingService;
     private readonly AgentInitCommand _agentInitCommand;
     private readonly ICliHostEnvironment _hostEnvironment;
@@ -74,6 +76,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
     public NewCommand(
         INewCommandPrompter prompter,
         ITemplateProvider templateProvider,
+        IBundleService bundleService,
         IPackagingService packagingService,
         AgentInitCommand agentInitCommand,
         ICliHostEnvironment hostEnvironment,
@@ -83,6 +86,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
     {
         _prompter = prompter;
         _templateProvider = templateProvider;
+        _bundleService = bundleService;
         _packagingService = packagingService;
         _agentInitCommand = agentInitCommand;
         _hostEnvironment = hostEnvironment;
@@ -522,6 +526,13 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             Language = selectedLanguageId
         };
         var templateResult = await template.ApplyTemplateAsync(inputs, parseResult, cancellationToken);
+
+        // Generated AppHosts can be run directly by dotnet, which cannot trigger lazy bundle
+        // extraction. Ensure the bundle is ready instead of relying on best-effort prefetching.
+        if (templateResult.ExitCode == CliExitCodes.Success)
+        {
+            await _bundleService.EnsureExtractedAsync(cancellationToken);
+        }
 
         var workspaceRoot = new DirectoryInfo(templateResult.OutputPath ?? ExecutionContext.WorkingDirectory.FullName);
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, s_suppressAgentInitOption, defaultValue: true);

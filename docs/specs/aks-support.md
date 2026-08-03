@@ -720,4 +720,4 @@ service CIDR `10.0.0.0/16`).
 - 31 AKS unit tests passing (extensions + infrastructure)
 - 88 K8s base tests passing
 - `playground/AksDemo/` validated end-to-end against a live AKS cluster (multi-Gateway, AGC, cert-manager TLS)
-- `tests/Aspire.Deployment.EndToEnd.Tests/AksAzureKubernetesEnvironmentGatewayDeploymentTests` — automated deployment test that provisions an AKS environment with AGC + Gateway, deploys an API, and verifies an HTTP 200 from `<gateway-fqdn>/weatherforecast`. Passes against live Azure (`westus3`, `Standard_D2as_v5`).
+- `tests/Aspire.Deployment.EndToEnd.Tests/AksAzureKubernetesEnvironmentGatewayDeploymentTests` — automated deployment test that provisions an AKS environment with AGC + Gateway, deploys an API, and verifies an HTTP 200 from `<gateway-fqdn>/weatherforecast`. Passes against live Azure (`centralus`, `Standard_D2s_v5`).
