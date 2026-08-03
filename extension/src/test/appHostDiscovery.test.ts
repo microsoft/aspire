@@ -1262,13 +1262,7 @@ suite('AppHost discovery', () => {
                     language: 'csharp',
                     status: 'buildable',
                 };
-                if (args.includes('--stream')) {
-                    options?.lineCallback?.(JSON.stringify(candidate));
-                }
-                else {
-                    options?.stdoutCallback?.(JSON.stringify([candidate]));
-                }
-                options?.exitCallback?.(0);
+                emitLsOutput(options, [candidate]);
                 return { kill: () => { } } as any;
             });
             const service = new AppHostDiscoveryService(terminalProvider);
@@ -1304,13 +1298,7 @@ suite('AppHost discovery', () => {
                     language: 'csharp',
                     status: 'buildable',
                 };
-                if (args.includes('--stream')) {
-                    options?.lineCallback?.(JSON.stringify(candidate));
-                }
-                else {
-                    options?.stdoutCallback?.(JSON.stringify([candidate]));
-                }
-                options?.exitCallback?.(0);
+                emitLsOutput(options, [candidate]);
                 return { kill: () => { } } as any;
             });
             const service = new AppHostDiscoveryService(makeTerminalProvider());
