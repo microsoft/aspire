@@ -351,26 +351,28 @@ internal sealed class AddCommand : BaseCommand
                 Source = source
             };
 
-            // Stop any running AppHost instance before adding the package.
-            // A running AppHost (especially in detach mode) locks project files,
-            // which prevents 'dotnet add package' from modifying the project.
-            RunningInstanceResult runningInstanceResult;
-            using (var stopRunningInstanceActivity = _profilingTelemetry.StartAddStopExistingInstance())
+            if (project.RequiresStopForAddPackage)
             {
-                runningInstanceResult = await project.FindAndStopRunningInstanceAsync(
-                    effectiveAppHostProjectFile,
-                    ExecutionContext.HomeDirectory,
-                    cancellationToken);
-                stopRunningInstanceActivity.SetAppHostRunningInstanceResult(runningInstanceResult);
-            }
+                // Classic .NET AppHosts mutate a user project file through `dotnet add package`.
+                // Stop running instances first so detached AppHosts do not keep project files locked.
+                RunningInstanceResult runningInstanceResult;
+                using (var stopRunningInstanceActivity = _profilingTelemetry.StartAddStopExistingInstance())
+                {
+                    runningInstanceResult = await project.FindAndStopRunningInstanceAsync(
+                        effectiveAppHostProjectFile,
+                        ExecutionContext.HomeDirectory,
+                        cancellationToken);
+                    stopRunningInstanceActivity.SetAppHostRunningInstanceResult(runningInstanceResult);
+                }
 
-            if (runningInstanceResult == RunningInstanceResult.InstanceStopped)
-            {
-                InteractionService.DisplayMessage(KnownEmojis.Information, AddCommandStrings.StoppedRunningInstance);
-            }
-            else if (runningInstanceResult == RunningInstanceResult.StopFailed)
-            {
-                return AddCommandFailure(CliExitCodes.FailedToAddPackage, AddCommandStrings.UnableToStopRunningInstances);
+                if (runningInstanceResult == RunningInstanceResult.InstanceStopped)
+                {
+                    InteractionService.DisplayMessage(KnownEmojis.Information, AddCommandStrings.StoppedRunningInstance);
+                }
+                else if (runningInstanceResult == RunningInstanceResult.StopFailed)
+                {
+                    return AddCommandFailure(CliExitCodes.FailedToAddPackage, AddCommandStrings.UnableToStopRunningInstances);
+                }
             }
 
             bool success;

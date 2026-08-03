@@ -110,6 +110,9 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     /// <inheritdoc />
     public string DisplayName => _resolvedLanguage.DisplayName;
 
+    /// <inheritdoc />
+    public bool RequiresStopForAddPackage => false;
+
     /// <summary>
     /// Gets the effective SDK version from configuration (inherits from parent directories)
     /// or falls back to the default SDK version.
@@ -268,10 +271,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     internal async Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, string? packageSourceOverride = null, CancellationToken cancellationToken = default)
     {
         var config = LoadConfiguration(directory);
-        return await BuildAndGenerateSdkAsync(directory, config, packageSourceOverride, cancellationToken);
+        return await BuildAndGenerateSdkAsync(directory, config, packageSourceOverride, cancellationToken: cancellationToken);
     }
 
-    private async Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, AspireConfigFile config, string? packageSourceOverride = null, CancellationToken cancellationToken = default)
+    private async Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, AspireConfigFile config, string? packageSourceOverride = null, OutputCollector? outputCollector = null, CancellationToken cancellationToken = default)
     {
         var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(directory.FullName, cancellationToken);
 
@@ -286,7 +289,14 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         {
             if (buildOutput is not null)
             {
-                _interactionService.DisplayLines(buildOutput.GetLines());
+                if (outputCollector is not null)
+                {
+                    MergeOutput(outputCollector, buildOutput);
+                }
+                else
+                {
+                    _interactionService.DisplayLines(buildOutput.GetLines());
+                }
             }
             _interactionService.DisplayError("Failed to prepare AppHost server.");
             return false;
@@ -322,6 +332,20 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     Task<bool> IGuestAppHostSdkGenerator.BuildAndGenerateSdkAsync(DirectoryInfo directory, string? packageSourceOverride, CancellationToken cancellationToken)
     {
         return BuildAndGenerateSdkAsync(directory, packageSourceOverride, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<int> RestoreAsync(FileInfo appHostFile, OutputCollector outputCollector, CancellationToken cancellationToken)
+    {
+        var directory = appHostFile.Directory;
+        if (directory is null)
+        {
+            return CliExitCodes.FailedToBuildArtifacts;
+        }
+
+        var config = LoadConfiguration(directory);
+        var success = await BuildAndGenerateSdkAsync(directory, config, outputCollector: outputCollector, cancellationToken: cancellationToken);
+        return success ? CliExitCodes.Success : CliExitCodes.FailedToBuildArtifacts;
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -1208,7 +1232,17 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             return;
         }
 
-        foreach (var (stream, line) in serverOutput.GetLines())
+        MergeOutput(target, serverOutput);
+    }
+
+    private static void MergeOutput(OutputCollector target, OutputCollector source)
+    {
+        if (ReferenceEquals(target, source))
+        {
+            return;
+        }
+
+        foreach (var (stream, line) in source.GetLines())
         {
             if (stream == OutputLineStream.StdErr)
             {

@@ -169,6 +169,12 @@ internal interface IAppHostProject
     string DisplayName { get; }
 
     /// <summary>
+    /// Gets whether <c>aspire add</c> should stop matching running AppHost instances before
+    /// mutating package references for this project type.
+    /// </summary>
+    bool RequiresStopForAddPackage { get; }
+
+    /// <summary>
     /// Gets the file patterns to search for when detecting apphosts.
     /// Examples: ["*.csproj", "*.fsproj", "apphost.cs"] or ["apphost.ts"]
     /// </summary>
@@ -204,6 +210,15 @@ internal interface IAppHostProject
     /// <param name="cancellationToken">A cancellation token.</param>
     /// <returns>The exit code from running the AppHost.</returns>
     Task<int> RunAsync(AppHostProjectContext context, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Restores the AppHost project.
+    /// </summary>
+    /// <param name="appHostFile">The AppHost file to restore.</param>
+    /// <param name="outputCollector">The command-owned output collector for capturing stdout/stderr during restore.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The exit code from restoring the AppHost.</returns>
+    Task<int> RestoreAsync(FileInfo appHostFile, OutputCollector outputCollector, CancellationToken cancellationToken);
 
     /// <summary>
     /// Publishes the AppHost project.

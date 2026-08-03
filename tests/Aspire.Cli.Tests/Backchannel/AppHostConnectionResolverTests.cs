@@ -307,7 +307,7 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
         var backchannelsDir = Path.Combine(homeDirectory.FullName, ".aspire", "cli", "bch");
         Directory.CreateDirectory(backchannelsDir);
 
-        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(appHostPath, homeDirectory.FullName);
+        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(PathNormalizer.ResolveToFilesystemPath(appHostPath), homeDirectory.FullName);
         var appHostId = Path.GetFileName(prefix);
         var socketPath = Path.Combine(
             backchannelsDir,

@@ -155,7 +155,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
             {
                 var selectedConnection = connections.FirstOrDefault(c =>
                     c.AppHostInfo?.AppHostPath != null &&
-                    string.Equals(Path.GetFullPath(c.AppHostInfo.AppHostPath), Path.GetFullPath(SelectedAppHostPath), StringComparison.OrdinalIgnoreCase));
+                    string.Equals(PathNormalizer.ResolveToFilesystemPath(c.AppHostInfo.AppHostPath), PathNormalizer.ResolveToFilesystemPath(SelectedAppHostPath), StringComparison.OrdinalIgnoreCase));
 
                 if (selectedConnection != null)
                 {
@@ -200,12 +200,12 @@ internal sealed class AuxiliaryBackchannelMonitor(
             return false;
         }
 
-        // Resolve symlinks (not just Path.GetFullPath) on both operands. The OS reports a process's current
-        // directory in physical form (for example macOS temp dirs under /var -> /private/var), while a
-        // file-based AppHost reports its path unresolved, so comparing without resolving symlinks would treat
-        // an in-scope AppHost as out of scope. 
-        var normalizedWorkingDirectory = PathNormalizer.ResolveSymlinks(workingDirectory);
-        var normalizedAppHostPath = PathNormalizer.ResolveSymlinks(appHostPath);
+        // Resolve symlinks and filesystem aliases on both operands. The OS reports a process's
+        // current directory in physical form (for example macOS temp dirs under /var -> /private/var),
+        // while a file-based AppHost can report its path unresolved, so comparing without filesystem
+        // normalization would treat an in-scope AppHost as out of scope.
+        var normalizedWorkingDirectory = PathNormalizer.ResolveToFilesystemPath(workingDirectory);
+        var normalizedAppHostPath = PathNormalizer.ResolveToFilesystemPath(appHostPath);
 
         // Check if the AppHost path is within the working directory
         var relativePath = Path.GetRelativePath(normalizedWorkingDirectory, normalizedAppHostPath);

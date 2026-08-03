@@ -53,6 +53,8 @@ internal sealed class TestTypeScriptStarterProject(Func<DirectoryInfo, Cancellat
 
     public string DisplayName => "TypeScript (Node.js)";
 
+    public bool RequiresStopForAddPackage => false;
+
     public string? AppHostFileName => "apphost.mts";
 
     public Task<string[]> GetDetectionPatternsAsync(CancellationToken cancellationToken = default)
@@ -73,6 +75,11 @@ internal sealed class TestTypeScriptStarterProject(Func<DirectoryInfo, Cancellat
     public Task<int> RunAsync(AppHostProjectContext context, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
+    }
+
+    public Task<int> RestoreAsync(FileInfo appHostFile, OutputCollector outputCollector, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(CliExitCodes.Success);
     }
 
     public Task<int> PublishAsync(PublishContext context, CancellationToken cancellationToken)

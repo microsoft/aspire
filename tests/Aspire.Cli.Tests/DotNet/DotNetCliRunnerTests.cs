@@ -611,6 +611,47 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunAsyncPreservesProcessInvocationOptionsForExecutionFactory()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var options = new ProcessInvocationOptions();
+        options.MSBuildProperties["AspireCliManagedAppHostBuild"] = "true";
+        options.EnvironmentVariablesToRemove.Add(KnownConfigNames.IntegrationProbeManifestPath);
+        options.EnvironmentVariablesToRemove.Add(KnownConfigNames.IntegrationLibsPath);
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var runner = DotNetCliRunnerTestHelper.Create(
+            provider,
+            executionContext,
+            (_, _, _, invocationOptions) =>
+            {
+                Assert.Equal("true", invocationOptions.MSBuildProperties["AspireCliManagedAppHostBuild"]);
+                Assert.Contains(KnownConfigNames.IntegrationProbeManifestPath, invocationOptions.EnvironmentVariablesToRemove);
+                Assert.Contains(KnownConfigNames.IntegrationLibsPath, invocationOptions.EnvironmentVariablesToRemove);
+            },
+            0);
+
+        var exitCode = await runner.RunAsync(
+            projectFile: projectFile,
+            watch: false,
+            noBuild: false,
+            noRestore: false,
+            args: ["--operation", "inspect"],
+            env: new Dictionary<string, string>(),
+            null,
+            options,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
     public async Task RunAsyncPropagatesProcessProfilingContextToChildEnvironment()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -1592,6 +1633,53 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, exitCode);
         Assert.NotNull(capturedEnv);
         Assert.Equal("true", capturedEnv[KnownConfigNames.SuppressCliRunHook]);
+    }
+
+    [Fact]
+    public async Task RunAsyncIncludesMSBuildPropertiesForProjectAppHost()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var propsPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.Directory.Build.props");
+        var options = new ProcessInvocationOptions();
+        options.MSBuildProperties["DirectoryBuildPropsPath"] = propsPath;
+        options.MSBuildProperties["AspireCliManagedAppHostBuild"] = "true";
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var runner = DotNetCliRunnerTestHelper.Create(
+            provider,
+            executionContext,
+            (args, _, _, _) =>
+            {
+                Assert.Collection(args,
+                    arg => Assert.Equal("run", arg),
+                    arg => Assert.Equal("--project", arg),
+                    arg => Assert.Equal(projectFile.FullName, arg),
+                    arg => Assert.Equal($"/p:DirectoryBuildPropsPath={propsPath}", arg),
+                    arg => Assert.Equal("/p:AspireCliManagedAppHostBuild=true", arg),
+                    arg => Assert.Equal("--", arg),
+                    arg => Assert.Equal("--operation", arg),
+                    arg => Assert.Equal("inspect", arg));
+            },
+            0);
+
+        var exitCode = await runner.RunAsync(
+            projectFile: projectFile,
+            watch: false,
+            noBuild: false,
+            noRestore: false,
+            args: ["--operation", "inspect"],
+            env: new Dictionary<string, string>(),
+            null,
+            options,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
     }
 
     [Fact]

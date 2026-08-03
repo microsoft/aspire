@@ -418,8 +418,8 @@ internal sealed class AppHostLauncher(
         {
             throw new InvalidOperationException("Failed to create child CLI process execution.");
         }
-
         var childStartedAt = childProcess.StartTime;
+        logger.LogDebug("Child CLI process started with PID: {PID}", childProcess.ProcessId);
         logger.LogDebug("Child CLI process started with PID: {PID}", childProcess.ProcessId);
 
         var startTime = timeProvider.GetUtcNow();

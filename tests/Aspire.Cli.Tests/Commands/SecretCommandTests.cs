@@ -4,6 +4,7 @@
 using Aspire.Cli.Commands;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Aspire.Shared.UserSecrets;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -116,6 +117,7 @@ public class SecretCommandTests(ITestOutputHelper outputHelper)
         public bool IsUnsupported { get; set; }
         public string LanguageId => "test";
         public string DisplayName => "Test";
+        public bool RequiresStopForAddPackage => false;
         public string? AppHostFileName => null;
 
         public Task<bool> AddPackageAsync(AddPackageContext context, CancellationToken cancellationToken) => throw new NotSupportedException();
@@ -124,6 +126,7 @@ public class SecretCommandTests(ITestOutputHelper outputHelper)
         public Task<string[]> GetDetectionPatternsAsync(CancellationToken cancellationToken = default) => Task.FromResult<string[]>([]);
         public Task<string?> GetUserSecretsIdAsync(FileInfo appHostFile, bool autoInit, CancellationToken cancellationToken) => Task.FromResult<string?>(userSecretsId);
         public bool IsUsingProjectReferences(FileInfo appHostFile) => false;
+        public Task<int> RestoreAsync(FileInfo appHostFile, OutputCollector outputCollector, CancellationToken cancellationToken) => Task.FromResult(CliExitCodes.Success);
         public Task<int> PublishAsync(PublishContext context, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<int> RunAsync(AppHostProjectContext context, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<UpdatePackagesResult> UpdatePackagesAsync(UpdatePackagesContext context, CancellationToken cancellationToken) => throw new NotSupportedException();

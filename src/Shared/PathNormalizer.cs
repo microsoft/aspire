@@ -28,9 +28,9 @@ internal static class PathNormalizer
     }
 
     /// <summary>
-    /// On Windows, resolves a path to its filesystem-canonical form by querying the OS for
-    /// the actual casing of each path component. On other platforms this is a no-op because
-    /// the file system is case-sensitive and there is no casing ambiguity.
+    /// Resolves a path to its filesystem-canonical form. On Windows, this queries the OS for
+    /// the actual casing of each path component. On Unix-like platforms, this resolves symbolic
+    /// links and macOS APFS firmlinks.
     /// </summary>
     /// <remarks>
     /// Use this when the path needs to match what MSBuild reports for the same file.
@@ -40,14 +40,14 @@ internal static class PathNormalizer
     /// </remarks>
     /// <param name="path">An absolute path to a file that exists on disk.</param>
     /// <returns>
-    /// The path with OS-canonical casing, or <paramref name="path"/> unchanged if it
-    /// cannot be resolved (file does not exist, UNC path, etc.).
+    /// The filesystem-canonical path, or <paramref name="path"/> unchanged if it cannot be
+    /// resolved (file does not exist, UNC path, etc.).
     /// </returns>
     public static string ResolveToFilesystemPath(string path)
     {
         if (!OperatingSystem.IsWindows())
         {
-            return path;
+            return ResolveSymlinks(path);
         }
 
         // Only handle standard drive-letter paths (e.g. C:\...).
@@ -68,13 +68,17 @@ internal static class PathNormalizer
             if (i == parts.Length - 1)
             {
                 // Final component: find the file with its real name.
-                var files = Directory.GetFiles(current, parts[i]);
-                return files.Length == 1 ? files[0] : Path.Combine(current, parts[i]);
+                return TryGetSingleFile(current, parts[i], out var resolvedFile) ? resolvedFile : Path.Combine(current, parts[i]);
             }
 
             // Intermediate component: find the directory with its real name.
-            var dirs = Directory.GetDirectories(current, parts[i]);
-            current = dirs.Length == 1 ? dirs[0] : Path.Combine(current, parts[i]);
+            if (!TryGetSingleDirectory(current, parts[i], out var resolvedDirectory))
+            {
+                current = Path.Combine(current, parts[i]);
+                return CombineRemaining(current, parts, i + 1);
+            }
+
+            current = resolvedDirectory;
 
             if (!current.EndsWith(Path.DirectorySeparatorChar))
             {
@@ -83,6 +87,66 @@ internal static class PathNormalizer
         }
 
         return path;
+
+        static bool TryGetSingleFile(string directory, string searchPattern, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? resolvedFile)
+        {
+            try
+            {
+                var files = Directory.GetFiles(directory, searchPattern);
+                resolvedFile = files.Length == 1 ? files[0] : null;
+                return resolvedFile is not null;
+            }
+            catch (DirectoryNotFoundException)
+            {
+                resolvedFile = null;
+                return false;
+            }
+            catch (IOException)
+            {
+                resolvedFile = null;
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                resolvedFile = null;
+                return false;
+            }
+        }
+
+        static bool TryGetSingleDirectory(string directory, string searchPattern, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? resolvedDirectory)
+        {
+            try
+            {
+                var dirs = Directory.GetDirectories(directory, searchPattern);
+                resolvedDirectory = dirs.Length == 1 ? dirs[0] : null;
+                return resolvedDirectory is not null;
+            }
+            catch (DirectoryNotFoundException)
+            {
+                resolvedDirectory = null;
+                return false;
+            }
+            catch (IOException)
+            {
+                resolvedDirectory = null;
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                resolvedDirectory = null;
+                return false;
+            }
+        }
+
+        static string CombineRemaining(string current, string[] segments, int startIndex)
+        {
+            for (var j = startIndex; j < segments.Length; j++)
+            {
+                current = Path.Combine(current, segments[j]);
+            }
+
+            return current;
+        }
     }
 
     /// <summary>

@@ -14,6 +14,11 @@ internal static class KnownTemplateId
     public const string CSharpEmptyAppHost = "aspire-empty";
 
     /// <summary>
+    /// The template ID for the CLI-managed C# empty AppHost template.
+    /// </summary>
+    public const string CSharpCliManagedEmptyAppHost = "aspire-cs-empty";
+
+    /// <summary>
     /// The template ID for the CLI TypeScript empty AppHost template.
     /// </summary>
     public const string TypeScriptEmptyAppHost = "aspire-ts-empty";
