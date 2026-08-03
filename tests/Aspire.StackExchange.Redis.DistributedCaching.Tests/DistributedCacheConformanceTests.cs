@@ -38,7 +38,7 @@ public class DistributedCacheConformanceTests : ConformanceTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.ContainerRuntime)]
+    [RequiresFeature(TestFeature.Testcontainers)]
     public void WorksWithOpenTelemetryTracing()
     {
         RemoteExecutor.Invoke(async (connectionString) =>

@@ -4,6 +4,7 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography.X509Certificates;
 using Aspire.Hosting.Utils;
+using Aspire.Shared;
 using Microsoft.DotNet.XUnitExtensions;
 
 namespace Aspire.TestUtilities;
@@ -11,12 +12,6 @@ namespace Aspire.TestUtilities;
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = true)]
 public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAttribute
 {
-    // Duplicated from Aspire.Shared.KnownContainerRuntimes rather than linked in, because this file is
-    // source-included by projects (e.g. Aspire.Playground.Tests) that deploy outside the repo and so
-    // cannot pull in files from src/Shared.
-    private const string DockerExecutable = "docker";
-    private const string PodmanExecutable = "podman";
-
     private static bool? s_isPlaywrightSupported;
     private static readonly ConcurrentDictionary<string, bool> s_executablesOnPath = new();
 
@@ -103,14 +98,16 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
     // only, Docker only, or neither, and tests should skip rather than fail against a runtime that is
     // not installed. Only PATH is inspected (no process is spawned) because trait attributes are
     // evaluated during discovery, once per test.
-    private static bool IsContainerRuntimeSupported()
+    internal static bool IsContainerRuntimeSupported()
     {
+        TestcontainersPodmanConfiguration.EnsureConfigured();
+
         if (PlatformDetection.IsRunningOnCI)
         {
             return OperatingSystem.IsLinux(); // non-linux on CI does not support containers
         }
 
-        return IsOnPath(DockerExecutable) || IsOnPath(PodmanExecutable);
+        return IsOnPath(KnownContainerRuntimes.Docker) || IsOnPath(KnownContainerRuntimes.Podman);
     }
 
     // Same CI expectation as IsContainerRuntimeSupported, but locally requires Docker itself. Used by
@@ -122,7 +119,30 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
             return OperatingSystem.IsLinux();
         }
 
-        return IsOnPath(DockerExecutable);
+        return IsOnPath(KnownContainerRuntimes.Docker);
+    }
+
+    // Testcontainers needs a Docker-compatible API *endpoint*, not just a CLI on PATH: it speaks HTTP to
+    // the engine rather than shelling out. A Podman-only host does not always have one — Testcontainers
+    // 4.8.1 cannot use Podman's Windows named pipe, and on Linux Podman is daemonless unless
+    // `podman system service` is running — so gating these fixtures on IsContainerRuntimeSupported() alone
+    // would run them straight into DockerUnavailableException instead of skipping them.
+    private static bool IsTestcontainersSupported()
+    {
+        // Applies the CI expectation and, as a side effect, points Testcontainers at Podman if it can.
+        if (!IsContainerRuntimeSupported())
+        {
+            return false;
+        }
+
+        if (PlatformDetection.IsRunningOnCI)
+        {
+            return true; // CI always has Docker where it has a container runtime at all.
+        }
+
+        // A Docker install always exposes the socket or named pipe Testcontainers probes by default, so
+        // the CLI being on PATH is enough. Podman only works if we managed to find an API socket for it.
+        return IsOnPath(KnownContainerRuntimes.Docker) || TestcontainersPodmanConfiguration.HasUsableEndpoint;
     }
 
     // Building an image from a Dockerfile needs the buildx plugin under Docker, which is not available on
@@ -141,7 +161,7 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
         }
 
         // buildx ships with modern Docker installations, so presence of either CLI is enough locally.
-        return IsOnPath(DockerExecutable) || IsOnPath(PodmanExecutable);
+        return IsOnPath(KnownContainerRuntimes.Docker) || IsOnPath(KnownContainerRuntimes.Podman);
     }
 
     private static bool IsOnPath(string executable)
@@ -177,6 +197,10 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
             return false;
         }
         if ((feature & TestFeature.Docker) == TestFeature.Docker && !IsDockerSupported())
+        {
+            return false;
+        }
+        if ((feature & TestFeature.Testcontainers) == TestFeature.Testcontainers && !IsTestcontainersSupported())
         {
             return false;
         }

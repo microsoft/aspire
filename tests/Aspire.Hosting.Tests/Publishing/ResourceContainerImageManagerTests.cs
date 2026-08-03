@@ -251,6 +251,8 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         // Ensure no error logs were produced during the build process
         Assert.DoesNotContain(logs, log => log.Level >= LogLevel.Error &&
             log.Message.Contains("Failed to build container image"));
+
+        AssertImageArchiveWasWritten(container.Resource, tempOutputPath);
     }
 
     [Fact]
@@ -269,11 +271,12 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         var tempContextPath = tempDockerfileContext.ContextPath;
         var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         using var workspace = TemporaryWorkspace.Create(output);
+        var tempOutputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "NewFolder"); // tests that the folder is created if it doesn't exist
         var container = builder.AddDockerfile("container", tempContextPath, tempDockerfilePath)
             .WithContainerBuildOptions(ctx =>
             {
                 ctx.ImageFormat = ContainerImageFormat.Oci;
-                ctx.OutputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "NewFolder"); // tests that the folder is created if it doesn't exist
+                ctx.OutputPath = tempOutputPath;
                 ctx.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
             });
 
@@ -293,6 +296,8 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         // Ensure no error logs were produced during the build process
         Assert.DoesNotContain(logs, log => log.Level >= LogLevel.Error &&
             log.Message.Contains("Failed to build container image"));
+
+        AssertImageArchiveWasWritten(container.Resource, tempOutputPath);
     }
 
     [Theory]
@@ -1550,6 +1555,32 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         Assert.NotEqual(-1, newlineIndex);
         Assert.Equal($"{containerRuntime.Name} build failed with exit code {ex.ExitCode}.", ex.Message[..newlineIndex]);
         Assert.Equal(ex.GetFormattedOutput(), ex.Message[(newlineIndex + Environment.NewLine.Length)..]);
+    }
+
+    /// <summary>
+    /// Asserts that the container runtime actually produced an image archive at the path consumers resolve.
+    /// </summary>
+    /// <remarks>
+    /// Log-only assertions are not enough here: Podman used to pass <c>--output</c> to <c>podman build</c>,
+    /// which is a *filesystem* export rather than an image archive, so the build "succeeded" without ever
+    /// writing the archive. Checking the file also pins the Docker/Podman archive-path agreement at runtime
+    /// rather than only through a string comparison in <c>PodmanSaveArgumentsTests</c>.
+    /// </remarks>
+    private static void AssertImageArchiveWasWritten(IResource resource, string outputPath)
+    {
+        Assert.True(resource.TryGetContainerImageName(out var builtImageName));
+
+        var expectedArchivePath = ResourceExtensions.GetContainerImageArchivePath(outputPath, builtImageName);
+
+        // Only a bounded sample of archives is listed, because one of the callers writes into the shared
+        // system temp directory.
+        var actualArchives = Directory.Exists(outputPath)
+            ? string.Join(", ", Directory.EnumerateFiles(outputPath, "*.tar").Select(Path.GetFileName).Take(10))
+            : "<output directory does not exist>";
+
+        Assert.True(
+            File.Exists(expectedArchivePath),
+            $"Expected an image archive at '{expectedArchivePath}'. '{outputPath}' contains: {actualArchives}.");
     }
 }
 

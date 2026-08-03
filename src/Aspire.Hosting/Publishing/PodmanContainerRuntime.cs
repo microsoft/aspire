@@ -6,6 +6,7 @@
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Process;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging;
@@ -268,9 +269,9 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
             _ => throw new ArgumentOutOfRangeException(nameof(options), options.ImageFormat, "Invalid container image format")
         };
 
-        // Derive the archive path through DockerContainerRuntime's helper so both runtimes write the same
-        // file for the same resource.
-        var archivePath = DockerContainerRuntime.GetArchivePath(options.OutputPath!, imageName);
+        // Derive the archive path through the shared helper so that this runtime, the Docker runtime, and
+        // ContainerImageReference (which hands the path to consumers) all resolve the same file.
+        var archivePath = ResourceExtensions.GetContainerImageArchivePath(options.OutputPath!, imageName);
 
         return $"save --format \"{format}\" --output \"{archivePath}\" \"{imageName}\"";
     }

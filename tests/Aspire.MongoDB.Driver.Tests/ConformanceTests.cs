@@ -21,7 +21,7 @@ public class ConformanceTests : ConformanceTests<IMongoClient, MongoDBSettings>,
 
     protected override bool SupportsKeyedRegistrations => true;
 
-    protected override bool CanConnectToServer => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.ContainerRuntime);
+    protected override bool CanConnectToServer => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers);
 
     protected override string? ConfigurationSectionName => "Aspire:MongoDB:Driver";
 
@@ -73,7 +73,7 @@ public class ConformanceTests : ConformanceTests<IMongoClient, MongoDBSettings>,
 
     private string GetConnectionString()
     {
-        if (RequiresFeatureAttribute.IsFeatureSupported(TestFeature.ContainerRuntime))
+        if (RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers))
         {
             var builder = new UriBuilder(_containerFixture.GetConnectionString());
             builder.Path = "test_db";

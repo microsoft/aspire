@@ -18,7 +18,7 @@ public sealed class RabbitMQContainerFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        if (RequiresFeatureAttribute.IsFeatureSupported(TestFeature.ContainerRuntime))
+        if (RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers))
         {
             _container = await CreateContainerAsync();
         }

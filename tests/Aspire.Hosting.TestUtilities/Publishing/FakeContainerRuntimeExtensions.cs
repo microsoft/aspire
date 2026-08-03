@@ -4,7 +4,6 @@
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
 using Aspire.Hosting.Publishing;
-using Aspire.Hosting.Testing;
 using Aspire.Shared;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -37,15 +36,5 @@ public static class FakeContainerRuntimeExtensions
         services.AddSingleton<IContainerRuntimeResolver>(runtime);
 
         return services;
-    }
-
-    /// <inheritdoc cref="AddFakeContainerRuntime(IServiceCollection, FakeContainerRuntime)"/>
-    public static IDistributedApplicationTestingBuilder WithFakeContainerRuntime(this IDistributedApplicationTestingBuilder builder, FakeContainerRuntime runtime)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-
-        builder.Services.AddFakeContainerRuntime(runtime);
-
-        return builder;
     }
 }

@@ -27,5 +27,15 @@ public enum TestFeature
     /// than on containers in general — for example, ones that bind-mount the Docker socket or invoke
     /// the <c>docker</c> CLI. Otherwise use <see cref="ContainerRuntime"/>.
     /// </summary>
-    Docker = 1 << 5
+    Docker = 1 << 5,
+
+    /// <summary>
+    /// The Testcontainers library can reach a container runtime. This implies--but is stricter than--<see cref="ContainerRuntime"/>: 
+    /// Testcontainers talks to a Docker-compatible HTTP API rather than
+    /// driving a CLI, so it also needs a socket or named pipe to connect to. Podman does not always
+    /// expose one — Testcontainers 4.x cannot use its Windows named pipe, and on Linux Podman runs
+    /// daemonlessly unless <c>podman system service</c> is running — while DCP-driven container tests
+    /// are perfectly happy on those hosts. Use this for tests backed by a Testcontainers fixture.
+    /// </summary>
+    Testcontainers = 1 << 6
 }
