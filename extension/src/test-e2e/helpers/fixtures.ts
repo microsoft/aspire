@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
 import type { AspireExtensionE2EControlCommand, AspireExtensionE2EControlStatus } from '../../types/extensionApi';
+import { lsJsonStreamCapability, type ConfigInfo } from '../../types/configInfo';
 import { applyE2eControl, isSamePath, readStateFile, sleepSynchronously, waitForExtensionState } from './assertions';
 import { getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getRunRoot, getWorkspaceRoot } from './paths';
 import { ProcessError, runProcess } from './process';
@@ -10,6 +11,17 @@ const csharpFileHeader = `// Licensed to the .NET Foundation under one or more a
 // The .NET Foundation licenses this file to you under the MIT license.
 
 `;
+
+function createConfigInfo(capabilities: string[] = []): ConfigInfo {
+    return {
+        localSettingsPath: path.join(getWorkspaceRoot(), 'aspire.config.json'),
+        globalSettingsPath: path.join(getWorkspaceRoot(), 'global-aspire.config.json'),
+        availableFeatures: [],
+        localSettingsSchema: { properties: [] },
+        globalSettingsSchema: { properties: [] },
+        capabilities,
+    };
+}
 
 export function getWorkspaceSettingsPath(): string {
     return path.join(getWorkspaceRoot(), '.vscode', 'settings.json');
@@ -189,14 +201,7 @@ export function removePrimaryAppHostFixture(): void {
 
 export function writeNoCapabilitiesCliWrapper(name = 'aspire-no-capabilities'): string {
     return writeCliWrapper(name, {
-        configInfoJson: {
-            localSettingsPath: path.join(getWorkspaceRoot(), 'aspire.config.json'),
-            globalSettingsPath: path.join(getWorkspaceRoot(), 'global-aspire.config.json'),
-            availableFeatures: [],
-            localSettingsSchema: { properties: [] },
-            globalSettingsSchema: { properties: [] },
-            capabilities: [],
-        },
+        configInfoJson: createConfigInfo(),
     });
 }
 
@@ -209,6 +214,7 @@ export function writeConfigInfoUnsupportedCliWrapper(name = 'aspire-no-config-in
 
 export function writeStreamingDiscoveryCliWrapper(delayMs = 5_000, initialDelayMs = 1_500): string {
     return writeCliWrapper('aspire-streaming-discovery', {
+        configInfoJson: createConfigInfo([lsJsonStreamCapability]),
         streamedLsCandidate: {
             path: getPrimaryAppHostProjectPath(),
             language: 'csharp',
@@ -224,6 +230,7 @@ export function writeTrackedStreamingDiscoveryCliWrapper(delayMs = 4_000, initia
     const invocationLogPath = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers', 'streaming-discovery-invocations.log');
     removePath(invocationLogPath, { force: true });
     const cliPath = writeCliWrapper('aspire-tracked-streaming-discovery', {
+        configInfoJson: createConfigInfo([lsJsonStreamCapability]),
         streamedLsCandidate: {
             path: getPrimaryAppHostProjectPath(),
             language: 'csharp',
