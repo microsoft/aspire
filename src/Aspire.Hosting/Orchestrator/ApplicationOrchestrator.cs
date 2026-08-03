@@ -15,7 +15,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using System.Collections.Concurrent;
 
 namespace Aspire.Hosting.Orchestrator;
 
@@ -127,10 +126,10 @@ internal sealed class ApplicationOrchestrator
         // either the resource has no instances, or a replicated resource is being started as a group and all of
         // its replicas legitimately share this single wait.
         //
-        // Important: call WaitForResourceAsync before WaitForDependenciesAsync, because the latter can complete synchronously 
+        // Important: call WaitForResourceAsync before WaitForDependenciesAsync, because the latter can complete synchronously
         // if there are no dependencies to wait for, and the transition from Waiting to Starting will be lost.
         var startingInstanceId = @event.ResourceInstanceId;
-        var waitingResourceIds = new ConcurrentDictionary<string, bool>(StringComparers.ResourceName);
+        var waitingResourceIds = new HashSet<string>(StringComparers.ResourceName);
         var waitForNonWaitingStateTask = _notificationService.WaitForResourceAsync(
             @event.Resource.Name,
             e =>
@@ -142,11 +141,11 @@ internal sealed class ApplicationOrchestrator
 
                 if (e.Snapshot.State?.Text == KnownResourceStates.Waiting)
                 {
-                    _ = waitingResourceIds.TryAdd(e.ResourceId, true);
+                    _ = waitingResourceIds.Add(e.ResourceId);
                     return false;
                 }
 
-                return waitingResourceIds.ContainsKey(e.ResourceId);
+                return waitingResourceIds.Contains(e.ResourceId);
             },
             cts.Token);
 
