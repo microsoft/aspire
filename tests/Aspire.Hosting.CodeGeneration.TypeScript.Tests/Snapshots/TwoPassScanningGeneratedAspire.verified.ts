@@ -935,7 +935,7 @@ export interface CreateInteractionInputOptions {
     maxFileSize?: number | null;
     /** Gets or sets a value indicating whether multiple files can be selected. Only used by file inputs. */
     allowMultipleFiles?: boolean | null;
-    /** Gets or sets the file type filter for file inputs. Uses the same format as the HTML accept attribute. */
+    /** Gets or sets the file type filter for file inputs. Uses the same format as the HTML accept attribute. The CLI validates only dot-prefixed extension filters and does not validate MIME type patterns such as "image/*". */
     fileFilter?: string | null;
 }
 
