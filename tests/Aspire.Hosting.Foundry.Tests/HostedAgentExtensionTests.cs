@@ -451,7 +451,7 @@ public class HostedAgentExtensionTests
         };
 
         builder.AddPythonApp("agent", "./app.py", "main:app")
-            .AsHostedAgentForExport(project, HostedAgentProtocol.Invocations, "1.0.0", options);
+            .AsHostedAgentWithProtocolForExport(project, HostedAgentProtocol.Invocations, "1.0.0", options);
 
         builder.Build();
 
@@ -571,7 +571,7 @@ public class HostedAgentExtensionTests
             .AddProject("my-project");
 
         builder.AddPythonApp("agent", "./app.py", "main:app")
-            .AsHostedAgentForExport(project, HostedAgentProtocol.Responses, "2.0.0", options: null);
+            .AsHostedAgentWithProtocolForExport(project, HostedAgentProtocol.Responses, "2.0.0", options: null);
 
         builder.Build();
 
@@ -590,7 +590,7 @@ public class HostedAgentExtensionTests
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var app = builder.AddPythonApp("agent", "./app.py", "main:app");
 
-        Assert.Throws<ArgumentNullException>(() => app.AsHostedAgentForExport(project: null!, HostedAgentProtocol.Responses, "2.0.0"));
+        Assert.Throws<ArgumentNullException>(() => app.AsHostedAgentForExport(project: null!));
     }
 
     [Fact]

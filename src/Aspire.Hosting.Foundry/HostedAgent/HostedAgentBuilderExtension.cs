@@ -111,14 +111,42 @@ public static class HostedAgentResourceBuilderExtensions
         return AsHostedAgent(builder, project: null, configure);
     }
 
-    // The internal AsHostedAgentForExport overload below is the polyglot-exported version of AsHostedAgent.
-    // The CLR method name differs from AsHostedAgent to avoid C# overload ambiguity with the Action-based
-    // overload, but the ATS capability name must stay "asHostedAgent" for compatibility.
-    // .NET callers should keep using the Action<HostedAgentConfiguration> overload when they need the
-    // full HostedAgentConfiguration surface (tools, content filters, additional protocol versions, etc.).
+    // The internal adapters below keep ATS compatibility without adding CLR overloads that would be
+    // ambiguous with the public Action-based overloads. The original asHostedAgent capability retains
+    // its Responses/2.0.0 defaults, while asHostedAgentWithProtocol exposes explicit protocol selection.
+    // .NET callers should keep using the public overloads when they need the full HostedAgentConfiguration
+    // surface (tools, content filters, additional protocol versions, etc.).
 
     /// <summary>
-    /// Configures the resource to run and publish as a hosted agent in Microsoft Foundry, targeting the specified Foundry project.
+    /// Configures the resource to run and publish as a hosted agent in Microsoft Foundry using the Responses protocol version 2.0.0.
+    /// </summary>
+    /// <typeparam name="T">The type of resource being configured.</typeparam>
+    /// <param name="builder">The resource builder for the compute resource.</param>
+    /// <param name="project">The Microsoft Foundry project the hosted agent is deployed into.</param>
+    /// <param name="options">Optional hosted agent deployment options. Options apply in publish mode.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="project"/> is <see langword="null"/>.</exception>
+    [AspireExport("asHostedAgent", MethodName = "asHostedAgent")]
+    internal static IResourceBuilder<T> AsHostedAgentForExport<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<AzureCognitiveServicesProjectResource> project,
+        HostedAgentOptions? options = null)
+        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
+    {
+        ArgumentNullException.ThrowIfNull(project);
+
+        Action<HostedAgentConfiguration>? configure = options is null ? null : options.ApplyTo;
+        return ConfigureAsHostedAgent(
+            builder,
+            project,
+            HostedAgentProtocol.Responses,
+            AzureHostedAgentResource.DefaultResponsesProtocolVersion,
+            configure);
+    }
+
+    /// <summary>
+    /// Configures the resource to run and publish as a hosted agent in Microsoft Foundry using an explicit protocol and version.
     /// </summary>
     /// <typeparam name="T">The type of resource being configured.</typeparam>
     /// <param name="builder">The resource builder for the compute resource.</param>
@@ -129,8 +157,8 @@ public static class HostedAgentResourceBuilderExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="project"/> is <see langword="null"/>.</exception>
-    [AspireExport("asHostedAgent", MethodName = "asHostedAgent")]
-    internal static IResourceBuilder<T> AsHostedAgentForExport<T>(
+    [AspireExport("asHostedAgentWithProtocol")]
+    internal static IResourceBuilder<T> AsHostedAgentWithProtocolForExport<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         HostedAgentProtocol protocol,
@@ -141,7 +169,7 @@ public static class HostedAgentResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(project);
 
         Action<HostedAgentConfiguration>? configure = options is null ? null : options.ApplyTo;
-        return ConfigureAsHostedAgent(builder, project: project, protocol, protocolVersion, configure: configure);
+        return ConfigureAsHostedAgent(builder, project, protocol, protocolVersion, configure);
     }
 
     /// <summary>
