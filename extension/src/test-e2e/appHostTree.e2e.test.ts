@@ -13,6 +13,7 @@ suite('Aspire AppHost tree E2E', function () {
             () => setTerminalCommandExecutionSuppressedForE2E(false),
             () => restoreE2eCliPathForE2E(),
             () => restoreWorkspaceCliPath(),
+            () => executeE2eControlCommand({ name: 'switchToWorkspaceView' }),
             () => executeE2eControlCommand({ name: 'stopDebugging' }),
             () => stopPrimaryAppHostIfRunning(),
             () => waitForNoDebugSessions().catch(() => undefined),
