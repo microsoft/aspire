@@ -173,6 +173,7 @@ suite('configInfoProvider tests', () => {
         const configInfoProvider = new ConfigInfoProvider(terminalProvider);
         const discoveryService = new AppHostDiscoveryService(terminalProvider, configInfoProvider);
         const repository = new AppHostDataRepository(terminalProvider, discoveryService, configInfoProvider);
+        const concurrentConfigInfo = configInfoProvider.getConfigInfo({ suppressErrors: true });
 
         try {
             await new Promise(resolve => setImmediate(resolve));
@@ -189,10 +190,151 @@ suite('configInfoProvider tests', () => {
                 capabilities: [describeIncludeDisabledCommandsCapability, lsJsonStreamCapability],
             }));
             configInfoOptions?.exitCallback?.(0);
+            await concurrentConfigInfo;
             await new Promise(resolve => setImmediate(resolve));
         } finally {
             repository.dispose();
             discoveryService.dispose();
+        }
+    });
+
+    test('getConfigInfo isolates concurrent probes by CLI path', async () => {
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => '/unused/aspire',
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        const optionsByCliPath = new Map<string, cliModule.SpawnProcessOptions>();
+        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, command, _args, options) => {
+            if (options) {
+                optionsByCliPath.set(command, options);
+            }
+            return { kill: () => true } as unknown as ChildProcessWithoutNullStreams;
+        });
+        const provider = new ConfigInfoProvider(terminalProvider);
+
+        const oldProbe = provider.getConfigInfo({ cliPath: '/old/aspire', suppressErrors: true });
+        const newProbe = provider.getConfigInfo({ cliPath: '/new/aspire', suppressErrors: true });
+
+        assert.strictEqual(spawnStub.callCount, 2);
+        assert.deepStrictEqual(spawnStub.getCalls().map(call => call.args[1]), ['/old/aspire', '/new/aspire']);
+
+        optionsByCliPath.get('/new/aspire')?.stdoutCallback?.(JSON.stringify({
+            localSettingsPath: '/workspace/aspire.config.json',
+            globalSettingsPath: '/home/user/.aspire/aspire.config.json',
+            availableFeatures: [],
+            localSettingsSchema: { properties: [] },
+            globalSettingsSchema: { properties: [] },
+            capabilities: [lsJsonStreamCapability],
+        }));
+        optionsByCliPath.get('/new/aspire')?.exitCallback?.(0);
+        optionsByCliPath.get('/old/aspire')?.stdoutCallback?.(JSON.stringify({
+            localSettingsPath: '/workspace/aspire.config.json',
+            globalSettingsPath: '/home/user/.aspire/aspire.config.json',
+            availableFeatures: [],
+            localSettingsSchema: { properties: [] },
+            globalSettingsSchema: { properties: [] },
+            capabilities: [],
+        }));
+        optionsByCliPath.get('/old/aspire')?.exitCallback?.(0);
+
+        assert.deepStrictEqual((await oldProbe)?.capabilities, []);
+        assert.deepStrictEqual((await newProbe)?.capabilities, [lsJsonStreamCapability]);
+        assert.deepStrictEqual((await provider.getConfigInfo({ cliPath: '/new/aspire' }))?.capabilities, [lsJsonStreamCapability]);
+        assert.strictEqual(spawnStub.callCount, 2);
+    });
+
+    test('force refresh replaces an in-flight probe without caching its stale completion', async () => {
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => '/unused/aspire',
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        const probeOptions: cliModule.SpawnProcessOptions[] = [];
+        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+            if (options) {
+                probeOptions.push(options);
+            }
+            return { kill: () => true } as unknown as ChildProcessWithoutNullStreams;
+        });
+        const provider = new ConfigInfoProvider(terminalProvider);
+
+        const staleProbe = provider.getConfigInfo({ cliPath: '/usr/bin/aspire', suppressErrors: true });
+        const refreshedProbe = provider.getConfigInfo({ cliPath: '/usr/bin/aspire', suppressErrors: true, forceRefresh: true });
+
+        assert.strictEqual(spawnStub.callCount, 2);
+        probeOptions[1].stdoutCallback?.(JSON.stringify({
+            localSettingsPath: '/workspace/aspire.config.json',
+            globalSettingsPath: '/home/user/.aspire/aspire.config.json',
+            availableFeatures: [],
+            localSettingsSchema: { properties: [] },
+            globalSettingsSchema: { properties: [] },
+            capabilities: [lsJsonStreamCapability],
+        }));
+        probeOptions[1].exitCallback?.(0);
+        assert.deepStrictEqual((await refreshedProbe)?.capabilities, [lsJsonStreamCapability]);
+
+        probeOptions[0].stdoutCallback?.(JSON.stringify({
+            localSettingsPath: '/workspace/aspire.config.json',
+            globalSettingsPath: '/home/user/.aspire/aspire.config.json',
+            availableFeatures: [],
+            localSettingsSchema: { properties: [] },
+            globalSettingsSchema: { properties: [] },
+            capabilities: [],
+        }));
+        probeOptions[0].exitCallback?.(0);
+        assert.deepStrictEqual((await staleProbe)?.capabilities, []);
+
+        assert.deepStrictEqual((await provider.getConfigInfo({ cliPath: '/usr/bin/aspire' }))?.capabilities, [lsJsonStreamCapability]);
+        assert.strictEqual(spawnStub.callCount, 2);
+    });
+
+    test('caller timeout does not cancel a newer shared probe after delayed path resolution', async () => {
+        const clock = sinon.useFakeTimers();
+        let resolveCliPath: ((cliPath: string) => void) | undefined;
+        const terminalProvider = {
+            getAspireCliExecutablePath: () => new Promise<string>(resolve => {
+                resolveCliPath = resolve;
+            }),
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        let probeOptions: cliModule.SpawnProcessOptions | undefined;
+        const kill = sinon.stub().returns(true);
+        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+            probeOptions = options;
+            return { kill } as unknown as ChildProcessWithoutNullStreams;
+        });
+        const provider = new ConfigInfoProvider(terminalProvider);
+
+        try {
+            const delayedCaller = provider.getConfigInfo({ suppressErrors: true });
+            await clock.tickAsync(25_000);
+
+            const newerCaller = provider.getConfigInfo({
+                cliPath: '/usr/bin/aspire',
+                suppressErrors: true,
+            });
+            resolveCliPath?.('/usr/bin/aspire');
+            await clock.tickAsync(0);
+
+            assert.strictEqual(spawnStub.callCount, 1);
+            await clock.tickAsync(5_000);
+            assert.strictEqual(await delayedCaller, null);
+            assert.strictEqual(kill.callCount, 0);
+
+            probeOptions?.stdoutCallback?.(JSON.stringify({
+                localSettingsPath: '/workspace/aspire.config.json',
+                globalSettingsPath: '/home/user/.aspire/aspire.config.json',
+                availableFeatures: [],
+                localSettingsSchema: { properties: [] },
+                globalSettingsSchema: { properties: [] },
+                capabilities: [lsJsonStreamCapability],
+            }));
+            probeOptions?.exitCallback?.(0);
+
+            assert.deepStrictEqual((await newerCaller)?.capabilities, [lsJsonStreamCapability]);
+            assert.strictEqual(kill.callCount, 0);
+        }
+        finally {
+            clock.restore();
         }
     });
 

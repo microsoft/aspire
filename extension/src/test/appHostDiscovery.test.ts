@@ -1243,6 +1243,93 @@ suite('AppHost discovery', () => {
             }
         });
 
+        test('reprobes streaming capability after CLI path changes', async () => {
+            getConfigInfoStub.onFirstCall().resolves({ capabilities: [] } as any);
+            getConfigInfoStub.onSecondCall().resolves({ capabilities: [lsJsonStreamCapability] } as any);
+            stubFileSystemWatchers(sandbox);
+            let cliPath = 'old-aspire';
+            const terminalProvider = makeTerminalProvider();
+            sandbox.stub(terminalProvider, 'getAspireCliExecutablePath').callsFake(async () => cliPath);
+            const observedCalls: Array<{ cliPath: string; args: string[] }> = [];
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, command, args = [], options) => {
+                observedCalls.push({ cliPath: command, args });
+                const candidate = {
+                    path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
+                    language: 'csharp',
+                    status: 'buildable',
+                };
+                if (args.includes('--stream')) {
+                    options?.lineCallback?.(JSON.stringify(candidate));
+                }
+                else {
+                    options?.stdoutCallback?.(JSON.stringify([candidate]));
+                }
+                options?.exitCallback?.(0);
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(terminalProvider);
+
+            try {
+                await service.discover(makeWorkspaceFolder(buildPath('workspace-one')));
+                cliPath = 'new-aspire';
+                await service.discover(makeWorkspaceFolder(buildPath('workspace-two')));
+
+                assert.deepStrictEqual(observedCalls, [
+                    { cliPath: 'old-aspire', args: ['ls', '--format', 'json', '--nologo'] },
+                    { cliPath: 'new-aspire', args: ['ls', '--format', 'json', '--stream', '--nologo'] },
+                ]);
+                assert.deepStrictEqual(getConfigInfoStub.getCalls().map(call => call.args[0]), [
+                    { suppressErrors: true, forceRefresh: false, cliPath: 'old-aspire' },
+                    { suppressErrors: true, forceRefresh: false, cliPath: 'new-aspire' },
+                ]);
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
+        test('force refresh retries an unavailable streaming capability probe', async () => {
+            getConfigInfoStub.onFirstCall().resolves(null);
+            getConfigInfoStub.onSecondCall().resolves({ capabilities: [lsJsonStreamCapability] } as any);
+            stubFileSystemWatchers(sandbox);
+            const observedArgs: string[][] = [];
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
+                observedArgs.push(args);
+                const candidate = {
+                    path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
+                    language: 'csharp',
+                    status: 'buildable',
+                };
+                if (args.includes('--stream')) {
+                    options?.lineCallback?.(JSON.stringify(candidate));
+                }
+                else {
+                    options?.stdoutCallback?.(JSON.stringify([candidate]));
+                }
+                options?.exitCallback?.(0);
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+
+            try {
+                await service.discover(workspaceFolder);
+                await service.discover(workspaceFolder, true);
+
+                assert.deepStrictEqual(observedArgs, [
+                    ['ls', '--format', 'json', '--nologo'],
+                    ['ls', '--format', 'json', '--stream', '--nologo'],
+                ]);
+                assert.deepStrictEqual(getConfigInfoStub.getCalls().map(call => call.args[0]), [
+                    { suppressErrors: true, forceRefresh: false, cliPath: 'aspire' },
+                    { suppressErrors: true, forceRefresh: true, cliPath: 'aspire' },
+                ]);
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
         test('generic CLI errors do not disable streamed discovery', async () => {
             const watcherCallbacks = stubFileSystemWatchers(sandbox);
             const clock = sandbox.useFakeTimers();

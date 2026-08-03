@@ -81,13 +81,11 @@ export class AppHostDiscoveryService implements vscode.Disposable {
     private readonly _activeCliProcesses = new Set<ChildProcessWithoutNullStreams>();
     private readonly _cancelActiveCliProcesses = new Set<(error: Error) => void>();
     private readonly _configInfoProvider: ConfigInfoProvider;
-    private readonly _lsJsonStreamSupported: Promise<boolean>;
     private _disposed = false;
     readonly onDidChangeCandidates = this._onDidChangeCandidates.event;
 
     constructor(private readonly _terminalProvider: AspireTerminalProvider, configInfoProvider?: ConfigInfoProvider) {
         this._configInfoProvider = configInfoProvider ?? new ConfigInfoProvider(_terminalProvider);
-        this._lsJsonStreamSupported = this._resolveLsStreamCapability();
     }
 
     async discover(workspaceFolder: vscode.WorkspaceFolder, forceRefresh = false, cancellationToken?: vscode.CancellationToken, onIncrementalCandidate: IncrementalCandidateCallback = () => { }): Promise<CandidateAppHostDisplayInfo[]> {
@@ -122,7 +120,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             // The cached discovery promise is shared across extension features. Keep caller
             // cancellation outside the cached operation so one cancelled refresh doesn't reject
             // unrelated callers that are awaiting the same workspace discovery.
-            const discoveryPromise = this._discoverCore(workspaceFolder, reportCandidateProgress, cancellationSource.token)
+            const discoveryPromise = this._discoverCore(workspaceFolder, reportCandidateProgress, cancellationSource.token, forceRefresh)
                 .then(async discovery => {
                     let candidates = discovery.candidates;
                     try {
@@ -256,14 +254,11 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         this._onDidChangeCandidates.dispose();
     }
 
-    private async _discoverCore(workspaceFolder: vscode.WorkspaceFolder, reportCandidateProgress: IncrementalCandidateCallback, cancellationToken: vscode.CancellationToken): Promise<AppHostDiscoveryResult> {
+    private async _discoverCore(workspaceFolder: vscode.WorkspaceFolder, reportCandidateProgress: IncrementalCandidateCallback, cancellationToken: vscode.CancellationToken, forceRefresh: boolean): Promise<AppHostDiscoveryResult> {
         let cliPath: string | undefined;
         try {
-            const [lsJsonStreamSupported, resolvedCliPath] = await Promise.all([
-                this._lsJsonStreamSupported,
-                this._getAspireCliExecutablePath(cancellationToken),
-            ]);
-            cliPath = resolvedCliPath;
+            cliPath = await this._getAspireCliExecutablePath(cancellationToken);
+            const lsJsonStreamSupported = await this._resolveLsStreamCapability(cliPath, forceRefresh);
             let appHosts: CandidateAppHostDisplayInfo[];
             if (lsJsonStreamSupported) {
                 try {
@@ -402,8 +397,12 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         });
     }
 
-    private async _resolveLsStreamCapability(): Promise<boolean> {
-        const configInfo = await this._configInfoProvider.getConfigInfo({ suppressErrors: true });
+    private async _resolveLsStreamCapability(cliPath: string, forceRefresh: boolean): Promise<boolean> {
+        const configInfo = await this._configInfoProvider.getConfigInfo({
+            suppressErrors: true,
+            forceRefresh,
+            cliPath,
+        });
         const supported = configInfo?.capabilities?.includes(lsJsonStreamCapability) ?? false;
         extensionLogOutputChannel.info(`CLI capability '${lsJsonStreamCapability}' ${supported ? 'advertised' : 'not advertised'}; aspire ls --stream ${supported ? 'enabled' : 'disabled'}.`);
         return supported;
