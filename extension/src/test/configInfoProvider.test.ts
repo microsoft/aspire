@@ -7,6 +7,9 @@ import type { ChildProcessWithoutNullStreams } from 'child_process';
 import { ConfigInfoProvider, getConfigInfo, parseConfigInfoOutput } from '../utils/configInfoProvider';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import * as cliModule from '../debugger/languages/cli';
+import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
+import { AppHostDataRepository } from '../views/AppHostDataRepository';
+import { describeIncludeDisabledCommandsCapability, lsJsonStreamCapability } from '../types/configInfo';
 
 suite('configInfoProvider tests', () => {
     teardown(() => sinon.restore());
@@ -154,6 +157,43 @@ suite('configInfoProvider tests', () => {
         assert.ok(configInfo);
         assert.deepStrictEqual(spawnStub.firstCall.args[2], ['config', 'info', '--json', '--nologo']);
         assert.deepStrictEqual(spawnStub.secondCall.args[2], ['config', 'info', '--json']);
+    });
+
+    test('shared provider deduplicates eager capability probes', async () => {
+        sinon.stub(vscode.workspace, 'workspaceFolders').value(undefined);
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => '/usr/bin/aspire',
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        let configInfoOptions: cliModule.SpawnProcessOptions | undefined;
+        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+            configInfoOptions = options;
+            return { kill: () => true } as unknown as ChildProcessWithoutNullStreams;
+        });
+        const configInfoProvider = new ConfigInfoProvider(terminalProvider);
+        const discoveryService = new AppHostDiscoveryService(terminalProvider, configInfoProvider);
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService, configInfoProvider);
+
+        try {
+            await new Promise(resolve => setImmediate(resolve));
+
+            assert.strictEqual(spawnStub.callCount, 1);
+            assert.deepStrictEqual(spawnStub.firstCall.args[2], ['config', 'info', '--json', '--nologo']);
+
+            configInfoOptions?.stdoutCallback?.(JSON.stringify({
+                localSettingsPath: '/workspace/aspire.config.json',
+                globalSettingsPath: '/home/user/.aspire/aspire.config.json',
+                availableFeatures: [],
+                localSettingsSchema: { properties: [] },
+                globalSettingsSchema: { properties: [] },
+                capabilities: [describeIncludeDisabledCommandsCapability, lsJsonStreamCapability],
+            }));
+            configInfoOptions?.exitCallback?.(0);
+            await new Promise(resolve => setImmediate(resolve));
+        } finally {
+            repository.dispose();
+            discoveryService.dispose();
+        }
     });
 
     test('getConfigInfo stops a hung CLI after timeout', async () => {

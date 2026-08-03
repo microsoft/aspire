@@ -42,6 +42,7 @@ import { createResourceCommandArgumentLoader } from './views/ResourceCommandArgu
 import { executeResourceCommand } from './views/resourceCommandExecution';
 import { ResourceCommandJson } from './views/AppHostDataRepository';
 import { AppHostDiscoveryService } from './utils/appHostDiscovery';
+import { ConfigInfoProvider } from './utils/configInfoProvider';
 import { AppHostLaunchService } from './services/AppHostLaunchService';
 import { cloneAppHostState, createStateSnapshot, getDashboardUrl } from './extensionState';
 import { createE2eStateFileBridge, isE2eBridgeEnabled } from './testing/e2eStateFileBridge';
@@ -99,7 +100,8 @@ export async function activate(context: vscode.ExtensionContext) {
   terminalProvider.dcpServerConnectionInfo = dcpServer.connectionInfo;
   terminalProvider.closeAllOpenAspireTerminals();
 
-  const appHostDiscoveryService = new AppHostDiscoveryService(terminalProvider);
+  const configInfoProvider = new ConfigInfoProvider(terminalProvider);
+  const appHostDiscoveryService = new AppHostDiscoveryService(terminalProvider, configInfoProvider);
   context.subscriptions.push(appHostDiscoveryService);
 
   // Meaningful-engagement reporter must outlive every command callback so it
@@ -171,7 +173,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const verifyCliInstalledRegistration = registerInstrumentedCommand('aspire-vscode.verifyCliInstalled', 'walkthrough', verifyCliInstalledCommand);
 
   // Aspire panel - running app hosts tree view
-  const dataRepository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService);
+  const dataRepository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService, configInfoProvider);
   const appHostTreeProvider = new AspireAppHostTreeProvider(dataRepository, terminalProvider, appHostLaunchService, context.globalState);
   const appHostTreeView = vscode.window.createTreeView('aspire-vscode.appHosts', {
     treeDataProvider: appHostTreeProvider,

@@ -85,8 +85,8 @@ export class AppHostDiscoveryService implements vscode.Disposable {
     private _disposed = false;
     readonly onDidChangeCandidates = this._onDidChangeCandidates.event;
 
-    constructor(private readonly _terminalProvider: AspireTerminalProvider) {
-        this._configInfoProvider = new ConfigInfoProvider(_terminalProvider);
+    constructor(private readonly _terminalProvider: AspireTerminalProvider, configInfoProvider?: ConfigInfoProvider) {
+        this._configInfoProvider = configInfoProvider ?? new ConfigInfoProvider(_terminalProvider);
         this._lsJsonStreamSupported = this._resolveLsStreamCapability();
     }
 
