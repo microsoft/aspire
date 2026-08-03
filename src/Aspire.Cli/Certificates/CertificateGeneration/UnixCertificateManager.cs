@@ -58,7 +58,11 @@ internal sealed partial class UnixCertificateManager : CertificateManager
     }
 
     public override TrustLevel GetTrustLevel(X509Certificate2 certificate)
+        => GetTrustLevel(certificate, CancellationToken.None);
+
+    internal TrustLevel GetTrustLevel(X509Certificate2 certificate, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var sawTrustSuccess = false;
         var sawTrustFailure = false;
 
@@ -159,7 +163,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
             {
                 foreach (var nssDb in nssDbs)
                 {
-                    if (IsCertificateInNssDb(certificateNickname, nssDb))
+                    if (IsCertificateInNssDb(certificateNickname, nssDb, cancellationToken))
                     {
                         sawTrustSuccess = true;
                     }
@@ -690,7 +694,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
     /// <remarks>
     /// It is the caller's responsibility to ensure that <see cref="CertificateHelpers.CertUtilCommand"/> is available.
     /// </remarks>
-    private bool IsCertificateInNssDb(string nickname, NssDb nssDb)
+    private bool IsCertificateInNssDb(string nickname, NssDb nssDb, CancellationToken cancellationToken = default)
     {
         // -V will validate that a cert can be used for a given purpose, in this case, server verification.
         // There is no corresponding -V check for the "Trusted CA" status required by Firefox, so we just check for existence.
@@ -706,8 +710,12 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         try
         {
             using var process = Process.Start(startInfo)!;
-            process.WaitForExit();
+            WaitForExit(process, cancellationToken);
             return process.ExitCode == 0;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -715,6 +723,25 @@ internal sealed partial class UnixCertificateManager : CertificateManager
             // This method is used to determine whether more trust is needed, so it's better to underestimate the amount of trust.
             return false;
         }
+    }
+
+    private static void WaitForExit(Process process, CancellationToken cancellationToken)
+    {
+        using var cancellationRegistration = cancellationToken.Register(static state =>
+        {
+            var process = (Process)state!;
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException or System.ComponentModel.Win32Exception)
+            {
+                // The process either exited concurrently or could not be killed by this platform.
+            }
+        }, process);
+
+        process.WaitForExit();
+        cancellationToken.ThrowIfCancellationRequested();
     }
 
     /// <remarks>

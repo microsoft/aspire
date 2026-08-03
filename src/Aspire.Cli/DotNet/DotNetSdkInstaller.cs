@@ -43,8 +43,34 @@ internal sealed class DotNetSdkInstaller(IConfiguration configuration) : IDotNet
             };
 
             process.Start();
-            var output = await process.StandardOutput.ReadToEndAsync(cancellationToken);
-            await process.WaitForExitAsync(cancellationToken);
+            var standardOutputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+            var standardErrorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+
+            try
+            {
+                await Task.WhenAll(
+                    standardOutputTask,
+                    standardErrorTask,
+                    process.WaitForExitAsync(cancellationToken));
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // The doctor timeout owns this process, so cancellation must not leave dotnet or
+                // any child process running after the check has returned.
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync(CancellationToken.None);
+                }
+                catch (InvalidOperationException)
+                {
+                    // The process exited between cancellation and the kill attempt.
+                }
+
+                throw;
+            }
+
+            var output = await standardOutputTask;
 
             if (process.ExitCode != 0)
             {

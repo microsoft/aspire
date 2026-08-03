@@ -36,7 +36,7 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
     {
         try
         {
-            var trustResult = certificateToolRunner.CheckHttpCertificate();
+            var trustResult = certificateToolRunner.CheckHttpCertificate(cancellationToken);
             var results = EvaluateCertificateResults(trustResult.Certificates, environment);
             await AddLinuxOpenSslCertificateCacheWarningsAsync(results, trustResult.Certificates, environment, cancellationToken).ConfigureAwait(false);
             AddLinuxCertificateToolWarnings(results, environment);
