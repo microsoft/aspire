@@ -1,0 +1,21 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@Arasz"
+  ],
+  "description": "Fixes a process leak where `aspire ls` and `aspire ps` accumulated orphaned NuGet search helper processes that were never awaited or cancelled, causing lock file buildup under `$TMPDIR/NuGetScratch/lock` and potential `dotnet restore` deadlocks. Read-only commands now opt out of unnecessary prefetching, and the prefetch service correctly awaits task completion before shutdown.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔧",
+  "firstMergedAt": "2026-08-03T01:07:18Z",
+  "lastMergedAt": "2026-08-03T01:07:18Z",
+  "name": "Fix NuGet search helper process leak in CLI read-only commands",
+  "owner": "JamesNK",
+  "prs": [
+    18958
+  ]
+}

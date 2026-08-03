@@ -1,0 +1,9 @@
+{
+  "author": "Arasz",
+  "comment": "Bug fix: orphaned NuGet search helper processes leaked by aspire ls/ps because prefetch tasks were never awaited",
+  "mergedAt": "2026-08-03T01:07:18Z",
+  "number": 18958,
+  "runDate": "2026-08-03T07:02:30Z",
+  "status": "included",
+  "title": "Stop leaking orphaned aspire-managed NuGet search helpers"
+}
