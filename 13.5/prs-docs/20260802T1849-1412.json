@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Automated security fix for brace-expansion in aspire.dev frontend; not a documentation PR for an Aspire product feature",
+  "mergedAt": "2026-08-02T18:49:35Z",
+  "number": 1412,
+  "runDate": "2026-08-03T00:22:09Z",
+  "status": "excluded",
+  "title": "[auto-sec] Fix brace-expansion GHSA-mh99-v99m-4gvg in aspire.dev frontend"
+}
