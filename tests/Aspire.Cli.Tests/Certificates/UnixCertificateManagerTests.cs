@@ -47,9 +47,9 @@ public class UnixCertificateManagerTests
             var trustTask = Task.Run(() => manager.GetTrustLevel(certificate, cancellationTokenSource.Token));
 
             parentPid = await ProcessTestHelpers.WaitForProcessIdAsync(parentPidFile, TestContext.Current.CancellationToken)
-                .WaitAsync(TimeSpan.FromSeconds(10));
+                .DefaultTimeout();
             childPid = await ProcessTestHelpers.WaitForProcessIdAsync(childPidFile, TestContext.Current.CancellationToken)
-                .WaitAsync(TimeSpan.FromSeconds(10));
+                .DefaultTimeout();
 
             cancellationTokenSource.Cancel();
 

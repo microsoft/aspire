@@ -42,9 +42,9 @@ public class DotNetSdkInstallerTests
             var checkTask = installer.CheckAsync(cancellationTokenSource.Token);
 
             parentPid = await ProcessTestHelpers.WaitForProcessIdAsync(parentPidFile, TestContext.Current.CancellationToken)
-                .WaitAsync(TimeSpan.FromSeconds(10));
+                .DefaultTimeout();
             childPid = await ProcessTestHelpers.WaitForProcessIdAsync(childPidFile, TestContext.Current.CancellationToken)
-                .WaitAsync(TimeSpan.FromSeconds(10));
+                .DefaultTimeout();
 
             cancellationTokenSource.Cancel();
 
