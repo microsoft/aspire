@@ -10,6 +10,19 @@ namespace Aspire.Cli.Tests.Npm;
 public class NpmRunnerTests
 {
     [Fact]
+    public void PackageRegistry_UsesCanonicalInternalFeed()
+    {
+        var registryConstants = typeof(NpmRunner)
+            .GetFields(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
+            .Where(field => field.IsLiteral && field.FieldType == typeof(string) && field.Name.Contains("Registry", StringComparison.Ordinal))
+            .Select(field => (string?)field.GetRawConstantValue())
+            .ToArray();
+
+        Assert.Contains("https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/", registryConstants);
+        Assert.DoesNotContain(registryConstants, value => value?.Contains("npmjs", StringComparison.OrdinalIgnoreCase) is true);
+    }
+
+    [Fact]
     public void CreateNpmProcessStartInfo_SetsCommonProperties()
     {
         var startInfo = NpmRunner.CreateNpmProcessStartInfo("/usr/bin/npm", ["view", "express", "version"], "/tmp/workdir", new TestEnvironment());
@@ -28,7 +41,7 @@ public class NpmRunnerTests
 
         var startInfo = NpmRunner.CreateNpmProcessStartInfo(
             @"C:\Program Files\nodejs\npm.cmd",
-            ["view", "@playwright/cli@0.1.1", "version", "--registry", "https://registry.npmjs.org/"],
+            ["view", "@playwright/cli@0.1.1", "version", "--registry", "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/"],
             @"C:\temp\workdir", new TestEnvironment());
 
         Assert.Equal("cmd.exe", startInfo.FileName);

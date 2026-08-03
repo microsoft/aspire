@@ -21,8 +21,8 @@
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
-    "@typescript-eslint/eslint-plugin": "^8.64.0",
-    "@typescript-eslint/parser": "^8.64.0",
+    "@typescript-eslint/eslint-plugin": "8.48.1",
+    "@typescript-eslint/parser": "8.48.1",
     "@vitejs/plugin-react": "^6.0.0",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
@@ -34,7 +34,6 @@
     "postcss": "8.5.20",
     "esbuild": "0.28.1",
     "@babel/core": "7.29.6",
-    "js-yaml": "4.2.0"
+    "js-yaml": "4.3.0"
   }
 }
-

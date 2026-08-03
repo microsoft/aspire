@@ -34,7 +34,7 @@
     "esbuild": "0.28.1",
     "http-proxy-middleware": "3.0.7",
     "launch-editor": "2.14.1",
-    "websocket-driver": "0.7.5"
+    "websocket-driver": "0.7.5",
+    "body-parser": "1.20.6"
   }
 }
-

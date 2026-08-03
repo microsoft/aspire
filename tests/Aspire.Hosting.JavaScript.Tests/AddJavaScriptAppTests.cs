@@ -16,6 +16,8 @@ namespace Aspire.Hosting.JavaScript.Tests;
 
 public class AddJavaScriptAppTests(ITestOutputHelper outputHelper)
 {
+    private const string InternalNpmRegistry = "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/";
+
     [Fact]
     public async Task VerifyDockerfile()
     {
@@ -339,6 +341,33 @@ public class AddJavaScriptAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task VerifyPnpmDockerfileUsesPackageManagerVersion()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+        await File.WriteAllTextAsync(
+            Path.Combine(appDir, "package.json"),
+            """
+            {
+              "packageManager": "pnpm@10.30.1+sha512.3590e550d5384caa39bd5c7c739f72270234b2f6059e13018f975c313b1eb9fefcc09714048765d4d9efe961382c312e624572c0420762bdc5d5940cdf9be73a"
+            }
+            """);
+
+        var pnpmApp = builder.AddJavaScriptApp("js", appDir)
+            .WithPnpm()
+            .WithBuildScript("build");
+
+        await ManifestUtils.GetManifest(pnpmApp.Resource, workspace.Path);
+
+        var dockerfile = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "js.Dockerfile"));
+        Assert.Contains("npm pack --json pnpm@10.30.1", dockerfile);
+        Assert.Contains("sha512sum -c", dockerfile);
+    }
+
+    [Fact]
     [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
     [OuterloopTest("Builds a Docker image to verify the generated pnpm Dockerfile works")]
     public async Task VerifyPnpmDockerfileBuildSucceeds()
@@ -355,6 +384,7 @@ public class AddJavaScriptAppTests(ITestOutputHelper outputHelper)
             {
               "name": "pnpm-test-app",
               "version": "1.0.0",
+                            "packageManager": "pnpm@10.30.1+sha512.3590e550d5384caa39bd5c7c739f72270234b2f6059e13018f975c313b1eb9fefcc09714048765d4d9efe961382c312e624572c0420762bdc5d5940cdf9be73a",
               "scripts": {
                 "build": "echo 'build completed'"
               }
@@ -371,9 +401,11 @@ public class AddJavaScriptAppTests(ITestOutputHelper outputHelper)
         var dockerfilePath = Path.Combine(workspace.Path, "pnpm-app.Dockerfile");
         Assert.True(File.Exists(dockerfilePath), $"Dockerfile should exist at {dockerfilePath}");
 
-        // Read the generated Dockerfile and verify it contains the corepack enable pnpm command
+        // Read the generated Dockerfile and verify it installs pnpm through npm.
         var dockerfileContent = await File.ReadAllTextAsync(dockerfilePath);
-        Assert.Contains("corepack enable pnpm", dockerfileContent);
+        Assert.Contains($"ARG NPM_CONFIG_REGISTRY={InternalNpmRegistry}", dockerfileContent);
+        Assert.Contains("npm pack --json pnpm@10.30.1", dockerfileContent);
+        Assert.Contains("sha512sum -c", dockerfileContent);
 
         // Modify the Dockerfile to add NODE_TLS_REJECT_UNAUTHORIZED=0 for test environments
         // that may have corporate proxies with self-signed certificates
@@ -445,6 +477,7 @@ public class AddJavaScriptAppTests(ITestOutputHelper outputHelper)
             {
               "name": "pnpm-runtime-test-app",
               "version": "1.0.0",
+                            "packageManager": "pnpm@10.30.1+sha512.3590e550d5384caa39bd5c7c739f72270234b2f6059e13018f975c313b1eb9fefcc09714048765d4d9efe961382c312e624572c0420762bdc5d5940cdf9be73a",
               "scripts": {
                 "build": "echo 'build completed'",
                 "start": "node -e \"console.log('runtime ok')\""
@@ -464,7 +497,9 @@ public class AddJavaScriptAppTests(ITestOutputHelper outputHelper)
         Assert.True(File.Exists(dockerfilePath), $"Dockerfile should exist at {dockerfilePath}");
 
         var dockerfileContent = await File.ReadAllTextAsync(dockerfilePath);
-        Assert.Contains("RUN corepack enable pnpm && pnpm --version", dockerfileContent);
+        Assert.Contains($"ARG NPM_CONFIG_REGISTRY={InternalNpmRegistry}", dockerfileContent);
+        Assert.Contains("npm pack --json pnpm@10.30.1", dockerfileContent);
+        Assert.Contains("sha512sum -c", dockerfileContent);
 
         var dockerfileInContext = Path.Combine(appDir, "Dockerfile");
         await File.WriteAllTextAsync(dockerfileInContext, dockerfileContent);

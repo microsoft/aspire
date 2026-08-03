@@ -392,6 +392,18 @@ public sealed class NpmCliPackageTests : IDisposable
     }
 
     [Fact]
+    public async Task PolyglotTypeScriptToolchainUsesInternalNpmRegistry()
+    {
+        var dockerfile = await ReadRepoFileAsync(".github/workflows/polyglot-validation/Dockerfile.typescript");
+
+        Assert.Contains("ARG NPM_REGISTRY=https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/", dockerfile);
+        Assert.Contains("npm install --global --force --registry \"${NPM_REGISTRY}\"", dockerfile);
+        Assert.Contains("pnpm@10.0.0", dockerfile);
+        Assert.Contains("@yarnpkg/cli-dist@4.14.1", dockerfile);
+        Assert.DoesNotContain("corepack prepare", dockerfile);
+    }
+
+    [Fact]
     public async Task NpmSigningScopeCoversNestedTarballPayloads()
     {
         var signingProps = XDocument.Parse(await ReadRepoFileAsync("eng/Signing.props"));

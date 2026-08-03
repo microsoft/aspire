@@ -31,12 +31,14 @@ public static class JavaScriptHostingExtensions
 {
     private const string BrowserCapability = "browser";
     private const string DefaultNodeVersion = "22";
+    private const string DefaultNpmRegistry = "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/";
+    private const string DefaultPnpmVersion = "10.30.1";
     private const string DefaultJavaScriptRunScriptName = "dev";
     private const string DefaultYarpImage = Yarp.YarpContainerImageTags.Registry + "/" + Yarp.YarpContainerImageTags.Image + ":" + Yarp.YarpContainerImageTags.Tag;
 
     // Help links surfaced when a required command is missing, mapped to a command by ResolveHelpLink.
     private const string NodeHelpLink = "https://nodejs.org/en/download/";
-    private const string NpmHelpLink = "https://docs.npmjs.com/downloading-and-installing-node-js-and-npm";
+    private const string NpmHelpLink = "https://nodejs.org/en/download";
     private const string BunHelpLink = "https://bun.sh/docs/installation";
     private const string YarnHelpLink = "https://yarnpkg.com/getting-started/install";
     private const string PnpmHelpLink = "https://pnpm.io/installation";
@@ -1989,6 +1991,19 @@ public static class JavaScriptHostingExtensions
         var workingDirectory = resource.Resource.WorkingDirectory;
         var hasPnpmLock = File.Exists(Path.Combine(workingDirectory, "pnpm-lock.yaml"));
         var hasPnpmWorkspace = File.Exists(Path.Combine(workingDirectory, "pnpm-workspace.yaml"));
+        var pnpmPackageManager = GetPnpmPackageManager(workingDirectory);
+        var initializeDockerStage = new Action<DockerfileStage>(stage =>
+        {
+            stage.Arg("NPM_CONFIG_REGISTRY", DefaultNpmRegistry);
+            if (pnpmPackageManager.Integrity is { } integrity)
+            {
+                stage.Run($"archive=\"$(npm pack --json pnpm@{pnpmPackageManager.Version} | node -e 'const result = JSON.parse(require(\"fs\").readFileSync(0, \"utf8\")); process.stdout.write(result[0].filename)')\" && echo \"{integrity.Hash}  $archive\" | {integrity.Algorithm}sum -c && npm install --global \"./$archive\" && rm \"$archive\"");
+            }
+            else
+            {
+                stage.Run($"npm install --global pnpm@{pnpmPackageManager.Version}");
+            }
+        });
 
         installArgs ??= GetDefaultPnpmInstallArgs(resource, hasPnpmLock);
 
@@ -2009,14 +2024,9 @@ public static class JavaScriptHostingExtensions
                 PackageFilesPatterns = { new CopyFilePattern(packageFilesSourcePattern, "./") },
                 // pnpm does not strip the -- separator and passes it to the script, causing Vite to ignore subsequent arguments.
                 CommandSeparator = null,
-                // pnpm is not included in the Node.js Docker image by default, so we need to enable it via corepack
-                InitializeDockerBuildStage = stage => stage.Run("corepack enable pnpm"),
-                InitializeDockerRuntimeStage = stage =>
-                {
-                    // Corepack's shim is not enough by itself: without invoking pnpm during the image build,
-                    // the first container start can try to download pnpm before running the app.
-                    stage.Run("corepack enable pnpm && pnpm --version");
-                },
+                // pnpm is not included in the Node.js Docker image by default.
+                InitializeDockerBuildStage = initializeDockerStage,
+                InitializeDockerRuntimeStage = initializeDockerStage,
             })
             .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs])
             {
@@ -2031,6 +2041,64 @@ public static class JavaScriptHostingExtensions
         resource.ApplicationBuilder.ExecutionContext.IsPublishMode && hasPnpmLock
             ? ["--frozen-lockfile"]
             : [];
+
+    private static (string Version, (string Algorithm, string Hash)? Integrity) GetPnpmPackageManager(string workingDirectory)
+    {
+        var packageJsonPath = Path.Combine(workingDirectory, "package.json");
+        if (!File.Exists(packageJsonPath))
+        {
+            return (DefaultPnpmVersion, null);
+        }
+
+        try
+        {
+            using var packageJson = JsonDocument.Parse(File.ReadAllText(packageJsonPath));
+            if (packageJson.RootElement.TryGetProperty("packageManager", out var packageManagerElement) &&
+                packageManagerElement.ValueKind == JsonValueKind.String &&
+                packageManagerElement.GetString() is { } packageManager &&
+                packageManager.StartsWith("pnpm@", StringComparison.Ordinal))
+            {
+                var version = packageManager.AsSpan("pnpm@".Length);
+                ReadOnlySpan<char> integrity = default;
+                var hashSeparator = version.IndexOf('+');
+                if (hashSeparator >= 0)
+                {
+                    integrity = version[(hashSeparator + 1)..];
+                    version = version[..hashSeparator];
+                }
+
+                if (!version.IsEmpty &&
+                    char.IsAsciiDigit(version[0]) &&
+                    version.IndexOfAnyExcept("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.-") < 0)
+                {
+                    var integritySeparator = integrity.IndexOf('.');
+                    if (integritySeparator > 0 &&
+                        integrity[(integritySeparator + 1)..] is { IsEmpty: false } hash &&
+                        hash.IndexOfAnyExcept("0123456789abcdefABCDEF") < 0 &&
+                        integrity[..integritySeparator] is "sha224" or "sha256" or "sha384" or "sha512")
+                    {
+                        return (version.ToString(), (integrity[..integritySeparator].ToString(), hash.ToString()));
+                    }
+
+                    if (integrity.IsEmpty)
+                    {
+                        return (version.ToString(), null);
+                    }
+                }
+            }
+        }
+        catch (JsonException)
+        {
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+
+        return (DefaultPnpmVersion, null);
+    }
 
     /// <summary>
     /// Adds a build script annotation to the resource builder using the specified command-line arguments.

@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  brace-expansion: 5.0.8
+
 importers:
 
   .:
@@ -198,9 +201,9 @@ packages:
     resolution: {integrity: sha1-9uFKl4WNMnJSIAJC1Mz+UixEVSI=}
     engines: {node: '>=8'}
 
-  brace-expansion@5.0.6:
-    resolution: {integrity: sha1-7Gj+CmQaKdhxFXnK9kHQW64fIoU=}
-    engines: {node: 18 || 20 || >=22}
+  brace-expansion@5.0.8:
+    resolution: {integrity: sha1-E1rQ2NgI6xjrXg7Joh86C5LvGM8=}
+    engines: {node: 20 || >=22}
 
   braces@3.0.3:
     resolution: {integrity: sha1-SQMy9AkZRSJy1VqEgK3AxEE1h4k=}
@@ -421,7 +424,7 @@ snapshots:
 
   binary-extensions@2.3.0: {}
 
-  brace-expansion@5.0.6:
+  brace-expansion@5.0.8:
     dependencies:
       balanced-match: 4.0.4
 
@@ -505,7 +508,7 @@ snapshots:
 
   minimatch@10.2.5:
     dependencies:
-      brace-expansion: 5.0.6
+      brace-expansion: 5.0.8
 
   ms@2.1.3: {}
 

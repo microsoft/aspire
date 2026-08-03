@@ -10,7 +10,7 @@ namespace Aspire.Cli.Npm;
 
 /// <summary>
 /// Verifies npm package provenance by cryptographically verifying Sigstore bundles
-/// from the npm registry attestations API using the Sigstore .NET library.
+/// from the public npm registry attestations API using the Sigstore .NET library.
 /// Uses Fulcio certificate extensions and in-toto statement APIs for attestation analysis.
 /// </summary>
 internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogger<SigstoreNpmProvenanceChecker> logger) : INpmProvenanceChecker
@@ -92,7 +92,7 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
     }
 
     /// <summary>
-    /// Fetches the attestation JSON from the npm registry for the given package and version.
+    /// Fetches the attestation JSON from the public npm registry for the given package and version.
     /// </summary>
     private async Task<string?> FetchAttestationJsonAsync(
         string packageName, string version, CancellationToken cancellationToken)
@@ -122,7 +122,7 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
 
     /// <summary>
     /// Extracts the Sigstore bundle JSON string for the SLSA provenance attestation
-    /// from the npm registry attestations API response.
+    /// from the public npm registry attestations API response.
     /// Returns the bundle JSON on success, or <c>null</c> if the JSON is malformed or
     /// no SLSA provenance attestation is found.
     /// </summary>
