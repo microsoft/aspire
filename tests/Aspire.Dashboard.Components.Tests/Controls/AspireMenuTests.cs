@@ -14,7 +14,7 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 public class AspireMenuTests : DashboardTestContext
 {
     [Fact]
-    public async Task DisposeAsync_RemovesFluentMenuFromMenuProvider()
+    public async Task RemoveAspireMenu_UnregistersFluentMenuFromMenuProvider()
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         FluentUISetupHelpers.SetupFluentUIComponents(this);
