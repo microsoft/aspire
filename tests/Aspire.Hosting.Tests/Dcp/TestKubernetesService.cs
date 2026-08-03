@@ -264,7 +264,9 @@ internal sealed class TestKubernetesService : IKubernetesService
             _watchChannels.Add(chan);
             foreach (var res in CreatedResources.OfType<T>())
             {
-                chan.Writer.TryWrite((WatchEventType.Added, res));
+                // Deliver a copy, the same way the other fan-out sites do, so the content of this event is
+                // fixed at the moment it is produced instead of tracking later changes to the resource.
+                chan.Writer.TryWrite((WatchEventType.Added, Copy(res)));
             }
         }
 
@@ -323,11 +325,17 @@ internal sealed class TestKubernetesService : IKubernetesService
 
             var result = jsonPatch.Apply<T, T>(res);
 
+            // A patch changes the stored object, so it needs a new resource version. No watch event is
+            // emitted here - tests push one themselves when they need it - but leaving the version behind
+            // would make a later replay of this object look unchanged and be discarded by the watcher.
             if (res is Executable exe && result is Executable eu)
             {
+                var changed = false;
+
                 if (eu.Spec.Start is not null)
                 {
                     exe.Spec.Start = eu.Spec.Start;
+                    changed = true;
                 }
 
                 if (eu.Spec.Stop == true)
@@ -338,14 +346,23 @@ internal sealed class TestKubernetesService : IKubernetesService
                         exe.Status = new ExecutableStatus();
                     }
                     exe.Status.State = ExecutableState.Finished;
+                    changed = true;
+                }
+
+                if (changed)
+                {
+                    StampResourceVersion(exe);
                 }
             }
 
             if (res is Container ctr && result is Container cu)
             {
+                var changed = false;
+
                 if (cu.Spec.Start is not null)
                 {
                     ctr.Spec.Start = cu.Spec.Start;
+                    changed = true;
                 }
 
                 if (cu.Spec.Stop == true)
@@ -356,6 +373,12 @@ internal sealed class TestKubernetesService : IKubernetesService
                         ctr.Status = new ContainerStatus();
                     }
                     ctr.Status.State = ContainerState.Exited;
+                    changed = true;
+                }
+
+                if (changed)
+                {
+                    StampResourceVersion(ctr);
                 }
             }
 
