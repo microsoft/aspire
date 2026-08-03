@@ -20,48 +20,85 @@
               "type": "object",
               "properties": {
                 "Database": {
-                  "type": "string",
-                  "description": "The database name of the Milvus server to connect to."
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "description": "The database name of the Milvus server to connect to."
+                    },
+                    {
+                      "$ref": "#/properties/Aspire/properties/Milvus/properties/Client/additionalProperties/anyOf/1"
+                    }
+                  ]
                 },
                 "DisableHealthChecks": {
-                  "type": "boolean",
-                  "description": "Gets or sets a boolean value that indicates whether the Milvus client health check is disabled or not.",
-                  "default": false
+                  "anyOf": [
+                    {
+                      "type": "boolean",
+                      "description": "Gets or sets a boolean value that indicates whether the Milvus client health check is disabled or not.",
+                      "default": false
+                    },
+                    {
+                      "$ref": "#/properties/Aspire/properties/Milvus/properties/Client/additionalProperties/anyOf/1"
+                    }
+                  ]
                 },
                 "Endpoint": {
-                  "type": "string",
-                  "format": "uri",
-                  "description": "The endpoint URI string of the Milvus server to connect to."
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uri",
+                      "description": "The endpoint URI string of the Milvus server to connect to."
+                    },
+                    {
+                      "$ref": "#/properties/Aspire/properties/Milvus/properties/Client/additionalProperties/anyOf/1"
+                    }
+                  ]
                 },
                 "Key": {
-                  "type": "string",
-                  "description": "The auth Key of the Milvus server to connect to."
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "description": "The auth Key of the Milvus server to connect to."
+                    },
+                    {
+                      "$ref": "#/properties/Aspire/properties/Milvus/properties/Client/additionalProperties/anyOf/1"
+                    }
+                  ]
                 }
               },
               "description": "Provides the client configuration settings for connecting to a Milvus server using MilvusClient.",
               "additionalProperties": {
-                "type": "object",
-                "properties": {
-                  "Database": {
-                    "type": "string",
-                    "description": "The database name of the Milvus server to connect to."
+                "anyOf": [
+                  {
+                    "not": {
+                      "type": "object"
+                    }
                   },
-                  "DisableHealthChecks": {
-                    "type": "boolean",
-                    "description": "Gets or sets a boolean value that indicates whether the Milvus client health check is disabled or not.",
-                    "default": false
-                  },
-                  "Endpoint": {
-                    "type": "string",
-                    "format": "uri",
-                    "description": "The endpoint URI string of the Milvus server to connect to."
-                  },
-                  "Key": {
-                    "type": "string",
-                    "description": "The auth Key of the Milvus server to connect to."
+                  {
+                    "type": "object",
+                    "properties": {
+                      "Database": {
+                        "type": "string",
+                        "description": "The database name of the Milvus server to connect to."
+                      },
+                      "DisableHealthChecks": {
+                        "type": "boolean",
+                        "description": "Gets or sets a boolean value that indicates whether the Milvus client health check is disabled or not.",
+                        "default": false
+                      },
+                      "Endpoint": {
+                        "type": "string",
+                        "format": "uri",
+                        "description": "The endpoint URI string of the Milvus server to connect to."
+                      },
+                      "Key": {
+                        "type": "string",
+                        "description": "The auth Key of the Milvus server to connect to."
+                      }
+                    },
+                    "description": "Provides the client configuration settings for connecting to a Milvus server using MilvusClient."
                   }
-                },
-                "description": "Provides the client configuration settings for connecting to a Milvus server using MilvusClient."
+                ]
               }
             }
           }

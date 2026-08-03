@@ -29,390 +29,441 @@
                   "type": "object",
                   "properties": {
                     "BlobContainerName": {
-                      "type": "string",
-                      "description": "Gets or sets the name of the blob container."
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "description": "Gets or sets the name of the blob container."
+                        },
+                        {
+                          "$ref": "#/properties/Aspire/properties/Azure/properties/Storage/properties/Blobs/additionalProperties/anyOf/1"
+                        }
+                      ]
                     },
                     "ClientOptions": {
-                      "type": "object",
-                      "properties": {
-                        "Diagnostics": {
+                      "anyOf": [
+                        {
                           "type": "object",
                           "properties": {
-                            "ApplicationId": {
-                              "type": "string",
-                              "description": "Gets or sets the value sent as the first part of \"User-Agent\" headers for all requests issues by this client. Defaults to 'Azure.Core.DiagnosticsOptions.DefaultApplicationId'."
-                            },
-                            "DefaultApplicationId": {
-                              "type": "string",
-                              "description": "Gets or sets the default application id. Default application id would be set on all instances."
-                            },
-                            "IsDistributedTracingEnabled": {
-                              "type": "boolean",
-                              "description": "Gets or sets value indicating whether distributed tracing activities ('System.Diagnostics.Activity') are going to be created for the clients methods calls and HTTP calls."
-                            },
-                            "IsLoggingContentEnabled": {
-                              "type": "boolean",
-                              "description": "Gets or sets value indicating if request or response content should be logged."
-                            },
-                            "IsLoggingEnabled": {
-                              "type": "boolean",
-                              "description": "Get or sets value indicating whether HTTP pipeline logging is enabled."
-                            },
-                            "IsTelemetryEnabled": {
-                              "type": "boolean",
-                              "description": "Gets or sets value indicating whether the \"User-Agent\" header containing 'Azure.Core.DiagnosticsOptions.ApplicationId', client library package name and version, 'System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription' and 'System.Runtime.InteropServices.RuntimeInformation.OSDescription' should be sent. The default value can be controlled process wide by setting AZURE_TELEMETRY_DISABLED to true, false, 1 or 0."
-                            },
-                            "LoggedContentSizeLimit": {
-                              "type": "integer",
-                              "description": "Gets or sets value indicating maximum size of content to log in bytes. Defaults to 4096."
-                            },
-                            "LoggedHeaderNames": {
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              },
-                              "description": "Gets a list of header names that are not redacted during logging."
-                            },
-                            "LoggedQueryParameters": {
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              },
-                              "description": "Gets a list of query parameter names that are not redacted during logging."
-                            }
-                          },
-                          "description": "Gets the client diagnostic options."
-                        },
-                        "EnableTenantDiscovery": {
-                          "type": "boolean",
-                          "description": "Enables tenant discovery through the authorization challenge when the client is configured to use a TokenCredential. When enabled, the client will attempt an initial un-authorized request to prompt a challenge in order to discover the correct tenant for the resource."
-                        },
-                        "EncryptionScope": {
-                          "type": "string",
-                          "description": "Gets the 'Azure.Storage.Blobs.BlobClientOptions.EncryptionScope' to be used when making requests."
-                        },
-                        "GeoRedundantSecondaryUri": {
-                          "type": "string",
-                          "format": "uri",
-                          "description": "Gets or sets the secondary storage 'System.Uri' that can be read from for the storage account if the account is enabled for RA-GRS.\n\nIf this property is set, the secondary Uri will be used for GET or HEAD requests during retries. If the status of the response from the secondary Uri is a 404, then subsequent retries for the request will not use the secondary Uri again, as this indicates that the resource may not have propagated there yet. Otherwise, subsequent retries will alternate back and forth between primary and secondary Uri."
-                        },
-                        "Request100ContinueOptions": {
-                          "type": "object",
-                          "properties": {
-                            "AutoInterval": {
-                              "type": "string",
-                              "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
-                              "description": "In mode 'Azure.Storage.Request100ContinueMode.Auto', the time interval to apply the header after recieving a triggering error. The default time is one minute."
-                            },
-                            "ContentLengthThreshold": {
-                              "type": "integer",
-                              "description": "The minimum value of HTTP request Content-Length for applying expect-continue."
-                            },
-                            "Mode": {
-                              "enum": [
-                                "Auto",
-                                "Always",
-                                "Never"
-                              ],
-                              "description": "Mode for these options."
-                            }
-                          },
-                          "description": "Behavior options for setting HTTP header Expect: 100-continue on requests."
-                        },
-                        "Retry": {
-                          "type": "object",
-                          "properties": {
-                            "Delay": {
-                              "type": "string",
-                              "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
-                              "description": "The delay between retry attempts for a fixed approach or the delay on which to base calculations for a backoff-based approach. If the service provides a Retry-After response header, the next retry will be delayed by the duration specified by the header value."
-                            },
-                            "MaxDelay": {
-                              "type": "string",
-                              "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
-                              "description": "The maximum permissible delay between retry attempts when the service does not provide a Retry-After response header. If the service provides a Retry-After response header, the next retry will be delayed by the duration specified by the header value."
-                            },
-                            "MaxRetries": {
-                              "type": "integer",
-                              "description": "The maximum number of retry attempts before giving up."
-                            },
-                            "Mode": {
-                              "enum": [
-                                "Fixed",
-                                "Exponential"
-                              ],
-                              "description": "The approach to use for calculating retry delays."
-                            },
-                            "NetworkTimeout": {
-                              "type": "string",
-                              "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
-                              "description": "The timeout applied to individual network operations."
-                            }
-                          },
-                          "description": "Gets the client retry options."
-                        },
-                        "TransferValidation": {
-                          "type": "object",
-                          "properties": {
-                            "Download": {
+                            "Diagnostics": {
                               "type": "object",
                               "properties": {
-                                "AutoValidateChecksum": {
-                                  "type": "boolean",
-                                  "description": "Defaults to true. False can only be specified on specific operations and not at the client level. Indicates whether the SDK should validate the content body against the content hash before returning contents to the caller. If set to false, caller is responsible for extracting the hash out of the 'Azure.Response`1' and validating the hash themselves."
+                                "ApplicationId": {
+                                  "type": "string",
+                                  "description": "Gets or sets the value sent as the first part of \"User-Agent\" headers for all requests issues by this client. Defaults to 'Azure.Core.DiagnosticsOptions.DefaultApplicationId'."
                                 },
-                                "ChecksumAlgorithm": {
-                                  "enum": [
-                                    "Auto",
-                                    "None",
-                                    "MD5",
-                                    "StorageCrc64"
-                                  ],
-                                  "description": "Checksum algorithm to use."
+                                "DefaultApplicationId": {
+                                  "type": "string",
+                                  "description": "Gets or sets the default application id. Default application id would be set on all instances."
+                                },
+                                "IsDistributedTracingEnabled": {
+                                  "type": "boolean",
+                                  "description": "Gets or sets value indicating whether distributed tracing activities ('System.Diagnostics.Activity') are going to be created for the clients methods calls and HTTP calls."
+                                },
+                                "IsLoggingContentEnabled": {
+                                  "type": "boolean",
+                                  "description": "Gets or sets value indicating if request or response content should be logged."
+                                },
+                                "IsLoggingEnabled": {
+                                  "type": "boolean",
+                                  "description": "Get or sets value indicating whether HTTP pipeline logging is enabled."
+                                },
+                                "IsTelemetryEnabled": {
+                                  "type": "boolean",
+                                  "description": "Gets or sets value indicating whether the \"User-Agent\" header containing 'Azure.Core.DiagnosticsOptions.ApplicationId', client library package name and version, 'System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription' and 'System.Runtime.InteropServices.RuntimeInformation.OSDescription' should be sent. The default value can be controlled process wide by setting AZURE_TELEMETRY_DISABLED to true, false, 1 or 0."
+                                },
+                                "LoggedContentSizeLimit": {
+                                  "type": "integer",
+                                  "description": "Gets or sets value indicating maximum size of content to log in bytes. Defaults to 4096."
+                                },
+                                "LoggedHeaderNames": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "description": "Gets a list of header names that are not redacted during logging."
+                                },
+                                "LoggedQueryParameters": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "description": "Gets a list of query parameter names that are not redacted during logging."
                                 }
                               },
-                              "description": "Options on download."
+                              "description": "Gets the client diagnostic options."
                             },
-                            "Upload": {
+                            "EnableTenantDiscovery": {
+                              "type": "boolean",
+                              "description": "Enables tenant discovery through the authorization challenge when the client is configured to use a TokenCredential. When enabled, the client will attempt an initial un-authorized request to prompt a challenge in order to discover the correct tenant for the resource."
+                            },
+                            "EncryptionScope": {
+                              "type": "string",
+                              "description": "Gets the 'Azure.Storage.Blobs.BlobClientOptions.EncryptionScope' to be used when making requests."
+                            },
+                            "GeoRedundantSecondaryUri": {
+                              "type": "string",
+                              "format": "uri",
+                              "description": "Gets or sets the secondary storage 'System.Uri' that can be read from for the storage account if the account is enabled for RA-GRS.\n\nIf this property is set, the secondary Uri will be used for GET or HEAD requests during retries. If the status of the response from the secondary Uri is a 404, then subsequent retries for the request will not use the secondary Uri again, as this indicates that the resource may not have propagated there yet. Otherwise, subsequent retries will alternate back and forth between primary and secondary Uri."
+                            },
+                            "Request100ContinueOptions": {
                               "type": "object",
                               "properties": {
-                                "ChecksumAlgorithm": {
+                                "AutoInterval": {
+                                  "type": "string",
+                                  "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                                  "description": "In mode 'Azure.Storage.Request100ContinueMode.Auto', the time interval to apply the header after recieving a triggering error. The default time is one minute."
+                                },
+                                "ContentLengthThreshold": {
+                                  "type": "integer",
+                                  "description": "The minimum value of HTTP request Content-Length for applying expect-continue."
+                                },
+                                "Mode": {
                                   "enum": [
                                     "Auto",
-                                    "None",
-                                    "MD5",
-                                    "StorageCrc64"
+                                    "Always",
+                                    "Never"
                                   ],
-                                  "description": "Checksum algorithm to use."
+                                  "description": "Mode for these options."
                                 }
                               },
-                              "description": "Options on upload."
+                              "description": "Behavior options for setting HTTP header Expect: 100-continue on requests."
+                            },
+                            "Retry": {
+                              "type": "object",
+                              "properties": {
+                                "Delay": {
+                                  "type": "string",
+                                  "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                                  "description": "The delay between retry attempts for a fixed approach or the delay on which to base calculations for a backoff-based approach. If the service provides a Retry-After response header, the next retry will be delayed by the duration specified by the header value."
+                                },
+                                "MaxDelay": {
+                                  "type": "string",
+                                  "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                                  "description": "The maximum permissible delay between retry attempts when the service does not provide a Retry-After response header. If the service provides a Retry-After response header, the next retry will be delayed by the duration specified by the header value."
+                                },
+                                "MaxRetries": {
+                                  "type": "integer",
+                                  "description": "The maximum number of retry attempts before giving up."
+                                },
+                                "Mode": {
+                                  "enum": [
+                                    "Fixed",
+                                    "Exponential"
+                                  ],
+                                  "description": "The approach to use for calculating retry delays."
+                                },
+                                "NetworkTimeout": {
+                                  "type": "string",
+                                  "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                                  "description": "The timeout applied to individual network operations."
+                                }
+                              },
+                              "description": "Gets the client retry options."
+                            },
+                            "TransferValidation": {
+                              "type": "object",
+                              "properties": {
+                                "Download": {
+                                  "type": "object",
+                                  "properties": {
+                                    "AutoValidateChecksum": {
+                                      "type": "boolean",
+                                      "description": "Defaults to true. False can only be specified on specific operations and not at the client level. Indicates whether the SDK should validate the content body against the content hash before returning contents to the caller. If set to false, caller is responsible for extracting the hash out of the 'Azure.Response`1' and validating the hash themselves."
+                                    },
+                                    "ChecksumAlgorithm": {
+                                      "enum": [
+                                        "Auto",
+                                        "None",
+                                        "MD5",
+                                        "StorageCrc64"
+                                      ],
+                                      "description": "Checksum algorithm to use."
+                                    }
+                                  },
+                                  "description": "Options on download."
+                                },
+                                "Upload": {
+                                  "type": "object",
+                                  "properties": {
+                                    "ChecksumAlgorithm": {
+                                      "enum": [
+                                        "Auto",
+                                        "None",
+                                        "MD5",
+                                        "StorageCrc64"
+                                      ],
+                                      "description": "Checksum algorithm to use."
+                                    }
+                                  },
+                                  "description": "Options on upload."
+                                }
+                              },
+                              "description": "Configures whether to send or receive checksum headers for blob uploads and downloads. Downloads can optionally validate that the content matches the checksum."
+                            },
+                            "TrimBlobNameSlashes": {
+                              "type": "boolean",
+                              "description": "Whether to trim leading and trailing slashes on a blob name when using 'Azure.Storage.Blobs.BlobContainerClient.GetBlobClient(System.String)' and similar methods. Defaults to true for backwards compatibility."
                             }
                           },
-                          "description": "Configures whether to send or receive checksum headers for blob uploads and downloads. Downloads can optionally validate that the content matches the checksum."
+                          "description": "Provides the client configuration options for connecting to Azure Blob Storage."
                         },
-                        "TrimBlobNameSlashes": {
-                          "type": "boolean",
-                          "description": "Whether to trim leading and trailing slashes on a blob name when using 'Azure.Storage.Blobs.BlobContainerClient.GetBlobClient(System.String)' and similar methods. Defaults to true for backwards compatibility."
+                        {
+                          "$ref": "#/properties/Aspire/properties/Azure/properties/Storage/properties/Blobs/additionalProperties/anyOf/1"
                         }
-                      },
-                      "description": "Provides the client configuration options for connecting to Azure Blob Storage."
+                      ]
                     },
                     "ConnectionString": {
-                      "type": "string",
-                      "description": "Gets or sets the connection string used to connect to the blob service."
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "description": "Gets or sets the connection string used to connect to the blob service."
+                        },
+                        {
+                          "$ref": "#/properties/Aspire/properties/Azure/properties/Storage/properties/Blobs/additionalProperties/anyOf/1"
+                        }
+                      ]
                     },
                     "DisableHealthChecks": {
-                      "type": "boolean",
-                      "description": "Gets or sets a boolean value that indicates whether the Blob Storage health check is disabled or not.",
-                      "default": false
+                      "anyOf": [
+                        {
+                          "type": "boolean",
+                          "description": "Gets or sets a boolean value that indicates whether the Blob Storage health check is disabled or not.",
+                          "default": false
+                        },
+                        {
+                          "$ref": "#/properties/Aspire/properties/Azure/properties/Storage/properties/Blobs/additionalProperties/anyOf/1"
+                        }
+                      ]
                     },
                     "DisableTracing": {
-                      "type": "boolean",
-                      "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
-                      "default": false
+                      "anyOf": [
+                        {
+                          "type": "boolean",
+                          "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
+                          "default": false
+                        },
+                        {
+                          "$ref": "#/properties/Aspire/properties/Azure/properties/Storage/properties/Blobs/additionalProperties/anyOf/1"
+                        }
+                      ]
                     },
                     "ServiceUri": {
-                      "type": "string",
-                      "format": "uri",
-                      "description": "A 'System.Uri' referencing the blob service. This is likely to be similar to \"https://{account_name}.blob.core.windows.net\"."
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uri",
+                          "description": "A 'System.Uri' referencing the blob service. This is likely to be similar to \"https://{account_name}.blob.core.windows.net\"."
+                        },
+                        {
+                          "$ref": "#/properties/Aspire/properties/Azure/properties/Storage/properties/Blobs/additionalProperties/anyOf/1"
+                        }
+                      ]
                     }
                   },
                   "description": "Provides the client configuration settings for connecting to Azure Blob Storage container.",
                   "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "BlobContainerName": {
-                        "type": "string",
-                        "description": "Gets or sets the name of the blob container."
+                    "anyOf": [
+                      {
+                        "not": {
+                          "type": "object"
+                        }
                       },
-                      "ClientOptions": {
+                      {
                         "type": "object",
                         "properties": {
-                          "Diagnostics": {
+                          "BlobContainerName": {
+                            "type": "string",
+                            "description": "Gets or sets the name of the blob container."
+                          },
+                          "ClientOptions": {
                             "type": "object",
                             "properties": {
-                              "ApplicationId": {
-                                "type": "string",
-                                "description": "Gets or sets the value sent as the first part of \"User-Agent\" headers for all requests issues by this client. Defaults to 'Azure.Core.DiagnosticsOptions.DefaultApplicationId'."
-                              },
-                              "DefaultApplicationId": {
-                                "type": "string",
-                                "description": "Gets or sets the default application id. Default application id would be set on all instances."
-                              },
-                              "IsDistributedTracingEnabled": {
-                                "type": "boolean",
-                                "description": "Gets or sets value indicating whether distributed tracing activities ('System.Diagnostics.Activity') are going to be created for the clients methods calls and HTTP calls."
-                              },
-                              "IsLoggingContentEnabled": {
-                                "type": "boolean",
-                                "description": "Gets or sets value indicating if request or response content should be logged."
-                              },
-                              "IsLoggingEnabled": {
-                                "type": "boolean",
-                                "description": "Get or sets value indicating whether HTTP pipeline logging is enabled."
-                              },
-                              "IsTelemetryEnabled": {
-                                "type": "boolean",
-                                "description": "Gets or sets value indicating whether the \"User-Agent\" header containing 'Azure.Core.DiagnosticsOptions.ApplicationId', client library package name and version, 'System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription' and 'System.Runtime.InteropServices.RuntimeInformation.OSDescription' should be sent. The default value can be controlled process wide by setting AZURE_TELEMETRY_DISABLED to true, false, 1 or 0."
-                              },
-                              "LoggedContentSizeLimit": {
-                                "type": "integer",
-                                "description": "Gets or sets value indicating maximum size of content to log in bytes. Defaults to 4096."
-                              },
-                              "LoggedHeaderNames": {
-                                "type": "array",
-                                "items": {
-                                  "type": "string"
+                              "Diagnostics": {
+                                "type": "object",
+                                "properties": {
+                                  "ApplicationId": {
+                                    "type": "string",
+                                    "description": "Gets or sets the value sent as the first part of \"User-Agent\" headers for all requests issues by this client. Defaults to 'Azure.Core.DiagnosticsOptions.DefaultApplicationId'."
+                                  },
+                                  "DefaultApplicationId": {
+                                    "type": "string",
+                                    "description": "Gets or sets the default application id. Default application id would be set on all instances."
+                                  },
+                                  "IsDistributedTracingEnabled": {
+                                    "type": "boolean",
+                                    "description": "Gets or sets value indicating whether distributed tracing activities ('System.Diagnostics.Activity') are going to be created for the clients methods calls and HTTP calls."
+                                  },
+                                  "IsLoggingContentEnabled": {
+                                    "type": "boolean",
+                                    "description": "Gets or sets value indicating if request or response content should be logged."
+                                  },
+                                  "IsLoggingEnabled": {
+                                    "type": "boolean",
+                                    "description": "Get or sets value indicating whether HTTP pipeline logging is enabled."
+                                  },
+                                  "IsTelemetryEnabled": {
+                                    "type": "boolean",
+                                    "description": "Gets or sets value indicating whether the \"User-Agent\" header containing 'Azure.Core.DiagnosticsOptions.ApplicationId', client library package name and version, 'System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription' and 'System.Runtime.InteropServices.RuntimeInformation.OSDescription' should be sent. The default value can be controlled process wide by setting AZURE_TELEMETRY_DISABLED to true, false, 1 or 0."
+                                  },
+                                  "LoggedContentSizeLimit": {
+                                    "type": "integer",
+                                    "description": "Gets or sets value indicating maximum size of content to log in bytes. Defaults to 4096."
+                                  },
+                                  "LoggedHeaderNames": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    },
+                                    "description": "Gets a list of header names that are not redacted during logging."
+                                  },
+                                  "LoggedQueryParameters": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    },
+                                    "description": "Gets a list of query parameter names that are not redacted during logging."
+                                  }
                                 },
-                                "description": "Gets a list of header names that are not redacted during logging."
+                                "description": "Gets the client diagnostic options."
                               },
-                              "LoggedQueryParameters": {
-                                "type": "array",
-                                "items": {
-                                  "type": "string"
+                              "EnableTenantDiscovery": {
+                                "type": "boolean",
+                                "description": "Enables tenant discovery through the authorization challenge when the client is configured to use a TokenCredential. When enabled, the client will attempt an initial un-authorized request to prompt a challenge in order to discover the correct tenant for the resource."
+                              },
+                              "EncryptionScope": {
+                                "type": "string",
+                                "description": "Gets the 'Azure.Storage.Blobs.BlobClientOptions.EncryptionScope' to be used when making requests."
+                              },
+                              "GeoRedundantSecondaryUri": {
+                                "type": "string",
+                                "format": "uri",
+                                "description": "Gets or sets the secondary storage 'System.Uri' that can be read from for the storage account if the account is enabled for RA-GRS.\n\nIf this property is set, the secondary Uri will be used for GET or HEAD requests during retries. If the status of the response from the secondary Uri is a 404, then subsequent retries for the request will not use the secondary Uri again, as this indicates that the resource may not have propagated there yet. Otherwise, subsequent retries will alternate back and forth between primary and secondary Uri."
+                              },
+                              "Request100ContinueOptions": {
+                                "type": "object",
+                                "properties": {
+                                  "AutoInterval": {
+                                    "type": "string",
+                                    "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                                    "description": "In mode 'Azure.Storage.Request100ContinueMode.Auto', the time interval to apply the header after recieving a triggering error. The default time is one minute."
+                                  },
+                                  "ContentLengthThreshold": {
+                                    "type": "integer",
+                                    "description": "The minimum value of HTTP request Content-Length for applying expect-continue."
+                                  },
+                                  "Mode": {
+                                    "enum": [
+                                      "Auto",
+                                      "Always",
+                                      "Never"
+                                    ],
+                                    "description": "Mode for these options."
+                                  }
                                 },
-                                "description": "Gets a list of query parameter names that are not redacted during logging."
+                                "description": "Behavior options for setting HTTP header Expect: 100-continue on requests."
+                              },
+                              "Retry": {
+                                "type": "object",
+                                "properties": {
+                                  "Delay": {
+                                    "type": "string",
+                                    "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                                    "description": "The delay between retry attempts for a fixed approach or the delay on which to base calculations for a backoff-based approach. If the service provides a Retry-After response header, the next retry will be delayed by the duration specified by the header value."
+                                  },
+                                  "MaxDelay": {
+                                    "type": "string",
+                                    "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                                    "description": "The maximum permissible delay between retry attempts when the service does not provide a Retry-After response header. If the service provides a Retry-After response header, the next retry will be delayed by the duration specified by the header value."
+                                  },
+                                  "MaxRetries": {
+                                    "type": "integer",
+                                    "description": "The maximum number of retry attempts before giving up."
+                                  },
+                                  "Mode": {
+                                    "enum": [
+                                      "Fixed",
+                                      "Exponential"
+                                    ],
+                                    "description": "The approach to use for calculating retry delays."
+                                  },
+                                  "NetworkTimeout": {
+                                    "type": "string",
+                                    "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                                    "description": "The timeout applied to individual network operations."
+                                  }
+                                },
+                                "description": "Gets the client retry options."
+                              },
+                              "TransferValidation": {
+                                "type": "object",
+                                "properties": {
+                                  "Download": {
+                                    "type": "object",
+                                    "properties": {
+                                      "AutoValidateChecksum": {
+                                        "type": "boolean",
+                                        "description": "Defaults to true. False can only be specified on specific operations and not at the client level. Indicates whether the SDK should validate the content body against the content hash before returning contents to the caller. If set to false, caller is responsible for extracting the hash out of the 'Azure.Response`1' and validating the hash themselves."
+                                      },
+                                      "ChecksumAlgorithm": {
+                                        "enum": [
+                                          "Auto",
+                                          "None",
+                                          "MD5",
+                                          "StorageCrc64"
+                                        ],
+                                        "description": "Checksum algorithm to use."
+                                      }
+                                    },
+                                    "description": "Options on download."
+                                  },
+                                  "Upload": {
+                                    "type": "object",
+                                    "properties": {
+                                      "ChecksumAlgorithm": {
+                                        "enum": [
+                                          "Auto",
+                                          "None",
+                                          "MD5",
+                                          "StorageCrc64"
+                                        ],
+                                        "description": "Checksum algorithm to use."
+                                      }
+                                    },
+                                    "description": "Options on upload."
+                                  }
+                                },
+                                "description": "Configures whether to send or receive checksum headers for blob uploads and downloads. Downloads can optionally validate that the content matches the checksum."
+                              },
+                              "TrimBlobNameSlashes": {
+                                "type": "boolean",
+                                "description": "Whether to trim leading and trailing slashes on a blob name when using 'Azure.Storage.Blobs.BlobContainerClient.GetBlobClient(System.String)' and similar methods. Defaults to true for backwards compatibility."
                               }
                             },
-                            "description": "Gets the client diagnostic options."
+                            "description": "Provides the client configuration options for connecting to Azure Blob Storage."
                           },
-                          "EnableTenantDiscovery": {
-                            "type": "boolean",
-                            "description": "Enables tenant discovery through the authorization challenge when the client is configured to use a TokenCredential. When enabled, the client will attempt an initial un-authorized request to prompt a challenge in order to discover the correct tenant for the resource."
-                          },
-                          "EncryptionScope": {
+                          "ConnectionString": {
                             "type": "string",
-                            "description": "Gets the 'Azure.Storage.Blobs.BlobClientOptions.EncryptionScope' to be used when making requests."
+                            "description": "Gets or sets the connection string used to connect to the blob service."
                           },
-                          "GeoRedundantSecondaryUri": {
+                          "DisableHealthChecks": {
+                            "type": "boolean",
+                            "description": "Gets or sets a boolean value that indicates whether the Blob Storage health check is disabled or not.",
+                            "default": false
+                          },
+                          "DisableTracing": {
+                            "type": "boolean",
+                            "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
+                            "default": false
+                          },
+                          "ServiceUri": {
                             "type": "string",
                             "format": "uri",
-                            "description": "Gets or sets the secondary storage 'System.Uri' that can be read from for the storage account if the account is enabled for RA-GRS.\n\nIf this property is set, the secondary Uri will be used for GET or HEAD requests during retries. If the status of the response from the secondary Uri is a 404, then subsequent retries for the request will not use the secondary Uri again, as this indicates that the resource may not have propagated there yet. Otherwise, subsequent retries will alternate back and forth between primary and secondary Uri."
-                          },
-                          "Request100ContinueOptions": {
-                            "type": "object",
-                            "properties": {
-                              "AutoInterval": {
-                                "type": "string",
-                                "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
-                                "description": "In mode 'Azure.Storage.Request100ContinueMode.Auto', the time interval to apply the header after recieving a triggering error. The default time is one minute."
-                              },
-                              "ContentLengthThreshold": {
-                                "type": "integer",
-                                "description": "The minimum value of HTTP request Content-Length for applying expect-continue."
-                              },
-                              "Mode": {
-                                "enum": [
-                                  "Auto",
-                                  "Always",
-                                  "Never"
-                                ],
-                                "description": "Mode for these options."
-                              }
-                            },
-                            "description": "Behavior options for setting HTTP header Expect: 100-continue on requests."
-                          },
-                          "Retry": {
-                            "type": "object",
-                            "properties": {
-                              "Delay": {
-                                "type": "string",
-                                "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
-                                "description": "The delay between retry attempts for a fixed approach or the delay on which to base calculations for a backoff-based approach. If the service provides a Retry-After response header, the next retry will be delayed by the duration specified by the header value."
-                              },
-                              "MaxDelay": {
-                                "type": "string",
-                                "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
-                                "description": "The maximum permissible delay between retry attempts when the service does not provide a Retry-After response header. If the service provides a Retry-After response header, the next retry will be delayed by the duration specified by the header value."
-                              },
-                              "MaxRetries": {
-                                "type": "integer",
-                                "description": "The maximum number of retry attempts before giving up."
-                              },
-                              "Mode": {
-                                "enum": [
-                                  "Fixed",
-                                  "Exponential"
-                                ],
-                                "description": "The approach to use for calculating retry delays."
-                              },
-                              "NetworkTimeout": {
-                                "type": "string",
-                                "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
-                                "description": "The timeout applied to individual network operations."
-                              }
-                            },
-                            "description": "Gets the client retry options."
-                          },
-                          "TransferValidation": {
-                            "type": "object",
-                            "properties": {
-                              "Download": {
-                                "type": "object",
-                                "properties": {
-                                  "AutoValidateChecksum": {
-                                    "type": "boolean",
-                                    "description": "Defaults to true. False can only be specified on specific operations and not at the client level. Indicates whether the SDK should validate the content body against the content hash before returning contents to the caller. If set to false, caller is responsible for extracting the hash out of the 'Azure.Response`1' and validating the hash themselves."
-                                  },
-                                  "ChecksumAlgorithm": {
-                                    "enum": [
-                                      "Auto",
-                                      "None",
-                                      "MD5",
-                                      "StorageCrc64"
-                                    ],
-                                    "description": "Checksum algorithm to use."
-                                  }
-                                },
-                                "description": "Options on download."
-                              },
-                              "Upload": {
-                                "type": "object",
-                                "properties": {
-                                  "ChecksumAlgorithm": {
-                                    "enum": [
-                                      "Auto",
-                                      "None",
-                                      "MD5",
-                                      "StorageCrc64"
-                                    ],
-                                    "description": "Checksum algorithm to use."
-                                  }
-                                },
-                                "description": "Options on upload."
-                              }
-                            },
-                            "description": "Configures whether to send or receive checksum headers for blob uploads and downloads. Downloads can optionally validate that the content matches the checksum."
-                          },
-                          "TrimBlobNameSlashes": {
-                            "type": "boolean",
-                            "description": "Whether to trim leading and trailing slashes on a blob name when using 'Azure.Storage.Blobs.BlobContainerClient.GetBlobClient(System.String)' and similar methods. Defaults to true for backwards compatibility."
+                            "description": "A 'System.Uri' referencing the blob service. This is likely to be similar to \"https://{account_name}.blob.core.windows.net\"."
                           }
                         },
-                        "description": "Provides the client configuration options for connecting to Azure Blob Storage."
-                      },
-                      "ConnectionString": {
-                        "type": "string",
-                        "description": "Gets or sets the connection string used to connect to the blob service."
-                      },
-                      "DisableHealthChecks": {
-                        "type": "boolean",
-                        "description": "Gets or sets a boolean value that indicates whether the Blob Storage health check is disabled or not.",
-                        "default": false
-                      },
-                      "DisableTracing": {
-                        "type": "boolean",
-                        "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
-                        "default": false
-                      },
-                      "ServiceUri": {
-                        "type": "string",
-                        "format": "uri",
-                        "description": "A 'System.Uri' referencing the blob service. This is likely to be similar to \"https://{account_name}.blob.core.windows.net\"."
+                        "description": "Provides the client configuration settings for connecting to Azure Blob Storage container."
                       }
-                    },
-                    "description": "Provides the client configuration settings for connecting to Azure Blob Storage container."
+                    ]
                   }
                 }
               }

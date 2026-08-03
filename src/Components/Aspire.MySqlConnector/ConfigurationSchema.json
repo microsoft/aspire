@@ -32,50 +32,87 @@
           "type": "object",
           "properties": {
             "ConnectionString": {
-              "type": "string",
-              "description": "The connection string of the MySQL database to connect to."
+              "anyOf": [
+                {
+                  "type": "string",
+                  "description": "The connection string of the MySQL database to connect to."
+                },
+                {
+                  "$ref": "#/properties/Aspire/properties/MySqlConnector/additionalProperties/anyOf/1"
+                }
+              ]
             },
             "DisableHealthChecks": {
-              "type": "boolean",
-              "description": "Gets or sets a boolean value that indicates whether the database health check is disabled or not.",
-              "default": false
+              "anyOf": [
+                {
+                  "type": "boolean",
+                  "description": "Gets or sets a boolean value that indicates whether the database health check is disabled or not.",
+                  "default": false
+                },
+                {
+                  "$ref": "#/properties/Aspire/properties/MySqlConnector/additionalProperties/anyOf/1"
+                }
+              ]
             },
             "DisableMetrics": {
-              "type": "boolean",
-              "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry metrics are disabled or not.",
-              "default": false
+              "anyOf": [
+                {
+                  "type": "boolean",
+                  "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry metrics are disabled or not.",
+                  "default": false
+                },
+                {
+                  "$ref": "#/properties/Aspire/properties/MySqlConnector/additionalProperties/anyOf/1"
+                }
+              ]
             },
             "DisableTracing": {
-              "type": "boolean",
-              "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
-              "default": false
+              "anyOf": [
+                {
+                  "type": "boolean",
+                  "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
+                  "default": false
+                },
+                {
+                  "$ref": "#/properties/Aspire/properties/MySqlConnector/additionalProperties/anyOf/1"
+                }
+              ]
             }
           },
           "description": "Provides the client configuration settings for connecting to a MySQL database using MySqlConnector.",
           "additionalProperties": {
-            "type": "object",
-            "properties": {
-              "ConnectionString": {
-                "type": "string",
-                "description": "The connection string of the MySQL database to connect to."
+            "anyOf": [
+              {
+                "not": {
+                  "type": "object"
+                }
               },
-              "DisableHealthChecks": {
-                "type": "boolean",
-                "description": "Gets or sets a boolean value that indicates whether the database health check is disabled or not.",
-                "default": false
-              },
-              "DisableMetrics": {
-                "type": "boolean",
-                "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry metrics are disabled or not.",
-                "default": false
-              },
-              "DisableTracing": {
-                "type": "boolean",
-                "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
-                "default": false
+              {
+                "type": "object",
+                "properties": {
+                  "ConnectionString": {
+                    "type": "string",
+                    "description": "The connection string of the MySQL database to connect to."
+                  },
+                  "DisableHealthChecks": {
+                    "type": "boolean",
+                    "description": "Gets or sets a boolean value that indicates whether the database health check is disabled or not.",
+                    "default": false
+                  },
+                  "DisableMetrics": {
+                    "type": "boolean",
+                    "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry metrics are disabled or not.",
+                    "default": false
+                  },
+                  "DisableTracing": {
+                    "type": "boolean",
+                    "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
+                    "default": false
+                  }
+                },
+                "description": "Provides the client configuration settings for connecting to a MySQL database using MySqlConnector."
               }
-            },
-            "description": "Provides the client configuration settings for connecting to a MySQL database using MySqlConnector."
+            ]
           }
         }
       }

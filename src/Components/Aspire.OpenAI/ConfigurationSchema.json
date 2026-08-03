@@ -8,190 +8,241 @@
           "type": "object",
           "properties": {
             "ClientOptions": {
-              "type": "object",
-              "properties": {
-                "ClientLoggingOptions": {
+              "anyOf": [
+                {
                   "type": "object",
                   "properties": {
-                    "AllowedHeaderNames": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
+                    "ClientLoggingOptions": {
+                      "type": "object",
+                      "properties": {
+                        "AllowedHeaderNames": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Gets or sets a list of header names that are not redacted during logging."
+                        },
+                        "AllowedQueryParameters": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Gets or sets a list of query parameter names that are not redacted during logging."
+                        },
+                        "EnableLogging": {
+                          "type": "boolean",
+                          "description": "Gets or sets value indicating if logging should be enabled in this client pipeline."
+                        },
+                        "EnableMessageContentLogging": {
+                          "type": "boolean",
+                          "description": "Gets or sets value indicating if request and response content should be logged."
+                        },
+                        "EnableMessageLogging": {
+                          "type": "boolean",
+                          "description": "Gets or sets value indicating if request and response uri and header information should be logged."
+                        },
+                        "MessageContentSizeLimit": {
+                          "type": "integer",
+                          "description": "Gets or sets value indicating maximum size of content to log in bytes."
+                        }
                       },
-                      "description": "Gets or sets a list of header names that are not redacted during logging."
+                      "description": "The options to be used to configure logging within the 'System.ClientModel.Primitives.ClientPipeline'."
                     },
-                    "AllowedQueryParameters": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      },
-                      "description": "Gets or sets a list of query parameter names that are not redacted during logging."
-                    },
-                    "EnableLogging": {
+                    "EnableDistributedTracing": {
                       "type": "boolean",
-                      "description": "Gets or sets value indicating if logging should be enabled in this client pipeline."
+                      "description": "Gets or sets whether distributed tracing should be enabled. If null, this value will be treated as true. The default is null."
                     },
-                    "EnableMessageContentLogging": {
-                      "type": "boolean",
-                      "description": "Gets or sets value indicating if request and response content should be logged."
+                    "Endpoint": {
+                      "type": "string",
+                      "format": "uri",
+                      "description": "The service endpoint that the client will send requests to. If not set, the default endpoint will be used."
                     },
-                    "EnableMessageLogging": {
-                      "type": "boolean",
-                      "description": "Gets or sets value indicating if request and response uri and header information should be logged."
+                    "NetworkTimeout": {
+                      "type": "string",
+                      "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                      "description": "The timeout applied to an individual network operation."
                     },
-                    "MessageContentSizeLimit": {
-                      "type": "integer",
-                      "description": "Gets or sets value indicating maximum size of content to log in bytes."
+                    "OrganizationId": {
+                      "type": "string",
+                      "description": "The value to use for the OpenAI-Organization request header. Users who belong to multiple organizations can set this value to specify which organization is used for an API request. Usage from these API requests will count against the specified organization's quota. If not set, the header will be omitted, and the default organization will be billed. You can change your default organization in your user settings. Learn more."
+                    },
+                    "ProjectId": {
+                      "type": "string",
+                      "description": "The value to use for the OpenAI-Project request header. Users who are accessing their projects through their legacy user API key can set this value to specify which project is used for an API request. Usage from these API requests will count as usage for the specified project. If not set, the header will be omitted, and the default project will be accessed."
+                    },
+                    "UserAgentApplicationId": {
+                      "type": "string",
+                      "description": "An optional application ID to use as part of the request User-Agent header."
                     }
                   },
-                  "description": "The options to be used to configure logging within the 'System.ClientModel.Primitives.ClientPipeline'."
+                  "description": "The options to configure the client."
                 },
-                "EnableDistributedTracing": {
-                  "type": "boolean",
-                  "description": "Gets or sets whether distributed tracing should be enabled. If null, this value will be treated as true. The default is null."
-                },
-                "Endpoint": {
-                  "type": "string",
-                  "format": "uri",
-                  "description": "The service endpoint that the client will send requests to. If not set, the default endpoint will be used."
-                },
-                "NetworkTimeout": {
-                  "type": "string",
-                  "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
-                  "description": "The timeout applied to an individual network operation."
-                },
-                "OrganizationId": {
-                  "type": "string",
-                  "description": "The value to use for the OpenAI-Organization request header. Users who belong to multiple organizations can set this value to specify which organization is used for an API request. Usage from these API requests will count against the specified organization's quota. If not set, the header will be omitted, and the default organization will be billed. You can change your default organization in your user settings. Learn more."
-                },
-                "ProjectId": {
-                  "type": "string",
-                  "description": "The value to use for the OpenAI-Project request header. Users who are accessing their projects through their legacy user API key can set this value to specify which project is used for an API request. Usage from these API requests will count as usage for the specified project. If not set, the header will be omitted, and the default project will be accessed."
-                },
-                "UserAgentApplicationId": {
-                  "type": "string",
-                  "description": "An optional application ID to use as part of the request User-Agent header."
+                {
+                  "$ref": "#/properties/Aspire/properties/OpenAI/additionalProperties/anyOf/1"
                 }
-              },
-              "description": "The options to configure the client."
+              ]
             },
             "DisableMetrics": {
-              "type": "boolean",
-              "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry metrics are enabled or not."
+              "anyOf": [
+                {
+                  "type": "boolean",
+                  "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry metrics are enabled or not."
+                },
+                {
+                  "$ref": "#/properties/Aspire/properties/OpenAI/additionalProperties/anyOf/1"
+                }
+              ]
             },
             "DisableTracing": {
-              "type": "boolean",
-              "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not."
+              "anyOf": [
+                {
+                  "type": "boolean",
+                  "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not."
+                },
+                {
+                  "$ref": "#/properties/Aspire/properties/OpenAI/additionalProperties/anyOf/1"
+                }
+              ]
             },
             "EnableSensitiveTelemetryData": {
-              "type": "boolean",
-              "description": "Gets or sets a boolean value indicating whether potentially sensitive information should be included in telemetry."
+              "anyOf": [
+                {
+                  "type": "boolean",
+                  "description": "Gets or sets a boolean value indicating whether potentially sensitive information should be included in telemetry."
+                },
+                {
+                  "$ref": "#/properties/Aspire/properties/OpenAI/additionalProperties/anyOf/1"
+                }
+              ]
             },
             "Endpoint": {
-              "type": "string",
-              "format": "uri",
-              "description": "Gets or sets a 'System.Uri' referencing the OpenAI REST API endpoint. Leave empty to connect to OpenAI, or set it to use a service using an API compatible with OpenAI."
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uri",
+                  "description": "Gets or sets a 'System.Uri' referencing the OpenAI REST API endpoint. Leave empty to connect to OpenAI, or set it to use a service using an API compatible with OpenAI."
+                },
+                {
+                  "$ref": "#/properties/Aspire/properties/OpenAI/additionalProperties/anyOf/1"
+                }
+              ]
             },
             "Key": {
-              "type": "string",
-              "description": "Gets or sets a the API key to used to authenticate with the service."
+              "anyOf": [
+                {
+                  "type": "string",
+                  "description": "Gets or sets a the API key to used to authenticate with the service."
+                },
+                {
+                  "$ref": "#/properties/Aspire/properties/OpenAI/additionalProperties/anyOf/1"
+                }
+              ]
             }
           },
           "description": "The settings relevant to accessing OpenAI.",
           "additionalProperties": {
-            "type": "object",
-            "properties": {
-              "ClientOptions": {
+            "anyOf": [
+              {
+                "not": {
+                  "type": "object"
+                }
+              },
+              {
                 "type": "object",
                 "properties": {
-                  "ClientLoggingOptions": {
+                  "ClientOptions": {
                     "type": "object",
                     "properties": {
-                      "AllowedHeaderNames": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
+                      "ClientLoggingOptions": {
+                        "type": "object",
+                        "properties": {
+                          "AllowedHeaderNames": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "description": "Gets or sets a list of header names that are not redacted during logging."
+                          },
+                          "AllowedQueryParameters": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "description": "Gets or sets a list of query parameter names that are not redacted during logging."
+                          },
+                          "EnableLogging": {
+                            "type": "boolean",
+                            "description": "Gets or sets value indicating if logging should be enabled in this client pipeline."
+                          },
+                          "EnableMessageContentLogging": {
+                            "type": "boolean",
+                            "description": "Gets or sets value indicating if request and response content should be logged."
+                          },
+                          "EnableMessageLogging": {
+                            "type": "boolean",
+                            "description": "Gets or sets value indicating if request and response uri and header information should be logged."
+                          },
+                          "MessageContentSizeLimit": {
+                            "type": "integer",
+                            "description": "Gets or sets value indicating maximum size of content to log in bytes."
+                          }
                         },
-                        "description": "Gets or sets a list of header names that are not redacted during logging."
+                        "description": "The options to be used to configure logging within the 'System.ClientModel.Primitives.ClientPipeline'."
                       },
-                      "AllowedQueryParameters": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        },
-                        "description": "Gets or sets a list of query parameter names that are not redacted during logging."
-                      },
-                      "EnableLogging": {
+                      "EnableDistributedTracing": {
                         "type": "boolean",
-                        "description": "Gets or sets value indicating if logging should be enabled in this client pipeline."
+                        "description": "Gets or sets whether distributed tracing should be enabled. If null, this value will be treated as true. The default is null."
                       },
-                      "EnableMessageContentLogging": {
-                        "type": "boolean",
-                        "description": "Gets or sets value indicating if request and response content should be logged."
+                      "Endpoint": {
+                        "type": "string",
+                        "format": "uri",
+                        "description": "The service endpoint that the client will send requests to. If not set, the default endpoint will be used."
                       },
-                      "EnableMessageLogging": {
-                        "type": "boolean",
-                        "description": "Gets or sets value indicating if request and response uri and header information should be logged."
+                      "NetworkTimeout": {
+                        "type": "string",
+                        "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                        "description": "The timeout applied to an individual network operation."
                       },
-                      "MessageContentSizeLimit": {
-                        "type": "integer",
-                        "description": "Gets or sets value indicating maximum size of content to log in bytes."
+                      "OrganizationId": {
+                        "type": "string",
+                        "description": "The value to use for the OpenAI-Organization request header. Users who belong to multiple organizations can set this value to specify which organization is used for an API request. Usage from these API requests will count against the specified organization's quota. If not set, the header will be omitted, and the default organization will be billed. You can change your default organization in your user settings. Learn more."
+                      },
+                      "ProjectId": {
+                        "type": "string",
+                        "description": "The value to use for the OpenAI-Project request header. Users who are accessing their projects through their legacy user API key can set this value to specify which project is used for an API request. Usage from these API requests will count as usage for the specified project. If not set, the header will be omitted, and the default project will be accessed."
+                      },
+                      "UserAgentApplicationId": {
+                        "type": "string",
+                        "description": "An optional application ID to use as part of the request User-Agent header."
                       }
                     },
-                    "description": "The options to be used to configure logging within the 'System.ClientModel.Primitives.ClientPipeline'."
+                    "description": "The options to configure the client."
                   },
-                  "EnableDistributedTracing": {
+                  "DisableMetrics": {
                     "type": "boolean",
-                    "description": "Gets or sets whether distributed tracing should be enabled. If null, this value will be treated as true. The default is null."
+                    "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry metrics are enabled or not."
+                  },
+                  "DisableTracing": {
+                    "type": "boolean",
+                    "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not."
+                  },
+                  "EnableSensitiveTelemetryData": {
+                    "type": "boolean",
+                    "description": "Gets or sets a boolean value indicating whether potentially sensitive information should be included in telemetry."
                   },
                   "Endpoint": {
                     "type": "string",
                     "format": "uri",
-                    "description": "The service endpoint that the client will send requests to. If not set, the default endpoint will be used."
+                    "description": "Gets or sets a 'System.Uri' referencing the OpenAI REST API endpoint. Leave empty to connect to OpenAI, or set it to use a service using an API compatible with OpenAI."
                   },
-                  "NetworkTimeout": {
+                  "Key": {
                     "type": "string",
-                    "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
-                    "description": "The timeout applied to an individual network operation."
-                  },
-                  "OrganizationId": {
-                    "type": "string",
-                    "description": "The value to use for the OpenAI-Organization request header. Users who belong to multiple organizations can set this value to specify which organization is used for an API request. Usage from these API requests will count against the specified organization's quota. If not set, the header will be omitted, and the default organization will be billed. You can change your default organization in your user settings. Learn more."
-                  },
-                  "ProjectId": {
-                    "type": "string",
-                    "description": "The value to use for the OpenAI-Project request header. Users who are accessing their projects through their legacy user API key can set this value to specify which project is used for an API request. Usage from these API requests will count as usage for the specified project. If not set, the header will be omitted, and the default project will be accessed."
-                  },
-                  "UserAgentApplicationId": {
-                    "type": "string",
-                    "description": "An optional application ID to use as part of the request User-Agent header."
+                    "description": "Gets or sets a the API key to used to authenticate with the service."
                   }
                 },
-                "description": "The options to configure the client."
-              },
-              "DisableMetrics": {
-                "type": "boolean",
-                "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry metrics are enabled or not."
-              },
-              "DisableTracing": {
-                "type": "boolean",
-                "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not."
-              },
-              "EnableSensitiveTelemetryData": {
-                "type": "boolean",
-                "description": "Gets or sets a boolean value indicating whether potentially sensitive information should be included in telemetry."
-              },
-              "Endpoint": {
-                "type": "string",
-                "format": "uri",
-                "description": "Gets or sets a 'System.Uri' referencing the OpenAI REST API endpoint. Leave empty to connect to OpenAI, or set it to use a service using an API compatible with OpenAI."
-              },
-              "Key": {
-                "type": "string",
-                "description": "Gets or sets a the API key to used to authenticate with the service."
+                "description": "The settings relevant to accessing OpenAI."
               }
-            },
-            "description": "The settings relevant to accessing OpenAI."
+            ]
           }
         }
       }

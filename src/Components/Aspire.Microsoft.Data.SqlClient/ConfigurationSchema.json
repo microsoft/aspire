@@ -14,40 +14,70 @@
                   "type": "object",
                   "properties": {
                     "ConnectionString": {
-                      "type": "string",
-                      "description": "Gets or sets the connection string of the SQL Server database to connect to."
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "description": "Gets or sets the connection string of the SQL Server database to connect to."
+                        },
+                        {
+                          "$ref": "#/properties/Aspire/properties/Microsoft/properties/Data/properties/SqlClient/additionalProperties/anyOf/1"
+                        }
+                      ]
                     },
                     "DisableHealthChecks": {
-                      "type": "boolean",
-                      "description": "Gets or sets a boolean value that indicates whether the database health check is disabled or not.",
-                      "default": false
+                      "anyOf": [
+                        {
+                          "type": "boolean",
+                          "description": "Gets or sets a boolean value that indicates whether the database health check is disabled or not.",
+                          "default": false
+                        },
+                        {
+                          "$ref": "#/properties/Aspire/properties/Microsoft/properties/Data/properties/SqlClient/additionalProperties/anyOf/1"
+                        }
+                      ]
                     },
                     "DisableTracing": {
-                      "type": "boolean",
-                      "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
-                      "default": false
+                      "anyOf": [
+                        {
+                          "type": "boolean",
+                          "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
+                          "default": false
+                        },
+                        {
+                          "$ref": "#/properties/Aspire/properties/Microsoft/properties/Data/properties/SqlClient/additionalProperties/anyOf/1"
+                        }
+                      ]
                     }
                   },
                   "description": "Provides the client configuration settings for connecting to a SQL Server database using SqlClient.",
                   "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "ConnectionString": {
-                        "type": "string",
-                        "description": "Gets or sets the connection string of the SQL Server database to connect to."
+                    "anyOf": [
+                      {
+                        "not": {
+                          "type": "object"
+                        }
                       },
-                      "DisableHealthChecks": {
-                        "type": "boolean",
-                        "description": "Gets or sets a boolean value that indicates whether the database health check is disabled or not.",
-                        "default": false
-                      },
-                      "DisableTracing": {
-                        "type": "boolean",
-                        "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
-                        "default": false
+                      {
+                        "type": "object",
+                        "properties": {
+                          "ConnectionString": {
+                            "type": "string",
+                            "description": "Gets or sets the connection string of the SQL Server database to connect to."
+                          },
+                          "DisableHealthChecks": {
+                            "type": "boolean",
+                            "description": "Gets or sets a boolean value that indicates whether the database health check is disabled or not.",
+                            "default": false
+                          },
+                          "DisableTracing": {
+                            "type": "boolean",
+                            "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
+                            "default": false
+                          }
+                        },
+                        "description": "Provides the client configuration settings for connecting to a SQL Server database using SqlClient."
                       }
-                    },
-                    "description": "Provides the client configuration settings for connecting to a SQL Server database using SqlClient."
+                    ]
                   }
                 }
               }

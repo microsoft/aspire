@@ -35,6 +35,7 @@ internal sealed partial class ConfigSchemaEmitter(SchemaGenerationSpec spec, Com
     private readonly Compilation _compilation = compilation;
     private readonly Stack<TypeSpec> _visitedTypes = new();
     private readonly string[] _exclusionPaths = CreateExclusionPaths(spec.ExclusionPaths);
+    private readonly List<JsonObject> _wildcardParentNodes = [];
 
     [GeneratedRegex(@"(\s*)(?:\r?\n\s*\r?\n)(\s*)")]
     private static partial Regex BlankLinesInDocComment();
@@ -44,6 +45,7 @@ internal sealed partial class ConfigSchemaEmitter(SchemaGenerationSpec spec, Com
         var root = new JsonObject();
         GenerateLogCategories(root);
         GenerateGraph(root);
+        NormalizeWildcardSchemas(root);
 
         return JsonSerializer.Serialize(root, s_serializerOptions);
     }
@@ -157,6 +159,11 @@ internal sealed partial class ConfigSchemaEmitter(SchemaGenerationSpec spec, Com
         }
 
         var hasGenerated = GeneratePathSegment(pathSegmentNode, type, pathSegments);
+        if (hasGenerated && isAsterisk && !_wildcardParentNodes.Any(node => ReferenceEquals(node, currentNode)))
+        {
+            _wildcardParentNodes.Add(currentNode);
+        }
+
         if (!hasGenerated)
         {
             RestoreBackup(backupTypeNode, "type", currentNode);
@@ -178,6 +185,116 @@ internal sealed partial class ConfigSchemaEmitter(SchemaGenerationSpec spec, Com
 
         return hasGenerated;
     }
+
+    private void NormalizeWildcardSchemas(JsonObject rootNode)
+    {
+        // Wildcard paths are generated into additionalProperties first so nested wildcard paths can
+        // merge into the same schema. Normalize outer wildcards first so nested wildcard references
+        // use their final JSON Pointer after their parent schema has been wrapped.
+        foreach (var parentNode in _wildcardParentNodes)
+        {
+            if (parentNode["additionalProperties"] is not JsonObject namedSettingsNode)
+            {
+                continue;
+            }
+
+            var namedSettingsReference = $"{GetJsonPointer(rootNode, parentNode)}/additionalProperties/anyOf/1";
+            if (parentNode["properties"] is JsonObject propertiesNode)
+            {
+                foreach (var property in propertiesNode.ToArray())
+                {
+                    propertiesNode[property.Key] = new JsonObject
+                    {
+                        ["anyOf"] = new JsonArray
+                        {
+                            property.Value?.DeepClone(),
+                            new JsonObject
+                            {
+                                ["$ref"] = namedSettingsReference
+                            }
+                        }
+                    };
+                }
+            }
+
+            parentNode.Remove("additionalProperties");
+            parentNode["additionalProperties"] = new JsonObject
+            {
+                ["anyOf"] = new JsonArray
+                {
+                    // Configuration schemas have historically permitted undeclared scalar values.
+                    // Restrict only undeclared objects, which represent named resource settings.
+                    new JsonObject
+                    {
+                        ["not"] = new JsonObject
+                        {
+                            ["type"] = "object"
+                        }
+                    },
+                    namedSettingsNode
+                }
+            };
+        }
+    }
+
+    private static string GetJsonPointer(JsonNode rootNode, JsonNode targetNode)
+    {
+        var pathSegments = new List<string>();
+        if (!TryFindJsonPointer(rootNode, targetNode, pathSegments))
+        {
+            throw new InvalidOperationException("The wildcard schema node is not attached to the generated schema.");
+        }
+
+        return $"#/{string.Join('/', pathSegments.Select(EscapeJsonPointerSegment))}";
+    }
+
+    private static bool TryFindJsonPointer(JsonNode currentNode, JsonNode targetNode, List<string> pathSegments)
+    {
+        if (ReferenceEquals(currentNode, targetNode))
+        {
+            return true;
+        }
+
+        if (currentNode is JsonObject objectNode)
+        {
+            foreach (var property in objectNode)
+            {
+                if (property.Value is null)
+                {
+                    continue;
+                }
+
+                pathSegments.Add(property.Key);
+                if (TryFindJsonPointer(property.Value, targetNode, pathSegments))
+                {
+                    return true;
+                }
+                pathSegments.RemoveAt(pathSegments.Count - 1);
+            }
+        }
+        else if (currentNode is JsonArray arrayNode)
+        {
+            for (var i = 0; i < arrayNode.Count; i++)
+            {
+                if (arrayNode[i] is not { } item)
+                {
+                    continue;
+                }
+
+                pathSegments.Add(i.ToString(CultureInfo.InvariantCulture));
+                if (TryFindJsonPointer(item, targetNode, pathSegments))
+                {
+                    return true;
+                }
+                pathSegments.RemoveAt(pathSegments.Count - 1);
+            }
+        }
+
+        return false;
+    }
+
+    private static string EscapeJsonPointerSegment(string segment)
+        => segment.Replace("~", "~0", StringComparison.Ordinal).Replace("/", "~1", StringComparison.Ordinal);
 
     private bool GenerateType(JsonObject currentNode, TypeSpec type)
     {

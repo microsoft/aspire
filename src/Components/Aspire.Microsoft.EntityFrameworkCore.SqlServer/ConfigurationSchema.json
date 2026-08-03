@@ -56,58 +56,102 @@
                   "type": "object",
                   "properties": {
                     "CommandTimeout": {
-                      "type": "integer",
-                      "description": "Gets or sets the time in seconds to wait for the command to execute."
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "description": "Gets or sets the time in seconds to wait for the command to execute."
+                        },
+                        {
+                          "$ref": "#/properties/Aspire/properties/Microsoft/properties/EntityFrameworkCore/properties/SqlServer/additionalProperties/anyOf/1"
+                        }
+                      ]
                     },
                     "ConnectionString": {
-                      "type": "string",
-                      "description": "The connection string of the SQL server database to connect to."
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "description": "The connection string of the SQL server database to connect to."
+                        },
+                        {
+                          "$ref": "#/properties/Aspire/properties/Microsoft/properties/EntityFrameworkCore/properties/SqlServer/additionalProperties/anyOf/1"
+                        }
+                      ]
                     },
                     "DisableHealthChecks": {
-                      "type": "boolean",
-                      "description": "Gets or sets a boolean value that indicates whether the database health check is disabled or not.",
-                      "default": false
+                      "anyOf": [
+                        {
+                          "type": "boolean",
+                          "description": "Gets or sets a boolean value that indicates whether the database health check is disabled or not.",
+                          "default": false
+                        },
+                        {
+                          "$ref": "#/properties/Aspire/properties/Microsoft/properties/EntityFrameworkCore/properties/SqlServer/additionalProperties/anyOf/1"
+                        }
+                      ]
                     },
                     "DisableRetry": {
-                      "type": "boolean",
-                      "description": "Gets or sets whether retries should be disabled.",
-                      "default": false
+                      "anyOf": [
+                        {
+                          "type": "boolean",
+                          "description": "Gets or sets whether retries should be disabled.",
+                          "default": false
+                        },
+                        {
+                          "$ref": "#/properties/Aspire/properties/Microsoft/properties/EntityFrameworkCore/properties/SqlServer/additionalProperties/anyOf/1"
+                        }
+                      ]
                     },
                     "DisableTracing": {
-                      "type": "boolean",
-                      "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
-                      "default": false
+                      "anyOf": [
+                        {
+                          "type": "boolean",
+                          "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
+                          "default": false
+                        },
+                        {
+                          "$ref": "#/properties/Aspire/properties/Microsoft/properties/EntityFrameworkCore/properties/SqlServer/additionalProperties/anyOf/1"
+                        }
+                      ]
                     }
                   },
                   "description": "Provides the client configuration settings for connecting to a SQL Server database using EntityFrameworkCore.",
                   "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "CommandTimeout": {
-                        "type": "integer",
-                        "description": "Gets or sets the time in seconds to wait for the command to execute."
+                    "anyOf": [
+                      {
+                        "not": {
+                          "type": "object"
+                        }
                       },
-                      "ConnectionString": {
-                        "type": "string",
-                        "description": "The connection string of the SQL server database to connect to."
-                      },
-                      "DisableHealthChecks": {
-                        "type": "boolean",
-                        "description": "Gets or sets a boolean value that indicates whether the database health check is disabled or not.",
-                        "default": false
-                      },
-                      "DisableRetry": {
-                        "type": "boolean",
-                        "description": "Gets or sets whether retries should be disabled.",
-                        "default": false
-                      },
-                      "DisableTracing": {
-                        "type": "boolean",
-                        "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
-                        "default": false
+                      {
+                        "type": "object",
+                        "properties": {
+                          "CommandTimeout": {
+                            "type": "integer",
+                            "description": "Gets or sets the time in seconds to wait for the command to execute."
+                          },
+                          "ConnectionString": {
+                            "type": "string",
+                            "description": "The connection string of the SQL server database to connect to."
+                          },
+                          "DisableHealthChecks": {
+                            "type": "boolean",
+                            "description": "Gets or sets a boolean value that indicates whether the database health check is disabled or not.",
+                            "default": false
+                          },
+                          "DisableRetry": {
+                            "type": "boolean",
+                            "description": "Gets or sets whether retries should be disabled.",
+                            "default": false
+                          },
+                          "DisableTracing": {
+                            "type": "boolean",
+                            "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
+                            "default": false
+                          }
+                        },
+                        "description": "Provides the client configuration settings for connecting to a SQL Server database using EntityFrameworkCore."
                       }
-                    },
-                    "description": "Provides the client configuration settings for connecting to a SQL Server database using EntityFrameworkCore."
+                    ]
                   }
                 }
               }

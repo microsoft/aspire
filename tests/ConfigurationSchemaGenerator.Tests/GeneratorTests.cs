@@ -1495,13 +1495,22 @@ public partial class GeneratorTests
                 "Certificates": {
                   "type": "object",
                   "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "PrivateKey": {
-                        "type": "string",
-                        "description": "The private key of the certificate, in base64 format."
+                    "anyOf": [
+                      {
+                        "not": {
+                          "type": "object"
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "PrivateKey": {
+                            "type": "string",
+                            "description": "The private key of the certificate, in base64 format."
+                          }
+                        }
                       }
-                    }
+                    ]
                   }
                 }
               }
@@ -1537,18 +1546,34 @@ public partial class GeneratorTests
                   "type": "object",
                   "properties": {
                     "PrivateKey": {
-                      "type": "string",
-                      "description": "The private key of the certificate, in base64 format."
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "description": "The private key of the certificate, in base64 format."
+                        },
+                        {
+                          "$ref": "#/properties/Certificates/additionalProperties/anyOf/1"
+                        }
+                      ]
                     }
                   },
                   "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "PrivateKey": {
-                        "type": "string",
-                        "description": "The private key of the certificate, in base64 format."
+                    "anyOf": [
+                      {
+                        "not": {
+                          "type": "object"
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "PrivateKey": {
+                            "type": "string",
+                            "description": "The private key of the certificate, in base64 format."
+                          }
+                        }
                       }
-                    }
+                    ]
                   }
                 }
               }
@@ -1588,32 +1613,55 @@ public partial class GeneratorTests
                   "type": "object",
                   "properties": {
                     "ClientOptions": {
-                      "type": "object",
-                      "properties": {
-                        "RetryCount": {
-                          "type": "integer"
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "RetryCount": {
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "$ref": "#/properties/Components/additionalProperties/anyOf/1"
                         }
-                      }
+                      ]
                     },
                     "ConnectionString": {
-                      "type": "string"
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "$ref": "#/properties/Components/additionalProperties/anyOf/1"
+                        }
+                      ]
                     }
                   },
                   "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "ClientOptions": {
-                        "type": "object",
-                        "properties": {
-                          "RetryCount": {
-                            "type": "integer"
-                          }
+                    "anyOf": [
+                      {
+                        "not": {
+                          "type": "object"
                         }
                       },
-                      "ConnectionString": {
-                        "type": "string"
+                      {
+                        "type": "object",
+                        "properties": {
+                          "ClientOptions": {
+                            "type": "object",
+                            "properties": {
+                              "RetryCount": {
+                                "type": "integer"
+                              }
+                            }
+                          },
+                          "ConnectionString": {
+                            "type": "string"
+                          }
+                        }
                       }
-                    }
+                    ]
                   }
                 }
               }
