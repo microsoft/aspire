@@ -13,12 +13,11 @@ $PSNativeCommandUseErrorActionPreference = $true
 $scriptDir = $PSScriptRoot
 $repoRoot = (Resolve-Path (Join-Path $scriptDir '..\..')).Path
 $embeddedDir = Join-Path $repoRoot 'src\Aspire.Cli\Agents\AspireSkills\Embedded'
-$metadataPath = Join-Path $embeddedDir 'aspire-skills.metadata.json'
 $installerPath = Join-Path $repoRoot 'src\Aspire.Cli\Agents\AspireSkills\AspireSkillsInstaller.cs'
 $cliProjectPath = Join-Path $repoRoot 'src\Aspire.Cli\Aspire.Cli.csproj'
 $hooksDir = Join-Path $repoRoot 'src\Aspire.Cli\Agents\Hooks'
 
-. (Join-Path $scriptDir 'aspire-skills-bundle.common.ps1')
+. (Join-Path $scriptDir 'aspire-skills-bundles.common.ps1')
 
 function Invoke-GitHubCli {
     param(
@@ -45,12 +44,22 @@ function Get-UnprefixedVersion([string]$Value) {
 }
 
 function Get-CurrentEmbeddedVersion {
-    if (-not (Test-Path $metadataPath)) {
-        throw "Embedded Aspire skills metadata was not found at '$metadataPath'. Pass -Version to choose the initial version."
+    $versions = foreach ($bundle in Get-AspireSkillsBundleDefinitions) {
+        $metadataPath = Join-Path $embeddedDir $bundle.MetadataFileName
+        if (-not (Test-Path $metadataPath)) {
+            throw "Embedded $($bundle.DisplayName) metadata was not found at '$metadataPath'. Pass -Version to choose the initial version."
+        }
+
+        $metadata = Get-Content -Raw -Path $metadataPath | ConvertFrom-Json
+        Get-UnprefixedVersion $metadata.version
     }
 
-    $metadata = Get-Content -Raw -Path $metadataPath | ConvertFrom-Json
-    return Get-UnprefixedVersion $metadata.version
+    $uniqueVersions = @($versions | Select-Object -Unique)
+    if ($uniqueVersions.Count -ne 1) {
+        throw "Embedded Aspire skills repository bundles must use the same version. Found: $($uniqueVersions -join ', ')."
+    }
+
+    return $uniqueVersions[0]
 }
 
 function Set-TextFile {
@@ -79,10 +88,10 @@ function Get-GitHubRelease([string]$NormalizedVersion) {
     throw "Could not find an Aspire skills release for version '$NormalizedVersion' in '$Repository'."
 }
 
-function Get-ReleaseAsset($Release, [string]$NormalizedVersion) {
+function Get-ReleaseAsset($Release, [string]$NormalizedVersion, $Bundle) {
     $assetNameCandidates = foreach ($archiveExtension in @('.zip', '.tar.gz', '.tgz')) {
-        "aspire-skills-v$NormalizedVersion$archiveExtension"
-        "aspire-skills-$NormalizedVersion$archiveExtension"
+        "$($Bundle.AssetPrefix)-v$NormalizedVersion$archiveExtension"
+        "$($Bundle.AssetPrefix)-$NormalizedVersion$archiveExtension"
     }
 
     foreach ($assetName in $assetNameCandidates) {
@@ -92,11 +101,11 @@ function Get-ReleaseAsset($Release, [string]$NormalizedVersion) {
         }
     }
 
-    throw "Release '$($Release.tagName)' does not contain a supported Aspire skills archive asset for version '$NormalizedVersion'."
+    throw "Release '$($Release.tagName)' does not contain a supported $($Bundle.DisplayName) archive asset for version '$NormalizedVersion'."
 }
 
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
-    throw "The GitHub CLI ('gh') is required to update the embedded Aspire skills bundle."
+    throw "The GitHub CLI ('gh') is required to update the embedded Aspire skills bundles."
 }
 
 $normalizedVersion = if ([string]::IsNullOrWhiteSpace($Version)) {
@@ -110,34 +119,34 @@ New-Item -ItemType Directory -Force -Path $embeddedDir | Out-Null
 
 Write-Host "Resolving Aspire skills release '$normalizedVersion' from '$Repository'..."
 $release = Get-GitHubRelease $normalizedVersion
-$asset = Get-ReleaseAsset $release $normalizedVersion
 
 $tempDir = [System.IO.Directory]::CreateTempSubdirectory('aspire-skills-update-').FullName
 try {
-    Write-Host "Downloading '$($asset.name)' from '$Repository' release '$($release.tagName)'..."
-    Invoke-GitHubCli release download $release.tagName --repo $Repository --pattern $asset.name --dir $tempDir --clobber
-
-    $archivePath = Join-Path $tempDir $asset.name
-    if (-not (Test-Path $archivePath)) {
-        throw "Expected downloaded asset '$archivePath' was not found."
-    }
-
     $certIdentity = "https://github.com/$Repository/.github/workflows/publish.yml@refs/tags/$($release.tagName)"
-    Write-Host "Verifying GitHub artifact attestation for '$($asset.name)'..."
-    Invoke-GitHubCli attestation verify $archivePath --repo $Repository --cert-identity $certIdentity --cert-oidc-issuer 'https://token.actions.githubusercontent.com'
+    $bundleUpdates = foreach ($bundle in Get-AspireSkillsBundleDefinitions) {
+        $asset = Get-ReleaseAsset $release $normalizedVersion $bundle
+        Write-Host "Downloading '$($asset.name)' from '$Repository' release '$($release.tagName)'..."
+        Invoke-GitHubCli release download $release.tagName --repo $Repository --pattern $asset.name --dir $tempDir --clobber | Out-Host
 
-    $hash = (Get-FileHash -Algorithm SHA256 $archivePath).Hash.ToLowerInvariant()
-    $targetArchivePath = Join-Path $embeddedDir $asset.name
+        $archivePath = Join-Path $tempDir $asset.name
+        if (-not (Test-Path $archivePath)) {
+            throw "Expected downloaded asset '$archivePath' was not found."
+        }
 
-    Get-ChildItem -Path $embeddedDir -File -Force |
-        Where-Object { $_.Name -match '^aspire-skills-.*\.(zip|tar\.gz|tgz)$' -and $_.Name -ne $asset.name } |
-        Remove-Item -Force
+        Write-Host "Verifying GitHub artifact attestation for '$($asset.name)'..."
+        Invoke-GitHubCli attestation verify $archivePath --repo $Repository --cert-identity $certIdentity --cert-oidc-issuer 'https://token.actions.githubusercontent.com' | Out-Host
 
-    Copy-Item -Path $archivePath -Destination $targetArchivePath -Force
+        [pscustomobject]@{
+            Bundle = $bundle
+            Asset = $asset
+            ArchivePath = $archivePath
+            Hash = (Get-FileHash -Algorithm SHA256 $archivePath).Hash.ToLowerInvariant()
+        }
+    }
 
     # Sync the telemetry hook scripts from the same release. Hooks are SOURCE files in aspire-skills
     # (hooks/scripts/track-telemetry.{sh,ps1}), so they are pinned to the immutable commit the release
-    # tag points at and fetched via the contents API (see aspire-skills-bundle.common.ps1). Releases
+    # tag points at and fetched via the contents API (see aspire-skills-bundles.common.ps1). Releases
     # that predate the telemetry hooks feature do not contain hooks/scripts/*, so a missing hook is a
     # warning + skip during the transition rather than a hard failure of the whole bundle update;
     # verification only enforces hooks once they are recorded in metadata.
@@ -148,7 +157,7 @@ try {
 
         # Fetch every hook first and only write to disk + record metadata once all fetches succeed.
         # Writing inside the fetch loop could leave one fresh + one stale file (and no hooks metadata)
-        # if a later fetch failed, after which verify-aspire-skills-bundle.ps1 would silently skip hook
+        # if a later fetch failed, after which verify-aspire-skills-bundles.ps1 would silently skip hook
         # verification. Collecting first makes the on-disk update atomic.
         $hookContents = [ordered]@{}
         $hookHashes = [ordered]@{}
@@ -180,17 +189,40 @@ try {
         }
     }
 
-    $metadata = [ordered]@{
-        version = $normalizedVersion
-        repository = $Repository
-        tag = $release.tagName
-        assetName = $asset.name
-        sha256 = $hash
+    $cliProjectContent = Get-Content -Raw -Path $cliProjectPath
+    foreach ($update in $bundleUpdates) {
+        $bundle = $update.Bundle
+        $asset = $update.Asset
+        $targetArchivePath = Join-Path $embeddedDir $asset.name
+        $archivePattern = '^' + [regex]::Escape($bundle.AssetPrefix) + '-.*\.(zip|tar\.gz|tgz)$'
+
+        Get-ChildItem -Path $embeddedDir -File -Force |
+            Where-Object { $_.Name -match $archivePattern -and $_.Name -ne $asset.name } |
+            Remove-Item -Force
+
+        Copy-Item -Path $update.ArchivePath -Destination $targetArchivePath -Force
+
+        $metadata = [ordered]@{
+            version = $normalizedVersion
+            repository = $Repository
+            tag = $release.tagName
+            assetName = $asset.name
+            sha256 = $update.Hash
+        }
+        if ($bundle.IncludesHooks -and $null -ne $hookMetadata) {
+            $metadata['hooks'] = $hookMetadata
+        }
+        $metadataPath = Join-Path $embeddedDir $bundle.MetadataFileName
+        Set-TextFile -Path $metadataPath -Content ($metadata | ConvertTo-Json -Depth 10)
+
+        $projectArchivePattern = 'Agents\\AspireSkills\\Embedded\\' + [regex]::Escape($bundle.AssetPrefix) + '-[^\"]+\.(zip|tar\.gz|tgz)'
+        $cliProjectContent = [regex]::Replace(
+            $cliProjectContent,
+            $projectArchivePattern,
+            "Agents\AspireSkills\Embedded\$($asset.name)")
+
+        Write-Host "Embedded $($bundle.DisplayName) bundle updated to '$($asset.name)' with SHA-256 '$($update.Hash)'."
     }
-    if ($null -ne $hookMetadata) {
-        $metadata['hooks'] = $hookMetadata
-    }
-    Set-TextFile -Path $metadataPath -Content ($metadata | ConvertTo-Json -Depth 10)
 
     $installerContent = Get-Content -Raw -Path $installerPath
     $installerContent = [regex]::Replace(
@@ -199,14 +231,7 @@ try {
         "internal const string Version = ""$normalizedVersion"";")
     Set-TextFile -Path $installerPath -Content $installerContent
 
-    $cliProjectContent = Get-Content -Raw -Path $cliProjectPath
-    $cliProjectContent = [regex]::Replace(
-        $cliProjectContent,
-        'Agents\\AspireSkills\\Embedded\\aspire-skills-[^"]+\.(zip|tar\.gz|tgz)',
-        "Agents\AspireSkills\Embedded\$($asset.name)")
     Set-TextFile -Path $cliProjectPath -Content $cliProjectContent
-
-    Write-Host "Embedded Aspire skills bundle updated to '$($asset.name)' with SHA-256 '$hash'."
 }
 finally {
     if (Test-Path $tempDir) {

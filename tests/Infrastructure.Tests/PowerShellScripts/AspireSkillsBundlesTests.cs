@@ -2,17 +2,15 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text;
+using System.Text.Json;
 using Aspire.TestUtilities;
 using Xunit;
 
 namespace Infrastructure.Tests;
 
 /// <summary>
-/// Offline guards for the hashing helpers in <c>eng/scripts/aspire-skills-bundle.common.ps1</c> that
-/// the embedded-bundle verification (<c>verify-aspire-skills-bundle.ps1</c>) relies on. Those helpers
-/// hash the telemetry hook scripts over LF-normalized UTF-8 (no BOM) so the recorded hash is stable no
-/// matter how git checked the file out — <c>track-telemetry.ps1</c> is <c>text=auto</c> and lands with
-/// CRLF on Windows, while <c>track-telemetry.sh</c> is <c>eol=lf</c>.
+/// Offline guards for the bundle definitions and hashing helpers in
+/// <c>eng/scripts/aspire-skills-bundles.common.ps1</c>.
 /// </summary>
 /// <remarks>
 /// The hook-hash branch of the verify script only runs once a companion aspire-skills release records a
@@ -20,7 +18,7 @@ namespace Infrastructure.Tests;
 /// regression invisible until the bundle update lands — an awkward place to discover it. These tests pin
 /// the contract now, exercising only the offline helpers (no GitHub contents API fetch).
 /// </remarks>
-public sealed class AspireSkillsBundleHashTests : IDisposable
+public sealed class AspireSkillsBundlesTests : IDisposable
 {
     // SHA-256 of the LF, UTF-8 (no BOM) bytes of CanonicalText, computed independently of the script
     // under test (so this is a real oracle, not a tautology). Every line-ending variant of the same
@@ -34,11 +32,11 @@ public sealed class AspireSkillsBundleHashTests : IDisposable
     private readonly string _commonScriptPath;
     private readonly ITestOutputHelper _output;
 
-    public AspireSkillsBundleHashTests(ITestOutputHelper output)
+    public AspireSkillsBundlesTests(ITestOutputHelper output)
     {
         _output = output;
         _workspace = TemporaryWorkspace.Create(output);
-        _commonScriptPath = Path.Combine(RepoRoot.Path, "eng", "scripts", "aspire-skills-bundle.common.ps1");
+        _commonScriptPath = Path.Combine(RepoRoot.Path, "eng", "scripts", "aspire-skills-bundles.common.ps1");
     }
 
     public void Dispose() => _workspace.Dispose();
@@ -75,6 +73,45 @@ public sealed class AspireSkillsBundleHashTests : IDisposable
             .ToArray();
 
         Assert.Equal(onDisk, names.OrderBy(static n => n, StringComparer.Ordinal).ToArray());
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task BundleDefinitionsMatchEmbeddedBundles()
+    {
+        var definitions = await RunBundleDefinitionsDriverAsync();
+        var embeddedDirectory = Path.Combine(RepoRoot.Path, "src", "Aspire.Cli", "Agents", "AspireSkills", "Embedded");
+        var projectContent = await File.ReadAllTextAsync(Path.Combine(RepoRoot.Path, "src", "Aspire.Cli", "Aspire.Cli.csproj"));
+
+        var metadataFiles = Directory.EnumerateFiles(embeddedDirectory, "aspire-*.metadata.json")
+            .Select(Path.GetFileName)
+            .OrderBy(static name => name, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(
+            metadataFiles,
+            definitions.Select(static definition => definition.MetadataFileName).OrderBy(static name => name, StringComparer.Ordinal).ToArray());
+
+        var versions = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var definition in definitions)
+        {
+            var metadataPath = Path.Combine(embeddedDirectory, definition.MetadataFileName);
+            using var metadata = JsonDocument.Parse(await File.ReadAllTextAsync(metadataPath));
+            var assetName = metadata.RootElement.GetProperty("assetName").GetString();
+            var version = metadata.RootElement.GetProperty("version").GetString();
+
+            Assert.NotNull(assetName);
+            Assert.NotNull(version);
+            versions.Add(version);
+            Assert.StartsWith($"{definition.AssetPrefix}-", assetName, StringComparison.Ordinal);
+            Assert.True(File.Exists(Path.Combine(embeddedDirectory, assetName)), $"Embedded archive '{assetName}' was not found.");
+            Assert.Contains($@"Agents\AspireSkills\Embedded\{assetName}", projectContent, StringComparison.Ordinal);
+            Assert.Contains($@"Agents\AspireSkills\Embedded\{definition.MetadataFileName}", projectContent, StringComparison.Ordinal);
+            Assert.True(
+                definition.IncludesHooks || !metadata.RootElement.TryGetProperty("hooks", out _),
+                $"Embedded metadata '{definition.MetadataFileName}' must not contain telemetry hooks.");
+        }
+
+        Assert.Single(versions);
     }
 
     private async Task<string> RunHashDriverAsync(string inputPath)
@@ -137,6 +174,28 @@ public sealed class AspireSkillsBundleHashTests : IDisposable
         return line!["NAMES=".Length..].Split(';', StringSplitOptions.RemoveEmptyEntries);
     }
 
+    private async Task<BundleDefinition[]> RunBundleDefinitionsDriverAsync()
+    {
+        var driverPath = WriteDriver(
+            "bundle-definitions-driver.ps1",
+            """
+            [CmdletBinding()]
+            param([Parameter(Mandatory = $true)][string]$CommonScript)
+
+            Set-StrictMode -Version Latest
+            $ErrorActionPreference = 'Stop'
+
+            . $CommonScript
+
+            Write-Output (Get-AspireSkillsBundleDefinitions | ConvertTo-Json -Compress)
+            """);
+
+        var result = await RunDriverAsync(driverPath, "-CommonScript", $"\"{_commonScriptPath}\"");
+        var json = ReadLines(result.Output).First(static line => line.StartsWith("[", StringComparison.Ordinal));
+
+        return JsonSerializer.Deserialize<BundleDefinition[]>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+    }
+
     private async Task<CommandResult> RunDriverAsync(string driverPath, params string[] args)
     {
         using var cmd = new PowerShellCommand(driverPath, _output).WithTimeout(TimeSpan.FromMinutes(1));
@@ -188,4 +247,6 @@ public sealed class AspireSkillsBundleHashTests : IDisposable
         Cr,
         BomCrlf
     }
+
+    private sealed record BundleDefinition(string AssetPrefix, string MetadataFileName, bool IncludesHooks);
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 
-# Shared helpers for syncing and verifying the embedded Aspire telemetry hook scripts
-# (track-telemetry.sh / track-telemetry.ps1).
+# Shared definitions for the embedded Aspire skills repository bundles and helpers for syncing and
+# verifying the embedded Aspire telemetry hook scripts (track-telemetry.sh / track-telemetry.ps1).
 #
 # The hook scripts live canonically in microsoft/aspire-skills under hooks/scripts/. They are SOURCE
 # files (not build outputs), so they are pinned to the immutable commit that an aspire-skills release
@@ -11,8 +11,26 @@
 
 Set-StrictMode -Version Latest
 
+$script:AspireSkillsBundleDefinitions = @(
+    [pscustomobject]@{
+        AssetPrefix = 'aspire-skills'
+        DisplayName = 'Aspire skills'
+        MetadataFileName = 'aspire-skills.metadata.json'
+        IncludesHooks = $true
+    },
+    [pscustomobject]@{
+        AssetPrefix = 'aspire-extensions'
+        DisplayName = 'Aspire extensions'
+        MetadataFileName = 'aspire-extensions.metadata.json'
+        IncludesHooks = $false
+    }
+)
 $script:AspireSkillsHookFileNames = @('track-telemetry.sh', 'track-telemetry.ps1')
 $script:AspireSkillsHookRepoDirectory = 'hooks/scripts'
+
+function Get-AspireSkillsBundleDefinitions {
+    return $script:AspireSkillsBundleDefinitions
+}
 
 function Get-AspireSkillsHookFileNames {
     return $script:AspireSkillsHookFileNames
