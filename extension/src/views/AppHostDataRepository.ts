@@ -288,6 +288,7 @@ export class AppHostDataRepository {
         this._workspaceFoldersChangeDisposable = vscode.workspace.onDidChangeWorkspaceFolders(() => {
             this._stopAllDescribes();
             this._stopPolling();
+            this._cancelWorkspaceAppHostDiscovery();
             this._markWorkspaceAppHostDiscoveryPending();
             this._clearErrors();
             this._syncPolling();

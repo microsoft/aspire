@@ -9,7 +9,7 @@ import { EventEmitter } from 'events';
 import { PassThrough } from 'stream';
 import { AppHostDataRepository, AspireCliFailedError } from '../views/AppHostDataRepository';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
-import type { AppHostDiscoveryService, CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
+import { AppHostDiscoveryService, type CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import * as cliModule from '../debugger/languages/cli';
 import * as configInfoProvider from '../utils/configInfoProvider';
 import { describeIncludeDisabledCommandsCapability, lsJsonStreamCapability } from '../types/configInfo';
@@ -188,6 +188,78 @@ suite('AppHostDataRepository', () => {
             assert.strictEqual(repository.isWorkspaceAppHostDiscoveryComplete, false);
         } finally {
             repository.dispose();
+            onDidChangeWorkspaceFoldersStub.restore();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('workspace-folder change starts new discovery without cancelling unrelated old-root subscriber', async () => {
+        const oldFolder: vscode.WorkspaceFolder = {
+            uri: vscode.Uri.file('/old-workspace'),
+            name: 'old-workspace',
+            index: 0,
+        };
+        const newFolder: vscode.WorkspaceFolder = {
+            uri: vscode.Uri.file('/new-workspace'),
+            name: 'new-workspace',
+            index: 0,
+        };
+        defaultWorkspaceFoldersStub.restore();
+        let currentWorkspaceFolders: readonly vscode.WorkspaceFolder[] = [oldFolder];
+        const workspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').get(() => currentWorkspaceFolders);
+        defaultWorkspaceFoldersStub = { restore: () => { } } as sinon.SinonStub;
+        let folderChangeListener: ((event: vscode.WorkspaceFoldersChangeEvent) => void) | undefined;
+        const onDidChangeWorkspaceFoldersStub = sinon.stub(vscode.workspace, 'onDidChangeWorkspaceFolders')
+            .callsFake((listener: any) => {
+                folderChangeListener = listener;
+                return { dispose: () => { } };
+            });
+        const lsCalls: Array<{ workingDirectory: string | undefined; options: cliModule.SpawnProcessOptions | undefined }> = [];
+        spawnStub.callsFake((_terminalProvider, _command, args = [], options) => {
+            if (args[0] === 'ls') {
+                lsCalls.push({ workingDirectory: options?.workingDirectory, options });
+            }
+            return new TestChildProcess();
+        });
+        const discoveryService = new AppHostDiscoveryService(terminalProvider);
+        const unrelatedOldRootDiscovery = discoveryService.discover(oldFolder);
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+
+        try {
+            await waitForCondition(() => lsCalls.length === 1, 'expected shared old-root discovery to start once');
+            assert.strictEqual(lsCalls[0].workingDirectory, oldFolder.uri.fsPath);
+
+            currentWorkspaceFolders = [newFolder];
+            assert.ok(folderChangeListener, 'expected the repository to register a workspace-folder listener');
+            folderChangeListener({ added: [newFolder], removed: [oldFolder] });
+
+            await waitForCondition(() => lsCalls.length === 2,
+                'expected new-root discovery to start before old-root discovery completes');
+            assert.strictEqual(lsCalls[1].workingDirectory, newFolder.uri.fsPath);
+
+            const oldCandidate = path.join(oldFolder.uri.fsPath, 'AppHost.csproj');
+            createLsOutputCallback(lsCalls[0].options)(JSON.stringify([{
+                path: oldCandidate,
+                language: 'csharp',
+                status: 'buildable',
+            }]));
+            assert.deepStrictEqual(await unrelatedOldRootDiscovery, [{
+                path: oldCandidate,
+                language: 'csharp',
+                status: 'buildable',
+            }]);
+
+            const newCandidate = path.join(newFolder.uri.fsPath, 'AppHost.csproj');
+            createLsOutputCallback(lsCalls[1].options)(JSON.stringify([{
+                path: newCandidate,
+                language: 'csharp',
+                status: 'buildable',
+            }]));
+            await waitForMicrotasks();
+        }
+        finally {
+            repository.dispose();
+            discoveryService.dispose();
             onDidChangeWorkspaceFoldersStub.restore();
             workspaceFoldersStub.restore();
         }
