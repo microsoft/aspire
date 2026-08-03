@@ -196,7 +196,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
     /// </remarks>
     internal static readonly IReadOnlySet<string> s_oneTimeSetupAssetNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        CommonAgentApplicators.AspireifySkillName,
+        CommonAgentApplicators.AspireifyName,
     };
 
     /// <summary>

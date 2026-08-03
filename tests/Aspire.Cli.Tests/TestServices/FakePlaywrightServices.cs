@@ -115,7 +115,7 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
                 """,
             [(CommonAgentApplicators.AspireSkillName, Path.Combine("references", "app-commands.md"))] = "# App commands",
             [(CommonAgentApplicators.AspireSkillName, Path.Combine("evals", "evals.json"))] = "{}",
-            [(CommonAgentApplicators.AspireifySkillName, "SKILL.md")] =
+            [(CommonAgentApplicators.AspireifyName, "SKILL.md")] =
                 """
                 ---
                 name: aspireify
@@ -181,7 +181,7 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
             Assets =
             [
                 CreateSkill(bundleDirectory, CommonAgentApplicators.AspireSkillName, ["evals"], files),
-                CreateSkill(bundleDirectory, CommonAgentApplicators.AspireifySkillName, ["evals"], files),
+                CreateSkill(bundleDirectory, CommonAgentApplicators.AspireifyName, ["evals"], files),
                 CreateSkill(bundleDirectory, CommonAgentApplicators.AspireDeploymentSkillName, ["evals"], files),
                 CreateSkill(bundleDirectory, AspireInitSkillName, ["evals"], files),
                 CreateSkill(bundleDirectory, AspireMonitoringSkillName, ["evals"], files),
@@ -200,10 +200,28 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
 
     private static async Task EnsureExtensionBundleAsync(DirectoryInfo bundleDirectory, CancellationToken cancellationToken)
     {
-        var extensionDirectory = Path.Combine(bundleDirectory.FullName, "extensions", AspireCanvasExtensionName);
-        Directory.CreateDirectory(extensionDirectory);
-        var extensionPath = Path.Combine(extensionDirectory, "extension.mjs");
-        await File.WriteAllTextAsync(extensionPath, "export default {};", cancellationToken);
+        var extensionNames = new[] { AspireCanvasExtensionName, CommonAgentApplicators.AspireifyName };
+        var assets = new List<BundleAsset>();
+        foreach (var extensionName in extensionNames)
+        {
+            var extensionDirectory = Path.Combine(bundleDirectory.FullName, "extensions", extensionName);
+            Directory.CreateDirectory(extensionDirectory);
+            var extensionPath = Path.Combine(extensionDirectory, "extension.mjs");
+            await File.WriteAllTextAsync(extensionPath, "export default {};", cancellationToken);
+            assets.Add(new BundleAsset
+            {
+                Name = extensionName,
+                Description = $"{extensionName} canvas extension",
+                Files =
+                [
+                    new BundleFile
+                    {
+                        RelativePath = "extension.mjs",
+                        Sha256 = ComputeSha256(extensionPath)
+                    }
+                ]
+            });
+        }
 
         var manifest = new BundleManifest
         {
@@ -213,22 +231,7 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
                 AspireCli = ">=0.0.0 <999.0.0",
                 AspireSdk = ">=0.0.0 <999.0.0"
             },
-            Assets =
-            [
-                new BundleAsset
-                {
-                    Name = AspireCanvasExtensionName,
-                    Description = "Aspire canvas extension",
-                    Files =
-                    [
-                        new BundleFile
-                        {
-                            RelativePath = "extension.mjs",
-                            Sha256 = ComputeSha256(extensionPath)
-                        }
-                    ]
-                }
-            ]
+            Assets = [.. assets]
         };
         var manifestJson = JsonSerializer.Serialize(new
         {

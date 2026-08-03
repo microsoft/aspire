@@ -207,8 +207,11 @@
   <data name="SkillLocation_OpenCodeDescription" xml:space="preserve">
     <value>Legacy location for OpenCode skills</value>
   </data>
-  <data name="AspireSkillsInstaller_InstallingStatus" xml:space="preserve">
+  <data name="AspireSkillsInstaller_InstallingSkillsStatus" xml:space="preserve">
     <value>Installing Aspire skills...</value>
+  </data>
+  <data name="AspireSkillsInstaller_InstallingExtensionsStatus" xml:space="preserve">
+    <value>Installing Aspire extensions...</value>
   </data>
   <data name="AspireSkillsInstaller_GitHubUnavailable" xml:space="preserve">
     <value>Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</value>

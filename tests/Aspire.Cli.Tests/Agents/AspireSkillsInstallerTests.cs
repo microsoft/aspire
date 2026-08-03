@@ -127,6 +127,7 @@ public class AspireSkillsInstallerTests
             var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
             var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
             var attestationVerifier = new TestGitHubArtifactAttestationVerifier();
+            var interactionService = new TestInteractionService();
             // Throw on any HTTP call so we can prove the GitHub path was never invoked.
             var handler = new MockHttpMessageHandler(_ => throw new InvalidOperationException("HTTP must not be called when remote fetch is disabled."));
             var features = new TestFeatures().SetFeature(KnownFeatures.AspireSkillsRemoteFetchEnabled, false);
@@ -135,7 +136,8 @@ public class AspireSkillsInstallerTests
                 httpMessageHandler: handler,
                 githubArtifactAttestationVerifier: attestationVerifier,
                 embeddedBundleProvider: embeddedBundleProvider,
-                features: features);
+                features: features,
+                interactionService: interactionService);
 
             var result = await installer.InstallAsync(AgentAssetKind.Skill, CancellationToken.None);
 
@@ -143,6 +145,7 @@ public class AspireSkillsInstallerTests
             Assert.NotNull(result.Bundle);
             Assert.True(embeddedBundleProvider.OpenArchiveCalled);
             Assert.False(attestationVerifier.VerifyCalled);
+            Assert.Equal(["Installing Aspire skills..."], interactionService.ShownStatuses);
         }
         finally
         {
@@ -160,10 +163,12 @@ public class AspireSkillsInstallerTests
             var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
             var embeddedBundleProvider = new EmbeddedAspireSkillsBundleProvider(NullLogger<EmbeddedAspireSkillsBundleProvider>.Instance);
             var features = new TestFeatures().SetFeature(KnownFeatures.AspireSkillsRemoteFetchEnabled, false);
+            var interactionService = new TestInteractionService();
             var installer = CreateInstaller(
                 executionContext,
                 embeddedBundleProvider: embeddedBundleProvider,
-                features: features);
+                features: features,
+                interactionService: interactionService);
 
             var result = await installer.InstallAsync(AgentAssetKind.Extension, CancellationToken.None);
 
@@ -171,6 +176,7 @@ public class AspireSkillsInstallerTests
             var bundle = Assert.IsType<AspireSkillsBundle>(result.Bundle);
             Assert.Equal(AgentAssetKind.Extension, bundle.AssetKind);
             Assert.Contains(bundle.GetAgentAssetDefinitions(), asset => asset.Name == "aspire-doctor");
+            Assert.Equal(["Installing Aspire extensions..."], interactionService.ShownStatuses);
         }
         finally
         {
@@ -512,7 +518,8 @@ public class AspireSkillsInstallerTests
         TestGitHubArtifactAttestationVerifier? githubArtifactAttestationVerifier = null,
         IConfiguration? configuration = null,
         IEmbeddedAspireSkillsBundleProvider? embeddedBundleProvider = null,
-        IFeatures? features = null)
+        IFeatures? features = null,
+        TestInteractionService? interactionService = null)
     {
         var effectiveEmbeddedBundleProvider = embeddedBundleProvider ?? new TestEmbeddedAspireSkillsBundleProvider();
         return new AspireSkillsInstaller(
@@ -520,7 +527,7 @@ public class AspireSkillsInstallerTests
             new MockHttpClientFactory(httpMessageHandler ?? new MockHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound))),
             new AspireSkillsBundleProvider(),
             effectiveEmbeddedBundleProvider,
-            new TestInteractionService(),
+            interactionService ?? new TestInteractionService(),
             executionContext,
             configuration ?? new ConfigurationBuilder().Build(),
             // Default existing tests to the remote-fetch-enabled path so they continue to

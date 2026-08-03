@@ -52,6 +52,16 @@
         <target state="new">Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</target>
         <note />
       </trans-unit>
+      <trans-unit id="AspireSkillsInstaller_InstallingExtensionsStatus">
+        <source>Installing Aspire extensions...</source>
+        <target state="new">Installing Aspire extensions...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AspireSkillsInstaller_InstallingSkillsStatus">
+        <source>Installing Aspire skills...</source>
+        <target state="new">Installing Aspire skills...</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AspireSkillsInstaller_InvalidMetadata">
         <source>Embedded Aspire skills bundle metadata is invalid: {0}</source>
         <target state="new">Embedded Aspire skills bundle metadata is invalid: {0}</target>
@@ -250,11 +260,6 @@
       <trans-unit id="InitCommand_WorkspaceRootOptionDescription">
         <source>Path to the workspace root directory</source>
         <target state="new">Path to the workspace root directory</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_InstallingStatus">
-        <source>Installing Aspire skills...</source>
-        <target state="new">Installing Aspire skills...</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_InvalidBundle">

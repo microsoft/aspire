@@ -126,7 +126,7 @@ public class CommonAgentApplicatorsTests
         Assert.All(
             [
                 AgentAssetDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireSkillName, "Aspire CLI commands and workflows for distributed apps", AgentAssetKind.Skill),
-                AgentAssetDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireifySkillName, "One-time setup: wire up AppHost with discovered projects", AgentAssetKind.Skill),
+                AgentAssetDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireifyName, "One-time setup: wire up AppHost with discovered projects", AgentAssetKind.Skill),
                 AgentAssetDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireDeploymentSkillName, "Aspire deployment target selection, preflight, publish, and deploy workflows", AgentAssetKind.Skill)
             ],
             skill =>

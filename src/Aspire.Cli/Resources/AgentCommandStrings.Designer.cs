@@ -504,9 +504,18 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Installing Aspire skills....
         /// </summary>
-        internal static string AspireSkillsInstaller_InstallingStatus {
+        internal static string AspireSkillsInstaller_InstallingSkillsStatus {
             get {
-                return ResourceManager.GetString("AspireSkillsInstaller_InstallingStatus", resourceCulture);
+                return ResourceManager.GetString("AspireSkillsInstaller_InstallingSkillsStatus", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Installing Aspire extensions....
+        /// </summary>
+        internal static string AspireSkillsInstaller_InstallingExtensionsStatus {
+            get {
+                return ResourceManager.GetString("AspireSkillsInstaller_InstallingExtensionsStatus", resourceCulture);
             }
         }
 

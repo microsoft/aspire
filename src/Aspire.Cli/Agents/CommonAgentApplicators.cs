@@ -21,9 +21,9 @@ internal static class CommonAgentApplicators
     internal const string AspireDeploymentSkillName = "aspire-deployment";
 
     /// <summary>
-    /// The name of the Aspireify skill.
+    /// The name of the Aspireify skill and extension.
     /// </summary>
-    internal const string AspireifySkillName = "aspireify";
+    internal const string AspireifyName = "aspireify";
 
     /// <summary>
     /// The name of the dotnet-inspect skill.

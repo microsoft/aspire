@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using Aspire.Cli.Resources;
 
 namespace Aspire.Cli.Agents.AspireSkills;
 
@@ -20,6 +21,7 @@ internal sealed record BundleDescriptor
         manifestFileName: "skill-manifest.json",
         assetsDirectoryName: "skills",
         displayName: "skill",
+        installingStatus: AgentCommandStrings.AspireSkillsInstaller_InstallingSkillsStatus,
         embeddedArchiveResourceName: "aspire-skills.bundle.tgz",
         embeddedMetadataResourceName: "aspire-skills.metadata.json",
         validateFile: ValidateSkillFile,
@@ -31,6 +33,7 @@ internal sealed record BundleDescriptor
         manifestFileName: "extension-manifest.json",
         assetsDirectoryName: "extensions",
         displayName: "extension",
+        installingStatus: AgentCommandStrings.AspireSkillsInstaller_InstallingExtensionsStatus,
         embeddedArchiveResourceName: "aspire-extensions.bundle.tgz",
         embeddedMetadataResourceName: "aspire-extensions.metadata.json",
         validateFile: null,
@@ -45,6 +48,7 @@ internal sealed record BundleDescriptor
         string manifestFileName,
         string assetsDirectoryName,
         string displayName,
+        string installingStatus,
         string? embeddedArchiveResourceName,
         string? embeddedMetadataResourceName,
         Action<string, string, string>? validateFile,
@@ -55,6 +59,7 @@ internal sealed record BundleDescriptor
         ManifestFileName = manifestFileName;
         AssetsDirectoryName = assetsDirectoryName;
         DisplayName = displayName;
+        InstallingStatus = installingStatus;
         EmbeddedArchiveResourceName = embeddedArchiveResourceName;
         EmbeddedMetadataResourceName = embeddedMetadataResourceName;
         _validateFile = validateFile;
@@ -70,6 +75,8 @@ internal sealed record BundleDescriptor
     public string AssetsDirectoryName { get; }
 
     public string DisplayName { get; }
+
+    public string InstallingStatus { get; }
 
     public string? EmbeddedArchiveResourceName { get; }
 

@@ -93,6 +93,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             $"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledExtensionsSummaryLocations, ".github/extensions")}");
         var message = Assert.Single(interactionService.DisplayedMessages, displayedMessage => displayedMessage.Emoji.Equals(KnownEmojis.Robot));
         Assert.Equal(expectedSummary, message.Message);
+        Assert.False(Directory.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".github", "extensions", CommonAgentApplicators.AspireifyName)));
         Assert.DoesNotContain(
             interactionService.DisplayedMessages,
             displayedMessage => displayedMessage.Message.Contains("Installed aspire skill", StringComparison.Ordinal));
@@ -154,7 +155,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var expectedSkillNames = new[]
         {
             CommonAgentApplicators.AspireSkillName,
-            CommonAgentApplicators.AspireifySkillName,
+            CommonAgentApplicators.AspireifyName,
             CommonAgentApplicators.AspireDeploymentSkillName,
             FakeAspireSkillsInstaller.AspireInitSkillName,
             FakeAspireSkillsInstaller.AspireMonitoringSkillName,
@@ -209,11 +210,12 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Contains(CommonAgentApplicators.AspireSkillName, promptedSkillNames);
-        Assert.Contains(CommonAgentApplicators.AspireifySkillName, promptedSkillNames);
+        Assert.Contains(CommonAgentApplicators.AspireifyName, promptedSkillNames);
         Assert.Contains(CommonAgentApplicators.AspireDeploymentSkillName, promptedSkillNames);
         Assert.Contains(FakeAspireSkillsInstaller.AspireInitSkillName, promptedSkillNames);
         Assert.Contains(FakeAspireSkillsInstaller.AspireMonitoringSkillName, promptedSkillNames);
         Assert.Contains(FakeAspireSkillsInstaller.AspireOrchestrationSkillName, promptedSkillNames);
+        Assert.Equal(2, promptedSkillNames.Count(static name => name == CommonAgentApplicators.AspireifyName));
     }
 
     [Fact]
@@ -518,7 +520,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), FakeAspireSkillsInstaller.AspireInitSkillName);
         AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), FakeAspireSkillsInstaller.AspireMonitoringSkillName);
         AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), FakeAspireSkillsInstaller.AspireOrchestrationSkillName);
-        var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireifySkillName);
+        var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireifyName);
         Assert.False(Directory.Exists(aspireifySkillPath), $"Expected no aspireify skill directory but found {aspireifySkillPath}");
     }
 
@@ -621,7 +623,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), FakeAspireSkillsInstaller.AspireInitSkillName);
         AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), FakeAspireSkillsInstaller.AspireMonitoringSkillName);
         AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), FakeAspireSkillsInstaller.AspireOrchestrationSkillName);
-        var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireifySkillName);
+        var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireifyName);
         Assert.False(Directory.Exists(aspireifySkillPath), $"Expected no aspireify skill directory but found {aspireifySkillPath}");
     }
 
@@ -703,8 +705,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         var command = provider.GetRequiredService<AgentInitCommand>();
 
-        // Passing no predicate pre-selects every bundle-sourced skill, which is the semantic
-        // `aspire init` relies on so the one-time wiring skill chains into the flow.
+        // Passing no predicate pre-selects every bundle-sourced asset, which is the semantic
+        // `aspire init` relies on so the one-time wiring skill and its canvas chain into the flow.
         var result = await command.PromptAndChainAsync(
             interactionService,
             CliExitCodes.Success,
@@ -715,8 +717,10 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
-        Assert.Contains(result.SelectedAgentAssets, static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName));
-        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), CommonAgentApplicators.AspireifySkillName);
+        Assert.Contains(result.SelectedAgentAssets, static asset => asset.HasName(CommonAgentApplicators.AspireifyName) && asset.AssetKind == AgentAssetKind.Skill);
+        Assert.Contains(result.SelectedAgentAssets, static asset => asset.HasName(CommonAgentApplicators.AspireifyName) && asset.AssetKind == AgentAssetKind.Extension);
+        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), CommonAgentApplicators.AspireifyName);
+        Assert.True(Directory.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".github", "extensions", CommonAgentApplicators.AspireifyName)));
     }
 
     [Fact]
@@ -734,8 +738,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<AgentInitCommand>();
 
         // Callers that just created a new AppHost (aspire new) or are running standalone agent
-        // init pass a predicate that strips aspireify from the default selection. The skill
-        // remains in the prompt — it's just not pre-checked.
+        // init pass a predicate that strips aspireify from the default selection. The skill and
+        // canvas remain in their prompts — they're just not pre-checked.
         var result = await command.PromptAndChainAsync(
             interactionService,
             CliExitCodes.Success,
@@ -746,9 +750,11 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
-        Assert.DoesNotContain(result.SelectedAgentAssets, static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName));
-        var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireifySkillName);
+        Assert.DoesNotContain(result.SelectedAgentAssets, static asset => asset.HasName(CommonAgentApplicators.AspireifyName));
+        var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireifyName);
         Assert.False(Directory.Exists(aspireifySkillPath), $"Expected no aspireify skill directory but found {aspireifySkillPath}");
+        var aspireifyExtensionPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".github", "extensions", CommonAgentApplicators.AspireifyName);
+        Assert.False(Directory.Exists(aspireifyExtensionPath), $"Expected no aspireify extension directory but found {aspireifyExtensionPath}");
     }
 
     [Fact]
@@ -826,7 +832,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), CommonAgentApplicators.AspireSkillName);
 
         // aspireify was not requested, so it should not be installed.
-        var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireifySkillName);
+        var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireifyName);
         Assert.False(Directory.Exists(aspireifySkillPath), $"Expected no aspireify skill directory but found {aspireifySkillPath}");
     }
 
@@ -986,6 +992,9 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         return new Dictionary<AgentAssetKind, AgentAssetPromptBindings>
         {
             [AgentAssetKind.Skill] = new(
+                PromptBinding.CreateDefault<string?>(null),
+                PromptBinding.CreateDefault<string?>(null)),
+            [AgentAssetKind.Extension] = new(
                 PromptBinding.CreateDefault<string?>(null),
                 PromptBinding.CreateDefault<string?>(null)),
         };

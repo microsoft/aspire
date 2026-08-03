@@ -48,9 +48,10 @@ internal sealed class AspireSkillsInstaller(
     public Task<AspireSkillsInstallResult> InstallAsync(AgentAssetKind assetKind, CancellationToken cancellationToken)
     {
         return interactionService.ShowStatusAsync(
-            AgentCommandStrings.AspireSkillsInstaller_InstallingStatus,
+            BundleDescriptor.GetDescriptor(assetKind).InstallingStatus,
             () => InstallCoreAsync(assetKind, cancellationToken));
     }
+
     private async Task<AspireSkillsInstallResult> InstallCoreAsync(AgentAssetKind assetKind, CancellationToken cancellationToken)
     {
         using var activity = telemetry.StartReportedActivity("AspireSkillsInstaller.Install");

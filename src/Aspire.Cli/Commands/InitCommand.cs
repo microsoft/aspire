@@ -180,7 +180,9 @@ internal sealed class InitCommand : BaseCommand
 
         // Step 5: Print follow-up commands only when the user selected the one-time init skill.
         if (agentInitResult.ExitCode == CliExitCodes.Success &&
-            agentInitResult.SelectedAgentAssets.Any(static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName)))
+            agentInitResult.SelectedAgentAssets.Any(static asset =>
+                asset.AssetKind == AgentAssetKind.Skill &&
+                asset.HasName(CommonAgentApplicators.AspireifyName)))
         {
             var commands = GetAspireifyCommands(agentInitResult.SelectedLocations);
             if (commands.Count > 0)

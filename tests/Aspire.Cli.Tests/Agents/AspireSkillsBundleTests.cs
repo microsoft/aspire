@@ -20,7 +20,7 @@ public class AspireSkillsBundleTests
         installExcludedRelativePaths: ["evals"]);
 
     private static AgentAssetDefinition AspireifyAgentAssetDefinition => AgentAssetDefinition.CreateAspireSkillsBundle(
-        CommonAgentApplicators.AspireifySkillName,
+        CommonAgentApplicators.AspireifyName,
         AspireifySkillDescription,
         AgentAssetKind.Skill);
 
@@ -296,10 +296,10 @@ public class AspireSkillsBundleTests
     public async Task GetSkillFilesAsync_TreatsMissingOptionalPathArraysAsEmpty()
     {
         var bundleDirectory = CreateTempDirectory();
-        var skillDirectory = Path.Combine(bundleDirectory, "skills", CommonAgentApplicators.AspireifySkillName);
+        var skillDirectory = Path.Combine(bundleDirectory, "skills", CommonAgentApplicators.AspireifyName);
         Directory.CreateDirectory(skillDirectory);
         var skillPath = Path.Combine(skillDirectory, "SKILL.md");
-        var skillContent = CreateSkillFileContent(CommonAgentApplicators.AspireifySkillName, AspireifySkillDescription, "# Aspireify");
+        var skillContent = CreateSkillFileContent(CommonAgentApplicators.AspireifyName, AspireifySkillDescription, "# Aspireify");
         await File.WriteAllTextAsync(skillPath, skillContent);
 
         try
@@ -314,7 +314,7 @@ public class AspireSkillsBundleTests
                   },
                   "skills": [
                     {
-                      "name": "{{CommonAgentApplicators.AspireifySkillName}}",
+                      "name": "{{CommonAgentApplicators.AspireifyName}}",
                       "description": "{{AspireifySkillDescription}}",
                       "files": [
                         { "relativePath": "SKILL.md", "sha256": "{{ComputeSha256(skillPath)}}" }
