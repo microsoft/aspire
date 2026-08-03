@@ -1,0 +1,16 @@
+{
+  "id": "dotnet-install-connection-closed",
+  "type": "infra-failure",
+  "title": ".NET install script SDK download fails with connection closed mid-stream from builds.dotnet.microsoft.com",
+  "error_pattern": "dotnet-install: Downloading from \"primary\" link has failed with error:\nUri: https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.201/dotnet-sdk-10.0.201-win-x64.zip\nError: Error while copying content to a stream.\nUnable to read data from the transport connection: The connection was closed.\nFailed to install 'sdk v10.0.201' from any of the specified locations.",
+  "occurrences": [
+    {
+      "run_id": 30776107936,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/30776107936",
+      "job": "Tests / Hosting.SqlServer / Hosting.SqlServer (windows-latest)",
+      "pr_number": 18958,
+      "observed_at": "2026-08-03T01:40:38Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/18967"
+}

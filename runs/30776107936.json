@@ -1,0 +1,29 @@
+{
+  "run_id": 30776107936,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/30776107936",
+  "analyzed_at": "2026-08-03T01:40:38Z",
+  "verdict": "transient-infra",
+  "pr": {
+    "number": 18958,
+    "title": "Stop leaking orphaned aspire-managed NuGet search helpers",
+    "author": "Arasz",
+    "state": "closed",
+    "head_branch": "fix/nuget-prefetch-orphans",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18958"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.SqlServer / Hosting.SqlServer (windows-latest)",
+      "id": 91572063229,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/30776107936/job/91572063229",
+      "classification": "transient-infra",
+      "reason": "The .NET SDK 10.0.201 download from builds.dotnet.microsoft.com failed with 'Error while copying content to a stream. Unable to read data from the transport connection: The connection was closed.' All fallback URLs returned 404. This is a transient network connectivity failure unrelated to PR changes.",
+      "failed_steps": ["Build test project"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["dotnet-install-connection-closed"]
+}
