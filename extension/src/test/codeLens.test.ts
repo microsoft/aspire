@@ -13,6 +13,7 @@ import {
     codeLensResourceStoppedError,
     codeLensResourceStoppedErrorWithExitCode,
     codeLensResourceError,
+    codeLensResourceRuntimeUnhealthy,
     codeLensResourceValueMissing,
 } from '../loc/strings';
 import { ResourceState, StateStyle } from '../editor/resourceConstants';
@@ -68,8 +69,9 @@ suite('getCodeLensStateLabel', () => {
         assert.strictEqual(getCodeLensStateLabel(ResourceState.FailedToStart, ''), codeLensResourceError);
     });
 
-    test('RuntimeUnhealthy returns error label', () => {
-        assert.strictEqual(getCodeLensStateLabel(ResourceState.RuntimeUnhealthy, ''), codeLensResourceError);
+    test('RuntimeUnhealthy returns warning label', () => {
+        assert.strictEqual(getCodeLensStateLabel(ResourceState.RuntimeUnhealthy, ''), codeLensResourceRuntimeUnhealthy);
+        assert.ok(codeLensResourceRuntimeUnhealthy.includes('$(warning)'));
     });
 
     // --- Stopped states ---

@@ -1660,9 +1660,11 @@ suite('getResourceIcon', () => {
         assert.strictEqual(icon.id, 'error');
     });
 
-    test('RuntimeUnhealthy shows error icon', () => {
+    test('RuntimeUnhealthy shows warning icon', () => {
         const icon = getResourceIcon(makeResource({ state: ResourceState.RuntimeUnhealthy }));
-        assert.strictEqual(icon.id, 'error');
+        assert.strictEqual(icon.id, 'warning');
+        assert.ok(icon.color instanceof vscode.ThemeColor);
+        assert.strictEqual(icon.color.id, 'list.warningForeground');
     });
 
     test('Starting shows loading spinner', () => {
