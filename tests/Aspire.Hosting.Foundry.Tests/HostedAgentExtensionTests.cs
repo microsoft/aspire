@@ -471,6 +471,42 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
+    public void AsHostedAgentForExport_WithOptions_UsesDefaultResponsesProtocolAndAppliesOptions()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var options = new HostedAgentOptions
+        {
+            Description = "test description",
+            Cpu = 1m,
+            Memory = 2m,
+            Metadata = { ["scenario"] = "unit-test" },
+            EnvironmentVariables = { ["MY_VAR"] = "my-value" }
+        };
+
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgentForExport(project, options);
+
+        builder.Build();
+
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+
+        var configuration = new HostedAgentConfiguration("test-image");
+        hostedAgent.Configure!(configuration);
+
+        Assert.Equal("test description", configuration.Description);
+        Assert.Equal(1m, configuration.Cpu);
+        Assert.Equal(2m, configuration.Memory);
+        Assert.Equal("unit-test", configuration.Metadata["scenario"]);
+        Assert.Equal("my-value", configuration.EnvironmentVariables["MY_VAR"]);
+        var protocol = Assert.Single(configuration.ProtocolVersions);
+        Assert.Equal(ProjectsAgentProtocol.Responses, protocol.Protocol);
+        Assert.Equal(AzureHostedAgentResource.DefaultResponsesProtocolVersion, protocol.Version);
+    }
+
+    [Fact]
     public void AsHostedAgent_WithConfigureCallback_EnsuresSelectedProtocolRemainsInConfiguration()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
