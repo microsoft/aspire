@@ -167,7 +167,7 @@ debug launch config for F5).
 
 ## 5. New & changed types / files
 
-> Resources → `Aspire.Hosting.ApplicationModel` (or the package's own namespace, matching Go/Python);
+> Resources → the package's own namespace (`Aspire.Hosting.Dotnet`, matching Go/Python);
 > builder extensions → `Aspire.Hosting`. All new public surface stays `[Experimental]`. Do **not**
 > hand-edit `api/*.cs`, `*.Capabilities.txt`, `*.ats.txt` (generated).
 
@@ -176,7 +176,8 @@ debug launch config for F5).
   to `Aspire.Hosting`, `[AspireExport]` wiring, `api/Aspire.Hosting.Dotnet.cs`, README).
 - **`DotnetProjectResource`** (new): `public class DotnetProjectResource(string name, string workingDirectory)
   : ExecutableResource(name, "dotnet", workingDirectory), IResourceWithServiceDiscovery, IProjectLaunchDefaultsResource`
-  — an `ExecutableResource` (no `ProjectResource` container-build pipeline). `[AspireExport(ExposeProperties = true)]`.
+  — an `ExecutableResource` (no `ProjectResource` container-build pipeline).
+  `[Experimental("ASPIREDOTNETPROJECT001")]`, `[AspireExport(ExposeProperties = true)]`.
 - **`AddDotnetProject`** (new): builds the `DotnetProjectResource`, attaches `IProjectMetadata`, adds a
   `WithArgs` callback producing `run --project <proj>` (or the file-based `.cs` form), applies the
   generalized project defaults (§5.4), and `WithDebugSupport(mode => new ProjectLaunchConfiguration{…},
