@@ -217,6 +217,10 @@ internal sealed class TestKubernetesService : IKubernetesService
             service.Status ??= new ServiceStatus();
             service.Status.EffectiveAddress = service.Spec.Address ?? "localhost";
             service.Status.EffectivePort = hostPort ?? Interlocked.Increment(ref _nextPort);
+
+            // Made a change to the service, so it needs a new resource version.
+            StampResourceVersion(service);
+
             modifiedResources.Add(service);
         }
 
