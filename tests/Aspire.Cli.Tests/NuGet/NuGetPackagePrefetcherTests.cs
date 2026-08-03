@@ -12,6 +12,7 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Time.Testing;
 
@@ -263,13 +264,18 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
         features.SetFeature(KnownFeatures.UpdateNotificationsEnabled, true);
 
         var templateStarted = false;
-        var packagingService = new TestPackagingService
+        var packageCache = new FakeNuGetPackageCache
         {
-            GetChannelsAsyncCallback = _ =>
+            GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
             {
                 templateStarted = true;
-                return Task.FromResult(Enumerable.Empty<PackageChannel>());
+                return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>([]);
             }
+        };
+        var channel = PackageChannel.CreateImplicitChannel(packageCache, features, NullLogger.Instance);
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
         };
 
         var cliStarted = false;
