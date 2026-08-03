@@ -71,7 +71,7 @@ const decorationTypes = Object.fromEntries(
     })])
 ) as Record<GutterCategory, vscode.TextEditorDecorationType>;
 
-function classifyState(state: string, stateStyle: string, healthStatus: string, exitCode?: number | null): GutterCategory {
+export function classifyState(state: string, stateStyle: string, healthStatus: string, exitCode?: number | null): GutterCategory {
     switch (state) {
         case ResourceState.Running:
         case ResourceState.Active:
@@ -83,8 +83,9 @@ function classifyState(state: string, stateStyle: string, healthStatus: string, 
             }
             return 'running';
         case ResourceState.FailedToStart:
-        case ResourceState.RuntimeUnhealthy:
             return 'error';
+        case ResourceState.RuntimeUnhealthy:
+            return 'warning';
         case ResourceState.Starting:
         case ResourceState.Stopping:
         case ResourceState.Building:

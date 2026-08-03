@@ -477,8 +477,9 @@ export function getResourceIcon(resource: ResourceJson): vscode.ThemeIcon {
             // as a green check, just in slightly different greens).
             return new vscode.ThemeIcon('circle-outline', new vscode.ThemeColor('descriptionForeground'));
         case ResourceState.FailedToStart:
-        case ResourceState.RuntimeUnhealthy:
             return new vscode.ThemeIcon('error', new vscode.ThemeColor('list.errorForeground'));
+        case ResourceState.RuntimeUnhealthy:
+            return new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.warningForeground'));
         case ResourceState.Starting:
         case ResourceState.Stopping:
         case ResourceState.Building:
