@@ -45,10 +45,17 @@ internal sealed partial class UnixCertificateManager : CertificateManager
 
     private HashSet<string>? _availableCommands;
     private readonly IEnvironment _environment;
+    private readonly Func<string, ProcessStartInfo> _createCertUtilStartInfo = CreateCertUtilStartInfo;
 
     public UnixCertificateManager(ILogger logger, IEnvironment environment) : base(logger)
     {
         _environment = environment;
+    }
+
+    internal UnixCertificateManager(ILogger logger, IEnvironment environment, Func<string, ProcessStartInfo> createCertUtilStartInfo)
+        : this(logger, environment)
+    {
+        _createCertUtilStartInfo = createCertUtilStartInfo;
     }
 
     internal UnixCertificateManager(string subject, int version)
@@ -701,11 +708,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         // (The docs suggest that "-V -u A" should do this, but it seems to accept all certs.)
         var operation = nssDb.IsFirefox ? "-L" : "-V -u V";
 
-        var startInfo = new ProcessStartInfo(CertificateHelpers.CertUtilCommand, $"-d sql:{nssDb.Path} -n {nickname} {operation}")
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
+        var startInfo = _createCertUtilStartInfo($"-d sql:{nssDb.Path} -n {nickname} {operation}");
 
         try
         {
@@ -753,11 +756,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         var usage = nssDb.IsFirefox ? "C" : "P";
 
         // This silently clobbers an existing entry, so there's no need to check for existence first.
-        var startInfo = new ProcessStartInfo(CertificateHelpers.CertUtilCommand, $"-d sql:{nssDb.Path} -n {nickname} -A -i {certificatePath} -t \"{usage},,\"")
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
+        var startInfo = _createCertUtilStartInfo($"-d sql:{nssDb.Path} -n {nickname} -A -i {certificatePath} -t \"{usage},,\"");
 
         try
         {
@@ -777,11 +776,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
     /// </remarks>
     private bool TryRemoveCertificateFromNssDb(string nickname, NssDb nssDb)
     {
-        var startInfo = new ProcessStartInfo(CertificateHelpers.CertUtilCommand, $"-d sql:{nssDb.Path} -D -n {nickname}")
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
+        var startInfo = _createCertUtilStartInfo($"-d sql:{nssDb.Path} -D -n {nickname}");
 
         try
         {
@@ -800,6 +795,15 @@ internal sealed partial class UnixCertificateManager : CertificateManager
             Log.UnixNssDbRemovalException(nssDb.Path, ex.Message);
             return false;
         }
+    }
+
+    private static ProcessStartInfo CreateCertUtilStartInfo(string arguments)
+    {
+        return new ProcessStartInfo(CertificateHelpers.CertUtilCommand, arguments)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
     }
 
     private IEnumerable<string> GetFirefoxProfiles(string firefoxDirectory)

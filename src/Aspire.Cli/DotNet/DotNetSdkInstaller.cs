@@ -13,6 +13,14 @@ namespace Aspire.Cli.DotNet;
 /// </summary>
 internal sealed class DotNetSdkInstaller(IConfiguration configuration) : IDotNetSdkInstaller
 {
+    private readonly Func<string, ProcessStartInfo> _createProcessStartInfo = CreateProcessStartInfo;
+
+    internal DotNetSdkInstaller(IConfiguration configuration, Func<string, ProcessStartInfo> createProcessStartInfo)
+        : this(configuration)
+    {
+        _createProcessStartInfo = createProcessStartInfo;
+    }
+
     /// <summary>
     /// The minimum .NET SDK version required for Aspire.
     /// </summary>
@@ -29,18 +37,7 @@ internal sealed class DotNetSdkInstaller(IConfiguration configuration) : IDotNet
             var currentArch = GetCurrentArchitecture();
             var arguments = $"--list-sdks --arch {currentArch}";
 
-            using var process = new Process
-            {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = "dotnet",
-                    Arguments = arguments,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                }
-            };
+            using var process = new Process { StartInfo = _createProcessStartInfo(arguments) };
 
             process.Start();
             var standardOutputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
@@ -119,6 +116,19 @@ internal sealed class DotNetSdkInstaller(IConfiguration configuration) : IDotNet
             // If we can't start the process, the SDK is not available
             return (false, null, minimumVersion);
         }
+    }
+
+    private static ProcessStartInfo CreateProcessStartInfo(string arguments)
+    {
+        return new ProcessStartInfo
+        {
+            FileName = "dotnet",
+            Arguments = arguments,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
     }
 
     /// <summary>
