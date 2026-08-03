@@ -75,6 +75,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
 
     private readonly _onDidChangeCandidates = new vscode.EventEmitter<vscode.WorkspaceFolder>();
     private readonly _cache = new Map<string, CachedAppHostDiscovery>();
+    private readonly _activeDiscoveries = new Set<CachedAppHostDiscovery>();
     private readonly _watchers = new Map<string, vscode.Disposable[]>();
     private readonly _pendingInvalidationTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private readonly _activeCliProcesses = new Set<ChildProcessWithoutNullStreams>();
@@ -95,7 +96,9 @@ export class AppHostDiscoveryService implements vscode.Disposable {
 
         const key = path.resolve(workspaceFolder.uri.fsPath);
         if (forceRefresh) {
-            this._invalidateCachedDiscovery(key);
+            // Existing callers still await the shared promise. Replace the cache entry without
+            // cancelling that operation so those callers can finish on their original snapshot.
+            this._cache.delete(key);
         }
 
         this._ensureWatchers(workspaceFolder, key);
@@ -144,6 +147,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                 }
                 throw error;
             }).finally(() => {
+                this._activeDiscoveries.delete(cachedDiscoveryForCleanup);
                 cachedDiscoveryForCleanup.completed = true;
                 cachedDiscoveryForCleanup.candidateProgressCallbacks.clear();
                 cachedDiscoveryForCleanup.cancellationSource.dispose();
@@ -160,6 +164,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                 stale: false,
             };
             cachedDiscoveryForCleanup = cachedDiscovery;
+            this._activeDiscoveries.add(cachedDiscovery);
             this._cache.set(key, cachedDiscovery);
         }
 
@@ -234,9 +239,11 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             disposables.forEach(disposable => disposable.dispose());
         }
         this._watchers.clear();
-        for (const key of [...this._cache.keys()]) {
-            this._invalidateCachedDiscovery(key);
+        this._cache.clear();
+        for (const discovery of this._activeDiscoveries) {
+            discovery.cancellationSource.cancel();
         }
+        this._activeDiscoveries.clear();
         for (const timer of this._pendingInvalidationTimers.values()) {
             clearTimeout(timer);
         }

@@ -591,6 +591,75 @@ suite('AppHost discovery', () => {
             }
         });
 
+        test('forced refresh does not reject existing shared discovery callers', async () => {
+            stubFileSystemWatchers(sandbox);
+            const spawnOptions: cliModule.SpawnProcessOptions[] = [];
+            const childProcesses: Array<{ kill: sinon.SinonStub }> = [];
+            const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                assert.ok(options);
+                spawnOptions.push(options);
+                const childProcess = { kill: sandbox.stub().returns(true) };
+                childProcesses.push(childProcess);
+                return childProcess as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+            const originalCandidate = {
+                path: buildPath('workspace', 'Original', 'AppHost.csproj'),
+                language: 'csharp',
+                status: 'buildable',
+            };
+            const refreshedCandidate = {
+                path: buildPath('workspace', 'Refreshed', 'AppHost.csproj'),
+                language: 'csharp',
+                status: 'buildable',
+            };
+
+            try {
+                const originalDiscovery = service.discover(workspaceFolder);
+                await waitForMicrotasks();
+                assert.strictEqual(spawnStub.callCount, 1);
+
+                const refreshedDiscovery = service.discover(workspaceFolder, true);
+                await waitForMicrotasks();
+                assert.strictEqual(spawnStub.callCount, 2);
+                assert.strictEqual(childProcesses[0].kill.callCount, 0);
+
+                emitLsOutput(spawnOptions[1], [refreshedCandidate]);
+                assert.deepStrictEqual(await refreshedDiscovery, [refreshedCandidate]);
+                assert.deepStrictEqual(await service.discover(workspaceFolder), [refreshedCandidate]);
+                assert.strictEqual(spawnStub.callCount, 2);
+
+                emitLsOutput(spawnOptions[0], [originalCandidate]);
+                assert.deepStrictEqual(await originalDiscovery, [originalCandidate]);
+                assert.strictEqual(childProcesses[0].kill.callCount, 0);
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
+        test('dispose cancels force-replaced discovery before CLI startup', async () => {
+            stubFileSystemWatchers(sandbox);
+            const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess');
+            const terminalProvider = {
+                getAspireCliExecutablePath: () => new Promise<string>(() => { }),
+                createEnvironment: () => ({}),
+            } as unknown as AspireTerminalProvider;
+            const service = new AppHostDiscoveryService(terminalProvider);
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+            const originalDiscovery = service.discover(workspaceFolder);
+            await waitForMicrotasks();
+            const refreshedDiscovery = service.discover(workspaceFolder, true);
+            await waitForMicrotasks();
+
+            service.dispose();
+
+            await assert.rejects(originalDiscovery, /disposed/);
+            await assert.rejects(refreshedDiscovery, /disposed/);
+            assert.strictEqual(spawnStub.callCount, 0);
+        });
+
         test('late callers receive prior and future streamed AppHosts', async () => {
             stubFileSystemWatchers(sandbox);
             let options: cliModule.SpawnProcessOptions | undefined;
