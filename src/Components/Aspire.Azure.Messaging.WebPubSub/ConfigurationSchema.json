@@ -125,7 +125,32 @@
                           "description": "Provides the client configuration options for connecting to Azure WebPubSub service."
                         },
                         {
-                          "$ref": "#/properties/Aspire/properties/Azure/properties/Messaging/properties/WebPubSub/additionalProperties/anyOf/1"
+                          "allOf": [
+                            {
+                              "$ref": "#/properties/Aspire/properties/Azure/properties/Messaging/properties/WebPubSub/additionalProperties/anyOf/1"
+                            },
+                            {
+                              "not": {
+                                "anyOf": [
+                                  {
+                                    "required": [
+                                      "ReverseProxyEndpoint"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "Diagnostics"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "Retry"
+                                    ]
+                                  }
+                                ]
+                              }
+                            }
+                          ]
                         }
                       ]
                     },
@@ -293,7 +318,32 @@
                                 "description": "Provides the client configuration options for connecting to Azure WebPubSub service."
                               },
                               {
-                                "$ref": "#/properties/Aspire/properties/Azure/properties/Messaging/properties/WebPubSub/additionalProperties/anyOf/1/additionalProperties/anyOf/1"
+                                "allOf": [
+                                  {
+                                    "$ref": "#/properties/Aspire/properties/Azure/properties/Messaging/properties/WebPubSub/additionalProperties/anyOf/1/additionalProperties/anyOf/1"
+                                  },
+                                  {
+                                    "not": {
+                                      "anyOf": [
+                                        {
+                                          "required": [
+                                            "ReverseProxyEndpoint"
+                                          ]
+                                        },
+                                        {
+                                          "required": [
+                                            "Diagnostics"
+                                          ]
+                                        },
+                                        {
+                                          "required": [
+                                            "Retry"
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  }
+                                ]
                               }
                             ]
                           },

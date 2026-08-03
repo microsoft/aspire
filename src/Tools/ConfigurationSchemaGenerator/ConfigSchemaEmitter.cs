@@ -203,15 +203,13 @@ internal sealed partial class ConfigSchemaEmitter(SchemaGenerationSpec spec, Com
             {
                 foreach (var property in propertiesNode.ToArray())
                 {
+                    var defaultSettingsNode = property.Value?.DeepClone();
                     propertiesNode[property.Key] = new JsonObject
                     {
                         ["anyOf"] = new JsonArray
                         {
-                            property.Value?.DeepClone(),
-                            new JsonObject
-                            {
-                                ["$ref"] = namedSettingsReference
-                            }
+                            defaultSettingsNode,
+                            CreateNamedSettingsAlternative(defaultSettingsNode, namedSettingsReference)
                         }
                     };
                 }
@@ -235,6 +233,47 @@ internal sealed partial class ConfigSchemaEmitter(SchemaGenerationSpec spec, Com
                 }
             };
         }
+    }
+
+    private static JsonObject CreateNamedSettingsAlternative(JsonNode? defaultSettingsNode, string namedSettingsReference)
+    {
+        var referenceNode = new JsonObject
+        {
+            ["$ref"] = namedSettingsReference
+        };
+
+        if (defaultSettingsNode is not JsonObject defaultSettingsObject ||
+            defaultSettingsObject["properties"] is not JsonObject { Count: > 0 } defaultProperties)
+        {
+            return referenceNode;
+        }
+
+        var recognizedDefaultProperties = new JsonArray();
+        foreach (var property in defaultProperties)
+        {
+            recognizedDefaultProperties.Add(new JsonObject
+            {
+                ["required"] = new JsonArray { property.Key }
+            });
+        }
+
+        // Object-valued shared settings and named resources can occupy the same property. Once a
+        // shared setting's property is present, keep validating that branch so its semantic errors
+        // cannot be hidden by the more permissive named-resource schema.
+        return new JsonObject
+        {
+            ["allOf"] = new JsonArray
+            {
+                referenceNode,
+                new JsonObject
+                {
+                    ["not"] = new JsonObject
+                    {
+                        ["anyOf"] = recognizedDefaultProperties
+                    }
+                }
+            }
+        };
     }
 
     private static string GetJsonPointer(JsonNode rootNode, JsonNode targetNode)

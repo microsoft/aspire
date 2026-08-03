@@ -121,7 +121,32 @@
                           "description": "Options that allow you to configure the requests sent to Key Vault."
                         },
                         {
-                          "$ref": "#/properties/Aspire/properties/Azure/properties/Security/properties/KeyVault/additionalProperties/anyOf/1"
+                          "allOf": [
+                            {
+                              "$ref": "#/properties/Aspire/properties/Azure/properties/Security/properties/KeyVault/additionalProperties/anyOf/1"
+                            },
+                            {
+                              "not": {
+                                "anyOf": [
+                                  {
+                                    "required": [
+                                      "DisableChallengeResourceVerification"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "Diagnostics"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "Retry"
+                                    ]
+                                  }
+                                ]
+                              }
+                            }
+                          ]
                         }
                       ]
                     },

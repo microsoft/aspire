@@ -120,7 +120,27 @@
                           "description": "Client options for clients in this library."
                         },
                         {
-                          "$ref": "#/properties/Aspire/properties/Azure/properties/Search/properties/Documents/additionalProperties/anyOf/1"
+                          "allOf": [
+                            {
+                              "$ref": "#/properties/Aspire/properties/Azure/properties/Search/properties/Documents/additionalProperties/anyOf/1"
+                            },
+                            {
+                              "not": {
+                                "anyOf": [
+                                  {
+                                    "required": [
+                                      "Diagnostics"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "Retry"
+                                    ]
+                                  }
+                                ]
+                              }
+                            }
+                          ]
                         }
                       ]
                     },

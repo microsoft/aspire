@@ -332,7 +332,147 @@
                       "description": "Main entry point to the RabbitMQ .NET AMQP client API. Constructs 'RabbitMQ.Client.IConnection' instances."
                     },
                     {
-                      "$ref": "#/properties/Aspire/properties/RabbitMQ/properties/Client/additionalProperties/anyOf/1"
+                      "allOf": [
+                        {
+                          "$ref": "#/properties/Aspire/properties/RabbitMQ/properties/Client/additionalProperties/anyOf/1"
+                        },
+                        {
+                          "not": {
+                            "anyOf": [
+                              {
+                                "required": [
+                                  "DefaultAmqpUriSslProtocols"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "AmqpUriSslProtocols"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "DefaultAddressFamily"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "AutomaticRecoveryEnabled"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "DispatchConsumersAsync"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "ConsumerDispatchConcurrency"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "HostName"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "NetworkRecoveryInterval"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "HandshakeContinuationTimeout"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "ContinuationTimeout"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "Port"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "RequestedConnectionTimeout"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "SocketReadTimeout"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "SocketWriteTimeout"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "Ssl"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "TopologyRecoveryEnabled"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "Endpoint"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "UserName"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "Password"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "RequestedChannelMax"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "RequestedFrameMax"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "RequestedHeartbeat"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "VirtualHost"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "MaxMessageSize"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "Uri"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "ClientProvidedName"
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      ]
                     }
                   ]
                 },

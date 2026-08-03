@@ -97,7 +97,52 @@
                   "description": "Gets OTLP exporter options for logs."
                 },
                 {
-                  "$ref": "#/properties/Aspire/properties/Seq/additionalProperties/anyOf/1"
+                  "allOf": [
+                    {
+                      "$ref": "#/properties/Aspire/properties/Seq/additionalProperties/anyOf/1"
+                    },
+                    {
+                      "not": {
+                        "anyOf": [
+                          {
+                            "required": [
+                              "Endpoint"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "Headers"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "TimeoutMilliseconds"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "Protocol"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "UserAgentProductIdentifier"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "ExportProcessorType"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "BatchExportProcessorOptions"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
                 }
               ]
             },
@@ -170,7 +215,52 @@
                   "description": "Gets OTLP exporter options for traces."
                 },
                 {
-                  "$ref": "#/properties/Aspire/properties/Seq/additionalProperties/anyOf/1"
+                  "allOf": [
+                    {
+                      "$ref": "#/properties/Aspire/properties/Seq/additionalProperties/anyOf/1"
+                    },
+                    {
+                      "not": {
+                        "anyOf": [
+                          {
+                            "required": [
+                              "Endpoint"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "Headers"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "TimeoutMilliseconds"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "Protocol"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "UserAgentProductIdentifier"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "ExportProcessorType"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "BatchExportProcessorOptions"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
                 }
               ]
             }

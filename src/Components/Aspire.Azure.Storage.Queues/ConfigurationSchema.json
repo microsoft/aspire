@@ -133,7 +133,42 @@
                           "description": "Provides the client configuration options for connecting to Azure Queue Storage"
                         },
                         {
-                          "$ref": "#/properties/Aspire/properties/Azure/properties/Storage/properties/Queues/additionalProperties/anyOf/1"
+                          "allOf": [
+                            {
+                              "$ref": "#/properties/Aspire/properties/Azure/properties/Storage/properties/Queues/additionalProperties/anyOf/1"
+                            },
+                            {
+                              "not": {
+                                "anyOf": [
+                                  {
+                                    "required": [
+                                      "GeoRedundantSecondaryUri"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "MessageEncoding"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "EnableTenantDiscovery"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "Diagnostics"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "Retry"
+                                    ]
+                                  }
+                                ]
+                              }
+                            }
+                          ]
                         }
                       ]
                     },

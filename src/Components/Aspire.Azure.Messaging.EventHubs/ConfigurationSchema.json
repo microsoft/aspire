@@ -131,7 +131,57 @@
                               "description": "The set of options that can be specified when creating an 'Azure.Messaging.EventHubs.Producer.EventHubBufferedProducerClient' to configure its behavior."
                             },
                             {
-                              "$ref": "#/properties/Aspire/properties/Azure/properties/Messaging/properties/EventHubs/properties/EventHubBufferedProducerClient/additionalProperties/anyOf/1"
+                              "allOf": [
+                                {
+                                  "$ref": "#/properties/Aspire/properties/Azure/properties/Messaging/properties/EventHubs/properties/EventHubBufferedProducerClient/additionalProperties/anyOf/1"
+                                },
+                                {
+                                  "not": {
+                                    "anyOf": [
+                                      {
+                                        "required": [
+                                          "EnableIdempotentRetries"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "MaximumWaitTime"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "MaximumEventBufferLengthPerPartition"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "MaximumConcurrentSends"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "MaximumConcurrentSendsPerPartition"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "Identifier"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "ConnectionOptions"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "RetryOptions"
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
                             }
                           ]
                         },
@@ -405,7 +455,32 @@
                               "description": "The set of options that can be specified when creating an 'Azure.Messaging.EventHubs.Consumer.EventHubConsumerClient' to configure its behavior."
                             },
                             {
-                              "$ref": "#/properties/Aspire/properties/Azure/properties/Messaging/properties/EventHubs/properties/EventHubConsumerClient/additionalProperties/anyOf/1"
+                              "allOf": [
+                                {
+                                  "$ref": "#/properties/Aspire/properties/Azure/properties/Messaging/properties/EventHubs/properties/EventHubConsumerClient/additionalProperties/anyOf/1"
+                                },
+                                {
+                                  "not": {
+                                    "anyOf": [
+                                      {
+                                        "required": [
+                                          "Identifier"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "ConnectionOptions"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "RetryOptions"
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
                             }
                           ]
                         },
@@ -673,7 +748,32 @@
                               "description": "The set of options that can be specified when creating an 'Azure.Messaging.EventHubs.Producer.EventHubProducerClient' to configure its behavior."
                             },
                             {
-                              "$ref": "#/properties/Aspire/properties/Azure/properties/Messaging/properties/EventHubs/properties/EventHubProducerClient/additionalProperties/anyOf/1"
+                              "allOf": [
+                                {
+                                  "$ref": "#/properties/Aspire/properties/Azure/properties/Messaging/properties/EventHubs/properties/EventHubProducerClient/additionalProperties/anyOf/1"
+                                },
+                                {
+                                  "not": {
+                                    "anyOf": [
+                                      {
+                                        "required": [
+                                          "Identifier"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "ConnectionOptions"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "RetryOptions"
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
                             }
                           ]
                         },
@@ -986,7 +1086,72 @@
                               "description": "The set of options that can be specified when creating an 'Azure.Messaging.EventHubs.EventProcessorClient' to configure its behavior."
                             },
                             {
-                              "$ref": "#/properties/Aspire/properties/Azure/properties/Messaging/properties/EventHubs/properties/EventProcessorClient/additionalProperties/anyOf/1"
+                              "allOf": [
+                                {
+                                  "$ref": "#/properties/Aspire/properties/Azure/properties/Messaging/properties/EventHubs/properties/EventProcessorClient/additionalProperties/anyOf/1"
+                                },
+                                {
+                                  "not": {
+                                    "anyOf": [
+                                      {
+                                        "required": [
+                                          "Identifier"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "TrackLastEnqueuedEventProperties"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "LoadBalancingStrategy"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "MaximumWaitTime"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "CacheEventCount"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "PrefetchCount"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "PrefetchSizeInBytes"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "LoadBalancingUpdateInterval"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "PartitionOwnershipExpirationInterval"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "ConnectionOptions"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "RetryOptions"
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
                             }
                           ]
                         },
@@ -1321,7 +1486,57 @@
                               "description": "The set of options that can be specified when creating a 'Azure.Messaging.EventHubs.Primitives.PartitionReceiver' to configure its behavior."
                             },
                             {
-                              "$ref": "#/properties/Aspire/properties/Azure/properties/Messaging/properties/EventHubs/properties/PartitionReceiver/additionalProperties/anyOf/1"
+                              "allOf": [
+                                {
+                                  "$ref": "#/properties/Aspire/properties/Azure/properties/Messaging/properties/EventHubs/properties/PartitionReceiver/additionalProperties/anyOf/1"
+                                },
+                                {
+                                  "not": {
+                                    "anyOf": [
+                                      {
+                                        "required": [
+                                          "ConnectionOptions"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "RetryOptions"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "DefaultMaximumReceiveWaitTime"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "Identifier"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "OwnerLevel"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "PrefetchCount"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "PrefetchSizeInBytes"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "TrackLastEnqueuedEventProperties"
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
                             }
                           ]
                         },

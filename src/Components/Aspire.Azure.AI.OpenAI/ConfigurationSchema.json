@@ -98,7 +98,47 @@
                           "description": "Defines the scenario-independent, client-level options for the Azure-specific OpenAI client."
                         },
                         {
-                          "$ref": "#/properties/Aspire/properties/Azure/properties/AI/properties/OpenAI/additionalProperties/anyOf/1"
+                          "allOf": [
+                            {
+                              "$ref": "#/properties/Aspire/properties/Azure/properties/AI/properties/OpenAI/additionalProperties/anyOf/1"
+                            },
+                            {
+                              "not": {
+                                "anyOf": [
+                                  {
+                                    "required": [
+                                      "UserAgentApplicationId"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "DefaultHeaders"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "DefaultQueryParameters"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "NetworkTimeout"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "ClientLoggingOptions"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "EnableDistributedTracing"
+                                    ]
+                                  }
+                                ]
+                              }
+                            }
+                          ]
                         }
                       ]
                     },

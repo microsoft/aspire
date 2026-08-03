@@ -431,11 +431,16 @@ public abstract class ConformanceTests<TService, TOptions>
         {
             using var config = JsonDocument.Parse(json);
             var results = schema.Evaluate(config.RootElement, DefaultEvaluationOptions);
-            // EvaluationResults.HasErrors was removed in JsonSchema.Net 8.x; use the Errors dictionary directly.
-            var detail = results.Details?.FirstOrDefault(x => x.Errors is { Count: > 0 });
 
-            Assert.NotNull(detail);
-            Assert.Equal(error, detail.Errors!.First().Value);
+            // Schema unions can report a branch type error before the more specific nested error.
+            // OutputFormat.List retains every branch's errors, so verify the intended semantic error is present.
+            var errors = results.Details?
+                .Where(detail => detail.Errors is { Count: > 0 })
+                .SelectMany(detail => detail.Errors!.Values)
+                .ToArray() ?? [];
+
+            Assert.False(results.IsValid, json);
+            Assert.Contains(error, errors);
         }
     }
 

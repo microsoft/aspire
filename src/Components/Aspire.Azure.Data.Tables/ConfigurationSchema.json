@@ -121,7 +121,32 @@
                           "description": "Options to configure the requests to the Table service."
                         },
                         {
-                          "$ref": "#/properties/Aspire/properties/Azure/properties/Data/properties/Tables/additionalProperties/anyOf/1"
+                          "allOf": [
+                            {
+                              "$ref": "#/properties/Aspire/properties/Azure/properties/Data/properties/Tables/additionalProperties/anyOf/1"
+                            },
+                            {
+                              "not": {
+                                "anyOf": [
+                                  {
+                                    "required": [
+                                      "EnableTenantDiscovery"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "Diagnostics"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "Retry"
+                                    ]
+                                  }
+                                ]
+                              }
+                            }
+                          ]
                         }
                       ]
                     },

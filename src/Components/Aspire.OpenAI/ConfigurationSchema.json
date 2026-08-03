@@ -78,7 +78,52 @@
                   "description": "The options to configure the client."
                 },
                 {
-                  "$ref": "#/properties/Aspire/properties/OpenAI/additionalProperties/anyOf/1"
+                  "allOf": [
+                    {
+                      "$ref": "#/properties/Aspire/properties/OpenAI/additionalProperties/anyOf/1"
+                    },
+                    {
+                      "not": {
+                        "anyOf": [
+                          {
+                            "required": [
+                              "Endpoint"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "OrganizationId"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "ProjectId"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "UserAgentApplicationId"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "NetworkTimeout"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "ClientLoggingOptions"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "EnableDistributedTracing"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
                 }
               ]
             },

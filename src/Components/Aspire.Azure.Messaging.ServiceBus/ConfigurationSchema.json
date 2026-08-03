@@ -97,7 +97,47 @@
                           "description": "The set of options that can be specified when creating an 'Azure.Messaging.ServiceBus.ServiceBusConnection' to configure its behavior."
                         },
                         {
-                          "$ref": "#/properties/Aspire/properties/Azure/properties/Messaging/properties/ServiceBus/additionalProperties/anyOf/1"
+                          "allOf": [
+                            {
+                              "$ref": "#/properties/Aspire/properties/Azure/properties/Messaging/properties/ServiceBus/additionalProperties/anyOf/1"
+                            },
+                            {
+                              "not": {
+                                "anyOf": [
+                                  {
+                                    "required": [
+                                      "TransportType"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "Identifier"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "CustomEndpointAddress"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "ConnectionIdleTimeout"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "RetryOptions"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "EnableCrossEntityTransactions"
+                                    ]
+                                  }
+                                ]
+                              }
+                            }
+                          ]
                         }
                       ]
                     },

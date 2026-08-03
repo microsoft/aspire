@@ -175,7 +175,172 @@
                       "description": "The options relevant to a set of redis connections."
                     },
                     {
-                      "$ref": "#/properties/Aspire/properties/StackExchange/properties/Redis/additionalProperties/anyOf/1"
+                      "allOf": [
+                        {
+                          "$ref": "#/properties/Aspire/properties/StackExchange/properties/Redis/additionalProperties/anyOf/1"
+                        },
+                        {
+                          "not": {
+                            "anyOf": [
+                              {
+                                "required": [
+                                  "AbortOnConnectFail"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "AllowAdmin"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "AsyncTimeout"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "SetClientLibrary"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "LibraryName"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "ChannelPrefix"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "CheckCertificateRevocation"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "HighIntegrity"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "ClientName"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "ConnectRetry"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "ConfigurationChannel"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "ConnectTimeout"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "DefaultDatabase"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "DefaultVersion"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "HeartbeatConsistencyChecks"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "HeartbeatInterval"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "IncludeDetailInExceptions"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "IncludePerformanceCountersInExceptions"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "KeepAlive"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "User"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "Password"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "Proxy"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "ResolveDns"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "ServiceName"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "Ssl"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "SslHost"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "SslProtocols"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "SyncTimeout"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "TieBreaker"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "ConfigCheckSeconds"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "Protocol"
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      ]
                     }
                   ]
                 },

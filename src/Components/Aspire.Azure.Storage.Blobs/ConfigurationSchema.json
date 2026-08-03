@@ -208,7 +208,57 @@
                           "description": "Provides the client configuration options for connecting to Azure Blob Storage."
                         },
                         {
-                          "$ref": "#/properties/Aspire/properties/Azure/properties/Storage/properties/Blobs/additionalProperties/anyOf/1"
+                          "allOf": [
+                            {
+                              "$ref": "#/properties/Aspire/properties/Azure/properties/Storage/properties/Blobs/additionalProperties/anyOf/1"
+                            },
+                            {
+                              "not": {
+                                "anyOf": [
+                                  {
+                                    "required": [
+                                      "EncryptionScope"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "GeoRedundantSecondaryUri"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "TransferValidation"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "TrimBlobNameSlashes"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "Request100ContinueOptions"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "EnableTenantDiscovery"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "Diagnostics"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "Retry"
+                                    ]
+                                  }
+                                ]
+                              }
+                            }
+                          ]
                         }
                       ]
                     },

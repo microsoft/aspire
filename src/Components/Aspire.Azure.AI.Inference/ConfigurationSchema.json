@@ -117,7 +117,27 @@
                           "description": "Client options for Azure.AI.Inference library clients."
                         },
                         {
-                          "$ref": "#/properties/Aspire/properties/Azure/properties/AI/properties/Inference/additionalProperties/anyOf/1"
+                          "allOf": [
+                            {
+                              "$ref": "#/properties/Aspire/properties/Azure/properties/AI/properties/Inference/additionalProperties/anyOf/1"
+                            },
+                            {
+                              "not": {
+                                "anyOf": [
+                                  {
+                                    "required": [
+                                      "Diagnostics"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "Retry"
+                                    ]
+                                  }
+                                ]
+                              }
+                            }
+                          ]
                         }
                       ]
                     },

@@ -169,7 +169,42 @@
                               "description": "Provides the client configuration options for connecting to Azure Data Lake service."
                             },
                             {
-                              "$ref": "#/properties/Aspire/properties/Azure/properties/Storage/properties/Files/properties/DataLake/additionalProperties/anyOf/1"
+                              "allOf": [
+                                {
+                                  "$ref": "#/properties/Aspire/properties/Azure/properties/Storage/properties/Files/properties/DataLake/additionalProperties/anyOf/1"
+                                },
+                                {
+                                  "not": {
+                                    "anyOf": [
+                                      {
+                                        "required": [
+                                          "GeoRedundantSecondaryUri"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "EnableTenantDiscovery"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "TransferValidation"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "Diagnostics"
+                                        ]
+                                      },
+                                      {
+                                        "required": [
+                                          "Retry"
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
                             }
                           ]
                         },
