@@ -77,10 +77,12 @@ public static class HostedAgentResourceBuilderExtensions
     /// <param name="configure">A callback to configure hosted agent deployment options.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <remarks>
-    /// This C# convenience overload is not exported to polyglot app hosts. Polyglot hosts must declare the
-    /// hosted agent protocol and protocol version explicitly. The configuration callback is applied in publish mode.
+    /// This C# convenience overload defaults to the Responses protocol version 2.0.0, mirroring the exported
+    /// <c>asHostedAgent</c> entry point used by polyglot app hosts. Polyglot hosts that need a different protocol
+    /// or version should use the exported <c>asHostedAgentWithProtocol</c> entry point instead. The configuration
+    /// callback is applied in publish mode.
     /// </remarks>
-    [AspireExportIgnore(Reason = "C# convenience overload; polyglot hosts must pass protocol and version explicitly.")]
+    [AspireExportIgnore(Reason = "Action callback shape is awkward for polyglot hosts; the defaulted asHostedAgent export covers this case.")]
     public static IResourceBuilder<T> AsHostedAgent<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureCognitiveServicesProjectResource>? project,
