@@ -41,6 +41,7 @@ internal sealed class TerminalHostArgs
     ///   <item><c>--control-uds PATH</c> (required) — path the host LISTENS on; AppHost dials for status/shutdown RPC.</item>
     ///   <item><c>--columns N</c> (optional, default 120)</item>
     ///   <item><c>--rows N</c> (optional, default 30)</item>
+    ///   <item><c>--shell NAME</c> (optional, accepted for compatibility and ignored)</item>
     /// </list>
     /// Every option is single-valued and may only be specified once; duplicates throw
     /// <see cref="TerminalHostArgsException"/>. We use <c>System.CommandLine</c> so the
@@ -62,6 +63,11 @@ internal sealed class TerminalHostArgs
             "Initial PTY width in columns (default 120).", defaultValue: 120);
         var rowsOption = SingleValueOption<int>("--rows", required: false,
             "Initial PTY height in rows (default 30).", defaultValue: 30);
+        // Older Aspire.Hosting packages can run with a newer CLI-provided terminal host
+        // and still emit --shell. Accept the argument so that mixed-version AppHosts start,
+        // but ignore it because DCP launches the resource process that owns the PTY.
+        var shellOption = SingleValueOption<string?>("--shell", required: false,
+            "Legacy shell hint accepted for compatibility and ignored.");
 
         // Cols / rows must be positive. System.CommandLine has no built-in range validator
         // for ints, so attach one explicitly. Skip when the value couldn't be converted at
@@ -98,6 +104,7 @@ internal sealed class TerminalHostArgs
             controlOption,
             columnsOption,
             rowsOption,
+            shellOption,
         };
         // The terminal host argv comes from DCP only; treat unknown flags as a hard error
         // so we don't silently accept garbage and start with the wrong configuration.
@@ -167,4 +174,3 @@ internal sealed class TerminalHostArgs
 /// Thrown when the terminal host receives malformed command-line arguments.
 /// </summary>
 internal sealed class TerminalHostArgsException(string message) : Exception(message);
-

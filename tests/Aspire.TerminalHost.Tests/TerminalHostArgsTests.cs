@@ -37,6 +37,21 @@ public class TerminalHostArgsTests
     }
 
     [Fact]
+    public void ParseAcceptsIgnoredShellForCompatibility()
+    {
+        var args = TerminalHostArgs.Parse([
+            "--producer-uds", "/tmp/p.sock",
+            "--consumer-uds", "/tmp/c.sock",
+            "--control-uds", "/tmp/ctrl.sock",
+            "--shell", "/bin/bash",
+        ]);
+
+        Assert.Equal("/tmp/p.sock", args.ProducerUdsPath);
+        Assert.Equal("/tmp/c.sock", args.ConsumerUdsPath);
+        Assert.Equal("/tmp/ctrl.sock", args.ControlUdsPath);
+    }
+
+    [Fact]
     public void ParseMissingProducerUdsThrows()
     {
         var ex = Assert.Throws<TerminalHostArgsException>(() => TerminalHostArgs.Parse([
