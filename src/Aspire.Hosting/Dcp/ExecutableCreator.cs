@@ -94,8 +94,22 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
         spec.PemCertificates = pemCertificates;
 
+        if (configuration.Exception is not null)
+        {
+            throw new FailedToApplyEnvironmentException($"Failed to apply configuration to executable {er.ModelResource.Name}", configuration.Exception);
+        }
+
+        // The launch configuration is applied before the command line is composed because applying it can switch the
+        // execution type to Process, and the composition depends on the final execution type: an IDE-launched
+        // resource does not receive its entrypoint arguments, a process-launched one does.
+        await ApplyLaunchConfigurationAsync(er, exe, cancellationToken).ConfigureAwait(false);
+
+        var omittedEntrypointArgumentCount = OmitEntrypointArguments(er, spec)
+            ? configuration.AdditionalConfigurationData.OfType<EntrypointArgumentsData>().FirstOrDefault()?.Count ?? 0
+            : 0;
+
         var executableArgumentStartIndex = spec.Args?.Count ?? 0;
-        var launchArgs = BuildLaunchArgs(er, spec, configuration.Arguments, executableArgumentStartIndex);
+        var launchArgs = BuildLaunchArgs(er, spec, configuration.Arguments, executableArgumentStartIndex, omittedEntrypointArgumentCount);
         if (!HasProjectLaunchArgsOverride(er.ModelResource))
         {
             AddDotnetRunArgsForExecutableAnnotatedProject(er, launchArgs, executableArgumentStartIndex);
@@ -109,6 +123,19 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         }
         // Arg annotations are what is displayed in the dashboard.
         er.DcpResource.SetAnnotationAsObjectList(CustomResource.ResourceAppArgsAnnotation, displayArgs.Select(a => new AppLaunchArgumentAnnotation(a.Value, isSensitive: a.IsSensitive, effectiveArgumentIndex: a.EffectiveArgumentIndex)));
+
+        // PrepareObjects() had to decide on the DCP-level Process fallback before any argument callback had run,
+        // so it conservatively withheld the fallback from every resource that declares entrypoint arguments.
+        // Now that the arguments are known, restore it when nothing was actually withheld from Spec.Args
+        // (for example a Python "Executable" entrypoint contributes no prefix at all).
+        if (spec.ExecutionType == ExecutionType.IDE
+            && er.ModelResource.SupportsDebugging(_configuration, out var debuggingAnnotation)
+            && er.ModelResource.OwnsEntrypointArguments(debuggingAnnotation))
+        {
+            spec.FallbackExecutionTypes = ShouldOfferProcessFallback(er.ModelResource, debuggingAnnotation, entrypointArgumentsOmitted: omittedEntrypointArgumentCount > 0)
+                ? [ExecutionType.Process]
+                : null;
+        }
 
         spec.Env = configuration.EnvironmentVariables.Select(kvp => new EnvVar { Name = kvp.Key, Value = kvp.Value }).ToList();
 
@@ -153,62 +180,104 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             }
         }
 
-        if (configuration.Exception is not null)
-        {
-            throw new FailedToApplyEnvironmentException($"Failed to apply configuration to executable {er.ModelResource.Name}", configuration.Exception);
-        }
-
-        // Invoke the debug configuration callback now that endpoints are allocated.
-        // This allows launch configurations to access endpoint URLs that were not
-        // available during PrepareExecutables().
-        // "project" launch types on ProjectResources configure their launch configs in
-        // PrepareProjectExecutables() directly. Plain executables that carry IProjectMetadata and a
-        // "project" SupportsDebuggingAnnotation (e.g. DotnetProjectResource) are prepared as plain executables, 
-        // so their "project" launch configuration is applied here for IDE/F5 parity with AddProject. 
-        // All other types (plain executables and project subtypes like azure-functions) are also handled here.
-        if (!er.ModelResource.HasAnnotationOfType<ForceProcessExecutionAnnotation>()
-            && er.ModelResource.SupportsDebugging(_configuration, out var supportsDebuggingAnnotation))
-        {
-            if (supportsDebuggingAnnotation.LaunchConfigurationType is KnownLaunchConfigurationTypes.Project)
-            {
-                // ProjectResources already applied the "project" launch config in PrepareProjectExecutables().
-                // Only plain executables carrying project metadata need it applied here.
-                if (er.ModelResource is not ProjectResource)
-                {
-                    if (er.ModelResource.TryGetProjectMetadata(out var plainProjectMetadata))
-                    {
-                        // Clear and re-apply the launch configuration to ensure proper restart behavior.
-                        await ApplyProjectLaunchConfigurationAsync(exe, er.ModelResource, plainProjectMetadata, supportsDebuggingAnnotation, cancellationToken).ConfigureAwait(false);
-                    }
-                    else
-                    {
-                        throw new FailedToApplyEnvironmentException(
-                            $"Resource '{er.ModelResource.Name}' declares \"project\" debug launch support (WithDebugSupport) but has no project metadata. " +
-                            $"The \"project\" launch configuration type is reserved for .NET project resources; use a resource that carries {nameof(IProjectMetadata)} or a different launch configuration type.");
-                    }
-                }
-            }
-            else
-            {
-                // We have non-project Executable that supports debugging; need to annotate it properly.
-
-                var mode = _configuration[KnownConfigNames.DebugSessionRunMode] ?? ExecutableLaunchMode.NoDebug;
-                try
-                {
-                    // Clear any existing launch configurations (needed for restart scenarios).
-                    exe.Annotate(Executable.LaunchConfigurationsAnnotation, string.Empty);
-                    await supportsDebuggingAnnotation.LaunchConfigurationAnnotator(exe, mode, cancellationToken).ConfigureAwait(false);
-                }
-                // Only fall back to Process when Spec.Args still forms a runnable command.
-                catch (Exception ex) when (!supportsDebuggingAnnotation.RewritesArgumentsForDebugging)
-                {
-                    _logger.LogWarning(ex, "Failed to apply launch configuration for resource '{ResourceName}'. Falling back to process execution.", er.ModelResource.Name);
-                    exe.Spec.ExecutionType = ExecutionType.Process;
-                }
-            }
-        }
-
         await factory.CreateDcpObjectsAsync([exe], cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Applies the resource's debug launch configuration, now that endpoints are allocated and the launch
+    /// configuration can reference endpoint URLs that were not available during <see cref="PrepareObjectsAsync"/>.
+    /// </summary>
+    /// <remarks>
+    /// "project" launch types on <see cref="ProjectResource"/> configure their launch configurations in
+    /// <c>PrepareProjectExecutables()</c> directly. Plain executables that carry <see cref="IProjectMetadata"/> and a
+    /// "project" <see cref="SupportsDebuggingAnnotation"/> (e.g. <c>DotnetProjectResource</c>) are prepared as plain
+    /// executables, so their "project" launch configuration is applied here for IDE/F5 parity with <c>AddProject</c>.
+    /// All other types (plain executables and project subtypes like azure-functions) are also handled here.
+    /// </remarks>
+    private async Task ApplyLaunchConfigurationAsync(RenderedModelResource<Executable> er, Executable exe, CancellationToken cancellationToken)
+    {
+        if (er.ModelResource.HasAnnotationOfType<ForceProcessExecutionAnnotation>()
+            || !er.ModelResource.SupportsDebugging(_configuration, out var supportsDebuggingAnnotation))
+        {
+            return;
+        }
+
+        if (supportsDebuggingAnnotation.LaunchConfigurationType is KnownLaunchConfigurationTypes.Project)
+        {
+            // ProjectResources already applied the "project" launch config in PrepareProjectExecutables().
+            // Only plain executables carrying project metadata need it applied here.
+            if (er.ModelResource is not ProjectResource)
+            {
+                if (er.ModelResource.TryGetProjectMetadata(out var plainProjectMetadata))
+                {
+                    // Clear and re-apply the launch configuration to ensure proper restart behavior.
+                    await ApplyProjectLaunchConfigurationAsync(exe, er.ModelResource, plainProjectMetadata, supportsDebuggingAnnotation, cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    throw new FailedToApplyEnvironmentException(
+                        $"Resource '{er.ModelResource.Name}' declares \"project\" debug launch support (WithDebugSupport) but has no project metadata. " +
+                        $"The \"project\" launch configuration type is reserved for .NET project resources; use a resource that carries {nameof(IProjectMetadata)} or a different launch configuration type.");
+                }
+            }
+
+            return;
+        }
+
+        // We have non-project Executable that supports debugging; need to annotate it properly.
+        var mode = _configuration[KnownConfigNames.DebugSessionRunMode] ?? ExecutableLaunchMode.NoDebug;
+        try
+        {
+            // Clear any existing launch configurations (needed for restart scenarios).
+            exe.Annotate(Executable.LaunchConfigurationsAnnotation, string.Empty);
+            await supportsDebuggingAnnotation.LaunchConfigurationAnnotator(exe, mode, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            // Falling back here is safe even for resources with entrypoint arguments: the command line is composed
+            // after this point, so switching to Process execution now means the full command line is emitted.
+            _logger.LogWarning(ex, "Failed to apply launch configuration for resource '{ResourceName}'. Falling back to process execution.", er.ModelResource.Name);
+            exe.Spec.ExecutionType = ExecutionType.Process;
+        }
+    }
+
+    /// <summary>
+    /// Determines whether the resource's entrypoint arguments must be omitted from the DCP executable spec because
+    /// it will be handled by IDE launch configuration.
+    /// </summary>
+    private bool OmitEntrypointArguments(RenderedModelResource<Executable> er, ExecutableSpec spec)
+    {
+        if (spec.ExecutionType != ExecutionType.IDE)
+        {
+            return false;
+        }
+
+        // Only withhold when the launch configuration that declared the entrypoint is the one actually in use.
+        // A launch configuration of a different type knows nothing about this entrypoint, so in that case the
+        // resource keeps its full command line.
+        return er.ModelResource.SupportsDebugging(_configuration, out var activeAnnotation)
+            && er.ModelResource.OwnsEntrypointArguments(activeAnnotation);
+    }
+
+    /// <summary>
+    /// Determines whether DCP may fall back to Process execution when the IDE cannot launch the resource.
+    /// </summary>
+    /// <remarks>
+    /// A Process fallback runs the DCP Executable spec's command and args "as is", so it is only meaningful when
+    /// those args form a runnable command. A DCP Executable spec has a single <c>args</c> field, so it cannot carry
+    /// both the IDE form and the process form of the command line: when the entrypoint prefix is omitted for the
+    /// IDE, no fallback can be offered.
+    /// </remarks>
+    private static bool ShouldOfferProcessFallback(IResource modelResource, SupportsDebuggingAnnotation annotation, bool entrypointArgumentsOmitted)
+    {
+        if (entrypointArgumentsOmitted)
+        {
+            return false;
+        }
+
+        // A ProjectResource always carries a runnable `dotnet run ...` command in its project args. A plain
+        // executable with a "project" launch configuration does not — those args come from the IDE.
+        return modelResource is ProjectResource || annotation.LaunchConfigurationType is not "project";
     }
 
     private async Task PrepareProjectExecutablesAsync(CancellationToken cancellationToken)
@@ -282,11 +351,12 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 {
                     exe.Spec.ExecutionType = ExecutionType.IDE;
 
-                    // A Process fallback runs the DCP Executable Spec's command and args "as is". When the debug
-                    // support rewrites the resource's arguments for debugging (an argsCallback on an
-                    // IResourceWithArgs, supplied via the generic WithDebugSupport), those args are valid only for
-                    // IDE launch, so a Process fallback would run a broken command. Skip the fallback in that case.
-                    if (!supportsDebuggingAnnotation.RewritesArgumentsForDebugging)
+                    // A Process fallback runs the DCP Executable Spec's command and args "as is". A resource that
+                    // declares entrypoint arguments may have them withheld from Spec.Args for the IDE, which would
+                    // leave a Process fallback running a broken command. The arguments are not evaluated yet here,
+                    // so omit the fallback conservatively; CreateObjectAsync() will add it if the entrypoint arguments
+                    // are not used.
+                    if (ShouldOfferProcessFallback(project, supportsDebuggingAnnotation, entrypointArgumentsOmitted: project.OwnsEntrypointArguments(supportsDebuggingAnnotation)))
                     {
                         exe.Spec.FallbackExecutionTypes = [ExecutionType.Process];
                     }
@@ -449,11 +519,11 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 // will be invoked in CreateExecutableAsync after endpoints are allocated.
                 exe.Spec.ExecutionType = ExecutionType.IDE;
 
-                // A Process fallback is only meaningful when the fallback can actually launch the resource.
-                // This means the DCP Executable Spec has "real" command and args that can be executed "as is".
-                // In case of "project" launch configuration type, or when RewritesArgumentsForDebugging is true, 
-                // that is not the case, so we do not add the fallback. 
-                if (supportsDebuggingAnnotation.LaunchConfigurationType is not KnownLaunchConfigurationTypes.Project && !supportsDebuggingAnnotation.RewritesArgumentsForDebugging)
+                // A Process fallback is only meaningful when the fallback can actually launch the resource, i.e. when
+                // the DCP Executable Spec has "real" command and args that can be executed "as is". The arguments are
+                // not evaluated yet here, so a resource that declares entrypoint arguments conservatively forgoes the
+                // fallback; CreateObjectAsync() will add it when it determines that entrypoint arguments are not used.
+                if (ShouldOfferProcessFallback(executable, supportsDebuggingAnnotation, entrypointArgumentsOmitted: executable.OwnsEntrypointArguments(supportsDebuggingAnnotation)))
                 {
                     exe.Spec.FallbackExecutionTypes = [ExecutionType.Process];
                 }
@@ -619,7 +689,13 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         return Path.Join(_locations.DcpSessionDir, exe.Metadata.Name);
     }
 
-    private static List<LaunchArgument> BuildLaunchArgs(RenderedModelResource<Executable> er, ExecutableSpec spec, IEnumerable<(string Value, bool IsSensitive)> appHostArgs, int executableArgumentStartIndex)
+    private static List<LaunchArgument> BuildLaunchArgs(
+        RenderedModelResource<Executable> er,
+        ExecutableSpec spec,
+        IEnumerable<(string Value, bool IsSensitive)> appHostArgs,
+        int executableArgumentStartIndex,
+        int omittedEntrypointArgumentCount
+    )
     {
         // Launch args is the final list of args that are displayed in the UI and possibly added to the executable spec.
         // They're built from app host resource model args and any args in the effective launch profile.
@@ -680,7 +756,11 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         }
 
         // In the situation where args are combined (process execution) the app host args are added after the launch profile args.
-        launchArgs.AddRange(appHostArgList.Select(a => CreateLaunchArgument(a.Value, a.IsSensitive, executable: true, display: true)));
+        // Entrypoint arguments (the tool-invocation prefix such as `run ./cmd/api`) are always the leading app host
+        // args. When the IDE launch configuration owns them they must not be passed to the launched program, but they
+        // are still shown in the dashboard so the resource's real command line stays visible — the same treatment
+        // project launch-profile args get above.
+        launchArgs.AddRange(appHostArgList.Select((a, i) => CreateLaunchArgument(a.Value, a.IsSensitive, executable: i >= omittedEntrypointArgumentCount, display: true)));
 
         return launchArgs;
     }

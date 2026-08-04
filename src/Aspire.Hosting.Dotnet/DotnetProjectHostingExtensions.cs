@@ -134,10 +134,10 @@ public static class DotnetProjectHostingExtensions
         {
             // Mirrors the fallback rule in Dcp/ExecutableCreator: 
             // a Process fallback is offered for the plain executable UNLESS 
-            // the launch configuration is "project", OR the configuration rewrites the arguments for debugging. 
+            // the launch configuration is "project", OR the launch configuration owns the entrypoint arguments. 
             // For any other active annotation a fallback IS offered and we need to construct the args here.
             if (ctx.Resource.SupportsDebugging(builder.Configuration, out var debugAnnotation)
-                && (debugAnnotation.LaunchConfigurationType is KnownLaunchConfigurationTypes.Project || debugAnnotation.RewritesArgumentsForDebugging))
+                && (debugAnnotation.LaunchConfigurationType is KnownLaunchConfigurationTypes.Project || ctx.Resource.OwnsEntrypointArguments(debugAnnotation)))
             {
                 return;
             }

@@ -74,6 +74,22 @@ public static class DebugSupportExtensions
     }
 
     /// <summary>
+    /// Determines whether the launch configuration owns the resource's entrypoint arguments.
+    /// </summary>
+    /// <param name="resource">The resource to inspect.</param>
+    /// <param name="supportsDebuggingAnnotation">The launch configuration annotation to compare.</param>
+    /// <returns><see langword="true"/> when the launch configuration supplies the entrypoint; otherwise, <see langword="false"/>.</returns>
+    [AspireExportIgnore(Reason = "Debug support inspection is a local .NET helper and is not part of the ATS surface.")]
+    public static bool OwnsEntrypointArguments(this IResource resource, SupportsDebuggingAnnotation supportsDebuggingAnnotation)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+        ArgumentNullException.ThrowIfNull(supportsDebuggingAnnotation);
+
+        return resource.TryGetLastAnnotation<EntrypointArgsCallbackAnnotation>(out var entrypointAnnotation)
+            && string.Equals(entrypointAnnotation.LaunchConfigurationType, supportsDebuggingAnnotation.LaunchConfigurationType, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Creates the launch configuration that this resource sends to the IDE for the given launch mode.
     /// </summary>
     /// <param name="resource">The resource to inspect. It must carry a <see cref="SupportsDebuggingAnnotation"/>.</param>

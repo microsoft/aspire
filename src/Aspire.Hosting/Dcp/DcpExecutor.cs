@@ -1352,6 +1352,14 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                 ((ICallbackResourceAnnotation<CommandLineArgsCallbackContext, IList<object>>)callback).ForgetCachedResult();
             }
         }
+
+        if (resource.TryGetAnnotationsOfType<EntrypointArgsCallbackAnnotation>(out var entrypointArgsCallbacks))
+        {
+            foreach (var callback in entrypointArgsCallbacks)
+            {
+                ((ICallbackResourceAnnotation<CommandLineArgsCallbackContext, IList<object>>)callback).ForgetCachedResult();
+            }
+        }
     }
 
     private void ForgetConnectionStringAvailableEvent(IResource resource)

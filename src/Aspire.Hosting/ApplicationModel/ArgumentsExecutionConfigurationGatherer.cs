@@ -32,5 +32,51 @@ internal class ArgumentsExecutionConfigurationGatherer : IExecutionConfiguration
             context.Arguments.Clear();
             context.Arguments.AddRange(args);
         }
+
+        await GatherEntrypointArgumentsAsync(context, resource, resourceLogger, executionContext, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Evaluates the resource's entrypoint arguments (the tool-invocation prefix, e.g. <c>run ./cmd/api</c>) and
+    /// inserts them ahead of every other argument.
+    /// </summary>
+    /// <remarks>
+    /// The callback is deliberately evaluated <em>after</em> the ordinary argument callbacks but its result is
+    /// inserted <em>before</em> them. That is what makes the prefix order-independent: no <c>WithArgs</c> callback
+    /// can observe it, mutate it, or clear it, so it does not matter whether the entrypoint was declared before or
+    /// after the calls that add the program's own arguments.
+    /// </remarks>
+    private static async ValueTask GatherEntrypointArgumentsAsync(IExecutionConfigurationGathererContext context, IResource resource, ILogger resourceLogger, DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken)
+    {
+        // Entrypoint arguments describe how a local tool (the resource's executable command) invokes the program.
+        // A container invokes the program through the image's ENTRYPOINT instead, so the prefix must not be repeated
+        // in its arguments. This matters for executables published as a Dockerfile (Go, Python, JavaScript), where
+        // PublishAsDockerFile() reuses the executable's annotations for the generated container resource.
+        if (resource is ContainerResource)
+        {
+            return;
+        }
+
+        // Only the last annotation applies, mirroring how the active SupportsDebuggingAnnotation is resolved:
+        // a resource can be handed entrypoint arguments more than once and the most recent declaration wins.
+        if (!resource.TryGetLastAnnotation<EntrypointArgsCallbackAnnotation>(out var entrypointAnnotation))
+        {
+            return;
+        }
+
+        var entrypointContext = new CommandLineArgsCallbackContext([], resource, cancellationToken)
+        {
+            Logger = resourceLogger,
+            ExecutionContext = executionContext
+        };
+
+        var entrypointArgs = await entrypointAnnotation.AsCallbackAnnotation().EvaluateOnceAsync(entrypointContext).ConfigureAwait(false);
+        if (entrypointArgs.Count == 0)
+        {
+            return;
+        }
+
+        context.Arguments.InsertRange(0, entrypointArgs);
+        context.AddAdditionalData(new EntrypointArgumentsData(entrypointArgs.Count));
     }
 }

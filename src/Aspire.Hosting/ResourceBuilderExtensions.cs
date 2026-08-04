@@ -4761,6 +4761,53 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
+    /// Declares the resource's <em>entrypoint arguments</em>: the tool-invocation prefix that hosts the program,
+    /// for example <c>run ./cmd/api</c> for <c>go</c> or <c>-m flask</c> for <c>python</c>.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="launchConfigurationType">
+    /// The debug launch configuration type that owns this entrypoint, for example "go" or "python". This is the same
+    /// value passed to <c>WithDebugSupport</c>.
+    /// </param>
+    /// <param name="callback">
+    /// Callback that produces the entrypoint arguments. It is invoked with an <em>empty</em>
+    /// <see cref="CommandLineArgsCallbackContext.Args"/> list; everything it adds becomes the leading arguments.
+    /// </param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// <para>
+    /// Entrypoint arguments are always placed ahead of every argument contributed by <c>WithArgs</c>, no matter when
+    /// this method is called, and no <c>WithArgs</c> callback can observe or modify them. Declaring the tool
+    /// invocation this way therefore avoids any dependency on the order in which resource builder methods are called.
+    /// </para>
+    /// <para>
+    /// When the resource is launched by an IDE using a launch configuration of
+    /// <paramref name="launchConfigurationType"/> (see <c>WithDebugSupport</c>), the launch configuration
+    /// already carries the tool invocation, so these arguments are not passed to the launched program. In every other
+    /// case — process execution, publish, or when a launch configuration of a different type is active — they are
+    /// part of the resource's command line.
+    /// </para>
+    /// <para>
+    /// Calling this method more than once is allowed; the most recent declaration wins.
+    /// </para>
+    /// </remarks>
+    [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Generic debug launch configuration support is not part of the ATS surface.")]
+    public static IResourceBuilder<T> WithEntrypointArgs<T>(this IResourceBuilder<T> builder, string launchConfigurationType, Action<CommandLineArgsCallbackContext> callback)
+        where T : IResourceWithArgs
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(launchConfigurationType);
+        ArgumentNullException.ThrowIfNull(callback);
+
+        return builder.WithAnnotation(new EntrypointArgsCallbackAnnotation(launchConfigurationType, ctx =>
+        {
+            callback(ctx);
+            return Task.CompletedTask;
+        }));
+    }
+
+    /// <summary>
     /// Adds support for debugging the resource in VS Code when running in an extension host.
     /// </summary>
     /// <typeparam name="T">The resource type.</typeparam>
@@ -4768,7 +4815,7 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="launchConfigurationProducer">Launch configuration producer for the resource. It is passed the launch mode (one of the values on <see cref="ExecutableLaunchMode"/>) and produces the configuration that is handed to the IDE.</param>
     /// <param name="launchConfigurationType">The type tag of the launch configuration (as sent to the IDE).</param>
-    /// <param name="argsCallback">Optional callback to add or modify command line arguments when running in an extension host. Useful if the entrypoint is usually provided as an argument to the resource executable.</param>
+    /// <param name="entrypointArgsCallback">Optional callback that produces the resource's entrypoint arguments.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <exception cref="ArgumentException">
     /// <typeparamref name="TLaunchConfiguration"/> is a <see cref="Task"/> or <see cref="ValueTask"/>, which means an
@@ -4784,7 +4831,7 @@ public static class ResourceBuilderExtensions
     /// </remarks>
     [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Generic debug launch configuration support is not part of the ATS surface.")]
-    public static IResourceBuilder<T> WithDebugSupport<T, TLaunchConfiguration>(this IResourceBuilder<T> builder, Func<string, TLaunchConfiguration> launchConfigurationProducer, string launchConfigurationType, Action<CommandLineArgsCallbackContext>? argsCallback = null)
+    public static IResourceBuilder<T> WithDebugSupport<T, TLaunchConfiguration>(this IResourceBuilder<T> builder, Func<string, TLaunchConfiguration> launchConfigurationProducer, string launchConfigurationType, Action<CommandLineArgsCallbackContext>? entrypointArgsCallback = null)
         where T : IResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -4798,7 +4845,7 @@ public static class ResourceBuilderExtensions
                 nameof(launchConfigurationProducer));
         }
 
-        return builder.WithDebugSupport((mode, _) => Task.FromResult(launchConfigurationProducer(mode)), launchConfigurationType, argsCallback);
+        return builder.WithDebugSupport((mode, _) => Task.FromResult(launchConfigurationProducer(mode)), launchConfigurationType, entrypointArgsCallback);
 
         static bool IsValueTask(Type type)
             => type == typeof(ValueTask) || (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ValueTask<>));
@@ -4813,7 +4860,7 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="launchConfigurationProducer">Launch configuration producer for the resource. It is passed the launch mode (one of the values on <see cref="ExecutableLaunchMode"/>) and produces the configuration that is handed to the IDE.</param>
     /// <param name="launchConfigurationType">The type of the resource.</param>
-    /// <param name="argsCallback">Optional callback to add or modify command line arguments when running in an extension host. Useful if the entrypoint is usually provided as an argument to the resource executable.</param>
+    /// <param name="entrypointArgsCallback">Optional callback that produces the resource's entrypoint arguments.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// Use this overload when the launch configuration has to be resolved from work that is itself asynchronous, for
@@ -4825,39 +4872,28 @@ public static class ResourceBuilderExtensions
     /// </remarks>
     [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Generic debug launch configuration support is not part of the ATS surface.")]
-    public static IResourceBuilder<T> WithDebugSupport<T, TLaunchConfiguration>(this IResourceBuilder<T> builder, Func<string, CancellationToken, Task<TLaunchConfiguration>> launchConfigurationProducer, string launchConfigurationType, Action<CommandLineArgsCallbackContext>? argsCallback = null)
+    public static IResourceBuilder<T> WithDebugSupport<T, TLaunchConfiguration>(this IResourceBuilder<T> builder, Func<string, CancellationToken, Task<TLaunchConfiguration>> launchConfigurationProducer, string launchConfigurationType, Action<CommandLineArgsCallbackContext>? entrypointArgsCallback = null)
         where T : IResource
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(launchConfigurationProducer);
+
+        // Entrypoint arguments describe how the resource is invoked in general, so unlike debug support itself they
+        // are registered in publish mode too, where they end up in the manifest and in generated container images.
+        if (entrypointArgsCallback is not null && builder is IResourceBuilder<IResourceWithArgs> resourceWithArgs)
+        {
+            resourceWithArgs.WithEntrypointArgs(launchConfigurationType, entrypointArgsCallback);
+        }
 
         if (!builder.ApplicationBuilder.ExecutionContext.IsRunMode)
         {
             return builder;
         }
 
-        var supportsDebuggingAnnotation = SupportsDebuggingAnnotation.Create(
+        return builder.WithAnnotation(SupportsDebuggingAnnotation.Create(
             builder.Resource.Name,
             launchConfigurationType,
-            launchConfigurationProducer,
-            rewritesArgumentsForDebugging: argsCallback is not null && builder is IResourceBuilder<IResourceWithArgs>
-        );
-
-        if (argsCallback is not null && builder is IResourceBuilder<IResourceWithArgs> resourceWithArgs)
-        {
-            resourceWithArgs.WithArgs(ctx =>
-            {
-                // Make sure that we do not call the callback if we aren't the active (last) SupportsDebuggingAnnotation, 
-                // because the callback may be specific to the launch configuration type.
-                if (resourceWithArgs.Resource.SupportsDebugging(builder.ApplicationBuilder.Configuration, out var activeAnnotation)
-                    && ReferenceEquals(activeAnnotation, supportsDebuggingAnnotation))
-                {
-                    argsCallback(ctx);
-                }
-            });
-        }
-
-        return builder.WithAnnotation(supportsDebuggingAnnotation);
+            launchConfigurationProducer));
     }
 
     /// <summary>
