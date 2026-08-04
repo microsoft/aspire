@@ -172,6 +172,7 @@ public class NpmRunnerTests
                     "install",
                     "-g",
                     tarballPath,
+                    "--ignore-scripts",
                     "--registry",
                     "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/"
                 ],
@@ -250,12 +251,12 @@ public class NpmRunnerTests
                 Path.Combine(directory.FullName, "npm.cmd"),
                 """
                 @echo off
-                if not "%~1"=="" echo %~1>>"%NPM_ARGS_FILE%"
-                if not "%~2"=="" echo %~2>>"%NPM_ARGS_FILE%"
-                if not "%~3"=="" echo %~3>>"%NPM_ARGS_FILE%"
-                if not "%~4"=="" echo %~4>>"%NPM_ARGS_FILE%"
-                if not "%~5"=="" echo %~5>>"%NPM_ARGS_FILE%"
-                exit /b 0
+                type nul > "%NPM_ARGS_FILE%"
+                :loop
+                if "%~1"=="" exit /b 0
+                >> "%NPM_ARGS_FILE%" echo %~1
+                shift
+                goto loop
                 """);
             return;
         }

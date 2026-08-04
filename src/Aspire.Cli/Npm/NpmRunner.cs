@@ -141,9 +141,11 @@ internal sealed class NpmRunner(IEnvironment environment, ILogger<NpmRunner> log
 
         try
         {
+            // The root tarball is provenance-verified, but its transitive dependencies are not.
+            // Prevent dependency lifecycle scripts from executing during installation.
             var output = await RunNpmCommandInDirectoryAsync(
                 npmPath,
-                ["install", "-g", tarballPath, "--registry", InternalRegistry],
+                ["install", "-g", tarballPath, "--ignore-scripts", "--registry", InternalRegistry],
                 tempDir,
                 cancellationToken);
 
