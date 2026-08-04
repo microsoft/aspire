@@ -94,5 +94,8 @@ internal sealed class EntrypointArgsCallbackAnnotation : IResourceAnnotation, IA
 /// <see cref="EntrypointArgsCallbackAnnotation"/>, so that consumers that compose the actual command line
 /// (such as the DCP executable creator) can tell the tool-invocation prefix apart from the program arguments.
 /// </summary>
-/// <param name="Count">The number of leading arguments that form the entrypoint prefix.</param>
+/// <param name="Count">
+/// The number of leading arguments that form the entrypoint prefix. This is normalized after value resolution to
+/// exclude arguments that resolve to <see langword="null"/>.
+/// </param>
 internal sealed record EntrypointArgumentsData(int Count) : IExecutionConfigurationData;

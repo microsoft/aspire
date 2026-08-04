@@ -12,7 +12,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// instead of being started as a plain process by Aspire.
 /// </summary>
 /// <remarks>
-/// Added by <see cref="ResourceBuilderExtensions.WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, TLaunchConfiguration}, string, Action{CommandLineArgsCallbackContext})"/>
+/// Added by <see cref="ResourceBuilderExtensions.WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, TLaunchConfiguration}, string)"/>
 /// (or its asynchronous overload). The
 /// annotation is only honored while a debug session is active; use
 /// <see cref="DebugSupportExtensions.SupportsDebugging"/> to test for that, and

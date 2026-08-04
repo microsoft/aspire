@@ -44,15 +44,26 @@ internal class ExecutionConfigurationGathererContext : IExecutionConfigurationGa
         List<(object Unprocessed, string Value, bool IsSensitive)> resolvedArguments = new(Arguments.Count);
         Dictionary<string, (object Unprocessed, string Value)> resolvedEnvironmentVariables = new(EnvironmentVariables.Count);
         List<Exception> exceptions = new();
+        var entrypointArgumentsData = AdditionalConfigurationData.OfType<EntrypointArgumentsData>().FirstOrDefault();
+        var resolvedEntrypointArgumentCount = 0;
 
-        foreach (var argument in Arguments)
+        for (var argumentIndex = 0; argumentIndex < Arguments.Count; argumentIndex++)
         {
+            var argument = Arguments[argumentIndex];
+
             try
             {
                 var resolvedValue = await resource.ResolveValueAsync(executionContext, resourceLogger, argument, null, cancellationToken).ConfigureAwait(false);
                 if (resolvedValue?.Value != null)
                 {
                     resolvedArguments.Add((argument, resolvedValue.Value, resolvedValue.IsSensitive));
+                    if (entrypointArgumentsData is not null && argumentIndex < entrypointArgumentsData.Count)
+                    {
+                        // Resolution drops null values. Count only entrypoint values that survived so a missing prefix
+                        // value cannot make consumers treat the first ordinary argument as part of the prefix.
+                        resolvedEntrypointArgumentCount++;
+                    }
+
                     if (argument is IValueProvider or IManifestExpressionProvider)
                     {
                         references.Add(argument);
@@ -87,12 +98,21 @@ internal class ExecutionConfigurationGathererContext : IExecutionConfigurationGa
             }
         }
 
+        var resolvedAdditionalConfigurationData = AdditionalConfigurationData;
+        if (entrypointArgumentsData is not null && entrypointArgumentsData.Count != resolvedEntrypointArgumentCount)
+        {
+            resolvedAdditionalConfigurationData = AdditionalConfigurationData
+                .Where(data => data is not EntrypointArgumentsData)
+                .ToHashSet();
+            resolvedAdditionalConfigurationData.Add(new EntrypointArgumentsData(resolvedEntrypointArgumentCount));
+        }
+
         return new ExecutionConfigurationResult
         {
             References = references,
             ArgumentsWithUnprocessed = resolvedArguments,
             EnvironmentVariablesWithUnprocessed = resolvedEnvironmentVariables,
-            AdditionalConfigurationData = AdditionalConfigurationData,
+            AdditionalConfigurationData = resolvedAdditionalConfigurationData,
             Exception = exceptions.Count == 0 ? null : new AggregateException("One or more errors occurred while resolving resource configuration.", exceptions)
         };
     }

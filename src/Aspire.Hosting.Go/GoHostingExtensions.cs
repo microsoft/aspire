@@ -763,8 +763,8 @@ public static class GoHostingExtensions
                     BuildFlags = buildFlags.Length > 0 ? buildFlags : null
                 };
             },
-            "go",
-            static ctx =>
+            "go")
+            .WithEntrypointArgs("go", static ctx =>
             {
                 // The executable resource normally starts as:
                 //   go run [-race] [-tags=...] [-ldflags=...] [-gcflags=...] <pkg> [app args]

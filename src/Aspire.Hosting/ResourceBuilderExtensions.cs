@@ -4815,23 +4815,22 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="launchConfigurationProducer">Launch configuration producer for the resource. It is passed the launch mode (one of the values on <see cref="ExecutableLaunchMode"/>) and produces the configuration that is handed to the IDE.</param>
     /// <param name="launchConfigurationType">The type tag of the launch configuration (as sent to the IDE).</param>
-    /// <param name="entrypointArgsCallback">Optional callback that produces the resource's entrypoint arguments.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <exception cref="ArgumentException">
     /// <typeparamref name="TLaunchConfiguration"/> is a <see cref="Task"/> or <see cref="ValueTask"/>, which means an
     /// asynchronous producer was written without the <see cref="CancellationToken"/> parameter and bound to this
-    /// overload. Use <see cref="WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, CancellationToken, Task{TLaunchConfiguration}}, string, Action{CommandLineArgsCallbackContext})"/> instead.
+    /// overload. Use <see cref="WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, CancellationToken, Task{TLaunchConfiguration}}, string)"/> instead.
     /// </exception>
     /// <remarks>
     /// Aspire invokes the launch configuration producer while preparing and creating the underlying orchestrator objects, and may invoke it
     /// several times for the same resource. Use
-    /// <see cref="WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, CancellationToken, Task{TLaunchConfiguration}}, string, Action{CommandLineArgsCallbackContext})"/>
+    /// <see cref="WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, CancellationToken, Task{TLaunchConfiguration}}, string)"/>
     /// when the configuration has to be resolved from work that is itself asynchronous, for example in the presence of 
     /// build-argument callbacks contributed by other annotations.
     /// </remarks>
     [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Generic debug launch configuration support is not part of the ATS surface.")]
-    public static IResourceBuilder<T> WithDebugSupport<T, TLaunchConfiguration>(this IResourceBuilder<T> builder, Func<string, TLaunchConfiguration> launchConfigurationProducer, string launchConfigurationType, Action<CommandLineArgsCallbackContext>? entrypointArgsCallback = null)
+    public static IResourceBuilder<T> WithDebugSupport<T, TLaunchConfiguration>(this IResourceBuilder<T> builder, Func<string, TLaunchConfiguration> launchConfigurationProducer, string launchConfigurationType)
         where T : IResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -4845,7 +4844,7 @@ public static class ResourceBuilderExtensions
                 nameof(launchConfigurationProducer));
         }
 
-        return builder.WithDebugSupport((mode, _) => Task.FromResult(launchConfigurationProducer(mode)), launchConfigurationType, entrypointArgsCallback);
+        return builder.WithDebugSupport((mode, _) => Task.FromResult(launchConfigurationProducer(mode)), launchConfigurationType);
 
         static bool IsValueTask(Type type)
             => type == typeof(ValueTask) || (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ValueTask<>));
@@ -4860,30 +4859,22 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="launchConfigurationProducer">Launch configuration producer for the resource. It is passed the launch mode (one of the values on <see cref="ExecutableLaunchMode"/>) and produces the configuration that is handed to the IDE.</param>
     /// <param name="launchConfigurationType">The type of the resource.</param>
-    /// <param name="entrypointArgsCallback">Optional callback that produces the resource's entrypoint arguments.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// Use this overload when the launch configuration has to be resolved from work that is itself asynchronous, for
     /// example in the presence of build-argument callbacks contributed by other annotations. Aspire invokes the producer while preparing
     /// and creating the underlying orchestrator objects, and may invoke it several times for the same resource. 
     /// A producer that computes everything synchronously should use
-    /// <see cref="WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, TLaunchConfiguration}, string, Action{CommandLineArgsCallbackContext})"/>
+    /// <see cref="WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, TLaunchConfiguration}, string)"/>
     /// instead.
     /// </remarks>
     [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Generic debug launch configuration support is not part of the ATS surface.")]
-    public static IResourceBuilder<T> WithDebugSupport<T, TLaunchConfiguration>(this IResourceBuilder<T> builder, Func<string, CancellationToken, Task<TLaunchConfiguration>> launchConfigurationProducer, string launchConfigurationType, Action<CommandLineArgsCallbackContext>? entrypointArgsCallback = null)
+    public static IResourceBuilder<T> WithDebugSupport<T, TLaunchConfiguration>(this IResourceBuilder<T> builder, Func<string, CancellationToken, Task<TLaunchConfiguration>> launchConfigurationProducer, string launchConfigurationType)
         where T : IResource
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(launchConfigurationProducer);
-
-        // Entrypoint arguments describe how the resource is invoked in general, so unlike debug support itself they
-        // are registered in publish mode too, where they end up in the manifest and in generated container images.
-        if (entrypointArgsCallback is not null && builder is IResourceBuilder<IResourceWithArgs> resourceWithArgs)
-        {
-            resourceWithArgs.WithEntrypointArgs(launchConfigurationType, entrypointArgsCallback);
-        }
 
         if (!builder.ApplicationBuilder.ExecutionContext.IsRunMode)
         {
