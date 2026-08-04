@@ -29,28 +29,27 @@
 }
 
 .markdown-container .code-block {
-    border: 1px solid var(--neutral-stroke-rest);
     background-color: var(--codeblock-background-color);
-    border-radius: .375rem;
+    border: 1px solid var(--codeblock-border-color);
+    border-radius: 6px;
     position: relative;
 }
 
 .markdown-container .code-title {
     display: flex;
-    color: var(--foreground-settings-text);
-    background-color: var(--neutral-fill-hover);
-    padding-left: 14px;
-    padding-right: 14px;
-    border-top-left-radius: 5px;
-    border-top-right-radius: 5px;
-    height: 2rem;
+    background-color: var(--codeblock-header-background-color);
+    border-bottom: 1px solid var(--codeblock-border-color);
+    border-radius: 5px 5px 0 0;
+    color: var(--code-language-foreground-color);
+    height: 1.75rem;
     font-size: 13px;
     align-items: center;
+    padding-inline: 14px;
 }
 
 .markdown-container .code-container {
     overflow-y: auto;
-    padding: 14px;
+    padding: 10px 14px 14px;
 }
 
 .markdown-container .code-buttons-anchor {
@@ -76,7 +75,7 @@
 }
 
 .markdown-container code {
-    font-family: 'Cascadia Mono', Consolas, monospace;
+    font-family: var(--aspire-font-mono);
     color: unset;
     background-color: var(--neutral-fill-secondary-focus);
     padding: .15rem .3rem;
@@ -94,22 +93,35 @@
     border-radius: unset;
 }
 
+/* Plain code may not receive highlight.js's .hljs class, so apply the theme's default syntax color
+   directly while allowing token spans to override it. */
+.markdown-container .code-block code {
+    color: var(--hljs-default);
+}
+
 .markdown-container .code-copy-button {
     border: 0;
     border-radius: 5px;
-    background-color: var(--neutral-fill-hover);
+    background-color: transparent;
+    color: var(--code-language-foreground-color);
     width: 28px;
     height: 28px;
 }
 
 .markdown-container .code-copy-button:hover {
-    background-color: var(--neutral-fill-active);
+    background-color: var(--neutral-fill-stealth-hover);
 }
 
 .markdown-container .copy-icon,
 .markdown-container .checkmark-icon {
     display: inline-flex;
     vertical-align: sub;
+}
+
+/* The generated SVG carries an inline accent fill. A CSS fill beats that presentation attribute and
+   keeps the icon aligned with the neutral button ink in either theme. */
+.markdown-container .code-copy-button svg {
+    fill: currentColor;
 }
 
 .markdown-container strong {

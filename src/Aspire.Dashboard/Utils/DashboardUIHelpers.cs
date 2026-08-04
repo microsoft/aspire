@@ -15,6 +15,12 @@ internal static class DashboardUIHelpers
 {
     public const string MessageBarSection = "MessagesTop";
 
+    // Blazor SectionOutlet/SectionContent name used to teleport the current page's title
+    // (the page's <h1 class="page-header">) up into the top header, where it renders as a
+    // suffix after the app/brand name (e.g. "Stress / Resources"). See MainLayout.razor
+    // (outlet) and AspirePageContentLayout.razor (content).
+    public const string PageTitleTopBarSection = "PageTitleTopBar";
+
     // these are language names supported by highlight.js
     public const string XmlFormat = "xml";
     public const string JsonFormat = "json";
@@ -69,7 +75,7 @@ internal static class DashboardUIHelpers
             const string textMaskingChar = "●";
 
             return new TextMask(
-                new MarkupString(Repeat(markupMaskingChar, i)),
+                new MarkupString($"<span class=\"masked-content\">{Repeat(markupMaskingChar, i)}</span>"),
                 Repeat(textMaskingChar, i)
             );
 

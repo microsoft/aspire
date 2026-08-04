@@ -5,13 +5,11 @@
 @{
     var additionalButtonAttributes = new Dictionary<string, object>(AdditionalAttributes ?? ImmutableDictionary<string, object>.Empty)
     {
-        { "aria-haspopup", "true" },
-        { "aria-expanded", _visible ? "true" : "false" },
         { "onkeydown", (KeyboardEventArgs args) => OnKeyDown(args) }
     };
 }
 
-<FluentButton Id="@MenuButtonId" Title="@Title" Appearance="@ButtonAppearance" IconStart="@IconStart" @onclick="ToggleMenu" Disabled="@_disabled" AdditionalAttributes="@additionalButtonAttributes" Class="@ButtonClass">
+<FluentButton @ref="_button" Id="@MenuButtonId" Title="@Title" Appearance="@ButtonAppearance" IconStart="@IconStart" @onclick="ToggleMenu" Disabled="@_disabled" AdditionalAttributes="@additionalButtonAttributes" Class="@ButtonClass">
     @if (string.IsNullOrWhiteSpace(Text))
     {
         <FluentIcon Value="@_icon" Color="@IconColor" CustomColor="@IconCustomColor" />

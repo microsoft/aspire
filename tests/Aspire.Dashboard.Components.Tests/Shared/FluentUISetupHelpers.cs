@@ -152,6 +152,7 @@ internal static class FluentUISetupHelpers
         IMessageService? messageService = null,
         BrowserTimeProvider? browserTimeProvider = null)
     {
+        context.JSInterop.SetupVoid("setMenuButtonAccessibility", _ => true);
         context.Services.AddLocalization();
         context.Services.AddSingleton<BrowserTimeProvider>(browserTimeProvider ?? new TestTimeProvider());
         context.Services.AddSingleton<TelemetryRepository>();
@@ -183,6 +184,7 @@ internal static class FluentUISetupHelpers
     public static void SetupFluentUIComponents(TestContext context)
     {
         context.Services.AddFluentUIComponents();
+        context.JSInterop.SetupVoid("setMenuButtonAccessibility", _ => true);
 
         // Setting a provider ID on menu service is required to simulate <FluentMenuProvider> on the page.
         // This makes FluentMenu render without error.
