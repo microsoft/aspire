@@ -18,7 +18,7 @@
     "typescript": "6.0.2"
   },
   "overrides": {
-    "postcss": "8.5.20",
+    "postcss": "8.5.23",
     "sharp": "0.35.0"
   }
 }
