@@ -3712,6 +3712,12 @@ public static class ResourceBuilderExtensions
                 }
                 var uri = new UriBuilder(endpoint.Url) { Path = path }.Uri;
                 var httpClient = context.Services.GetRequiredService<IHttpClientFactory>().CreateClient(commandOptions.HttpClientName ?? Options.DefaultName);
+                if (commandOptions.HttpClientName is null)
+                {
+                    // HTTP commands are user-cancelable and may legitimately run longer than HttpClient's 100-second default.
+                    // Named clients retain their configured timeout.
+                    httpClient.Timeout = Timeout.InfiniteTimeSpan;
+                }
                 var request = new HttpRequestMessage(commandOptions.Method, uri);
                 if (commandOptions.PrepareRequest is not null)
                 {
