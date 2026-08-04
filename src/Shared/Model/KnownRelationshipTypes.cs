@@ -9,4 +9,5 @@ internal static class KnownRelationshipTypes
     public const string Reference = "Reference";
     public const string Parent = "Parent";
     public const string Manages = "Manages";
+    public const string DependsOn = "DependsOn";
 }
