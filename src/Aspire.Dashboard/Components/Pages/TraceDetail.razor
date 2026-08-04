@@ -348,11 +348,11 @@
 @code {
     private RenderFragment GetDesktopToolbar()
     {
-        return @<div class="trace-header main-toolbar"
-                     role="toolbar"
-                     aria-label="@ControlStringsLoc[nameof(ControlsStrings.PageToolbarLandmark)]">
+        return @<div class="trace-header main-toolbar">
             @GetTraceDetailsFragment()
-            <div class="trace-header-filters">
+            <div class="trace-header-filters"
+                 role="group"
+                 aria-label="@ControlStringsLoc[nameof(ControlsStrings.PageToolbarLandmark)]">
                 <FluentSearch @bind-Value="PageViewModel.Filter"
                               @bind-Value:after="HandleAfterFilterBindAsync"
                               Name="spans-search"

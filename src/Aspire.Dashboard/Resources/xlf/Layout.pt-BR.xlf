@@ -102,11 +102,6 @@
         <target state="new">Collapse navigation to icons</target>
         <note />
       </trans-unit>
-      <trans-unit id="NavMenuToggleCollapseLabel">
-        <source>Collapse sidebar</source>
-        <target state="new">Collapse sidebar</target>
-        <note />
-      </trans-unit>
       <trans-unit id="NavMenuToggleExpand">
         <source>Expand navigation labels</source>
         <target state="new">Expand navigation labels</target>

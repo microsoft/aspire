@@ -1516,8 +1516,8 @@ fluent-switch.table-switch::part(label) {
 }
 
 .property-grid-container tr:last-child td {
-    /* bottom of the table is at the bottom of an accordion item so hide the bottom row's bottom border */
-    border-bottom: none;
+    /* The table ends at the accordion edge, so override the shared important row separator on its last row. */
+    border-bottom: none !important;
 }
 
 /* Align the section heading, the Name/Value column headers, and the row values on a single left edge

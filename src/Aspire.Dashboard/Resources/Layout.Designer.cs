@@ -223,15 +223,6 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Collapse sidebar.
-        /// </summary>
-        public static string NavMenuToggleCollapseLabel {
-            get {
-                return ResourceManager.GetString("NavMenuToggleCollapseLabel", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Resources.
         /// </summary>
         public static string NavMenuResourcesTab {

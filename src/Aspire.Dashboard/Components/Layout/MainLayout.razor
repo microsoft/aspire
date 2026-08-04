@@ -54,10 +54,9 @@
             <UserProfile/>
         </FluentHeader>
 
-        @* The nav rail is a flex column: the tab list (DesktopNavMenu) fills the available space and the
-           collapse/expand toggle is pinned to the bottom. Keeping the toggle at the foot of the rail (rather
-           than in the top header) matches the common sidebar pattern and lets it show a full "Collapse sidebar"
-           label beside the icon when the rail is expanded. Toggle state/persistence still lives in MainLayout. *@
+        @* The nav rail is a flex column so DesktopNavMenu fills the available space while the collapse/expand
+           toggle stays pinned to the bottom, matching the common sidebar pattern. Toggle state/persistence
+           still lives in MainLayout. *@
         <div class="desktop-nav-rail">
             <DesktopNavMenu/>
             <FluentButton Class="nav-toggle-button nav-toggle-bottom"

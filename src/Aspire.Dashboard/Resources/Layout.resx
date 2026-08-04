@@ -165,9 +165,6 @@
   <data name="NavMenuToggleCollapse" xml:space="preserve">
     <value>Collapse navigation to icons</value>
   </data>
-  <data name="NavMenuToggleCollapseLabel" xml:space="preserve">
-    <value>Collapse sidebar</value>
-  </data>
   <data name="MainLayoutAspire" xml:space="preserve">
     <value>Aspire</value>
   </data>
