@@ -32,20 +32,20 @@ public class AspireMenuButtonFocusTests : PlaywrightTestsBase<DashboardServerFix
             // repository, so nothing else legitimately claims focus and the assertion stays meaningful.
             // Focus after a menu closes is a browser-only behavior that bUnit can't observe.
             //
-            // Match the fluent-button host rather than using a role locator: aria-expanded and the id
-            // used for focus restoration live on the host, while the role locator resolves to the inner
-            // shadow DOM control that only carries the aria-label.
-            var clearButton = page.Locator($"fluent-button[title='{ControlsStrings.ClearSignalsButtonTitle}'][aria-haspopup='true']").First;
-            await Assertions.Expect(clearButton).ToHaveAttributeAsync("aria-expanded", "false");
+            // Keep the host for focus restoration, but inspect the native shadow button for ARIA state.
+            var clearButton = page.Locator($"fluent-button[title='{ControlsStrings.ClearSignalsButtonTitle}']").First;
+            var clearButtonControl = clearButton.Locator("button[part~='control']");
+            await Assertions.Expect(clearButtonControl).ToHaveAttributeAsync("aria-haspopup", "menu");
+            await Assertions.Expect(clearButtonControl).ToHaveAttributeAsync("aria-expanded", "false");
 
             var clearButtonId = await clearButton.GetAttributeAsync("id");
             Assert.False(string.IsNullOrEmpty(clearButtonId));
 
             await clearButton.ClickAsync();
-            await Assertions.Expect(clearButton).ToHaveAttributeAsync("aria-expanded", "true");
+            await Assertions.Expect(clearButtonControl).ToHaveAttributeAsync("aria-expanded", "true");
 
             await page.Locator("fluent-menu-item#clear-menu-all").ClickAsync();
-            await Assertions.Expect(clearButton).ToHaveAttributeAsync("aria-expanded", "false");
+            await Assertions.Expect(clearButtonControl).ToHaveAttributeAsync("aria-expanded", "false");
 
             await AsyncTestHelpers.AssertIsTrueRetryAsync(
                 async () => string.Equals(await page.EvaluateAsync<string?>("() => document.activeElement?.id"), clearButtonId, StringComparison.Ordinal),

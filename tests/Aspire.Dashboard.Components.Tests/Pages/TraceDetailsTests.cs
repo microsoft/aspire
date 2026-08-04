@@ -125,11 +125,19 @@ public partial class TraceDetailsTests : DashboardTestContext
 
         var scrollContainer = cut.Find("#traceDetailScrollContainer");
         var loc = Services.GetRequiredService<IStringLocalizer<Dashboard.Resources.TraceDetail>>();
+        var controlsLoc = Services.GetRequiredService<IStringLocalizer<Dashboard.Resources.ControlsStrings>>();
+        var header = cut.Find(".trace-header");
+        var filterGroup = cut.Find(".trace-header-filters");
 
         Assert.Equal("0", scrollContainer.GetAttribute("tabindex"));
         Assert.Equal("region", scrollContainer.GetAttribute("role"));
         Assert.Equal(loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailTraceStartHeader)].Value, scrollContainer.GetAttribute("aria-label"));
         Assert.Equal("tracedetails-grid-container", scrollContainer.GetAttribute("class"));
+        Assert.Null(header.GetAttribute("role"));
+        Assert.Equal("group", filterGroup.GetAttribute("role"));
+        Assert.Equal(controlsLoc[nameof(Dashboard.Resources.ControlsStrings.PageToolbarLandmark)].Value, filterGroup.GetAttribute("aria-label"));
+        Assert.Contains(header.Children, element => element.ClassList.Contains("trace-header-details"));
+        Assert.Contains(header.Children, element => element.ClassList.Contains("trace-header-filters"));
         cut.WaitForAssertion(() =>
         {
             Assert.Contains(JSInterop.Invocations, invocation =>

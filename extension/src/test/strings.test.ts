@@ -1,4 +1,6 @@
 import * as assert from 'assert';
+import * as fs from 'fs';
+import * as path from 'path';
 import { launchingWithAppHost, launchingWithDirectory } from '../loc/strings';
 import { formatText } from '../utils/strings';
 
@@ -19,6 +21,27 @@ suite('utils/strings tests', () => {
         const resultWithNoEmojis = formatText(inputWithNoEmojis);
         assert.strictEqual(resultWithNoEmojis, expectedOutputWithNoEmojis);
 	});
+
+    test('copy AppHost path loc strings have package nls entries', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const stringsSource = fs.readFileSync(path.join(extensionRoot, 'src', 'loc', 'strings.ts'), 'utf8');
+        const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
+
+        const expectedStrings = {
+            appHostPathCopiedToClipboard: 'AppHost path copied to clipboard.',
+            appHostPathInvalid: 'Could not determine the AppHost path to copy.',
+        };
+
+        for (const [name, value] of Object.entries(expectedStrings)) {
+            // Match the declaration tolerantly so formatting differences do not matter. The literal
+            // value is regex-escaped so the test still fails if the registered string changes.
+            const escapedValue = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const declaration = new RegExp(
+                `export\\s+const\\s+${name}\\s*=\\s*vscode\\.l10n\\.t\\(\\s*(['"\`])${escapedValue}\\1\\s*\\)`);
+            assert.match(stringsSource, declaration, `Expected ${name} to be registered in strings.ts with the value "${value}".`);
+            assert.strictEqual(packageNls[`aspire-vscode.strings.${name}`], value);
+        }
+    });
 });
 
 suite('loc/strings tests', () => {
@@ -36,5 +59,24 @@ suite('loc/strings tests', () => {
 				'Launching Aspire debug session using directory /workspace: attempting to determine effective AppHost...',
 				'Launching Aspire run session using directory /workspace: attempting to determine effective AppHost...',
 			]);
+	});
+
+	test('registers complete launch messages for localization', () => {
+		const extensionRoot = path.resolve(__dirname, '..', '..');
+		const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
+
+		assert.deepStrictEqual(
+			{
+				launchingWithDirectory: packageNls['aspire-vscode.strings.launchingWithDirectory'],
+				launchingWithAppHost: packageNls['aspire-vscode.strings.launchingWithAppHost'],
+				launchingRunWithDirectory: packageNls['aspire-vscode.strings.launchingRunWithDirectory'],
+				launchingRunWithAppHost: packageNls['aspire-vscode.strings.launchingRunWithAppHost'],
+			},
+			{
+				launchingWithDirectory: 'Launching Aspire debug session using directory {0}: attempting to determine effective AppHost...',
+				launchingWithAppHost: 'Launching Aspire debug session for AppHost {0}...',
+				launchingRunWithDirectory: 'Launching Aspire run session using directory {0}: attempting to determine effective AppHost...',
+				launchingRunWithAppHost: 'Launching Aspire run session for AppHost {0}...',
+			});
 	});
 });

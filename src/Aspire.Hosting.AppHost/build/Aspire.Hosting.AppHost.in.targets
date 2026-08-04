@@ -307,15 +307,27 @@ namespace Projects%3B
       <_AspireRunProject Condition="'$(FileBasedProgram)' == 'true' and '@(_AspireFileBasedAppHostPath)' != ''">@(_AspireFileBasedAppHostPath)</_AspireRunProject>
       <_AspireRunWorkingDirectory>$(MSBuildProjectDirectory)</_AspireRunWorkingDirectory>
       <_AspireRunWorkingDirectory Condition="'$(FileBasedProgram)' == 'true' and '@(_AspireFileBasedAppHostDirectory)' != ''">@(_AspireFileBasedAppHostDirectory)</_AspireRunWorkingDirectory>
-      <RunCommand Condition="'$(AspireCliPath)' != ''">$(AspireCliPath)</RunCommand>
+      <_AspireCliPathIsWindowsCommandShim Condition="'$(OS)' == 'Windows_NT' and '$(AspireCliPath)' != '' and ($(AspireCliPath.ToLowerInvariant().EndsWith('.cmd')) or $(AspireCliPath.ToLowerInvariant().EndsWith('.bat')))">true</_AspireCliPathIsWindowsCommandShim>
+      <_AspireCliPathForCommandShim Condition="'$(_AspireCliPathIsWindowsCommandShim)' == 'true'">$([System.Text.RegularExpressions.Regex]::Replace($(AspireCliPath), '[ \t()[\]{}!^`&lt;&gt;&amp;|;,+="~@]', '^$0'))</_AspireCliPathForCommandShim>
+      <RunCommand Condition="'$(AspireCliPath)' != '' and '$(_AspireCliPathIsWindowsCommandShim)' != 'true'">$(AspireCliPath)</RunCommand>
+      <RunCommand Condition="'$(_AspireCliPathIsWindowsCommandShim)' == 'true'">cmd</RunCommand>
       <!-- On Windows, Aspire can be installed as a command shim such as aspire.cmd.
-           dotnet run starts RunCommand directly, so use cmd /C for the default PATH
-           lookup to get the same PATHEXT resolution as an interactive shell. -->
+           dotnet run starts RunCommand directly, so use cmd /C for default PATH
+           lookup and to interpret explicit shims instead of starting them as native executables. -->
       <RunCommand Condition="'$(AspireCliPath)' == '' and '$(OS)' == 'Windows_NT'">cmd</RunCommand>
       <RunCommand Condition="'$(AspireCliPath)' == '' and '$(OS)' != 'Windows_NT'">aspire</RunCommand>
       <!-- dotnet run appends application arguments after ComputeRunArguments, so the double-dash separator
            must be present even when RunArguments is initially empty. -->
       <RunArguments>run --project "$(_AspireRunProject)" --no-build --</RunArguments>
+      <!-- The explicit-shim command line is emitted as:
+             cmd /D /V:OFF /C C:\path^ with^ spaces\aspire.cmd run [separator] user-arg
+           Keep the caret-escaped shim path unquoted because a leading quote makes cmd.exe strip
+           the first and last quotes after dotnet run appends application arguments. Avoid call
+           because its second parsing pass consumes carets in otherwise valid Windows paths.
+           Appended arguments retain cmd.exe metacharacter semantics, as in the existing PATH
+           branch, and percent expansion remains an unavoidable cmd command-string limitation.
+           See https://learn.microsoft.com/windows-server/administration/windows-commands/cmd. -->
+      <RunArguments Condition="'$(_AspireCliPathIsWindowsCommandShim)' == 'true'">/D /V:OFF /C $(_AspireCliPathForCommandShim) $(RunArguments)</RunArguments>
       <RunArguments Condition="'$(AspireCliPath)' == '' and '$(OS)' == 'Windows_NT'">/C aspire $(RunArguments)</RunArguments>
       <RunArguments Condition="'$(_AspireOriginalRunArguments)' != ''">$(RunArguments) $(_AspireOriginalRunArguments)</RunArguments>
       <RunWorkingDirectory>$(_AspireRunWorkingDirectory)</RunWorkingDirectory>

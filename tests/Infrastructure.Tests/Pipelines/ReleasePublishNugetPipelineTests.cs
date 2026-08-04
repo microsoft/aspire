@@ -545,6 +545,88 @@ public sealed class ReleasePublishNugetPipelineTests
         Assert.Contains("npm view $spec version --registry=https://registry.npmjs.org/", pipeline);
     }
 
+    [Fact]
+    public async Task VSCodeExtensionPublishUsesAzureCredential()
+    {
+        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
+        var job = ExtractSection(
+            pipeline,
+            "# ===== VS CODE EXTENSION PUBLISHING =====",
+            "# ===== WINGET PUBLISHING =====");
+
+        Assert.Contains("task: AzureCLI@2", job);
+        // The service connection name must match the connection whose identity is authorized on
+        // the microsoft-aspire Marketplace publisher. A mismatch fails only at publish time,
+        // which is the last step of a release.
+        Assert.Contains("azureSubscription: 'AspireSecurePublishPipelineMarketplaceConnectionWithManagedIdentity'", job);
+        Assert.Contains("vsce verify-pat --azure-credential $publisher", job);
+        Assert.Contains("""$publishArgs = @("publish", "--azure-credential", "--packagePath", $vsix.FullName, "--manifestPath", $manifestPath, "--signaturePath", $signaturePath)""", job);
+        Assert.Contains("vsce @publishArgs", job);
+
+        var secretReferenceMatches = System.Text.RegularExpressions.Regex.Matches(job, @"\b(VSCE_PAT|VscePublishToken)\b");
+        Assert.Empty(secretReferenceMatches);
+    }
+
+    [Fact]
+    public async Task ExtensionReleaseInstructionsSkipNonExtensionReleaseLegs()
+    {
+        var workflow = await ReadRepoFileAsync(".github/workflows/extension-release.yml");
+        var instructions = ExtractSection(
+            workflow,
+            "For an extension-only release, use these parameters:",
+            "For a full Aspire release");
+
+        Assert.Contains("| \\`SkipNuGetPublish\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipNpmRidPublish\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipNpmPointerPublish\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipChannelPromotion\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipWinGetPublish\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipHomebrewValidation\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipGitHubTasks\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipReleaseAssets\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipNixPackageUpdate\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipVSCodeExtensionPublish\\` | \\`false\\` |", instructions);
+    }
+
+    [Fact]
+    public async Task ExtensionReleaseDryRunInstructionsDoNotOverstatePublisherRoleValidation()
+    {
+        var workflow = await ReadRepoFileAsync(".github/workflows/extension-release.yml");
+
+        Assert.Contains("can acquire an Azure credential and read publisher role assignments", workflow);
+        Assert.Contains("Separately confirm the service connection identity is a Contributor", workflow);
+    }
+
+    [Fact]
+    public async Task MarketplacePublishingDocumentationKeepsIdentityDetailsInternalAndRetiresPat()
+    {
+        var documentation = await ReadRepoFileAsync("docs/release-process.md");
+        var identitySection = ExtractSection(
+            documentation,
+            "#### Marketplace publishing identity",
+            "### Approved GitHub Actions");
+
+        Assert.Contains(
+            "[Azure DevOps service connections](https://dev.azure.com/dnceng/internal/_settings/adminservices)",
+            identitySection);
+        Assert.DoesNotMatch(
+            @"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b",
+            documentation);
+        Assert.Contains(
+            "If the variable is still present in `Aspire-Release-Secrets`, revoke the PAT and delete the variable.",
+            documentation);
+    }
+
+    private static string ExtractSection(string contents, string begin, string end)
+    {
+        var beginIndex = FindRequiredText(contents, begin);
+        var endIndex = FindRequiredText(contents, end);
+
+        Assert.True(endIndex > beginIndex, $"Expected '{end}' after '{begin}'.");
+
+        return contents[beginIndex..endIndex];
+    }
+
     private static void AssertBefore(string contents, string text, int boundaryIndex)
     {
         var textIndex = FindRequiredText(contents, text);

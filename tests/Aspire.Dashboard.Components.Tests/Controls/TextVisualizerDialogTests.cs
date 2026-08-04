@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Immutable;
+using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
@@ -104,6 +105,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
             Assert.Equal(DashboardUIHelpers.PlaintextFormat, dialog.TextVisualizerViewModel.FormatKind);
             Assert.Equal(rawXml, dialog.TextVisualizerViewModel.FormattedText);
             Assert.Equal(DashboardUIHelpers.PlaintextFormat, cut.FindComponent<FluentSelect<SelectViewModel<string>>>().Instance.SelectedOption?.Id);
+            Assert.Single(cut.FindAll(".text-visualizer-unformatted"));
         });
 
         cut.FindComponent<TextVisualizerDialog>().SetParametersAndRender(parameters => parameters.Add(p => p.Content, content));
@@ -115,6 +117,19 @@ public class TextVisualizerDialogTests : DashboardTestContext
             Assert.Equal(rawXml, dialog.TextVisualizerViewModel.FormattedText);
             Assert.Equal(DashboardUIHelpers.PlaintextFormat, cut.FindComponent<FluentSelect<SelectViewModel<string>>>().Instance.SelectedOption?.Id);
         });
+    }
+
+    [Fact]
+    public void Render_TextVisualizer_DisplayUnformatted_AddsUnformattedClass()
+    {
+        SetUpDialog(out _);
+
+        var cut = RenderComponent<TextVisualizer>(parameters => parameters
+            .Add(p => p.ViewModel, new TextVisualizerViewModel("""{"value":1}""", indentText: false))
+            .Add(p => p.DisplayUnformatted, true)
+            .Add(p => p.Virtualize, false));
+
+        Assert.Single(cut.FindAll(".text-visualizer-unformatted"));
     }
 
     [Fact]

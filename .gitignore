@@ -133,6 +133,7 @@ config.ps1
 
 # Node.js modules
 node_modules/
+**/.yarn/install-state.gz
 
 # Maven build outputs
 target/

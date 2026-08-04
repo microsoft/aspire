@@ -30,9 +30,9 @@ public static class TerminalResourceBuilderExtensions
     /// <remarks>
     /// <para>
     /// When a resource is configured with <c>.WithTerminal()</c>, DCP allocates a pseudo-terminal
-    /// (PTY) per replica and one hidden <see cref="TerminalHostResource"/> per replica bridges
-    /// the PTY traffic over Hex1b's HMP v1 protocol. The terminal session can be accessed from
-    /// the Aspire Dashboard's terminal page or via the <c>aspire terminal</c> CLI command.
+    /// (PTY) per replica and a hidden terminal host process bridges the PTY traffic over Hex1b's
+    /// HMP v1 protocol. The terminal session can be accessed from the Aspire Dashboard's terminal
+    /// page or via the <c>aspire terminal</c> CLI command.
     /// </para>
     /// <para>
     /// One terminal host process is spawned per parent replica (e.g. <c>WithReplicas(3).WithTerminal()</c>
@@ -125,6 +125,8 @@ public static class TerminalResourceBuilderExtensions
 #pragma warning disable ASPIRETERMINAL001 // Internal dispatcher into the experimental API.
         => builder.WithTerminal();
 #pragma warning restore ASPIRETERMINAL001
+
+#pragma warning disable ASPIRETERMINAL001 // Internal implementation of the experimental terminal configuration API.
 
     /// <summary>
     /// Reads the parent's final <see cref="ReplicaAnnotation"/> and creates one
@@ -434,6 +436,8 @@ public static class TerminalResourceBuilderExtensions
             return Task.CompletedTask;
         }));
     }
+
+#pragma warning restore ASPIRETERMINAL001
 
     /// <summary>
     /// Builds the per-replica UDS triple + metadata path for a single terminal host. All

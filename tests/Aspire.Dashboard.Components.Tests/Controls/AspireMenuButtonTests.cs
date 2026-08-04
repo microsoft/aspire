@@ -11,7 +11,7 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 public class AspireMenuButtonTests : DashboardTestContext
 {
     [Fact]
-    public void ToggleMenu_UpdatesAriaExpandedState()
+    public void Render_OmitsHostAria_AndMarksTriggerForAccessibilityObserver()
     {
         FluentUISetupHelpers.SetupFluentUIComponents(this);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
@@ -36,20 +36,19 @@ public class AspireMenuButtonTests : DashboardTestContext
         });
 
         var button = cut.Find("#view-options-button");
-        Assert.Equal("false", button.GetAttribute("aria-expanded"));
 
-        button.Click();
+        // Menu-button ARIA is applied by app.js at runtime, not rendered here, so bUnit (which never
+        // executes app.js) asserts the host-element contract the JS observer relies on:
+        //  - The data-* marker is how the single document-level observer in app.js finds every menu
+        //    trigger and then sets aria-haspopup="menu" on the inner shadow-root <button part="control">.
+        Assert.True(button.HasAttribute("data-aspire-menu-trigger"));
 
-        cut.WaitForAssertion(() =>
-        {
-            Assert.Equal("true", cut.Find("#view-options-button").GetAttribute("aria-expanded"));
-        });
-
-        button.Click();
-
-        cut.WaitForAssertion(() =>
-        {
-            Assert.Equal("false", cut.Find("#view-options-button").GetAttribute("aria-expanded"));
-        });
+        //  - The role-less <fluent-button> host must NOT carry these ARIA attributes: aria-expanded on a
+        //    role-less element is an axe-core aria-allowed-attr violation, and giving the host
+        //    role="button" would trip nested-interactive against its inner <button>. They belong on the
+        //    inner control (verified in a real browser by the Playwright menu-button tests). Asserting
+        //    their absence here guards against regressing back to declarative host ARIA.
+        Assert.False(button.HasAttribute("aria-haspopup"));
+        Assert.False(button.HasAttribute("aria-expanded"));
     }
 }

@@ -19,6 +19,11 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 {
     private bool _isNavMenuOpen;
 
+    // Desktop nav rail layout. false = collapsed to icons only (default, most content space,
+    // labels still available via each item's tooltip); true = expanded so each item shows its
+    // icon on the left and text label on the right. Persisted per-browser in local storage.
+    private bool _isNavMenuExpanded;
+
     private IDisposable? _themeChangedSubscription;
     private IDisposable? _locationChangingRegistration;
     private IJSObjectReference? _jsModule;
@@ -114,6 +119,13 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         if (timeFormatResult.Success)
         {
             TimeProvider.SetConfiguredTimeFormat(timeFormatResult.Value);
+        }
+
+        // Restore the persisted desktop nav rail layout (collapsed to icons vs. expanded with labels).
+        var navExpandedResult = await LocalStorage.GetUnprotectedAsync<bool>(BrowserStorageKeys.NavMenuExpanded);
+        if (navExpandedResult.Success)
+        {
+            _isNavMenuExpanded = navExpandedResult.Value;
         }
 
         await DisplayUnsecuredEndpointsMessageAsync();
@@ -417,6 +429,12 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     {
         _isNavMenuOpen = false;
         StateHasChanged();
+    }
+
+    private async Task ToggleNavMenuExpandedAsync()
+    {
+        _isNavMenuExpanded = !_isNavMenuExpanded;
+        await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.NavMenuExpanded, _isNavMenuExpanded);
     }
 
     public async ValueTask DisposeAsync()

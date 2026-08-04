@@ -45,6 +45,8 @@ public partial class MainLayoutTests : DashboardTestContext
         {
             switch (key)
             {
+                case BrowserStorageKeys.NavMenuExpanded:
+                    return (true, false);
                 case BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey:
                 case BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey:
                     return (false, false);
@@ -105,6 +107,8 @@ public partial class MainLayoutTests : DashboardTestContext
         {
             switch (key)
             {
+                case BrowserStorageKeys.NavMenuExpanded:
+                    return (true, false);
                 case BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey:
                     return (unsecuredTelemetryMessageDismissedKey, unsecuredTelemetryMessageDismissedKey);
                 case BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey:
@@ -155,6 +159,8 @@ public partial class MainLayoutTests : DashboardTestContext
         {
             switch (key)
             {
+                case BrowserStorageKeys.NavMenuExpanded:
+                    return (true, false);
                 case BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey:
                 case BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey:
                     return (false, false); // Message not dismissed, but should be suppressed by config if suppressUnsecuredMessage is true
@@ -185,6 +191,43 @@ public partial class MainLayoutTests : DashboardTestContext
             await messageShownTcs.Task.DefaultTimeout();
             Assert.NotEmpty(messageService.AllMessages);
         }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task NavMenuExpanded_RestoresAndPersistsToggledState(bool storedExpanded)
+    {
+        object? persistedValue = null;
+        var localStorage = new TestLocalStorage
+        {
+            OnGetUnprotectedAsync = key => key switch
+            {
+                BrowserStorageKeys.NavMenuExpanded => (true, storedExpanded),
+                BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey => (false, false),
+                BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey => (false, false),
+                _ => throw new InvalidOperationException("Unexpected key.")
+            },
+            OnSetUnprotectedAsync = (key, value) =>
+            {
+                Assert.Equal(BrowserStorageKeys.NavMenuExpanded, key);
+                persistedValue = value;
+            }
+        };
+
+        SetupMainLayoutServices(localStorage: localStorage);
+
+        var cut = RenderComponent<MainLayout>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        cut.WaitForAssertion(() => Assert.Contains(storedExpanded ? "nav-expanded" : "nav-collapsed", cut.Find(".layout").ClassList));
+
+        await cut.InvokeAsync(() => cut.Find(".nav-toggle-button").Click());
+
+        cut.WaitForAssertion(() => Assert.Contains(storedExpanded ? "nav-collapsed" : "nav-expanded", cut.Find(".layout").ClassList));
+        Assert.Equal(!storedExpanded, Assert.IsType<bool>(persistedValue));
     }
 
     [Theory]
