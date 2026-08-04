@@ -133,6 +133,22 @@ suite('AspireGutterDecorationProvider', () => {
         assert.strictEqual(classifyState(ResourceState.FailedToStart, '', ''), 'warning');
     });
 
+    test('FailedToStart with a null exit code uses the warning decoration category', () => {
+        assert.strictEqual(classifyState(ResourceState.FailedToStart, '', '', null), 'warning');
+    });
+
+    test('FailedToStart with exit code 0 uses the warning decoration category', () => {
+        assert.strictEqual(classifyState(ResourceState.FailedToStart, '', '', 0), 'warning');
+    });
+
+    test('FailedToStart with exit code -1 uses the error decoration category', () => {
+        assert.strictEqual(classifyState(ResourceState.FailedToStart, '', '', -1), 'error');
+    });
+
+    test('FailedToStart with a non-zero exit code uses the error decoration category', () => {
+        assert.strictEqual(classifyState(ResourceState.FailedToStart, '', '', 1), 'error');
+    });
+
     test('does not emit resource decorations from a different running AppHost', () => {
         const runningHostPath = p('repo', 'RunningAppHost', 'AppHost.csproj');
         const stoppedHostPath = p('repo', 'StoppedAppHost', 'AppHost.cs');

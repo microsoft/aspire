@@ -22,6 +22,7 @@ import {
     codeLensResourceStoppedError,
     codeLensResourceStoppedErrorWithExitCode,
     codeLensResourceFailedToStart,
+    codeLensResourceFailedToStartError,
     codeLensResourceRuntimeUnhealthy,
     codeLensRestart,
     codeLensStop,
@@ -374,7 +375,7 @@ export function getCodeLensStateLabel(state: string, stateStyle: string, exitCod
         case ResourceState.NotStarted:
             return codeLensResourceNotStarted;
         case ResourceState.FailedToStart:
-            return codeLensResourceFailedToStart;
+            return exitCode != null && exitCode !== 0 ? codeLensResourceFailedToStartError : codeLensResourceFailedToStart;
         case ResourceState.RuntimeUnhealthy:
             return codeLensResourceRuntimeUnhealthy;
         case ResourceState.Stopping:
