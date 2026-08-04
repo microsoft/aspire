@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.TestUtilities;
+using Microsoft.DotNet.RemoteExecutor;
 
 namespace Aspire.Hosting.Containers.Tests;
 
@@ -25,6 +26,19 @@ public class TestcontainersPodmanConfigurationTests
 
     // The macOS `podman machine` layout, which is what the CLI fallback reports.
     private const string PodmanMachineSocket = "/var/folders/_h/xxxx/T/podman/podman-machine-default-api.sock";
+
+    [Fact]
+    public void IsFeatureSupported_ContainerRuntime_DoesNotInitializeTestcontainersConfiguration()
+    {
+        RemoteExecutor.Invoke(static () =>
+        {
+            Assert.False(TestcontainersPodmanConfiguration.IsConfigurationInitialized);
+
+            _ = RequiresFeatureAttribute.IsFeatureSupported(TestFeature.ContainerRuntime);
+
+            Assert.False(TestcontainersPodmanConfiguration.IsConfigurationInitialized);
+        }).Dispose();
+    }
 
     [Fact]
     public void Decide_OnWindowsWithAPodmanSocket_ReportsNoEndpoint()

@@ -25,9 +25,8 @@ namespace Aspire.TestUtilities;
 /// <para>
 /// Configuration has to happen before the first <c>ContainerBuilder</c> is constructed, because
 /// <c>TestcontainersSettings</c> resolves its endpoint and Ryuk switches once, in its static constructor.
-/// <see cref="RequiresFeatureAttribute.IsContainerRuntimeSupported"/> is the hook for that: declaring
-/// <see cref="TestFeature.ContainerRuntime"/> is already mandatory for any test that runs a container, so
-/// every Testcontainers fixture in the repo passes through it - either by calling
+/// The <see cref="TestFeature.Testcontainers"/> capability check is the hook for that, so every
+/// Testcontainers fixture in the repo passes through it - either by calling
 /// <see cref="RequiresFeatureAttribute.IsFeatureSupported"/> directly before building its container, or via
 /// the trait attribute, which xUnit evaluates during discovery. That makes this strictly more reliable than
 /// a module initializer, which would only cover the assemblies it happened to be compiled into.
@@ -50,6 +49,11 @@ internal static class TestcontainersPodmanConfiguration
 
     // Called once per test during trait evaluation, so the probing must happen at most once per process.
     private static readonly Lazy<bool> s_hasUsableEndpoint = new(Configure);
+
+    /// <summary>
+    /// Reports whether configuration has already run, without triggering it.
+    /// </summary>
+    internal static bool IsConfigurationInitialized => s_hasUsableEndpoint.IsValueCreated;
 
     /// <summary>
     /// Configures Testcontainers for Podman if required. Safe to call repeatedly; the work happens once.

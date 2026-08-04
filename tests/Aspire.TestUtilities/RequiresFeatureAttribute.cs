@@ -100,8 +100,6 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
     // evaluated during discovery, once per test.
     internal static bool IsContainerRuntimeSupported()
     {
-        TestcontainersPodmanConfiguration.EnsureConfigured();
-
         if (PlatformDetection.IsRunningOnCI)
         {
             return OperatingSystem.IsLinux(); // non-linux on CI does not support containers
@@ -129,11 +127,14 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
     // would run them straight into DockerUnavailableException instead of skipping them.
     private static bool IsTestcontainersSupported()
     {
-        // Applies the CI expectation and, as a side effect, points Testcontainers at Podman if it can.
         if (!IsContainerRuntimeSupported())
         {
             return false;
         }
+
+        // Configuration can set process-wide environment variables, so keep it scoped to tests that
+        // actually use Testcontainers rather than generic DCP-backed container tests.
+        TestcontainersPodmanConfiguration.EnsureConfigured();
 
         if (PlatformDetection.IsRunningOnCI)
         {
