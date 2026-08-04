@@ -8,7 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
-    "next": "16.2.11",
+    "next": "16.2.12",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
