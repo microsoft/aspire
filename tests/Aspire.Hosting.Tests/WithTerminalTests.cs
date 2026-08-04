@@ -80,6 +80,53 @@ public class WithTerminalTests
         Assert.Equal("/bin/bash", annotation.Options.Shell);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void WithTerminalRejectsNonPositiveColumns(int columns)
+    {
+        // Aspire.TerminalHost rejects a PTY width below 1, so an invalid Columns value must
+        // fail at the WithTerminal() call site rather than as a hidden terminal-host startup
+        // failure that can block the parent resource.
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddExecutable("myapp", "myapp", ".");
+
+        var ex = Assert.Throws<ArgumentOutOfRangeException>(
+            () => resource.WithTerminal(options => options.Columns = columns));
+        Assert.Equal("value", ex.ParamName);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void WithTerminalRejectsNonPositiveRows(int rows)
+    {
+        // Aspire.TerminalHost rejects a PTY height below 1, so an invalid Rows value must
+        // fail at the WithTerminal() call site rather than as a hidden terminal-host startup
+        // failure that can block the parent resource.
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddExecutable("myapp", "myapp", ".");
+
+        var ex = Assert.Throws<ArgumentOutOfRangeException>(
+            () => resource.WithTerminal(options => options.Rows = rows));
+        Assert.Equal("value", ex.ParamName);
+    }
+
+    [Fact]
+    public void TerminalOptionsRejectNonPositiveDimensions()
+    {
+        var options = new TerminalOptions();
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => options.Columns = 0);
+        Assert.Throws<ArgumentOutOfRangeException>(() => options.Rows = -5);
+
+        // A valid assignment still succeeds, and the boundary value 1 is accepted.
+        options.Columns = 1;
+        options.Rows = 1;
+        Assert.Equal(1, options.Columns);
+        Assert.Equal(1, options.Rows);
+    }
+
     [Fact]
     public async Task WithTerminalCreatesPerReplicaHiddenTerminalHostResources()
     {
