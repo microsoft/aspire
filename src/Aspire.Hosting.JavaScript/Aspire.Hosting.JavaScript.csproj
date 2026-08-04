@@ -20,4 +20,10 @@
     <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Workspace member discovery resolves pnpm/npm/yarn/bun "packages" globs (recursive **,
+         single-segment *, negation) with the standard FileSystemGlobbing matcher. -->
+    <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" />
+  </ItemGroup>
+
 </Project>
