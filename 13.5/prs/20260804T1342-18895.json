@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Significant bug fix for Azure SQL managed-identity provisioning failures on az14.0 deployment image",
+  "mergedAt": "2026-08-04T13:42:59Z",
+  "number": 18895,
+  "runDate": "2026-08-04T18:32:24Z",
+  "status": "included",
+  "title": "Fix Azure SQL managed-identity provisioning script on az14.0 deployment image"
+}

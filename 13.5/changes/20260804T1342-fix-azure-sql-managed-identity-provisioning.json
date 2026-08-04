@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixes Azure SQL managed-identity provisioning failures when deploying to the az14.0 deployment image. The script no longer depends on the SqlServer PowerShell module, makes user creation idempotent so retries succeed, and validates the identity by SID so a recreated managed identity is correctly replaced.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔒",
+  "firstMergedAt": "2026-08-04T13:42:59Z",
+  "lastMergedAt": "2026-08-04T13:42:59Z",
+  "name": "Fix Azure SQL managed-identity provisioning on az14.0",
+  "owner": "mitchdenny",
+  "prs": [
+    18895
+  ]
+}

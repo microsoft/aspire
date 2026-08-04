@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixes the VS Code extension failing to discover the Aspire CLI on Windows when installed as a global tool via dotnet tool install --global Aspire.Cli. The extension now correctly probes aspire.cmd in addition to aspire.exe, resolves Windows PATH shims to fully qualified paths, and honors DOTNET_CLI_HOME.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🪟",
+  "firstMergedAt": "2026-08-04T15:35:31Z",
+  "lastMergedAt": "2026-08-04T15:35:31Z",
+  "name": "Fix Windows global-tool Aspire CLI discovery in VS Code",
+  "owner": "adamint",
+  "prs": [
+    18940
+  ]
+}

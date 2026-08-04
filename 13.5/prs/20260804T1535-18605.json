@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Engineering-only CI pipeline change for secure VS Code extension publishing; not user-facing",
+  "mergedAt": "2026-08-04T15:35:56Z",
+  "number": 18605,
+  "runDate": "2026-08-04T18:32:24Z",
+  "status": "excluded",
+  "title": "Use secure publish for VS Code extension"
+}

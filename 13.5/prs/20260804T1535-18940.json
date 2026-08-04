@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Fixes VS Code extension CLI discovery on Windows when installed as global tool",
+  "mergedAt": "2026-08-04T15:35:31Z",
+  "number": 18940,
+  "runDate": "2026-08-04T18:32:24Z",
+  "status": "included",
+  "title": "Fix Windows global-tool Aspire CLI discovery"
+}

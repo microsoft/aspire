@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Restores backward-compatible asHostedAgent polyglot signature; grouped with existing hosted agent protocol entry",
+  "mergedAt": "2026-08-04T17:05:50Z",
+  "number": 18980,
+  "runDate": "2026-08-04T18:32:24Z",
+  "status": "included",
+  "title": "Restore hosted agent ATS compatibility"
+}

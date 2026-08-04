@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Normalizes Aspire terminology in docs website API reference data; no matching changelog entry - docs website infrastructure",
+  "mergedAt": "2026-08-04T15:10:46Z",
+  "number": 1413,
+  "runDate": "2026-08-04T18:32:24Z",
+  "status": "excluded",
+  "title": "fix: normalize Aspire terminology in generated API reference data"
+}
