@@ -744,3 +744,136 @@ window.downloadStreamAsFile = async function (fileName, contentStreamReference) 
         start();
     }
 })();
+
+// ===== Menu-button ARIA (aria-haspopup + aria-expanded) =====
+// AspireMenuButton renders a <fluent-button> that opens a <fluent-menu>. The ARIA menu-button pattern
+// (https://www.w3.org/WAI/ARIA/apg/patterns/menu-button/) wants aria-haspopup="menu" + aria-expanded on
+// the trigger, but FAST/FluentUI's <fluent-button> host is a role-less custom element whose real control
+// is a native <button part="control"> in its (open) shadow root. Neither attribute may live on the
+// role-less host: aria-expanded there is an axe-core aria-allowed-attr violation, and role="button" on the
+// host would trip nested-interactive against the inner <button>. Both therefore live on the inner control,
+// which has an implicit role=button:
+//  - aria-haspopup is global, so we set it on the inner <button>, where it's valid and FAST leaves it be.
+//  - aria-expanded is what FluentMenu.razor.js stamps onto its anchor (this host) on every open/close, and
+//    FAST reflects the host's aria-expanded onto the inner control. We move that state onto the inner
+//    control and strip the host copy (keeping the host axe-clean), re-pinning the inner control whenever
+//    FAST clears it in response to the host attribute being removed, so the trigger keeps reporting its
+//    expanded/collapsed state to assistive tech.
+// The component just marks each trigger host with data-aspire-menu-trigger; a single document-level
+// observer then covers every menu button, including ones revealed by SPA navigation or opened in dialogs.
+(function initializeMenuButtonAccessibilityFeature() {
+    const TRIGGER_SELECTOR = "fluent-button[data-aspire-menu-trigger]";
+    const registered = new WeakSet();
+
+    function getControl(host) {
+        return host.shadowRoot && host.shadowRoot.querySelector('[part~="control"]');
+    }
+
+    // Reconcile the menu-button ARIA onto the inner native <button>. `expanded` is the state ("true" or
+    // "false") the trigger should report. Returns false until the custom element has upgraded and rendered
+    // its shadow control, so the caller can retry.
+    function applyAria(host, expanded) {
+        const control = getControl(host);
+        if (!control) {
+            return false;
+        }
+        if (control.getAttribute("aria-haspopup") !== "menu") {
+            control.setAttribute("aria-haspopup", "menu");
+        }
+        // Strip the aria-expanded FluentMenu stamps on the role-less host (axe-core aria-allowed-attr) and
+        // pin the desired value onto the inner control instead. The equality guards keep re-pinning (after
+        // FAST clears the inner control) from recursing through the observer indefinitely - setting an
+        // attribute to a new value queues another mutation record, but setting it to its current value is
+        // skipped, so the reconcile settles.
+        if (host.hasAttribute("aria-expanded")) {
+            host.removeAttribute("aria-expanded");
+        }
+        if (control.getAttribute("aria-expanded") !== expanded) {
+            control.setAttribute("aria-expanded", expanded);
+        }
+        return true;
+    }
+
+    function register(host) {
+        if (registered.has(host)) {
+            return;
+        }
+        // The trigger is collapsed until FluentMenu.razor.js reports otherwise via the host's aria-expanded.
+        const state = { expanded: host.getAttribute("aria-expanded") ?? "false" };
+        if (!applyAria(host, state.expanded)) {
+            // The element isn't upgraded yet; retry once its definition is ready (upgrades of already-
+            // parsed elements complete synchronously once the tag is defined).
+            customElements.whenDefined("fluent-button").then(() => register(host));
+            return;
+        }
+        registered.add(host);
+        // A single observer, scoped to aria-expanded on this button, covers both sources of drift so it
+        // stays cheap even on grid pages that render many menu buttons:
+        //  - the host, where FluentMenu.razor.js stamps the authoritative expanded state on open/close, and
+        //  - the inner control, where FAST clears aria-expanded once the host copy is removed.
+        const observer = new MutationObserver(function (mutations) {
+            for (const m of mutations) {
+                // Capture the authoritative state from the host before applyAria strips it below.
+                if (m.target === host && host.hasAttribute("aria-expanded")) {
+                    state.expanded = host.getAttribute("aria-expanded");
+                }
+            }
+            applyAria(host, state.expanded);
+        });
+        observer.observe(host, { attributes: true, attributeFilter: ["aria-expanded"] });
+        const control = getControl(host);
+        if (control) {
+            observer.observe(control, { attributes: true, attributeFilter: ["aria-expanded"] });
+        }
+    }
+
+    function scan() {
+        for (const host of document.querySelectorAll(TRIGGER_SELECTOR)) {
+            register(host);
+        }
+    }
+
+    let scanTimer = null;
+    function scheduleScan() {
+        if (scanTimer !== null) {
+            return;
+        }
+        scanTimer = setTimeout(function () {
+            scanTimer = null;
+            scan();
+        }, 100);
+    }
+
+    function nodeListHasTrigger(nodes) {
+        for (const node of nodes) {
+            if (node.nodeType !== 1) {
+                continue;
+            }
+            if (node.matches?.(TRIGGER_SELECTOR) || node.querySelector?.(TRIGGER_SELECTOR)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function start() {
+        scan();
+        // Menu buttons are inserted deep in Blazor's render tree (SPA navigation) and inside dialogs
+        // appended at <body>. Only rescan when a batch actually adds a trigger, so streaming-log/grid
+        // churn doesn't cost a document-wide query.
+        new MutationObserver(function (mutations) {
+            for (const m of mutations) {
+                if (nodeListHasTrigger(m.addedNodes)) {
+                    scheduleScan();
+                    return;
+                }
+            }
+        }).observe(document.body, { childList: true, subtree: true });
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", start, { once: true });
+    } else {
+        start();
+    }
+})();

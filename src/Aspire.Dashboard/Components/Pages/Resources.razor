@@ -83,7 +83,7 @@
                                 ViewKey="ResourcesList"
                                 OnResize="@(r => _manager.SetWidthFraction(r.Orientation == Orientation.Horizontal ? r.Panel1Fraction : 1))">
                 <Summary>
-                    <div id="resources-summary-layout-id" class="resources-summary-layout">
+                    <div class="resources-summary-layout">
                         <div class="@(!_hideResourceGraph ? "resource-tabs" : string.Empty)">
                             @*
                                 Tab content isn't nested inside FluentTab elements. The tab control is just used to display the tabs.
@@ -263,6 +263,13 @@
                             }
                         </div>
                     </div>
+                    @* FluentMenu unconditionally stamps aria-expanded on its Anchor element (see
+                       FluentMenu.razor.js). This is a cursor-positioned context menu (ShowContextMenuAsync
+                       opens it at the click coordinates), so the anchor is only an id reference, never a
+                       visible trigger. Point it at a hidden, non-focusable element kept out of the
+                       accessibility tree so the stamped aria-expanded doesn't land on the role-less visible
+                       summary <div> (axe aria-allowed-attr) and AT users don't meet a non-operable control. *@
+                    <button id="resources-summary-layout-id" type="button" style="display: none;"></button>
                     <FluentOverlay Visible="_contextMenuOpen" VisibleChanged="ContextMenuOpenChangedAsync" OnClose="ContextMenuClosedAsync" Transparent="true" FullScreen="true" />
                     <AspireMenu Open="_contextMenuOpen" OpenChanged="ContextMenuOpenChangedAsync" @ref="_contextMenu" Anchor="resources-summary-layout-id" Anchored="false" Items="_contextMenuItems" />
                 </Summary>

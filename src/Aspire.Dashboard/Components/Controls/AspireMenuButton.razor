@@ -6,12 +6,17 @@
     var additionalButtonAttributes = new Dictionary<string, object>(AdditionalAttributes ?? ImmutableDictionary<string, object>.Empty)
     {
         { "onkeydown", (KeyboardEventArgs args) => OnKeyDown(args) },
-        // Render the ARIA menu-button semantics declaratively on the host <fluent-button>. FluentUI's
-        // web component reflects aria-haspopup/aria-expanded from the host element onto the interactive
-        // <button part="control"> in its shadow root, so the inner control stays in sync without any JS
-        // interop. See https://www.w3.org/WAI/ARIA/apg/patterns/menu-button/.
-        { "aria-haspopup", "menu" },
-        { "aria-expanded", _visible ? "true" : "false" }
+        // Menu-button ARIA is awkward here because FluentUI's <fluent-button> host is a role-less custom
+        // element whose real interactive element is a native <button part="control"> in its shadow root.
+        // Neither aria-haspopup nor aria-expanded may live on the role-less host: aria-expanded there is an
+        // axe-core aria-allowed-attr violation, and giving the host role="button" would trip
+        // nested-interactive against the inner <button>. So app.js places both on the inner control
+        // (implicit role=button) instead - aria-haspopup="menu" directly, and aria-expanded moved off the
+        // host (where FluentMenu.razor.js stamps it on open/close) onto the inner control - so the trigger
+        // still reports its expanded state to assistive tech while the host stays axe-clean.
+        // The data-* marker lets a single document-level app.js observer find every menu button.
+        // See https://www.w3.org/WAI/ARIA/apg/patterns/menu-button/.
+        { "data-aspire-menu-trigger", "" }
     };
 }
 
