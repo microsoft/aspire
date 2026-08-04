@@ -13,6 +13,7 @@
 | `ASPIRE008` | Error | '\[ProjectName\]' project requires GenerateAssemblyInfo to be enabled. The Aspire AppHost relies on assembly metadata attributes to locate required dependencies. Please remove &lt;GenerateAssemblyInfo&gt;false&lt;/GenerateAssemblyInfo&gt; from your project file or set it to true. | [src/Aspire.Hosting.AppHost/build/Aspire.Hosting.AppHost.in.targets](../src/Aspire.Hosting.AppHost/build/Aspire.Hosting.AppHost.in.targets) |
 | `ASPIRE009` | Error | '\[ProjectName\]' is configured to use the Aspire CLI bundle, but the bundle could not be resolved. | [src/Aspire.Hosting.AppHost/build/Aspire.Hosting.AppHost.in.targets](../src/Aspire.Hosting.AppHost/build/Aspire.Hosting.AppHost.in.targets) |
 | `ASPIRE010` | Warning | '\[ProjectName\]' is configured with AspireUseCliBundle=false. Some Aspire features may not work when the Aspire CLI bundle is not being used. | [src/Aspire.Hosting.AppHost/build/Aspire.Hosting.AppHost.in.targets](../src/Aspire.Hosting.AppHost/build/Aspire.Hosting.AppHost.in.targets) |
+| `ASPIRE011` | Error | '\[ProjectName\]' is configured with AspireCliInvocationMode=Dnx, but the dnx command could not be found on PATH. | [src/Aspire.Hosting.AppHost/build/Aspire.Hosting.AppHost.in.targets](../src/Aspire.Hosting.AppHost/build/Aspire.Hosting.AppHost.in.targets) |
 
 ## Analyzer Warnings
 
