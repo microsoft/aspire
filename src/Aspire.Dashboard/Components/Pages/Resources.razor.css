@@ -79,10 +79,6 @@
     overflow: hidden;
 }
 
-::deep .resource-tabs fluent-tabs {
-    margin-left: calc(var(--design-unit) * 3px);
-}
-
 ::deep .resources-tab-header {
     max-width: 100%;
     min-width: 0;
@@ -106,6 +102,8 @@
     flex-wrap: wrap;
     gap: calc(var(--design-unit) * 1.5px);
     min-width: 0;
+    padding-top: 0.5rem;
+    padding-left: var(--layout-left-padding);
     padding-right: var(--layout-right-padding);
     container-type: inline-size;
 }

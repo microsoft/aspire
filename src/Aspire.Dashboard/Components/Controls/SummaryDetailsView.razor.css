@@ -77,7 +77,7 @@
 ::deep .details-container > header > .details-header-title {
     grid-area: title;
     font-size: var(--type-ramp-plus-1-font-size);
-    font-weight: bold;
+    font-weight: 600;
     text-overflow: ellipsis;
     white-space: nowrap;
     overflow: hidden;

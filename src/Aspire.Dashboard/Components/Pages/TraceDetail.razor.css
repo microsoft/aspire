@@ -35,6 +35,7 @@
 }
 
 ::deep .tracedetails-grid-container {
+    margin-top: 4px;
     flex: 1;
     min-height: 0;
     overflow: auto;
@@ -109,7 +110,7 @@
 ::deep .ticks .tick {
     width: 1px;
     height: 32px;
-    background: #d8d8d8;
+    background: var(--trace-tick-background-color);
     grid-row: 1;
 }
 

@@ -60,6 +60,11 @@ fluent-toolbar fluent-divider {
     border: 0;
 }
 
+fluent-toolbar strong,
+.main-toolbar strong {
+    font-weight: 600;
+}
+
 fluent-toolbar fluent-switch,
 fluent-toolbar p {
     margin-inline-end: 15px;
@@ -252,6 +257,7 @@ fluent-combobox:focus-visible::part(control) {
     --messagebar-foreground-color: #242424;
     --table-header-border-color: var(--neutral-stroke-rest);
     --table-body-border-color: #f2f2f2;
+    --trace-tick-background-color: #d8d8d8;
     --layout-toolbar-padding: calc(var(--design-unit) * 1.5px);
     /* Compact pass: tighten the outer gutters so content starts closer to the nav rail
        and reaches nearer the right edge, fitting more on screen. (was 4.5/2 -> 3/1.5) */
@@ -374,6 +380,7 @@ fluent-combobox:focus-visible::part(control) {
     --messagebar-foreground-color: #e5e5e5;
     --table-header-border-color: var(--neutral-stroke-rest);
     --table-body-border-color: #474747;
+    --trace-tick-background-color: #717171;
     /* overrides of default fluentui-blazor styling */
     --error: #E10B11 !important;
     color-scheme: dark;
@@ -522,13 +529,6 @@ h1, h2, h3, h4, h5, h6,
    tokens), so it's a literal here rather than a token reference. */
 .fluent-dialog-header > fluent-tooltip:last-child {
     margin-left: -10px;
-}
-
-/* Resources page: the tabs share their row with the filter/toolbar controls (see
-   Resources.razor.css). Give that row a small, deliberate 0.5rem of breathing room below the
-   app header - lighter than the other pages' toolbar top padding since the tabs sit higher. */
-.resource-tabs-header-row {
-    padding-top: 0.5rem;
 }
 
 h1 {
@@ -1494,7 +1494,6 @@ fluent-switch.table-switch::part(label) {
 .property-grid-container fluent-accordion-item::part(heading-content) {
     font-family: var(--aspire-font-display);
     font-weight: 600;
-    font-size: var(--type-ramp-plus-1-font-size);
 }
 
 .property-grid-container fluent-accordion .fluent-data-grid-row:last-of-type {
