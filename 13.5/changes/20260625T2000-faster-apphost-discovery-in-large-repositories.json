@@ -5,15 +5,16 @@
   "breaking": false,
   "changeType": "Improvements",
   "communityContributors": [],
-  "description": "AppHost discovery (used by `aspire ls`, `aspire run`, and other commands) is significantly faster in large repositories. A lightweight XML pre-filter now skips full MSBuild evaluation for projects that clearly are not AppHosts, reducing cold discovery time by up to 2× in large repos.",
+  "description": "AppHost discovery (used by `aspire ls`, `aspire run`, and other commands) is significantly faster in large repositories. A lightweight XML pre-filter now skips full MSBuild evaluation for projects that clearly are not AppHosts, reducing cold discovery time. The pre-filter also correctly recognizes ancestor Directory.Build.* files, SDK-style imports, and MSBuild walk-up imports as AppHost markers.",
   "docsPrs": [],
   "docsRequired": false,
   "emoji": "⚡",
   "firstMergedAt": "2026-06-25T20:00:57Z",
-  "lastMergedAt": "2026-06-25T20:00:57Z",
+  "lastMergedAt": "2026-08-04T00:01:32Z",
   "name": "Faster AppHost discovery in large repositories",
   "owner": "ellahathaway",
   "prs": [
-    18436
+    18436,
+    18555
   ]
 }

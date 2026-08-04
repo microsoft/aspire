@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Correctness follow-up to #18436 AppHost discovery prefilter; grouped with existing entry",
+  "mergedAt": "2026-08-04T00:01:32Z",
+  "number": 18555,
+  "runDate": "2026-08-04T00:22:35Z",
+  "status": "included",
+  "title": "Recognize ancestor Directory.Build.* and <Import Sdk=...> in AppHost prefilter"
+}

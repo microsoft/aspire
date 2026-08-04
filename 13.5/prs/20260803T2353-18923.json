@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Internal cleanup: removed misplaced zero-byte file with no user-facing impact",
+  "mergedAt": "2026-08-03T23:53:42Z",
+  "number": 18923,
+  "runDate": "2026-08-04T00:22:35Z",
+  "status": "excluded",
+  "title": "Remove misplaced empty LogsCommand file"
+}

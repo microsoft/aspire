@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "`aspire doctor` now bounds each environment check to 30 seconds and the entire check aggregate to 2 minutes. Previously a blocked check or installation discovery could cause the command to hang indefinitely.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "⏱️",
+  "firstMergedAt": "2026-08-03T23:34:25Z",
+  "lastMergedAt": "2026-08-03T23:34:25Z",
+  "name": "Timeouts for aspire doctor checks",
+  "owner": "JamesNK",
+  "prs": [
+    18969
+  ]
+}

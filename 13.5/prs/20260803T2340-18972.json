@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Dependency version bump (Fluent UI 4.14.4) with internal workaround removal; no user-facing behavior change",
+  "mergedAt": "2026-08-03T23:40:25Z",
+  "number": 18972,
+  "runDate": "2026-08-04T00:22:35Z",
+  "status": "excluded",
+  "title": "Update Fluent UI to 4.14.4"
+}

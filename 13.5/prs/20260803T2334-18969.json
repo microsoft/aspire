@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Improvement to aspire doctor: individual checks now timeout at 30s, aggregate at 2 minutes",
+  "mergedAt": "2026-08-03T23:34:25Z",
+  "number": 18969,
+  "runDate": "2026-08-04T00:22:35Z",
+  "status": "included",
+  "title": "Bound aspire doctor checks with timeouts"
+}
