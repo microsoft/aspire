@@ -3469,6 +3469,59 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('continuous AppHost results are applied within a bounded wait', async () => {
+        const clock = sinon.useFakeTimers();
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        let incrementalCandidateCallback: ((candidate: CandidateAppHostDisplayInfo) => void) | undefined;
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: (_folder: vscode.WorkspaceFolder, _forceRefresh?: boolean, _cancellationToken?: vscode.CancellationToken, onIncrementalCandidate?: (candidate: CandidateAppHostDisplayInfo) => void) => {
+                incrementalCandidateCallback = onIncrementalCandidate;
+                return discovery.promise;
+            },
+            dispose: () => { },
+        };
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+        let updateCount = 0;
+        const updateSubscription = repository.onDidChangeData(() => updateCount++);
+        const candidates = Array.from({ length: 10 }, (_, index) => ({
+            path: `/workspace/AppHost${index}/AppHost.csproj`,
+            language: 'csharp',
+            status: 'buildable',
+        }));
+
+        try {
+            await waitForMicrotasks();
+            assert.ok(incrementalCandidateCallback);
+
+            incrementalCandidateCallback(candidates[0]);
+            for (let index = 1; index < candidates.length; index++) {
+                await clock.tickAsync(25);
+                incrementalCandidateCallback(candidates[index]);
+            }
+
+            await clock.tickAsync(24);
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, []);
+            assert.strictEqual(updateCount, 0);
+
+            await clock.tickAsync(1);
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, candidates.map(candidate => candidate.path));
+            assert.strictEqual(updateCount, 1);
+        }
+        finally {
+            updateSubscription.dispose();
+            repository.dispose();
+            workspaceFoldersStub.restore();
+            clock.restore();
+        }
+    });
+
     test('AppHost results separated by pauses are applied incrementally', async () => {
         const clock = sinon.useFakeTimers();
         const workspaceFolder = {

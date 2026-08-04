@@ -190,6 +190,7 @@ export class AppHostDataRepository {
     private static readonly _oneShotCommandTimeoutMs = 30000;
     private static readonly _oneShotOutputBufferLimit = oneShotOutputBufferLimit;
     private static readonly _streamedCandidateUpdateDebounceMs = 50;
+    private static readonly _streamedCandidateUpdateMaxWaitMs = 250;
 
     private readonly _onDidChangeData = new vscode.EventEmitter<void>();
     readonly onDidChangeData = this._onDidChangeData.event;
@@ -723,14 +724,19 @@ export class AppHostDataRepository {
         this._showWorkspaceAppHostDiscoveryProgress();
         const streamedCandidates: CandidateAppHostDisplayInfo[] = [];
         let incrementalCandidateUpdateTimer: ReturnType<typeof setTimeout> | undefined;
+        let incrementalCandidateMaxWaitTimer: ReturnType<typeof setTimeout> | undefined;
         const cancelIncrementalCandidateUpdate = (): void => {
             if (incrementalCandidateUpdateTimer) {
                 clearTimeout(incrementalCandidateUpdateTimer);
                 incrementalCandidateUpdateTimer = undefined;
             }
+            if (incrementalCandidateMaxWaitTimer) {
+                clearTimeout(incrementalCandidateMaxWaitTimer);
+                incrementalCandidateMaxWaitTimer = undefined;
+            }
         };
         const applyIncrementalCandidateUpdates = (): void => {
-            incrementalCandidateUpdateTimer = undefined;
+            cancelIncrementalCandidateUpdate();
             if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
                 return;
             }
@@ -754,10 +760,14 @@ export class AppHostDataRepository {
                 streamedCandidates.push(candidate);
             }
 
-            // Warm discovery caches can emit dozens of candidates within a few milliseconds.
-            // Resetting a trailing timer coalesces that burst into one tree update while preserving
-            // incremental results when a slower scan has a natural pause between candidates.
-            cancelIncrementalCandidateUpdate();
+            // Use a trailing debounce to coalesce short bursts, but start the maximum-wait timer
+            // only for the first candidate so a dense stream cannot postpone every tree update.
+            if (!incrementalCandidateMaxWaitTimer) {
+                incrementalCandidateMaxWaitTimer = setTimeout(applyIncrementalCandidateUpdates, AppHostDataRepository._streamedCandidateUpdateMaxWaitMs);
+            }
+            if (incrementalCandidateUpdateTimer) {
+                clearTimeout(incrementalCandidateUpdateTimer);
+            }
             incrementalCandidateUpdateTimer = setTimeout(applyIncrementalCandidateUpdates, AppHostDataRepository._streamedCandidateUpdateDebounceMs);
         };
 
