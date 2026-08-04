@@ -799,6 +799,10 @@ public class ResourceNotificationService : IDisposable
     /// <param name="resource">The resource to update</param>
     /// <param name="resourceId"> The id of the resource.</param>
     /// <param name="stateFactory">A factory that creates the new state based on the previous state.</param>
+    /// <remarks>
+    /// If the resulting snapshot has the same content as the current snapshot, the update is not
+    /// published and the snapshot version is not incremented.
+    /// </remarks>
     public Task PublishUpdateAsync(IResource resource, string resourceId, Func<CustomResourceSnapshot, CustomResourceSnapshot> stateFactory)
     {
         var notificationState = GetResourceNotificationState(resourceId, resource);
@@ -844,7 +848,10 @@ public class ResourceNotificationService : IDisposable
             // See https://github.com/microsoft/aspire/issues/18869.
             if (notificationState.LastSnapshot is { } lastSnapshot && lastSnapshot.ContentEquals(newState))
             {
-                _logger.LogTrace("Resource {ResourceName}/{ResourceId} update skipped because the snapshot is unchanged.", resource.Name, resourceId);
+                if (_logger.IsEnabled(LogLevel.Trace))
+                {
+                    _logger.LogTrace("Resource {ResourceName}/{ResourceId} update skipped because the snapshot is unchanged.", resource.Name, resourceId);
+                }
 
                 return Task.CompletedTask;
             }
@@ -1193,6 +1200,10 @@ public class ResourceNotificationService : IDisposable
     /// </summary>
     /// <param name="resource">The resource to update</param>
     /// <param name="stateFactory">A factory that creates the new state based on the previous state.</param>
+    /// <remarks>
+    /// If the resulting snapshot has the same content as the current snapshot, the update is not
+    /// published and the snapshot version is not incremented.
+    /// </remarks>
     public async Task PublishUpdateAsync(IResource resource, Func<CustomResourceSnapshot, CustomResourceSnapshot> stateFactory)
     {
         var resourceNames = resource.GetResolvedResourceNames();

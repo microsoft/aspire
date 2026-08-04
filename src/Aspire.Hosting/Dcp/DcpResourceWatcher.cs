@@ -46,6 +46,8 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
 
     // Holds names of resources that reached terminal state and logs have already been flushed for them. 
     // Prevents re-reading DCP's log store every time an already-terminal resource is reported again.
+    // Point-in-time FailedToStart reads and incomplete attempts are intentionally not recorded so a later terminal
+    // notification can retry them.
     private readonly ConcurrentDictionary<string, bool> _allLogsFlushed = new();
     private Task? _resourceWatchTask;
 
@@ -303,19 +305,22 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                     // depending on the ordering, and GetAllAsync can still query DCP's external log
                     // store later without this extra read on every terminal transition.
                     //
-                    // Flush at most once for resources in terminal state. Every further notification for a resource
-                    // that is already terminal describes logs we have read, and the flush is awaited
-                    // while holding the watcher's single output semaphore, so repeating it stalls the
-                    // Container, Executable, ContainerExec, Service and Endpoint watches alike for up
-                    // to TerminalLogFlushTimeout. The marker is cleared below if the resource is restarted, 
-                    // so a restarted resource is flushed again when it terminates.
+                    // A successfully completed follow stream needs to run only once per terminal period.
+                    // The flush is awaited while holding the watcher's single output semaphore, so repeating
+                    // a completed flush would stall all resource watches. Point-in-time FailedToStart reads
+                    // and incomplete attempts remain retryable because they cannot guarantee all logs were read.
+                    // The marker is cleared below if the resource is restarted.
                     if (status.State is not null && KnownResourceStates.TerminalStates.Contains(status.State))
                     {
                         if (HasLogsAvailable(resource) &&
                             _loggerService.HasActiveSubscribers(resource.Metadata.Name) &&
-                            _allLogsFlushed.TryAdd(resource.Metadata.Name, true))
+                            !_allLogsFlushed.ContainsKey(resource.Metadata.Name))
                         {
-                            await FlushCurrentLogsAsync(resource, status, _shutdownToken).ConfigureAwait(false);
+                            var completed = await FlushCurrentLogsAsync(resource, status, _shutdownToken).ConfigureAwait(false);
+                            if (completed)
+                            {
+                                _allLogsFlushed.TryAdd(resource.Metadata.Name, true);
+                            }
                         }
                     }
                     else
@@ -361,10 +366,13 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         }
     }
 
-    private async Task FlushCurrentLogsAsync<T>(T resource, ResourceStatus status, CancellationToken cancellationToken)
+    private async Task<bool> FlushCurrentLogsAsync<T>(T resource, ResourceStatus status, CancellationToken cancellationToken)
         where T : CustomResource, IKubernetesStaticMetadata
     {
         var logEntries = new List<LogEntry>();
+        var follow = status.State != KnownResourceStates.FailedToStart;
+        var completed = false;
+
         // The resource watcher serializes all resource-change handling through one semaphore in
         // Start(). A follow stream gives the strongest DCP guarantee for terminal logs, but it is
         // still an external stream: if DCP stalls or the resource disappears mid-stream, waiting
@@ -381,10 +389,9 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
             // race with DCP's own cleanup/log-drain work.
             //
             // FailedToStart is different: the process never starts, so there may be no completing
-            // process log stream to follow. DCP emits the system failure logs before the FailedToStart
-            // state is observed, so use a current snapshot there to avoid blocking terminal state
-            // publication indefinitely.
-            var follow = status.State != KnownResourceStates.FailedToStart;
+            // process log stream to follow. Use a current snapshot there to avoid blocking terminal
+            // state publication indefinitely. A later resource notification retries the snapshot
+            // because, unlike a completed follow stream, it cannot prove all logs were drained.
             var logSource = new ResourceLogSource<T>(_logger, _kubernetesService, resource, follow: follow);
 
             // Treat the flush as best-effort: logs collected before the timeout are still forwarded
@@ -393,6 +400,11 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
             {
                 logEntries.AddRange(CreateLogEntries(batch));
             }
+
+            // ResourceLogSource treats cancellation as an expected stream shutdown, so explicitly
+            // distinguish that from DCP completing every follow stream.
+            timeoutCts.Token.ThrowIfCancellationRequested();
+            completed = true;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -416,6 +428,9 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         // the same DCP log source again.
         SetPendingFollowLogDeduplication(resource.Metadata.Name, logEntries);
         _loggerService.AddLogEntries(resource.Metadata.Name, logEntries, inMemorySource: false, skipExisting: true);
+
+        // Only normal completion of a follow stream proves DCP has no more logs to deliver.
+        return follow && completed;
     }
 
     private static bool HasLogsAvailable(CustomResource resource)

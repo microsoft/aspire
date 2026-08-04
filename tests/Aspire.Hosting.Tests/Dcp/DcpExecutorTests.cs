@@ -1547,13 +1547,28 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         builder.AddContainer("other", "image");
 
         string? blockingDcpResourceName = null;
+        var normalStreamStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var blockingFlushAttempts = 0;
         var kubernetesService = new TestKubernetesService(startStreamWithFollow: (obj, logStreamType, follow) =>
         {
             if (obj.Metadata.Name == blockingDcpResourceName &&
-                obj is Container { Status.State: ContainerState.Exited } &&
+                obj is Container container &&
+                container.Status?.State != ContainerState.Exited &&
+                logStreamType == Logs.StreamTypeSystem &&
                 follow == true)
             {
-                return new Pipe().Reader.AsStream();
+                normalStreamStarted.TrySetResult();
+            }
+
+            if (obj.Metadata.Name == blockingDcpResourceName &&
+                obj is Container { Status.State: ContainerState.Exited } &&
+                logStreamType == Logs.StreamTypeStdErr &&
+                follow == true)
+            {
+                if (Interlocked.Increment(ref blockingFlushAttempts) == 1)
+                {
+                    return new Pipe().Reader.AsStream();
+                }
             }
 
             return new MemoryStream();
@@ -1563,14 +1578,22 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var dcpOptions = new DcpOptions { DashboardPath = "./dashboard" };
         var resourceLoggerService = new ResourceLoggerService();
         var otherTerminalNotification = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var blockingTerminalNotifications = 0;
         string? otherDcpResourceName = null;
 
         var events = new DcpExecutorEvents();
         events.Subscribe<OnResourceChangedContext>(context =>
         {
-            if (context.DcpResourceName == otherDcpResourceName && context.Status.State == ContainerState.Exited)
+            if (context.Status.State == ContainerState.Exited)
             {
-                otherTerminalNotification.TrySetResult();
+                if (context.DcpResourceName == blockingDcpResourceName)
+                {
+                    Interlocked.Increment(ref blockingTerminalNotifications);
+                }
+                else if (context.DcpResourceName == otherDcpResourceName)
+                {
+                    otherTerminalNotification.TrySetResult();
+                }
             }
 
             return Task.CompletedTask;
@@ -1586,6 +1609,9 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         otherDcpResourceName = otherContainer.Metadata.Name;
 
         using var subscription = resourceLoggerService.Subscribe(blockingDcpResourceName, _ => { });
+        blockingContainer.Status = new ContainerStatus { State = ContainerState.Running };
+        kubernetesService.PushResourceModified(blockingContainer);
+        await normalStreamStarted.Task.DefaultTimeout();
 
         blockingContainer.Status = new ContainerStatus { State = ContainerState.Exited };
         kubernetesService.PushResourceModified(blockingContainer);
@@ -1594,6 +1620,16 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         kubernetesService.PushResourceModified(otherContainer);
 
         await otherTerminalNotification.Task.DefaultTimeout();
+
+        blockingContainer.Status = new ContainerStatus { State = ContainerState.Exited, ExitCode = 1 };
+        kubernetesService.PushResourceModified(blockingContainer);
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => Volatile.Read(ref blockingTerminalNotifications) >= 2,
+            "The terminal state change after a timed-out flush should be reported.");
+
+        Assert.Equal(2, Volatile.Read(ref blockingTerminalNotifications));
+        Assert.Equal(2, Volatile.Read(ref blockingFlushAttempts));
     }
 
     [Fact]
@@ -1725,8 +1761,10 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         kubernetesService.PushResourceUnchanged(container);
 
         await AsyncTestHelpers.AssertIsTrueRetryAsync(
-            () => observedStates.Count(s => s == ContainerState.Exited) == 2,
+            () => observedStates.Count(s => s == ContainerState.Exited) >= 2,
             "Events without a resource version should always be processed.");
+
+        Assert.Equal(2, observedStates.Count(s => s == ContainerState.Exited));
     }
 
     [Fact]
@@ -1781,6 +1819,59 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         await AsyncTestHelpers.AssertIsTrueRetryAsync(
             () => observedStates.Contains(ContainerState.Exited),
             "The state change to Exited should be reported.");
+
+        AssertStatesReportedAfter(observedStates, ContainerState.Running, ContainerState.Exited);
+    }
+
+    [Fact]
+    public async Task ResourceWatch_RecreatedResourceWithPreviouslySeenVersionIsProcessed()
+    {
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        builder.AddContainer("database", "image");
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var observedStates = new ConcurrentQueue<string?>();
+
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceChangedContext>(context =>
+        {
+            if (context.Resource.Name == "database")
+            {
+                observedStates.Enqueue(context.Status.State);
+            }
+
+            return Task.CompletedTask;
+        });
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, events: events);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+
+        container.Status = new ContainerStatus { State = ContainerState.Running };
+        kubernetesService.PushResourceModified(container);
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => observedStates.Contains(ContainerState.Running),
+            "The state change to Running should be reported.");
+
+        // Resource versions are opaque, so a recreated object can carry a value that was already
+        // observed for the previous object with the same kind and name. The Deleted event must clear
+        // that version before the recreated object is delivered as Added.
+        kubernetesService.PushResourceDeleted(container);
+        container.Status = new ContainerStatus { State = ContainerState.Exited };
+        kubernetesService.PushResourceUnchanged(container, k8s.WatchEventType.Added);
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => observedStates.Contains(ContainerState.Exited),
+            "The recreated resource should be reported even when its resource version was seen before deletion.");
 
         AssertStatesReportedAfter(observedStates, ContainerState.Running, ContainerState.Exited);
     }
@@ -1844,7 +1935,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ResourceWatch_TerminalLogsAreFlushedOnlyOncePerTerminalPeriod()
+    public async Task ResourceWatch_FailedToStartLogsAreRetriedForEachChangedTerminalNotification()
     {
         var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
         {
@@ -1853,12 +1944,12 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         builder.AddContainer("database", "image");
 
-        // A FailedToStart resource is flushed with a non-follow stream, so counting non-follow
-        // stream opens counts terminal log flushes without picking up normal log streaming.
         var flushStreamOpens = 0;
         var kubernetesService = new TestKubernetesService(startStreamWithFollow: (obj, logStreamType, follow) =>
         {
-            if (follow == false)
+            if (obj is Container { Status.State: ContainerState.FailedToStart } &&
+                logStreamType == Logs.StreamTypeSystem &&
+                follow == false)
             {
                 Interlocked.Increment(ref flushStreamOpens);
             }
@@ -1898,21 +1989,118 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         kubernetesService.PushResourceModified(container);
 
         await AsyncTestHelpers.AssertIsTrueRetryAsync(
-            () => flushesAtNotification.Count == 1,
+            () => !flushesAtNotification.IsEmpty,
             "The terminal state should be reported.");
 
-        // A later change to a resource that is already terminal describes logs that were already
-        // read, so it must not trigger another read of the DCP log store.
+        // FailedToStart uses a point-in-time snapshot because there is no process stream that can
+        // complete. A later changed notification must retry in case DCP drained more logs meanwhile.
         container.Status = new ContainerStatus { State = ContainerState.FailedToStart, ExitCode = 1 };
         kubernetesService.PushResourceModified(container);
 
         await AsyncTestHelpers.AssertIsTrueRetryAsync(
-            () => flushesAtNotification.Count == 2,
+            () => flushesAtNotification.Count >= 2,
             "The follow-up change should be reported.");
 
-        var flushes = flushesAtNotification.ToArray();
-        Assert.True(flushes[0] > 0, "Entering the terminal state should flush the current logs.");
-        Assert.Equal(flushes[0], flushes[1]);
+        Assert.Equal([1, 2], flushesAtNotification.ToArray());
+    }
+
+    [Fact]
+    public async Task ResourceWatch_TerminalLogsAreFlushedOnlyOncePerTerminalPeriod()
+    {
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        builder.AddContainer("database", "image");
+
+        var normalStreamStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var flushStreamOpens = 0;
+        var kubernetesService = new TestKubernetesService(startStreamWithFollow: (obj, logStreamType, follow) =>
+        {
+            if (obj is Container container &&
+                container.Status?.State != ContainerState.Exited &&
+                logStreamType == Logs.StreamTypeSystem &&
+                follow == true)
+            {
+                normalStreamStarted.TrySetResult();
+            }
+
+            if (obj is Container { Status.State: ContainerState.Exited } &&
+                logStreamType == Logs.StreamTypeSystem &&
+                follow == true)
+            {
+                Interlocked.Increment(ref flushStreamOpens);
+            }
+
+            return new MemoryStream();
+        });
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var resourceLoggerService = new ResourceLoggerService();
+
+        string? dcpResourceName = null;
+        var flushesAtNotification = new ConcurrentQueue<int>();
+        var runningNotifications = 0;
+
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceChangedContext>(context =>
+        {
+            if (context.DcpResourceName == dcpResourceName)
+            {
+                if (context.Status.State == ContainerState.Exited)
+                {
+                    flushesAtNotification.Enqueue(Volatile.Read(ref flushStreamOpens));
+                }
+                else if (context.Status.State == ContainerState.Running)
+                {
+                    Interlocked.Increment(ref runningNotifications);
+                }
+            }
+
+            return Task.CompletedTask;
+        });
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, resourceLoggerService: resourceLoggerService, events: events);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+        dcpResourceName = container.Metadata.Name;
+
+        using var subscription = resourceLoggerService.Subscribe(dcpResourceName, _ => { });
+        container.Status = new ContainerStatus { State = ContainerState.Running };
+        kubernetesService.PushResourceModified(container);
+        await normalStreamStarted.Task.DefaultTimeout();
+
+        container.Status = new ContainerStatus { State = ContainerState.Exited };
+        kubernetesService.PushResourceModified(container);
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => !flushesAtNotification.IsEmpty,
+            "The first terminal state should be reported.");
+
+        container.Status = new ContainerStatus { State = ContainerState.Exited, ExitCode = 1 };
+        kubernetesService.PushResourceModified(container);
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => flushesAtNotification.Count >= 2,
+            "The changed terminal state should be reported.");
+
+        container.Status = new ContainerStatus { State = ContainerState.Running };
+        kubernetesService.PushResourceModified(container);
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => Volatile.Read(ref runningNotifications) >= 2,
+            "The resource restart should be reported.");
+
+        container.Status = new ContainerStatus { State = ContainerState.Exited, ExitCode = 2 };
+        kubernetesService.PushResourceModified(container);
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => flushesAtNotification.Count >= 3,
+            "The terminal state after restart should be reported.");
+
+        Assert.Equal([1, 1, 2], flushesAtNotification.ToArray());
     }
 
     /// <summary>

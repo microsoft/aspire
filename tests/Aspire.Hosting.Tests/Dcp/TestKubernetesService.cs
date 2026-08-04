@@ -156,6 +156,15 @@ internal sealed class TestKubernetesService : IKubernetesService
     }
 
     /// <summary>
+    /// Delivers a resource to the watchers as a <see cref="WatchEventType.Deleted"/> event without
+    /// assigning a new resource version.
+    /// </summary>
+    public void PushResourceDeleted(CustomResource resource)
+    {
+        PushResourceUnchanged(resource, WatchEventType.Deleted);
+    }
+
+    /// <summary>
     /// Replays every existing resource to the watchers as an <see cref="WatchEventType.Added"/> event,
     /// each carrying the resource version it already has.
     /// </summary>
