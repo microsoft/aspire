@@ -23,6 +23,7 @@
     "nodemon": "^3.1.10"
   },
   "overrides": {
-    "body-parser": "2.3.0"
+    "body-parser": "2.3.0",
+    "brace-expansion@1": "2.1.3"
   }
 }

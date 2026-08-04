@@ -11,6 +11,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.ApplicationModel.Docker;
 using Aspire.Hosting.JavaScript;
@@ -27,7 +28,7 @@ namespace Aspire.Hosting;
 /// <summary>
 /// Provides extension methods for adding JavaScript applications to an <see cref="IDistributedApplicationBuilder"/>.
 /// </summary>
-public static class JavaScriptHostingExtensions
+public static partial class JavaScriptHostingExtensions
 {
     private const string BrowserCapability = "browser";
     private const string DefaultNodeVersion = "22";
@@ -1982,6 +1983,7 @@ public static class JavaScriptHostingExtensions
     /// <param name="install">When true (default), automatically installs packages before the application starts. When false, only sets the package manager annotation without creating an installer resource.</param>
     /// <param name="installArgs">The command-line arguments passed to "pnpm install".</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when <c>package.json</c> declares an invalid pnpm package manager version or integrity.</exception>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<TResource> WithPnpm<TResource>(this IResourceBuilder<TResource> resource, bool install = true, string[]? installArgs = null) where TResource : JavaScriptAppResource
@@ -2061,15 +2063,14 @@ public static class JavaScriptHostingExtensions
                 var version = packageManager.AsSpan("pnpm@".Length);
                 ReadOnlySpan<char> integrity = default;
                 var hashSeparator = version.IndexOf('+');
-                if (hashSeparator >= 0)
+                var hasIntegrity = hashSeparator >= 0;
+                if (hasIntegrity)
                 {
                     integrity = version[(hashSeparator + 1)..];
                     version = version[..hashSeparator];
                 }
 
-                if (!version.IsEmpty &&
-                    char.IsAsciiDigit(version[0]) &&
-                    version.IndexOfAnyExcept("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.-") < 0)
+                if (PnpmVersionRegex().IsMatch(version))
                 {
                     var integritySeparator = integrity.IndexOf('.');
                     if (integritySeparator > 0 &&
@@ -2080,11 +2081,16 @@ public static class JavaScriptHostingExtensions
                         return (version.ToString(), (integrity[..integritySeparator].ToString(), hash.ToString()));
                     }
 
-                    if (integrity.IsEmpty)
+                    if (!hasIntegrity)
                     {
                         return (version.ToString(), null);
                     }
                 }
+
+                // A declared pnpm specification controls the binary installed in the published image.
+                // Fail closed instead of silently discarding the requested version and integrity.
+                throw new InvalidOperationException(
+                    $"The packageManager value '{packageManager}' in '{packageJsonPath}' is invalid. Expected 'pnpm@<version>' or 'pnpm@<version>+<sha224|sha256|sha384|sha512>.<hex hash>'.");
             }
         }
         catch (JsonException)
@@ -2099,6 +2105,13 @@ public static class JavaScriptHostingExtensions
 
         return (DefaultPnpmVersion, null);
     }
+
+    // Corepack requires packageManager values to use an exact semantic version. node-semver
+    // also accepts the ecosystem's conventional leading "v"; integrity metadata is parsed
+    // separately after the version's '+' delimiter.
+    // See https://github.com/nodejs/corepack/blob/436b358a19f6d2592cff740078db1b06953c3578/sources/specUtils.ts
+    [GeneratedRegex("""^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-((?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*))?$""", RegexOptions.CultureInvariant | RegexOptions.NonBacktracking)]
+    private static partial Regex PnpmVersionRegex();
 
     /// <summary>
     /// Adds a build script annotation to the resource builder using the specified command-line arguments.

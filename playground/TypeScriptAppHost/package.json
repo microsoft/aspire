@@ -17,5 +17,8 @@
     "nodemon": "^3.1.11",
     "tsx": "^4.22.3",
     "typescript": "^5.3.0"
+  },
+  "overrides": {
+    "brace-expansion@1": "2.1.3"
   }
 }

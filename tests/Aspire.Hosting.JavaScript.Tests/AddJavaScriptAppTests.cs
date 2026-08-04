@@ -438,6 +438,72 @@ public class AddJavaScriptAppTests(ITestOutputHelper outputHelper)
         Assert.All(integrityLines, line => Assert.Contains($"\"{algorithm}\" \"abcdef\" \"$archive\"", line));
     }
 
+    [Theory]
+    [InlineData("10.30.1")]
+    [InlineData("v10.30.1")]
+    [InlineData("10.30.1-beta.1")]
+    public async Task VerifyPnpmDockerfileUsesValidPackageManagerVersion(string version)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+        await File.WriteAllTextAsync(
+            Path.Combine(appDir, "package.json"),
+            $$"""
+            {
+              "packageManager": "pnpm@{{version}}"
+            }
+            """);
+
+        var pnpmApp = builder.AddJavaScriptApp("js", appDir)
+            .WithPnpm()
+            .WithBuildScript("build");
+
+        await ManifestUtils.GetManifest(pnpmApp.Resource, workspace.Path);
+
+        var dockerfile = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "js.Dockerfile"));
+        Assert.Contains($"npm install --global --registry \"$NPM_REGISTRY\" pnpm@{version}", dockerfile);
+    }
+
+    [Theory]
+    [InlineData("pnpm@")]
+    [InlineData("pnpm@10")]
+    [InlineData("pnpm@10.30")]
+    [InlineData("pnpm@01.30.1")]
+    [InlineData("pnpm@10.030.1")]
+    [InlineData("pnpm@10.30.01")]
+    [InlineData("pnpm@10.30.1/invalid")]
+    [InlineData("pnpm@10.30.1-alpha..1")]
+    [InlineData("pnpm@10.30.1+")]
+    [InlineData("pnpm@10.30.1+sha1.abcdef")]
+    [InlineData("pnpm@10.30.1+sha512")]
+    [InlineData("pnpm@10.30.1+sha512.")]
+    [InlineData("pnpm@10.30.1+sha512.not-hex")]
+    public void VerifyPnpmRejectsInvalidPackageManagerSpecification(string packageManager)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+        var packageJsonPath = Path.Combine(appDir, "package.json");
+        File.WriteAllText(
+            packageJsonPath,
+            $$"""
+            {
+              "packageManager": "{{packageManager}}"
+            }
+            """);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => builder.AddJavaScriptApp("js", appDir).WithPnpm());
+
+        Assert.Equal(
+            $"The packageManager value '{packageManager}' in '{packageJsonPath}' is invalid. Expected 'pnpm@<version>' or 'pnpm@<version>+<sha224|sha256|sha384|sha512>.<hex hash>'.",
+            exception.Message);
+    }
+
     [Fact]
     [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
     [OuterloopTest("Builds a Docker image to verify the generated pnpm Dockerfile works")]
