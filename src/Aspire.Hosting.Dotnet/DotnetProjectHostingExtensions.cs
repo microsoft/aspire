@@ -132,10 +132,9 @@ public static class DotnetProjectHostingExtensions
         //   dotnet run --file <app.cs> --no-cache [--no-build] [--configuration <cfg>] --no-launch-profile
         resource.WithArgs(ctx =>
         {
-            // Mirrors the fallback rule in Dcp/ExecutableCreator: 
-            // a Process fallback is offered for the plain executable UNLESS 
-            // the launch configuration is "project", OR the launch configuration owns the entrypoint arguments. 
-            // For any other active annotation a fallback IS offered and we need to construct the args here.
+            // The active launch configuration supplies the project launch when it is "project" or owns a custom
+            // entrypoint. In those cases adding `dotnet run` would duplicate the tool invocation instead of
+            // contributing the process command.
             if (ctx.Resource.SupportsDebugging(builder.Configuration, out var debugAnnotation)
                 && (debugAnnotation.LaunchConfigurationType is KnownLaunchConfigurationTypes.Project || ctx.Resource.OwnsEntrypointArguments(debugAnnotation)))
             {
