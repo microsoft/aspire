@@ -1,0 +1,38 @@
+{
+  "run_id": 30899298287,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/30899298287",
+  "analyzed_at": "2026-08-04T10:41:37Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 1056,
+    "title": null,
+    "author": null,
+    "state": null,
+    "head_branch": null,
+    "base_branch": null,
+    "url": null
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.Maui / Hosting.Maui (windows-latest)",
+      "id": 91960101978,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/30899298287/job/91960101978",
+      "classification": "flaky-test",
+      "reason": "Single test timed out with System.TimeoutException — matches prior flaky cause mauibuildqueue-releasesemaphoreafterlaunchasync. Not related to PR changed files.",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Maui.Tests.MauiBuildQueueTests.ReleaseSemaphoreAfterLaunchAsync_SkipsReplayStateAndReleasesOnStableState",
+      "job": "Tests / Hosting.Maui / Hosting.Maui (windows-latest)",
+      "error": "System.TimeoutException : The operation has timed out.",
+      "stack_trace": "at Aspire.Hosting.Maui.Tests.MauiBuildQueueTests.ReleaseSemaphoreAfterLaunchAsync_SkipsReplayStateAndReleasesOnStableState() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Maui.Tests\\MauiBuildQueueTests.cs:line 663\n   at Aspire.Hosting.Maui.Tests.MauiBuildQueueTests.ReleaseSemaphoreAfterLaunchAsync_SkipsReplayStateAndReleasesOnStableState() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Maui.Tests\\MauiBuildQueueTests.cs:line 664",
+      "classification": "flaky",
+      "reason": "Matches known flaky test pattern mauibuildqueue-releasesemaphoreafterlaunchasync — times out intermittently on Windows runners."
+    }
+  ],
+  "causes": ["mauibuildqueue-releasesemaphoreafterlaunchasync"]
+}
