@@ -502,10 +502,8 @@ public class WithTerminalTests
             Assert.Contains("200", args);
             Assert.Contains("--rows", args);
             Assert.Contains("50", args);
-            // The terminal host never selected the shell: DCP allocates the PTY for the
-            // resource's own process (there is no shell field on the DCP TerminalSpec), so
-            // no shell flag is forwarded. Guards against re-introducing the misleading
-            // TerminalOptions.Shell no-op that only forwarded --shell to the host.
+            // DCP allocates the PTY for the resource's own process, and its TerminalSpec
+            // has no shell field. The terminal host therefore receives no shell argument.
             Assert.DoesNotContain("--shell", args);
         }
     }
