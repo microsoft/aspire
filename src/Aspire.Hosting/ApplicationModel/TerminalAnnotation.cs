@@ -100,14 +100,8 @@ public sealed class TerminalOptions
     private int _rows = 30;
 
     /// <summary>
-    /// Gets or sets the initial number of columns for the terminal. Defaults to 120.
+    /// Gets or sets the initial number of columns for the terminal. The value must be greater than zero. Defaults to 120.
     /// </summary>
-    /// <remarks>
-    /// Must be greater than zero. Aspire.TerminalHost rejects a PTY width below 1
-    /// (see its <c>--columns</c> validator), so validating here surfaces the error at
-    /// the <see cref="TerminalResourceBuilderExtensions.WithTerminal{T}(IResourceBuilder{T}, Action{TerminalOptions}?)"/>
-    /// call site instead of as a hidden terminal-host startup failure.
-    /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when set to zero or a negative value.</exception>
     public int Columns
     {
@@ -120,14 +114,8 @@ public sealed class TerminalOptions
     }
 
     /// <summary>
-    /// Gets or sets the initial number of rows for the terminal. Defaults to 30.
+    /// Gets or sets the initial number of rows for the terminal. The value must be greater than zero. Defaults to 30.
     /// </summary>
-    /// <remarks>
-    /// Must be greater than zero. Aspire.TerminalHost rejects a PTY height below 1
-    /// (see its <c>--rows</c> validator), so validating here surfaces the error at
-    /// the <see cref="TerminalResourceBuilderExtensions.WithTerminal{T}(IResourceBuilder{T}, Action{TerminalOptions}?)"/>
-    /// call site instead of as a hidden terminal-host startup failure.
-    /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when set to zero or a negative value.</exception>
     public int Rows
     {
