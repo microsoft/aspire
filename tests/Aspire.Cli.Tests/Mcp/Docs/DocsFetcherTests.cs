@@ -11,7 +11,7 @@ namespace Aspire.Cli.Tests.Documentation.Docs;
 
 public class DocsFetcherTests
 {
-    private const string DefaultLlmsTxtUrl = "https://aspire.dev/llms-small.txt";
+    private const string DefaultLlmsTxtUrl = DocsSourceConfiguration.DefaultLlmsTxtUrl;
     private static readonly string s_defaultCacheKey = DocsSourceConfiguration.GetContentCacheKey(DefaultLlmsTxtUrl);
 
     private static DocsFetcher CreateFetcher(HttpClient httpClient, IDocsCache cache, IConfiguration? configuration = null)

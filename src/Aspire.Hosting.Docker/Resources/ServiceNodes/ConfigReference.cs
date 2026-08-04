@@ -13,6 +13,7 @@ namespace Aspire.Hosting.Docker.Resources.ServiceNodes;
 /// service in a containerized environment. It includes information about
 /// the configuration source, target, ownership, and permissions.
 /// </remarks>
+[AspireExport(ExposeProperties = true)]
 [YamlSerializable]
 public sealed class ConfigReference
 {

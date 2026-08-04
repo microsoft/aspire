@@ -91,6 +91,7 @@ internal sealed class DocsSearchResponse
 /// <summary>
 /// Represents a search result from the documentation.
 /// </summary>
+// `aspire docs search --format json` uses this shape; keep docs/specs/cli-output-formats.md in sync when changing it.
 internal sealed class SearchResult
 {
     /// <summary>

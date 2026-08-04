@@ -229,48 +229,120 @@ internal class DeveloperCertificateService : IDeveloperCertificateService
             return ExportFromPrivateKey(certificate, password, needKeyPem, needPfx);
         }
 
-        // For dev certs we prefer reading from cache to avoid repeated keychain access prompts
+        // For dev certs we prefer reading from cache to avoid repeated keychain access prompts.
+        // Ensure only one thread at a time is resolving certificates to avoid concurrent cache misses
+        // all trying to update the cache at the same time.
+        await s_certificateCacheSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var cached = EnsureCachedKeyMaterial(certificate, password);
+            return (
+                needKeyPem ? Encoding.UTF8.GetString(cached.keyBytes).ToCharArray() : null,
+                needPfx ? cached.pfxBytes : null);
+        }
+        finally
+        {
+            s_certificateCacheSemaphore.Release();
+        }
+    }
+
+    /// <summary>
+    /// Ensures the public certificate (.crt), PFX (.pfx) and PEM private key (.key) cache files
+    /// exist for the specified ASP.NET Core developer certificate and returns the paths along with
+    /// the certificate thumbprint. Returns <c>(null, null, null)</c> if the supplied certificate is
+    /// not a developer certificate, has no thumbprint, or the cache files could not be produced.
+    /// </summary>
+    internal static async Task<(string? certificateFilePath, string? keyFilePath, string? thumbprint)> GetCachedCertificateFilePathsAsync(
+        X509Certificate2 certificate,
+        string? password,
+        CancellationToken cancellationToken)
+    {
+        if (!certificate.IsAspNetCoreDevelopmentCertificate() || string.IsNullOrWhiteSpace(certificate.Thumbprint))
+        {
+            return (null, null, null);
+        }
+
+        string certificateFileName;
+        string keyFileName;
+
+        await s_certificateCacheSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var cached = EnsureCachedKeyMaterial(certificate, password);
+            certificateFileName = cached.certFileName;
+            keyFileName = cached.keyFileName;
+        }
+        finally
+        {
+            s_certificateCacheSemaphore.Release();
+        }
+
+        return File.Exists(certificateFileName) && File.Exists(keyFileName)
+            ? (certificateFileName, keyFileName, certificate.Thumbprint)
+            : (null, null, null);
+    }
+
+    /// <summary>
+    /// Ensures the public certificate (.crt), PFX (.pfx) and PEM private key (.key) cache files
+    /// exist for the specified certificate, returning their paths along with the cached PFX/key
+    /// byte contents. On cache miss the private key is accessed once (which may trigger a keychain
+    /// prompt on macOS) to export both private-key formats; on cache hit the bytes are read
+    /// directly from disk to avoid importing the PFX into the macOS keychain via
+    /// <see cref="X509Certificate2"/>. The public .crt file is written whenever it is missing,
+    /// since it can be produced without accessing the private key.
+    /// </summary>
+    /// <remarks>The caller must hold <see cref="s_certificateCacheSemaphore"/>.</remarks>
+    private static (string certFileName, string pfxFileName, string keyFileName, byte[] pfxBytes, byte[] keyBytes) EnsureCachedKeyMaterial(
+        X509Certificate2 certificate, string? password)
+    {
+        var lookup = GetKeyMaterialCacheLookup(certificate, password);
+        var certFileName = Path.Join(s_userDevCertificateLocation, $"{lookup}.crt");
+        var pfxFileName = Path.Join(s_userDevCertificateLocation, $"{lookup}.pfx");
+        var keyFileName = Path.Join(s_userDevCertificateLocation, $"{lookup}.key");
+
+        var cachedPfx = TryReadCacheFile(pfxFileName);
+        var cachedKey = TryReadCacheFile(keyFileName);
+
+        byte[] pfxBytes;
+        byte[] keyBytes;
+
+        if (cachedPfx is not null && cachedKey is not null)
+        {
+            pfxBytes = cachedPfx;
+            keyBytes = cachedKey;
+        }
+        else
+        {
+            // Fall back to accessing the private key directly (triggers a keychain prompt on macOS).
+            // Always produce both formats for caching, even if the caller only needs one.
+            var result = ExportFromPrivateKey(certificate, password, needKeyPem: true, needPfx: true);
+            pfxBytes = result.pfxBytes!;
+            keyBytes = Encoding.UTF8.GetBytes(result.keyPem!);
+            Array.Clear(result.keyPem!);
+
+            WriteCacheFiles(certFileName, certificate, pfxFileName, pfxBytes, keyFileName, keyBytes);
+        }
+
+        // The public certificate cache file can be produced without touching the private key,
+        // so refresh it whenever it is missing (including on cache hits from older caches that
+        // pre-date this file).
+        if (!File.Exists(certFileName))
+        {
+            WriteCacheFiles(certFileName, certificate, pfxFileName: null, pfxBytes: null, keyFileName: null, keyBytes: null);
+        }
+
+        return (certFileName, pfxFileName, keyFileName, pfxBytes, keyBytes);
+    }
+
+    private static string GetKeyMaterialCacheLookup(X509Certificate2 certificate, string? password)
+    {
         var lookup = certificate.Thumbprint;
         if (password is not null)
         {
             lookup += $"-{password}";
         }
 
-        lookup = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(lookup)));
-
-        // Ensure only one thread at a time is resolving certificates to avoid concurrent cache misses
-        // all trying to update the cache at the same time.
-        await s_certificateCacheSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var pfxFileName = Path.Join(s_userDevCertificateLocation, $"{lookup}.pfx");
-            var keyFileName = Path.Join(s_userDevCertificateLocation, $"{lookup}.key");
-
-            // Try to read cached files. On cache hit, return the raw bytes directly
-            // without loading them into X509Certificate2 (which would import the key into
-            // the macOS keychain on net8.0).
-            var cachedPfx = TryReadCacheFile(pfxFileName);
-            var cachedKey = TryReadCacheFile(keyFileName);
-
-            if (cachedPfx is not null && cachedKey is not null)
-            {
-                return (
-                    needKeyPem ? Encoding.UTF8.GetString(cachedKey).ToCharArray() : null,
-                    needPfx ? cachedPfx : null);
-            }
-
-            // Fall back to accessing the private key directly (triggers a keychain prompt on macOS).
-            // Always produce both formats for caching, even if the caller only needs one.
-            var result = ExportFromPrivateKey(certificate, password, needKeyPem: true, needPfx: true);
-
-            WriteCacheFiles(pfxFileName, result.pfxBytes, keyFileName, result.keyPem);
-
-            return (needKeyPem ? result.keyPem : null, needPfx ? result.pfxBytes : null);
-        }
-        finally
-        {
-            s_certificateCacheSemaphore.Release();
-        }
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(lookup)));
     }
 
     /// <summary>
@@ -353,9 +425,17 @@ internal class DeveloperCertificateService : IDeveloperCertificateService
     }
 
     /// <summary>
-    /// Writes PFX and PEM key cache files. Best-effort; failures are silently ignored.
+    /// Writes the public certificate (.crt), PFX (.pfx) and PEM private key (.key) cache files.
+    /// Any of the file-name / payload pairs may be null to skip writing that file. Best-effort;
+    /// failures are silently ignored.
     /// </summary>
-    private static void WriteCacheFiles(string pfxFileName, byte[]? pfxBytes, string keyFileName, char[]? keyPem)
+    private static void WriteCacheFiles(
+        string certFileName,
+        X509Certificate2 certificate,
+        string? pfxFileName,
+        byte[]? pfxBytes,
+        string? keyFileName,
+        byte[]? keyBytes)
     {
         try
         {
@@ -368,14 +448,16 @@ internal class DeveloperCertificateService : IDeveloperCertificateService
                 Directory.CreateDirectory(s_userDevCertificateLocation, UnixFileMode.UserExecute | UnixFileMode.UserWrite | UnixFileMode.UserRead);
             }
 
-            if (pfxBytes is not null)
+            File.WriteAllText(certFileName, certificate.ExportCertificatePem());
+
+            if (pfxFileName is not null && pfxBytes is not null)
             {
                 File.WriteAllBytes(pfxFileName, pfxBytes);
             }
 
-            if (keyPem is not null)
+            if (keyFileName is not null && keyBytes is not null)
             {
-                File.WriteAllBytes(keyFileName, Encoding.UTF8.GetBytes(keyPem));
+                File.WriteAllBytes(keyFileName, keyBytes);
             }
         }
         catch

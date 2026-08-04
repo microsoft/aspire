@@ -25,14 +25,7 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
             File.WriteAllText(settingsFilePath, existingContent);
         }
 
-        var logsDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "logs"));
-        var executionContext = new CliExecutionContext(
-            workspace.WorkspaceRoot,
-            new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives")),
-            new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cache")),
-            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")),
-            logsDir,
-            "test.log");
+        var executionContext = workspace.CreateExecutionContext();
 
         var configBuilder = new ConfigurationBuilder();
         var configuration = configBuilder.Build();
@@ -46,7 +39,7 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SetConfigurationAsync_WorksWithJsonComments()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var contentWithComments = """
             {
@@ -69,7 +62,7 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SetConfigurationAsync_WorksWithTrailingCommas()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var contentWithTrailingCommas = """
             {
@@ -91,7 +84,7 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SetConfigurationAsync_WorksWithCommentsAndTrailingCommas()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var content = """
             {
@@ -113,28 +106,25 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SetConfigurationAsync_CreatesNewFile_WhenNoneExists()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
-        // Delete the sentinel .aspire/settings.json so there is truly no settings file
-        var sentinelPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "settings.json");
-        if (File.Exists(sentinelPath))
-        {
-            File.Delete(sentinelPath);
-        }
-
-        var (service, settingsFilePath) = CreateService(workspace);
+        // The workspace has .aspire/settings.json (the legacy sentinel) but no
+        // aspire.config.json. FindNearestSettingsFile will find the sentinel and
+        // write to it.
+        var legacySettingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "settings.json");
+        var (service, _) = CreateService(workspace);
 
         await service.SetConfigurationAsync("channel", "staging", isGlobal: false);
 
-        Assert.True(File.Exists(settingsFilePath));
-        var result = File.ReadAllText(settingsFilePath);
+        Assert.True(File.Exists(legacySettingsPath));
+        var result = File.ReadAllText(legacySettingsPath);
         Assert.Contains("staging", result);
     }
 
     [Fact]
     public async Task SetConfigurationAsync_HandlesEmptyFile()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var (service, settingsFilePath) = CreateService(workspace, "");
 
@@ -147,7 +137,7 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeleteConfigurationAsync_WorksWithJsonComments()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var contentWithComments = """
             {
@@ -170,7 +160,7 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeleteConfigurationAsync_ReturnsFalse_WhenFileDoesNotExist()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var (service, _) = CreateService(workspace);
 
@@ -182,7 +172,7 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeleteConfigurationAsync_ReturnsFalse_WhenFileIsEmpty()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var (service, _) = CreateService(workspace, "");
 
@@ -194,7 +184,7 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetAllConfigurationAsync_ParsesCommentsCorrectly()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var contentWithComments = """
             {
@@ -215,9 +205,87 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetConfigurationFromDirectoryAsync_WithContinueSearchWhenKeyMissing_WalksUpWhenNearestConfigDoesNotContainKey()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var (service, _) = CreateService(
+            workspace,
+            """
+            {
+              "sdk": {
+                "version": "10.0.0-preview.5.26311.1"
+              }
+            }
+            """);
+
+        var srcDirectory = workspace.WorkspaceRoot.CreateSubdirectory("src");
+        await File.WriteAllTextAsync(
+            Path.Combine(srcDirectory.FullName, AspireConfigFile.FileName),
+            """
+            {
+              "packages": {
+                "Aspire.Hosting.Redis": ""
+              }
+            }
+            """);
+
+        var value = await service.GetConfigurationFromDirectoryAsync("sdk.version", srcDirectory, continueSearchWhenKeyMissing: true);
+
+        Assert.Equal("10.0.0-preview.5.26311.1", value);
+    }
+
+    [Fact]
+    public async Task GetConfigurationFromDirectoryAsync_WhenNearestConfigDoesNotContainKey_DoesNotReadParentConfig()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var (service, _) = CreateService(
+            workspace,
+            """
+            {
+              "channel": "daily"
+            }
+            """);
+
+        var srcDirectory = workspace.WorkspaceRoot.CreateSubdirectory("src");
+        await File.WriteAllTextAsync(
+            Path.Combine(srcDirectory.FullName, AspireConfigFile.FileName),
+            """
+            {
+              "language": "csharp"
+            }
+            """);
+
+        var value = await service.GetConfigurationFromDirectoryAsync("channel", srcDirectory);
+
+        Assert.Null(value);
+    }
+
+    [Fact]
+    public async Task GetConfigurationFromDirectoryAsync_FindsNearestParentConfigWhenStartDirectoryHasNoConfig()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var (service, _) = CreateService(
+            workspace,
+            """
+            {
+              "channel": "daily"
+            }
+            """);
+
+        var srcDirectory = workspace.WorkspaceRoot.CreateSubdirectory("src");
+
+        var value = await service.GetConfigurationFromDirectoryAsync("channel", srcDirectory);
+
+        Assert.Equal("daily", value);
+    }
+
+    [Fact]
     public async Task SetConfigurationAsync_SetsNestedValues()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var (service, settingsFilePath) = CreateService(workspace, "{}");
 
@@ -231,7 +299,7 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SetConfigurationAsync_WritesBooleanStringAsJsonString()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var (service, settingsFilePath) = CreateService(workspace, "{}");
 
@@ -253,7 +321,7 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SetConfigurationAsync_ChannelWithBooleanLikeValue_StaysAsString()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var (service, settingsFilePath) = CreateService(workspace, "{}");
 
@@ -276,7 +344,7 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SetConfigurationAsync_WritesStringValueAsString()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var (service, settingsFilePath) = CreateService(workspace, "{}");
 

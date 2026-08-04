@@ -1,10 +1,10 @@
-﻿---
+---
 apiVersion: "v1"
 kind: "ConfigMap"
 metadata:
   name: "servicea-config"
   labels:
-    app.kubernetes.io/name: "aspire-hosting-tests"
+    app.kubernetes.io/name: "{{ .Chart.Name }}"
     app.kubernetes.io/component: "ServiceA"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
 data:

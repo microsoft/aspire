@@ -13,7 +13,7 @@ with create_builder() as builder:
     # Reference expressions for expression-based APIs
     expr_secret_value = "expression"
     named_expr_secret_value = "expression"
-    # ── 2. withRoleAssignments ───────────────────────────────────────────────────
+    # ── 2. with_key_vault_role_assignments ───────────────────────────────────────
     vault.with_key_vault_role_assignments()
     # ── 3. addSecret ─────────────────────────────────────────────────────────────
     secret_from_parameter = vault.add_secret("resource")

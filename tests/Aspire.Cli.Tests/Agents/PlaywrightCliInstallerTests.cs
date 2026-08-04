@@ -586,6 +586,47 @@ public class PlaywrightCliInstallerTests
         }
     }
 
+    [Theory]
+    [InlineData(">=0.2.0")]
+    [InlineData("latest")]
+    [InlineData("0.2")]
+    [InlineData("not-a-version")]
+    [InlineData("v0.2.0")]
+    public async Task InstallAsync_WhenVersionOverrideIsNotStrictSemVer_ReturnsFailed(string invalidVersion)
+    {
+        var tempDir = CreateTestRepoRoot();
+
+        try
+        {
+            var npmRunner = new TestNpmRunner
+            {
+                ResolveResult = new NpmPackageInfo { Version = SemVersion.Parse("0.2.0", SemVersionStyles.Strict), Integrity = "sha512-abc123" }
+            };
+            var playwrightRunner = new TestPlaywrightCliRunner();
+            var configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    [PlaywrightCliInstaller.VersionOverrideKey] = invalidVersion
+                })
+                .Build();
+            var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), configuration, NullLogger<PlaywrightCliInstaller>.Instance);
+
+            var (status, message) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
+
+            Assert.Equal(PlaywrightInstallStatus.Failed, status);
+            Assert.NotNull(message);
+            Assert.Contains(invalidVersion, message);
+            Assert.Null(npmRunner.ResolvedVersionRange);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
     [Fact]
     public async Task InstallAsync_WhenNoVersionOverride_UsesDefaultRange()
     {
@@ -1038,7 +1079,7 @@ public class PlaywrightCliInstallerTests
         public bool ProvenanceCalled { get; private set; }
         public Func<WorkflowRefInfo, bool>? CapturedValidateWorkflowRef { get; private set; }
 
-        public Task<ProvenanceVerificationResult> VerifyProvenanceAsync(string packageName, string version, string expectedSourceRepository, string expectedWorkflowPath, string expectedBuildType, Func<WorkflowRefInfo, bool>? validateWorkflowRef, CancellationToken cancellationToken, string? sriIntegrity = null)
+        public Task<ProvenanceVerificationResult> VerifyProvenanceAsync(string packageName, string version, string expectedSourceRepository, string expectedWorkflowPath, string expectedBuildType, Func<WorkflowRefInfo, bool>? validateWorkflowRef, string? sriIntegrity, CancellationToken cancellationToken)
         {
             ProvenanceCalled = true;
             CapturedValidateWorkflowRef = validateWorkflowRef;

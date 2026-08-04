@@ -39,7 +39,7 @@ public class ConformanceTests : ConformanceTests<IConnection, RabbitMQClientSett
 
     protected override bool SupportsKeyedRegistrations => true;
 
-    protected override string[] RequiredLogCategories => Array.Empty<string>();
+    protected override RequiredLogCategory[] RequiredLogCategories => [];
 
 #if RABBITMQ_V6
     protected override string ActivitySourceName => "Aspire.RabbitMQ.Client";
@@ -117,7 +117,7 @@ public class ConformanceTests : ConformanceTests<IConnection, RabbitMQClientSett
     {
 #if RABBITMQ_V6
         var channel = service.CreateModel();
-        channel.QueueDeclare("test-queue", exclusive: false);
+        channel.QueueDeclare("test-queue");
         channel.BasicPublish(
             exchange: "",
             routingKey: "test-queue",
@@ -127,7 +127,7 @@ public class ConformanceTests : ConformanceTests<IConnection, RabbitMQClientSett
         Task.Run(async () =>
         {
             using var channel = await service.CreateChannelAsync();
-            await channel.QueueDeclareAsync("test-queue", exclusive: false);
+            await channel.QueueDeclareAsync("test-queue");
             await channel.BasicPublishAsync(
                 exchange: "",
                 routingKey: "test-queue",

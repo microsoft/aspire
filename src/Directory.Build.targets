@@ -25,7 +25,48 @@
                     OutputItemType="Analyzer" />
   </ItemGroup>
 
-  <!-- Used by Aspire.Workload.Testing.targets -->
+  <!-- Polyglot-compatible integration marker (opt-out).
+       Every in-repo Aspire.Hosting integration that runs the export analyzer is treated as
+       polyglot-compatible by default: it gets the well-known 'polyglot' NuGet tag so `aspire add`
+       can surface the package to non-C# (polyglot) AppHosts. An author acknowledges that a project is
+       NOT a polyglot integration with <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible>,
+       which both omits the tag and satisfies ASPIREEXPORT017 (the rule errors when such a project has
+       no [AspireExport] coverage and has not opted out). The property is also surfaced to the analyzer.
+       The shipped equivalent for external authors lives in
+       src/Aspire.Hosting/buildTransitive/Aspire.Hosting.targets. -->
+  <ItemGroup Condition="$([System.String]::Copy('$(MSBuildProjectName)').StartsWith('Aspire.Hosting'))
+                        and
+                        '$(SkipAspireIntegrationAnalyzersReference)' != 'true'">
+    <CompilerVisibleProperty Include="IsAspirePolyglotCompatible" />
+  </ItemGroup>
+
+  <!-- Evaluated at import time (Directory.Build.targets is imported after the project body), so both
+       $(IsAspirePolyglotCompatible) and $(PackageTags) already hold their final csproj-assigned values.
+       Scoped to the same Aspire.Hosting* projects that run the analyzer so the default-on tag never lands
+       on unrelated repo projects (tests, components, etc.). The marker is opt-out: the tag is added unless
+       the project sets the property to 'false'. The guard space-pads $(PackageTags) and looks for a whole
+       ' polyglot ' token so an unrelated tag that merely contains the substring (e.g. 'monopolyglot') does
+       not suppress the marker, and Concat(...).Trim() avoids a leading space when $(PackageTags) was empty. -->
+  <PropertyGroup Condition="$([System.String]::Copy('$(MSBuildProjectName)').StartsWith('Aspire.Hosting'))
+                            and '$(SkipAspireIntegrationAnalyzersReference)' != 'true'
+                            and '$(IsAspirePolyglotCompatible)' != 'false'
+                            and !$([System.String]::Concat(' ', '$(PackageTags)', ' ').Contains(' polyglot '))">
+    <PackageTags>$([System.String]::Concat('$(PackageTags)', ' polyglot').Trim())</PackageTags>
+  </PropertyGroup>
+
+  <!-- Used by Aspire.Templates.Testing.targets and by Aspire.RepoTesting.targets to
+       dynamically compute per-package versions for Helix testing.
+       Returns items with PackageId as Include and the per-project computed PackageVersion
+       as WithPackageVersion metadata. The version is computed by the Arcade SDK and respects
+       SuppressFinalPackageVersion, StabilizePackageVersion, etc.
+
+       Reads $(PackageVersion) declaratively (i.e. as a property whose value Arcade has
+       already set via property groups during evaluation, not via a prior target). That is
+       correct as of the current Arcade SDK. If a future Arcade bump moves PackageVersion
+       computation into a target body, callers of this target may observe the pre-target
+       value; the Helix package-versions generation in
+       tests/Shared/RepoTesting/Aspire.RepoTesting.targets would then need an explicit
+       dependency on whatever target sets PackageVersion. -->
   <Target Name="GetPackageName" Returns="@(PackageName)">
     <ItemGroup>
       <PackageName Include="$(PackageId)" Condition="'$(IsPackable)' == 'true'" WithPackageVersion="$(PackageVersion)" />

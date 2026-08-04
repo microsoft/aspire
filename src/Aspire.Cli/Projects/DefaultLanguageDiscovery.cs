@@ -29,9 +29,9 @@ internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDi
             LanguageId: new LanguageId("typescript/nodejs"),
             DisplayName: "TypeScript (Node.js)",
             PackageName: "Aspire.Hosting.CodeGeneration.TypeScript",
-            DetectionPatterns: ["apphost.ts"],
+            DetectionPatterns: ["apphost.mts", "apphost.ts"],
             CodeGenerator: "TypeScript", // Matches ICodeGenerator.Language
-            AppHostFileName: "apphost.ts"),
+            AppHostFileName: "apphost.mts"),
         new LanguageInfo(
             LanguageId: new LanguageId(KnownLanguageId.Python),
             DisplayName: KnownLanguageId.PythonDisplayName,

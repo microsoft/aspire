@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Reflection;
-using Aspire.Dashboard.Extensions;
+using Aspire.Shared;
 using Xunit;
 
 namespace Aspire.Dashboard.Tests;
@@ -27,7 +27,7 @@ public class AssemblyExtensionsTests
             assembly.AddCustomAttribute(new AssemblyVersionAttribute("1.1.1.1"));
         }
 
-        var actualDisplayVersion = assembly.GetDisplayVersion();
+        var actualDisplayVersion = AssemblyVersionHelper.GetDisplayVersion(assembly);
 
         Assert.Equal(expectedDisplayVersion, actualDisplayVersion);
     }
@@ -47,7 +47,7 @@ public class AssemblyExtensionsTests
             assembly.AddCustomAttribute(new AssemblyVersionAttribute("1.1.1.1"));
         }
 
-        var actualDisplayVersion = assembly.GetDisplayVersion();
+        var actualDisplayVersion = AssemblyVersionHelper.GetDisplayVersion(assembly);
 
         Assert.Equal(expectedDisplayVersion, actualDisplayVersion);
     }
@@ -66,7 +66,7 @@ public class AssemblyExtensionsTests
             assembly.AddCustomAttribute(new AssemblyVersionAttribute(attributeValue));
         }
 
-        var actualDisplayVersion = assembly.GetDisplayVersion();
+        var actualDisplayVersion = AssemblyVersionHelper.GetDisplayVersion(assembly);
 
         Assert.Equal(expectedDisplayVersion, actualDisplayVersion);
     }

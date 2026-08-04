@@ -5,6 +5,7 @@ using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.InternalTesting;
@@ -16,7 +17,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ExtensionInternalCommandIsHidden()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -28,7 +29,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExtensionInternalCommand_WithHelpArgument_ReturnsZero()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -42,7 +43,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExtensionInternalCommand_WithNoSubcommand_ReturnsZero()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -50,13 +51,13 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("extension");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
     public async Task GetAppHostsCommand_WithSingleProject_ReturnsSuccessWithValidJson()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "MyApp.AppHost.csproj"));
         
         var capturedOutput = new TestOutputTextWriter(outputHelper);
@@ -71,7 +72,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("extension get-apphosts");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         // Join all captured output and deserialize
         var allOutput = string.Join(string.Empty, capturedOutput.Logs);
@@ -95,9 +96,44 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetAppHostsCommand_WithRealDiscovery_ReturnsOnlyJson()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "MyApp.AppHost.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, """
+            <Project Sdk="Aspire.AppHost.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        var capturedOutput = new TestOutputTextWriter(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AppHostProjectFactory = _ => new TestAppHostProjectFactory();
+            options.OutputTextWriter = capturedOutput;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("extension get-apphosts --nologo");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var allOutput = string.Join(string.Empty, capturedOutput.Logs);
+        var searchResult = JsonSerializer.Deserialize(allOutput, BackchannelJsonSerializerContext.Default.AppHostProjectSearchResultPoco);
+
+        Assert.NotNull(searchResult);
+        Assert.Equal(projectFile.FullName, searchResult.SelectedProjectFile);
+        Assert.Equal([projectFile.FullName], searchResult.AllProjectFileCandidates);
+    }
+
+    [Fact]
     public async Task GetAppHostsCommand_WithMultipleProjects_ReturnsSuccessWithAllCandidates()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile1 = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "App1.AppHost.csproj"));
         var projectFile2 = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "App2.AppHost.csproj"));
 
@@ -113,7 +149,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("extension get-apphosts");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         // Join all captured output and deserialize
         var allOutput = string.Join(string.Empty, capturedOutput.Logs);
@@ -140,7 +176,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetAppHostsCommand_WithNoProjects_ReturnsFailureExitCode()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -152,13 +188,13 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("extension get-apphosts");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.FailedToFindProject, exitCode);
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
     }
 
     [Fact]
     public async Task GetAppHostsCommand_WhenProjectLocatorThrows_ReturnsFailureExitCode()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -170,13 +206,13 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("extension get-apphosts");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.FailedToFindProject, exitCode);
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
     }
 
     [Fact]
     public async Task GetAppHostsCommand_WithHelpArgument_ReturnsZero()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -206,6 +242,16 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
         {
             var result = new AppHostProjectSearchResult(_projectFile, [_projectFile]);
             return Task.FromResult(result);
+        }
+
+        public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<List<AppHostProjectCandidate>>([new(_projectFile, "test")]);
+        }
+
+        public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<List<FileInfo>>([_projectFile]);
         }
 
         public Task<FileInfo?> UseOrFindAppHostProjectFileAsync(
@@ -263,6 +309,16 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
             return Task.FromResult(result);
         }
 
+        public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(_projectFiles.Select(projectFile => new AppHostProjectCandidate(projectFile, "test")).ToList());
+        }
+
+        public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(_projectFiles);
+        }
+
         public Task<FileInfo?> UseOrFindAppHostProjectFileAsync(
             FileInfo? projectFile, 
             bool createSettingsFile, 
@@ -301,6 +357,16 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
 
     private sealed class NoProjectFileProjectLocator : IProjectLocator
     {
+        public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        {
+            throw new ProjectLocatorException("No AppHost project found.", ProjectLocatorFailureReason.NoProjectFileFound);
+        }
+
+        public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        {
+            throw new ProjectLocatorException("No AppHost project found.", ProjectLocatorFailureReason.NoProjectFileFound);
+        }
+
         public Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(
             FileInfo? projectFile, 
             MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, 
@@ -348,6 +414,16 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
 
     private sealed class ThrowingProjectLocator : IProjectLocator
     {
+        public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        {
+            throw new InvalidOperationException("Something went wrong");
+        }
+
+        public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        {
+            throw new InvalidOperationException("Something went wrong");
+        }
+
         public Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(
             FileInfo? projectFile,
             MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior,

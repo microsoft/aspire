@@ -12,14 +12,26 @@ namespace Aspire.Cli.Tests.Mcp;
 
 public class ExecuteResourceCommandToolTests
 {
-    private static IReadOnlyDictionary<string, JsonElement> CreateArguments(string resourceName, string commandName)
+    private static IReadOnlyDictionary<string, JsonElement> CreateArguments(string resourceName, string commandName, string? commandArgumentsJson = null)
     {
-        var doc = JsonDocument.Parse($$"""
+        var json = commandArgumentsJson is null
+            ? $$"""
             {
                 "resourceName": "{{resourceName}}",
                 "commandName": "{{commandName}}"
             }
-            """);
+            """
+            : $$"""
+            {
+                "resourceName": "{{resourceName}}",
+                "commandName": "{{commandName}}",
+                "arguments": {{commandArgumentsJson}}
+            }
+            """;
+
+        // MCP tool arguments JSON can include nested resource command arguments, for example:
+        // { "resourceName": "api-service", "commandName": "click", "arguments": { "selector": "#submit" } }
+        using var doc = JsonDocument.Parse(json);
         return doc.RootElement.EnumerateObject()
             .ToDictionary(p => p.Name, p => p.Value.Clone());
     }
@@ -61,6 +73,86 @@ public class ExecuteResourceCommandToolTests
     }
 
     [Fact]
+    public async Task ExecuteResourceCommandTool_WithArguments_PassesArgumentsToBackchannel()
+    {
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true }
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var tool = new ExecuteResourceCommandTool(monitor, NullLogger<ExecuteResourceCommandTool>.Instance);
+        var result = await tool.CallToolAsync(
+            CallToolContextTestHelper.Create(CreateArguments("api-service", "click", """{ "selector": "#submit" }""")),
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.IsError is null or false);
+        Assert.NotNull(connection.ExecuteResourceCommandArguments);
+        Assert.Equal("#submit", connection.ExecuteResourceCommandArguments["selector"]!.GetValue<string>());
+        Assert.True(connection.ExecuteResourceCommandOptions?.NonInteractive == true);
+    }
+
+    [Fact]
+    public async Task ExecuteResourceCommandTool_WithPrimitiveArguments_ConvertsArgumentsToStrings()
+    {
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true }
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var tool = new ExecuteResourceCommandTool(monitor, NullLogger<ExecuteResourceCommandTool>.Instance);
+        var result = await tool.CallToolAsync(
+            CallToolContextTestHelper.Create(CreateArguments("api-service", "click", """{ "count": 3, "urgent": true, "ratio": 1.5, "optional": null }""")),
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.IsError is null or false);
+        Assert.NotNull(connection.ExecuteResourceCommandArguments);
+        Assert.Equal("3", connection.ExecuteResourceCommandArguments["count"]!.GetValue<string>());
+        Assert.Equal("true", connection.ExecuteResourceCommandArguments["urgent"]!.GetValue<string>());
+        Assert.Equal("1.5", connection.ExecuteResourceCommandArguments["ratio"]!.GetValue<string>());
+        Assert.Null(connection.ExecuteResourceCommandArguments["optional"]);
+    }
+
+    [Fact]
+    public async Task ExecuteResourceCommandTool_ThrowsException_WhenArgumentsIsNotObject()
+    {
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true }
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var tool = new ExecuteResourceCommandTool(monitor, NullLogger<ExecuteResourceCommandTool>.Instance);
+        var exception = await Assert.ThrowsAsync<ModelContextProtocol.McpProtocolException>(
+            () => tool.CallToolAsync(CallToolContextTestHelper.Create(CreateArguments("api-service", "click", """[]""")), CancellationToken.None).AsTask()).DefaultTimeout();
+
+        Assert.Contains("must be a JSON object", exception.Message);
+    }
+
+    [Theory]
+    [InlineData("""{ "settings": {} }""")]
+    [InlineData("""{ "items": [] }""")]
+    public async Task ExecuteResourceCommandTool_ThrowsException_WhenArgumentValueIsObjectOrArray(string argumentsJson)
+    {
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true }
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var tool = new ExecuteResourceCommandTool(monitor, NullLogger<ExecuteResourceCommandTool>.Instance);
+        var exception = await Assert.ThrowsAsync<ModelContextProtocol.McpProtocolException>(
+            () => tool.CallToolAsync(CallToolContextTestHelper.Create(CreateArguments("api-service", "click", argumentsJson)), CancellationToken.None).AsTask()).DefaultTimeout();
+
+        Assert.Contains("must be a string, number, boolean, or null", exception.Message);
+    }
+
+    [Fact]
     public async Task ExecuteResourceCommandTool_ReturnsError_WhenCommandFails()
     {
         var monitor = new TestAuxiliaryBackchannelMonitor();
@@ -80,6 +172,61 @@ public class ExecuteResourceCommandToolTests
 
         Assert.True(result.IsError);
         Assert.Contains(result.Content, c => c is ModelContextProtocol.Protocol.TextContentBlock t && t.Text.Contains("Resource not found"));
+    }
+
+    [Fact]
+    public async Task ExecuteResourceCommandTool_ReturnsError_WhenCommandFailsWithNullValidationErrors()
+    {
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
+            {
+                Success = false,
+                Message = "Resource not found",
+                ValidationErrors = null!
+            }
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var tool = new ExecuteResourceCommandTool(monitor, NullLogger<ExecuteResourceCommandTool>.Instance);
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(CreateArguments("nonexistent", "start")), CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.IsError);
+        Assert.Contains(result.Content, c => c is ModelContextProtocol.Protocol.TextContentBlock t && t.Text.Contains("Resource not found"));
+    }
+
+    [Fact]
+    public async Task ExecuteResourceCommandTool_ReturnsValidationErrors_WhenCommandArgumentsAreInvalid()
+    {
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
+            {
+                Success = false,
+                Message = "Command argument validation failed.",
+                ValidationErrors =
+                [
+                    new ResourceCommandArgumentValidationError
+                    {
+                        ArgumentName = "target",
+                        ErrorMessage = "Target must not be prod."
+                    }
+                ]
+            }
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var tool = new ExecuteResourceCommandTool(monitor, NullLogger<ExecuteResourceCommandTool>.Instance);
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(CreateArguments("api-service", "validate")), CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.IsError);
+        Assert.Contains(result.Content, c => c is ModelContextProtocol.Protocol.TextContentBlock t &&
+            t.Text.Contains("Command argument validation failed.") &&
+            t.Text.Contains("--target: Target must not be prod."));
     }
 
     [Fact]
@@ -203,4 +350,3 @@ public class ExecuteResourceCommandToolTests
         Assert.Single(result.Content);
     }
 }
-

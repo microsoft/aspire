@@ -142,7 +142,10 @@ public static class OtlpConfigurationExtensions
         return builder;
     }
 
-    [AspireExport("withOtlpExporter", Description = "Configures OTLP telemetry export")]
+    /// <summary>
+    /// Configures OTLP telemetry export
+    /// </summary>
+    [AspireExport("withOtlpExporter")]
     internal static IResourceBuilder<T> WithOtlpExporterForPolyglot<T>(
         this IResourceBuilder<T> builder,
         OtlpProtocol? protocol = null) where T : IResourceWithEnvironment
@@ -191,7 +194,7 @@ public static class OtlpConfigurationExtensions
         DistributedApplicationModel? model;
         try
         {
-            model = context.ExecutionContext.ServiceProvider.GetService<DistributedApplicationModel>();
+            model = context.ExecutionContext.Services.GetService<DistributedApplicationModel>();
         }
         catch (InvalidOperationException)
         {

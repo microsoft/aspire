@@ -66,6 +66,10 @@ public class EFMigrationCommandsTests
 
         Assert.NotNull(addCommand);
         Assert.Contains("Add Migration", addCommand.DisplayName);
+
+        var nameArgument = Assert.Single(addCommand.Arguments);
+        Assert.Equal("name", nameArgument.Name);
+        Assert.True(nameArgument.Required);
     }
 
     [Fact]
@@ -132,7 +136,7 @@ public class EFMigrationCommandsTests
         var migrations = project.AddEFMigrations("mymigrations", typeof(TestDbContext).FullName!);
 
         // Verify the context type name is stored on the resource
-        Assert.Equal(typeof(TestDbContext).FullName, migrations.Resource.ContextTypeName);
+        Assert.Equal(typeof(TestDbContext).FullName, migrations.Resource.DbContextTypeName);
     }
 
     [Fact]
@@ -203,7 +207,7 @@ public class EFMigrationCommandsTests
             var state = command.UpdateState(new UpdateCommandStateContext
             {
                 ResourceSnapshot = snapshot,
-                ServiceProvider = builder.Services.BuildServiceProvider()
+                Services = builder.Services.BuildServiceProvider()
             });
             Assert.Equal(ResourceCommandState.Enabled, state);
         }
@@ -233,7 +237,7 @@ public class EFMigrationCommandsTests
             var state = command.UpdateState(new UpdateCommandStateContext
             {
                 ResourceSnapshot = snapshot,
-                ServiceProvider = builder.Services.BuildServiceProvider()
+                Services = builder.Services.BuildServiceProvider()
             });
             Assert.Equal(ResourceCommandState.Disabled, state);
         }
@@ -264,7 +268,7 @@ public class EFMigrationCommandsTests
             var state = command.UpdateState(new UpdateCommandStateContext
             {
                 ResourceSnapshot = snapshot,
-                ServiceProvider = builder.Services.BuildServiceProvider()
+                Services = builder.Services.BuildServiceProvider()
             });
             Assert.Equal(ResourceCommandState.Disabled, state);
         }
@@ -284,7 +288,7 @@ public class EFMigrationCommandsTests
             var state = command.UpdateState(new UpdateCommandStateContext
             {
                 ResourceSnapshot = snapshot,
-                ServiceProvider = builder.Services.BuildServiceProvider()
+                Services = builder.Services.BuildServiceProvider()
             });
             Assert.Equal(ResourceCommandState.Enabled, state);
         }

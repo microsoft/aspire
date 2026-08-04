@@ -20,7 +20,7 @@ internal sealed class PipelineEditor(IReadOnlyList<PipelineStep> steps)
     /// Gets all configured pipeline steps.
     /// </summary>
     /// <returns>The configured pipeline steps.</returns>
-    [AspireExport(Description = "Gets all configured pipeline steps")]
+    [AspireExport]
     public IReadOnlyList<PipelineStep> Steps() => _steps;
 
     /// <summary>
@@ -28,7 +28,7 @@ internal sealed class PipelineEditor(IReadOnlyList<PipelineStep> steps)
     /// </summary>
     /// <param name="tag">The tag to search for.</param>
     /// <returns>The matching pipeline steps.</returns>
-    [AspireExport(Description = "Gets pipeline steps with the specified tag")]
+    [AspireExport]
     public IReadOnlyList<PipelineStep> StepsByTag(string tag)
     {
         ArgumentNullException.ThrowIfNull(tag);

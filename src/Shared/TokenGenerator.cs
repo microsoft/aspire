@@ -14,7 +14,7 @@ internal static class TokenGenerator
 
         string tokenHex;
 #if NET9_0_OR_GREATER
-        tokenHex = Convert.ToHexStringLower(tokenBytes); 
+        tokenHex = Convert.ToHexStringLower(tokenBytes);
 #else
         tokenHex = Convert.ToHexString(tokenBytes).ToLowerInvariant();
 #endif

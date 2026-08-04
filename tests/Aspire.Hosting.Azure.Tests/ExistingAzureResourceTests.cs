@@ -500,6 +500,115 @@ public class ExistingAzureResourceTests
 
         await Verify(manifest.ToString(), "json")
             .AppendContentAsFile(bicep, "bicep");
-            
+             
+    }
+
+    [Fact]
+    public async Task SupportsExistingServiceBusWithResourceGroupAndSubscriptionInRunMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var existingResourceName = builder.AddParameter("existingResourceName");
+        var existingResourceGroupName = builder.AddParameter("existingResourceGroupName");
+        var existingSubscriptionId = builder.AddParameter("existingSubscriptionId");
+        var serviceBus = builder.AddAzureServiceBus("messaging")
+            .RunAsExistingInResourceGroup(existingResourceName, existingResourceGroupName, existingSubscriptionId);
+        serviceBus.AddServiceBusQueue("queue");
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        Assert.Null(serviceBus.Resource.GetDeploymentTargetAnnotation());
+        Assert.True(serviceBus.Resource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAzureResourceAnnotation));
+        Assert.False(existingAzureResourceAnnotation.IsTenantScope);
+        Assert.NotNull(existingAzureResourceAnnotation.ResourceGroup);
+        Assert.NotNull(existingAzureResourceAnnotation.Subscription);
+    }
+
+    [Fact]
+    public async Task SupportsExistingServiceBusWithTenantScopeInRunMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var existingResourceName = builder.AddParameter("existingResourceName");
+        var serviceBus = builder.AddAzureServiceBus("messaging")
+            .RunAsExistingInTenant(existingResourceName);
+        serviceBus.AddServiceBusQueue("queue");
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        Assert.Null(serviceBus.Resource.GetDeploymentTargetAnnotation());
+        Assert.True(serviceBus.Resource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAzureResourceAnnotation));
+        Assert.True(existingAzureResourceAnnotation.IsTenantScope);
+        Assert.Null(existingAzureResourceAnnotation.ResourceGroup);
+        Assert.Null(existingAzureResourceAnnotation.Subscription);
+    }
+
+    [Fact]
+    public async Task SupportsExistingServiceBusWithResourceGroupAndSubscriptionInPublishMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var existingResourceName = builder.AddParameter("existingResourceName");
+        var existingResourceGroupName = builder.AddParameter("existingResourceGroupName");
+        var existingSubscriptionId = builder.AddParameter("existingSubscriptionId");
+        var serviceBus = builder.AddAzureServiceBus("messaging")
+            .PublishAsExistingInResourceGroup(existingResourceName, existingResourceGroupName, existingSubscriptionId);
+        serviceBus.AddServiceBusQueue("queue");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var (manifest, bicep) = await GetManifestWithBicep(model, serviceBus.Resource);
+
+        var messagingRoles = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == "messaging-roles");
+        var (rolesManifest, rolesBicep) = await GetManifestWithBicep(messagingRoles, skipPreparer: true);
+
+        await Verify(manifest.ToString(), "json")
+            .AppendContentAsFile(bicep, "bicep")
+            .AppendContentAsFile(rolesManifest.ToString(), "json")
+            .AppendContentAsFile(rolesBicep, "bicep");
+    }
+
+    [Fact]
+    public async Task SupportsBicepTemplateWithSubscriptionScopeInPublishMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var existingSubscriptionId = builder.AddParameter("existingSubscriptionId");
+        var resource = builder.AddBicepTemplateString("subscriptionScoped",
+            """
+            targetScope = 'subscription'
+
+            param value string
+
+            output id string = 'subscription'
+            """)
+            .WithParameter("value", "unused");
+        resource.Resource.Scope = AzureBicepResourceScope.ForSubscription(existingSubscriptionId.Resource);
+
+        var (manifest, bicep) = await AzureManifestUtils.GetManifestWithBicep(resource.Resource, skipPreparer: true);
+
+        await Verify(manifest.ToString(), "json")
+            .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task SupportsBicepTemplateWithTenantScopeInPublishMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var resource = builder.AddBicepTemplateString("tenantScoped",
+            """
+            targetScope = 'tenant'
+
+            output id string = 'tenant'
+            """);
+        resource.Resource.Scope = AzureBicepResourceScope.ForTenant();
+
+        var (manifest, bicep) = await AzureManifestUtils.GetManifestWithBicep(resource.Resource, skipPreparer: true);
+
+        await Verify(manifest.ToString(), "json")
+            .AppendContentAsFile(bicep, "bicep");
     }
 }

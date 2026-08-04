@@ -13,6 +13,7 @@ import {
     codeLensResourceStoppedError,
     codeLensResourceStoppedErrorWithExitCode,
     codeLensResourceError,
+    codeLensResourceValueMissing,
 } from '../loc/strings';
 import { ResourceState, StateStyle } from '../editor/resourceConstants';
 
@@ -117,6 +118,13 @@ suite('getCodeLensStateLabel', () => {
 
     test('Finished with undefined exitCode returns stopped label', () => {
         assert.strictEqual(getCodeLensStateLabel(ResourceState.Finished, ''), codeLensResourceStopped);
+    });
+
+    // --- Parameter ValueMissing state ---
+
+    test('ValueMissing returns the humanized "Value missing" label with a warning icon', () => {
+        assert.strictEqual(getCodeLensStateLabel(ResourceState.ValueMissing, ''), codeLensResourceValueMissing);
+        assert.ok(codeLensResourceValueMissing.includes('$(warning)'));
     });
 
     // --- Default / unknown states ---

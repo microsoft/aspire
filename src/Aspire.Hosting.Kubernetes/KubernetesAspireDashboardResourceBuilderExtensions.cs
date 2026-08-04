@@ -51,6 +51,7 @@ public static class KubernetesAspireDashboardResourceBuilderExtensions
     /// which routes to the dashboard's container port (18888). If <c>null</c>, the Service port
     /// defaults to the container port.</param>
     /// <returns>The <see cref="IResourceBuilder{KubernetesAspireDashboardResource}"/> instance for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This sets the <c>port</c> field on the generated Kubernetes Service while keeping the
     /// <c>targetPort</c> as the original container port. This is useful when placing the dashboard
@@ -59,7 +60,7 @@ public static class KubernetesAspireDashboardResourceBuilderExtensions
     /// configure the environment's <see cref="KubernetesEnvironmentResource.DefaultServiceType"/>
     /// to <c>NodePort</c> or <c>LoadBalancer</c>.
     /// </remarks>
-    [AspireExport(Description = "Sets the Kubernetes Service port for the Aspire dashboard")]
+    [AspireExport]
     public static IResourceBuilder<KubernetesAspireDashboardResource> WithServicePort(
         this IResourceBuilder<KubernetesAspireDashboardResource> builder,
         int? port = null)
@@ -82,13 +83,14 @@ public static class KubernetesAspireDashboardResourceBuilderExtensions
     /// <param name="httpPort">The Service port for the OTLP HTTP endpoint. If <c>null</c>, the Service port
     /// defaults to the container port (18890).</param>
     /// <returns>The <see cref="IResourceBuilder{KubernetesAspireDashboardResource}"/> instance for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This sets the <c>port</c> field on the generated Kubernetes Service for the OTLP endpoints
     /// while keeping the <c>targetPort</c> as the original container port. Application resources
     /// in the cluster send telemetry to these Service ports. Use standard OTLP ports (4317 for gRPC,
     /// 4318 for HTTP) if your services are configured with those defaults.
     /// </remarks>
-    [AspireExport(Description = "Sets the Kubernetes Service ports for the OTLP endpoints")]
+    [AspireExport]
     public static IResourceBuilder<KubernetesAspireDashboardResource> WithOtlpServicePort(
         this IResourceBuilder<KubernetesAspireDashboardResource> builder,
         int? grpcPort = null,
@@ -115,12 +117,13 @@ public static class KubernetesAspireDashboardResourceBuilderExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{KubernetesAspireDashboardResource}"/> instance.</param>
     /// <param name="enabled">True to enable forwarded headers, false to disable.</param>
     /// <returns>The same <see cref="IResourceBuilder{KubernetesAspireDashboardResource}"/> to allow chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This sets the <c>ASPIRE_DASHBOARD_FORWARDEDHEADERS_ENABLED</c> environment variable inside the dashboard
     /// container. When enabled, the dashboard will process <c>X-Forwarded-Host</c> and <c>X-Forwarded-Proto</c>
     /// headers which is required when the dashboard is accessed through a reverse proxy or ingress controller.
     /// </remarks>
-    [AspireExport(Description = "Enables or disables forwarded headers support for the Aspire dashboard")]
+    [AspireExport]
     public static IResourceBuilder<KubernetesAspireDashboardResource> WithForwardedHeaders(
         this IResourceBuilder<KubernetesAspireDashboardResource> builder,
         bool enabled = true)

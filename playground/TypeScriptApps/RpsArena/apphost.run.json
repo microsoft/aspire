@@ -3,8 +3,6 @@
     "https": {
       "applicationUrl": "https://rpsarena.dev.localhost:16323;http://rpsarena.dev.localhost:15163",
       "environmentVariables": {
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://rpsarena.dev.localhost:35807",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://rpsarena.dev.localhost:32833"
       }
     }
   }

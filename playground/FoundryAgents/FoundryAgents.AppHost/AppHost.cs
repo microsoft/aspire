@@ -2,27 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.Foundry;
-using Azure.Provisioning.Authorization;
-using Azure.Provisioning.CognitiveServices;
-using Azure.Provisioning.Expressions;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-var foundry = builder.AddFoundry("aif-myfoundry");
-var project = foundry.AddProject("proj-myproject")
-    // workaround for https://github.com/microsoft/aspire/issues/15971
-    .ConfigureInfrastructure(infra =>
-    {
-        var project = infra.GetProvisionableResources().OfType<CognitiveServicesProject>().Single();
+var aca = builder.AddAzureContainerAppEnvironment("env");
 
-        var foundryAccount = foundry.Resource.AddAsExistingResource(infra);
-
-        var cogUserRa = foundryAccount.CreateRoleAssignment(CognitiveServicesBuiltInRole.CognitiveServicesUser, RoleManagementPrincipalType.ServicePrincipal, project.Identity.PrincipalId);
-        // There's a bug in the CDK, see https://github.com/Azure/azure-sdk-for-net/issues/47265
-        cogUserRa.Name = BicepFunction.CreateGuid(foundryAccount.Id, project.Id, cogUserRa.RoleDefinitionId);
-        infra.Add(cogUserRa);
-    });
-var chat = project.AddModelDeployment("chat", FoundryModel.OpenAI.Gpt41);
+var foundry = builder.AddFoundry("aifmyfoundry");
+var project = foundry.AddProject("projmyproject");
+var chat = project.AddModelDeployment("chat", FoundryModel.OpenAI.Gpt5);
 
 // --- Prompt agent tools ---
 
@@ -39,19 +26,11 @@ var aiSearchTool = project.AddAISearchTool("aisearch-tool", indexName: "default"
 
 var codeInterpreter = project.AddCodeInterpreterTool("code-interp");
 
-builder.AddPythonApp("weather-hosted-agent", "../app", "main.py")
-    .WithUv()
-    .WithReference(project).WithReference(chat).WaitFor(chat)
-    .PublishAsHostedAgent(project);
-
-builder.AddProject<Projects.DotNetHostedAgent>("proj-dotnet-hosted-agent")
-    .WithHttpEndpoint(targetPort: 9000)
-    .WithReference(project).WithReference(chat).WaitFor(chat)
-    .PublishAsHostedAgent(project);
+var webSearch = project.AddWebSearchTool("websearch");
 
 // --- Prompt Agents ---
 
-var researchAgent = project.AddPromptAgent(chat, "research-agent",
+var researchAgent = project.AddPromptAgent("research-agent", chat,
     instructions: """
         You are a research assistant. When asked a question:
         1. Use Bing grounding to search the web for current information
@@ -61,16 +40,38 @@ var researchAgent = project.AddPromptAgent(chat, "research-agent",
     .WithTool(aiSearchTool)
     .WithTool(codeInterpreter);
 
-var jokerAgent = project.AddPromptAgent(chat, "joker-agent",
+var jokerAgent = project.AddPromptAgent("joker-agent", chat,
     instructions: """
         You are a hilarious comedian. Tell jokes, be witty, and make people laugh.
         If someone asks you to analyze something, use the code interpreter to
         create funny charts or calculations about the topic.
+        """);
+
+var searchAgent = project.AddPromptAgent("searchagent", chat,
+    instructions: """
+        You are an agent capable of searching the web for information.
         """)
-    .WithTool(codeInterpreter);
+    .WithTool(webSearch);
+
+// --- Hosted Agents ---
+
+builder.AddPythonApp("weather-python", "../app", "main.py")
+    .WithUv()
+    .WithReference(chat).WaitFor(chat)
+    .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
+
+builder.AddProject<Projects.DotNetHostedAgent>("weather-dotnet")
+    .WithHttpEndpoint(targetPort: 9000)
+    .WithReference(chat).WaitFor(chat)
+    .WithReference(searchAgent).WaitFor(searchAgent)
+    .AsHostedAgent(project);
+
+builder.AddProject<Projects.DotNetInvocationHostedAgent>("echo-invocations-dotnet")
+    .AsHostedAgent(project, HostedAgentProtocol.Invocations, "1.0.0");
 
 builder.AddProject<Projects.PromptAgentChat>("chat-app")
     .WithExternalHttpEndpoints()
+    .WithComputeEnvironment(aca)
     .WithReference(jokerAgent).WaitFor(jokerAgent)
     .WithReference(researchAgent).WaitFor(researchAgent);
 

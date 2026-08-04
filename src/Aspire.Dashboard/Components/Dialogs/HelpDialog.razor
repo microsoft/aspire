@@ -8,19 +8,32 @@
 
 <h5>@Loc[nameof(Dialogs.HelpDialogKeyboardShortcutsTitle)]</h5>
 
+@{
+    var shortcutCategories = GetShortcutsByCategory();
+}
+
+@* Each shortcut category uses <dl> / <dt> / <dd> so screen readers expose the
+   description -> keys pairing as a description list. The dl is associated to its
+   <h6> heading via aria-labelledby so the assistive technology hears the category
+   name when entering the list. Keep this structure when changing the layout. *@
 <FluentGrid Spacing="3">
-    @foreach (var shortcutCategory in GetShortcutsByCategory())
+    @for (var categoryIndex = 0; categoryIndex < shortcutCategories.Count; categoryIndex++)
     {
+        var shortcutCategory = shortcutCategories[categoryIndex];
+        var categoryHeadingId = $"help-dialog-shortcut-category-{categoryIndex}";
+
         <FluentGridItem xs="12" sm="6">
             <FluentStack Orientation="Orientation.Vertical" VerticalGap="3" style="border-radius: 0.375rem; border-style: solid; border-width: 1px; border-color: var(--neutral-layer-4); padding: 11px;">
-                <h6 style="margin-bottom: 5px;">@shortcutCategory.Category</h6>
-                <FluentStack Orientation="Orientation.Vertical" VerticalGap="6">
+                <h6 id="@categoryHeadingId" style="margin-bottom: 5px;">@shortcutCategory.Category</h6>
+                <dl aria-labelledby="@categoryHeadingId" style="margin: 0; width: 100%; display: flex; flex-direction: column; gap: 6px;">
                     @foreach (var shortcut in shortcutCategory.Shortcuts)
                     {
-                        <FluentStack Orientation="Orientation.Horizontal" width="100%">
-                            @shortcut.Description
-                            <FluentSpacer/>
-                            <span>
+                        <div style="display: flex; align-items: center; width: 100%; gap: 6px;">
+                            @* dt takes the remaining space so the keys column on the right
+                               stays right-aligned against the panel edge, matching the
+                               pre-refactor FluentSpacer layout. *@
+                            <dt style="font-weight: normal; flex: 1; min-width: 0;">@shortcut.Description</dt>
+                            <dd style="margin: 0;">
                                 @for (var i = 0; i < shortcut.Keys.Length; i++)
                                 {
                                     <kbd style="margin-right: 3px;">@shortcut.Keys[i]</kbd>
@@ -30,10 +43,10 @@
                                         <span style="margin-right: 3px;">+</span>
                                     }
                                 }
-                            </span>
-                        </FluentStack>
+                            </dd>
+                        </div>
                     }
-                </FluentStack>
+                </dl>
             </FluentStack>
         </FluentGridItem>
     }

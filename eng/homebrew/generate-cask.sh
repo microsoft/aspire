@@ -13,7 +13,6 @@ Required:
   --version VERSION         Installer version in the cask and archive filename (e.g. 9.2.0)
 
 Optional:
-  --artifact-version VER    Version segment used in the ci.dot.net artifact path (defaults to --version)
   --output PATH             Output file path (default: ./aspire.rb)
   --archive-root PATH       Root directory containing locally built CLI archives to hash
   --skip-url-validation     Skip URL validation and downloading; use placeholder SHA256 hashes
@@ -23,7 +22,6 @@ EOF
 }
 
 VERSION=""
-ARTIFACT_VERSION=""
 OUTPUT=""
 ARCHIVE_ROOT=""
 SKIP_URL_VALIDATION=false
@@ -31,7 +29,6 @@ SKIP_URL_VALIDATION=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --version)              VERSION="$2";  shift 2 ;;
-    --artifact-version)     ARTIFACT_VERSION="$2"; shift 2 ;;
     --output)               OUTPUT="$2";   shift 2 ;;
     --archive-root)         ARCHIVE_ROOT="$2"; shift 2 ;;
     --skip-url-validation)  SKIP_URL_VALIDATION=true; shift ;;
@@ -45,10 +42,6 @@ if [[ -z "$VERSION" ]]; then
   usage
 fi
 
-if [[ -z "$ARTIFACT_VERSION" ]]; then
-  ARTIFACT_VERSION="$VERSION"
-fi
-
 TEMPLATE="$SCRIPT_DIR/aspire.rb.template"
 [[ -z "$OUTPUT" ]] && OUTPUT="./aspire.rb"
 
@@ -57,7 +50,10 @@ if [[ ! -f "$TEMPLATE" ]]; then
   exit 1
 fi
 
-BASE_URL="https://ci.dot.net/public/aspire/$ARTIFACT_VERSION"
+# BASE_URL must match the URL embedded in aspire.rb.template so the SHA256
+# computed below verifies the same bytes that `brew install` will fetch at
+# install time. The template's URL is parameterized only on #{version}.
+BASE_URL="https://github.com/microsoft/aspire/releases/download/v$VERSION"
 
 # Compute SHA256 for a URL by downloading to a temp file
 compute_sha256() {
@@ -177,7 +173,6 @@ echo "Generating cask from template..."
 # Read template and perform substitutions
 content="$(cat "$TEMPLATE")"
 content="${content//\$\{VERSION\}/$VERSION}"
-content="${content//\$\{ARTIFACT_VERSION\}/$ARTIFACT_VERSION}"
 content="${content//\$\{SHA256_OSX_ARM64\}/$SHA256_OSX_ARM64}"
 content="${content//\$\{SHA256_OSX_X64\}/$SHA256_OSX_X64}"
 

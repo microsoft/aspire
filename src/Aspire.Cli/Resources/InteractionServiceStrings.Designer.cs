@@ -70,7 +70,25 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Aspire CLI Version.
+        ///   Looks up a localized string similar to The AppHost is using an older Aspire version than the Aspire CLI. Update the AppHost&apos;s Aspire packages to continue..
+        /// </summary>
+        public static string AppHostNotCompatibleUpdateAppHost {
+            get {
+                return ResourceManager.GetString("AppHostNotCompatibleUpdateAppHost", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The Aspire CLI is older than the Aspire version used by the AppHost. Update the Aspire CLI to continue..
+        /// </summary>
+        public static string AppHostNotCompatibleUpdateCli {
+            get {
+                return ResourceManager.GetString("AppHostNotCompatibleUpdateCli", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire CLI version.
         /// </summary>
         public static string AspireCLIVersion {
             get {
@@ -79,7 +97,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Aspire.Hosting Version.
+        ///   Looks up a localized string similar to Aspire.Hosting version.
         /// </summary>
         public static string AspireHostingSDKVersion {
             get {
@@ -169,7 +187,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to An error occurred while connecting to the apphost. The apphost possibly crashed before it was available: {0}..
+        ///   Looks up a localized string similar to An error occurred while connecting to the AppHost: {0}.
         /// </summary>
         public static string ErrorConnectingToAppHost {
             get {
@@ -178,7 +196,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to An error occurred while connecting to the apphost. The apphost possibly crashed before it was available: {0}..
+        ///   Looks up a localized string similar to The connection to the AppHost was lost: {0}.
         /// </summary>
         public static string AppHostConnectionLost {
             get {
@@ -223,7 +241,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to [dim]For more information, see: [link]{0}[/][/].
+        ///   Looks up a localized string similar to [dim]For more information, see: {0}[/].
         /// </summary>
         public static string MoreInfoNewCliVersion {
             get {
@@ -237,6 +255,15 @@ namespace Aspire.Cli.Resources {
         public static string NonInteractiveAvailableValues {
             get {
                 return ResourceManager.GetString("NonInteractiveAvailableValues", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No supported app hosts were found..
+        /// </summary>
+        public static string NoSupportedAppHostsFound {
+            get {
+                return ResourceManager.GetString("NoSupportedAppHostsFound", resourceCulture);
             }
         }
 
@@ -286,7 +313,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The project could not be built. See logs at {0}.
+        ///   Looks up a localized string similar to The project could not be built..
         /// </summary>
         public static string ProjectCouldNotBeBuilt {
             get {
@@ -295,7 +322,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The app could not be created. See logs at {0}.
+        ///   Looks up a localized string similar to The app could not be created..
         /// </summary>
         public static string ProjectCouldNotBeCreated {
             get {
@@ -309,6 +336,24 @@ namespace Aspire.Cli.Resources {
         public static string ProjectOptionDoesntExist {
             get {
                 return ResourceManager.GetString("ProjectOptionDoesntExist", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The --apphost option specified a directory that contains multiple apphost project files..
+        /// </summary>
+        public static string ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts {
+            get {
+                return ResourceManager.GetString("ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The --apphost option specified a directory that does not contain any apphost project files..
+        /// </summary>
+        public static string ProjectOptionSpecifiedDirectoryContainsNoAppHosts {
+            get {
+                return ResourceManager.GetString("ProjectOptionSpecifiedDirectoryContainsNoAppHosts", resourceCulture);
             }
         }
 
@@ -331,7 +376,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Required Capability.
+        ///   Looks up a localized string similar to Required capability.
         /// </summary>
         public static string RequiredCapability {
             get {
@@ -408,6 +453,15 @@ namespace Aspire.Cli.Resources {
         public static string SeeLogsAt {
             get {
                 return ResourceManager.GetString("SeeLogsAt", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to See app host logs at {0}.
+        /// </summary>
+        public static string SeeAppHostLogsAt {
+            get {
+                return ResourceManager.GetString("SeeAppHostLogsAt", resourceCulture);
             }
         }
 

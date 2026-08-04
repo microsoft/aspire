@@ -317,8 +317,31 @@ validate_content_type() {
     # Get headers via HEAD request
     local headers
     if headers=$(secure_curl "$url" /dev/null 60 "$USER_AGENT" 3 "HEAD" 2>&1); then
+        # curl --location --head returns a header block for each redirect, for example:
+        #   HTTP/2 302
+        #   content-type: text/html; charset=utf-8
+        #
+        #   HTTP/2 200
+        #   content-type: application/octet-stream
+        # GitHub documents release asset downloads as either 200 OK or 302 Found.
+        # The 302 is an HTML redirect page, but the final 200 response is the
+        # archive/checksum, so validate only that block.
+        # See: https://docs.github.com/rest/releases/assets#get-a-release-asset
+        local final_headers
+        final_headers=$(printf "%s\n" "$headers" | awk '
+            /^HTTP(\/| )[0-9]/ {
+                block = $0 "\n"
+                next
+            }
+            {
+                block = block $0 "\n"
+            }
+            END {
+                printf "%s", block
+            }')
+
         # Check if response suggests HTML content (error page)
-        if echo "$headers" | grep -qi "content-type:.*text/html"; then
+        if echo "$final_headers" | grep -qi "content-type:.*text/html"; then
             say_error "Server returned HTML content instead of expected file. Make sure the URL is correct: $url"
             return 1
         fi
@@ -494,70 +517,6 @@ map_quality_to_channel() {
             printf "%s" "$quality"
             ;;
     esac
-}
-
-# Function to save the global settings using the aspire CLI
-# Uses 'aspire config set -g' to set global configuration values
-# Parameters:
-#   $1 - cli_path: Path to the aspire CLI executable
-#   $2 - key: The configuration key to set
-#   $3 - value: The value to set
-# Expected schema of ~/.aspire/globalsettings.json:
-# {
-#   "channel": "string"  // The channel name (e.g., "daily", "staging", "pr-1234")
-# }
-save_global_settings() {
-    local cli_path="$1"
-    local key="$2"
-    local value="$3"
-    
-    if [[ "$DRY_RUN" == true ]]; then
-        say_info "[DRY RUN] Would run: $cli_path config set -g $key $value"
-        return 0
-    fi
-    
-    say_verbose "Setting global config: $key = $value"
-    
-    local output
-    output=$("$cli_path" config set -g "$key" "$value" 2>&1)
-    local exit_code=$?
-    if [[ $exit_code -ne 0 ]]; then
-        say_warn "Failed to set global config via aspire CLI: $output"
-        return 1
-    fi
-    if [[ -n "$output" ]]; then
-        say_verbose "$output"
-    fi
-    
-    say_verbose "Global config saved: $key = $value"
-}
-
-# Function to remove a global setting using the aspire CLI
-# Uses 'aspire config delete -g' to remove global configuration values
-# This is used when installing the release/stable channel to avoid forcing nuget.config creation
-# Parameters:
-#   $1 - cli_path: Path to the aspire CLI executable
-#   $2 - key: The configuration key to remove
-remove_global_settings() {
-    local cli_path="$1"
-    local key="$2"
-    
-    if [[ "$DRY_RUN" == true ]]; then
-        say_info "[DRY RUN] Would run: $cli_path config delete -g $key"
-        return 0
-    fi
-    
-    say_verbose "Removing global config: $key"
-    
-    local output
-    output=$("$cli_path" config delete -g "$key" 2>&1)
-    local exit_code=$?
-    if [[ $exit_code -ne 0 ]]; then
-        say_verbose "Failed to delete global config via aspire CLI: $output"
-        return 1
-    fi
-    
-    say_verbose "Global config removed: $key"
 }
 
 # Function to add PATH to shell configuration file
@@ -798,6 +757,18 @@ construct_aspire_extension_url() {
     fi
 }
 
+is_stable_version() {
+    local version="$1"
+
+    [[ "$version" =~ ^[vV]?[0-9]+\.[0-9]+\.[0-9]+$ ]]
+}
+
+normalize_stable_version() {
+    local version="$1"
+
+    printf "%s" "${version#[vV]}"
+}
+
 # Function to construct the base URL for the Aspire CLI download
 construct_aspire_cli_url() {
     local version="$1"
@@ -833,13 +804,19 @@ construct_aspire_cli_url() {
 
         printf "${base_url}/aspire-cli-${rid}.${extension}"
     else
-        # When version is set, use ci.dot.net URL
+        if is_stable_version "$version"; then
+            local normalized_version
+            normalized_version=$(normalize_stable_version "$version")
+            base_url="https://github.com/microsoft/aspire/releases/download/v${normalized_version}"
+            printf "${base_url}/aspire-cli-${rid}-${normalized_version}.${extension}"
+            return 0
+        fi
 
         if [[ "$checksum" == "true" ]]; then
             # For checksum URLs, use the public-checksums URL
             base_url="https://ci.dot.net/public-checksums/aspire"
         else
-            base_url="https://ci.dot.net/public/aspire/"
+            base_url="https://ci.dot.net/public/aspire"
         fi
 
         printf "${base_url}/${version}/aspire-cli-${rid}-${version}.${extension}"
@@ -1021,19 +998,6 @@ download_and_install_archive() {
 
     say_info "Aspire CLI successfully installed to: ${GREEN}$cli_path${RESET}"
 
-    # Save the global channel setting if using quality-based download (not version-specific)
-    # This allows 'aspire new' and 'aspire init' to use the same channel by default
-    # For release/stable channel, remove the setting to avoid forcing nuget.config creation
-    if [[ -z "$VERSION" ]]; then
-        local channel
-        channel=$(map_quality_to_channel "$QUALITY")
-        if [[ "$channel" == "stable" ]]; then
-            remove_global_settings "$cli_path" "channel"
-        else
-            save_global_settings "$cli_path" "channel" "$channel"
-        fi
-    fi
-
     # Download and install VS Code extension if requested
     if [[ "$INSTALL_EXTENSION" == true ]]; then
         printf "\n"
@@ -1128,6 +1092,18 @@ main() {
     # Download and install the archive
     if ! download_and_install_archive "$temp_dir"; then
         exit 1
+    fi
+
+    # Write the script-route install-source sidecar next to the binary.
+    # Under --dry-run, print the target path and skip the write.
+    # Authorship contract: docs/specs/install-routes.md.
+    local sidecar_path
+    sidecar_path="$INSTALL_PATH/.aspire-install.json"
+    if [[ "$DRY_RUN" == true ]]; then
+        printf 'DRYRUN: would write route sidecar to: %s\n' "$sidecar_path"
+    else
+        mkdir -p "$INSTALL_PATH"
+        printf '{"source":"script"}\n' > "$sidecar_path"
     fi
 
     # Skip PATH configuration if --skip-path is set

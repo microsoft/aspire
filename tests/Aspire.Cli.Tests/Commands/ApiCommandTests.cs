@@ -13,7 +13,7 @@ public class ApiCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ApiCommand_WithNoSubcommand_ShowsHelp()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ApiDocsIndexServiceFactory = _ => new TestApiDocsIndexService();
@@ -24,13 +24,13 @@ public class ApiCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("docs api");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
     }
 
     [Fact]
     public async Task ApiListCommand_WithScope_ReturnsEntries()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ApiDocsIndexServiceFactory = _ => new TestApiDocsIndexService();
@@ -41,13 +41,13 @@ public class ApiCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("docs api list csharp");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
     public async Task ApiSearchCommand_WithLanguageFilter_ReturnsResults()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ApiDocsIndexServiceFactory = _ => new TestApiDocsIndexService();
@@ -58,13 +58,13 @@ public class ApiCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("docs api search emulator --language typescript --format json");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
     public async Task ApiGetCommand_WithValidId_ReturnsContent()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ApiDocsIndexServiceFactory = _ => new TestApiDocsIndexService();
@@ -75,13 +75,13 @@ public class ApiCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("docs api get csharp/aspire.test.package/testtype");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
     public async Task ApiGetCommand_WithInvalidId_ReturnsError()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ApiDocsIndexServiceFactory = _ => new TestApiDocsIndexService();
@@ -92,7 +92,7 @@ public class ApiCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("docs api get missing/id");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.NotEqual(ExitCodeConstants.Success, exitCode);
+        Assert.NotEqual(CliExitCodes.Success, exitCode);
     }
 }
 

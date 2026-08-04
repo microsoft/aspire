@@ -1,0 +1,5 @@
+parameters: {}
+secrets: {}
+config:
+  web:
+    QDB_CLIENT_CONF: "http://questdb-service:9002"

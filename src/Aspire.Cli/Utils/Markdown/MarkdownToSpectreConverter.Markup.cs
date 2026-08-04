@@ -186,7 +186,7 @@ internal partial class MarkdownToSpectreConverter
                 .Select(cell => RenderTableCellToMarkup(cell, markdown)).ToList())
             .ToList();
         var plainValues = markupValues
-            .Select(static row => row.Select(static cell => cell.RemoveMarkup()).ToList())
+            .Select(static row => row.Select(static cell => StringUtils.RemoveMarkup(cell)).ToList())
             .ToList();
 
         var columnCount = markupValues.Max(static row => row.Count);
@@ -552,6 +552,7 @@ internal partial class MarkdownToSpectreConverter
         {
             var contentStart = builder.Length;
             AppendInlinesToMarkup(builder, link, markdown);
+            TrimAppendedWhitespace(builder, contentStart);
 
             var appendedLength = builder.Length - contentStart;
             if (appendedLength == 0 || appendedLength == link.Url.Length && AppendedTextEquals(builder, contentStart, link.Url))
@@ -576,6 +577,7 @@ internal partial class MarkdownToSpectreConverter
 
         var linkContentStart = builder.Length;
         AppendInlinesToMarkup(builder, link, markdown);
+        TrimAppendedWhitespace(builder, linkContentStart);
         if (builder.Length == linkContentStart)
         {
             AppendEscapedMarkup(builder, link.Url.AsSpan());

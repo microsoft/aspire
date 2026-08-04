@@ -20,7 +20,8 @@ public static class AzureBicepResourceExtensions
     /// <param name="name">The name of the resource. This name will be used as the deployment name.</param>
     /// <param name="bicepFile">The path to the bicep file on disk. This path is relative to the apphost's project directory.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds an Azure Bicep template resource from a file")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureBicepResource> AddBicepTemplate(this IDistributedApplicationBuilder builder, [ResourceName] string name, string bicepFile)
     {
         builder.AddAzureProvisioning();
@@ -37,7 +38,8 @@ public static class AzureBicepResourceExtensions
     /// <param name="name">The name of the resource. This name will be used as the deployment name.</param>
     /// <param name="bicepContent">A string that represents a snippet of bicep.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds an Azure Bicep template resource from inline Bicep content")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureBicepResource> AddBicepTemplateString(this IDistributedApplicationBuilder builder, [ResourceName] string name, string bicepContent)
     {
         builder.AddAzureProvisioning();
@@ -52,7 +54,7 @@ public static class AzureBicepResourceExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="name">Name of the output.</param>
     /// <returns>A <see cref="BicepOutputReference"/> that represents the output.</returns>
-    [AspireExport(Description = "Gets an output reference from an Azure Bicep template resource")]
+    [AspireExport]
     public static BicepOutputReference GetOutput(this IResourceBuilder<AzureBicepResource> builder, string name)
     {
         return new BicepOutputReference(name, builder.Resource);
@@ -83,25 +85,6 @@ public static class AzureBicepResourceExtensions
         where T : IResourceWithEnvironment
     {
         return builder.WithEnvironment(name, (IExpressionValue)bicepOutputReference);
-    }
-
-    // Keep these ATS-only aliases for backward compatibility with existing polyglot app hosts.
-    // Remove them once callers have migrated to the unified withEnvironment(...) export.
-    // Tracking issue: https://github.com/microsoft/aspire/issues/15734
-    /// <summary>
-    /// Obsolete ATS alias for <see cref="WithEnvironment{T}(IResourceBuilder{T}, string, BicepOutputReference)"/>.
-    /// </summary>
-    /// <typeparam name="T">The resource type.</typeparam>
-    /// <param name="builder">The resource builder.</param>
-    /// <param name="name">The name of the environment variable.</param>
-    /// <param name="bicepOutputReference">The reference to the Bicep output.</param>
-    /// <returns>An <see cref="IResourceBuilder{T}"/>.</returns>
-    [Obsolete("ATS compatibility shim. Use withEnvironment instead.")]
-    [AspireExport("withEnvironmentFromOutput", Description = "Sets an environment variable from a Bicep output reference")]
-    internal static IResourceBuilder<T> WithEnvironmentFromOutputShim<T>(this IResourceBuilder<T> builder, string name, BicepOutputReference bicepOutputReference)
-        where T : IResourceWithEnvironment
-    {
-        return builder.WithEnvironment(name, bicepOutputReference);
     }
 
     /// <summary>
@@ -138,22 +121,6 @@ public static class AzureBicepResourceExtensions
     }
 
     /// <summary>
-    /// Obsolete ATS alias for <see cref="WithEnvironment{T}(IResourceBuilder{T}, string, IAzureKeyVaultSecretReference)"/>.
-    /// </summary>
-    /// <typeparam name="T">The resource type.</typeparam>
-    /// <param name="builder">The resource builder.</param>
-    /// <param name="name">The name of the environment variable.</param>
-    /// <param name="secretReference">The key vault secret reference.</param>
-    /// <returns>An <see cref="IResourceBuilder{T}"/>.</returns>
-    [Obsolete("ATS compatibility shim. Use withEnvironment instead.")]
-    [AspireExport("withEnvironmentFromKeyVaultSecret", Description = "Sets an environment variable from an Azure Key Vault secret reference")]
-    internal static IResourceBuilder<T> WithEnvironmentFromKeyVaultSecretShim<T>(this IResourceBuilder<T> builder, string name, IAzureKeyVaultSecretReference secretReference)
-        where T : IResourceWithEnvironment
-    {
-        return builder.WithEnvironment(name, secretReference);
-    }
-
-    /// <summary>
     /// Adds a parameter to the bicep template.
     /// </summary>
     /// <typeparam name="T">The <see cref="AzureBicepResource"/>.</typeparam>
@@ -169,7 +136,10 @@ public static class AzureBicepResourceExtensions
         return builder;
     }
 
-    [AspireExport("withParameter", Description = "Adds a Bicep parameter")]
+    /// <summary>
+    /// Adds a Bicep parameter
+    /// </summary>
+    [AspireExport("withParameter")]
     internal static IResourceBuilder<T> WithParameterForPolyglot<T>(
         this IResourceBuilder<T> builder,
         string name,

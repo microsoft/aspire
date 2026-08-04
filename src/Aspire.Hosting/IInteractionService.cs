@@ -4,16 +4,14 @@
 using System.Collections;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
 /// <summary>
 /// A service to interact with the current development environment.
 /// </summary>
-[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public interface IInteractionService
 {
     /// <summary>
@@ -98,6 +96,34 @@ public interface IInteractionService
     /// An <see cref="InteractionResult{T}"/> containing <c>true</c> if the user accepted, <c>false</c> otherwise.
     /// </returns>
     Task<InteractionResult<bool>> PromptNotificationAsync(string title, string message, NotificationInteractionOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Displays a progress dialog with an indeterminate progress indicator.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The dialog displays a spinning progress wheel and can optionally include a title, message, and a cancel button.
+    /// </para>
+    /// <para>
+    /// If <see cref="ProgressInteractionOptions.Work"/> is provided, the dialog remains open while the callback executes
+    /// and closes automatically when it completes. If no callback is provided, the dialog remains open until
+    /// <paramref name="cancellationToken"/> is canceled.
+    /// </para>
+    /// <para>
+    /// When a button is shown (via <see cref="InteractionOptions.PrimaryButtonText"/>), clicking it signals cancellation
+    /// through the <see cref="ProgressContext.CancellationToken"/> provided to the work callback.
+    /// </para>
+    /// </remarks>
+    /// <param name="message">The message to display in the progress dialog.</param>
+    /// <param name="title">The optional title of the progress dialog.</param>
+    /// <param name="options">Optional configuration for the progress interaction.</param>
+    /// <param name="cancellationToken">A token to cancel the operation and close the dialog.</param>
+    /// <returns>
+    /// An <see cref="InteractionResult{T}"/> containing <c>true</c> if the operation completed successfully,
+    /// or a canceled result if the user clicked the cancel button.
+    /// </returns>
+    [Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    Task<InteractionResult<bool>> PromptProgressAsync(string message, string? title = null, ProgressInteractionOptions? options = null, CancellationToken cancellationToken = default);
 }
 
 internal record QueueLoadOptions(
@@ -105,7 +131,7 @@ internal record QueueLoadOptions(
     CancellationToken CancellationToken,
     InteractionInput Input,
     InteractionInputCollection AllInputs,
-    IServiceProvider ServiceProvider);
+    IServiceProvider Services);
 
 internal sealed class InputLoadingState(InputLoadOptions options)
 {
@@ -172,7 +198,7 @@ internal sealed class InputLoadingState(InputLoadOptions options)
                 {
                     AllInputs = options.AllInputs,
                     Input = options.Input,
-                    Services = options.ServiceProvider,
+                    Services = options.Services,
                     CancellationToken = currentToken
                 }).ConfigureAwait(false);
                 lock (_lock)
@@ -201,7 +227,6 @@ internal sealed class InputLoadingState(InputLoadOptions options)
 /// Use this class to specify how and when dynamic input data should be loaded. This type is intended for advanced
 /// scenarios where input loading behavior must be customized.
 /// </remarks>
-[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class InputLoadOptions
 {
     /// <summary>
@@ -228,7 +253,6 @@ public sealed class InputLoadOptions
 /// <summary>
 /// The context for dynamic input loading. Used with <see cref="InputLoadOptions.LoadCallback"/>.
 /// </summary>
-[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class LoadInputContext
 {
     /// <summary>
@@ -255,18 +279,37 @@ public sealed class LoadInputContext
 /// <summary>
 /// Represents an input for an interaction.
 /// </summary>
-[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireDto]
 [DebuggerDisplay("Name = {Name}, InputType = {InputType}, Required = {Required}, Value = {Value}")]
 public sealed class InteractionInput
 {
+    private string _name = null!;
+    private bool _required;
+    private InputLoadOptions? _dynamicLoading;
+
     internal string EffectiveLabel => string.IsNullOrWhiteSpace(Label) ? Name : Label;
     internal InputLoadingState? DynamicLoadingState { get; set; }
     internal List<string> ValidationErrors { get; } = [];
+    internal void SetName(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        _name = name;
+    }
+
+    internal void SetRequired(bool required) => _required = required;
+
+    internal void SetFiles(IReadOnlyList<InteractionFile>? files) => Files = files;
+
+    internal void SetDynamicLoading(InputLoadOptions? dynamicLoading) => _dynamicLoading = dynamicLoading;
 
     /// <summary>
     /// Gets or sets the name for the input. Used for accessing inputs by name from a keyed collection.
     /// </summary>
-    public required string Name { get; init; }
+    public required string Name
+    {
+        get => _name;
+        init => _name = value;
+    }
 
     /// <summary>
     /// Gets or sets the label for the input. If not specified, the name will be used as the label.
@@ -292,7 +335,11 @@ public sealed class InteractionInput
     /// <summary>
     /// Gets or sets a value indicating whether the input is required.
     /// </summary>
-    public bool Required { get; init; }
+    public bool Required
+    {
+        get => _required;
+        init => _required = value;
+    }
 
     /// <summary>
     /// Gets or sets the options for the input. Only used by <see cref="InputType.Choice"/> inputs.
@@ -304,7 +351,16 @@ public sealed class InteractionInput
     /// Dynamic loading is used to load data and update inputs after a prompt has started.
     /// It can also be used to reload data and update inputs after a dependant input has changed.
     /// </summary>
-    public InputLoadOptions? DynamicLoading { get; init; }
+    // Excluded from the ATS surface: InputLoadOptions holds a non-serializable LoadCallback delegate, and the
+    // dynamic-loading payload is always stripped from interaction results at runtime (see InteractionExports.ToResultInput).
+    // Polyglot app hosts configure dynamic loading through InteractionInputBuilder.WithDynamicLoading, never by reading
+    // this property back, so advertising it on the result DTO would describe a value that is always null on the wire.
+    [AspireExportIgnore(Reason = "InputLoadOptions carries a non-serializable callback and is never populated on interaction results.")]
+    public InputLoadOptions? DynamicLoading
+    {
+        get => _dynamicLoading;
+        init => _dynamicLoading = value;
+    }
 
     /// <summary>
     /// Gets or sets the value of the input.
@@ -342,12 +398,94 @@ public sealed class InteractionInput
             field = value;
         }
     }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether multiple files can be selected. Only used by <see cref="InputType.File"/> inputs.
+    /// </summary>
+    public bool AllowMultipleFiles { get; init; }
+
+    /// <summary>
+    /// Gets or sets the file type filter for <see cref="InputType.File"/> inputs.
+    /// Uses the same format as the HTML <c>accept</c> attribute, e.g. <c>".pem,.pfx,.crt"</c> or <c>"image/*"</c>.
+    /// When set, the file picker restricts selectable files and the CLI validates that chosen files match.
+    /// </summary>
+    public string? FileFilter { get; init; }
+
+    /// <summary>
+    /// Gets or sets the maximum file size in bytes for <see cref="InputType.File"/> inputs.
+    /// If not specified, the server applies the configured upload limit (default 100 MB).
+    /// When specified, the value is capped at the server-side upload limit.
+    /// </summary>
+    public long? MaxFileSize
+    {
+        get => field;
+        init
+        {
+            if (value is { } v)
+            {
+                ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(v, 0);
+            }
+
+            field = value;
+        }
+    }
+
+    /// <summary>
+    /// Gets the files associated with this <see cref="InputType.File"/> input.
+    /// Populated after the user selects file(s) and the interaction completes.
+    /// </summary>
+    // Excluded from the ATS surface: InteractionFile holds non-serializable methods (OpenRead, ReadAllBytesAsync)
+    // and refers to server-local file paths. Polyglot app hosts receive file metadata through the manually defined
+    // InteractionInputFile interface in base.mts, populated by ToResultInput.
+    [AspireExportIgnore(Reason = "InteractionFile contains non-serializable methods and server-local paths; polyglot callers use InteractionInputFile from base.mts.")]
+    public IReadOnlyList<InteractionFile>? Files { get; private set; }
+}
+
+/// <summary>
+/// Represents a file selected by the user for an <see cref="InputType.File"/> input.
+/// </summary>
+public sealed class InteractionFile
+{
+    internal InteractionFile(string id, string name, string filePath)
+    {
+        Id = id;
+        Name = name;
+        FilePath = filePath;
+    }
+
+    /// <summary>
+    /// Gets the unique identifier for the uploaded file.
+    /// </summary>
+    public string Id { get; }
+
+    /// <summary>
+    /// Gets the original file name as provided by the user (e.g. "readme.txt").
+    /// </summary>
+    public string Name { get; }
+
+    /// <summary>
+    /// Gets the full path to the uploaded file on disk.
+    /// </summary>
+    public string FilePath { get; }
+
+    /// <summary>
+    /// Opens a read-only stream for the file content.
+    /// </summary>
+    /// <returns>A <see cref="Stream"/> for reading the file.</returns>
+    public Stream OpenRead() => new FileStream(FilePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 4096, useAsync: true);
+
+    /// <summary>
+    /// Reads all bytes of the file asynchronously.
+    /// </summary>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A byte array containing the file content.</returns>
+    public Task<byte[]> ReadAllBytesAsync(CancellationToken cancellationToken = default) => File.ReadAllBytesAsync(FilePath, cancellationToken);
 }
 
 /// <summary>
 /// A collection of interaction inputs that supports both indexed and name-based access.
 /// </summary>
-[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport]
 [DebuggerDisplay("Count = {Count}")]
 public sealed class InteractionInputCollection : IReadOnlyList<InteractionInput>
 {
@@ -429,6 +567,68 @@ public sealed class InteractionInputCollection : IReadOnlyList<InteractionInput>
     }
 
     /// <summary>
+    /// Gets the value of the input with the specified name as a string.
+    /// </summary>
+    /// <param name="name">The name of the input.</param>
+    /// <returns>The value of the input, or <see langword="null"/> when the input has no value.</returns>
+    public string? GetString(string name)
+    {
+        return this[name].Value;
+    }
+
+    /// <summary>
+    /// Gets the value of the input with the specified name as a <see cref="bool"/>.
+    /// </summary>
+    /// <param name="name">The name of the input.</param>
+    /// <returns>The value of the input parsed as a <see cref="bool"/>.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the input has no value.</exception>
+    /// <exception cref="FormatException">Thrown when the input value is not a valid <see cref="bool"/>.</exception>
+    public bool GetBoolean(string name)
+    {
+        return bool.Parse(GetRequiredString(name));
+    }
+
+    /// <summary>
+    /// Gets the value of the input with the specified name as a <see cref="int"/>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="InputType.Number"/> accepts floating point values. Use <see cref="GetDouble(string)"/> for decimal values,
+    /// or validate that the input is an integer before calling this method.
+    /// </remarks>
+    /// <param name="name">The name of the input.</param>
+    /// <returns>The value of the input parsed as a <see cref="int"/>.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the input has no value.</exception>
+    /// <exception cref="FormatException">Thrown when the input value is not a valid <see cref="int"/>.</exception>
+    /// <exception cref="OverflowException">Thrown when the input value is outside the range of a <see cref="int"/>.</exception>
+    public int GetInt32(string name)
+    {
+        return int.Parse(GetRequiredString(name), NumberStyles.Integer, CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// Gets the value of the input with the specified name as a <see cref="double"/>.
+    /// </summary>
+    /// <param name="name">The name of the input.</param>
+    /// <returns>The value of the input parsed as a <see cref="double"/>.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the input has no value.</exception>
+    /// <exception cref="FormatException">Thrown when the input value is not a valid <see cref="double"/>.</exception>
+    /// <exception cref="OverflowException">Thrown when the input value is outside the range of a <see cref="double"/>.</exception>
+    public double GetDouble(string name)
+    {
+        return double.Parse(GetRequiredString(name), NumberStyles.Float, CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// Gets all inputs in declaration order.
+    /// </summary>
+    /// <returns>A copy of the inputs in declaration order.</returns>
+    [AspireExport("InteractionInputCollection.toArray", MethodName = "toArray")]
+    public InteractionInput[] ToArray()
+    {
+        return [.. _inputs];
+    }
+
+    /// <summary>
     /// Gets the names of all inputs in the collection.
     /// </summary>
     public IEnumerable<string> Names => _inputsByName.Keys;
@@ -446,12 +646,22 @@ public sealed class InteractionInputCollection : IReadOnlyList<InteractionInput>
     IEnumerator IEnumerable.GetEnumerator() => _inputs.GetEnumerator();
 
     internal int IndexOf(InteractionInput input) => _inputs.IndexOf(input);
+
+    private string GetRequiredString(string name)
+    {
+        var value = GetString(name);
+        if (value is null)
+        {
+            throw new InvalidOperationException($"Input '{name}' does not have a value.");
+        }
+
+        return value;
+    }
 }
 
 /// <summary>
 /// Specifies the type of input for an <see cref="InteractionInput"/>.
 /// </summary>
-[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public enum InputType
 {
     /// <summary>
@@ -473,13 +683,16 @@ public enum InputType
     /// <summary>
     /// A numeric input.
     /// </summary>
-    Number
+    Number,
+    /// <summary>
+    /// A file input. Allows the user to select a file using the OS/browser file picker.
+    /// </summary>
+    File
 }
 
 /// <summary>
 /// Options for configuring an inputs dialog interaction.
 /// </summary>
-[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public class InputsDialogInteractionOptions : InteractionOptions
 {
     internal static new InputsDialogInteractionOptions Default { get; } = new();
@@ -494,7 +707,7 @@ public class InputsDialogInteractionOptions : InteractionOptions
 /// <summary>
 /// Represents the context for validating inputs in an inputs dialog interaction.
 /// </summary>
-[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport(ExposeProperties = true)]
 public sealed class InputsDialogValidationContext
 {
     internal bool HasErrors { get; private set; }
@@ -531,12 +744,22 @@ public sealed class InputsDialogValidationContext
         input.ValidationErrors.Add(errorMessage);
         HasErrors = true;
     }
+
+    /// <summary>
+    /// Adds a validation error for the input with the specified name.
+    /// </summary>
+    /// <param name="inputName">The name of the input to add a validation error for.</param>
+    /// <param name="errorMessage">The error message to add.</param>
+    [AspireExport("InputsDialogValidationContext.addValidationError", MethodName = "addValidationError")]
+    public void AddValidationError(string inputName, string errorMessage)
+    {
+        AddValidationError(Inputs[inputName], errorMessage);
+    }
 }
 
 /// <summary>
 /// Options for configuring a message box interaction.
 /// </summary>
-[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public class MessageBoxInteractionOptions : InteractionOptions
 {
     internal static MessageBoxInteractionOptions CreateDefault() => new();
@@ -550,7 +773,6 @@ public class MessageBoxInteractionOptions : InteractionOptions
 /// <summary>
 /// Options for configuring a notification interaction.
 /// </summary>
-[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public class NotificationInteractionOptions : InteractionOptions
 {
     internal static NotificationInteractionOptions CreateDefault() => new();
@@ -572,9 +794,42 @@ public class NotificationInteractionOptions : InteractionOptions
 }
 
 /// <summary>
+/// Options for configuring a progress interaction.
+/// </summary>
+[Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+public class ProgressInteractionOptions : InteractionOptions
+{
+    internal static ProgressInteractionOptions CreateDefault() => new();
+
+    /// <summary>
+    /// Gets or sets an optional asynchronous work callback to execute while the progress dialog is displayed.
+    /// </summary>
+    /// <remarks>
+    /// When provided, the progress dialog remains open while this callback executes and closes automatically
+    /// when the callback completes. The <see cref="ProgressContext.CancellationToken"/> passed to the callback
+    /// is triggered when the user clicks the cancel button or the operation is externally canceled.
+    /// When not provided, the dialog remains open until the <see cref="CancellationToken"/> passed to
+    /// <see cref="IInteractionService.PromptProgressAsync"/> is canceled.
+    /// </remarks>
+    public Func<ProgressContext, Task>? Work { get; set; }
+}
+
+/// <summary>
+/// Provides context to the work callback of a progress interaction.
+/// </summary>
+[Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+public sealed class ProgressContext
+{
+    /// <summary>
+    /// Gets the <see cref="System.Threading.CancellationToken"/> that is triggered when the user clicks
+    /// the cancel button or the operation is externally canceled.
+    /// </summary>
+    public required CancellationToken CancellationToken { get; init; }
+}
+
+/// <summary>
 /// Specifies the intent or purpose of a message in an interaction.
 /// </summary>
-[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public enum MessageIntent
 {
     /// <summary>
@@ -606,7 +861,6 @@ public enum MessageIntent
 /// <summary>
 /// Optional configuration for interactions added with <see cref="InteractionService"/>.
 /// </summary>
-[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public class InteractionOptions
 {
     internal static InteractionOptions Default { get; } = new();
@@ -673,7 +927,6 @@ public static class InteractionResult
 /// <summary>
 /// Represents the result of an interaction.
 /// </summary>
-[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public class InteractionResult<T>
 {
     /// <summary>
@@ -693,5 +946,3 @@ public class InteractionResult<T>
         Canceled = canceled;
     }
 }
-
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

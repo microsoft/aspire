@@ -7,6 +7,7 @@ using System.Runtime.Versioning;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using Aspire.Hosting.RemoteHost.CodeGeneration;
+using Aspire.Hosting.RemoteHost.Diagnostics;
 using Aspire.Hosting.RemoteHost.Language;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,6 +22,7 @@ internal sealed class JsonRpcServer : BackgroundService
     private readonly string _socketPath;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<JsonRpcServer> _logger;
+    private readonly RemoteHostProfilingTelemetry _profilingTelemetry;
     private Socket? _listenSocket;
     private bool _disposed;
     private int _activeClientCount;
@@ -28,10 +30,12 @@ internal sealed class JsonRpcServer : BackgroundService
     public JsonRpcServer(
         IConfiguration configuration,
         IServiceScopeFactory scopeFactory,
-        ILogger<JsonRpcServer> logger)
+        ILogger<JsonRpcServer> logger,
+        RemoteHostProfilingTelemetry profilingTelemetry)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
+        _profilingTelemetry = profilingTelemetry;
 
         var socketPath = configuration["REMOTE_APP_HOST_SOCKET_PATH"];
         if (string.IsNullOrEmpty(socketPath))
@@ -45,21 +49,33 @@ internal sealed class JsonRpcServer : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("Starting RemoteAppHost JsonRpc Server on {SocketPath}...", _socketPath);
+        var transport = OperatingSystem.IsWindows()
+            ? RemoteHostProfilingTelemetry.Values.NamedPipe
+            : RemoteHostProfilingTelemetry.Values.UnixDomainSocket;
+        using var activity = _profilingTelemetry.StartJsonRpcListen(transport);
 
-        if (OperatingSystem.IsWindows())
+        try
         {
-            await StartNamedPipeServerAsync(stoppingToken).ConfigureAwait(false);
+            if (OperatingSystem.IsWindows())
+            {
+                await StartNamedPipeServerAsync(activity, stoppingToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await StartUnixSocketServerAsync(activity, stoppingToken).ConfigureAwait(false);
+            }
         }
-        else
+        catch (Exception ex)
         {
-            await StartUnixSocketServerAsync(stoppingToken).ConfigureAwait(false);
+            activity.SetError(ex);
+            throw;
         }
 
         _logger.LogInformation("Goodbye!");
     }
 
     [SupportedOSPlatform("windows")]
-    private async Task StartNamedPipeServerAsync(CancellationToken cancellationToken)
+    private async Task StartNamedPipeServerAsync(RemoteHostProfilingTelemetry.ActivityScope listenActivity, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Starting JsonRpc server on named pipe: {SocketPath}", _socketPath);
 
@@ -92,10 +108,12 @@ internal sealed class JsonRpcServer : BackgroundService
                     outBufferSize: 0,
                     pipeSecurity);
 
+                listenActivity.AddJsonRpcServerListening();
                 await pipeServer.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
 
                 _logger.LogDebug("Client connected");
-                Interlocked.Increment(ref _activeClientCount);
+                var activeClientCount = Interlocked.Increment(ref _activeClientCount);
+                listenActivity.AddJsonRpcClientConnected(activeClientCount);
 
                 // Handle the connection in a separate task - pipe stream is owned by handler
                 _ = Task.Run(() => HandleClientStreamAsync(pipeServer, ownsStream: true, cancellationToken), cancellationToken);
@@ -115,7 +133,7 @@ internal sealed class JsonRpcServer : BackgroundService
         _logger.LogInformation("Server stopped");
     }
 
-    private async Task StartUnixSocketServerAsync(CancellationToken cancellationToken)
+    private async Task StartUnixSocketServerAsync(RemoteHostProfilingTelemetry.ActivityScope listenActivity, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Starting JsonRpc server on Unix domain socket: {SocketPath}", _socketPath);
 
@@ -144,6 +162,7 @@ internal sealed class JsonRpcServer : BackgroundService
         }
 
         _listenSocket.Listen(10);
+        listenActivity.AddJsonRpcServerListening();
 
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -154,7 +173,8 @@ internal sealed class JsonRpcServer : BackgroundService
                 var clientSocket = await _listenSocket.AcceptAsync(cancellationToken).ConfigureAwait(false);
 
                 _logger.LogDebug("Client connected");
-                Interlocked.Increment(ref _activeClientCount);
+                var activeClientCount = Interlocked.Increment(ref _activeClientCount);
+                listenActivity.AddJsonRpcClientConnected(activeClientCount);
 
                 // Handle the connection in a separate task - NetworkStream owns the socket
                 var stream = new NetworkStream(clientSocket, ownsSocket: true);
@@ -179,6 +199,7 @@ internal sealed class JsonRpcServer : BackgroundService
     {
         var clientId = Guid.NewGuid().ToString("N")[..8]; // Short client identifier
         var disconnectReason = "unknown";
+        using var activity = _profilingTelemetry.StartJsonRpcConnection();
 
         // Create a DI scope for this client connection
         // All scoped services (HandleRegistry, RemoteAppHostService, etc.) are per-client
@@ -196,7 +217,10 @@ internal sealed class JsonRpcServer : BackgroundService
             // Use System.Text.Json formatter instead of the default Newtonsoft.Json formatter
             var formatter = new SystemTextJsonFormatter();
             var handler = new HeaderDelimitedMessageHandler(clientStream, clientStream, formatter);
-            using var jsonRpc = new JsonRpc(handler, clientService);
+            using var jsonRpc = new JsonRpc(handler, clientService)
+            {
+                ActivityTracingStrategy = new ActivityTracingStrategy()
+            };
 
             // Add the shared CodeGenerationService as an additional target for generateCode method
             jsonRpc.AddLocalRpcTarget(codeGenerationService);
@@ -205,6 +229,7 @@ internal sealed class JsonRpcServer : BackgroundService
             jsonRpc.AddLocalRpcTarget(languageService);
 
             jsonRpc.StartListening();
+            activity.AddJsonRpcListening();
 
             // Enable bidirectional communication - allow .NET to call back to TypeScript
             clientService.SetClientConnection(jsonRpc);
@@ -244,10 +269,12 @@ internal sealed class JsonRpcServer : BackgroundService
         }
         catch (IOException ex)
         {
+            activity.SetError(ex);
             _logger.LogWarning(ex, "Client {ClientId} I/O error", clientId);
         }
         catch (Exception ex)
         {
+            activity.SetError(ex);
             _logger.LogError(ex, "Client {ClientId} unexpected error", clientId);
         }
         finally
@@ -266,6 +293,7 @@ internal sealed class JsonRpcServer : BackgroundService
             }
 
             _logger.LogDebug("Connection cleanup completed for client {ClientId}", clientId);
+            activity.AddJsonRpcConnectionClosed(disconnectReason);
 
             // Decrement active client count
             var remaining = Interlocked.Decrement(ref _activeClientCount);

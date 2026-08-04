@@ -1,0 +1,9 @@
+﻿{
+  "type": "azure.bicep.v0",
+  "path": "env.module.bicep",
+  "params": {
+    "shared_mi_outputs_id": "{shared-mi.outputs.id}",
+    "env_acr_outputs_name": "{env-acr.outputs.name}",
+    "userPrincipalId": ""
+  }
+}

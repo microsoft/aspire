@@ -3,14 +3,15 @@
 
 using System.ComponentModel;
 using System.Data.Common;
+using Azure.AI.Extensions.OpenAI;
 using Azure.AI.Projects;
 using Azure.Identity;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Foundry.Hosting;
 using Microsoft.Extensions.AI;
 
-string projectConnectionString = Environment.GetEnvironmentVariable("ConnectionStrings__proj-myproject")
-    ?? throw new InvalidOperationException("ConnectionStrings__proj-myproject is not set.");
+string projectConnectionString = Environment.GetEnvironmentVariable("ConnectionStrings__projmyproject")
+    ?? throw new InvalidOperationException("ConnectionStrings__projmyproject is not set.");
 
 string chatConnectionString = Environment.GetEnvironmentVariable("ConnectionStrings__chat")
     ?? throw new InvalidOperationException("ConnectionStrings__chat is not set.");
@@ -23,7 +24,7 @@ string deploymentName = GetRequiredConnectionValue(chatConnectionBuilder, "Deplo
 
 if (!Uri.TryCreate(projectEndpoint, UriKind.Absolute, out Uri? projectUri) || projectUri is null)
 {
-    throw new InvalidOperationException("ConnectionStrings__proj-myproject contains an invalid Endpoint value.");
+    throw new InvalidOperationException("ConnectionStrings__projmyproject contains an invalid Endpoint value.");
 }
 
 Console.WriteLine($"Project Endpoint: {projectUri}");
@@ -45,14 +46,25 @@ WeatherForecast[] GetWeatherForecast()
     return forecast;
 }
 
-DefaultAzureCredential credential = new();
+DefaultAzureCredential credential = new(new DefaultAzureCredentialOptions
+{
+    ExcludeManagedIdentityCredential = string.Equals(
+        Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"),
+        "Development",
+        StringComparison.OrdinalIgnoreCase)
+});
+
+var foundryProjectClient = new AIProjectClient(projectUri, credential);
+var searchAgentReference = new AgentReference(name: Environment.GetEnvironmentVariable("SEARCHAGENT_AGENTNAME"));
+var responseClient = foundryProjectClient.ProjectOpenAIClient.GetProjectResponsesClientForAgent(searchAgentReference);
+var searchAgent = responseClient.AsIChatClient(deploymentName).AsAIAgent(Environment.GetEnvironmentVariable("SEARCHAGENT_AGENTNAME"), description: "I can search the web.");
 
 AIAgent agent = new AIProjectClient(projectUri, credential)
     .AsAIAgent(
         model: deploymentName,
         name: "WeatherAgent",
         instructions: """You are the Weather Intelligence Agent that can return weather forecast using your tools.""",
-        tools: [AIFunctionFactory.Create(GetWeatherForecast)]);
+        tools: [AIFunctionFactory.Create(GetWeatherForecast), searchAgent.AsAIFunction()]);
 
 // Bind to the port allocated by Aspire via the DEFAULT_AD_PORT environment variable.
 string port = Environment.GetEnvironmentVariable("DEFAULT_AD_PORT") ?? "8088";
@@ -61,9 +73,14 @@ var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseUrls($"http://+:{port}");
 builder.Services.AddFoundryResponses(agent);
 
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddDevTemporaryLocalContributorSetup();
+}
 var app = builder.Build();
 
 app.MapFoundryResponses();
+app.MapDevTemporaryLocalAgentEndpoint();
 app.MapGet("/liveness", () => Results.Ok("Healthy"));
 app.MapGet("/readiness", () => Results.Ok("Ready"));
 

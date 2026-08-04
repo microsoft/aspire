@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+
 using System.Text;
 using Aspire.TestUtilities;
 using Aspire.Hosting.ApplicationModel;
@@ -78,7 +80,7 @@ public class RabbitMQFunctionalTests(ITestOutputHelper testOutputHelper)
 
         await using var channel = await connection.CreateChannelAsync();
         const string queueName = "hello";
-        await channel.QueueDeclareAsync(queueName, durable: false, exclusive: false, autoDelete: false, arguments: null);
+        await channel.QueueDeclareAsync(queueName, durable: false, exclusive: true, autoDelete: false, arguments: null);
 
         const string message = "Hello World!";
         var body = Encoding.UTF8.GetBytes(message);
@@ -233,4 +235,27 @@ public class RabbitMQFunctionalTests(ITestOutputHelper testOutputHelper)
             }
         }
     }
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public Task RabbitMQ_WithPersistentLifetime_ReusesContainer()
+    {
+        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
+            testOutputHelper,
+            builder => builder.AddRabbitMQ("resource").WithPersistentLifetime(),
+            "resource",
+            useTestContainerRegistry: true);
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public Task RabbitMQ_WithPersistentLifetimeAndRandomizedPorts_ReusesContainer()
+    {
+        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
+            testOutputHelper,
+            builder => builder.AddRabbitMQ("resource").WithPersistentLifetime(),
+            "resource",
+            useTestContainerRegistry: true,
+            randomizePorts: true);
+    }
+
 }

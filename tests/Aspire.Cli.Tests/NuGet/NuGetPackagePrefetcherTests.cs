@@ -4,25 +4,29 @@
 using System.CommandLine;
 using System.Diagnostics;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.NuGet;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Testing;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Cli.Tests.NuGet;
 
-public class NuGetPackagePrefetcherTests
+public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public void CliExecutionContextSetsCommand()
     {
         var workingDir = new DirectoryInfo(Environment.CurrentDirectory);
-        var hivesDir = new DirectoryInfo(Path.Combine(Environment.CurrentDirectory, "hives"));
-    var cacheDir = new DirectoryInfo(Path.Combine(workingDir.FullName, ".aspire", "cache"));
-    var executionContext = new CliExecutionContext(workingDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
-        
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(workingDir);
+
         Assert.Null(executionContext.Command);
-        
+
         var testCommand = new TestCommand();
         executionContext.Command = testCommand;
         Assert.Same(testCommand, executionContext.Command);
@@ -73,7 +77,6 @@ public class NuGetPackagePrefetcherTests
     public async Task PrefetchingCancellationDueToShutdownLogsCleanMessage()
     {
         var sink = new TestSink();
-        var logger = new TestLogger<NuGetPackagePrefetcher>(new TestLoggerFactory(sink, enabled: true));
 
         using var stoppingCts = new CancellationTokenSource();
         var executionContext = CreateExecutionContext();
@@ -128,12 +131,12 @@ public class NuGetPackagePrefetcherTests
             }
         };
 
-        var prefetcher = new NuGetPackagePrefetcher(
-            logger,
+        var prefetcher = CreatePrefetcher(
             executionContext,
             features,
             packagingService,
-            updateNotifier);
+            updateNotifier,
+            sink);
 
         await prefetcher.StartAsync(stoppingCts.Token).DefaultTimeout();
 
@@ -147,7 +150,6 @@ public class NuGetPackagePrefetcherTests
     public async Task TemplatePrefetchingNonCancellationExceptionLogsExceptionDetails()
     {
         var sink = new TestSink();
-        var logger = new TestLogger<NuGetPackagePrefetcher>(new TestLoggerFactory(sink, enabled: true));
 
         var executionContext = CreateExecutionContext();
         executionContext.CommandSelected.TrySetResult(new TestCommand("new"));
@@ -169,12 +171,12 @@ public class NuGetPackagePrefetcherTests
             }
         };
 
-        var prefetcher = new NuGetPackagePrefetcher(
-            logger,
+        var prefetcher = CreatePrefetcher(
             executionContext,
             new TestFeatures(),
             packagingService,
-            new TestCliUpdateNotifier());
+            new TestCliUpdateNotifier(),
+            sink);
 
         await prefetcher.StartAsync(CancellationToken.None).DefaultTimeout();
 
@@ -184,18 +186,224 @@ public class NuGetPackagePrefetcherTests
         await prefetcher.StopAsync(CancellationToken.None).DefaultTimeout();
     }
 
+    // The tests below resolve the real commands and drive the real NuGetPackagePrefetcher rather than
+    // going through TestNuGetPrefetcher at the bottom of this file. That helper re-implements the
+    // production prefetch decision instead of calling it, and has already drifted from it: its
+    // IsRuntimeOnlyCommand is missing "do". Tests written against the copy pass no matter what the
+    // production code decides, which is exactly the behaviour these tests need to pin down.
+    [Theory]
+    [InlineData(typeof(LsCommand))]
+    [InlineData(typeof(PsCommand))]
+    public void ReadOnlyCommandsDisablePackageMetadataPrefetching(Type commandType)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService(commandType);
+
+        var prefetchingCommand = Assert.IsAssignableFrom<IPackageMetaPrefetchingCommand>(command);
+        Assert.False(prefetchingCommand.PrefetchesTemplatePackageMetadata);
+        Assert.False(prefetchingCommand.PrefetchesCliPackageMetadata);
+    }
+
+    [Theory]
+    [InlineData(typeof(LsCommand))]
+    [InlineData(typeof(PsCommand))]
+    public async Task ReadOnlyCommandsStartNoPrefetching(Type commandType)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var executionContext = CreateExecutionContext();
+        executionContext.CommandSelected.TrySetResult((Command)provider.GetRequiredService(commandType));
+
+        var features = new TestFeatures();
+        features.SetFeature(KnownFeatures.UpdateNotificationsEnabled, true);
+
+        var templateStarted = false;
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ =>
+            {
+                templateStarted = true;
+                return Task.FromResult(Enumerable.Empty<PackageChannel>());
+            }
+        };
+
+        var cliStarted = false;
+        var updateNotifier = new TestCliUpdateNotifier
+        {
+            CheckForCliUpdatesAsyncCallback = (_, _) =>
+            {
+                cliStarted = true;
+                return Task.CompletedTask;
+            }
+        };
+
+        var prefetcher = CreatePrefetcher(
+            executionContext,
+            features,
+            packagingService,
+            updateNotifier);
+
+        await prefetcher.StartAsync(CancellationToken.None).DefaultTimeout();
+        await prefetcher.ExecuteTask!.DefaultTimeout();
+        await prefetcher.StopAsync(CancellationToken.None).DefaultTimeout();
+
+        Assert.False(templateStarted);
+        Assert.False(cliStarted);
+    }
+
+    // Command selection happens in BaseCommand's action, which the host reaches only after the first-run
+    // banner has played. The banner spends 1660ms in fixed delays, so a prefetcher that gave up waiting
+    // after a second would fall back to the null default and prefetch for `ls`/`ps` anyway. Advance the
+    // clock past that former timeout before selecting the command.
+    [Fact]
+    public async Task CommandSelectedAfterABannerLengthDelayStillDisablesPrefetching()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var executionContext = CreateExecutionContext();
+        var timeProvider = new FakeTimeProvider();
+
+        var features = new TestFeatures();
+        features.SetFeature(KnownFeatures.UpdateNotificationsEnabled, true);
+
+        var templateStarted = false;
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ =>
+            {
+                templateStarted = true;
+                return Task.FromResult(Enumerable.Empty<PackageChannel>());
+            }
+        };
+
+        var cliStarted = false;
+        var updateNotifier = new TestCliUpdateNotifier
+        {
+            CheckForCliUpdatesAsyncCallback = (_, _) =>
+            {
+                cliStarted = true;
+                return Task.CompletedTask;
+            }
+        };
+
+        var prefetcher = CreatePrefetcher(
+            executionContext,
+            features,
+            packagingService,
+            updateNotifier,
+            timeProvider: timeProvider);
+
+        await prefetcher.StartAsync(CancellationToken.None).DefaultTimeout();
+
+        // The removed timeout was one second. 1500ms crosses that boundary without coupling
+        // this test to every delay that contributes to the banner's full 1660ms duration.
+        timeProvider.Advance(TimeSpan.FromMilliseconds(1500));
+
+        executionContext.CommandSelected.TrySetResult(provider.GetRequiredService<LsCommand>());
+
+        await prefetcher.ExecuteTask!.DefaultTimeout();
+        await prefetcher.StopAsync(CancellationToken.None).DefaultTimeout();
+
+        Assert.False(templateStarted);
+        Assert.False(cliStarted);
+    }
+
+    [Fact]
+    public async Task InFlightPrefetchingCompletesBeforeTheServiceStops()
+    {
+        var executionContext = CreateExecutionContext();
+        executionContext.CommandSelected.TrySetResult(new TestCommand("new"));
+
+        var features = new TestFeatures();
+        features.SetFeature(KnownFeatures.UpdateNotificationsEnabled, true);
+
+        var templateEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var templateFinished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cliEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cliFinished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = async token =>
+            {
+                templateEntered.SetResult();
+                try
+                {
+                    await AsyncTestHelpers.WaitForCancellationAsync(token);
+                }
+                finally
+                {
+                    templateFinished.SetResult();
+                }
+
+                throw new UnreachableException();
+            }
+        };
+
+        var updateNotifier = new TestCliUpdateNotifier
+        {
+            CheckForCliUpdatesAsyncCallback = async (_, token) =>
+            {
+                cliEntered.SetResult();
+                try
+                {
+                    await AsyncTestHelpers.WaitForCancellationAsync(token);
+                }
+                finally
+                {
+                    cliFinished.SetResult();
+                }
+            }
+        };
+
+        var prefetcher = CreatePrefetcher(
+            executionContext,
+            features,
+            packagingService,
+            updateNotifier);
+
+        await prefetcher.StartAsync(CancellationToken.None).DefaultTimeout();
+        await Task.WhenAll(templateEntered.Task, cliEntered.Task).DefaultTimeout();
+
+        Assert.False(prefetcher.ExecuteTask!.IsCompleted);
+
+        await prefetcher.StopAsync(CancellationToken.None).DefaultTimeout();
+
+        Assert.True(templateFinished.Task.IsCompletedSuccessfully);
+        Assert.True(cliFinished.Task.IsCompletedSuccessfully);
+    }
+
+    private static NuGetPackagePrefetcher CreatePrefetcher(
+        CliExecutionContext executionContext,
+        IFeatures features,
+        IPackagingService packagingService,
+        ICliUpdateNotifier updateNotifier,
+        TestSink? sink = null,
+        TimeProvider? timeProvider = null)
+    {
+        return new NuGetPackagePrefetcher(
+            CreateLogger(sink ?? new TestSink()),
+            timeProvider ?? TimeProvider.System,
+            executionContext,
+            features,
+            packagingService,
+            updateNotifier);
+    }
+
+    private static TestLogger<NuGetPackagePrefetcher> CreateLogger(TestSink sink)
+        => new(new TestLoggerFactory(sink, enabled: true));
+
     private static CliExecutionContext CreateExecutionContext()
     {
         var workingDir = new DirectoryInfo(Environment.CurrentDirectory);
-        var hivesDir = new DirectoryInfo(Path.Combine(Environment.CurrentDirectory, "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(workingDir.FullName, ".aspire", "cache"));
-        return new CliExecutionContext(
-            workingDir,
-            hivesDir,
-            cacheDir,
-            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")),
-            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")),
-            "test.log");
+        return TestExecutionContextHelper.CreateExecutionContext(workingDir);
     }
 }
 
@@ -236,27 +444,27 @@ internal static class TestNuGetPrefetcher
 // Test command implementations
 internal sealed class TestCommand : BaseCommand
 {
-    public TestCommand(string name = "test") : base(name, "Test command", null!, null!, null!, null!, null!)
+    public TestCommand(string name = "test") : base(name, "Test command", new CommonCommandServices(null!, null!, null!, null!, null!, null!, null!, null!))
     {
     }
 
-    protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
-        return Task.FromResult(0);
+        return Task.FromResult(CommandResult.Success());
     }
 }
 
 internal sealed class TestCommandWithInterface : BaseCommand, IPackageMetaPrefetchingCommand
 {
-    public TestCommandWithInterface() : base("test-interface", "Test command with interface", null!, null!, null!, null!, null!)
+    public TestCommandWithInterface() : base("test-interface", "Test command with interface", new CommonCommandServices(null!, null!, null!, null!, null!, null!, null!, null!))
     {
     }
 
     public bool PrefetchesTemplatePackageMetadata => true;
     public bool PrefetchesCliPackageMetadata => true;
 
-    protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
-        return Task.FromResult(0);
+        return Task.FromResult(CommandResult.Success());
     }
 }

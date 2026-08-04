@@ -3,12 +3,8 @@
 
 using System.CommandLine;
 using System.Globalization;
-using Aspire.Cli.Configuration;
-using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Secrets;
-using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Commands;
 
@@ -30,13 +26,9 @@ internal sealed class SecretSetCommand : BaseCommand
     private readonly SecretStoreResolver _secretStoreResolver;
 
     public SecretSetCommand(
-        IInteractionService interactionService,
         SecretStoreResolver secretStoreResolver,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        AspireCliTelemetry telemetry)
-        : base("set", SecretCommandStrings.SetDescription, features, updateNotifier, executionContext, interactionService, telemetry)
+        CommonCommandServices services)
+        : base("set", SecretCommandStrings.SetDescription, services)
     {
         _secretStoreResolver = secretStoreResolver;
 
@@ -45,7 +37,7 @@ internal sealed class SecretSetCommand : BaseCommand
         Options.Add(SecretCommand.s_appHostOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         // Argument arity guarantees non-null
         var key = parseResult.GetValue(s_keyArgument)!;
@@ -57,14 +49,13 @@ internal sealed class SecretSetCommand : BaseCommand
         var result = await _secretStoreResolver.ResolveAsync(projectFile, autoInit: true, cancellationToken);
         if (result is null)
         {
-            InteractionService.DisplayError(SecretCommandStrings.CouldNotFindAppHost);
-            return ExitCodeConstants.FailedToFindProject;
+            return CommandResult.Failure(CliExitCodes.FailedToFindProject, SecretCommandStrings.CouldNotFindAppHost);
         }
 
         result.Store.Set(key, value);
         result.Store.Save();
 
         InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, SecretCommandStrings.SecretSetSuccess, key));
-        return ExitCodeConstants.Success;
+        return CommandResult.Success();
     }
 }

@@ -267,6 +267,19 @@ public class AtsPythonCodeGeneratorTests
     }
 
     [Fact]
+    public void GeneratedCode_CreateBuilderDefaultsAppHostFilePathFromEnvironment()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspirePy = files["aspire_app.py"];
+
+        Assert.Contains("app_host_file_path: str | None = None", aspirePy);
+        Assert.Contains("effective_options['AppHostFilePath'] = app_host_file_path", aspirePy);
+        Assert.Contains("app_host_file_path = os.environ.get('ASPIRE_APPHOST_FILEPATH')", aspirePy);
+    }
+
+    [Fact]
     public void GeneratedCode_UsesTypeHints()
     {
         // Verify that the generated Python code uses type hints
@@ -290,6 +303,17 @@ public class AtsPythonCodeGeneratorTests
         Assert.Contains("from_", aspirePy);
         Assert.DoesNotContain("def with_from(self, from: str)", aspirePy);
         Assert.DoesNotContain("\n    from: str", aspirePy);
+    }
+
+    [Fact]
+    public void GeneratedCode_PreservesAcronymsInSnakeCaseIdentifiers()
+    {
+        var files = _generator.GenerateDistributedApplication(CreateContextWithAcronymIdentifiers());
+        var aspirePy = files["aspire_app.py"];
+
+        Assert.Contains("def with_something_ai(self, something_ai: str)", aspirePy);
+        Assert.DoesNotContain("with_something_a_i", aspirePy);
+        Assert.DoesNotContain("something_a_i", aspirePy);
     }
 
     [Fact]
@@ -415,6 +439,62 @@ public class AtsPythonCodeGeneratorTests
         };
     }
 
+    private static AtsContext CreateContextWithAcronymIdentifiers()
+    {
+        var resourceType = new AtsTypeRef
+        {
+            TypeId = "Tests/AcronymResource",
+            ClrType = typeof(AcronymResource),
+            Category = AtsTypeCategory.Handle
+        };
+
+        return new AtsContext
+        {
+            Capabilities =
+            [
+                new AtsCapabilityInfo
+                {
+                    CapabilityId = "Tests/withSomethingAI",
+                    MethodName = "withSomethingAI",
+                    Parameters =
+                    [
+                        new AtsParameterInfo
+                        {
+                            Name = "builder",
+                            Type = resourceType
+                        },
+                        new AtsParameterInfo
+                        {
+                            Name = "somethingAI",
+                            Type = new AtsTypeRef
+                            {
+                                TypeId = AtsConstants.String,
+                                Category = AtsTypeCategory.Primitive
+                            }
+                        }
+                    ],
+                    ReturnType = resourceType,
+                    TargetTypeId = resourceType.TypeId,
+                    TargetType = resourceType,
+                    TargetParameterName = "builder",
+                    ExpandedTargetTypes = [resourceType],
+                    ReturnsBuilder = true,
+                    CapabilityKind = AtsCapabilityKind.Method
+                }
+            ],
+            HandleTypes =
+            [
+                new AtsTypeInfo
+                {
+                    AtsTypeId = resourceType.TypeId,
+                    ClrType = typeof(AcronymResource)
+                }
+            ],
+            DtoTypes = [],
+            EnumTypes = []
+        };
+    }
+
     private static AtsContext CreateContextWithGenericInheritance()
     {
         var genericBaseType = typeof(GenericBaseResource<GenericTypeArgument<int, string>>);
@@ -499,6 +579,8 @@ public class AtsPythonCodeGeneratorTests
     }
 
     private sealed class KeywordResource;
+
+    private sealed class AcronymResource;
 
     private interface IGenericResource<T>;
 

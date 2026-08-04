@@ -36,8 +36,8 @@ public class FoundryDeploymentResource : Resource, IResourceWithParent<FoundryRe
     }
 
     /// <summary>
-    /// This field is used to store the model id that is downloaded by Foundry Local based on the local machine's GPU.
-    /// It is used in the connection string instead of <see cref="ModelName" />.
+    /// This field is used to store the model identifier used by Foundry Local.
+    /// It is used in the connection string instead of <see cref="ModelName"/>.
     /// </summary>
     internal string? ModelId { get; set; }
 

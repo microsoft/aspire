@@ -80,6 +80,21 @@ internal partial class MarkdownToSpectreConverter
         }
     }
 
+    private static void TrimAppendedWhitespace(StringBuilder builder, int contentStart)
+    {
+        // Trim trailing whitespace
+        while (builder.Length > contentStart && char.IsWhiteSpace(builder[builder.Length - 1]))
+        {
+            builder.Length--;
+        }
+
+        // Trim leading whitespace
+        while (builder.Length > contentStart && char.IsWhiteSpace(builder[contentStart]))
+        {
+            builder.Remove(contentStart, 1);
+        }
+    }
+
     private static void WrapAppendedLines(StringBuilder builder, int contentStart, string linePrefix, string lineSuffix)
     {
         if (contentStart >= builder.Length)
@@ -338,9 +353,6 @@ internal partial class MarkdownToSpectreConverter
             }
         }
     }
-
-    [GeneratedRegex(@"\[((?:[^\[\]]|\[[^\[\]]*\])+)\]\(([^)]+)\)")]
-    private static partial Regex LinkRegex();
 
     [GeneratedRegex(@"</?[^>]+>", RegexOptions.Singleline)]
     private static partial Regex HtmlTagRegex();

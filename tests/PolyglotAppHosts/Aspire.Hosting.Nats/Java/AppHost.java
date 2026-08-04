@@ -14,7 +14,7 @@ void main() throws Exception {
         var nats2 = builder.addNats("messaging2", new AddNatsOptions().port(4223.0))
             .withJetStream()
             .withDataVolume(new WithDataVolumeOptions().name("nats-data").isReadOnly(false))
-            .withLifetime(ContainerLifetime.PERSISTENT);
+            .withPersistentLifetime();
         // withDataBindMount - bind mount a host directory
         var nats3 = builder.addNats("messaging3");
         nats3.withDataBindMount("/tmp/nats-data");

@@ -10,7 +10,6 @@ using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Azure.AI.Projects;
 using Azure.AI.Projects.Agents;
-using Azure.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -34,7 +33,6 @@ namespace Aspire.Hosting.Foundry;
 public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IResourceWithConnectionString
 {
     private const string BeforeStartStepName = "before-start";
-    private const string RunModeAzureProvisionStepName = "run-mode-azure-provision";
     private const int ProjectEndpointReadinessMaxRetryAttempts = 11;
     private static readonly TimeSpan s_projectEndpointReadinessDelay = TimeSpan.FromSeconds(5);
     private readonly List<IFoundryTool> _tools = [];
@@ -76,7 +74,7 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
                     Action = DeployBeforeStartAsync,
                     RequiredBySteps = [BeforeStartStepName],
                     Resource = this,
-                    DependsOnSteps = [RunModeAzureProvisionStepName]
+                    DependsOnSteps = [AzureEnvironmentResource.PrepareResourcesStepName]
                 };
                 steps.Add(beforeStartDeployStep);
             }
@@ -207,8 +205,11 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
             throw new InvalidOperationException($"Project '{project.Name}' does not have a valid endpoint.");
         }
 
+        var tokenCredentialProvider = context.Services.GetRequiredService<ITokenCredentialProvider>();
+        var credential = tokenCredentialProvider.TokenCredential;
+
         var options = await ToProjectsAgentVersionCreationOptionsAsync(cancellationToken).ConfigureAwait(false);
-        var projectClient = new AIProjectClient(new Uri(projectEndpoint), new DefaultAzureCredential());
+        var projectClient = new AIProjectClient(new Uri(projectEndpoint), credential);
 
         var retryPipeline = new ResiliencePipelineBuilder<ProjectsAgentVersion>()
             .AddRetry(new RetryStrategyOptions<ProjectsAgentVersion>

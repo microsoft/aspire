@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Aspire.Hosting.RemoteHost.Diagnostics;
 using Aspire.TypeSystem;
 using Microsoft.Extensions.Logging;
 
@@ -32,7 +33,12 @@ internal sealed class CapabilityDispatcher
     private readonly HandleRegistry _handles;
     private readonly AtsMarshaller _marshaller;
     private readonly ILogger _logger;
+    private readonly RemoteHostProfilingTelemetry _profilingTelemetry;
     private AtsContext? _atsContext;
+    // Tracks whether any CapabilityDispatcher in this process has scanned yet. Recorded as a
+    // profiling tag so traces can distinguish the cold first scan (full reflection cost) from
+    // subsequent scans (cached metadata).
+    private static int s_hasScanned;
 
     /// <summary>
     /// Represents a registered capability.
@@ -53,15 +59,18 @@ internal sealed class CapabilityDispatcher
     /// <param name="assemblyLoader">The assembly loader to get assemblies from.</param>
     /// <param name="marshaller">The marshaller for converting objects to/from JSON.</param>
     /// <param name="logger">The logger.</param>
+    /// <param name="profilingTelemetry">The remote host profiling telemetry helper.</param>
     public CapabilityDispatcher(
         HandleRegistry handles,
         AssemblyLoader assemblyLoader,
         AtsMarshaller marshaller,
-        ILogger<CapabilityDispatcher> logger)
+        ILogger<CapabilityDispatcher> logger,
+        RemoteHostProfilingTelemetry profilingTelemetry)
     {
         _handles = handles;
         _marshaller = marshaller;
         _logger = logger;
+        _profilingTelemetry = profilingTelemetry;
 
         // Scan for capabilities on initialization
         ScanAssemblies(assemblyLoader.GetAssemblies());
@@ -81,6 +90,7 @@ internal sealed class CapabilityDispatcher
         _handles = handles;
         _marshaller = marshaller;
         _logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<CapabilityDispatcher>.Instance;
+        _profilingTelemetry = RemoteHostProfilingTelemetry.Disabled;
 
         ScanAssemblies(assemblies);
     }
@@ -92,11 +102,20 @@ internal sealed class CapabilityDispatcher
     private void ScanAssemblies(IEnumerable<Assembly> assemblies)
     {
         var assemblyList = assemblies.ToList();
+        var firstScan = Interlocked.Exchange(ref s_hasScanned, 1) == 0;
+        using var activity = _profilingTelemetry.StartCapabilityScan(assemblyList.Count, firstScan);
 
         _logger.LogDebug("Scanning {AssemblyCount} assemblies for capabilities...", assemblyList.Count);
 
         // Scan all assemblies at once to get combined result with AtsContext
         var result = AtsCapabilityScanner.ScanAssemblies(assemblyList);
+        activity.SetAtsCounts(
+            result.Capabilities.Count,
+            result.HandleTypes.Count,
+            result.DtoTypes.Count,
+            result.EnumTypes.Count,
+            result.ExportedValues.Count,
+            result.Diagnostics.Count);
 
         // Store the AtsContext for capability registration
         _atsContext = result.ToAtsContext();
@@ -524,6 +543,7 @@ internal sealed class CapabilityDispatcher
             throw CapabilityException.CapabilityNotFound(capabilityId);
         }
 
+        using var activity = _profilingTelemetry.StartCapabilityInvoke(capabilityId, registration.Capability);
         args ??= new JsonObject();
 
         try
@@ -532,14 +552,17 @@ internal sealed class CapabilityDispatcher
         }
         catch (PolyglotCapabilityInvocationException ex)
         {
+            activity.SetError(ex);
             throw ex.ToCapabilityException();
         }
-        catch (CapabilityException)
+        catch (CapabilityException ex)
         {
+            activity.SetError(ex);
             throw;
         }
         catch (ArgumentException ex) when (IsTypeMismatchException(ex))
         {
+            activity.SetError(ex);
             throw PolyglotCapabilityErrorFormatter.CreateInternalError(
                 capabilityId,
                 registration.Capability?.MethodName,
@@ -551,8 +574,17 @@ internal sealed class CapabilityDispatcher
                 registration.Capability?.TargetParameterName,
                 errorCode: AtsErrorCodes.TypeMismatch).ToCapabilityException();
         }
+        catch (ArgumentException ex)
+        {
+            activity.SetError(ex);
+            throw CapabilityException.InvalidArgument(
+                capabilityId,
+                ex.ParamName ?? registration.Capability?.TargetParameterName ?? "unknown",
+                ex.Message);
+        }
         catch (InvalidCastException ex)
         {
+            activity.SetError(ex);
             throw PolyglotCapabilityErrorFormatter.CreateInternalError(
                 capabilityId,
                 registration.Capability?.MethodName,
@@ -566,6 +598,7 @@ internal sealed class CapabilityDispatcher
         }
         catch (Exception ex)
         {
+            activity.SetError(ex);
             _logger.LogError(ex, "Capability {CapabilityId} failed with {ExceptionType}: {Message}", capabilityId, ex.GetType().Name, ex.Message);
             throw PolyglotCapabilityErrorFormatter.CreateInternalError(
                 capabilityId,
@@ -592,24 +625,17 @@ internal sealed class CapabilityDispatcher
         return InvokeAsync(capabilityId, args).GetAwaiter().GetResult();
     }
 
-    private static async Task<object?> InvokeMethodAsync(MethodInfo method, object? target, object?[] methodArgs, bool runSyncOnBackgroundThread)
+    private static async Task<object?> InvokeMethodAsync(MethodInfo method, object? target, object?[] methodArgs, bool runInvocationOnBackgroundThread)
     {
-        if (runSyncOnBackgroundThread && !IsAsyncReturnType(method.ReturnType))
+        if (runInvocationOnBackgroundThread)
         {
+            // Async-returning exports can execute substantial synchronous setup before returning
+            // their Task or ValueTask. Run that invocation path off the JSON-RPC synchronization context so
+            // sync-over-async callback proxies can still receive nested RPC responses.
             return await Task.Run(() => InvokeMethodCore(method, target, methodArgs)).ConfigureAwait(false);
         }
 
         return InvokeMethodCore(method, target, methodArgs);
-    }
-
-    private static bool IsAsyncReturnType(Type returnType)
-    {
-        if (typeof(Task).IsAssignableFrom(returnType) || returnType == typeof(ValueTask))
-        {
-            return true;
-        }
-
-        return returnType.IsGenericType && returnType.GetGenericTypeDefinition() == typeof(ValueTask<>);
     }
 
     private static async Task<object?> UnwrapAsyncResultAsync(object? result, Type returnType)
@@ -661,14 +687,7 @@ internal sealed class CapabilityDispatcher
 
     private static object? InvokeMethodCore(MethodInfo method, object? target, object?[] methodArgs)
     {
-        try
-        {
-            return method.Invoke(target, methodArgs);
-        }
-        catch (TargetInvocationException tie) when (tie.InnerException is not null)
-        {
-            throw tie.InnerException;
-        }
+        return method.Invoke(target, methodArgs);
     }
 
     /// <summary>
@@ -829,6 +848,13 @@ internal sealed class CapabilityDispatcher
             {
                 continue;
             }
+            catch (ArgumentException) when (IsRejectedEnumString(argNode, unionMemberType))
+            {
+                // Enum.Parse rejects unknown string values with ArgumentException. In a union,
+                // that only means this enum member did not match, so later members such as
+                // string still need a chance to accept the same JSON value.
+                continue;
+            }
         }
 
         throw CapabilityException.TypeMismatch(
@@ -900,6 +926,21 @@ internal sealed class CapabilityDispatcher
     private static string DescribeUnionTypes(IReadOnlyList<Type> unionMemberTypes)
     {
         return string.Join(" | ", unionMemberTypes.Select(static type => type.Name));
+    }
+
+    /// <summary>
+    /// Determines if the given JSON node represents a rejected enum string for the specified union member type.
+    /// A rejected enum string occurs when the union member type is an enum, but the JSON node is a string that does not match any of the enum's defined names. In this case, the value may still be valid for another union member type (e.g., string), so it should not cause an immediate type mismatch failure for the entire union parameter.
+    /// </summary>
+    /// <param name="node">The JSON node to check.</param>
+    /// <param name="unionMemberType">The union member type to check against.</param>
+    /// <returns>True if the JSON node is a rejected enum string; otherwise, false.</returns>
+    private static bool IsRejectedEnumString(JsonNode? node, Type unionMemberType)
+    {
+        var underlyingType = Nullable.GetUnderlyingType(unionMemberType) ?? unionMemberType;
+        return underlyingType.IsEnum &&
+            node is JsonValue value &&
+            value.TryGetValue<string>(out _);
     }
 
     private static string DescribeJsonNode(JsonNode? node)

@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Resources;
-using Aspire.Cli.Tests.Utils;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
 using Xunit;
@@ -91,30 +90,21 @@ public sealed class FrontDoorDeploymentTests(ITestOutputHelper output)
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 
-            // Step 5: Add Azure Container Apps and Front Door hosting packages
+            // Step 5: Add Azure Container Apps and Front Door hosting packages.
+            // Use WaitForAspireAddCompletionAsync because `aspire add` only prompts for a
+            // version when multiple candidates are found; when the package is resolved from
+            // the local bundle (the typical CI case) the command installs directly with no
+            // prompt, so a hard-coded WaitUntilText for the legacy "(based on NuGet.config)"
+            // prompt times out. The helper covers both code paths.
             output.WriteLine("Step 5: Adding Azure Container Apps hosting package...");
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.AppContainers");
             await auto.EnterAsync();
-
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync();
-            }
-
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromMinutes(3));
 
             output.WriteLine("Step 5b: Adding Azure Front Door hosting package...");
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.FrontDoor");
             await auto.EnterAsync();
-
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync();
-            }
-
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromMinutes(3));
 
             // Step 6: Modify AppHost.cs to add Azure Container App Environment and Front Door
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
@@ -173,20 +163,33 @@ builder.Build().Run();
                   "fdurls=$(az afd endpoint list -g \"$RG_NAME\" --profile-name $(az afd profile list -g \"$RG_NAME\" --query \"[0].name\" -o tsv 2>/dev/null) --query \"[].hostName\" -o tsv 2>/dev/null) && " +
                   "echo \"Front Door endpoints: $fdurls\" && " +
                   "failed=0 && " +
+                  // Share a single deadline across every endpoint (see the rationale comment below the
+                  // command) so the whole loop stays bounded no matter how many endpoints are returned.
+                  "deadline=$(( $(date +%s) + 660 )) && " +
                   // Verify ACA endpoints
                   "for url in $urls; do " +
                   "echo \"Checking ACA https://$url...\"; " +
                   "success=0; " +
-                  "for i in $(seq 1 18); do " +
+                  "while true; do " +
                   "STATUS=$(curl -s -o /dev/null -w \"%{http_code}\" \"https://$url\" --max-time 30 2>/dev/null); " +
-                  "if [ \"$STATUS\" = \"200\" ] || [ \"$STATUS\" = \"302\" ]; then echo \"  ✅ $STATUS (attempt $i)\"; success=1; break; fi; " +
-                  "echo \"  Attempt $i: $STATUS, retrying in 10s...\"; sleep 10; " +
+                  "if [ \"$STATUS\" = \"200\" ] || [ \"$STATUS\" = \"302\" ]; then echo \"  ✅ $STATUS\"; success=1; break; fi; " +
+                  "if [ \"$(date +%s)\" -ge \"$deadline\" ]; then break; fi; " +
+                  "echo \"  $STATUS, retrying in 10s...\"; sleep 10; " +
                   "done; " +
-                  "if [ \"$success\" -eq 0 ]; then echo \"  ❌ Failed after 18 attempts\"; failed=1; fi; " +
+                  "if [ \"$success\" -eq 0 ]; then echo \"  ❌ $url not reachable before deadline\"; failed=1; fi; " +
                   "done && " +
                   "if [ \"$failed\" -ne 0 ]; then echo \"❌ One or more endpoint checks failed\"; exit 1; fi");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
+            // The in-terminal verification loop above checks every external ACA endpoint, retrying each
+            // with `curl --max-time 30` + `sleep 10`. `urls` can contain more than one endpoint (for
+            // example the workload plus the Aspire dashboard), and the endpoints are checked
+            // sequentially, so a per-endpoint retry budget would let the total runtime grow with the
+            // number of endpoints. Instead the loop shares a single ~11-minute deadline across all
+            // endpoints (each still gets at least one attempt), which keeps the worst case bounded.
+            // The outer success-prompt wait must exceed that deadline plus the final in-flight
+            // `curl --max-time 30`, so 15 minutes covers it; a shorter wait would abandon a
+            // still-running (and often eventually-successful) loop and fail an otherwise healthy deploy.
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(15));
 
             // Step 11: Exit terminal
             await auto.TypeAsync("exit");

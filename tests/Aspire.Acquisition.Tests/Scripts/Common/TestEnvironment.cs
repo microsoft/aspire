@@ -74,37 +74,47 @@ public sealed class TestEnvironment : IDisposable
                 exit 0
 
                 :api
-                rem Parse endpoint and --jq flag to return realistic responses
                 set "ENDPOINT=%~2"
-                set "JQ_FILTER="
-                set "IDX=2"
-                :api_parse
                 shift
-                if "%~2"=="" goto :api_dispatch
-                if "%~2"=="--jq" (
-                    set "JQ_FILTER=%~3"
-                    shift
-                    goto :api_parse
+                shift
+                set "HAS_JQ="
+                rem The scripts only use these mocked API calls with --jq. Scan only for the
+                rem flag and avoid parsing the jq expression because it can contain cmd
+                rem metacharacters such as pipes.
+                :api_arg_loop
+                if "%~1"=="" goto :api_args_done
+                if "%~1"=="--jq" (
+                    set "HAS_JQ=true"
+                    goto :api_args_done
                 )
-                goto :api_parse
+                shift
+                goto :api_arg_loop
 
-                :api_dispatch
-                echo %ENDPOINT% | findstr /C:"/pulls/" >nul 2>&1
-                if not errorlevel 1 (
-                    if defined JQ_FILTER (
-                        echo abc123def456789012345678901234567890abcd
-                    ) else (
-                        echo {"head":{"sha":"abc123def456789012345678901234567890abcd"}}
+                :api_args_done
+                if "%ENDPOINT%"=="graphql" (
+                    if not "%HAS_JQ%"=="true" (
+                        echo {"_mock_missing_jq":true}
+                        exit 1
                     )
+                    echo abc123def456789012345678901234567890abcd
                     exit 0
                 )
-                echo %ENDPOINT% | findstr /C:"/actions/workflows/" >nul 2>&1
+                echo "%ENDPOINT%" | findstr /C:"/pulls/" >nul 2>&1
                 if not errorlevel 1 (
-                    if defined JQ_FILTER (
-                        echo 987654321
-                    ) else (
-                        echo {"workflow_runs":[{"id":987654321,"conclusion":"success"}]}
+                    if not "%HAS_JQ%"=="true" (
+                        echo {"_mock_missing_jq":true}
+                        exit 1
                     )
+                    echo abc123def456789012345678901234567890abcd
+                    exit 0
+                )
+                echo "%ENDPOINT%" | findstr /C:"/actions/workflows/" >nul 2>&1
+                if not errorlevel 1 (
+                    rem Workflow-run endpoints include '&' query separators. When PowerShell
+                    rem invokes this .cmd shim, cmd.exe treats those as command separators before
+                    rem this script can see later arguments like --jq, so this endpoint must keep
+                    rem returning the scalar value used by the scripts' --jq path.
+                    echo 987654321
                     exit 0
                 )
                 echo {}
@@ -149,7 +159,14 @@ public sealed class TestEnvironment : IDisposable
                 :do_dl
                 if defined DLDIR (
                     if not exist "%DLDIR%" mkdir "%DLDIR%"
-                    echo fake-archive> "%DLDIR%\fake-archive.tar.gz"
+                    if defined MOCK_GH_DOWNLOAD_ARCHIVE_SOURCE (
+                        copy /Y "%MOCK_GH_DOWNLOAD_ARCHIVE_SOURCE%" "%DLDIR%\" >nul
+                    ) else if defined MOCK_GH_DOWNLOAD_FILES (
+                        set "MOCK_GH_DOWNLOAD_DIR=%DLDIR%"
+                        powershell -NoLogo -NoProfile -Command "$downloadDir = $env:MOCK_GH_DOWNLOAD_DIR; $lines = $env:MOCK_GH_DOWNLOAD_FILES -split '\r?\n'; foreach ($line in $lines) { if (-not [string]::IsNullOrWhiteSpace($line)) { Set-Content -LiteralPath (Join-Path $downloadDir $line.Trim()) -Value 'fake-archive' } }"
+                    ) else (
+                        echo fake-archive> "%DLDIR%\fake-archive.tar.gz"
+                    )
                 )
                 exit 0
 
@@ -193,8 +210,11 @@ public sealed class TestEnvironment : IDisposable
                         done
                         if [ -n "$download_dir" ]; then
                             mkdir -p "$download_dir"
-                            # Create files listed in MOCK_GH_DOWNLOAD_FILES (newline-separated)
-                            if [ -n "${MOCK_GH_DOWNLOAD_FILES:-}" ]; then
+                            if [ -n "${MOCK_GH_DOWNLOAD_ARCHIVE_SOURCE:-}" ]; then
+                                # Copy a real archive into the download dir so the
+                                # script's extract/install path can run end-to-end.
+                                cp "$MOCK_GH_DOWNLOAD_ARCHIVE_SOURCE" "$download_dir/"
+                            elif [ -n "${MOCK_GH_DOWNLOAD_FILES:-}" ]; then
                                 echo "$MOCK_GH_DOWNLOAD_FILES" | while IFS= read -r fname; do
                                     [ -n "$fname" ] && echo "fake-archive" > "$download_dir/$fname"
                                 done
@@ -215,23 +235,32 @@ public sealed class TestEnvironment : IDisposable
                         esac
                     done
 
+                    if [ "$endpoint" = "graphql" ]; then
+                        if [ -z "$jq_filter" ]; then
+                            echo '{"_mock_missing_jq":true}'
+                            exit 1
+                        fi
+                        echo "abc123def456789012345678901234567890abcd"
+                        exit 0
+                    fi
+
                     # PR head SHA lookup: repos/.../pulls/<number>
                     if echo "$endpoint" | grep -q "/pulls/"; then
-                        if [ -n "$jq_filter" ]; then
-                            echo "abc123def456789012345678901234567890abcd"
-                        else
-                            echo '{"head":{"sha":"abc123def456789012345678901234567890abcd"}}'
+                        if [ -z "$jq_filter" ]; then
+                            echo '{"_mock_missing_jq":true}'
+                            exit 1
                         fi
+                        echo "abc123def456789012345678901234567890abcd"
                         exit 0
                     fi
 
                     # Workflow run lookup: repos/.../actions/workflows/...
                     if echo "$endpoint" | grep -q "/actions/workflows/"; then
-                        if [ -n "$jq_filter" ]; then
-                            echo "987654321"
-                        else
-                            echo '{"workflow_runs":[{"id":987654321,"conclusion":"success"}]}'
+                        if [ -z "$jq_filter" ]; then
+                            echo '{"_mock_missing_jq":true}'
+                            exit 1
                         fi
+                        echo "987654321"
                         exit 0
                     fi
 

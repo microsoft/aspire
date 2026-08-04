@@ -100,14 +100,15 @@ public class PackageJsonMergerTests
     }
 
     [Fact]
-    public void PrefixedScripts_AlwaysAdded()
+    public void PrefixedScripts_PreserveExistingValues()
     {
         var existing = """
             {
               "name": "my-app",
               "scripts": {
                 "dev": "vite",
-                "build": "vite build"
+                "build": "vite build",
+                "aspire:start": "custom start"
               }
             }
             """;
@@ -130,8 +131,8 @@ public class PackageJsonMergerTests
         Assert.Equal("vite", scripts["dev"]?.GetValue<string>());
         Assert.Equal("vite build", scripts["build"]?.GetValue<string>());
 
-        // All aspire: scripts added
-        Assert.Equal("aspire run", scripts["aspire:start"]?.GetValue<string>());
+        // Existing aspire: scripts are preserved; missing ones are added
+        Assert.Equal("custom start", scripts["aspire:start"]?.GetValue<string>());
         Assert.Equal("tsc -p tsconfig.apphost.json", scripts["aspire:build"]?.GetValue<string>());
         Assert.Equal("tsc --watch -p tsconfig.apphost.json", scripts["aspire:dev"]?.GetValue<string>());
         Assert.Equal("eslint apphost.ts", scripts["aspire:lint"]?.GetValue<string>());
@@ -1089,6 +1090,33 @@ public class PackageJsonMergerTests
         var result = MergeJson(existing, scaffold);
 
         // 5.9.3 release is newer than 5.9.3-beta.1 pre-release
+        Assert.Equal("^5.9.3", GetDep(result, "devDependencies", "typescript"));
+    }
+
+    [Fact]
+    public void DevDependencyAlreadyInDependencies_IsNotDuplicated()
+    {
+        var existing = """
+            {
+              "dependencies": {
+                "vscode-jsonrpc": "^8.1.0"
+              }
+            }
+            """;
+
+        var scaffold = """
+            {
+              "devDependencies": {
+                "vscode-jsonrpc": "^8.2.0",
+                "typescript": "^5.9.3"
+              }
+            }
+            """;
+
+        var result = MergeJson(existing, scaffold);
+
+        Assert.Equal("^8.2.0", GetDep(result, "dependencies", "vscode-jsonrpc"));
+        Assert.Null(GetDep(result, "devDependencies", "vscode-jsonrpc"));
         Assert.Equal("^5.9.3", GetDep(result, "devDependencies", "typescript"));
     }
 

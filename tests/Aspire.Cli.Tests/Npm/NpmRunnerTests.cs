@@ -3,6 +3,7 @@
 
 using System.Runtime.InteropServices;
 using Aspire.Cli.Npm;
+using Aspire.Cli.Tests.Utils;
 
 namespace Aspire.Cli.Tests.Npm;
 
@@ -11,7 +12,7 @@ public class NpmRunnerTests
     [Fact]
     public void CreateNpmProcessStartInfo_SetsCommonProperties()
     {
-        var startInfo = NpmRunner.CreateNpmProcessStartInfo("/usr/bin/npm", ["view", "express", "version"], "/tmp/workdir");
+        var startInfo = NpmRunner.CreateNpmProcessStartInfo("/usr/bin/npm", ["view", "express", "version"], "/tmp/workdir", new TestEnvironment());
 
         Assert.True(startInfo.RedirectStandardOutput);
         Assert.True(startInfo.RedirectStandardError);
@@ -28,7 +29,7 @@ public class NpmRunnerTests
         var startInfo = NpmRunner.CreateNpmProcessStartInfo(
             @"C:\Program Files\nodejs\npm.cmd",
             ["view", "@playwright/cli@0.1.1", "version", "--registry", "https://registry.npmjs.org/"],
-            @"C:\temp\workdir");
+            @"C:\temp\workdir", new TestEnvironment());
 
         Assert.Equal("cmd.exe", startInfo.FileName);
         Assert.Empty(startInfo.ArgumentList);
@@ -49,7 +50,7 @@ public class NpmRunnerTests
         var startInfo = NpmRunner.CreateNpmProcessStartInfo(
             @"C:\Program Files\nodejs\npm.cmd",
             ["view", "express", "version"],
-            @"C:\temp");
+            @"C:\temp", new TestEnvironment());
 
         // cmd.exe /c requires outer quotes wrapping the entire command:
         // /c ""C:\Program Files\nodejs\npm.cmd" "view" "express" "version""
@@ -66,7 +67,7 @@ public class NpmRunnerTests
         var startInfo = NpmRunner.CreateNpmProcessStartInfo(
             @"C:\Program Files\nodejs\npm.exe",
             ["view", "express", "version"],
-            @"C:\temp");
+            @"C:\temp", new TestEnvironment());
 
         Assert.Equal(@"C:\Program Files\nodejs\npm.exe", startInfo.FileName);
         Assert.Equal(["view", "express", "version"], startInfo.ArgumentList);
@@ -81,7 +82,7 @@ public class NpmRunnerTests
         var startInfo = NpmRunner.CreateNpmProcessStartInfo(
             "/usr/local/bin/npm",
             ["view", "@playwright/cli@0.1.1", "version"],
-            "/tmp/workdir");
+            "/tmp/workdir", new TestEnvironment());
 
         Assert.Equal("/usr/local/bin/npm", startInfo.FileName);
         Assert.Equal(["view", "@playwright/cli@0.1.1", "version"], startInfo.ArgumentList);
@@ -97,7 +98,7 @@ public class NpmRunnerTests
         var startInfo = NpmRunner.CreateNpmProcessStartInfo(
             "/usr/local/bin/npm.cmd",
             ["view", "express", "version"],
-            "/tmp");
+            "/tmp", new TestEnvironment());
 
         Assert.Equal("/usr/local/bin/npm.cmd", startInfo.FileName);
         Assert.Equal(["view", "express", "version"], startInfo.ArgumentList);
@@ -109,7 +110,7 @@ public class NpmRunnerTests
     {
         Assert.SkipUnless(!RuntimeInformation.IsOSPlatform(OSPlatform.Windows), "Non-Windows-only test.");
 
-        var startInfo = NpmRunner.CreateNpmProcessStartInfo("/usr/bin/npm", [], "/tmp");
+        var startInfo = NpmRunner.CreateNpmProcessStartInfo("/usr/bin/npm", [], "/tmp", new TestEnvironment());
 
         Assert.Equal("/usr/bin/npm", startInfo.FileName);
         Assert.Empty(startInfo.ArgumentList);
@@ -120,7 +121,7 @@ public class NpmRunnerTests
     {
         Assert.SkipUnless(RuntimeInformation.IsOSPlatform(OSPlatform.Windows), "Windows-only test.");
 
-        var startInfo = NpmRunner.CreateNpmProcessStartInfo(@"C:\Program Files\nodejs\npm.cmd", [], @"C:\temp");
+        var startInfo = NpmRunner.CreateNpmProcessStartInfo(@"C:\Program Files\nodejs\npm.cmd", [], @"C:\temp", new TestEnvironment());
 
         Assert.Equal("cmd.exe", startInfo.FileName);
         Assert.Contains("npm.cmd", startInfo.Arguments);

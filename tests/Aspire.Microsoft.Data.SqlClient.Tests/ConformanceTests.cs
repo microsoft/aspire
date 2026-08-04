@@ -22,7 +22,7 @@ public class ConformanceTests : ConformanceTests<SqlConnection, MicrosoftDataSql
     protected override string ActivitySourceName => "OpenTelemetry.Instrumentation.SqlClient";
 
     // TODO
-    protected override string[] RequiredLogCategories => Array.Empty<string>();
+    protected override RequiredLogCategory[] RequiredLogCategories => [];
 
     protected override bool SupportsKeyedRegistrations => true;
 

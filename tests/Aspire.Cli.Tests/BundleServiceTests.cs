@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Bundles;
-using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Aspire.Shared;
 
 namespace Aspire.Cli.Tests;
@@ -27,7 +27,7 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void VersionMarker_WriteAndRead_Roundtrips()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dir = workspace.WorkspaceRoot.FullName;
 
         BundleService.WriteVersionMarker(dir, "13.2.0-dev");
@@ -38,22 +38,27 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void VersionMarker_ReturnsNull_WhenMissing()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         Assert.Null(BundleService.ReadVersionMarker(workspace.WorkspaceRoot.FullName));
     }
 
     [Fact]
-    public void GetDefaultExtractDir_ReturnsParentOfParent()
+    public void ComputeDefaultExtractDir_NoSidecar_ReturnsDefaultAspireHomeDirectory()
     {
+        // Sidecar-less installs do not prove the binary's directory is user-writable.
+        // Use Aspire home so arbitrary install locations such as read-only package
+        // stores can still extract the embedded bundle.
+        var expected = CliPathHelper.GetDefaultAspireHomeDirectory();
+
         if (OperatingSystem.IsWindows())
         {
-            var result = BundleService.GetDefaultExtractDir(@"C:\Users\test\.aspire\bin\aspire.exe");
-            Assert.Equal(@"C:\Users\test\.aspire", result);
+            var result = BundleService.ComputeDefaultExtractDir(@"C:\Users\test\.aspire\bin\aspire.exe");
+            Assert.Equal(expected, result);
         }
         else
         {
-            var result = BundleService.GetDefaultExtractDir("/home/test/.aspire/bin/aspire");
-            Assert.Equal("/home/test/.aspire", result);
+            var result = BundleService.ComputeDefaultExtractDir("/home/test/.aspire/bin/aspire");
+            Assert.Equal(expected, result);
         }
     }
 
@@ -68,7 +73,7 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GetCurrentVersion_ChangesWhenCliBinaryChanges()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var processPath = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire");
         File.WriteAllText(processPath, "old");
         File.SetLastWriteTimeUtc(processPath, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
@@ -114,7 +119,7 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void IsVersionedLayoutValid_RequiresManagedExecutableAndDcpDirectory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dir = workspace.WorkspaceRoot.FullName;
 
         Assert.False(BundleService.IsVersionedLayoutValid(dir));
@@ -136,7 +141,7 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void IsVersionedLayoutValid_RequiresDcpDirectory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dir = workspace.WorkspaceRoot.FullName;
         CreateFakeBundleLayout(dir);
 
@@ -144,10 +149,38 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
         Assert.False(BundleService.IsVersionedLayoutValid(dir));
     }
 
+    [Theory]
+    [InlineData(unchecked((int)0x80070005), true)] // ERROR_ACCESS_DENIED
+    [InlineData(unchecked((int)0x80070020), true)] // ERROR_SHARING_VIOLATION
+    [InlineData(unchecked((int)0x80070021), true)] // ERROR_LOCK_VIOLATION
+    [InlineData(unchecked((int)0x80070027), false)] // ERROR_HANDLE_DISK_FULL
+    [InlineData(unchecked((int)0x80070070), false)] // ERROR_DISK_FULL
+    [InlineData(unchecked((int)0x800700B7), false)] // ERROR_ALREADY_EXISTS
+    public void IsRetryableDirectoryMoveException_OnlyRetriesTransientWindowsLockErrors(int hresult, bool expected)
+    {
+        var exception = new IOException("Directory move failed.", hresult);
+
+        Assert.Equal(expected, BundleService.IsRetryableDirectoryMoveException(exception, isWindows: true));
+    }
+
+    [Fact]
+    public void IsRetryableDirectoryMoveException_RetriesUnauthorizedAccess()
+    {
+        Assert.True(BundleService.IsRetryableDirectoryMoveException(new UnauthorizedAccessException(), isWindows: true));
+    }
+
+    [Fact]
+    public void IsRetryableDirectoryMoveException_DoesNotRetryOnNonWindows()
+    {
+        var exception = new IOException("Directory move failed.", unchecked((int)0x80070020));
+
+        Assert.False(BundleService.IsRetryableDirectoryMoveException(exception, isWindows: false));
+    }
+
     [Fact]
     public void TryCleanupStaleVersions_RemovesNonActiveVersionsAndStaleTempDirs()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var versionsRoot = Path.Combine(workspace.WorkspaceRoot.FullName, BundleService.VersionsDirectoryName);
         Directory.CreateDirectory(versionsRoot);
 
@@ -168,7 +201,7 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void CaptureLinkTargets_ReturnsNullForMissingAndRealDirectories()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dir = workspace.WorkspaceRoot.FullName;
 
         // bundle/ does not exist → null entry.

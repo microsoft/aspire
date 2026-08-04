@@ -18,8 +18,22 @@ internal static class TestTelemetryHelper
     {
         var provider = new TestMachineInformationProvider();
         var ciDetector = new TestCIEnvironmentDetector();
-        var telemetry = new AspireCliTelemetry(NullLogger<AspireCliTelemetry>.Instance, provider, ciDetector);
-        telemetry.InitializeAsync().GetAwaiter().GetResult();
+        var codingAgentDetector = new TestCodingAgentDetector();
+        var internalMicrosoftDetector = new TestInternalMicrosoftDetector();
+        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
+        var telemetry = new AspireCliTelemetry(
+            NullLogger<AspireCliTelemetry>.Instance,
+            provider,
+            ciDetector,
+            codingAgentDetector,
+            internalMicrosoftDetector,
+            new TelemetryConfiguration { ReportedTelemetryEnabled = true },
+            AspireCliTelemetry.ReportedActivitySourceName,
+            AspireCliTelemetry.DiagnosticsActivitySourceName,
+            CreateExecutionContext(),
+            tagsSource);
+        telemetry.Initialize();
+        tagsSource.TagsTask.GetAwaiter().GetResult();
         return telemetry;
     }
 
@@ -30,10 +44,17 @@ internal static class TestTelemetryHelper
     {
         var provider = new TestMachineInformationProvider();
         var ciDetector = new TestCIEnvironmentDetector();
-        var telemetry = new AspireCliTelemetry(NullLogger<AspireCliTelemetry>.Instance, provider, ciDetector, reportedSourceName, diagnosticsSourceName);
-        telemetry.InitializeAsync().GetAwaiter().GetResult();
+        var codingAgentDetector = new TestCodingAgentDetector();
+        var internalMicrosoftDetector = new TestInternalMicrosoftDetector();
+        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
+        var telemetry = new AspireCliTelemetry(NullLogger<AspireCliTelemetry>.Instance, provider, ciDetector, codingAgentDetector, internalMicrosoftDetector, reportedSourceName, diagnosticsSourceName, CreateExecutionContext(), tagsSource);
+        telemetry.Initialize();
+        tagsSource.TagsTask.GetAwaiter().GetResult();
         return telemetry;
     }
+
+    private static CliExecutionContext CreateExecutionContext()
+        => Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory));
 
     private sealed class TestMachineInformationProvider : IMachineInformationProvider
     {
@@ -44,5 +65,16 @@ internal static class TestTelemetryHelper
     private sealed class TestCIEnvironmentDetector : ICIEnvironmentDetector
     {
         public bool IsCIEnvironment() => false;
+    }
+
+    private sealed class TestCodingAgentDetector : ICodingAgentDetector
+    {
+        public string? GetCodingAgent() => null;
+    }
+
+    private sealed class TestInternalMicrosoftDetector : IInternalMicrosoftDetector
+    {
+        public Task<InternalMicrosoftDetectionResult> IsInternalMicrosoftMachineAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(new InternalMicrosoftDetectionResult(IsInternalMicrosoft: false, Source: null, Alias: null, Domain: null));
     }
 }

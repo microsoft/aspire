@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
+using System.CommandLine.Help;
 using Aspire.Cli.Resources;
 
 namespace Aspire.Cli.Commands;
@@ -42,9 +43,7 @@ internal static class GroupedHelpWriter
         }
 
         // Usage
-        writer.WriteLine(HelpGroupStrings.Usage);
-        writer.WriteLine(GetIndent() + HelpGroupStrings.UsageSyntax);
-        writer.WriteLine();
+        WriteUsage(writer, HelpGroupStrings.UsageSyntax);
 
         // Collect visible subcommands and organize by group.
         var grouped = new Dictionary<HelpGroup, List<BaseCommand>>();
@@ -143,32 +142,48 @@ internal static class GroupedHelpWriter
         var visibleOptions = command.Options.Where(o => !o.Hidden).ToList();
         if (visibleOptions.Count > 0)
         {
-            writer.WriteLine(HelpGroupStrings.Options);
-
-            var optionColumnWidth = 0;
-            foreach (var opt in visibleOptions)
-            {
-                var label = FormatOptionLabel(opt);
-                if (label.Length > optionColumnWidth)
-                {
-                    optionColumnWidth = label.Length;
-                }
-            }
-
-            optionColumnWidth += 4;
-
-            foreach (var opt in visibleOptions)
-            {
-                var label = FormatOptionLabel(opt);
-                var desc = opt.Description ?? string.Empty;
-                WriteTwoColumnRow(writer, label, desc, optionColumnWidth, width);
-            }
-
-            writer.WriteLine();
+            WriteTwoColumnSection(
+                writer,
+                HelpGroupStrings.Options,
+                visibleOptions.Select(static opt => (FormatOptionLabel(opt), opt.Description ?? string.Empty)),
+                width);
         }
 
         // Help hint
         writer.WriteLine(HelpGroupStrings.HelpHint);
+    }
+
+    internal static void WriteUsage(TextWriter writer, params string[] usages)
+    {
+        writer.WriteLine(HelpGroupStrings.Usage);
+        foreach (var usage in usages)
+        {
+            writer.WriteLine(GetIndent() + usage);
+        }
+
+        writer.WriteLine();
+    }
+
+    internal static void WriteTwoColumnSection(TextWriter writer, string heading, IEnumerable<(string Label, string Description)> rows, int maxWidth, bool trailingBlankLine = true)
+    {
+        var rowArray = rows.ToArray();
+        if (rowArray.Length == 0)
+        {
+            return;
+        }
+
+        writer.WriteLine(heading);
+
+        var columnWidth = rowArray.Max(static row => row.Label.Length) + 4;
+        foreach (var (label, description) in rowArray)
+        {
+            WriteTwoColumnRow(writer, label, description, columnWidth, maxWidth);
+        }
+
+        if (trailingBlankLine)
+        {
+            writer.WriteLine();
+        }
     }
 
     private static void WriteGroup(TextWriter writer, string heading, List<BaseCommand> commands, int columnWidth, int width)
@@ -287,7 +302,7 @@ internal static class GroupedHelpWriter
         return string.Join(" ", parts);
     }
 
-    private static string FormatOptionLabel(Option option)
+    internal static string FormatOptionLabel(Option option, bool includeValueName = false)
     {
         // Collect all identifiers: Name may not be in Aliases in System.CommandLine 2.0.
         var allNames = new HashSet<string>(option.Aliases, StringComparer.Ordinal);
@@ -296,9 +311,23 @@ internal static class GroupedHelpWriter
             allNames.Add(option.Name);
         }
 
-        var sorted = allNames.OrderBy(a => a.Length).ToList();
-        return sorted.Count > 1
-            ? $"{sorted[0]}, {sorted[1]}"
-            : sorted.Count > 0 ? sorted[0] : option.Name;
+        var label = string.Join(", ", allNames.OrderBy(a => a.Length).ThenBy(a => a, StringComparer.Ordinal));
+        return includeValueName && !IsBooleanOption(option)
+            ? $"{label} <{GetOptionValueName(option)}>"
+            : label;
+    }
+
+    private static bool IsBooleanOption(Option option)
+    {
+        return option is Option<bool> or HelpOption;
+    }
+
+    private static string GetOptionValueName(Option option)
+    {
+        var longName = option.Name.StartsWith("--", StringComparison.Ordinal)
+            ? option.Name
+            : option.Aliases.FirstOrDefault(static alias => alias.StartsWith("--", StringComparison.Ordinal)) ?? option.Name;
+
+        return longName.TrimStart('-');
     }
 }

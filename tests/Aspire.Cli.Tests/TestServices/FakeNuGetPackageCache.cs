@@ -25,8 +25,28 @@ internal sealed class FakeNuGetPackageCache : INuGetPackageCache
         => GetCliPackagesAsyncCallback?.Invoke(workingDirectory, prerelease, nugetConfigFile, cancellationToken)
            ?? Task.FromResult<IEnumerable<NuGetPackage>>([]);
 
+    public Func<DirectoryInfo, string, Func<string, bool>?, bool, FileInfo?, bool, CancellationToken, Task<IEnumerable<NuGetPackage>>>? GetPackagesAsyncCallback { get; set; }
+
     public Task<IEnumerable<NuGetPackage>> GetPackagesAsync(DirectoryInfo workingDirectory, string packageId, Func<string, bool>? filter, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
-        => Task.FromResult<IEnumerable<NuGetPackage>>([]);
+    {
+        if (GetPackagesAsyncCallback is not null)
+        {
+            return GetPackagesAsyncCallback.Invoke(workingDirectory, packageId, filter, prerelease, nugetConfigFile, useCache, cancellationToken);
+        }
+
+        // Polyglot integration discovery resolves the compatible allow-list via a `tags:polyglot` search
+        // (see PackageChannel.GetPolyglotCompatiblePackageIdsAsync). Tests that exercise channel discovery
+        // for a non-C# AppHost but predate polyglot filtering only configure GetIntegrationPackagesAsyncCallback,
+        // and they assume every package they return is discoverable. Default the tag search to echo those
+        // integration packages so the allow-list does not silently strip them. Tests that need a specific
+        // compatible subset set GetPackagesAsyncCallback explicitly to override this default.
+        if (packageId.StartsWith("tags:", StringComparison.OrdinalIgnoreCase))
+        {
+            return GetIntegrationPackagesAsync(workingDirectory, prerelease, nugetConfigFile, cancellationToken);
+        }
+
+        return Task.FromResult<IEnumerable<NuGetPackage>>([]);
+    }
 
     public Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(DirectoryInfo workingDirectory, string exactPackageId, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
         => GetPackageVersionsAsyncCallback?.Invoke(workingDirectory, exactPackageId, prerelease, nugetConfigFile, useCache, cancellationToken)

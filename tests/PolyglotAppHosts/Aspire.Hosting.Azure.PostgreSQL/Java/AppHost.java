@@ -13,7 +13,7 @@ void main() throws Exception {
         var pgContainer = builder.addAzurePostgresFlexibleServer("pg-container");
         pgContainer.runAsContainer((container) -> {
                 // Exercise PostgresServerResource builder methods within the callback
-                container.withLifetime(ContainerLifetime.PERSISTENT);
+                container.withPersistentLifetime();
             });
         // 5) addDatabase on container-mode server
         var dbContainer = pgContainer.addDatabase("containerdb");

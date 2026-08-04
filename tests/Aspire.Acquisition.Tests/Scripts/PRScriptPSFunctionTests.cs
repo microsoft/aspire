@@ -77,6 +77,33 @@ public class PRScriptPSFunctionTests(ITestOutputHelper testOutput)
         Assert.Equal(expected, result.Output.Trim());
     }
 
+    [Fact]
+    public async Task UpdatePathEnvironment_WhenCurrentPathAlreadyContainsDirectory_StillUpdatesGitHubPath()
+    {
+        using var env = new TestEnvironment();
+        var cliBinDir = Path.Combine(env.TempDirectory, "cli-bin");
+        var existingPath = $"{cliBinDir}{Path.PathSeparator}{Path.Combine(env.TempDirectory, "other-bin")}";
+        var githubPath = Path.Combine(env.TempDirectory, "github-path.txt");
+
+        using var cmd = new ScriptFunctionCommand(
+            s_prScript,
+            $"""
+            $Script:HostOS = 'linux'
+            $env:PATH = '{existingPath}'
+            $env:GITHUB_ACTIONS = 'true'
+            $env:GITHUB_PATH = '{githubPath}'
+            Update-PathEnvironment -CliBinDir '{cliBinDir}'
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.Contains("already exists in PATH", result.Output);
+        Assert.Contains(cliBinDir, await File.ReadAllLinesAsync(githubPath));
+    }
+
     #endregion
 
     #region Get-VersionSuffixFromPackages

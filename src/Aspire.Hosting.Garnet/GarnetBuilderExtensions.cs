@@ -174,7 +174,10 @@ public static class GarnetBuilderExtensions
             });
     }
 
-    [AspireExport("addGarnet", Description = "Adds a Garnet container resource to the application model.")]
+    /// <summary>
+    /// Adds a Garnet container resource to the application model.
+    /// </summary>
+    [AspireExport("addGarnet")]
     internal static IResourceBuilder<GarnetResource> AddGarnetForPolyglot(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -195,6 +198,7 @@ public static class GarnetBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     /// <param name="builder">The resource builder.</param>
     /// <param name="name">The name of the volume. Defaults to an auto-generated name based on the application and resource names.</param>
     /// <param name="isReadOnly">
@@ -202,7 +206,8 @@ public static class GarnetBuilderExtensions
     /// Defaults to <c>false</c>.
     /// </param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a persistent data volume to the Garnet resource.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<GarnetResource> WithDataVolume(this IResourceBuilder<GarnetResource> builder,
         string? name = null, bool isReadOnly = false)
     {
@@ -231,6 +236,7 @@ public static class GarnetBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     /// <param name="builder">The resource builder.</param>
     /// <param name="source">The source directory on the host to mount into the container.</param>
     /// <param name="isReadOnly">
@@ -238,7 +244,8 @@ public static class GarnetBuilderExtensions
     /// Defaults to <c>false</c>.
     /// </param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Mounts a host directory as the Garnet data directory.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<GarnetResource> WithDataBindMount(this IResourceBuilder<GarnetResource> builder,
         string source, bool isReadOnly = false)
     {
@@ -289,10 +296,12 @@ public static class GarnetBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     /// <param name="builder">The resource builder.</param>
     /// <param name="interval">The interval between snapshot exports. Defaults to 60 seconds.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Configures snapshot persistence for the Garnet resource.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<GarnetResource> WithPersistence(this IResourceBuilder<GarnetResource> builder,
         TimeSpan? interval = null)
     {

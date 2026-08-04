@@ -12,6 +12,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <param name="services">The service provider for accessing application services.</param>
 /// <param name="cancellationToken">A cancellation token that can be used to cancel the validation.</param>
 [Experimental("ASPIRECOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport(ExposeProperties = true, ExposeMethods = true)]
 public sealed class RequiredCommandValidationContext(string resolvedPath, IServiceProvider services, CancellationToken cancellationToken)
 {
     /// <summary>
@@ -28,4 +29,17 @@ public sealed class RequiredCommandValidationContext(string resolvedPath, IServi
     /// Gets a cancellation token that can be used to cancel the validation.
     /// </summary>
     public CancellationToken CancellationToken { get; } = cancellationToken;
+
+    /// <summary>
+    /// Creates a successful validation result.
+    /// </summary>
+    /// <returns>A <see cref="RequiredCommandValidationResult"/> indicating the command is valid.</returns>
+    public RequiredCommandValidationResult Success() => RequiredCommandValidationResult.Success();
+
+    /// <summary>
+    /// Creates a failed validation result with the specified message.
+    /// </summary>
+    /// <param name="validationMessage">A message describing why validation failed.</param>
+    /// <returns>A <see cref="RequiredCommandValidationResult"/> indicating the command is invalid.</returns>
+    public RequiredCommandValidationResult Failure(string validationMessage) => RequiredCommandValidationResult.Failure(validationMessage);
 }

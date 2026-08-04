@@ -14,7 +14,7 @@ public class DevCertsCheckFixRecommendationTests
     [Fact]
     public void EvaluateCertificateResults_NoCertificates_RecommendsTrust()
     {
-        var results = DevCertsCheck.EvaluateCertificateResults([]);
+        var results = DevCertsCheck.EvaluateCertificateResults([], new HostEnvironment());
 
         var result = Assert.Single(results);
         Assert.Equal(EnvironmentCheckStatus.Warning, result.Status);
@@ -31,7 +31,7 @@ public class DevCertsCheckFixRecommendationTests
             CreateDevCertInfo(CertificateManager.TrustLevel.None, "AABB1234", MinVersion)
         };
 
-        var results = DevCertsCheck.EvaluateCertificateResults(certInfos);
+        var results = DevCertsCheck.EvaluateCertificateResults(certInfos, new HostEnvironment());
 
         var result = Assert.Single(results);
         Assert.Equal(EnvironmentCheckStatus.Warning, result.Status);
@@ -48,7 +48,7 @@ public class DevCertsCheckFixRecommendationTests
             CreateDevCertInfo(CertificateManager.TrustLevel.Full, "AABB1234", MinVersion)
         };
 
-        var results = DevCertsCheck.EvaluateCertificateResults(certInfos);
+        var results = DevCertsCheck.EvaluateCertificateResults(certInfos, new HostEnvironment());
 
         var result = Assert.Single(results);
         Assert.Equal(EnvironmentCheckStatus.Pass, result.Status);
@@ -64,7 +64,7 @@ public class DevCertsCheckFixRecommendationTests
             CreateDevCertInfo(CertificateManager.TrustLevel.None, "CCDD5678", MinVersion)
         };
 
-        var results = DevCertsCheck.EvaluateCertificateResults(certInfos);
+        var results = DevCertsCheck.EvaluateCertificateResults(certInfos, new HostEnvironment());
 
         var result = Assert.Single(results);
         Assert.Equal(EnvironmentCheckStatus.Warning, result.Status);
@@ -82,7 +82,7 @@ public class DevCertsCheckFixRecommendationTests
             CreateDevCertInfo(CertificateManager.TrustLevel.None, "CCDD5678", MinVersion)
         };
 
-        var results = DevCertsCheck.EvaluateCertificateResults(certInfos);
+        var results = DevCertsCheck.EvaluateCertificateResults(certInfos, new HostEnvironment());
 
         var result = Assert.Single(results);
         Assert.Equal(EnvironmentCheckStatus.Warning, result.Status);
@@ -99,11 +99,11 @@ public class DevCertsCheckFixRecommendationTests
             CreateDevCertInfo(CertificateManager.TrustLevel.Full, "AABB1234", 1)
         };
 
-        var results = DevCertsCheck.EvaluateCertificateResults(certInfos);
+        var results = DevCertsCheck.EvaluateCertificateResults(certInfos, new HostEnvironment());
 
         // Should have two results: pass for trust status, warning for old version
         Assert.Equal(2, results.Count);
-        var versionWarning = results.First(r => r.Name == "dev-certs-version");
+        var versionWarning = results.First(r => r.Name == DevCertsCheck.VersionCheckName);
         Assert.Equal(EnvironmentCheckStatus.Warning, versionWarning.Status);
         Assert.NotNull(versionWarning.Fix);
         Assert.Contains("aspire certs clean", versionWarning.Fix);
@@ -118,7 +118,7 @@ public class DevCertsCheckFixRecommendationTests
             CreateDevCertInfo(CertificateManager.TrustLevel.Partial, "AABB1234", MinVersion)
         };
 
-        var results = DevCertsCheck.EvaluateCertificateResults(certInfos);
+        var results = DevCertsCheck.EvaluateCertificateResults(certInfos, new HostEnvironment());
 
         var result = Assert.Single(results);
         Assert.Equal(EnvironmentCheckStatus.Warning, result.Status);
@@ -136,7 +136,7 @@ public class DevCertsCheckFixRecommendationTests
             CreateDevCertInfo(CertificateManager.TrustLevel.Full, "CCDD5678", MinVersion)
         };
 
-        var results = DevCertsCheck.EvaluateCertificateResults(certInfos);
+        var results = DevCertsCheck.EvaluateCertificateResults(certInfos, new HostEnvironment());
 
         var result = Assert.Single(results);
         Assert.Equal(EnvironmentCheckStatus.Pass, result.Status);

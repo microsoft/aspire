@@ -7,6 +7,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Hosting.Dcp.Process;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Publishing;
@@ -17,7 +18,7 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
     {
     }
 
-    protected override string RuntimeExecutable => "podman";
+    protected override string RuntimeExecutable => KnownContainerRuntimes.Podman;
     public override string Name => "Podman";
 
     /// <summary>

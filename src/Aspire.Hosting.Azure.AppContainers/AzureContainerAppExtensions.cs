@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREAZURE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREAZURE001
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Diagnostics;
@@ -16,9 +16,11 @@ using Azure.Provisioning.AppContainers;
 using Azure.Provisioning.ContainerRegistry;
 using Azure.Provisioning.Expressions;
 using Azure.Provisioning.OperationalInsights;
+using Azure.Provisioning.Primitives;
 using Azure.Provisioning.Roles;
 using Azure.Provisioning.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using FileShare = Azure.Provisioning.Storage.FileShare;
 
 namespace Aspire.Hosting;
@@ -28,6 +30,9 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class AzureContainerAppExtensions
 {
+    internal const string PrepareContainerAppsStepNamePrefix = "prepare-azure-container-apps-";
+    internal const string ValidateContainerAppsStepName = "validate-azure-container-apps";
+
     /// <summary>
     /// Adds the necessary infrastructure for Azure Container Apps to the distributed application builder.
     /// </summary>
@@ -56,13 +61,23 @@ public static class AzureContainerAppExtensions
         // no AzureContainerAppEnvironmentResource instances in the model.
         if (builder.Services.All(d => d.ServiceType != typeof(ContainerAppsPipelineStepMarker)))
         {
-            builder.Services.AddSingleton<ContainerAppsPipelineStepMarker>();
+            var marker = new ContainerAppsPipelineStepMarker();
+            builder.Services.AddSingleton(marker);
 
             builder.Pipeline.AddStep(
-                name: ContainerAppsPipelineStepMarker.StepName,
+                name: ValidateContainerAppsStepName,
                 action: ctx =>
                 {
-                    if (!ctx.Model.Resources.OfType<AzureContainerAppEnvironmentResource>().Any())
+                    if (!ctx.ExecutionContext.IsPublishMode)
+                    {
+                        return Task.CompletedTask;
+                    }
+
+                    var environments = ctx.Model.Resources
+                        .OfType<AzureContainerAppEnvironmentResource>()
+                        .Where(environment => !environment.IsExcludedFromPublish())
+                        .ToList();
+                    if (environments.Count == 0)
                     {
                         foreach (var r in ctx.Model.GetComputeResources())
                         {
@@ -73,10 +88,47 @@ public static class AzureContainerAppExtensions
                             }
                         }
                     }
+                    else
+                    {
+                        // Name resolvers run while each environment's Bicep module is generated. Force evaluation
+                        // here so the shared tracker sees every legacy fallback before deployment targets are prepared.
+                        foreach (var environment in environments)
+                        {
+                            _ = environment.GetBicepTemplateString();
+                        }
+
+                        marker.ValidateManagedEnvironmentNames(
+                            environments.Select(environment => environment.Name).ToHashSet(StringComparer.Ordinal));
+                    }
 
                     return Task.CompletedTask;
                 },
+                dependsOn: AzureEnvironmentResource.PrepareResourcesStepName,
                 requiredBy: WellKnownPipelineSteps.BeforeStart);
+
+            builder.Pipeline.AddPipelineConfiguration(context =>
+            {
+                var validationStep = context.Steps.Single(step => step.Name == ValidateContainerAppsStepName);
+                var configuredBuildOptions = context.Services
+                    .GetRequiredService<IOptions<AzureProvisioningOptions>>()
+                    .Value
+                    .ProvisioningBuildOptions;
+
+                foreach (var environment in context.Model.Resources.OfType<AzureContainerAppEnvironmentResource>())
+                {
+                    // Pipeline-level configuration runs before AzureBicepResource forces template generation.
+                    // Assign configured resolvers now so the collision tracker records the final fallback name,
+                    // rather than a stale legacy expression generated before azure-prepare-resources executes.
+                    environment.ProvisioningBuildOptions ??= configuredBuildOptions;
+
+                    var prepareStep = context.GetSteps(environment)
+                        .SingleOrDefault(step => step.Name == $"{PrepareContainerAppsStepNamePrefix}{environment.Name}");
+
+                    prepareStep?.DependsOn(validationStep);
+                }
+
+                return Task.CompletedTask;
+            });
         }
 
         return builder;
@@ -84,8 +136,126 @@ public static class AzureContainerAppExtensions
 
     private sealed class ContainerAppsPipelineStepMarker
     {
-        public const string StepName = "validate-azure-container-apps";
+        private const string ResourceGroupTokenPlaceholder = "\u001f\u001f\u001f\u001f\u001f\u001f\u001f\u001f\u001f\u001f\u001f\u001f\u001f";
+        private readonly object _lock = new();
+        private readonly Dictionary<string, Dictionary<string, ManagedEnvironmentName>> _environmentsByManagedEnvironmentName = new(StringComparer.Ordinal);
+
+        public void RecordManagedEnvironmentName(
+            string environmentName,
+            BicepValue<string> managedEnvironmentName,
+            ManagedEnvironmentNamingMode namingMode)
+        {
+            var expression = managedEnvironmentName.ToString();
+            var effectiveNameKey = GetEffectiveNameKey(expression);
+
+            lock (_lock)
+            {
+                if (!_environmentsByManagedEnvironmentName.TryGetValue(effectiveNameKey, out var environmentNames))
+                {
+                    environmentNames = new Dictionary<string, ManagedEnvironmentName>(StringComparer.Ordinal);
+                    _environmentsByManagedEnvironmentName.Add(effectiveNameKey, environmentNames);
+                }
+
+                environmentNames[environmentName] = new ManagedEnvironmentName(expression, namingMode);
+            }
+        }
+
+        public void ValidateManagedEnvironmentNames(IReadOnlySet<string> includedEnvironmentNames)
+        {
+            KeyValuePair<string, ManagedEnvironmentName>[][] collisions;
+
+            lock (_lock)
+            {
+                collisions = _environmentsByManagedEnvironmentName
+                    .Select(pair => pair.Value.Where(environment => includedEnvironmentNames.Contains(environment.Key)).ToArray())
+                    .Where(environments => environments.Length > 1)
+                    .ToArray();
+            }
+
+            if (collisions.Length == 0)
+            {
+                return;
+            }
+
+            var collisionDetails = string.Join(
+                "; ",
+                collisions.SelectMany(environments =>
+                    environments
+                        .GroupBy(environment => environment.Value.Expression, StringComparer.Ordinal)
+                        .Select(group =>
+                            $"'{string.Join("', '", group.Select(environment => environment.Key).Order(StringComparer.Ordinal))}' resolve to {group.Key}")));
+
+            var namingModes = collisions
+                .SelectMany(environments => environments)
+                .Select(environment => environment.Value.NamingMode)
+                .ToHashSet();
+            var guidance = new List<string>();
+
+            if (namingModes.Contains(ManagedEnvironmentNamingMode.Legacy))
+            {
+                guidance.Add($"For environments using the default naming convention, call '{nameof(WithUniqueResourceNaming)}()'.");
+            }
+
+            if (namingModes.Contains(ManagedEnvironmentNamingMode.Unique))
+            {
+                guidance.Add($"For environments already using '{nameof(WithUniqueResourceNaming)}()', rename one or more resources or configure an explicit name resolver.");
+            }
+
+            if (namingModes.Contains(ManagedEnvironmentNamingMode.Azd))
+            {
+                guidance.Add($"For environments using '{nameof(WithAzdResourceNaming)}()', remove it or configure distinct managed environment names explicitly.");
+            }
+
+            throw new DistributedApplicationException(
+                $"Azure Container App environments {collisionDetails}. Multiple environments with the same managed environment name cannot be deployed to one resource group. " +
+                string.Join(" ", guidance));
+        }
+
+        private static string GetEffectiveNameKey(string expression)
+        {
+            // Normalize the two generated Bicep shapes that use the same 13-character resource-group token:
+            //   take('cae-${uniqueString(resourceGroup().id)}', 60)
+            //   'cae-${resourceToken}'
+            // Evaluating take after substitution catches syntactically different expressions that deploy the
+            // same physical name. Unknown shapes retain their expression as the key.
+            var normalizedExpression = expression
+                .Replace("${uniqueString(resourceGroup().id)}", ResourceGroupTokenPlaceholder, StringComparison.Ordinal)
+                .Replace("${resourceToken}", ResourceGroupTokenPlaceholder, StringComparison.Ordinal);
+
+            const string TakePrefix = "take('";
+            const string TakeSeparator = "', ";
+            if (normalizedExpression.StartsWith(TakePrefix, StringComparison.Ordinal) &&
+                normalizedExpression.EndsWith(')'))
+            {
+                var separatorIndex = normalizedExpression.LastIndexOf(TakeSeparator, StringComparison.Ordinal);
+                var lengthStart = separatorIndex + TakeSeparator.Length;
+                if (separatorIndex >= TakePrefix.Length &&
+                    int.TryParse(
+                        normalizedExpression.AsSpan(lengthStart, normalizedExpression.Length - lengthStart - 1),
+                        out var maxLength))
+                {
+                    var value = normalizedExpression[TakePrefix.Length..separatorIndex];
+                    return value[..Math.Min(value.Length, maxLength)];
+                }
+            }
+
+            if (normalizedExpression is ['\'', .., '\''])
+            {
+                return normalizedExpression[1..^1];
+            }
+
+            return normalizedExpression;
+        }
     }
+
+    private enum ManagedEnvironmentNamingMode
+    {
+        Legacy,
+        Unique,
+        Azd
+    }
+
+    private readonly record struct ManagedEnvironmentName(string Expression, ManagedEnvironmentNamingMode NamingMode);
 
     /// <summary>
     /// Adds a container app environment resource to the distributed application builder.
@@ -93,14 +263,32 @@ public static class AzureContainerAppExtensions
     /// <param name="builder">The distributed application builder.</param>
     /// <param name="name">The name of the resource.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
-    [AspireExport(Description = "Adds an Azure Container App Environment resource")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> AddAzureContainerAppEnvironment(this IDistributedApplicationBuilder builder, string name)
     {
         builder.AddAzureContainerAppsInfrastructureCore();
 
-        var containerAppEnvResource = new AzureContainerAppEnvironmentResource(name, static infra =>
+        var marker = builder.Services
+            .Where(descriptor => descriptor.ServiceType == typeof(ContainerAppsPipelineStepMarker))
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<ContainerAppsPipelineStepMarker>()
+            .Single();
+
+        var containerAppEnvResource = new AzureContainerAppEnvironmentResource(name, infra =>
         {
             var appEnvResource = (AzureContainerAppEnvironmentResource)infra.AspireResource;
+
+            // When the user has marked this environment as existing (via AsExisting / PublishAsExisting),
+            // we must not generate a brand-new managed environment + Log Analytics + Dashboard. Instead,
+            // emit a thin module that references the existing environment and still wires up the ACR pull
+            // identity that newly-deployed container apps in the env will need.
+            // See https://github.com/microsoft/aspire/issues/12977.
+            if (appEnvResource.IsExisting())
+            {
+                ConfigureExistingContainerAppEnvironmentInfrastructure(infra, appEnvResource);
+                return;
+            }
 
             // This tells azd to avoid creating infrastructure
             var userPrincipalId = new ProvisioningParameter(AzureBicepResource.KnownParameters.UserPrincipalId, typeof(string)) { Value = new BicepValue<string>(string.Empty) };
@@ -123,12 +311,27 @@ public static class AzureContainerAppExtensions
                 infra.Add(resourceToken);
             }
 
-            var identity = new UserAssignedIdentity(Infrastructure.NormalizeBicepIdentifier($"{appEnvResource.Name}_mi"))
-            {
-                Tags = tags
-            };
+            UserAssignedIdentity? newIdentity = null;
+            BicepValue<string> managedIdentityIdOutputValue;
 
-            infra.Add(identity);
+            if (appEnvResource.TryGetLastAnnotation<AzureContainerAppEnvironmentAcrPullIdentityAnnotation>(out var identityAnnotation))
+            {
+                // The user has supplied an existing identity (commonly via AddAzureUserAssignedIdentity +
+                // .WithRoleAssignments(acr, AcrPull)). Skip creating env_mi + the AcrPull role assignment
+                // here and have the env module read the identity id from a parameter wired to the identity
+                // module's "id" output.
+                managedIdentityIdOutputValue = identityAnnotation.Identity.Id.AsProvisioningParameter(infra);
+            }
+            else
+            {
+                newIdentity = new UserAssignedIdentity(Infrastructure.NormalizeBicepIdentifier($"{appEnvResource.Name}_mi"))
+                {
+                    Tags = tags
+                };
+
+                infra.Add(newIdentity);
+                managedIdentityIdOutputValue = newIdentity.Id.ToBicepExpression();
+            }
 
             AzureProvisioningResource? registry = null;
             if (appEnvResource.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var registryReferenceAnnotation) &&
@@ -149,11 +352,14 @@ public static class AzureContainerAppExtensions
             var containerRegistry = (ContainerRegistryService)registry.AddAsExistingResource(infra);
             infra.Add(containerRegistry);
 
-            var pullRa = containerRegistry.CreateRoleAssignment(ContainerRegistryBuiltInRole.AcrPull, identity);
+            if (newIdentity is not null)
+            {
+                var pullRa = containerRegistry.CreateRoleAssignment(ContainerRegistryBuiltInRole.AcrPull, newIdentity);
 
-            // There's a bug in the CDK, see https://github.com/Azure/azure-sdk-for-net/issues/47265
-            pullRa.Name = BicepFunction.CreateGuid(containerRegistry.Id, identity.Id, pullRa.RoleDefinitionId);
-            infra.Add(pullRa);
+                // There's a bug in the CDK, see https://github.com/Azure/azure-sdk-for-net/issues/47265
+                pullRa.Name = BicepFunction.CreateGuid(containerRegistry.Id, newIdentity.Id, pullRa.RoleDefinitionId);
+                infra.Add(pullRa);
+            }
 
             OperationalInsightsWorkspace? laWorkspace = null;
             if (appEnvResource.TryGetLastAnnotation<AzureLogAnalyticsWorkspaceReferenceAnnotation>(out var logAnalyticsReferenceAnnotation) && logAnalyticsReferenceAnnotation.Workspace is AzureProvisioningResource workspace)
@@ -336,7 +542,7 @@ public static class AzureContainerAppExtensions
             {
                 Debug.Assert(resourceToken is not null);
 
-                identity.Name = BicepFunction.Interpolate($"mi-{resourceToken}");
+                newIdentity?.Name = BicepFunction.Interpolate($"mi-{resourceToken}");
                 containerRegistry.Name = new FunctionCallExpression(
                     new IdentifierExpression("replace"),
                     new InterpolatedStringExpression([
@@ -346,7 +552,15 @@ public static class AzureContainerAppExtensions
                     new StringLiteralExpression("-"),
                     new StringLiteralExpression(""));
                 laWorkspace.Name = BicepFunction.Interpolate($"law-{resourceToken}");
-                containerAppEnvironment.Name = BicepFunction.Interpolate($"cae-{resourceToken}");
+                var managedEnvironmentName = BicepFunction.Interpolate($"cae-{resourceToken}");
+                containerAppEnvironment.Name = managedEnvironmentName;
+                if (!appEnvResource.IsExcludedFromPublish())
+                {
+                    marker.RecordManagedEnvironmentName(
+                        appEnvResource.Name,
+                        managedEnvironmentName,
+                        ManagedEnvironmentNamingMode.Azd);
+                }
 
 #pragma warning disable IDE0031 // Use null propagation (IDE0031)
                 if (storageVolume is not null)
@@ -376,6 +590,23 @@ public static class AzureContainerAppExtensions
                 }
             }
 
+            // By default the managed environment name is left to Azure.Provisioning, whose sanitizer keeps
+            // only lowercase letters (ContainerAppManagedEnvironment inherits ResourceNameRequirements(1, 24,
+            // ResourceNameCharacters.LowercaseLetters)). That drops digits from the bicep identifier, so
+            // environments named e.g. "cae1"/"cae2" in the same resource group both resolve to
+            // take('cae${uniqueString(resourceGroup().id)}', 24) and collapse onto a single physical
+            // environment, where concurrent container-app writes race with ManagedEnvironmentOperationInProgress
+            // (see https://github.com/microsoft/aspire/issues/18722).
+            //
+            // Changing this by default would rename already-deployed environments and cause Azure to recreate
+            // them, so the digit-preserving name is opt-in via WithUniqueResourceNaming(). The fallback resolver
+            // also records the actual generated expression so publish can reject colliding legacy names with
+            // actionable guidance instead of allowing a broken deployment.
+            if (!appEnvResource.UseAzdNamingConvention && !appEnvResource.IsExcludedFromPublish())
+            {
+                AddManagedEnvironmentNameResolver(appEnvResource, containerAppEnvironment, marker);
+            }
+
             // Exposed so that callers reference the LA workspace in other bicep modules
             infra.Add(new ProvisioningOutput("AZURE_LOG_ANALYTICS_WORKSPACE_NAME", typeof(string))
             {
@@ -387,38 +618,7 @@ public static class AzureContainerAppExtensions
                 Value = laWorkspace.Id.ToBicepExpression()
             });
 
-            // Required by the IContaineRegistry interface
-            infra.Add(new ProvisioningOutput("AZURE_CONTAINER_REGISTRY_NAME", typeof(string))
-            {
-                Value = containerRegistry.Name.ToBicepExpression()
-            });
-
-            infra.Add(new ProvisioningOutput("AZURE_CONTAINER_REGISTRY_ENDPOINT", typeof(string))
-            {
-                Value = containerRegistry.LoginServer.ToBicepExpression()
-            });
-
-            // Required by the IAzureContainerRegistry interface
-            infra.Add(new ProvisioningOutput("AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID", typeof(string))
-            {
-                Value = identity.Id.ToBicepExpression()
-            });
-
-            infra.Add(new ProvisioningOutput("AZURE_CONTAINER_APPS_ENVIRONMENT_NAME", typeof(string))
-            {
-                Value = containerAppEnvironment.Name.ToBicepExpression()
-            });
-
-            infra.Add(new ProvisioningOutput("AZURE_CONTAINER_APPS_ENVIRONMENT_ID", typeof(string))
-            {
-                Value = containerAppEnvironment.Id.ToBicepExpression()
-            });
-
-            // Required for azd to output the dashboard URL
-            infra.Add(new ProvisioningOutput("AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN", typeof(string))
-            {
-                Value = containerAppEnvironment.DefaultDomain.ToBicepExpression()
-            });
+            AddSharedContainerAppEnvironmentOutputs(infra, containerRegistry, containerAppEnvironment, managedIdentityIdOutputValue);
         });
 
         // Create the default container registry resource before creating the environment
@@ -433,7 +633,268 @@ public static class AzureContainerAppExtensions
             ? builder.CreateResourceBuilder(containerAppEnvResource)
             : builder.AddResource(containerAppEnvResource);
 
+        // The environment normally creates its ACR pull identity and role assignment inline. When the final
+        // registry is explicitly cross-scoped, late preparation promotes only that identity to a standalone
+        // resource so the role assignment can be emitted in a module scoped to the registry.
+        appEnvBuilder.WithCrossScopeAcrPullIdentity(
+            identity => new AzureContainerAppEnvironmentAcrPullIdentityAnnotation(identity),
+            identityBuilder =>
+            {
+                // Standalone identities use compact naming by default, but azd-named environments have
+                // historically used mi-${resourceToken}. Preserve that physical name for this promoted path.
+                if (!containerAppEnvResource.UseAzdNamingConvention)
+                {
+                    return;
+                }
+
+                identityBuilder.ConfigureInfrastructure(infrastructure =>
+                {
+                    var resourceToken = new ProvisioningVariable("resourceToken", typeof(string))
+                    {
+                        Value = BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)
+                    };
+                    infrastructure.Add(resourceToken);
+
+                    var identity = infrastructure.GetProvisionableResources().OfType<UserAssignedIdentity>().Single();
+                    identity.Name = BicepFunction.Interpolate($"mi-{resourceToken}");
+                });
+            });
+
         return appEnvBuilder;
+    }
+
+    /// <summary>
+    /// Adds the fallback resolver used to track generated managed environment names when azd naming is not in
+    /// effect, substituting the corrected name requirements when <see cref="WithUniqueResourceNaming"/> is applied.
+    /// </summary>
+    /// <remarks>
+    /// Azure.Provisioning's default name resolver only assigns names while the <c>Name</c> property is unset.
+    /// Registering a resolver rather than assigning <c>Name</c> here preserves any caller-supplied resolvers in
+    /// <see cref="ProvisioningBuildOptions.InfrastructureResolvers"/> while still fixing the default fallback.
+    /// </remarks>
+    private static void AddManagedEnvironmentNameResolver(
+        AzureContainerAppEnvironmentResource appEnvResource,
+        ContainerAppManagedEnvironment managedEnvironment,
+        ContainerAppsPipelineStepMarker marker)
+    {
+        var options = appEnvResource.ProvisioningBuildOptions ?? new ProvisioningBuildOptions();
+
+        if (options.InfrastructureResolvers.OfType<ManagedEnvironmentNameResolver>()
+            .Any(resolver => ReferenceEquals(resolver.ManagedEnvironment, managedEnvironment)))
+        {
+            return;
+        }
+
+        // AzureResourcePreparer assigns the same ProvisioningBuildOptions instance to every provisioning resource.
+        // Deployment builds independent resource templates concurrently, so mutating that shared resolver list here
+        // would race with other builds that are enumerating it. Copy the caller-configured options first, then add
+        // the managed-environment fallback only to this resource's build options.
+        options = CloneProvisioningBuildOptions(options);
+        appEnvResource.ProvisioningBuildOptions = options;
+
+        var resolver = new ManagedEnvironmentNameResolver(
+            managedEnvironment,
+            appEnvResource.Name,
+            appEnvResource.UseUniqueResourceNaming,
+            marker);
+
+        // Put Aspire's resolver after caller-configured resolvers but before Azure.Provisioning's default dynamic
+        // resolver. This preserves explicit policies such as AspireV8ResourceNamePropertyResolver while preventing
+        // the built-in lowercase-letters-only fallback from collapsing "cae1" and "cae2" to the same name.
+        var defaultDynamicResolverIndex = -1;
+        for (var i = 0; i < options.InfrastructureResolvers.Count; i++)
+        {
+            if (options.InfrastructureResolvers[i].GetType() == typeof(DynamicResourceNamePropertyResolver))
+            {
+                defaultDynamicResolverIndex = i;
+                break;
+            }
+        }
+
+        if (defaultDynamicResolverIndex >= 0)
+        {
+            options.InfrastructureResolvers.Insert(defaultDynamicResolverIndex, resolver);
+        }
+        else
+        {
+            options.InfrastructureResolvers.Add(resolver);
+        }
+    }
+
+    private static ProvisioningBuildOptions CloneProvisioningBuildOptions(ProvisioningBuildOptions options)
+    {
+        var clone = new ProvisioningBuildOptions
+        {
+            Random = options.Random
+        };
+
+        clone.InfrastructureResolvers.Clear();
+        foreach (var infrastructureResolver in options.InfrastructureResolvers)
+        {
+            clone.InfrastructureResolvers.Add(infrastructureResolver);
+        }
+
+        return clone;
+    }
+
+    /// <summary>
+    /// Configures the Bicep infrastructure for an <see cref="AzureContainerAppEnvironmentResource"/> that has been
+    /// marked as existing (e.g. via <c>AsExisting</c> / <c>PublishAsExisting</c>). Only emits a reference to the
+    /// existing managed environment and the small set of supporting resources that newly-deployed container apps
+    /// need (an ACR-pull managed identity bound to the env's container registry).
+    /// </summary>
+    /// <remarks>
+    /// We deliberately skip:
+    /// <list type="bullet">
+    ///   <item><description>Creating a new <c>ContainerAppManagedEnvironment</c> — the existing one is referenced.</description></item>
+    ///   <item><description>Creating a new <c>OperationalInsightsWorkspace</c> — the existing env already has logging configured.</description></item>
+    ///   <item><description>Creating the Aspire Dashboard <c>dotNetComponent</c> — the existing env already owns its dashboard configuration.</description></item>
+    ///   <item><description>Storage accounts / file shares for container volumes and VNet configuration — these cannot be
+    ///   added to an env that already exists without mutating it. If the user attempts to combine these features with
+    ///   <c>AsExisting</c>, we throw a clear error.</description></item>
+    /// </list>
+    /// See https://github.com/microsoft/aspire/issues/12977 for the bug this addresses.
+    /// </remarks>
+    private static void ConfigureExistingContainerAppEnvironmentInfrastructure(
+        AzureResourceInfrastructure infra,
+        AzureContainerAppEnvironmentResource appEnvResource)
+    {
+        if (appEnvResource.VolumeNames.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"The Azure Container App Environment '{appEnvResource.Name}' is marked as existing but one or more " +
+                "container apps targeted to it declare volume mounts. Volumes require provisioning storage on the " +
+                "managed environment, which Aspire cannot do for an existing environment. Remove the volume mounts " +
+                "or stop marking the environment as existing.");
+        }
+
+        if (appEnvResource.HasAnnotationOfType<DelegatedSubnetAnnotation>())
+        {
+            throw new InvalidOperationException(
+                $"The Azure Container App Environment '{appEnvResource.Name}' is marked as existing but is also " +
+                "configured with a delegated subnet via WithDelegatedSubnet. VNet integration is a property of the " +
+                "managed environment itself and cannot be reconfigured on an existing environment. Remove the " +
+                "WithDelegatedSubnet call or stop marking the environment as existing.");
+        }
+
+        if (appEnvResource.HasAnnotationOfType<AzureLogAnalyticsWorkspaceReferenceAnnotation>())
+        {
+            throw new InvalidOperationException(
+                $"The Azure Container App Environment '{appEnvResource.Name}' is marked as existing but is also " +
+                "configured with a Log Analytics workspace via WithAzureLogAnalyticsWorkspace. The existing managed " +
+                "environment already owns its Log Analytics workspace and Aspire cannot reconfigure it. Remove the " +
+                "WithAzureLogAnalyticsWorkspace call or stop marking the environment as existing.");
+        }
+
+        // This tells azd to avoid creating infrastructure.
+        var userPrincipalId = new ProvisioningParameter(AzureBicepResource.KnownParameters.UserPrincipalId, typeof(string)) { Value = new BicepValue<string>(string.Empty) };
+        infra.Add(userPrincipalId);
+
+        var tags = new ProvisioningParameter("tags", typeof(object))
+        {
+            Value = new BicepDictionary<string>()
+        };
+        infra.Add(tags);
+
+        // Reference the existing managed environment. AddAsExistingResource handles the
+        // FromExisting + ExistingAzureResourceAnnotation (name / resource group scope) wiring.
+        var containerAppEnvironment = (ContainerAppManagedEnvironment)appEnvResource.AddAsExistingResource(infra);
+
+        // Container apps still need an identity that can pull from the configured ACR. By default we
+        // create one here and add an AcrPull role assignment on the registry. When the user has supplied
+        // their own identity via WithAcrPullIdentity, we skip both — they own role assignments —
+        // and emit the supplied identity's id as AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID.
+        UserAssignedIdentity? newIdentity = null;
+        BicepValue<string> managedIdentityIdOutputValue;
+
+        if (appEnvResource.TryGetLastAnnotation<AzureContainerAppEnvironmentAcrPullIdentityAnnotation>(out var identityAnnotation))
+        {
+            managedIdentityIdOutputValue = identityAnnotation.Identity.Id.AsProvisioningParameter(infra);
+        }
+        else
+        {
+            newIdentity = new UserAssignedIdentity(Infrastructure.NormalizeBicepIdentifier($"{appEnvResource.Name}_mi"))
+            {
+                Tags = tags
+            };
+            infra.Add(newIdentity);
+            managedIdentityIdOutputValue = newIdentity.Id.ToBicepExpression();
+        }
+
+        AzureProvisioningResource? registry = null;
+        if (appEnvResource.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var registryReferenceAnnotation) &&
+            registryReferenceAnnotation.Registry is AzureProvisioningResource explicitRegistry)
+        {
+            registry = explicitRegistry;
+        }
+        else if (appEnvResource.DefaultContainerRegistry is not null)
+        {
+            registry = appEnvResource.DefaultContainerRegistry;
+        }
+
+        if (registry is null)
+        {
+            throw new InvalidOperationException($"No container registry associated with environment '{appEnvResource.Name}'. This should have been added automatically.");
+        }
+
+        var containerRegistry = (ContainerRegistryService)registry.AddAsExistingResource(infra);
+        infra.Add(containerRegistry);
+
+        if (newIdentity is not null)
+        {
+            var pullRa = containerRegistry.CreateRoleAssignment(ContainerRegistryBuiltInRole.AcrPull, newIdentity);
+            // There's a bug in the CDK, see https://github.com/Azure/azure-sdk-for-net/issues/47265
+            pullRa.Name = BicepFunction.CreateGuid(containerRegistry.Id, newIdentity.Id, pullRa.RoleDefinitionId);
+            infra.Add(pullRa);
+        }
+
+        AddSharedContainerAppEnvironmentOutputs(infra, containerRegistry, containerAppEnvironment, managedIdentityIdOutputValue);
+    }
+
+    /// <summary>
+    /// Emits the container-registry + container-app-environment outputs that downstream
+    /// resources (<c>BaseContainerAppContext</c>, <c>ContainerAppUrls</c>, etc.) consume.
+    /// Shared between the greenfield and existing-env infrastructure callbacks so both
+    /// paths produce the exact same set of well-known outputs.
+    /// </summary>
+    private static void AddSharedContainerAppEnvironmentOutputs(
+        AzureResourceInfrastructure infra,
+        ContainerRegistryService containerRegistry,
+        ContainerAppManagedEnvironment containerAppEnvironment,
+        BicepValue<string> managedIdentityIdOutputValue)
+    {
+        // Required by the IContainerRegistry interface
+        infra.Add(new ProvisioningOutput("AZURE_CONTAINER_REGISTRY_NAME", typeof(string))
+        {
+            Value = containerRegistry.Name.ToBicepExpression()
+        });
+
+        infra.Add(new ProvisioningOutput("AZURE_CONTAINER_REGISTRY_ENDPOINT", typeof(string))
+        {
+            Value = containerRegistry.LoginServer.ToBicepExpression()
+        });
+
+        // Required by the IAzureContainerRegistry interface
+        infra.Add(new ProvisioningOutput("AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID", typeof(string))
+        {
+            Value = managedIdentityIdOutputValue
+        });
+
+        infra.Add(new ProvisioningOutput("AZURE_CONTAINER_APPS_ENVIRONMENT_NAME", typeof(string))
+        {
+            Value = containerAppEnvironment.Name.ToBicepExpression()
+        });
+
+        infra.Add(new ProvisioningOutput("AZURE_CONTAINER_APPS_ENVIRONMENT_ID", typeof(string))
+        {
+            Value = containerAppEnvironment.Id.ToBicepExpression()
+        });
+
+        // Required for azd to output the dashboard URL
+        infra.Add(new ProvisioningOutput("AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN", typeof(string))
+        {
+            Value = containerAppEnvironment.DefaultDomain.ToBicepExpression()
+        });
     }
 
     /// <summary>
@@ -441,13 +902,14 @@ public static class AzureContainerAppExtensions
     /// </summary>
     /// <param name="builder">The AzureContainerAppEnvironmentResource to configure.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// By default, the container app environment resources use a different naming convention than azd.
     ///
     /// This method allows for reusing the previously deployed resources if the application was deployed using
     /// azd without calling <see cref="AddAzureContainerAppEnvironment"/>
     /// </remarks>
-    [AspireExport(Description = "Configures resources to use azd naming conventions")]
+    [AspireExport]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithAzdResourceNaming(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder)
     {
         builder.Resource.UseAzdNamingConvention = true;
@@ -460,6 +922,7 @@ public static class AzureContainerAppExtensions
     /// </summary>
     /// <param name="builder">The <see cref="AzureContainerAppEnvironmentResource"/> to configure.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// By default, the generated Azure resource names use long static suffixes (e.g. <c>storageVolume</c>,
@@ -477,11 +940,67 @@ public static class AzureContainerAppExtensions
     /// Use <see cref="WithAzdResourceNaming"/> to change those names as well.
     /// </para>
     /// </remarks>
-    [AspireExport(Description = "Configures resources to use compact naming for length-constrained Azure resources")]
+    [AspireExport]
     [Experimental("ASPIREACANAMING001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithCompactResourceNaming(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder)
     {
         builder.Resource.UseCompactResourceNaming = true;
+        return builder;
+    }
+
+    /// <summary>
+    /// Configures the container app environment to incorporate its resource name into the generated managed
+    /// environment <c>name</c>, so that multiple environments in the same resource group get distinct names.
+    /// </summary>
+    /// <param name="builder">The <see cref="AzureContainerAppEnvironmentResource"/> to configure.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
+    /// <remarks>
+    /// <para>
+    /// By default the managed environment relies on Azure.Provisioning's name, whose sanitizer keeps only
+    /// lowercase letters. For example, two <see cref="AddAzureContainerAppEnvironment"/> resources named
+    /// <c>cae1</c> and <c>cae2</c> both drop their trailing digit and yield
+    /// <c>take('cae${uniqueString(resourceGroup().id)}', 24)</c>. When they share a resource group,
+    /// that default would collapse both onto a single physical environment and concurrent
+    /// container-app writes would race with <c>ManagedEnvironmentOperationInProgress</c>. Publish and deploy
+    /// detect this collision and fail with guidance to apply this method instead
+    /// (see <see href="https://github.com/microsoft/aspire/issues/18722"/>).
+    /// </para>
+    /// <para>
+    /// Applying this method computes the managed environment <c>name</c> with the same algorithm Azure.Provisioning
+    /// uses for every other Azure resource type (sanitized resource name, then a hyphen separator and a
+    /// <c>uniqueString(resourceGroup().id)</c> suffix, truncated to the maximum length), but with the character
+    /// requirements Azure Container Apps managed environments actually allow — lowercase letters, digits, and
+    /// hyphens, with a 60-character maximum. For example, <c>cae1</c> produces
+    /// <c>take('cae1-${uniqueString(resourceGroup().id)}', 60)</c>, while <c>prod1</c> uses a <c>prod1</c>
+    /// prefix. Preserving the digits gives each environment a distinct <c>name</c>. This is opt-in because
+    /// enabling it changes the environment <c>name</c> for an already-deployed single environment, which would
+    /// cause Azure to recreate it. Apply it only to the environments that need distinct names (typically when
+    /// deploying more than one environment to a single resource group), or to new deployments.
+    /// </para>
+    /// <para>
+    /// This option acts as a fallback after name resolvers configured through
+    /// <see cref="AzureProvisioningOptions.ProvisioningBuildOptions"/>. A configured resolver can therefore
+    /// override the generated name. This option also has no effect when <see cref="WithAzdResourceNaming"/> is
+    /// used, since azd naming sets the environment name explicitly.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var env1 = builder.AddAzureContainerAppEnvironment("cae1")
+    ///     .WithUniqueResourceNaming();
+    /// var env2 = builder.AddAzureContainerAppEnvironment("cae2")
+    ///     .WithUniqueResourceNaming();
+    /// </code>
+    /// </example>
+    [AspireExport]
+    [Experimental("ASPIREACANAMING002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithUniqueResourceNaming(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Resource.UseUniqueResourceNaming = true;
         return builder;
     }
 
@@ -491,7 +1010,8 @@ public static class AzureContainerAppExtensions
     /// <param name="builder">The AzureContainerAppEnvironmentResource to configure.</param>
     /// <param name="enable">Whether to include the Aspire dashboard. Default is true.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
-    [AspireExport(Description = "Configures whether the Aspire dashboard is included in the container app environment")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithDashboard(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder, bool enable = true)
     {
         builder.Resource.EnableDashboard = enable;
@@ -505,12 +1025,13 @@ public static class AzureContainerAppExtensions
     /// <param name="builder">The AzureContainerAppEnvironmentResource to configure.</param>
     /// <param name="upgrade">Whether to upgrade HTTP endpoints to HTTPS. Default is true.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// When disabled (<c>false</c>), HTTP endpoints will use HTTP scheme and port 80 in Azure Container Apps.
     /// Note that explicit ports specified for development (e.g., port 8080) are still normalized
     /// to standard ports (80/443) as required by Azure Container Apps.
     /// </remarks>
-    [AspireExport(Description = "Configures whether HTTP endpoints are upgraded to HTTPS")]
+    [AspireExport]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithHttpsUpgrade(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder, bool upgrade = true)
     {
         builder.Resource.PreserveHttpEndpoints = !upgrade;
@@ -523,8 +1044,9 @@ public static class AzureContainerAppExtensions
     /// <param name="builder">The AzureContainerAppEnvironmentResource to configure.</param>
     /// <param name="workspaceBuilder">The resource builder for the <see cref="AzureLogAnalyticsWorkspaceResource"/> to use.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="workspaceBuilder"/> is null.</exception>
-    [AspireExport(Description = "Configures the container app environment to use a specific Log Analytics Workspace")]
+    [AspireExport]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithAzureLogAnalyticsWorkspace(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder, IResourceBuilder<AzureLogAnalyticsWorkspaceResource> workspaceBuilder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -534,6 +1056,118 @@ public static class AzureContainerAppExtensions
         builder.WithAnnotation(new AzureLogAnalyticsWorkspaceReferenceAnnotation(workspaceBuilder.Resource));
 
         return builder;
+    }
+
+    /// <summary>
+    /// Configures the container app environment to use the supplied <see cref="AzureUserAssignedIdentityResource"/>
+    /// as the managed identity that container apps in the environment use to pull images from the configured
+    /// container registry (the <c>AcrPull</c> identity), instead of having Aspire create a new identity and a new
+    /// <c>AcrPull</c> role assignment.
+    /// </summary>
+    /// <param name="builder">The container app environment to configure.</param>
+    /// <param name="identityBuilder">
+    /// The resource builder for the user-assigned identity that should be used for image pulls. This identity is
+    /// only used for the <c>AcrPull</c> role; it is not assigned to individual container apps in the environment.
+    /// </param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// <para>
+    /// When this is set, Aspire will not create a new identity or an <c>AcrPull</c> role assignment for the
+    /// container registry. The caller is responsible for ensuring the supplied identity already has the required
+    /// <c>AcrPull</c> role assignment on the registry, for example by chaining
+    /// <c>.WithRoleAssignments(acr, ContainerRegistryBuiltInRole.AcrPull)</c> when adding the identity.
+    /// </para>
+    /// <para>
+    /// This is commonly combined with <c>AsExisting</c> on the environment and on the container registry to deploy
+    /// container apps into a pre-provisioned set of Azure resources without Aspire emitting any new identity or
+    /// role-assignment resources. See <see href="https://github.com/microsoft/aspire/issues/12977"/> for the
+    /// scenario this addresses.
+    /// </para>
+    /// <para>
+    /// Only the combination of an existing environment, an existing container registry, and this method avoids
+    /// emitting any new identity or role-assignment resources in the env module. Other combinations still work but
+    /// will emit additional resources:
+    /// </para>
+    /// <list type="bullet">
+    ///   <item><description>
+    ///   If the environment is marked <c>AsExisting</c> but no identity is supplied here, Aspire still emits a new
+    ///   <c>UserAssignedIdentity</c> and an <c>AcrPull</c> role assignment on the configured registry.
+    ///   </description></item>
+    ///   <item><description>
+    ///   If this method is used but the container registry is not existing (either the Aspire-generated default
+    ///   registry or a user-added registry without <c>AsExisting</c>), the registry itself is still provisioned.
+    ///   To wire the supplied identity to that newly-created registry, chain
+    ///   <c>.WithRoleAssignments(acr, ContainerRegistryBuiltInRole.AcrPull)</c> on the identity.
+    ///   </description></item>
+    /// </list>
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="identityBuilder"/> is <see langword="null"/>.</exception>
+    [AspireExport]
+    public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithAcrPullIdentity(
+        this IResourceBuilder<AzureContainerAppEnvironmentResource> builder,
+        IResourceBuilder<AzureUserAssignedIdentityResource> identityBuilder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(identityBuilder);
+
+        builder.WithAnnotation(new AzureContainerAppEnvironmentAcrPullIdentityAnnotation(identityBuilder.Resource));
+
+        return builder;
+    }
+
+    private sealed class ManagedEnvironmentNameResolver(
+        ContainerAppManagedEnvironment managedEnvironment,
+        string environmentName,
+        bool useUniqueResourceNaming,
+        ContainerAppsPipelineStepMarker marker) : DynamicResourceNamePropertyResolver
+    {
+        // Azure Container Apps managed environment names allow lowercase letters, digits, and hyphens and are
+        // 2-60 characters long. These are the managed-environment limits, not the 2-32 character container-app
+        // limits:
+        // https://azure.github.io/PSRule.Rules.Azure/en/rules/Azure.ContainerApp.EnvNaming/
+        //
+        // Azure.Provisioning.AppContainers does not override GetResourceNameRequirements for
+        // ContainerAppManagedEnvironment, so it inherits ProvisionableResource's conservative default of
+        // (1, 24, LowercaseLetters). That default silently drops the digits Aspire relies on to keep sibling
+        // environment names distinct, so "cae1"/"cae2" both sanitize to "cae" and collide in a shared resource
+        // group (https://github.com/microsoft/aspire/issues/18722).
+        private static readonly ResourceNameRequirements s_requirements = new(
+            minLength: 2,
+            maxLength: 60,
+            validCharacters: ResourceNameCharacters.LowercaseLetters | ResourceNameCharacters.Numbers | ResourceNameCharacters.Hyphen);
+
+        public ContainerAppManagedEnvironment ManagedEnvironment { get; } = managedEnvironment;
+
+        public override BicepValue<string>? ResolveName(ProvisioningBuildOptions options, ProvisionableResource resource, ResourceNameRequirements requirements)
+        {
+            // Scope strictly to the environment instance this resolver was created for, by reference identity.
+            // Bicep identifiers are only unique within a single module, so matching on the identifier could rename
+            // an unrelated ContainerAppManagedEnvironment that happens to share the same name in another module.
+            // Every other resource returns null so it falls through to the rest of the resolver chain unchanged.
+            if (!ReferenceEquals(resource, ManagedEnvironment))
+            {
+                return null;
+            }
+
+            // Delegate to the standard dynamic naming algorithm. The opt-in substitutes the requirements that
+            // Azure.Provisioning failed to declare; otherwise the supplied requirements preserve the legacy output
+            // byte-for-byte. Recording the returned expression here means caller-configured resolvers still take
+            // precedence and only names produced by this fallback participate in collision validation.
+            var resolvedName = base.ResolveName(
+                options,
+                resource,
+                useUniqueResourceNaming ? s_requirements : requirements);
+
+            if (resolvedName is not null)
+            {
+                marker.RecordManagedEnvironmentName(
+                    environmentName,
+                    resolvedName,
+                    useUniqueResourceNaming ? ManagedEnvironmentNamingMode.Unique : ManagedEnvironmentNamingMode.Legacy);
+            }
+
+            return resolvedName;
+        }
     }
 
     private static AzureContainerRegistryResource CreateDefaultAzureContainerRegistry(IDistributedApplicationBuilder builder, string name, AzureContainerAppEnvironmentResource containerAppEnvironment)

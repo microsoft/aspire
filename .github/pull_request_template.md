@@ -27,8 +27,3 @@ Fixes # (issue)
       - [ ] Yes
       - [ ] No
   - [ ] No
-- Does the change require an update in our Aspire docs?
-  - [ ] Yes
-    - Link to `aspire.dev` issue:
-      - [New issue](https://github.com/microsoft/aspire.dev/issues/new)
-  - [ ] No

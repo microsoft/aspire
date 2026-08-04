@@ -11,7 +11,7 @@
     "dev": "ts-node app.ts"
   },
   "dependencies": {
-    "express": "^4.22.1",
+    "express": "^4.22.2",
     "pg": "^8.11.3",
     "@azure/identity": "^4.0.0",
     "@azure/core-auth": "^1.10.1",

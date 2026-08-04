@@ -27,10 +27,13 @@
                             @bind-SelectedResource:after="HandleSelectedOptionChangedAsync"
                             LabelClass="toolbar-left" />
 
-            <SignalsActionsDisplay HandleClearSignal="@ClearConsoleLogs"
-                                  IsPaused="@PauseManager.ConsoleLogsPaused"
-                                  OnPausedChanged="@OnPausedChanged"
-                                  SelectedResource="@PageViewModel.SelectedResource" />
+            @if (_activeView == ConsoleLogsView.Console)
+            {
+                <SignalsActionsDisplay HandleClearSignal="@ClearConsoleLogs"
+                                      IsPaused="@PauseManager.ConsoleLogsPaused"
+                                      OnPausedChanged="@OnPausedChanged"
+                                      SelectedResource="@PageViewModel.SelectedResource" />
+            }
 
             @if (PageViewModel.SelectedResource is { } selectedResource && !IsAllSelected())
             {
@@ -46,14 +49,7 @@
                                   Disabled="@(command.State == CommandViewModelState.Disabled || DashboardCommandExecutor.IsExecuting(selectedResource.Name, command.Name))"
                                   OnClick="@(() => ExecuteResourceCommandAsync(command))"
                                   Class="highlighted-command">
-                        @if (!string.IsNullOrEmpty(command.IconName) && IconResolver.ResolveIconName(command.IconName, IconSize.Size16, command.IconVariant) is { } icon)
-                        {
-                            <FluentIcon Value="@icon" Width="16px" />
-                        }
-                        else
-                        {
-                            @command.GetDisplayName()
-                        }
+                        <FluentIcon Value="@IconResolver.ResolveHighlightedCommandIcon(command.IconName, command.IconVariant)" Width="16px" />
                     </FluentButton>
                 }
 
@@ -70,17 +66,46 @@
             @if (ViewportInformation.IsDesktop)
             {
                 // This takes up too much horizontal space on mobile, so show on a new line on mobile
-                <FluentLabel Typo="Typography.Body" aria-live="polite" aria-label="@Loc[nameof(Dashboard.Resources.ConsoleLogs.LogStatusLabel)]" slot="end">@PageViewModel.Status</FluentLabel>
+                @if (_activeView == ConsoleLogsView.Console)
+                {
+                    <FluentLabel Typo="Typography.Body" aria-live="polite" aria-label="@Loc[nameof(Dashboard.Resources.ConsoleLogs.LogStatusLabel)]" slot="end">@PageViewModel.Status</FluentLabel>
+                }
 
-                <AspireMenuButton
-                    ButtonAppearance="Appearance.Lightweight"
-                    Icon="@(new Icons.Regular.Size20.Options())"
-                    Items="@_logsMenuItems"
-                    Title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsSettings)]"
-                    slot="end"/>
+                @if (_activeView == ConsoleLogsView.Console || _selectedResourceHasTerminal)
+                {
+                    @if (_activeView == ConsoleLogsView.Console)
+                    {
+                        <FluentSearch @bind-Value="_logFilter"
+                                      Name="console-logs-search"
+                                      Immediate="true"
+                                      ImmediateDelay="@FluentUIExtensions.InputDelay"
+                                      Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
+                                      title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTextFilter)]"
+                                      slot="end" />
+                    }
+
+                    <AspireMenuButton
+                        ButtonAppearance="Appearance.Lightweight"
+                        Icon="@(new Icons.Regular.Size20.Options())"
+                        Items="@_logsMenuItems"
+                        Title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsSettings)]"
+                        slot="end"/>
+                }
             }
-            else
+            else if (_activeView == ConsoleLogsView.Console || _selectedResourceHasTerminal)
             {
+                @if (_activeView == ConsoleLogsView.Console)
+                {
+                    <FluentSearch @bind-Value="_logFilter"
+                                  Name="console-logs-search"
+                                  Immediate="true"
+                                  ImmediateDelay="@FluentUIExtensions.InputDelay"
+                                  Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
+                                  Label="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)].Value"
+                                  title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTextFilter)]"
+                                  slot="end" />
+                }
+
                 <AspireMenuButton
                     Icon="@(new Icons.Regular.Size20.Options())"
                     Items="@_logsMenuItems"
@@ -91,26 +116,63 @@
         </ToolbarSection>
 
         <MobilePageTitleToolbarSection>
-            <FluentLabel Typo="Typography.Body" aria-live="polite" aria-label="@Loc[nameof(Dashboard.Resources.ConsoleLogs.LogStatusLabel)]">
-                @if (PageViewModel.SelectedResource?.Id is not null)
-                {
-                    @($"{PageViewModel.SelectedResource.Name}: {PageViewModel.Status}")
-                }
-                else
-                {
-                    @PageViewModel.Status
-                }
-            </FluentLabel>
+            @if (_activeView == ConsoleLogsView.Console)
+            {
+                <FluentLabel Typo="Typography.Body" aria-live="polite" aria-label="@Loc[nameof(Dashboard.Resources.ConsoleLogs.LogStatusLabel)]">
+                    @if (PageViewModel.SelectedResource?.Id is not null)
+                    {
+                        @($"{PageViewModel.SelectedResource.Name}: {PageViewModel.Status}")
+                    }
+                    else
+                    {
+                        @PageViewModel.Status
+                    }
+                </FluentLabel>
+            }
         </MobilePageTitleToolbarSection>
 
         <MainSection>
-            <LogViewer
-                @ref="_logViewerRef"
-                LogEntries="@_logEntries"
-                ShowTimestamp="@_showTimestamp"
-                IsTimestampUtc="@_isTimestampUtc"
-                NoWrapLogs="@_noWrapLogs"
-                ShowResourcePrefix="@_isSubscribedToAll"/>
+            @* For terminal-enabled resources we keep BOTH views mounted and
+               flip visibility via CSS. Unmounting TerminalView on every flip
+               would tear down xterm.js, the WebSocket, and the PTY consumer
+               session — destroying scrollback and forcing an HMP1
+               StateSync round-trip on every toggle. Unmounting LogViewer
+               would drop the rendered log buffer for the same reason.
+               `display:none` keeps the DOM, JS state, and Blazor component
+               state alive while only one view is visible at a time. *@
+            @if (_selectedResourceHasTerminal && _terminalResourceName is not null)
+            {
+                <div style="@(_activeView == ConsoleLogsView.Console ? "display: contents;" : "display: none;")">
+                    <LogViewer
+                        @ref="_logViewerRef"
+                        LogEntries="@_logEntries"
+                        FilterText="@_logFilter"
+                        ShowTimestamp="@_showTimestamp"
+                        IsTimestampUtc="@_isTimestampUtc"
+                        NoWrapLogs="@_noWrapLogs"
+                        ShowNoLogsMessage="@_showNoLogsMessage"
+                        ShowResourcePrefix="@_isSubscribedToAll"/>
+                </div>
+                <div style="@(_activeView == ConsoleLogsView.Terminal ? "display: contents;" : "display: none;")">
+                    <TerminalView
+                        @ref="_terminalViewRef"
+                        ResourceName="@_terminalResourceName"
+                        ReplicaIndex="@_terminalReplicaIndex"
+                        OnToolbarStateChanged="OnTerminalToolbarStateChangedAsync" />
+                </div>
+            }
+            else
+            {
+                <LogViewer
+                    @ref="_logViewerRef"
+                    LogEntries="@_logEntries"
+                    FilterText="@_logFilter"
+                    ShowTimestamp="@_showTimestamp"
+                    IsTimestampUtc="@_isTimestampUtc"
+                    NoWrapLogs="@_noWrapLogs"
+                    ShowNoLogsMessage="@_showNoLogsMessage"
+                    ShowResourcePrefix="@_isSubscribedToAll"/>
+            }
         </MainSection>
     </AspirePageContentLayout>
 </div>

@@ -118,7 +118,10 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Destroy a previously deployed AppHost environment (Preview)</value>
+    <value>Destroy a previously deployed AppHost environment</value>
+  </data>
+  <data name="NonInteractiveRequiresYes" xml:space="preserve">
+    <value>The destroy command requires --yes when the --non-interactive option is specified.</value>
   </data>
   <data name="OutputPathArgumentDescription" xml:space="preserve">
     <value>The output path containing the deployment artifacts to destroy</value>

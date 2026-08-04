@@ -5,9 +5,11 @@
 #pragma warning disable ASPIREAZURE001
 
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.AppService;
+using Azure.Core;
 using Aspire.Hosting.Pipelines;
 using Azure.Provisioning;
 using Azure.Provisioning.AppService;
@@ -23,12 +25,18 @@ namespace Aspire.Hosting.Azure;
 /// Represents an Azure App Service Environment resource.
 /// </summary>
 #pragma warning disable CS0618 // Type or member is obsolete
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 public class AzureAppServiceEnvironmentResource :
     AzureProvisioningResource,
     IAzureComputeEnvironmentResource,
-    IAzureContainerRegistry
+    IAzureContainerRegistry,
+    IAzureDelegatedSubnetResource
 #pragma warning restore CS0618 // Type or member is obsolete
+#pragma warning restore ASPIREAZURE003
 {
+    /// <inheritdoc />
+    string IAzureDelegatedSubnetResource.DelegatedSubnetServiceName => "Microsoft.Web/serverFarms";
+
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureAppServiceEnvironmentResource"/> class.
     /// </summary>
@@ -51,7 +59,7 @@ public class AzureAppServiceEnvironmentResource :
                 Name = $"prepare-azure-app-service-{name}",
                 Description = $"Prepares Azure App Service deployment targets for {name}.",
                 Action = ctx => PrepareDeploymentTargetsAsync(ctx),
-                DependsOnSteps = [AzureEnvironmentResource.PrepareResourcesStepName],
+                DependsOnSteps = [AzureEnvironmentResource.PrepareResourcesStepName, WellKnownPipelineSteps.ValidateComputeEnvironments],
                 RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
             };
 
@@ -70,18 +78,23 @@ public class AzureAppServiceEnvironmentResource :
 
             steps.Add(validateStep);
 
-            // Add print-dashboard-url step
-            var printDashboardUrlStep = new PipelineStep
+            if (EnableDashboard)
             {
-                Name = $"print-dashboard-url-{name}",
-                Description = $"Prints the deployment summary and dashboard URL for {name}.",
-                Action = ctx => PrintDashboardUrlAsync(ctx),
-                Tags = ["print-summary"],
-                DependsOnSteps = [AzureEnvironmentResource.ProvisionInfrastructureStepName],
-                RequiredBySteps = [WellKnownPipelineSteps.Deploy]
-            };
+                // The dashboard output is only emitted when the dashboard is provisioned.
+                // Avoid registering the summary step when WithDashboard(false) is used,
+                // otherwise deploy succeeds and then fails while trying to read a missing output.
+                var printDashboardUrlStep = new PipelineStep
+                {
+                    Name = $"print-dashboard-url-{name}",
+                    Description = $"Prints the deployment summary and dashboard URL for {name}.",
+                    Action = ctx => PrintDashboardUrlAsync(ctx),
+                    Tags = ["print-summary"],
+                    DependsOnSteps = [AzureEnvironmentResource.ProvisionInfrastructureStepName],
+                    RequiredBySteps = [WellKnownPipelineSteps.Deploy]
+                };
 
-            steps.Add(printDashboardUrlStep);
+                steps.Add(printDashboardUrlStep);
+            }
 
             // Expand deployment target steps for all compute resources
             // This ensures the push/provision steps from deployment targets are included in the pipeline
@@ -358,6 +371,21 @@ public class AzureAppServiceEnvironmentResource :
     internal BicepOutputReference WebSiteSuffix => new("webSiteSuffix", this);
 
     /// <summary>
+    /// Gets the delegated subnet ID configured for this environment, if any.
+    /// </summary>
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+    internal BicepValue<ResourceIdentifier>? GetDelegatedSubnetId(AzureResourceInfrastructure infra)
+    {
+        if (this.TryGetLastAnnotation<DelegatedSubnetAnnotation>(out var subnetAnnotation))
+        {
+            return subnetAnnotation.SubnetId.AsProvisioningParameter(infra);
+        }
+
+        return null;
+    }
+#pragma warning restore ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
+    /// <summary>
     /// When true, HTTP endpoints are not upgraded to HTTPS. Default is false (HTTP→HTTPS upgrade is enabled).
     /// </summary>
     internal bool PreserveHttpEndpoints { get; set; }
@@ -481,6 +509,35 @@ public class AzureAppServiceEnvironmentResource :
     {
         var resource = endpointReference.Resource;
         return ReferenceExpression.Create($"{resource.Name.ToLowerInvariant()}-{WebSiteSuffix}.azurewebsites.net");
+    }
+
+    /// <inheritdoc/>
+    [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public ReferenceExpression GetEndpointPropertyExpression(EndpointReferenceExpression endpointReferenceExpression)
+    {
+        ArgumentNullException.ThrowIfNull(endpointReferenceExpression);
+
+        var endpointReference = endpointReferenceExpression.Endpoint;
+        var property = endpointReferenceExpression.Property;
+        var endpoint = endpointReference.EndpointAnnotation;
+        var scheme = PreserveHttpEndpoints ? endpoint.UriScheme : "https";
+        var port = string.Equals(scheme, "http", StringComparison.OrdinalIgnoreCase) ? 80 : 443;
+        var tlsEnabled = string.Equals(scheme, "https", StringComparison.OrdinalIgnoreCase) || endpoint.TlsEnabled;
+        var host = GetHostAddressExpression(endpointReference);
+
+        return property switch
+        {
+            EndpointProperty.Url => ReferenceExpression.Create($"{scheme}://{host}"),
+            EndpointProperty.Host or EndpointProperty.IPV4Host => host,
+            EndpointProperty.Port => ReferenceExpression.Create($"{port.ToString(CultureInfo.InvariantCulture)}"),
+            EndpointProperty.TargetPort => endpoint.TargetPort is int targetPort
+                ? ReferenceExpression.Create($"{targetPort.ToString(CultureInfo.InvariantCulture)}")
+                : ReferenceExpression.Create($"{new ContainerPortReference(endpointReference.Resource)}"),
+            EndpointProperty.Scheme => ReferenceExpression.Create($"{scheme}"),
+            EndpointProperty.HostAndPort => host,
+            EndpointProperty.TlsEnabled => ReferenceExpression.Create($"{(tlsEnabled ? bool.TrueString : bool.FalseString)}"),
+            _ => throw new InvalidOperationException($"The property '{property}' is not supported for the endpoint '{endpoint.Name}'.")
+        };
     }
 
     /// <inheritdoc/>

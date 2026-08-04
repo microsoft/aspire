@@ -11,7 +11,6 @@
     </packageSource>
     <packageSource key="{PR_HIVE}/packages">
       <package pattern="Aspire*" />
-      <package pattern="*" />
     </packageSource>
     <packageSource key="companyfeed">
       <package pattern="*" />

@@ -5,6 +5,7 @@
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIREEXTENSION001
+#pragma warning disable ASPIRECOMMAND001
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
@@ -14,6 +15,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.ApplicationModel.Docker;
 using Aspire.Hosting.JavaScript;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -29,25 +31,37 @@ public static class JavaScriptHostingExtensions
 {
     private const string BrowserCapability = "browser";
     private const string DefaultNodeVersion = "22";
+    private const string DefaultJavaScriptRunScriptName = "dev";
     private const string DefaultYarpImage = Yarp.YarpContainerImageTags.Registry + "/" + Yarp.YarpContainerImageTags.Image + ":" + Yarp.YarpContainerImageTags.Tag;
+
+    // Help links surfaced when a required command is missing, mapped to a command by ResolveHelpLink.
+    private const string NodeHelpLink = "https://nodejs.org/en/download/";
+    private const string NpmHelpLink = "https://docs.npmjs.com/downloading-and-installing-node-js-and-npm";
+    private const string BunHelpLink = "https://bun.sh/docs/installation";
+    private const string YarnHelpLink = "https://yarnpkg.com/getting-started/install";
+    private const string PnpmHelpLink = "https://pnpm.io/installation";
+
+    // npm/yarn/pnpm are Node CLIs: whether they install packages or launch the app's run script, they spawn
+    // node, so node must be on PATH too. bun is a full Node replacement and needs no node.
+    private static readonly string[] s_nodeBasedPackageManagers = ["npm", "yarn", "pnpm"];
 
     // This is the order of config files that Vite will look for by default
     // See https://github.com/vitejs/vite/blob/main/packages/vite/src/node/constants.ts#L97
     private static readonly string[] s_defaultConfigFiles = ["vite.config.js", "vite.config.mjs", "vite.config.ts", "vite.config.cjs", "vite.config.mts", "vite.config.cts"];
 
     // The token to replace with the relative path to the user's Vite config file
-    private const string AspireViteRelativeConfigToken = "%%ASPIRE_VITE_RELATIVE_CONFIG_PATH%%";
+    private const string AspireViteConfigPathToken = "%%ASPIRE_VITE_CONFIG_PATH%%";
 
     // The token to replace with the absolute path to the original Vite config file
     private const string AspireViteAbsoluteConfigToken = "%%ASPIRE_VITE_ABSOLUTE_CONFIG_PATH%%";
 
     // A template Vite config that loads an existing config provides a default https configuration if one isn't present
     // Uses environment variables to configure a TLS certificate in PFX format and its password if specified
-    // The value of %%ASPIRE_VITE_RELATIVE_CONFIG_PATH%% is replaced with the path to the user's actual Vite config file at runtime
+    // The value of %%ASPIRE_VITE_CONFIG_PATH%% is replaced with the relative path to the user's actual Vite config file at runtime
     // Vite only supports module style config files, so we don't have to handle commonjs style imports or exports here
     private const string AspireViteConfig = """
     import { defineConfig } from 'vite'
-    import config from '%%ASPIRE_VITE_RELATIVE_CONFIG_PATH%%'
+    import config from '%%ASPIRE_VITE_CONFIG_PATH%%'
 
     console.log('Applying Aspire specific Vite configuration for HTTPS support.')
     console.log('Found original Vite configuration at "%%ASPIRE_VITE_ABSOLUTE_CONFIG_PATH%%"')
@@ -96,6 +110,7 @@ public static class JavaScriptHostingExtensions
     /// <param name="appDirectory">The path to the directory containing the node application.</param>
     /// <param name="scriptPath">The path to the script relative to the app directory to run.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method executes a Node script directly using <c>node script.js</c>. If you want to use a package manager
     /// you can add one and configure the install and run scripts using the provided extension methods.
@@ -114,7 +129,7 @@ public static class JavaScriptHostingExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds a Node.js application resource")]
+    [AspireExport]
     public static IResourceBuilder<NodeAppResource> AddNodeApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string scriptPath)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -263,7 +278,7 @@ public static class JavaScriptHostingExtensions
             resourceBuilder.WithNpm();
         }
 
-        resourceBuilder.WithVSCodeDebugging(scriptPath);
+        resourceBuilder.WithVSCodeDebugging(scriptPath, "node");
 
         if (builder.ExecutionContext.IsRunMode)
         {
@@ -285,7 +300,7 @@ public static class JavaScriptHostingExtensions
 
     private static IResourceBuilder<TResource> WithNodeDefaults<TResource>(this IResourceBuilder<TResource> builder) where TResource : JavaScriptAppResource =>
         builder.WithOtlpExporter()
-            .WithRequiredCommand("node", "https://nodejs.org/en/download/")
+            .WithRequiredCommandsFromPackageManager("node")
             .WithEnvironment("NODE_ENV", builder.ApplicationBuilder.Environment.IsDevelopment() ? "development" : "production")
             .WithCertificateTrustConfiguration((ctx) =>
             {
@@ -314,6 +329,447 @@ public static class JavaScriptHostingExtensions
                 return Task.CompletedTask;
             });
 
+    // Registers a hook that materializes the resource's required commands just before start. The annotations are
+    // added on BeforeStartEvent in every execution context, but they only have an effect in run mode, where
+    // RequiredCommandValidationEventingSubscriber validates them against the local PATH on
+    // BeforeResourceStartedEvent (which fires after BeforeStartEvent). Resolving them here - rather than eagerly
+    // as each With* method runs - lets the package-manager selection settle first, so a later selection fully
+    // replaces an earlier one without having to remove stale RequiredCommandAnnotations.
+    // See https://github.com/microsoft/aspire/issues/18625.
+    //
+    // runtimeCommand is the executable the app was created to run with (node for
+    // AddNodeApp/AddViteApp/AddJavaScriptApp, bun for AddBunApp); it launches the app whenever the app is not
+    // routed through a package-manager run script.
+    private static IResourceBuilder<TResource> WithRequiredCommandsFromPackageManager<TResource>(
+        this IResourceBuilder<TResource> builder,
+        string runtimeCommand) where TResource : JavaScriptAppResource
+    {
+        var resource = builder.Resource;
+        builder.ApplicationBuilder.OnBeforeStart((_, _) =>
+        {
+            foreach (var (command, helpLink) in ResolveRequiredCommands(resource, runtimeCommand))
+            {
+                // Idempotent: skip commands already present so an unexpected second publish of BeforeStartEvent
+                // cannot add duplicate RequiredCommandAnnotations for the same command.
+                if (!resource.Annotations.OfType<RequiredCommandAnnotation>().Any(a => string.Equals(a.Command, command, StringComparison.Ordinal)))
+                {
+                    resource.Annotations.Add(new RequiredCommandAnnotation(command) { HelpLink = helpLink });
+                }
+            }
+
+            return Task.CompletedTask;
+        });
+
+        return builder;
+    }
+
+    // Resolves the executables that must be on PATH for the app to install and run, from how the app is actually
+    // launched. Two independent axes:
+    //   - Runtime: apps that launch via a named package-manager run script (npm run dev / bun run dev) - which is
+    //     every AddViteApp/AddJavaScriptApp, plus AddNodeApp/AddBunApp when WithRunScript is used - are launched by
+    //     the package manager, so the package manager is the runtime. Apps that invoke a script file directly
+    //     (AddNodeApp "server.js" / AddBunApp "server.ts" with no run script) are launched by their fixed runtime
+    //     (node/bun) regardless of any package manager.
+    //   - Install: a selected package manager also runs at install time, so it must be on PATH even when a
+    //     different runtime launches the app - e.g. AddNodeApp(...).WithBun() runs `node server.js` but installs
+    //     with `bun`, so both node and bun are required.
+    // npm/yarn/pnpm additionally require node (they are Node CLIs); bun does not. This projection is what fixes
+    // https://github.com/microsoft/aspire/issues/18625 (AddViteApp(...).WithBun() requires only bun) without
+    // dropping the runtime for direct-script apps.
+    private static IEnumerable<(string Command, string? HelpLink)> ResolveRequiredCommands(IResource resource, string runtimeCommand)
+    {
+        resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager);
+
+        // A package manager only replaces the runtime when the app launches through a run script; otherwise the
+        // runtime executes the script file directly.
+        var launchesViaRunScript = resource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out _);
+        var runCommand = launchesViaRunScript && packageManager is not null
+            ? packageManager.ExecutableName
+            : runtimeCommand;
+
+        var commands = new HashSet<string>(StringComparer.Ordinal) { runCommand };
+
+        if (packageManager is not null)
+        {
+            commands.Add(packageManager.ExecutableName);
+        }
+
+        if (commands.Overlaps(s_nodeBasedPackageManagers))
+        {
+            commands.Add("node");
+        }
+
+        return commands.Select(static command => (command, ResolveHelpLink(command)));
+    }
+
+    // Maps a required executable to the install/help link surfaced when the command is missing on PATH.
+    private static string? ResolveHelpLink(string command) => command switch
+    {
+        "node" => NodeHelpLink,
+        "npm" => NpmHelpLink,
+        "bun" => BunHelpLink,
+        "yarn" => YarnHelpLink,
+        "pnpm" => PnpmHelpLink,
+        // Unknown/custom package manager: no specific install help link.
+        _ => null,
+    };
+
+    // The default Docker image used for AddBunApp build and runtime stages.
+    // Pinned to the major version tag to keep generated Dockerfiles deterministic
+    // while still picking up patch updates. The image provides a non-root `bun` user.
+    private const string DefaultBunImage = "oven/bun:1";
+
+    // Default .dockerignore content emitted alongside the generated Bun Dockerfile using
+    // BuildKit's per-Dockerfile ignore convention. The runtime stage uses `COPY . .` from the
+    // build context so an ignore file is required to keep local node_modules, .git, dotenv
+    // files, etc. out of the published image. Mirrors the recommendation at
+    // https://bun.com/guides/ecosystem/docker.
+    private const string DefaultBunBuildContextIgnoreContent = """
+        # Generated by Aspire. Author <contextRoot>/.dockerignore to override.
+        node_modules
+        .git
+        .gitignore
+        .DS_Store
+        npm-debug.log*
+        yarn-debug.log*
+        yarn-error.log*
+        .pnpm-debug.log*
+        .env
+        .env.*
+        .aspire
+        aspire-output
+        Dockerfile
+        Dockerfile.*
+        *.Dockerfile.dockerignore
+        .dockerignore
+        *.tsbuildinfo
+
+        """;
+
+    /// <summary>
+    /// Adds a Bun application to the application model. Bun should be available on the PATH.
+    /// </summary>
+    /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/> to add the resource to.</param>
+    /// <param name="name">The name of the resource.</param>
+    /// <param name="appDirectory">The path to the directory containing the Bun application.</param>
+    /// <param name="scriptPath">The path to the script (for example, <c>server.ts</c>) relative to <paramref name="appDirectory"/> to run.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>
+    /// This method executes the script directly using <c>bun &lt;script&gt;</c>. Bun natively runs JavaScript and TypeScript
+    /// files so no transpile step is required.
+    ///
+    /// If the application directory contains a <c>package.json</c> file, Bun will be added as the default package manager.
+    /// When publishing to a container, the default base image is <c>oven/bun:1</c> for both the build and runtime stages.
+    /// </remarks>
+    /// <example>
+    /// Add a Bun app to the application model:
+    /// <code lang="csharp">
+    /// var builder = DistributedApplication.CreateBuilder(args);
+    ///
+    /// builder.AddBunApp("api", "../api", "server.ts");
+    ///
+    /// builder.Build().Run();
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IResourceBuilder<BunAppResource> AddBunApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string scriptPath)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentException.ThrowIfNullOrEmpty(scriptPath);
+
+        appDirectory = Path.GetFullPath(appDirectory, builder.AppHostDirectory);
+        var resource = new BunAppResource(name, "bun", appDirectory);
+
+        var resourceBuilder = builder.AddResource(resource)
+            .WithBunDefaults()
+            .WithArgs(c =>
+            {
+                // If the JavaScriptRunScriptAnnotation is present, use that to run the app
+                if (c.Resource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out var runCommand) &&
+                    c.Resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager))
+                {
+                    if (!string.IsNullOrEmpty(packageManager.ScriptCommand))
+                    {
+                        c.Args.Add(packageManager.ScriptCommand);
+                    }
+
+                    c.Args.Add(runCommand.ScriptName);
+
+                    foreach (var arg in runCommand.Args)
+                    {
+                        c.Args.Add(arg);
+                    }
+                }
+                else
+                {
+                    c.Args.Add(scriptPath);
+                }
+            })
+            .WithIconName("CodeJsRectangle")
+            .PublishAsDockerFile(c =>
+            {
+                // Only generate a Dockerfile if one doesn't already exist in the app directory
+                if (File.Exists(Path.Combine(resource.WorkingDirectory, "Dockerfile")))
+                {
+                    return;
+                }
+
+                c.WithDockerfileBuilder(resource.WorkingDirectory, dockerfileContext =>
+                {
+                    // Get custom base image from annotation, if present
+                    dockerfileContext.Resource.TryGetLastAnnotation<DockerfileBaseImageAnnotation>(out var baseImageAnnotation);
+
+                    // Provide a default .dockerignore that publishers emit alongside the generated
+                    // Dockerfile using BuildKit's per-Dockerfile ignore convention
+                    // (<dockerfile-name>.dockerignore). The runtime stage below copies source
+                    // directly from the build context (`COPY . .`), so without an ignore file the
+                    // user's local node_modules, .git, etc. would leak into the build context and
+                    // into the image. Matches the recommendation at
+                    // https://bun.com/guides/ecosystem/docker. The annotation lookup is guarded
+                    // because WithDockerfileBuilder always adds a DockerfileBuildAnnotation, but
+                    // we want to remain robust if a future refactor changes that.
+                    if (dockerfileContext.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation))
+                    {
+                        dockerfileBuildAnnotation.BuildContextIgnoreContent ??= DefaultBunBuildContextIgnoreContent;
+                    }
+
+                    // Bun ships its own runtime, so both stages default to the same Bun image rather than
+                    // using a node-based image as in AddNodeApp.
+                    var baseBuildImage = baseImageAnnotation?.BuildImage ?? DefaultBunImage;
+                    var builderStage = dockerfileContext.Builder
+                        .From(baseBuildImage, "build")
+                        .EmptyLine()
+                        .WorkDir("/app");
+
+                    if (resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager))
+                    {
+                        // Initialize the Docker build stage with package manager-specific setup commands.
+                        packageManager.InitializeDockerBuildStage?.Invoke(builderStage);
+
+                        var copiedAllSource = false;
+                        if (resource.TryGetLastAnnotation<JavaScriptInstallCommandAnnotation>(out var installCommand))
+                        {
+                            // Copy package files first for better layer caching
+                            if (packageManager.PackageFilesPatterns.Count > 0)
+                            {
+                                foreach (var packageFilePattern in packageManager.PackageFilesPatterns)
+                                {
+                                    builderStage.Copy(packageFilePattern.Source, packageFilePattern.Destination);
+                                }
+                            }
+                            else
+                            {
+                                builderStage.Copy(".", ".");
+                                copiedAllSource = true;
+                            }
+
+                            builderStage.AddInstallCommand(packageManager, installCommand);
+                        }
+
+                        if (!copiedAllSource)
+                        {
+                            builderStage.Copy(".", ".");
+                        }
+
+                        if (resource.TryGetLastAnnotation<JavaScriptBuildScriptAnnotation>(out var buildCommand))
+                        {
+                            var commandArgs = new List<string>() { packageManager.ExecutableName };
+                            if (!string.IsNullOrEmpty(packageManager.ScriptCommand))
+                            {
+                                commandArgs.Add(packageManager.ScriptCommand);
+                            }
+                            commandArgs.Add(buildCommand.ScriptName);
+                            commandArgs.AddRange(buildCommand.Args);
+
+                            builderStage.EmptyLine()
+                                .Run(string.Join(' ', commandArgs));
+                        }
+                    }
+                    else
+                    {
+                        // No package manager, just copy everything
+                        builderStage.Copy(".", ".");
+                    }
+
+                    var logger = dockerfileContext.Services.GetService<ILogger<JavaScriptAppResource>>();
+                    dockerfileContext.Builder.AddContainerFilesStages(dockerfileContext.Resource, logger);
+
+                    // When the package manager exposes production-only install args (e.g. bun's
+                    // `--production`), emit a dedicated `prod-deps` stage that installs only the
+                    // runtime dependencies. The runtime stage then overlays this stage's
+                    // `node_modules` on top of the build output so the final image does not ship
+                    // devDependencies. This mirrors the multi-stage pattern recommended at
+                    // https://bun.com/guides/ecosystem/docker.
+                    JavaScriptPackageManagerAnnotation? prodPackageManager = null;
+                    JavaScriptInstallCommandAnnotation? prodInstallCommand = null;
+                    var emitProdDepsStage =
+                        resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out prodPackageManager) &&
+                        resource.TryGetLastAnnotation<JavaScriptInstallCommandAnnotation>(out prodInstallCommand) &&
+                        !string.IsNullOrEmpty(prodInstallCommand.ProductionInstallArgs);
+
+                    if (emitProdDepsStage)
+                    {
+                        var pm = prodPackageManager!;
+                        var install = prodInstallCommand!;
+                        var prodDepsStage = dockerfileContext.Builder
+                            .From(baseBuildImage, "prod-deps")
+                            .EmptyLine()
+                            .WorkDir("/app");
+
+                        pm.InitializeDockerBuildStage?.Invoke(prodDepsStage);
+
+                        if (pm.PackageFilesPatterns.Count > 0)
+                        {
+                            foreach (var packageFilePattern in pm.PackageFilesPatterns)
+                            {
+                                prodDepsStage.Copy(packageFilePattern.Source, packageFilePattern.Destination);
+                            }
+                        }
+                        else
+                        {
+                            prodDepsStage.Copy("package.json", "./");
+                        }
+
+                        var prodInstallCmd = $"{pm.ExecutableName} {string.Join(' ', install.Args)} {install.ProductionInstallArgs}";
+                        if (!string.IsNullOrEmpty(pm.CacheMount))
+                        {
+                            prodDepsStage.Run($"--mount=type=cache,target={pm.CacheMount} {prodInstallCmd}");
+                        }
+                        else
+                        {
+                            prodDepsStage.Run(prodInstallCmd);
+                        }
+                    }
+
+                    var baseRuntimeImage = baseImageAnnotation?.RuntimeImage ?? DefaultBunImage;
+                    var runtimeBuilder = dockerfileContext.Builder
+                        .From(baseRuntimeImage, "runtime")
+                            .EmptyLine()
+                            .WorkDir("/app");
+
+                    if (emitProdDepsStage)
+                    {
+                        // Mirror the multi-stage pattern recommended at https://bun.com/guides/ecosystem/docker:
+                        // pull node_modules from the production-only install stage and the rest of the app
+                        // source from the build context. The build stage exists for validation/caching but
+                        // its filesystem is intentionally not copied here, because Docker's COPY --from=
+                        // merges directories and would let devDependencies survive the overlay.
+                        //
+                        // A matching .dockerignore is emitted next to the published Dockerfile via the
+                        // DockerfileBuildAnnotation.BuildContextIgnoreContent property (BuildKit's
+                        // <dockerfile-name>.dockerignore convention) so local build artifacts
+                        // (node_modules, .git, .aspire, etc.) do not leak into the image via COPY . . below.
+                        runtimeBuilder
+                            .CopyFrom("prod-deps", "/app/node_modules", "./node_modules")
+                            .Copy(".", ".");
+                    }
+                    else
+                    {
+                        runtimeBuilder.CopyFrom("build", "/app", "/app");
+                    }
+
+                    runtimeBuilder
+                        .AddContainerFiles(dockerfileContext.Resource, "/app", logger)
+                        .EmptyLine()
+                        .Env("NODE_ENV", "production")
+                        .EmptyLine()
+                        // The official oven/bun images provide a non-root `bun` user (UID 1000).
+                        // See https://hub.docker.com/r/oven/bun
+                        .User("bun")
+                        .EmptyLine()
+                        .Entrypoint([resource.Command, scriptPath]);
+                });
+            });
+
+        // Configure pipeline to ensure container file sources are built first
+        resourceBuilder.WithPipelineConfiguration(context =>
+        {
+            if (resourceBuilder.Resource.TryGetAnnotationsOfType<ContainerFilesDestinationAnnotation>(out var containerFilesAnnotations))
+            {
+                var buildSteps = context.GetSteps(resourceBuilder.Resource, WellKnownPipelineTags.BuildCompute);
+
+                foreach (var containerFile in containerFilesAnnotations)
+                {
+                    buildSteps.DependsOn(context.GetSteps(containerFile.Source, WellKnownPipelineTags.BuildCompute));
+                }
+            }
+        });
+
+        if (File.Exists(Path.Combine(appDirectory, "package.json")))
+        {
+            // Automatically add bun as the package manager if a package.json file exists
+            resourceBuilder.WithBun();
+        }
+
+        resourceBuilder.WithVSCodeDebugging(scriptPath, "bun");
+
+        if (builder.ExecutionContext.IsRunMode)
+        {
+            builder.OnBeforeStart((_, _) =>
+            {
+                // Set the command to the package manager executable if a WithRunScript was configured.
+                // For the default Bun package manager this is a no-op (executable is "bun"), but it correctly
+                // handles cases where a user opts into a different package manager (e.g., WithYarn).
+                if (resourceBuilder.Resource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out _) &&
+                    resourceBuilder.Resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager))
+                {
+                    resourceBuilder.WithCommand(packageManager.ExecutableName);
+                }
+
+                return Task.CompletedTask;
+            });
+        }
+
+        return resourceBuilder;
+    }
+
+    private static IResourceBuilder<TResource> WithBunDefaults<TResource>(this IResourceBuilder<TResource> builder) where TResource : JavaScriptAppResource =>
+        builder.WithOtlpExporter()
+            .WithRequiredCommandsFromPackageManager("bun")
+            // Bun honors NODE_ENV for module resolution and runtime mode the same way Node does.
+            // See https://bun.com/docs/runtime/env
+            .WithEnvironment("NODE_ENV", builder.ApplicationBuilder.Environment.IsDevelopment() ? "development" : "production")
+            .WithCertificateTrustConfiguration((ctx) =>
+            {
+                // Configure Bun's Node-compatible custom-CA hook for append-scope trust.
+                // See https://bun.com/blog/bun-v1.3-nodejs-compatibility#node-extra-ca-certs.
+                //
+                // Important: Bun 1.3.10 and 1.3.14 still fail to trust Aspire's injected
+                // self-signed localhost certificate for outgoing HTTPS requests with
+                // UNABLE_TO_VERIFY_LEAF_SIGNATURE, even when NODE_EXTRA_CA_CERTS is set.
+                // curl --cacert and Node.js with NODE_EXTRA_CA_CERTS accept the same cert.
+                // Track the Bun dependency in https://github.com/microsoft/aspire/issues/17455.
+                if (ctx.Scope == CertificateTrustScope.Append)
+                {
+                    ctx.EnvironmentVariables["NODE_EXTRA_CA_CERTS"] = ctx.CertificateBundlePath;
+                }
+                else
+                {
+                    // Bun reads NODE_OPTIONS for a subset of Node flags including --use-openssl-ca,
+                    // which switches TLS verification to the OS trust store (matching the Override
+                    // and System scopes here). See https://bun.com/docs/cli/run#node-options.
+                    // This does not work around the Aspire dev-certificate issue above unless that
+                    // certificate is trusted by the selected OS/OpenSSL store.
+                    if (ctx.EnvironmentVariables.TryGetValue("NODE_OPTIONS", out var existingOptionsObj))
+                    {
+                        ctx.EnvironmentVariables["NODE_OPTIONS"] = existingOptionsObj switch
+                        {
+                            string s when !string.IsNullOrEmpty(s) => $"{s} --use-openssl-ca",
+                            ReferenceExpression re => ReferenceExpression.Create($"{re} --use-openssl-ca"),
+                            _ => "--use-openssl-ca",
+                        };
+                    }
+                    else
+                    {
+                        ctx.EnvironmentVariables["NODE_OPTIONS"] = "--use-openssl-ca";
+                    }
+                }
+
+                return Task.CompletedTask;
+            });
+
     /// <summary>
     /// Adds a JavaScript application resource to the distributed application using the specified app directory and
     /// run script.
@@ -328,8 +784,8 @@ public static class JavaScriptHostingExtensions
     /// automatically when publishing. The method configures the resource with Node.js defaults and sets up npm
     /// integration.
     /// </remarks>
-    [AspireExport(Description = "Adds a JavaScript application resource")]
-    public static IResourceBuilder<JavaScriptAppResource> AddJavaScriptApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string runScriptName = "dev")
+    [AspireExport]
+    public static IResourceBuilder<JavaScriptAppResource> AddJavaScriptApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string runScriptName = DefaultJavaScriptRunScriptName)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
@@ -355,7 +811,7 @@ public static class JavaScriptHostingExtensions
     /// To add an API reverse-proxy, use the overload that accepts an <c>apiPath</c> and <c>apiTarget</c>.
     /// </para>
     /// </remarks>
-    [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Use the polyglot-compatible overload instead.")]
     public static IResourceBuilder<TResource> PublishAsStaticWebsite<TResource>(
         this IResourceBuilder<TResource> builder,
@@ -390,7 +846,7 @@ public static class JavaScriptHostingExtensions
     /// work correctly across all deployment targets (Docker Compose, Azure App Service, etc.).
     /// </para>
     /// </remarks>
-    [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Use the polyglot-compatible overload instead.")]
     public static IResourceBuilder<TResource> PublishAsStaticWebsite<TResource>(
         this IResourceBuilder<TResource> builder,
@@ -405,12 +861,12 @@ public static class JavaScriptHostingExtensions
         return PublishAsStaticWebsiteCore(builder, apiPath, apiTarget, options);
     }
 
-    /// <summary>
-    /// Polyglot-compatible overload. All parameters are optional so the TS codegen wraps them
-    /// in a single options object rather than positional args.
-    /// </summary>
 #pragma warning disable ASPIREEXPORT009 // Polyglot entry point — collision is intentional
-    [AspireExport("publishAsStaticWebsite", Description = "Publishes the JavaScript application as a standalone static website using YARP.")]
+    /// <summary>
+    /// Publishes the JavaScript application as a standalone static website using YARP.
+    /// </summary>
+    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport("publishAsStaticWebsite")]
     internal static IResourceBuilder<TResource> PublishAsStaticWebsitePolyglot<TResource>(
 #pragma warning restore ASPIREEXPORT009
         this IResourceBuilder<TResource> builder,
@@ -430,6 +886,7 @@ public static class JavaScriptHostingExtensions
         return PublishAsStaticWebsiteCore(builder, apiPath, apiTarget, options);
     }
 
+    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     private static IResourceBuilder<TResource> PublishAsStaticWebsiteCore<TResource>(
         IResourceBuilder<TResource> builder,
         string? apiPath,
@@ -542,7 +999,8 @@ public static class JavaScriptHostingExtensions
     /// the built output directory is copied into the runtime container, not the full application source.
     /// </para>
     /// </remarks>
-    [AspireExport(Description = "Publishes the JavaScript application as a standalone Node.js server that runs a built artifact directly.")]
+    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport]
     public static IResourceBuilder<TResource> PublishAsNodeServer<TResource>(this IResourceBuilder<TResource> builder, string entryPoint, string outputPath = ".")
         where TResource : JavaScriptAppResource
     {
@@ -577,13 +1035,14 @@ public static class JavaScriptHostingExtensions
     }
 
     /// <summary>
-    /// Configures the JavaScript application to publish as a Node.js server that uses a package manager script at runtime.
+    /// Configures the JavaScript application to publish as a Node.js server that uses a <c>package.json</c> script at runtime.
     /// </summary>
     /// <typeparam name="TResource">The JavaScript resource type.</typeparam>
     /// <param name="builder">The JavaScript resource builder.</param>
-    /// <param name="startScriptName">
-    /// The name of the package manager script to run in the published container.
-    /// For example, <c>start</c> runs <c>npm run start</c>.
+    /// <param name="scriptName">
+    /// The name of the <c>package.json</c> script to run in the published container.
+    /// For example, <c>start</c> invokes the configured package manager's run command for the <c>start</c> script,
+    /// such as <c>npm run start</c>, <c>pnpm run start</c>, <c>yarn run start</c>, or <c>bun run start</c>.
     /// </param>
     /// <param name="runScriptArguments">
     /// Optional arguments appended after the script name at runtime,
@@ -605,21 +1064,22 @@ public static class JavaScriptHostingExtensions
     /// use <see cref="PublishAsNodeServer{TResource}"/> instead for a smaller runtime image.
     /// </para>
     /// </remarks>
-    [AspireExport(Description = "Publishes the JavaScript application as a Node.js server that uses a package manager script at runtime.")]
-    public static IResourceBuilder<TResource> PublishAsNpmScript<TResource>(this IResourceBuilder<TResource> builder, string startScriptName = "start", string? runScriptArguments = null)
+    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport]
+    public static IResourceBuilder<TResource> PublishAsPackageScript<TResource>(this IResourceBuilder<TResource> builder, string scriptName = "start", string? runScriptArguments = null)
         where TResource : JavaScriptAppResource
     {
         ArgumentNullException.ThrowIfNull(builder);
-        ArgumentException.ThrowIfNullOrEmpty(startScriptName);
+        ArgumentException.ThrowIfNullOrEmpty(scriptName);
 
         if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
         {
             return builder;
         }
 
-        var annotation = new JavaScriptPublishModeAnnotation(JavaScriptPublishMode.NpmScript)
+        var annotation = new JavaScriptPublishModeAnnotation(JavaScriptPublishMode.PackageScript)
         {
-            StartScriptName = startScriptName,
+            ScriptName = scriptName,
             RunScriptArguments = runScriptArguments
         };
 
@@ -649,6 +1109,22 @@ public static class JavaScriptHostingExtensions
         {
             builderStage.Run(installCmd);
         }
+    }
+
+    private static string GetPackageScriptRuntimeImage(
+        string appDirectory,
+        IServiceProvider services,
+        DockerfileBaseImageAnnotation? baseImageAnnotation,
+        JavaScriptPackageManagerAnnotation packageManager,
+        string buildImage)
+    {
+        if (!string.IsNullOrEmpty(baseImageAnnotation?.RuntimeImage))
+        {
+            return baseImageAnnotation.RuntimeImage;
+        }
+
+        return packageManager.ResolvePackageScriptRuntimeImage?.Invoke(buildImage)
+            ?? GetDefaultBaseImage(appDirectory, "alpine", services);
     }
 
     private static IResourceBuilder<TResource> CreateDefaultJavaScriptAppBuilder<TResource>(
@@ -775,9 +1251,9 @@ public static class JavaScriptHostingExtensions
                                     .Entrypoint(["node", NormalizeRelativePath(publishMode.EntryPoint!)]);
                                 break;
                             }
-                            case JavaScriptPublishMode.NpmScript:
+                            case JavaScriptPublishMode.PackageScript:
                             {
-                                var runtimeImage = baseImageAnnotation?.RuntimeImage ?? GetDefaultBaseImage(appDirectory, "alpine", dockerfileContext.Services);
+                                var runtimeImage = GetPackageScriptRuntimeImage(appDirectory, dockerfileContext.Services, baseImageAnnotation, packageManager, baseImage);
 
                                 // Production dependencies stage for optimized image
                                 var prodDepsStage = dockerfileContext.Builder
@@ -804,7 +1280,7 @@ public static class JavaScriptHostingExtensions
                                 var installAnnotation = c.Resource.TryGetLastAnnotation<JavaScriptInstallCommandAnnotation>(out var installCmd) ? installCmd : null;
                                 if (string.IsNullOrEmpty(installAnnotation?.ProductionInstallArgs))
                                 {
-                                    throw new InvalidOperationException($"Package manager '{packageManager.ExecutableName}' does not have ProductionInstallArgs configured, which is required for PublishAsNpmScript.");
+                                    throw new InvalidOperationException($"Package manager '{packageManager.ExecutableName}' does not have ProductionInstallArgs configured, which is required for PublishAsPackageScript.");
                                 }
 
                                 var prodInstallCmd = $"{packageManager.ExecutableName} {string.Join(' ', installAnnotation.Args)} {installAnnotation.ProductionInstallArgs}";
@@ -819,14 +1295,18 @@ public static class JavaScriptHostingExtensions
 
                                 // Runtime stage: copy build output then overlay prod deps
                                 var runCommand = string.IsNullOrWhiteSpace(publishMode.RunScriptArguments)
-                                    ? $"{packageManager.ExecutableName} {packageManager.ScriptCommand ?? "run"} {publishMode.StartScriptName}"
-                                    : $"{packageManager.ExecutableName} {packageManager.ScriptCommand ?? "run"} {publishMode.StartScriptName} {publishMode.RunScriptArguments}";
+                                    ? $"{packageManager.ExecutableName} {packageManager.ScriptCommand ?? "run"} {publishMode.ScriptName}"
+                                    : $"{packageManager.ExecutableName} {packageManager.ScriptCommand ?? "run"} {publishMode.ScriptName} {publishMode.RunScriptArguments}";
 
-                                dockerfileContext.Builder
+                                var runtimeStage = dockerfileContext.Builder
                                     .From(runtimeImage, "runtime")
                                     .WorkDir("/app")
                                     .CopyFrom("build", "/app", "/app")
-                                    .CopyFrom("prod-deps", "/app/node_modules", "./node_modules")
+                                    .CopyFrom("prod-deps", "/app/node_modules", "./node_modules");
+
+                                packageManager.InitializeDockerRuntimeStage?.Invoke(runtimeStage);
+
+                                runtimeStage
                                     .Env("NODE_ENV", "production")
                                     .Entrypoint(["sh", "-c", $"exec {runCommand}"]);
                                 break;
@@ -869,6 +1349,33 @@ public static class JavaScriptHostingExtensions
             .WithBuildScript("build")
             .WithRunScript(runScriptName);
 
+        if (builder.ExecutionContext.IsPublishMode &&
+            builder.TryCreateResourceBuilder<ContainerResource>(resource.Name, out var containerBuilder))
+        {
+            var validationStepName = $"validate-javascript-dockerfile-run-script-{resource.Name}";
+
+            Task WriteValidatedContainerAsync(ManifestPublishingContext context)
+            {
+                ValidateExistingDockerfileRunScript(resource, containerBuilder.Resource);
+                return context.WriteContainerAsync(containerBuilder.Resource);
+            }
+
+            resourceBuilder.WithManifestPublishingCallback(WriteValidatedContainerAsync);
+            containerBuilder.WithManifestPublishingCallback(WriteValidatedContainerAsync);
+            containerBuilder.WithAnnotation(new PipelineStepAnnotation(_ => new PipelineStep
+            {
+                Name = validationStepName,
+                Description = $"Validates that JavaScript app '{resource.Name}' does not publish an ignored run script with an existing Dockerfile.",
+                RequiredBySteps = [WellKnownPipelineSteps.Build, WellKnownPipelineSteps.Publish],
+                Resource = containerBuilder.Resource,
+                Action = _ =>
+                {
+                    ValidateExistingDockerfileRunScript(resource, containerBuilder.Resource);
+                    return Task.CompletedTask;
+                }
+            }));
+        }
+
         resourceBuilder.WithVSCodeDebugging();
 
         // ensure the package manager command is set before starting the resource
@@ -888,6 +1395,45 @@ public static class JavaScriptHostingExtensions
         return resourceBuilder;
     }
 
+    private static void ValidateExistingDockerfileRunScript(JavaScriptAppResource resource, ContainerResource containerResource)
+    {
+        if (containerResource.Entrypoint is not null ||
+            !containerResource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation) ||
+            dockerfileBuildAnnotation.DockerfileFactory is not null ||
+            !containerResource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out var runScript))
+        {
+            return;
+        }
+
+        // The user's effective run-script intent is captured by the last annotation: AddJavaScriptApp
+        // always adds one with the supplied runScriptName, and any subsequent WithRunScript call
+        // appends another. Comparing the last annotation against the default avoids false positives
+        // when the user re-states the default explicitly (e.g. .WithRunScript("dev")).
+        var hasExplicitRunScript =
+            !string.Equals(runScript.ScriptName, DefaultJavaScriptRunScriptName, StringComparison.Ordinal) ||
+            runScript.Args is { Length: > 0 };
+
+        if (!hasExplicitRunScript)
+        {
+            return;
+        }
+
+        // Include the args in the message when they are the trigger, so the user can see why
+        // a default-named script (e.g. "dev") still produced a conflict.
+        var argsClause = runScript.Args is { Length: > 0 }
+            ? $" with args [{string.Join(", ", runScript.Args)}]"
+            : string.Empty;
+
+        // Existing Dockerfiles are user-authored, so Aspire cannot safely assume that replacing
+        // their entrypoint with a package-manager script will work for the image shape.
+        // If the user provides an explicit container entrypoint above, honor it; otherwise fail
+        // instead of silently publishing an image that ignores the requested run script.
+        throw new DistributedApplicationException(
+            $"JavaScript app resource '{resource.Name}' is configured to run script '{runScript.ScriptName}'{argsClause}, but publish is using the existing Dockerfile '{dockerfileBuildAnnotation.DockerfilePath}'. " +
+            "An existing Dockerfile entrypoint cannot be changed automatically from runScriptName or WithRunScript. " +
+            "Remove or rename the Dockerfile so Aspire can generate one, or call PublishAsDockerFile(...) and set the container entrypoint explicitly.");
+    }
+
     /// <summary>
     /// Adds a Vite app to the distributed application builder.
     /// </summary>
@@ -896,6 +1442,7 @@ public static class JavaScriptHostingExtensions
     /// <param name="appDirectory">The path to the directory containing the Vite app.</param>
     /// <param name="runScriptName">The name of the script that runs the Vite app. Defaults to "dev".</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <example>
     /// The following example creates a Vite app using npm as the package manager.
@@ -908,7 +1455,7 @@ public static class JavaScriptHostingExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Adds a Vite application resource")]
+    [AspireExport]
     public static IResourceBuilder<ViteAppResource> AddViteApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string runScriptName = "dev")
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -916,6 +1463,7 @@ public static class JavaScriptHostingExtensions
         ArgumentException.ThrowIfNullOrEmpty(appDirectory);
 
         appDirectory = PathNormalizer.NormalizePathForCurrentPlatform(Path.Combine(builder.AppHostDirectory, appDirectory));
+        var appHostId = builder.Configuration["AppHost:Sha256"]![..10].ToLowerInvariant();
         var resource = new ViteAppResource(name, "npm", appDirectory);
 
         var resourceBuilder = builder.CreateDefaultJavaScriptAppBuilder(
@@ -961,7 +1509,7 @@ public static class JavaScriptHostingExtensions
                 {
                     configTarget = ctx.Arguments[cfgIndex + 1] switch
                     {
-                        string s when !string.IsNullOrEmpty(s) && !s.StartsWith("--") => s,
+                        string s when !string.IsNullOrEmpty(s) && !s.StartsWith("--", StringComparison.Ordinal) => s,
                         ReferenceExpression re => await re.GetValueAsync(ctx.CancellationToken).ConfigureAwait(false),
                         _ => null,
                     };
@@ -1002,18 +1550,39 @@ public static class JavaScriptHostingExtensions
                     {
                         // Determine the absolute path to the original config file
                         var absoluteConfigPath = Path.GetFullPath(configTarget, appDirectory);
-                        // Determine the relative path from the Aspire vite config to the original config file
-                        var relativeConfigPath = Path.GetRelativePath(Path.Join(appDirectory, "node_modules", ".bin"), absoluteConfigPath);
 
-                        // If we are expecting to run the vite app with HTTPS termination, generate an Aspire specific Vite config file that can mutate the user's original config
+                        // Find the nearest node_modules directory by walking up from the app directory.
+                        // This handles package managers that hoist dependencies (e.g. yarn workspaces)
+                        // where node_modules lives at the repo root rather than in the app directory.
+                        // Writing inside node_modules ensures Node.js module resolution can find
+                        // bare imports like 'vite' in the generated wrapper config.
+                        var nodeModulesDir = FindNearestNodeModules(appDirectory);
+                        if (nodeModulesDir is null)
+                        {
+                            var resourceLoggerService = ctx.ExecutionContext.Services.GetRequiredService<ResourceLoggerService>();
+                            var resourceLogger = resourceLoggerService.GetLogger(resource);
+                            resourceLogger.LogWarning("Could not find a node_modules directory in or above '{AppDirectory}' for resource '{ResourceName}'. Automatic HTTPS configuration won't be available. Ensure packages are installed before starting the app.", appDirectory, resource.Name);
+                            ctx.Arguments.Add("--config");
+                            ctx.Arguments.Add(configTarget);
+                            return;
+                        }
+
+                        // Use the same per-AppHost discriminator as persistent resource names so concurrent
+                        // AppHosts sharing a hoisted node_modules directory cannot overwrite each other's wrappers.
+                        var aspireConfigDir = Path.Join(nodeModulesDir, ".aspire", appHostId, resource.Name);
+                        Directory.CreateDirectory(aspireConfigDir);
+
+                        // Compute the relative path from the wrapper location to the original config
+                        var relativeConfigPath = Path.GetRelativePath(aspireConfigDir, absoluteConfigPath).Replace("\\", "/");
+
+                        // Generate an Aspire specific Vite config file that wraps the user's original config with HTTPS support
                         var aspireConfig = AspireViteConfig
-                            .Replace(AspireViteRelativeConfigToken, relativeConfigPath.Replace("\\", "/"), StringComparison.Ordinal)
+                            .Replace(AspireViteConfigPathToken, relativeConfigPath, StringComparison.Ordinal)
                             .Replace(AspireViteAbsoluteConfigToken, absoluteConfigPath.Replace("\\", "\\\\"), StringComparison.Ordinal);
-                        var aspireConfigPath = Path.Join(appDirectory, "node_modules", ".bin", $"aspire.{Path.GetFileName(configTarget)}");
+                        var aspireConfigPath = Path.Join(aspireConfigDir, $"aspire.{Path.GetFileName(configTarget)}");
                         File.WriteAllText(aspireConfigPath, aspireConfig);
 
-                        // Override the path to the Vite config file to use the Aspire generated one. If we made it here, we
-                        // know there isn't an existing --config argument present.
+                        // Override the path to the Vite config file to use the Aspire generated one
                         ctx.Arguments.Add("--config");
                         ctx.Arguments.Add(aspireConfigPath);
 
@@ -1025,7 +1594,7 @@ public static class JavaScriptHostingExtensions
                     }
                     catch (Exception ex)
                     {
-                        var resourceLoggerService = ctx.ExecutionContext.ServiceProvider.GetRequiredService<ResourceLoggerService>();
+                        var resourceLoggerService = ctx.ExecutionContext.Services.GetRequiredService<ResourceLoggerService>();
                         var resourceLogger = resourceLoggerService.GetLogger(resource);
 
                         resourceLogger.LogWarning(ex, "Failed to generate Aspire Vite HTTPS config wrapper for resource '{ResourceName}'. Falling back to existing Vite config without Aspire modifications. Automatic HTTPS configuration won't be available", resource.Name);
@@ -1043,7 +1612,8 @@ public static class JavaScriptHostingExtensions
         if (builder.ExecutionContext.IsRunMode)
         {
             // Vite only supports a single endpoint, so we have to modify the existing endpoint to use HTTPS instead of
-            // adding a new one.
+            // adding a new one. The user explicitly opted into HTTPS via WithHttpsDeveloperCertificate(), so the scheme
+            // change is unconditional here.
             resourceBuilder.SubscribeHttpsEndpointsUpdate(ctx =>
             {
                 resourceBuilder.WithEndpoint("http", ep => ep.UriScheme = "https");
@@ -1061,6 +1631,7 @@ public static class JavaScriptHostingExtensions
     /// <param name="appDirectory">The path to the directory containing the Next.js app.</param>
     /// <param name="runScriptName">The name of the script that runs the Next.js dev server. Defaults to "dev".</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This method configures the Next.js application for both local development and publishing.
@@ -1084,7 +1655,8 @@ public static class JavaScriptHostingExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Adds a Next.js application resource")]
+    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport]
     public static IResourceBuilder<NextJsAppResource> AddNextJsApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string runScriptName = "dev")
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -1170,7 +1742,8 @@ public static class JavaScriptHostingExtensions
     /// to suppress those checks when the configuration is set dynamically or via an external
     /// mechanism that cannot be detected by static file inspection.
     /// </remarks>
-    [AspireExport(Description = "Disables deploy-time build validation checks for the Next.js application.")]
+    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport]
     public static IResourceBuilder<NextJsAppResource> DisableBuildValidation(this IResourceBuilder<NextJsAppResource> builder)
     {
         return builder.WithAnnotation<SuppressPublishValidationAnnotation>(new());
@@ -1193,7 +1766,7 @@ public static class JavaScriptHostingExtensions
     ///     .WithViteConfig("./vite.production.config.js");
     /// </code>
     /// </example>
-    [AspireExport(Description = "Configures a custom Vite configuration file")]
+    [AspireExport]
     public static IResourceBuilder<ViteAppResource> WithViteConfig(this IResourceBuilder<ViteAppResource> builder, string configPath)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -1212,7 +1785,8 @@ public static class JavaScriptHostingExtensions
     /// <param name="installCommand">The install command itself passed to npm to install dependencies.</param>
     /// <param name="installArgs">The command-line arguments passed to npm to install dependencies.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Configures npm as the package manager")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<TResource> WithNpm<TResource>(this IResourceBuilder<TResource> resource, bool install = true, string? installCommand = null, string[]? installArgs = null) where TResource : JavaScriptAppResource
     {
         ArgumentNullException.ThrowIfNull(resource);
@@ -1227,8 +1801,7 @@ public static class JavaScriptHostingExtensions
             .WithAnnotation(new JavaScriptInstallCommandAnnotation([installCommand, .. installArgs ?? []])
             {
                 ProductionInstallArgs = "--omit=dev"
-            })
-            .WithRequiredCommand("npm", "https://docs.npmjs.com/downloading-and-installing-node-js-and-npm");
+            });
 
         AddInstaller(resource, install);
         return resource;
@@ -1241,12 +1814,15 @@ public static class JavaScriptHostingExtensions
     /// <param name="install">When true (default), automatically installs packages before the application starts. When false, only sets the package manager annotation without creating an installer resource.</param>
     /// <param name="installArgs">Additional command-line arguments passed to "bun install". When null, defaults are applied based on publish mode and lockfile presence.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// Bun forwards script arguments without requiring the <c>--</c> command separator, so this method configures the resource to omit it.
     /// When publishing and a bun lockfile (<c>bun.lock</c> or <c>bun.lockb</c>) is present, <c>--frozen-lockfile</c> is used by default.
     /// Publishing to a container requires Bun to be present in the build image. This method configures a Bun build image when one is not already specified.
+    /// <see cref="PublishAsPackageScript{TResource}"/> also uses the Bun image for the runtime stage unless a custom runtime image is configured.
     /// To use a specific Bun version, configure a custom build image (for example, <c>oven/bun:&lt;tag&gt;</c>) using <see cref="ContainerResourceBuilderExtensions.WithDockerfileBaseImage{T}(IResourceBuilder{T}, string?, string?)"/>.
     /// </remarks>
+    /// <ats-remarks />
     /// <example>
     /// Run a Vite app using Bun as the package manager:
     /// <code lang="csharp">
@@ -1259,7 +1835,7 @@ public static class JavaScriptHostingExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    [AspireExport(Description = "Configures Bun as the package manager")]
+    [AspireExport]
     public static IResourceBuilder<TResource> WithBun<TResource>(this IResourceBuilder<TResource> resource, bool install = true, string[]? installArgs = null) where TResource : JavaScriptAppResource
     {
         ArgumentNullException.ThrowIfNull(resource);
@@ -1286,12 +1862,12 @@ public static class JavaScriptHostingExtensions
                 PackageFilesPatterns = { new CopyFilePattern(packageFilesSourcePattern, "./") },
                 // bun supports passing script flags without the `--` separator.
                 CommandSeparator = null,
+                ResolvePackageScriptRuntimeImage = buildImage => buildImage,
             })
             .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs])
             {
                 ProductionInstallArgs = "--production"
-            })
-            .WithRequiredCommand("bun", "https://bun.sh/docs/installation");
+            });
 
         if (!resource.Resource.TryGetLastAnnotation<DockerfileBaseImageAnnotation>(out _))
         {
@@ -1326,7 +1902,8 @@ public static class JavaScriptHostingExtensions
     /// <param name="install">When true (default), automatically installs packages before the application starts. When false, only sets the package manager annotation without creating an installer resource.</param>
     /// <param name="installArgs">The command-line arguments passed to "yarn install".</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Configures yarn as the package manager")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<TResource> WithYarn<TResource>(this IResourceBuilder<TResource> resource, bool install = true, string[]? installArgs = null) where TResource : JavaScriptAppResource
     {
         ArgumentNullException.ThrowIfNull(resource);
@@ -1368,8 +1945,7 @@ public static class JavaScriptHostingExtensions
             .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs])
             {
                 ProductionInstallArgs = "--production"
-            })
-            .WithRequiredCommand("yarn", "https://yarnpkg.com/getting-started/install");
+            });
 
         AddInstaller(resource, install);
         return resource;
@@ -1404,13 +1980,15 @@ public static class JavaScriptHostingExtensions
     /// <param name="install">When true (default), automatically installs packages before the application starts. When false, only sets the package manager annotation without creating an installer resource.</param>
     /// <param name="installArgs">The command-line arguments passed to "pnpm install".</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Configures pnpm as the package manager")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<TResource> WithPnpm<TResource>(this IResourceBuilder<TResource> resource, bool install = true, string[]? installArgs = null) where TResource : JavaScriptAppResource
     {
         ArgumentNullException.ThrowIfNull(resource);
 
         var workingDirectory = resource.Resource.WorkingDirectory;
         var hasPnpmLock = File.Exists(Path.Combine(workingDirectory, "pnpm-lock.yaml"));
+        var hasPnpmWorkspace = File.Exists(Path.Combine(workingDirectory, "pnpm-workspace.yaml"));
 
         installArgs ??= GetDefaultPnpmInstallArgs(resource, hasPnpmLock);
 
@@ -1418,6 +1996,11 @@ public static class JavaScriptHostingExtensions
         if (hasPnpmLock)
         {
             packageFilesSourcePattern += " pnpm-lock.yaml";
+        }
+
+        if (hasPnpmWorkspace)
+        {
+            packageFilesSourcePattern += " pnpm-workspace.yaml";
         }
 
         resource
@@ -1428,12 +2011,17 @@ public static class JavaScriptHostingExtensions
                 CommandSeparator = null,
                 // pnpm is not included in the Node.js Docker image by default, so we need to enable it via corepack
                 InitializeDockerBuildStage = stage => stage.Run("corepack enable pnpm"),
+                InitializeDockerRuntimeStage = stage =>
+                {
+                    // Corepack's shim is not enough by itself: without invoking pnpm during the image build,
+                    // the first container start can try to download pnpm before running the app.
+                    stage.Run("corepack enable pnpm && pnpm --version");
+                },
             })
             .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs])
             {
                 ProductionInstallArgs = "--prod"
-            })
-            .WithRequiredCommand("pnpm", "https://pnpm.io/installation");
+            });
 
         AddInstaller(resource, install);
         return resource;
@@ -1456,7 +2044,7 @@ public static class JavaScriptHostingExtensions
     /// Use this method to specify custom build scripts for JavaScript application resources during
     /// deployment.
     /// </remarks>
-    [AspireExport(Description = "Specifies an npm script to run before starting the application")]
+    [AspireExport]
     public static IResourceBuilder<TResource> WithBuildScript<TResource>(this IResourceBuilder<TResource> resource, string scriptName, string[]? args = null) where TResource : JavaScriptAppResource
     {
         return resource.WithAnnotation(new JavaScriptBuildScriptAnnotation(scriptName, args));
@@ -1475,15 +2063,15 @@ public static class JavaScriptHostingExtensions
     /// Use this method to specify a custom script and its arguments that should be executed when the resource is executed
     /// in RunMode.
     /// </remarks>
-    [AspireExport(Description = "Specifies an npm script to run during development")]
+    [AspireExport]
     public static IResourceBuilder<TResource> WithRunScript<TResource>(this IResourceBuilder<TResource> resource, string scriptName, string[]? args = null) where TResource : JavaScriptAppResource
     {
         return resource.WithAnnotation(new JavaScriptRunScriptAnnotation(scriptName, args));
     }
 
     [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    internal static IResourceBuilder<T> WithVSCodeDebugging<T>(this IResourceBuilder<T> builder, string scriptPath)
-        where T : NodeAppResource
+    internal static IResourceBuilder<T> WithVSCodeDebugging<T>(this IResourceBuilder<T> builder, string scriptPath, string launchConfigType)
+        where T : JavaScriptAppResource
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(scriptPath);
@@ -1497,17 +2085,18 @@ public static class JavaScriptHostingExtensions
                 // Compute at run time so the launch config reflects the final annotation state
                 var hasRunScript = resource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out _);
                 var hasPackageManager = resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var pmAnnotation);
-                var runtimeExecutable = hasRunScript && hasPackageManager ? pmAnnotation!.ExecutableName : "node";
+                var isPackageManagerScript = hasRunScript && hasPackageManager;
 
-                return new NodeLaunchConfiguration
+                return new JavaScriptLaunchConfiguration(launchConfigType)
                 {
                     ScriptPath = Path.GetFullPath(scriptPath, workingDirectory),
                     Mode = mode,
-                    RuntimeExecutable = runtimeExecutable,
+                    RuntimeExecutable = isPackageManagerScript ? pmAnnotation!.ExecutableName : launchConfigType,
+                    LaunchMethod = isPackageManagerScript ? JavaScriptLaunchConfiguration.LaunchMethodPackageManager : JavaScriptLaunchConfiguration.LaunchMethodDirect,
                     WorkingDirectory = workingDirectory
                 };
             },
-            "node");
+            launchConfigType);
     }
 
     [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -1519,21 +2108,28 @@ public static class JavaScriptHostingExtensions
         var resource = builder.Resource;
         var workingDirectory = Path.GetFullPath(resource.WorkingDirectory);
 
+        if (resource is BunAppResource)
+        {
+            throw new InvalidOperationException(
+                $"Bun apps cannot be debugged through the Node dev-server debug path. '{resource.Name}' is a {nameof(BunAppResource)}; use {nameof(AddBunApp)}, which wires its own Bun debug support.");
+        }
+
         return builder.WithDebugSupport(
             mode =>
             {
-                // Compute at run time so the launch config reflects the final annotation state
+                // Fall back to "npm" (the default for these frameworks) if no package manager annotation is present.
                 var packageManager = "npm";
                 if (resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var pmAnnotation))
                 {
                     packageManager = pmAnnotation.ExecutableName;
                 }
 
-                return new NodeLaunchConfiguration
+                return new JavaScriptLaunchConfiguration("node")
                 {
                     ScriptPath = string.Empty,
                     Mode = mode,
                     RuntimeExecutable = packageManager,
+                    LaunchMethod = JavaScriptLaunchConfiguration.LaunchMethodPackageManager,
                     WorkingDirectory = workingDirectory
                 };
             },
@@ -1548,6 +2144,7 @@ public static class JavaScriptHostingExtensions
     /// <param name="builder">The resource builder for the JavaScript application.</param>
     /// <param name="browser">The browser to use for debugging. Defaults to <c>"msedge"</c>. Supported values include <c>"msedge"</c> and <c>"chrome"</c>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining additional configuration.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method creates a child <see cref="BrowserDebuggerResource"/> that waits for the parent JavaScript
     /// application to start, then launches a browser debug session targeting the parent's HTTP or HTTPS endpoint.
@@ -1566,7 +2163,7 @@ public static class JavaScriptHostingExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport(Description = "Configures a browser debugger for the JavaScript application")]
+    [AspireExport]
     public static IResourceBuilder<T> WithBrowserDebugger<T>(
         this IResourceBuilder<T> builder,
         string browser = "msedge")
@@ -1798,6 +2395,31 @@ public static class JavaScriptHostingExtensions
                 throw new ArgumentException($"The apiPath must contain only URL-safe path characters (alphanumeric, '/', '-', '_'). Invalid character: '{c}'", nameof(apiPath));
             }
         }
+    }
+
+    /// <summary>
+    /// Walks up from <paramref name="startDirectory"/> to find the nearest <c>node_modules</c> directory.
+    /// </summary>
+    private static string? FindNearestNodeModules(string startDirectory)
+    {
+        var current = Path.GetFullPath(startDirectory);
+        while (current is not null)
+        {
+            var candidate = Path.Join(current, "node_modules");
+            if (Directory.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            var parent = Path.GetDirectoryName(current);
+            if (parent == current)
+            {
+                break;
+            }
+            current = parent;
+        }
+
+        return null;
     }
 
     private static string NormalizeRelativePath(string path)

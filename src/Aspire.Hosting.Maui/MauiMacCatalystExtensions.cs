@@ -18,7 +18,7 @@ public static class MauiMacCatalystExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// This method creates a new Mac Catalyst platform resource that will run the MAUI application
-    /// targeting the Mac Catalyst platform using <c>dotnet run</c>. The resource does not auto-start 
+    /// targeting the Mac Catalyst platform using <c>dotnet run</c>. The resource does not auto-start
     /// and must be explicitly started from the dashboard by clicking the start button.
     /// <para>
     /// The resource name will default to "{projectName}-maccatalyst".
@@ -31,10 +31,10 @@ public static class MauiMacCatalystExtensions
     /// Add a Mac Catalyst device to a MAUI project:
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
-    /// 
+    ///
     /// var maui = builder.AddMauiProject("mauiapp", "../MyMauiApp/MyMauiApp.csproj");
     /// var macCatalystDevice = maui.AddMacCatalystDevice();
-    /// 
+    ///
     /// builder.Build().Run();
     /// </code>
     /// </example>
@@ -54,9 +54,10 @@ public static class MauiMacCatalystExtensions
     /// <param name="builder">The MAUI project resource builder.</param>
     /// <param name="name">The name of the Mac Catalyst device resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method creates a new Mac Catalyst platform resource that will run the MAUI application
-    /// targeting the Mac Catalyst platform using <c>dotnet run</c>. The resource does not auto-start 
+    /// targeting the Mac Catalyst platform using <c>dotnet run</c>. The resource does not auto-start
     /// and must be explicitly started from the dashboard by clicking the start button.
     /// <para>
     /// You can add multiple Mac Catalyst device resources to a MAUI project by calling this method multiple times with different names.
@@ -66,15 +67,15 @@ public static class MauiMacCatalystExtensions
     /// Add multiple Mac Catalyst devices to a MAUI project:
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
-    /// 
+    ///
     /// var maui = builder.AddMauiProject("mauiapp", "../MyMauiApp/MyMauiApp.csproj");
     /// var macCatalystDevice1 = maui.AddMacCatalystDevice("maccatalyst-device-1");
     /// var macCatalystDevice2 = maui.AddMacCatalystDevice("maccatalyst-device-2");
-    /// 
+    ///
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds a Mac Catalyst platform resource for a .NET MAUI project.")]
+    [AspireExport]
     public static IResourceBuilder<MauiMacCatalystPlatformResource> AddMacCatalystDevice(
         this IResourceBuilder<MauiProjectResource> builder,
         [ResourceName] string name)
@@ -96,7 +97,7 @@ public static class MauiMacCatalystExtensions
             });
 
         // Configure the platform resource with common settings
-        MauiPlatformHelper.ConfigurePlatformResource(
+        var targetFramework = MauiPlatformHelper.ConfigurePlatformResource(
             resourceBuilder,
             projectPath,
             "maccatalyst",
@@ -105,6 +106,16 @@ public static class MauiMacCatalystExtensions
             OperatingSystem.IsMacOS,
             "Desktop",
             "-p:OpenArguments=-W");
+
+        resourceBuilder.WithMauiIdeLaunchConfiguration(
+            projectPath,
+            targetFramework,
+            "maccatalyst",
+            "device",
+            msBuildProperties: new Dictionary<string, string>
+            {
+                ["OpenArguments"] = "-W"
+            });
 
         return resourceBuilder;
     }

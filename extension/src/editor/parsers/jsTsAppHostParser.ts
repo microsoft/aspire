@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
+import * as ts from 'typescript';
 import { AppHostResourceParser, ParsedResource, registerParser } from './AppHostResourceParser';
-import { findStatementStartLine } from './parserUtils';
 
 /**
  * JavaScript / TypeScript AppHost resource parser.
@@ -8,50 +8,169 @@ import { findStatementStartLine } from './parserUtils';
  */
 class JsTsAppHostParser implements AppHostResourceParser {
     getSupportedExtensions(): string[] {
-        return ['.ts', '.js'];
+        return ['.ts', '.mts', '.cts', '.js', '.mjs', '.cjs'];
     }
 
-    isAppHostFile(document: vscode.TextDocument): boolean {
-        const text = document.getText();
-        // Match @aspire package imports, local aspire module imports (e.g. ./.modules/aspire.js),
-        // or the createBuilder() entry point from the Aspire TS SDK.
-        return /(?:from\s+['"](?:@aspire|[^'"]*aspire[^'"]*)|require\s*\(\s*['"](?:@aspire|[^'"]*aspire[^'"]*))/.test(text)
-            || /\bcreateBuilder\s*\(/.test(text);
+    async isAppHostFile(document: vscode.TextDocument): Promise<boolean> {
+        const sourceFile = createSourceFile(document);
+        let isAppHost = false;
+
+        visit(sourceFile, node => {
+            if (ts.isImportDeclaration(node)
+                && ts.isStringLiteral(node.moduleSpecifier)
+                && isAspireModuleSpecifier(node.moduleSpecifier.text)) {
+                isAppHost = true;
+                return false;
+            }
+
+            if (ts.isCallExpression(node)
+                && (isAspireRequireCall(node) || isCreateBuilderCall(node))) {
+                isAppHost = true;
+                return false;
+            }
+
+            return true;
+        });
+
+        return isAppHost;
     }
 
-    parseResources(document: vscode.TextDocument): ParsedResource[] {
-        const text = document.getText();
-        const results: ParsedResource[] = [];
+    async parseResources(document: vscode.TextDocument): Promise<ParsedResource[]> {
+        const sourceFile = createSourceFile(document);
+        const results: ParsedResourceWithStart[] = [];
 
-        // Match .addXyz("name") or .addXyz('name') patterns
-        // \s* matches whitespace including newlines, supporting multi-line calls
-        const pattern = /\.(add\w+)\s*\(\s*(['"])([^'"]+)\2/gi;
-        let match: RegExpExecArray | null;
+        visit(sourceFile, node => {
+            if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression)) {
+                return true;
+            }
 
-        while ((match = pattern.exec(text)) !== null) {
-            const methodName = match[1];
-            const resourceName = match[3];
+            const methodName = node.expression.name.text;
+            if (!/^add\w+$/i.test(methodName)) {
+                return true;
+            }
 
-            const matchStart = match.index;
+            const firstArgument = node.arguments[0];
+            if (!firstArgument || !ts.isStringLiteral(firstArgument) || !isClosedStringLiteral(sourceFile, firstArgument)) {
+                return true;
+            }
+
+            const matchStart = getPropertyAccessStart(sourceFile, node.expression);
             const startPos = document.positionAt(matchStart);
-            const endPos = document.positionAt(matchStart + match[0].length);
-
-            // Find the start of the full statement (walk back to previous ';', '{', '}', or start of file)
-            const statementStartLine = findStatementStartLine(text, matchStart, document);
+            const endPos = document.positionAt(firstArgument.getEnd());
+            const statementStartLine = findContainingStatementStartLine(sourceFile, node, document);
 
             results.push({
-                name: resourceName,
+                name: firstArgument.text,
                 methodName: methodName,
                 range: new vscode.Range(startPos, endPos),
                 kind: methodName.toLowerCase() === 'addstep' ? 'pipelineStep' : 'resource',
                 statementStartLine,
+                matchStart,
             });
-        }
 
-        return results;
+            return true;
+        });
+
+        return results
+            .sort((left, right) => left.matchStart - right.matchStart)
+            .map(({ matchStart: _, ...resource }) => resource);
+    }
+
+    async findBuilderStatementLine(document: vscode.TextDocument): Promise<number | undefined> {
+        const sourceFile = createSourceFile(document);
+        let builderLine: number | undefined;
+
+        visit(sourceFile, node => {
+            if (!ts.isCallExpression(node) || !isCreateBuilderCall(node)) {
+                return true;
+            }
+
+            builderLine = findContainingStatementStartLine(sourceFile, node, document);
+            return false;
+        });
+
+        return builderLine;
     }
 
 }
 
 // Self-register on import
 registerParser(new JsTsAppHostParser());
+
+interface ParsedResourceWithStart extends ParsedResource {
+    matchStart: number;
+}
+
+function createSourceFile(document: vscode.TextDocument): ts.SourceFile {
+    return ts.createSourceFile(
+        document.uri.fsPath,
+        document.getText(),
+        ts.ScriptTarget.Latest,
+        true,
+        isJavaScriptFile(document.uri.fsPath) ? ts.ScriptKind.JS : ts.ScriptKind.TS
+    );
+}
+
+function isJavaScriptFile(filePath: string): boolean {
+    return filePath.endsWith('.js') || filePath.endsWith('.mjs') || filePath.endsWith('.cjs');
+}
+
+function visit(node: ts.Node, visitor: (node: ts.Node) => boolean): boolean {
+    if (!visitor(node)) {
+        return false;
+    }
+
+    let keepGoing = true;
+    ts.forEachChild(node, child => {
+        if (keepGoing) {
+            keepGoing = visit(child, visitor);
+        }
+    });
+
+    return keepGoing;
+}
+
+function isAspireModuleSpecifier(moduleName: string): boolean {
+    return moduleName.startsWith('@aspire') || moduleName.includes('aspire');
+}
+
+function isAspireRequireCall(node: ts.CallExpression): boolean {
+    return ts.isIdentifier(node.expression)
+        && node.expression.text === 'require'
+        && node.arguments.length > 0
+        && ts.isStringLiteral(node.arguments[0])
+        && isAspireModuleSpecifier(node.arguments[0].text);
+}
+
+function isCreateBuilderCall(node: ts.CallExpression): boolean {
+    if (ts.isIdentifier(node.expression)) {
+        return node.expression.text === 'createBuilder';
+    }
+
+    return ts.isPropertyAccessExpression(node.expression)
+        && node.expression.name.text === 'createBuilder';
+}
+
+function getPropertyAccessStart(sourceFile: ts.SourceFile, node: ts.PropertyAccessExpression): number {
+    const nameStart = node.name.getStart(sourceFile);
+    return sourceFile.text[nameStart - 1] === '.' ? nameStart - 1 : nameStart;
+}
+
+function isClosedStringLiteral(sourceFile: ts.SourceFile, node: ts.StringLiteral): boolean {
+    const literalText = node.getText(sourceFile);
+    const quote = literalText[0];
+    return (quote === '"' || quote === "'") && literalText.length > 1 && literalText[literalText.length - 1] === quote;
+}
+
+function findContainingStatementStartLine(sourceFile: ts.SourceFile, node: ts.Node, document: vscode.TextDocument): number {
+    let current: ts.Node | undefined = node;
+    while (current) {
+        if (ts.isStatement(current)) {
+            return document.positionAt(current.getStart(sourceFile)).line;
+        }
+
+        current = current.parent;
+    }
+
+    return document.positionAt(node.getStart(sourceFile)).line;
+}

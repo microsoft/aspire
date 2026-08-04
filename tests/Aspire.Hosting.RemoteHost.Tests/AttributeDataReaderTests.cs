@@ -31,7 +31,7 @@ public class AttributeDataReaderTests
 
         Assert.NotNull(result);
         Assert.Equal("officialMethod", result.Id);
-        Assert.Equal("Official method description", result.Description);
+        Assert.Null(result.Description);
     }
 
     [Fact]
@@ -197,7 +197,7 @@ public class AttributeDataReaderTests
 
     public static class OfficialAttributeExports
     {
-        [AspireExport("officialMethod", Description = "Official method description")]
+        [AspireExport("officialMethod")]
         public static void OfficialExportMethod(IResource resource)
         {
             _ = resource;

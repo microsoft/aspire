@@ -19,7 +19,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_Help_Works()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -27,13 +27,13 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("describe --help");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
     public async Task DescribeCommand_WhenNoAppHostRunning_ReturnsSuccess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -43,7 +43,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Should succeed - no running AppHost is not an error (like Unix ps with no processes)
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Theory]
@@ -52,7 +52,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [InlineData("JSON")]
     public async Task DescribeCommand_FormatOption_IsCaseInsensitive(string format)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -61,7 +61,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Theory]
@@ -70,7 +70,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [InlineData("TABLE")]
     public async Task DescribeCommand_FormatOption_AcceptsTable(string format)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -79,13 +79,13 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
     public async Task DescribeCommand_FormatOption_RejectsInvalidValue()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -94,13 +94,13 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.NotEqual(ExitCodeConstants.Success, exitCode);
+        Assert.NotEqual(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
     public async Task DescribeCommand_FollowOption_CanBeParsed()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -109,13 +109,13 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
     public async Task DescribeCommand_LegacyWatchOption_StillWorks()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -124,13 +124,13 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
     public async Task DescribeCommand_LegacyResourcesAlias_StillWorks()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -139,13 +139,13 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
     public async Task DescribeCommand_FollowAndFormat_CanBeCombined()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -154,13 +154,13 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
     public async Task DescribeCommand_ResourceNameArgument_CanBeParsed()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -169,13 +169,13 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
     public async Task DescribeCommand_AllOptions_CanBeCombined()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -184,7 +184,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -258,7 +258,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_Follow_JsonFormat_DeduplicatesIdenticalSnapshots()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
@@ -275,7 +275,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         // Parse all JSON lines from output
         var jsonLines = outputWriter.Logs
@@ -302,7 +302,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_Follow_TableFormat_DeduplicatesIdenticalSnapshots()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
@@ -319,7 +319,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         // Filter to lines containing the resource name indicator
         var resourceLines = outputWriter.Logs
@@ -336,7 +336,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_Follow_WhenBackchannelIsDisposed_ExitsSuccessfully()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var errorWriter = new StringWriter();
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
@@ -352,7 +352,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonLines = outputWriter.Logs
             .Where(l => l.TrimStart().StartsWith("{", StringComparison.Ordinal))
@@ -366,7 +366,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_Follow_WhenAppHostHasExited_WritesShutdownMessageToStderr()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var errorWriter = new StringWriter();
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
@@ -382,7 +382,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Single(outputWriter.Logs, l => l.TrimStart().StartsWith("{", StringComparison.Ordinal));
         Assert.Contains(InteractionServiceStrings.AppHostShutDown, errorWriter.ToString(), StringComparison.Ordinal);
     }
@@ -390,7 +390,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_Follow_WhenCanceledAndBackchannelIsDisposed_DoesNotWriteStatusToStderr()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var errorWriter = new StringWriter();
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
@@ -411,7 +411,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await pendingRun.DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.DoesNotContain(InteractionServiceStrings.AppHostConnectionLostGeneric, errorWriter.ToString(), StringComparison.Ordinal);
         Assert.DoesNotContain(InteractionServiceStrings.AppHostShutDown, errorWriter.ToString(), StringComparison.Ordinal);
     }
@@ -419,7 +419,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_JsonFormat_StripsLoginPathFromDashboardUrl()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
@@ -433,7 +433,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonOutput = string.Join("", outputWriter.Logs);
         var deserialized = JsonSerializer.Deserialize(jsonOutput, ResourcesCommandJsonContext.RelaxedEscaping.ResourcesOutput);
@@ -447,7 +447,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_Follow_JsonFormat_StripsLoginPathFromDashboardUrl()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
@@ -461,7 +461,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonLines = outputWriter.Logs
             .Where(l => l.TrimStart().StartsWith("{", StringComparison.Ordinal))
@@ -478,7 +478,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_HiddenResources_AreExcludedByDefault()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
@@ -491,7 +491,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonOutput = string.Join("", outputWriter.Logs);
         var deserialized = JsonSerializer.Deserialize(jsonOutput, ResourcesCommandJsonContext.RelaxedEscaping.ResourcesOutput);
@@ -504,7 +504,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_IncludeHidden_ShowsHiddenResources()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
@@ -517,7 +517,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonOutput = string.Join("", outputWriter.Logs);
         var deserialized = JsonSerializer.Deserialize(jsonOutput, ResourcesCommandJsonContext.RelaxedEscaping.ResourcesOutput);
@@ -532,7 +532,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_SpecificResource_IncludesHiddenWithoutFlag()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
@@ -544,7 +544,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonOutput = string.Join("", outputWriter.Logs);
         var deserialized = JsonSerializer.Deserialize(jsonOutput, ResourcesCommandJsonContext.RelaxedEscaping.ResourcesOutput);
@@ -557,7 +557,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_Follow_HiddenResources_AreExcludedByDefault()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
@@ -569,7 +569,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonLines = outputWriter.Logs
             .Where(l => l.TrimStart().StartsWith("{", StringComparison.Ordinal))
@@ -585,7 +585,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_Follow_IncludeHidden_ShowsHiddenResources()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
@@ -597,7 +597,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonLines = outputWriter.Logs
             .Where(l => l.TrimStart().StartsWith("{", StringComparison.Ordinal))

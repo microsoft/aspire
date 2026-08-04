@@ -22,6 +22,11 @@
         <target state="needs-review-translation">JSON 형식(NDJSON)으로 로그를 출력합니다.</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoLogsFound">
+        <source>No logs found.</source>
+        <target state="new">No logs found.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoResourcesFound">
         <source>No resources found.</source>
         <target state="translated">리소스를 찾을 수 없습니다.</target>
@@ -40,6 +45,11 @@
       <trans-unit id="ResourceRequiredWithoutFollow">
         <source>A resource name is required when not using --follow. Use --follow to stream logs from all resources.</source>
         <target state="translated">--follow를 사용하지 않을 경우 리소스 이름은 필수 항목입니다. --follow를 사용하여 모든 리소스의 로그를 스트리밍합니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SearchOptionDescription">
+        <source>Full-text search to filter log content. See https://aka.ms/aspire/cli-search for more details</source>
+        <target state="new">Full-text search to filter log content. See https://aka.ms/aspire/cli-search for more details</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">

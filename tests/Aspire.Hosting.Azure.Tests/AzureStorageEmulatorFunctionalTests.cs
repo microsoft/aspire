@@ -1,5 +1,7 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
+
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
@@ -283,4 +285,19 @@ public class AzureStorageEmulatorFunctionalTests(ITestOutputHelper testOutputHel
 
         Assert.Equal(blobNameAndContent, peekMessage.Value.Body.ToString());
     }
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public Task AzureStorageEmulator_WithPersistentLifetime_ReusesContainersAndPorts()
+    {
+        return PersistentContainerTestHelpers.AssertResourcesReuseContainersAsync(
+            testOutputHelper,
+            builder =>
+            {
+                builder.AddAzureStorage("storage1").RunAsEmulator(container => container.WithPersistentLifetime());
+                builder.AddAzureStorage("storage2").RunAsEmulator(container => container.WithPersistentLifetime());
+            },
+            ["storage1", "storage2"],
+            compareUrls: true);
+    }
+
 }

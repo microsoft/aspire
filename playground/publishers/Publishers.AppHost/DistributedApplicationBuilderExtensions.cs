@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREINTERACTION001
 
 using Aspire.Hosting.Pipelines;
 using Microsoft.Extensions.DependencyInjection;
@@ -94,6 +93,13 @@ internal static class IDistributedApplicationBuilderExtensions
                                 c.Input.Options = options;
                             }
                         }
+                    },
+                    new InteractionInput
+                    {
+                        Name = "CertificateFile",
+                        Label = "Certificate file",
+                        InputType = InputType.File,
+                        Required = true
                     }
                 ],
                 new InputsDialogInteractionOptions
@@ -120,9 +126,20 @@ internal static class IDistributedApplicationBuilderExtensions
                 },
                 cancellationToken: context.CancellationToken);
 
-            var appName = multiInputResult.Canceled ? "default-app" : (multiInputResult.Data?.FirstOrDefault(i => i.Label == "Application Name")?.Value ?? "default-app");
-            var appVersion = multiInputResult.Canceled ? "1.0.0" : (multiInputResult.Data?.FirstOrDefault(i => i.Label == "Application Version")?.Value ?? "1.0.0");
-            var sslType = multiInputResult.Canceled ? "self-signed" : (multiInputResult.Data?.FirstOrDefault(i => i.Label == "SSL Certificate Type")?.Value ?? "self-signed");
+            var appName = multiInputResult.Canceled ? "default-app" : (multiInputResult.Data?["ApplicationName"]?.Value ?? "default-app");
+            var appVersion = multiInputResult.Canceled ? "1.0.0" : (multiInputResult.Data?["ApplicationVersion"]?.Value ?? "1.0.0");
+            var sslType = multiInputResult.Canceled ? "self-signed" : (multiInputResult.Data?["SSLCertificateType"]?.Value ?? "self-signed");
+            var certFiles = multiInputResult.Canceled ? null : multiInputResult.Data?["CertificateFile"]?.Files;
+
+            if (certFiles is { Count: > 0 })
+            {
+                var certTask = await reporter.CreateTaskAsync($"Processing {certFiles.Count} certificate file(s)");
+                foreach (var certFile in certFiles)
+                {
+                    await certTask.UpdateAsync($"Certificate: {certFile.Name}");
+                }
+                await certTask.SucceedAsync($"Processed {certFiles.Count} certificate file(s)");
+            }
 
             // Test Text input
             var envResult = await interactionService.PromptInputAsync(

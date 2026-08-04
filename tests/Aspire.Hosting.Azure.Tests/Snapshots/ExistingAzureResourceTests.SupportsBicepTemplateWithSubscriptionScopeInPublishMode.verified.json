@@ -1,0 +1,10 @@
+﻿{
+  "type": "azure.bicep.v1",
+  "path": "subscriptionscoped.module.bicep",
+  "params": {
+    "value": "unused"
+  },
+  "scope": {
+    "subscription": "{existingSubscriptionId.value}"
+  }
+}

@@ -108,7 +108,7 @@ check() {
 check api "$DIAG/api-response.txt" temperatureC
 check staticsite "$DIAG/staticsite-response.txt" Weather
 check nodeserver "$DIAG/nodeserver-response.txt" PublishAsNodeServer
-check npmscript "$DIAG/npmscript-response.txt" PublishAsNpmScript
+check npmscript "$DIAG/npmscript-response.txt" PublishAsPackageScript
 check nextjs "$DIAG/nextjs-response.txt" "Next.js"
 
 if [ $FAIL -eq 0 ]; then

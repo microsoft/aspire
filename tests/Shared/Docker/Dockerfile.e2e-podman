@@ -4,6 +4,10 @@
 # deploy flows can be tested without depending on host Podman state.
 FROM mcr.microsoft.com/dotnet/sdk:10.0
 
+ARG UBUNTU_APT_MIRROR=
+
+COPY tests/Shared/Docker/configure-ubuntu-apt-mirror.sh /usr/local/bin/
+RUN sh /usr/local/bin/configure-ubuntu-apt-mirror.sh "$UBUNTU_APT_MIRROR"
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
         curl \

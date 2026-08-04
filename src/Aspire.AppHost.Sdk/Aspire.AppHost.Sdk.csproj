@@ -28,8 +28,8 @@
   </ItemGroup>
 
   <Target Name="_PublishAndPackRIDTool">
-    <MSBuild Projects="$(MSBuildThisFileDirectory)Aspire.RuntimeIdentifier.Tool\Aspire.RuntimeIdentifier.Tool.csproj" 
-             Targets="Publish" 
+    <MSBuild Projects="$(MSBuildThisFileDirectory)Aspire.RuntimeIdentifier.Tool\Aspire.RuntimeIdentifier.Tool.csproj"
+             Targets="Publish"
              Properties="Configuration=$(Configuration);Platform=$(Platform)" />
 
     <ItemGroup>

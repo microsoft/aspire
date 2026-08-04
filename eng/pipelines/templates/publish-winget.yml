@@ -1,5 +1,6 @@
 # Reusable template for submitting WinGet manifests via wingetcreate.
-# Used by both the prerelease flow (azure-pipelines.yml) and the release flow (release-publish-nuget.yml).
+# Used by the release flow (release-publish-nuget.yml) to publish the stable
+# Aspire package (Microsoft.Aspire) to WinGet.
 
 parameters:
   - name: manifestArtifactPath
@@ -11,7 +12,7 @@ parameters:
     displayName: 'Package version (used in PR title). If empty, extracted from manifest directory structure.'
   - name: packageIdentifier
     type: string
-    displayName: 'WinGet package identifier (e.g. Microsoft.Aspire or Microsoft.Aspire.Prerelease)'
+    displayName: 'WinGet package identifier (e.g. Microsoft.Aspire)'
   - name: dryRun
     type: boolean
     default: false
@@ -44,6 +45,12 @@ steps:
       New-Item -ItemType Directory -Path $submissionDir -Force | Out-Null
       Get-ChildItem -Path $manifestDir -File -Filter "*.yaml" | ForEach-Object {
         Copy-Item -Path $_.FullName -Destination (Join-Path $submissionDir $_.Name) -Force
+      }
+
+      Get-ChildItem -Path $submissionDir -File -Filter "*.locale.*.yaml" | ForEach-Object {
+        $content = Get-Content -Raw -Path $_.FullName
+        $content = $content -replace '(?m)^(\s*ReleaseNotesUrl:\s*).+$', '${1}https://aspire.dev'
+        [IO.File]::WriteAllText($_.FullName, $content, [Text.UTF8Encoding]::new($false))
       }
 
       Write-Host "Manifest directory: $submissionDir"
@@ -125,6 +132,17 @@ steps:
       }
       Write-Host "All installer URLs are accessible."
     displayName: '🟣Validate installer URLs from manifest'
+    # Only run when we'd actually submit (matches the Submit step condition).
+    # On non-production branches the manifest URLs point to artifacts that aren't
+    # published at their canonical ci.dot.net paths, so reachability checks fail
+    # meaninglessly; in dry-run we're not submitting anything so URL probing is
+    # equally moot.
+    condition: |
+      and(
+        succeeded(),
+        eq('${{ parameters.dryRun }}', 'false'),
+        eq(variables['_IsProductionBranch'], 'true')
+      )
 
   - powershell: |
       $ErrorActionPreference = 'Stop'
@@ -160,6 +178,13 @@ steps:
 
       Write-Host "ReleaseNotesUrl is valid."
     displayName: '🟣Validate ReleaseNotesUrl'
+    # Same gate as the installer-URL validation above and the Submit step below.
+    condition: |
+      and(
+        succeeded(),
+        eq('${{ parameters.dryRun }}', 'false'),
+        eq(variables['_IsProductionBranch'], 'true')
+      )
 
   - powershell: |
       $ErrorActionPreference = 'Stop'
@@ -167,6 +192,16 @@ steps:
       Invoke-WebRequest -Uri "https://aka.ms/wingetcreate/latest" -OutFile "$(Build.StagingDirectory)/wingetcreate.exe"
       Write-Host "wingetcreate downloaded successfully"
     displayName: '🟣Install wingetcreate'
+    # Skip when no Submit step will run. wingetcreate is only used to submit to
+    # the upstream winget-pkgs repo, so dry-run and non-production-branch builds
+    # gain nothing from downloading it and instead pick up an aka.ms-redirect
+    # failure surface for free.
+    condition: |
+      and(
+        succeeded(),
+        eq('${{ parameters.dryRun }}', 'false'),
+        eq(variables['_IsProductionBranch'], 'true')
+      )
 
   - powershell: |
       $ErrorActionPreference = 'Stop'
@@ -220,8 +255,32 @@ steps:
         exit $exitCode
       }
 
+      # wingetcreate opens a normal (ready-for-review) PR against microsoft/winget-pkgs,
+      # which is what we want. Parse the single PR URL purely for logging/traceability.
+      $pullRequestNumbers = @([regex]::Matches($outputText, 'https://github\.com/microsoft/winget-pkgs/pull/(\d+)') |
+        ForEach-Object { $_.Groups[1].Value } |
+        Select-Object -Unique
+      )
+
+      if ($pullRequestNumbers.Count -ne 1) {
+        Write-Error "Expected exactly one microsoft/winget-pkgs PR URL in wingetcreate output; found $($pullRequestNumbers.Count)."
+        exit 1
+      }
+
+      $pullRequestNumber = $pullRequestNumbers[0]
+      $pullRequestUrl = "https://github.com/microsoft/winget-pkgs/pull/$pullRequestNumber"
+      Write-Host "Opened WinGet PR #$pullRequestNumber (ready for review): $pullRequestUrl"
       Write-Host "Successfully submitted WinGet manifest for $packageId $version"
     displayName: '🟣Submit to WinGet'
-    condition: and(succeeded(), eq('${{ parameters.dryRun }}', 'false'))
+    # Guard: only submit to WinGet from production branches.
+    # 1ES PT branch validation surfaces this as a non-blocking warning, which is too easy to miss;
+    # a hard condition stops accidental submissions from feature, fork or dogfood branches.
+    # _IsProductionBranch is defined in eng/pipelines/common-variables.yml.
+    condition: |
+      and(
+        succeeded(),
+        eq('${{ parameters.dryRun }}', 'false'),
+        eq(variables['_IsProductionBranch'], 'true')
+      )
     env:
       WINGET_CREATE_GITHUB_TOKEN: $(aspire-winget-bot-pat)

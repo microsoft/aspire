@@ -40,11 +40,6 @@
         flex: 1;
     }
 
-    ::deep.layout .layout-sidebar-spacer {
-        flex: 0 0 auto;
-        width: 480px;
-    }
-
     ::deep.layout > .messagebar-container {
         grid-area: messagebar;
         border-top: 1px solid var(--neutral-stroke-rest);
@@ -84,11 +79,16 @@
 
 @media (max-width: 768px) {
     ::deep.layout {
+        /* MobileNavMenu uses this same value to keep its scrollport within the
+           visible viewport instead of extending underneath the header at high zoom. */
+        --mobile-header-height: 52px;
+        --mobile-nav-menu-offset: 2px;
+        --mobile-nav-menu-focus-padding: 4px;
         height: 100vh;
         width: 100vw;
         display: grid;
         grid-template-columns: auto 1fr;
-        grid-template-rows: auto auto auto 1fr;
+        grid-template-rows: var(--mobile-header-height) minmax(0, auto) auto minmax(0, 1fr);
         grid-template-areas:
             "icon head"
             "nav-menu nav-menu"
@@ -198,10 +198,6 @@
     height: 100%;
     border-radius: 0;
     background-color: var(--neutral-fill-secondary-rest);
-}
-
-::deep.layout > header > .header-gutters > .header-button-selected:not(:hover)::part(control) {
-    background-color: var(--chat-background-color) !important;
 }
 
 #blazor-error-ui {

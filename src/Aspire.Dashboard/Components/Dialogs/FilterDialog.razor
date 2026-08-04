@@ -1,4 +1,5 @@
 ﻿@using Aspire.Dashboard.Model
+@using Aspire.Dashboard.Model.Otlp
 @using Aspire.Dashboard.Resources
 @implements IDialogContentComponent<FilterDialogViewModel>
 
@@ -33,31 +34,75 @@
                           Width="100%" />
         </div>
 
-        <div class="filter-input-container input-container">
-            <FluentCombobox TOption="SelectViewModel<FieldValue>"
-                            @bind-Value="_formModel.Value"
-                            @bind-Value:after="ValueChanged"
-                            Items="@_filteredValues"
-                            Width="100%"
-                            Height="400px"
-                            OptionText="@(c => c.Name)"
-                            OptionValue="@(c => c.Name)"
-                            OptionTitle="@(c => DashboardUIHelpers.ResolveTooltip(c.Name))"
-                            Immediate="true"
-                            ImmediateDelay="@FluentUIExtensions.InputDelay"
-                            Label="@Loc[nameof(Dialogs.FilterDialogTextValuePlaceholder)]">
-                <OptionTemplate Context="optionContext">
-                    <FluentBadge Circular=true Appearance="Appearance.Neutral" Slot="end">
-                        @* There is FluentUI bug that causes bad data if there is additional text in an option. *@
-                        @* https://github.com/microsoft/fluentui-blazor/issues/2695 *@
-                        @* Workaround this issue by inserting extra text using CSS. *@
-                        <span data-filtercount="@optionContext.Id!.Count"></span>
-                    </FluentBadge>
-                    <FluentHighlighter Text="@optionContext.Name" HighlightedText="@_formModel.Value" />
-                </OptionTemplate>
-            </FluentCombobox>
-            <ValidationMessage For="() => _formModel.Value" />
-        </div>
+        @if (_formModel.ValueIsNumeric)
+        {
+            <div class="filter-input-container input-container">
+                <FluentNumberField TValue="double?"
+                                   @bind-Value="_formModel.NumericValue"
+                                   Min="0"
+                                   Step="50"
+                                   Width="100%"
+                                   Immediate="true"
+                                   ImmediateDelay="@FluentUIExtensions.InputDelay"
+                                   Label="@Loc[nameof(Dialogs.FilterDialogTextValuePlaceholder)]" />
+                <ValidationMessage For="() => _formModel.NumericValue" />
+            </div>
+        }
+        else if (_formModel.ValueIsDate)
+        {
+            <div class="filter-input-container input-container">
+                @* Position relative to correctly align the absolute positioned date picker *@
+                <div style="position: relative;">
+                    <FluentTextField @bind-Value="_formModel.Value"
+                                    Style="min-width: 100%"
+                                    Immediate="true"
+                                    ImmediateDelay="@FluentUIExtensions.InputDelay"
+                                    Placeholder="@Loc[nameof(Dialogs.FilterDialogDatePlaceholder)]"
+                                    Label="@Loc[nameof(Dialogs.FilterDialogDateValueLabel)]">
+                        <FluentIcon slot="end"
+                                    Value="@(new Icons.Regular.Size16.Calendar())"
+                                    Title="@Loc[nameof(Dialogs.FilterDialogPickDateButtonTitle)]"
+                                    OnClick="OpenDatePickerAsync"
+                                    Style="cursor: pointer;" />
+                    </FluentTextField>
+                    <input type="datetime-local"
+                        @ref="_datePickerInput"
+                        step="1"
+                        value="@_formModel.DateTimeLocalValue"
+                        @oninput="OnDateTimePickerChanged"
+                        style="position: absolute; right: 0; bottom: 0; height: 0; width: 0; overflow: hidden; border: none; padding: 0; margin: 0; pointer-events: none; opacity: 0;" />
+                </div>
+                <ValidationMessage For="() => _formModel.Value" />
+            </div>
+        }
+        else
+        {
+            <div class="filter-input-container input-container">
+                <FluentCombobox TOption="SelectViewModel<FieldValue>"
+                                @bind-Value="_formModel.Value"
+                                @bind-Value:after="ValueChanged"
+                                Items="@_filteredValues"
+                                Width="100%"
+                                Height="400px"
+                                OptionText="@(c => c.Name)"
+                                OptionValue="@(c => c.Name)"
+                                OptionTitle="@(c => DashboardUIHelpers.ResolveTooltip(c.Name))"
+                                Immediate="true"
+                                ImmediateDelay="@FluentUIExtensions.InputDelay"
+                                Label="@Loc[nameof(Dialogs.FilterDialogTextValuePlaceholder)]">
+                    <OptionTemplate Context="optionContext">
+                        <FluentBadge Circular=true Appearance="Appearance.Neutral" Slot="end">
+                            @* There is FluentUI bug that causes bad data if there is additional text in an option. *@
+                            @* https://github.com/microsoft/fluentui-blazor/issues/2695 *@
+                            @* Workaround this issue by inserting extra text using CSS. *@
+                            <span data-filtercount="@optionContext.Id!.Count"></span>
+                        </FluentBadge>
+                        <FluentHighlighter Text="@optionContext.Name" HighlightedText="@_formModel.Value" />
+                    </OptionTemplate>
+                </FluentCombobox>
+                <ValidationMessage For="() => _formModel.Value" />
+            </div>
+        }
 
         <div class="filter-input-container filter-button-container input-container">
             <FluentStack Orientation="Orientation.Horizontal" HorizontalAlignment="HorizontalAlignment.Left">

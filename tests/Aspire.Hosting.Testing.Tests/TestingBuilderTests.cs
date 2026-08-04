@@ -3,11 +3,13 @@
 
 using System.Net.Http.Json;
 using System.Reflection;
+using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Tests;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Aspire.TestProject;
 using Aspire.TestUtilities;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -566,6 +568,75 @@ public class TestingBuilderTests(ITestOutputHelper output)
             Assert.False(cts.IsCancellationRequested);
             Assert.IsType<TimeoutException>(ex);
         }
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public async Task DashboardEnabledInTestingBuilderShouldWorkWithDynamicPorts()
+    {
+        var builder = DistributedApplicationTestingBuilder.Create([], (options, _) =>
+        {
+            options.DisableDashboard = false;
+        });
+        builder.WithTestAndResourceLogging(output);
+
+        await using var app = await builder.BuildAsync();
+
+        await app.StartAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+
+        // Get the allocated dashboard service URI from the app host to confirm the final endpoint.
+        var dashboardServiceHost = app.Services.GetRequiredService<DashboardServiceHost>();
+        var resourceServiceUri = await dashboardServiceHost.GetResourceServiceUriAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+
+        var uri = new Uri(resourceServiceUri);
+        Assert.Equal("127.0.0.1", uri.Host);
+        Assert.NotEqual(0, uri.Port);
+    }
+
+    [Theory]
+    [RequiresFeature(TestFeature.Docker)]
+    [InlineData("https://127.0.0.1:0", "127.0.0.1")]
+    [InlineData("https://[::1]:0", "[::1]")]
+    public async Task LoopbackWithDynamicPorts(string endpointUrl, string expectedHost)
+    {
+        var builder = DistributedApplicationTestingBuilder.Create([], (opt, _) =>
+        {
+            opt.DisableDashboard = false;
+        });
+        builder.WithTestAndResourceLogging(output);
+
+        builder.Configuration["ASPNETCORE_URLS"] = endpointUrl;
+        builder.Configuration["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = endpointUrl;
+        builder.Configuration["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = endpointUrl;
+
+        await using var app = await builder.BuildAsync();
+        await app.StartAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+
+        // Get the allocated dashboard service URI from the app host to confirm the final endpoint.
+        var dashboardServiceHost = app.Services.GetRequiredService<DashboardServiceHost>();
+        var resourceServiceUri = await dashboardServiceHost.GetResourceServiceUriAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+
+        var uri = new Uri(resourceServiceUri);
+        Assert.Equal(expectedHost, uri.Host);
+        Assert.NotEqual(0, uri.Port);
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public async Task NonLocalResourceServiceEndpointThrows()
+    {
+        var builder = DistributedApplicationTestingBuilder.Create([], (opt, _) =>
+        {
+            opt.DisableDashboard = false;
+        });
+        builder.WithTestAndResourceLogging(output);
+
+        builder.Configuration["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = "https://example.com:5001";
+
+        await using var app = await builder.BuildAsync();
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => app.StartAsync());
+        Assert.Equal("ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL must contain a local loopback address.", ex.Message);
     }
 
     private sealed record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)

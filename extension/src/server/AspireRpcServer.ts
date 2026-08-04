@@ -78,7 +78,7 @@ export default class AspireRpcServer {
                 reject(err);
             });
 
-            extensionLogOutputChannel.info(`Setting up RPC server with token: ${token}`);
+            extensionLogOutputChannel.info('Setting up RPC server.');
             server.listen(0, () => {
                 const addressInfo = server?.address();
                 if (typeof addressInfo === 'object' && addressInfo?.port) {
@@ -142,4 +142,3 @@ export default class AspireRpcServer {
         });
     }
 }
-

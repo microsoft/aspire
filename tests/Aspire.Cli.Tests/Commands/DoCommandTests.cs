@@ -7,6 +7,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Backchannel;
 using Microsoft.Extensions.DependencyInjection;
 using Aspire.Cli.Utils;
+using Aspire.Hosting;
 using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -16,9 +17,9 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoCommandWithHelpArgumentReturnsZero()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
@@ -31,10 +32,10 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoCommandWithStepArgumentSucceeds()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Arrange
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
 
@@ -89,10 +90,10 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoCommandWithDeployStepSucceeds()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Arrange
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
 
@@ -142,10 +143,10 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoCommandWithPublishStepSucceeds()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Arrange
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
 
@@ -195,10 +196,10 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoCommandPassesOutputPathWhenSpecified()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Arrange
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
 
@@ -253,10 +254,10 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoCommandFailsWithInvalidProjectFile()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Arrange
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DotNetCliRunnerFactory = (sp) =>
             {
@@ -279,18 +280,18 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
-        Assert.Equal(ExitCodeConstants.FailedToFindProject, exitCode);
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
     }
 
     [Fact]
     public async Task DoCommandWithListStepsReturnsZero()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var requestStopCalled = new TaskCompletionSource();
         var getPipelineStepsCalled = new TaskCompletionSource();
 
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
 
@@ -325,8 +326,8 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
-        // Act - no step argument needed with --list-steps
-        var result = command.Parse("do --list-steps");
+        // Act - step argument is required, even with --list-steps
+        var result = command.Parse("do deploy --list-steps");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
@@ -336,13 +337,66 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DoCommandWithListStepsAndNoStepArgumentShowsFriendlyError()
+    {
+        // Regression for https://github.com/microsoft/aspire/issues/17526:
+        // `aspire do --list-steps` with no step argument used to launch the AppHost
+        // and crash mid-pipeline. It should now fail validation with a friendly
+        // error pointing at concrete examples.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("do --list-steps");
+
+        Assert.NotEmpty(result.Errors);
+        var combined = string.Join("\n", result.Errors.Select(e => e.Message));
+        Assert.Contains("--list-steps", combined);
+        Assert.Contains("aspire do deploy --list-steps", combined);
+        Assert.Contains("build", combined);
+        Assert.Contains("publish", combined);
+        Assert.Contains("https://aspire.dev/reference/cli/commands/aspire-do/", combined);
+    }
+
+    [Fact]
+    public async Task DoCommandWithListStepsAndNoStepArgumentInExtensionHostShowsFriendlyError()
+    {
+        // The extension host bypasses the plain `aspire do` step requirement because
+        // GetRunArgumentsAsync prompts the user interactively. But `--list-steps` does
+        // not flow through that prompt, so without the validator firing the extension
+        // would still hit the original crash from https://github.com/microsoft/aspire/issues/17526.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            options.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp);
+            options.ConfigurationCallback += config =>
+            {
+                config[KnownConfigNames.ExtensionDebugSessionId] = "test-session-id";
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("do --list-steps");
+
+        Assert.NotEmpty(result.Errors);
+        var combined = string.Join("\n", result.Errors.Select(e => e.Message));
+        Assert.Contains("--list-steps", combined);
+        Assert.Contains("https://aspire.dev/reference/cli/commands/aspire-do/", combined);
+    }
+
+    [Fact]
     public async Task DoCommandWithListStepsAndStepArgumentReturnsZero()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var requestStopCalled = new TaskCompletionSource();
 
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
 
@@ -387,12 +441,12 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoCommandWithListStepsDoesNotExecutePipeline()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var publishingActivitiesRequested = false;
         var requestStopCalled = new TaskCompletionSource();
 
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
 
@@ -431,7 +485,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
-        var result = command.Parse("do --list-steps");
+        var result = command.Parse("do deploy --list-steps");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert - pipeline should NOT have been executed
@@ -442,11 +496,11 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoCommandListStepsDisplaysCustomSteps()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var requestStopCalled = new TaskCompletionSource();
 
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
 
@@ -489,7 +543,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
-        var result = command.Parse("do --list-steps");
+        var result = command.Parse("do deploy --list-steps");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(0, exitCode);
@@ -498,9 +552,9 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoCommandWithHelpShowsListStepsOption()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
@@ -508,5 +562,112 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task DoCommandForwardsPipelineLogLevelAsLogLevelToAppHost()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        string[]? capturedArgs = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner
+                {
+                    BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
+
+                    GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) =>
+                    {
+                        return (0, true, VersionHelper.GetDefaultTemplateVersion());
+                    },
+
+                    RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                    {
+                        capturedArgs = args;
+
+                        var completed = new TaskCompletionSource();
+                        var backchannel = new TestAppHostBackchannel
+                        {
+                            RequestStopAsyncCalled = completed
+                        };
+                        backchannelCompletionSource?.SetResult(backchannel);
+                        await completed.Task.DefaultTimeout();
+                        return 0;
+                    }
+                };
+
+                return runner;
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("do my-step --pipeline-log-level debug");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.NotNull(capturedArgs);
+        var logLevelIndex = Array.IndexOf(capturedArgs, "--log-level");
+        Assert.True(logLevelIndex >= 0, "Expected --log-level argument to be passed to AppHost");
+        Assert.Equal("debug", capturedArgs[logLevelIndex + 1]);
+        Assert.DoesNotContain("--pipeline-log-level", capturedArgs);
+    }
+
+    [Fact]
+    public async Task DoCommandDoesNotForwardCliLogLevelToAppHost()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        string[]? capturedArgs = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner
+                {
+                    BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
+
+                    GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) =>
+                    {
+                        return (0, true, VersionHelper.GetDefaultTemplateVersion());
+                    },
+
+                    RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                    {
+                        capturedArgs = args;
+
+                        var completed = new TaskCompletionSource();
+                        var backchannel = new TestAppHostBackchannel
+                        {
+                            RequestStopAsyncCalled = completed
+                        };
+                        backchannelCompletionSource?.SetResult(backchannel);
+                        await completed.Task.DefaultTimeout();
+                        return 0;
+                    }
+                };
+
+                return runner;
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("do my-step --log-level Warning");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.NotNull(capturedArgs);
+        Assert.DoesNotContain("--log-level", capturedArgs);
     }
 }

@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
+using Aspire.Shared;
 
 namespace Aspire.Dashboard.Telemetry;
 
@@ -25,8 +25,8 @@ public sealed class DashboardTelemetryService
         _defaultProperties = new Dictionary<string, AspireTelemetryProperty>
         {
             // This is consistent with CLI version data.
-            { TelemetryPropertyKeys.DashboardVersion, new AspireTelemetryProperty(typeof(DashboardWebApplication).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? string.Empty) },
-            { TelemetryPropertyKeys.DashboardBuildId, new AspireTelemetryProperty(typeof(DashboardWebApplication).Assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version ?? string.Empty) },
+            { TelemetryPropertyKeys.DashboardVersion, new AspireTelemetryProperty(AssemblyVersionHelper.GetInformationalVersion(typeof(DashboardWebApplication).Assembly)) },
+            { TelemetryPropertyKeys.DashboardBuildId, new AspireTelemetryProperty(AssemblyVersionHelper.GetFileVersion(typeof(DashboardWebApplication).Assembly)) },
         };
     }
 

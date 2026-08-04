@@ -1,26 +1,37 @@
-# Aspire.Hosting.NATS library
+# NATS hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure a NATS resource.
+Use this integration to model, configure, and orchestrate a NATS resource in an Aspire solution.
 
 ## Getting started
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire NATS Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.Nats` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Nats
+```bash
+aspire add Aspire.Hosting.Nats
 ```
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add a NATS resource and consume the connection using the following methods:
+In the AppHost, add a NATS resource and reference it from another resource with either C# or TypeScript:
+
+**C#**
 
 ```csharp
 var nats = builder.AddNats("nats");
 
 var myService = builder.AddProject<Projects.MyService>()
                        .WithReference(nats);
+```
+
+**TypeScript**
+
+```typescript
+const nats = await builder.addNats("nats");
+
+const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
+                       .withReference(nats);
 ```
 
 ## Connection Properties
@@ -43,7 +54,8 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 
 ## Additional documentation
 
-* https://aspire.dev/integrations/messaging/nats/
+* https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/messaging/nats/nats-host/
 
 ## Feedback & contributing
 

@@ -1,0 +1,15 @@
+﻿FROM golang:1.26-alpine AS build
+WORKDIR /app
+ENV CGO_ENABLED=0
+ENV GOOS=linux
+COPY . .
+RUN --mount=type=cache,target=/root/.cache/go-build --mount=type=cache,target=/root/go/pkg/mod \
+    go build -o /app/api .
+
+FROM alpine:latest
+RUN apk --no-cache add ca-certificates tzdata
+RUN addgroup -S app && adduser -S -G app app
+WORKDIR /app
+COPY --from=build /app/api /app/api
+USER app
+ENTRYPOINT ["/app/api"]

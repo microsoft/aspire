@@ -19,9 +19,9 @@ namespace Aspire.Shared.ConsoleLogs;
 /// </summary>
 internal static class SharedAIHelpers
 {
-    public const int TracesLimit = 200;
-    public const int StructuredLogsLimit = 200;
-    public const int ConsoleLogsLimit = 500;
+    public const int TracesLimit = 800;
+    public const int StructuredLogsLimit = 800;
+    public const int ConsoleLogsLimit = 2000;
     public const int MaximumListTokenLength = 8192;
     public const int MaximumStringLength = 2048;
 
@@ -211,6 +211,8 @@ internal static class SharedAIHelpers
         Func<IOtlpResource, string> getResourceName,
         string? dashboardBaseUrl = null)
     {
+        // `aspire otel spans --format json` and trace JSON output use this shape;
+        // keep docs/specs/cli-output-formats.md in sync when changing it.
         var span = spanDto.Span;
         var spanId = span.SpanId ?? string.Empty;
         var traceId = span.TraceId ?? string.Empty;
@@ -378,6 +380,8 @@ internal static class SharedAIHelpers
         Func<IOtlpResource, string> getResourceName,
         string? dashboardBaseUrl = null)
     {
+        // `aspire otel traces --format json` uses this shape;
+        // keep docs/specs/cli-output-formats.md in sync when changing it.
         var spanObjects = new List<JsonNode>();
         foreach (var s in trace.Spans)
         {
@@ -708,6 +712,8 @@ internal static class SharedAIHelpers
         Func<IOtlpResource, string> getResourceName,
         string? dashboardBaseUrl = null)
     {
+        // `aspire otel logs --format json` uses this shape;
+        // keep docs/specs/cli-output-formats.md in sync when changing it.
         var exceptionText = GetExceptionText(logEntry);
         var logIdString = GetAttributeStringValue(logEntry.LogRecord.Attributes, OtlpHelpers.AspireLogIdAttribute);
         var logId = long.TryParse(logIdString, CultureInfo.InvariantCulture, out var parsedLogId) ? parsedLogId : (long?)null;

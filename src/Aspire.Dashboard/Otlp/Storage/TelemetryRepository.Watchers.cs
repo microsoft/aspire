@@ -27,13 +27,12 @@ public sealed partial class TelemetryRepository
     /// <summary>
     /// Streams spans as they arrive using push-based delivery.
     /// Yields existing spans first, then new ones as they're added.
+    /// Filtering (resource, traceId, hasError, telemetry filters, text fragments) is applied
+    /// inside the repository before yielding.
     /// O(1) per new span instead of O(n) re-query.
     /// </summary>
-    /// <param name="resourceKey">Optional filter by resource.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>An async enumerable of spans.</returns>
     public async IAsyncEnumerable<OtlpSpan> WatchSpansAsync(
-        ResourceKey? resourceKey,
+        WatchSpansRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         // Create a bounded channel to receive pushed spans
@@ -42,7 +41,7 @@ public sealed partial class TelemetryRepository
             FullMode = BoundedChannelFullMode.DropOldest
         });
 
-        var watcher = new SpanWatcher(resourceKey, channel);
+        var watcher = new SpanWatcher(request, channel);
 
         // Register watcher FIRST to avoid race condition where spans could be
         // added between getting the snapshot and registering.
@@ -54,32 +53,34 @@ public sealed partial class TelemetryRepository
 
         try
         {
-            // Get existing spans from traces (capped to prevent OOM)
-            var existingTraces = GetTraces(new GetTracesRequest
+            // Get existing spans directly using GetSpans, which applies all filters
+            // (resource, traceId, hasError, telemetry filters, text fragments) at the query level.
+            var existingSpans = GetSpans(new GetSpansRequest
             {
-                ResourceKey = resourceKey,
+                ResourceKeys = request.ResourceKeys,
                 StartIndex = 0,
                 Count = MaxWatcherSnapshotCount,
-                Filters = [],
-                FilterText = string.Empty
+                Filters = request.Filters,
+                TraceId = request.TraceId,
+                HasError = request.HasError,
+                TextFragments = request.TextFragments
             });
 
             // Track seen span IDs to deduplicate spans that arrive during the snapshot read.
-            // Race condition: watcher is registered BEFORE GetTraces, so spans arriving during
+            // Race condition: watcher is registered BEFORE GetSpans, so spans arriving during
             // the snapshot read are pushed to the channel AND included in the snapshot.
             // Unlike logs (which have monotonically increasing InternalId), span IDs are random
             // hex strings, so we need a HashSet rather than a simple counter.
             // The HashSet is cleared after draining to prevent unbounded memory growth.
             var seenSpanIds = new HashSet<string>();
 
-            // Yield existing spans ordered by start time so streaming clients
-            // receive the initial snapshot in chronological order.
-            var existingSpans = existingTraces.PagedResult.Items
-                .SelectMany(trace => trace.Spans)
-                .Where(span => resourceKey is null || span.Source.ResourceKey.Equals(resourceKey))
-                .OrderBy(span => span.StartTime);
+            // Sort spans by start time so streaming clients receive the initial snapshot in
+            // chronological order. GetSpans returns spans grouped by trace (trace-order within
+            // each trace), but spans from different traces can overlap in time.
+            var orderedSpans = existingSpans.PagedResult.Items.OrderBy(s => s.StartTime);
 
-            foreach (var span in existingSpans)
+            // Yield existing spans ordered by start time
+            foreach (var span in orderedSpans)
             {
                 seenSpanIds.Add(span.SpanId);
                 yield return span;
@@ -98,7 +99,7 @@ public sealed partial class TelemetryRepository
             // (they weren't in the snapshot taken earlier). This prevents unbounded memory growth.
             seenSpanIds.Clear();
 
-            // Stream new spans as they're pushed
+            // Stream new spans as they're pushed (already filtered in PushSpansToWatchers)
             await foreach (var span in channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
             {
                 yield return span;
@@ -118,15 +119,12 @@ public sealed partial class TelemetryRepository
     /// <summary>
     /// Streams logs as they arrive using push-based delivery.
     /// Yields existing logs first, then new ones as they're added.
+    /// Filtering (resource, telemetry filters, text fragments) is applied
+    /// inside the repository before yielding.
     /// O(1) per new log instead of O(n) re-query.
     /// </summary>
-    /// <param name="resourceKey">Optional filter by resource.</param>
-    /// <param name="filters">Optional filters for logs.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>An async enumerable of log entries.</returns>
     public async IAsyncEnumerable<OtlpLogEntry> WatchLogsAsync(
-        ResourceKey? resourceKey,
-        IEnumerable<TelemetryFilter>? filters,
+        WatchLogsRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         // Create a bounded channel to receive pushed logs
@@ -135,8 +133,7 @@ public sealed partial class TelemetryRepository
             FullMode = BoundedChannelFullMode.DropOldest
         });
 
-        var filterList = filters?.ToList() ?? [];
-        var watcher = new LogWatcher(resourceKey, filterList, channel);
+        var watcher = new LogWatcher(request, channel);
 
         // Register watcher FIRST to avoid race condition where logs could be
         // added between getting the snapshot and registering.
@@ -151,10 +148,11 @@ public sealed partial class TelemetryRepository
             // Get existing logs snapshot (capped to prevent OOM)
             var existingLogs = GetLogs(new GetLogsContext
             {
-                ResourceKey = resourceKey,
+                ResourceKeys = request.ResourceKeys,
                 StartIndex = 0,
                 Count = MaxWatcherSnapshotCount,
-                Filters = filterList
+                Filters = request.Filters,
+                TextFragments = request.TextFragments
             });
 
             // Track the highest log ID we've yielded to deduplicate
@@ -223,8 +221,16 @@ public sealed partial class TelemetryRepository
         {
             foreach (var watcher in watchers)
             {
+                var request = watcher.Request;
+
                 // Check if watcher is filtering by resource
-                if (watcher.ResourceKey is { } key && !key.Equals(resourceKey))
+                if (request.ResourceKeys is { Count: > 0 } keys && !keys.Contains(resourceKey))
+                {
+                    continue;
+                }
+
+                // Apply all watcher filters before pushing to channel
+                if (!MatchesSpanCriteria(span, request.TraceId, request.HasError, request.Filters, request.TextFragments))
                 {
                     continue;
                 }
@@ -260,14 +266,22 @@ public sealed partial class TelemetryRepository
         {
             foreach (var watcher in watchers)
             {
+                var request = watcher.Request;
+
                 // Check if watcher is filtering by resource
-                if (watcher.ResourceKey is { } key && !key.Equals(resourceKey))
+                if (request.ResourceKeys is { Count: > 0 } keys && !keys.Contains(resourceKey))
                 {
                     continue;
                 }
 
-                // Apply watcher filters before pushing to channel
-                if (watcher.Filters.Count > 0 && !MatchesFilters(log, watcher.Filters))
+                // Apply watcher telemetry filters before pushing to channel
+                if (request.Filters.Count > 0 && !MatchesFilters(log, request.Filters))
+                {
+                    continue;
+                }
+
+                // Apply text fragment matching
+                if (request.TextFragments is { Length: > 0 } fragments && !MatchesLogTextFragments(log, fragments))
                 {
                     continue;
                 }
@@ -325,9 +339,9 @@ public sealed partial class TelemetryRepository
     /// <summary>
     /// Represents a span watcher for push-based streaming.
     /// </summary>
-    private sealed class SpanWatcher(ResourceKey? resourceKey, Channel<OtlpSpan> channel)
+    private sealed class SpanWatcher(WatchSpansRequest request, Channel<OtlpSpan> channel)
     {
-        public ResourceKey? ResourceKey => resourceKey;
+        public WatchSpansRequest Request => request;
         public Channel<OtlpSpan> Channel => channel;
     }
 
@@ -335,10 +349,9 @@ public sealed partial class TelemetryRepository
     /// Represents a log watcher for push-based streaming.
     /// Includes filters to apply when pushing logs to the channel.
     /// </summary>
-    private sealed class LogWatcher(ResourceKey? resourceKey, List<TelemetryFilter> filters, Channel<OtlpLogEntry> channel)
+    private sealed class LogWatcher(WatchLogsRequest request, Channel<OtlpLogEntry> channel)
     {
-        public ResourceKey? ResourceKey => resourceKey;
-        public List<TelemetryFilter> Filters => filters;
+        public WatchLogsRequest Request => request;
         public Channel<OtlpLogEntry> Channel => channel;
     }
 }

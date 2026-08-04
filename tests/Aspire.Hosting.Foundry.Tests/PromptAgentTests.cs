@@ -3,14 +3,20 @@
 
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREFOUNDRY001 // Preview tool types
+#pragma warning disable ASPIREPIPELINES001 // Pipeline APIs are experimental
+#pragma warning disable ASPIREAZURE001 // Azure types are experimental
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Foundry.Tests;
 
-public class PromptAgentTests
+public class PromptAgentTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AddPromptAgent_CreatesResource()
@@ -20,7 +26,7 @@ public class PromptAgentTests
             .AddProject("my-project");
         var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
 
-        var agent = project.AddPromptAgent(model, "my-agent", instructions: "You tell jokes.");
+        var agent = project.AddPromptAgent("my-agent", model, instructions: "You tell jokes.");
 
         Assert.NotNull(agent);
         Assert.NotNull(agent.Resource);
@@ -36,7 +42,7 @@ public class PromptAgentTests
             .AddProject("my-project");
         var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
 
-        var agent = project.AddPromptAgent(model, "my-agent", instructions: "You tell jokes.");
+        var agent = project.AddPromptAgent("my-agent", model, instructions: "You tell jokes.");
 
         Assert.Equal("gpt41", agent.Resource.Model);
         Assert.Equal("You tell jokes.", agent.Resource.Instructions);
@@ -50,9 +56,29 @@ public class PromptAgentTests
             .AddProject("my-project");
         var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
 
-        var agent = project.AddPromptAgent(model, "my-agent");
+        var agent = project.AddPromptAgent("my-agent", model);
 
         Assert.Same(project.Resource, agent.Resource.Project);
+    }
+
+    [Fact]
+    public void AddPromptAgent_ConfiguresSendMessageCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
+
+        project.AddPromptAgent("my-agent", model);
+
+        builder.Build();
+
+        var resource = builder.Resources.Single(r => r.Name == "my-agent");
+        var command = Assert.Single(resource.Annotations.OfType<ResourceCommandAnnotation>());
+        Assert.Equal("Send Message", command.DisplayName);
+        Assert.Equal("ChatSparkle", command.IconName);
+        Assert.Equal(IconVariant.Regular, command.IconVariant);
+        Assert.True(command.IsHighlighted);
     }
 
     [Fact]
@@ -63,7 +89,7 @@ public class PromptAgentTests
             .AddProject("my-project");
         var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
 
-        Assert.Throws<ArgumentException>(() => project.AddPromptAgent(model, ""));
+        Assert.Throws<ArgumentException>(() => project.AddPromptAgent("", model));
     }
 
     [Fact]
@@ -73,7 +99,7 @@ public class PromptAgentTests
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
 
-        Assert.Throws<ArgumentNullException>(() => project.AddPromptAgent(null!, "my-agent"));
+        Assert.Throws<ArgumentNullException>(() => project.AddPromptAgent("my-agent", null!));
     }
 
     [Fact]
@@ -84,7 +110,7 @@ public class PromptAgentTests
             .AddProject("my-project");
         var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
 
-        var agent = project.AddPromptAgent(model, "my-agent");
+        var agent = project.AddPromptAgent("my-agent", model);
 
         Assert.Null(agent.Resource.Instructions);
     }
@@ -100,7 +126,7 @@ public class PromptAgentTests
         var codeInterp = project.AddCodeInterpreterTool("ci");
         var webSearch = project.AddWebSearchTool("ws");
 
-        var agent = project.AddPromptAgent(model, "my-agent",
+        var agent = project.AddPromptAgent("my-agent", model,
             instructions: "You tell jokes.")
             .WithTool(codeInterp)
             .WithTool(webSearch);
@@ -390,7 +416,7 @@ public class PromptAgentTests
         var aiSearch = project.AddAISearchTool("search-tool").WithReference(search);
         var sharePoint = project.AddSharePointTool("sp", "sp-conn");
 
-        var agent = project.AddPromptAgent(model, "my-agent",
+        var agent = project.AddPromptAgent("my-agent", model,
             instructions: "You tell jokes.")
             .WithTool(codeInterp)
             .WithTool(webSearch)
@@ -414,8 +440,8 @@ public class PromptAgentTests
 
         var codeInterp = project.AddCodeInterpreterTool("ci");
 
-        var agent1 = project.AddPromptAgent(model, "agent-1").WithTool(codeInterp);
-        var agent2 = project.AddPromptAgent(model, "agent-2").WithTool(codeInterp);
+        var agent1 = project.AddPromptAgent("agent-1", model).WithTool(codeInterp);
+        var agent2 = project.AddPromptAgent("agent-2", model).WithTool(codeInterp);
 
         Assert.Single(agent1.Resource.Tools);
         Assert.Single(agent2.Resource.Tools);
@@ -435,7 +461,7 @@ public class PromptAgentTests
         var toolFromProject2 = project2.AddCodeInterpreterTool("ci");
 
         Assert.Throws<InvalidOperationException>(() =>
-            project1.AddPromptAgent(model, "agent").WithTool(toolFromProject2));
+            project1.AddPromptAgent("agent", model).WithTool(toolFromProject2));
     }
 
     [Fact]
@@ -445,7 +471,7 @@ public class PromptAgentTests
         var project = builder.AddFoundry("test-account")
             .AddProject("test-project");
         var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
-        var agent = project.AddPromptAgent(model, "my-agent", instructions: "You tell jokes.");
+        var agent = project.AddPromptAgent("my-agent", model, instructions: "You tell jokes.");
 
         var pyapp = builder.AddPythonApp("app", "./app.py", "main:app")
             .WithReference(agent);
@@ -464,7 +490,7 @@ public class PromptAgentTests
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
         var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
-        var agent = project.AddPromptAgent(model, "my-agent");
+        var agent = project.AddPromptAgent("my-agent", model);
 
         Assert.IsAssignableFrom<IResourceWithConnectionString>(agent.Resource);
         Assert.IsAssignableFrom<IResourceWithEnvironment>(agent.Resource);
@@ -514,5 +540,69 @@ public class PromptAgentTests
         Assert.Same(project.Resource, ci.Resource.Project);
         Assert.Same(project.Resource, fs.Resource.Project);
         Assert.Same(project.Resource, ws.Resource.Project);
+    }
+
+    [Fact]
+    public async Task AddPromptAgent_RunMode_BeforeStartStepDependsOnPrepareResources()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
+
+        var agent = project.AddPromptAgent("my-agent", model, instructions: "Test agent");
+
+        builder.Build();
+
+        var annotations = agent.Resource.Annotations.OfType<PipelineStepAnnotation>().ToList();
+        Assert.NotEmpty(annotations);
+
+        using var serviceProvider = builder.Services.BuildServiceProvider();
+        var pipelineContext = new PipelineContext(
+            serviceProvider.GetRequiredService<DistributedApplicationModel>(),
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            serviceProvider,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        var steps = new List<PipelineStep>();
+        foreach (var annotation in annotations)
+        {
+            steps.AddRange(await annotation.CreateStepsAsync(new PipelineStepFactoryContext
+            {
+                PipelineContext = pipelineContext,
+                Resource = agent.Resource
+            }));
+        }
+
+        var beforeStartStep = steps.SingleOrDefault(s => s.Name == "deploy-my-agent-before-start");
+        Assert.NotNull(beforeStartStep);
+
+        Assert.Equal(new[] { AzureEnvironmentResource.PrepareResourcesStepName }, beforeStartStep.DependsOnSteps);
+    }
+
+    [Fact]
+    public async Task AddPromptAgent_RunMode_BeforeStartPipelineExecutesSuccessfully()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var activityReporter = new TestPipelineActivityReporter(testOutputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter>(activityReporter);
+
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
+        project.AddPromptAgent("my-agent", model, instructions: "Test agent");
+
+        using var app = builder.Build();
+
+        // This calls the real pipeline resolution + validation + execution.
+        // If any DependsOnSteps reference a non-existent step, it throws InvalidOperationException.
+        await app.ExecuteBeforeStartHooksAsync(default);
+
+        // Verify the prompt agent's deploy step was created and executed by the pipeline.
+        Assert.Contains("deploy-my-agent-before-start", activityReporter.CreatedSteps);
+        // Verify the azure-prepare-resources step (the dependency) was also executed.
+        Assert.Contains(AzureEnvironmentResource.PrepareResourcesStepName, activityReporter.CreatedSteps);
     }
 }

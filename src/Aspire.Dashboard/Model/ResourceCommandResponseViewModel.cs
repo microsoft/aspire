@@ -27,7 +27,8 @@ public enum ResourceCommandResponseKind
     Undefined = 0,
     Succeeded = 1,
     Failed = 2,
-    Cancelled = 3
+    Cancelled = 3,
+    InvalidArguments = 4
 }
 
 /// <summary>

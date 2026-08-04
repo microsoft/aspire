@@ -40,6 +40,12 @@ public sealed class RuntimeSpec
     public CommandSpec? InstallDependencies { get; init; }
 
     /// <summary>
+    /// Gets the commands to run before executing or publishing the AppHost. Null if no pre-execution validation is needed.
+    /// Watch-mode validation should be part of <see cref="WatchExecute" /> when needed.
+    /// </summary>
+    public CommandSpec[]? PreExecute { get; init; }
+
+    /// <summary>
     /// Gets the command to execute the AppHost for run.
     /// </summary>
     public required CommandSpec Execute { get; init; }

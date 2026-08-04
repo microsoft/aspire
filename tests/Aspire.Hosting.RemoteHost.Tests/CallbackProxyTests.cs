@@ -147,6 +147,31 @@ public class CallbackProxyTests
     }
 
     [Fact]
+    public async Task InvokedProxy_MarshalsHandleArgumentWithDeclaredType()
+    {
+        var invoker = new TestCallbackInvoker();
+        using var factory = CreateFactory(invoker, handleTypes:
+        [
+            new AtsTypeInfo
+            {
+                AtsTypeId = AtsTypeMapping.DeriveTypeId(typeof(ITestCallbackHandle)),
+                ClrType = typeof(ITestCallbackHandle),
+                IsInterface = true
+            }
+        ]);
+
+        var proxy = (TestCallbackWithHandle)factory.CreateProxy("test-callback", typeof(TestCallbackWithHandle))!;
+
+        await proxy(new TestCallbackHandle());
+
+        Assert.Single(invoker.Invocations);
+        var args = Assert.IsAssignableFrom<JsonObject>(invoker.Invocations[0].Args);
+        var handle = Assert.IsAssignableFrom<JsonObject>(args["p0"]);
+        Assert.NotNull(handle["$handle"]?.GetValue<string>());
+        Assert.Equal(AtsTypeMapping.DeriveTypeId(typeof(ITestCallbackHandle)), handle["$type"]?.GetValue<string>());
+    }
+
+    [Fact]
     public async Task InvokedProxy_WithResultReturnsCorrectValue()
     {
         var invoker = new TestCallbackInvoker { ResultToReturn = JsonValue.Create("result-value") };
@@ -359,7 +384,7 @@ public class CallbackProxyTests
         Assert.Equal(20, dto2.Count);
     }
 
-    private static AtsCallbackProxyFactory CreateFactory(ICallbackInvoker? invoker = null, bool registerDtoTypes = false)
+    private static AtsCallbackProxyFactory CreateFactory(ICallbackInvoker? invoker = null, bool registerDtoTypes = false, IReadOnlyList<AtsTypeInfo>? handleTypes = null)
     {
         var handles = new HandleRegistry();
         var ctRegistry = new CancellationTokenRegistry();
@@ -369,7 +394,7 @@ public class CallbackProxyTests
                 new() { TypeId = "test/TestCallbackDto", Name = "TestCallbackDto", ClrType = typeof(TestCallbackDto), Properties = [] }
             }
             : [];
-        var context = new AtsContext { Capabilities = [], HandleTypes = [], DtoTypes = dtoTypes, EnumTypes = [] };
+        var context = new AtsContext { Capabilities = [], HandleTypes = handleTypes ?? [], DtoTypes = dtoTypes, EnumTypes = [] };
         var marshaller = new AtsMarshaller(handles, context, ctRegistry, new Lazy<AtsCallbackProxyFactory>(() => throw new NotImplementedException()));
         return new AtsCallbackProxyFactory(invoker ?? new TestCallbackInvoker(), handles, ctRegistry, marshaller);
     }
@@ -384,6 +409,8 @@ public class CallbackProxyTests
     public delegate Task TestCallbackWithString(string value);
 
     public delegate Task TestCallbackWithMultipleParams(string name, int count);
+
+    public delegate Task TestCallbackWithHandle(ITestCallbackHandle handle);
 
     public delegate Task<string> TestCallbackWithStringResult(string input);
 
@@ -404,6 +431,14 @@ public class CallbackProxyTests
     {
         public string? Name { get; set; }
         public int Count { get; set; }
+    }
+
+    public interface ITestCallbackHandle
+    {
+    }
+
+    private sealed class TestCallbackHandle : ITestCallbackHandle
+    {
     }
 }
 

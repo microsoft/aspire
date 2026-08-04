@@ -127,6 +127,7 @@ internal sealed class ApiReferenceItem
 /// <summary>
 /// Represents a listable API child item.
 /// </summary>
+// `aspire docs api list --format json` uses this shape; keep docs/specs/cli-output-formats.md in sync when changing it.
 internal sealed class ApiListItem
 {
     /// <summary>
@@ -163,6 +164,7 @@ internal sealed class ApiListItem
 /// <summary>
 /// Represents an API search result.
 /// </summary>
+// `aspire docs api search --format json` uses this shape; keep docs/specs/cli-output-formats.md in sync when changing it.
 internal sealed class ApiSearchResult
 {
     /// <summary>
@@ -209,6 +211,7 @@ internal sealed class ApiSearchResult
 /// <summary>
 /// Represents the content returned by <c>aspire docs api get</c>.
 /// </summary>
+// `aspire docs api get --format json` uses this shape; keep docs/specs/cli-output-formats.md in sync when changing it.
 internal sealed class ApiContent
 {
     /// <summary>
@@ -317,6 +320,11 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
     private const int MemberSearchBatchSize = 8;
     private const string MemberIndexFingerprintVersion = "v2";
 
+    // Cache schema version for the API reference sitemap-driven index. Bump this whenever
+    // a code change would produce a different ApiReferenceItem[] for the same sitemap so
+    // older caches are invalidated on first launch. v1 is the original schema.
+    private const int IndexSchemaVersion = 1;
+
     private readonly IApiDocsFetcher _fetcher = fetcher;
     private readonly IApiDocsCache _cache = cache;
     private readonly string _sitemapUrl = ApiDocsSourceConfiguration.GetSitemapUrl(configuration);
@@ -374,7 +382,7 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
                 return;
             }
 
-            var currentFingerprint = SourceContentFingerprint.Compute(sitemapContent);
+            var currentFingerprint = SourceContentFingerprint.Compute(sitemapContent, IndexSchemaVersion);
             if (cachedItems is not null && string.Equals(cachedFingerprint, currentFingerprint, StringComparison.Ordinal))
             {
                 SetIndex(cachedItems);

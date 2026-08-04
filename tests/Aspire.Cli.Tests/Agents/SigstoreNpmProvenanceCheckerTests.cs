@@ -9,6 +9,8 @@ namespace Aspire.Cli.Tests.Agents;
 
 public class SigstoreNpmProvenanceCheckerTests
 {
+    private const string GitHubReleaseAssetBuildType = "https://actions.github.io/buildtypes/workflow/v1";
+
     #region ExtractSlsaBundleJson Tests
 
     [Fact]
@@ -257,6 +259,59 @@ public class SigstoreNpmProvenanceCheckerTests
             refInfo => refInfo.Kind == "tags");
 
         Assert.Equal(ProvenanceVerificationOutcome.Verified, result.Outcome);
+    }
+
+    [Fact]
+    public void VerifyProvenanceFields_WithGitHubReleaseAssetBuildType_ReturnsVerified()
+    {
+        var provenance = new NpmProvenanceData
+        {
+            SourceRepository = "https://github.com/microsoft/aspire-skills",
+            WorkflowPath = ".github/workflows/publish.yml",
+            BuildType = GitHubReleaseAssetBuildType,
+            WorkflowRef = "refs/tags/v0.0.1",
+            BuilderId = "https://github.com/microsoft/aspire-skills/.github/workflows/publish.yml@refs/tags/v0.0.1"
+        };
+
+        var result = SigstoreNpmProvenanceChecker.VerifyProvenanceFields(
+            provenance,
+            "https://github.com/microsoft/aspire-skills",
+            ".github/workflows/publish.yml",
+            GitHubReleaseAssetBuildType,
+            refInfo => string.Equals(refInfo.Kind, "tags", StringComparison.Ordinal) &&
+                       string.Equals(refInfo.Name, "v0.0.1", StringComparison.Ordinal));
+
+        Assert.Equal(ProvenanceVerificationOutcome.Verified, result.Outcome);
+    }
+
+    [Theory]
+    [InlineData("https://github.com/evil/aspire-skills", ".github/workflows/publish.yml", "refs/tags/v0.0.1", nameof(ProvenanceVerificationOutcome.SourceRepositoryMismatch))]
+    [InlineData("https://github.com/microsoft/aspire-skills", ".github/workflows/evil.yml", "refs/tags/v0.0.1", nameof(ProvenanceVerificationOutcome.WorkflowMismatch))]
+    [InlineData("https://github.com/microsoft/aspire-skills", ".github/workflows/publish.yml", "refs/heads/main", nameof(ProvenanceVerificationOutcome.WorkflowRefMismatch))]
+    public void VerifyProvenanceFields_WithGitHubReleaseAssetBuildType_RejectsUnexpectedProvenance(
+        string sourceRepository,
+        string workflowPath,
+        string workflowRef,
+        string expectedOutcome)
+    {
+        var provenance = new NpmProvenanceData
+        {
+            SourceRepository = sourceRepository,
+            WorkflowPath = workflowPath,
+            BuildType = GitHubReleaseAssetBuildType,
+            WorkflowRef = workflowRef,
+            BuilderId = "https://github.com/microsoft/aspire-skills/.github/workflows/publish.yml@refs/tags/v0.0.1"
+        };
+
+        var result = SigstoreNpmProvenanceChecker.VerifyProvenanceFields(
+            provenance,
+            "https://github.com/microsoft/aspire-skills",
+            ".github/workflows/publish.yml",
+            GitHubReleaseAssetBuildType,
+            refInfo => string.Equals(refInfo.Kind, "tags", StringComparison.Ordinal) &&
+                       string.Equals(refInfo.Name, "v0.0.1", StringComparison.Ordinal));
+
+        Assert.Equal(Enum.Parse<ProvenanceVerificationOutcome>(expectedOutcome), result.Outcome);
     }
 
     [Fact]
@@ -1046,124 +1101,4 @@ public class SigstoreNpmProvenanceCheckerTests
 
     #endregion
 
-    #region SAN Extraction Tests
-
-    [Theory]
-    [InlineData("URI:https://github.com/nicolo-ribaudo/chokidar-3-to-2-fork/.github/workflows/publish-npm.yml@refs/heads/main")]
-    [InlineData("uri:https://github.com/nicolo-ribaudo/chokidar-3-to-2-fork/.github/workflows/publish-npm.yml@refs/heads/main")]
-    public void ParseUriFromFormattedSan_WithUriFormat_ExtractsUri(string formatted)
-    {
-        var result = SigstoreNpmProvenanceChecker.ParseUriFromFormattedSan(formatted);
-        Assert.Equal("https://github.com/nicolo-ribaudo/chokidar-3-to-2-fork/.github/workflows/publish-npm.yml@refs/heads/main", result);
-    }
-
-    [Theory]
-    [InlineData("URL=https://github.com/nicolo-ribaudo/chokidar-3-to-2-fork/.github/workflows/publish-npm.yml@refs/heads/main")]
-    [InlineData("url=https://github.com/nicolo-ribaudo/chokidar-3-to-2-fork/.github/workflows/publish-npm.yml@refs/heads/main")]
-    public void ParseUriFromFormattedSan_WithUrlFormat_ExtractsUri(string formatted)
-    {
-        var result = SigstoreNpmProvenanceChecker.ParseUriFromFormattedSan(formatted);
-        Assert.Equal("https://github.com/nicolo-ribaudo/chokidar-3-to-2-fork/.github/workflows/publish-npm.yml@refs/heads/main", result);
-    }
-
-    [Theory]
-    [InlineData("DNS:example.com")]
-    [InlineData("email:test@example.com")]
-    [InlineData("IP Address:192.168.1.1")]
-    public void ParseUriFromFormattedSan_WithNonUriFormat_ReturnsNull(string formatted)
-    {
-        var result = SigstoreNpmProvenanceChecker.ParseUriFromFormattedSan(formatted);
-        Assert.Null(result);
-    }
-
-    [Fact]
-    public void ParseUriFromFormattedSan_WithMultipleEntries_ExtractsFirstUri()
-    {
-        var formatted = "DNS:example.com, URI:https://actions.github.com/workflow, email:test@test.com";
-        var result = SigstoreNpmProvenanceChecker.ParseUriFromFormattedSan(formatted);
-        Assert.Equal("https://actions.github.com/workflow", result);
-    }
-
-    [Fact]
-    public void ParseUriFromFormattedSan_WithWindowsMultipleEntries_ExtractsFirstUrl()
-    {
-        var formatted = "DNS Name=example.com, URL=https://actions.github.com/workflow, RFC822 Name=test@test.com";
-        var result = SigstoreNpmProvenanceChecker.ParseUriFromFormattedSan(formatted);
-        Assert.Equal("https://actions.github.com/workflow", result);
-    }
-
-    [Fact]
-    public void ParseUriFromFormattedSan_WithWhitespace_TrimsValue()
-    {
-        var formatted = "URI:  https://actions.github.com/workflow  ";
-        var result = SigstoreNpmProvenanceChecker.ParseUriFromFormattedSan(formatted);
-        Assert.Equal("https://actions.github.com/workflow", result);
-    }
-
-    [Fact]
-    public void ExtractSubjectAlternativeNamePortable_WithUriSanCert_ExtractsSan()
-    {
-        var expectedUri = "https://github.com/test-org/test-repo/.github/workflows/publish.yml@refs/heads/main";
-        using var cert = CreateCertificateWithUriSan(expectedUri);
-        var result = SigstoreNpmProvenanceChecker.ExtractSubjectAlternativeNamePortable(cert);
-        Assert.Equal(expectedUri, result);
-    }
-
-    [Fact]
-    public void ExtractSubjectAlternativeNamePortable_WithCertWithoutSan_ReturnsNull()
-    {
-        using var cert = CreateSelfSignedCertWithoutSan();
-        var result = SigstoreNpmProvenanceChecker.ExtractSubjectAlternativeNamePortable(cert);
-        Assert.Null(result);
-    }
-
-    private static System.Security.Cryptography.X509Certificates.X509Certificate2 CreateCertificateWithUriSan(string uri)
-    {
-        using var key = System.Security.Cryptography.RSA.Create(2048);
-        var request = new System.Security.Cryptography.X509Certificates.CertificateRequest(
-            "CN=Test", key, System.Security.Cryptography.HashAlgorithmName.SHA256,
-            System.Security.Cryptography.RSASignaturePadding.Pkcs1);
-
-        // Build the SAN extension with a URI entry using raw ASN.1.
-        // SubjectAlternativeName is SEQUENCE { [6] IMPLICIT IA5String <uri> }
-        // Tag 0x86 = context-specific (bit 7) | constructed=0 | tag number 6
-        var uriBytes = System.Text.Encoding.ASCII.GetBytes(uri);
-        var innerLength = uriBytes.Length;
-        var sanValueBytes = new byte[2 + innerLength + 2]; // SEQUENCE header + content
-        var offset = 0;
-
-        // Write the uniformResourceIdentifier [6] IMPLICIT
-        sanValueBytes[offset++] = 0x86; // context tag 6
-        sanValueBytes[offset++] = (byte)innerLength;
-        Array.Copy(uriBytes, 0, sanValueBytes, offset, innerLength);
-        offset += innerLength;
-
-        // Wrap in SEQUENCE
-        var sequenceContent = sanValueBytes[..offset];
-        var sequenceBytes = new byte[2 + sequenceContent.Length];
-        sequenceBytes[0] = 0x30; // SEQUENCE tag
-        sequenceBytes[1] = (byte)sequenceContent.Length;
-        Array.Copy(sequenceContent, 0, sequenceBytes, 2, sequenceContent.Length);
-
-        var sanExtension = new System.Security.Cryptography.X509Certificates.X509Extension(
-            new System.Security.Cryptography.Oid("2.5.29.17", "Subject Alternative Name"),
-            sequenceBytes,
-            critical: false);
-
-        request.CertificateExtensions.Add(sanExtension);
-
-        return request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow.AddHours(1));
-    }
-
-    private static System.Security.Cryptography.X509Certificates.X509Certificate2 CreateSelfSignedCertWithoutSan()
-    {
-        using var key = System.Security.Cryptography.RSA.Create(2048);
-        var request = new System.Security.Cryptography.X509Certificates.CertificateRequest(
-            "CN=Test", key, System.Security.Cryptography.HashAlgorithmName.SHA256,
-            System.Security.Cryptography.RSASignaturePadding.Pkcs1);
-
-        return request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow.AddHours(1));
-    }
-
-    #endregion
 }

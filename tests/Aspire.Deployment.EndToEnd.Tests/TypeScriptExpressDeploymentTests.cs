@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Tests.Utils;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
 using Xunit;
@@ -103,12 +102,12 @@ public sealed class TypeScriptExpressDeploymentTests(ITestOutputHelper output)
                 await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
             }
 
-            // Step 6: Modify apphost.ts to add Azure Container App Environment for deployment
+            // Step 6: Modify apphost.mts to add Azure Container App Environment for deployment
             {
                 var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
-                var appHostFilePath = Path.Combine(projectDir, "apphost.ts");
+                var appHostFilePath = Path.Combine(projectDir, "apphost.mts");
 
-                output.WriteLine($"Looking for apphost.ts at: {appHostFilePath}");
+                output.WriteLine($"Looking for apphost.mts at: {appHostFilePath}");
 
                 var content = File.ReadAllText(appHostFilePath);
 
@@ -125,7 +124,7 @@ await builder.build().run();
 
                 File.WriteAllText(appHostFilePath, content);
 
-                output.WriteLine($"Modified apphost.ts at: {appHostFilePath}");
+                output.WriteLine($"Modified apphost.mts at: {appHostFilePath}");
             }
 
             // Step 7: Set environment for deployment

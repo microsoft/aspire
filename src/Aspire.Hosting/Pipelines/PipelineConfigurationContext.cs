@@ -51,13 +51,13 @@ public class PipelineConfigurationContext
     /// <summary>
     /// Gets the pipeline editor used by polyglot callbacks.
     /// </summary>
-    [AspireExport(Description = "Gets the pipeline editor")]
+    [AspireExport]
     internal PipelineEditor Pipeline => new(Steps);
 
     /// <summary>
     /// Gets the logger facade used by polyglot callbacks.
     /// </summary>
-    [AspireExport(Description = "Gets the callback logger facade")]
+    [AspireExport]
     internal LogFacade Log => new(Logger);
 
     /// <summary>
@@ -65,7 +65,7 @@ public class PipelineConfigurationContext
     /// </summary>
     /// <param name="tag">The tag to search for.</param>
     /// <returns>A collection of steps that have the specified tag.</returns>
-    [AspireExport(Description = "Gets pipeline steps with the specified tag")]
+    [AspireExport]
     public IEnumerable<PipelineStep> GetSteps(string tag)
     {
         ArgumentNullException.ThrowIfNull(tag);

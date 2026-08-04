@@ -1,20 +1,22 @@
-# Aspire.Hosting.Azure.Kusto library
+# Azure Data Explorer hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure a Kusto resource.
+Use this integration to model, configure, and orchestrate a Kusto resource in an Aspire solution.
 
 ## Getting started
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire Azure Kusto Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.Azure.Kusto` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Azure.Kusto
+```bash
+aspire add Aspire.Hosting.Azure.Kusto
 ```
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add a Kusto resource and consume the connection using the following method:
+In the AppHost, add a Kusto resource and reference it from another resource:
+
+**C#**
 
 ```csharp
 var db = builder.AddAzureKustoCluster("kusto")
@@ -23,6 +25,17 @@ var db = builder.AddAzureKustoCluster("kusto")
 
 var myService = builder.AddProject<Projects.MyService>()
                        .WithReference(db);
+```
+
+**TypeScript**
+
+```typescript
+const db = await builder.addAzureKustoCluster("kusto")
+                .runAsEmulator()
+                .addReadWriteDatabase("mydb");
+
+const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
+                       .withReference(db);
 ```
 
 ## Connection Properties
@@ -46,6 +59,8 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 
 ## Additional documentation
 
+* https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/cloud/azure/azure-data-explorer/
 * https://learn.microsoft.com/en-us/kusto/
 * https://learn.microsoft.com/en-us/kusto/api/
 * https://learn.microsoft.com/en-us/azure/data-explorer/kusto-emulator-overview

@@ -20,3 +20,18 @@ internal sealed class NullDiskCache : IDiskCache
     public Task ClearAsync(CancellationToken cancellationToken = default)
         => Task.CompletedTask;
 }
+
+/// <summary>
+/// A no-op AppHost info disk cache used in tests. Always returns null on get and ignores set.
+/// </summary>
+internal sealed class NullAppHostInfoDiskCache : IAppHostInfoDiskCache
+{
+    public string GetCacheKey(FileInfo projectFile)
+        => string.Empty;
+
+    public Task<AppHostInfoCacheEntry?> TryGetAsync(FileInfo projectFile, CancellationToken cancellationToken)
+        => Task.FromResult<AppHostInfoCacheEntry?>(null);
+
+    public Task SetAsync(FileInfo projectFile, string expectedCacheKey, AppHostInfoCacheEntry entry, CancellationToken cancellationToken)
+        => Task.CompletedTask;
+}

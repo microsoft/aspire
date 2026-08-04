@@ -1,10 +1,10 @@
-﻿---
+---
 apiVersion: "keda.sh/v1alpha1"
 kind: "ScaledObject"
 metadata:
   name: "myapp-scaler"
   labels:
-    app.kubernetes.io/name: "aspire-hosting-tests"
+    app.kubernetes.io/name: "{{ .Chart.Name }}"
     app.kubernetes.io/component: "myapp"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
 spec:

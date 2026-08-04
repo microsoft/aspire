@@ -313,7 +313,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Project creation failed with exit code {0}. See logs at {1}.
+        ///   Looks up a localized string similar to Project creation failed with exit code {0}.
         /// </summary>
         public static string ProjectCreationFailed {
             get {
@@ -367,7 +367,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The template installation failed with exit code {0}. See logs at {1}.
+        ///   Looks up a localized string similar to The template installation failed with exit code {0}.
         /// </summary>
         public static string TemplateInstallationFailed {
             get {
@@ -480,6 +480,15 @@ namespace Aspire.Cli.Resources {
         public static string RunAspireRun {
             get {
                 return ResourceManager.GetString("RunAspireRun", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to [yellow]--source was used for the initial scaffold restore only and is not persisted. Later 'aspire restore' / 'aspire add' will use the channel feeds configured for this project.[/].
+        /// </summary>
+        public static string SourceOverrideNotPersistedWarning {
+            get {
+                return ResourceManager.GetString("SourceOverrideNotPersistedWarning", resourceCulture);
             }
         }
 

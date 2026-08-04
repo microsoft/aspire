@@ -23,6 +23,7 @@ public static partial class AzureKeyVaultResourceExtensions
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// By default references to the Azure Key Vault resource will be assigned the following roles:
@@ -58,7 +59,8 @@ public static partial class AzureKeyVaultResourceExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Adds an Azure Key Vault resource")]
+    /// <ats-remarks />
+    [AspireExport]
     public static IResourceBuilder<AzureKeyVaultResource> AddAzureKeyVault(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -185,8 +187,9 @@ public static partial class AzureKeyVaultResourceExtensions
     /// <param name="target">The target Azure Key Vault resource.</param>
     /// <param name="roles">The Key Vault roles to be assigned.</param>
     /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureKeyVaultRole"/> value.</exception>
-    [AspireExport("withKeyVaultRoleAssignments", MethodName = "withRoleAssignments", Description = "Assigns Key Vault roles to a resource")]
+    [AspireExport("withKeyVaultRoleAssignments")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureKeyVaultResource> target,
@@ -229,7 +232,7 @@ public static partial class AzureKeyVaultResourceExtensions
     /// <param name="builder">The Azure Key Vault resource builder.</param>
     /// <param name="secretName">The name of the secret.</param>
     /// <returns>A reference to the secret.</returns>
-    [AspireExport(Description = "Gets a secret reference from the Azure Key Vault")]
+    [AspireExport]
     public static IAzureKeyVaultSecretReference GetSecret(this IResourceBuilder<AzureKeyVaultResource> builder, string secretName)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -253,7 +256,10 @@ public static partial class AzureKeyVaultResourceExtensions
         return builder.AddSecret(name, name, parameterResource.Resource);
     }
 
-    [AspireExport("addSecret", Description = "Adds a secret to the Azure Key Vault")]
+    /// <summary>
+    /// Adds a secret to the Azure Key Vault
+    /// </summary>
+    [AspireExport("addSecret")]
     internal static IResourceBuilder<AzureKeyVaultSecretResource> AddSecretForPolyglot(
         this IResourceBuilder<AzureKeyVaultResource> builder,
         [ResourceName] string name,

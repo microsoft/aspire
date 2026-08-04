@@ -1,0 +1,24 @@
+﻿Exercises command help for every supported resource command argument shape.
+
+Usage:
+  aspire resource argument-commands all-argument-types [options] [[--] <command-options>...]
+
+Command options:
+  --message <value>      Text input shown as a value option. Required.
+  --secret <value>       Secret text input shown as a value option.
+  --count <value>        Number input with a default. Default: 5.
+  --enabled              Boolean input shown as a flag. Default: true.
+  --flavor <value>       Choice input with fixed allowed values. Allowed values: vanilla, chocolate.
+  --log-level <value>    Command option colliding with a CLI option. Use `-- --log-level <value>` to pass this command
+                         option.
+
+Options:
+  --apphost <apphost>            The path to the Aspire AppHost project file or a directory to search
+  --include-hidden               Include hidden resources in the output
+  -?, -h, /?, /h, --help         Show help and usage information
+  -l, --log-level <log-level>    Set the minimum log level for console output (Trace, Debug, Information, Warning,
+                                 Error, Critical)
+  --non-interactive              Run the command in non-interactive mode, disabling all interactive prompts and spinners
+  --nologo                       Suppress the startup banner and telemetry notice
+  --banner                       Display the animated Aspire CLI welcome banner
+  --wait-for-debugger            Wait for a debugger to attach before executing the command

@@ -28,8 +28,8 @@
         <note />
       </trans-unit>
       <trans-unit id="SummaryLogLevelHelp">
-        <source>For more details, add --log-level debug/trace to the command.</source>
-        <target state="new">For more details, add --log-level debug/trace to the command.</target>
+        <source>For more details, add --pipeline-log-level debug/trace to the command.</source>
+        <target state="new">For more details, add --pipeline-log-level debug/trace to the command.</target>
         <note />
       </trans-unit>
       <trans-unit id="SummaryStepsSucceeded">

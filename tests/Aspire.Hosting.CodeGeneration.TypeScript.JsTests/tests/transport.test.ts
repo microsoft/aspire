@@ -18,6 +18,7 @@ import {
     registerCancellation,
     unregisterCancellation,
 } from '@aspire/transport';
+import { ReferenceExpression } from '@aspire/base';
 
 // ============================================================================
 // Type Guards
@@ -570,7 +571,10 @@ describe('registerHandleWrapper', () => {
  * Creates a named-pipe server that speaks JSON-RPC, connects an AspireClient,
  * and provides a `sendRequest` helper to invoke callbacks on the client side.
  */
-function createPipeFixture(options?: { authenticate?: (token: string) => boolean | Promise<boolean> }) {
+function createPipeFixture(options?: {
+    authenticate?: (token: string) => boolean | Promise<boolean>;
+    invokeCapability?: (capabilityId: string, args: unknown) => unknown | Promise<unknown>;
+}) {
     const pipeName = `aspire-test-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const pipePath = process.platform === 'win32' ? `\\\\.\\pipe\\${pipeName}` : `/tmp/${pipeName}`;
     let serverConnection: rpc.MessageConnection | null = null;
@@ -588,7 +592,9 @@ function createPipeFixture(options?: { authenticate?: (token: string) => boolean
         serverConnection.onRequest('ping', () => 'pong');
 
         // Handle invokeCapability (return empty for most tests)
-        serverConnection.onRequest('invokeCapability', () => null);
+        serverConnection.onRequest('invokeCapability', (capabilityId: string, args: unknown) =>
+            options?.invokeCapability?.(capabilityId, args) ?? null
+        );
 
         // Handle cancelToken
         serverConnection.onRequest('cancelToken', () => true);
@@ -770,6 +776,126 @@ describe('callback invocation protocol', () => {
         } finally {
             unregisterCallback(id);
             await fixture.cleanup(client);
+        }
+    });
+});
+
+// ============================================================================
+// Capability argument marshalling
+// ============================================================================
+
+describe('capability argument marshalling', () => {
+    async function connectFixture(options: Parameters<typeof createPipeFixture>[0]) {
+        const previousToken = process.env.ASPIRE_REMOTE_APPHOST_TOKEN;
+        const testToken = 'marshalling-test-token';
+        process.env.ASPIRE_REMOTE_APPHOST_TOKEN = testToken;
+
+        const fixture = createPipeFixture({
+            ...options,
+            authenticate: (token: string) => token === testToken,
+        });
+
+        await fixture.start();
+        const client = new AspireClient(fixture.clientSocketPath);
+
+        try {
+            await client.connect();
+            await fixture.waitForClient();
+        }
+        catch (error)
+        {
+            if (previousToken === undefined) {
+                delete process.env.ASPIRE_REMOTE_APPHOST_TOKEN;
+            } else {
+                process.env.ASPIRE_REMOTE_APPHOST_TOKEN = previousToken;
+            }
+
+            await fixture.cleanup(client);
+            throw error;
+        }
+
+        return {
+            client,
+            cleanup: async () => {
+                if (previousToken === undefined) {
+                    delete process.env.ASPIRE_REMOTE_APPHOST_TOKEN;
+                } else {
+                    process.env.ASPIRE_REMOTE_APPHOST_TOKEN = previousToken;
+                }
+
+                await fixture.cleanup(client);
+            },
+        };
+    }
+
+    it('sends DTO List properties as JSON arrays to the AppHost server', async () => {
+        let received: { capabilityId: string; args: unknown } | undefined;
+        const { client, cleanup } = await connectFixture({
+            invokeCapability: (capabilityId, args) => {
+                received = { capabilityId, args };
+                return null;
+            },
+        });
+
+        try {
+            await client.invokeCapability('Aspire.Hosting.Azure.Network/withAccessRule', {
+                rule: {
+                    name: 'allow-corp-network',
+                    direction: 'Inbound',
+                    addressPrefixes: ['203.0.113.0/24'],
+                },
+            });
+
+            expect(received).toEqual({
+                capabilityId: 'Aspire.Hosting.Azure.Network/withAccessRule',
+                args: {
+                    rule: {
+                        name: 'allow-corp-network',
+                        direction: 'Inbound',
+                        addressPrefixes: ['203.0.113.0/24'],
+                    },
+                },
+            });
+        } finally {
+            await cleanup();
+        }
+    });
+
+    it('marshals transport values inside DTO List properties before sending them', async () => {
+        let receivedArgs: any;
+        const { client, cleanup } = await connectFixture({
+            invokeCapability: (_capabilityId, args) => {
+                receivedArgs = args;
+                return null;
+            },
+        });
+
+        try {
+            const expression = new ReferenceExpression('prefix-{0}', [
+                new Handle({ $handle: 'parameter-1', $type: 'Aspire.Hosting.ApplicationModel/ParameterResource' }),
+            ]);
+
+            await client.invokeCapability('Aspire.Hosting.Azure.Network/withAccessRule', {
+                rule: {
+                    addressPrefixReferences: [expression],
+                },
+            });
+
+            expect(receivedArgs.rule.addressPrefixReferences).toEqual([
+                {
+                    $expr: {
+                        format: 'prefix-{0}',
+                        valueProviders: [
+                            {
+                                $handle: 'parameter-1',
+                                $type: 'Aspire.Hosting.ApplicationModel/ParameterResource',
+                            },
+                        ],
+                    },
+                },
+            ]);
+        } finally {
+            await cleanup();
         }
     });
 });

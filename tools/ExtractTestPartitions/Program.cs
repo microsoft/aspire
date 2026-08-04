@@ -75,7 +75,7 @@ static void ExtractPartitions(string assemblyPath, string outputFile)
                 var attrTypeName = attr.AttributeType.FullName ?? attr.AttributeType.Name;
 
                 // Check for Trait attribute with Partition key
-                if (!attrTypeName.EndsWith(".TraitAttribute") && attrTypeName != "TraitAttribute")
+                if (!attrTypeName.EndsWith(".TraitAttribute", StringComparison.Ordinal) && attrTypeName != "TraitAttribute")
                 {
                     continue;
                 }

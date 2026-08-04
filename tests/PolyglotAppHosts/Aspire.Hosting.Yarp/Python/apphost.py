@@ -63,6 +63,7 @@ with create_builder() as builder:
     proxy.with_volume()
     proxy.with_build_arg("BUILD_VERSION", build_version)
     proxy.with_build_secret("MY_SECRET", build_secret)
+    proxy.with_static_files(source_path=".")
     proxy.publish_with_static_files(static_files_source)
     proxy.with_config(configure_proxy)
     proxy.publish_as_connection_string()

@@ -57,6 +57,11 @@
         <target state="new">Certificate trust operation returned: {0}</target>
         <note>{0} is the EnsureCertificateResult value</note>
       </trans-unit>
+      <trans-unit id="TrustPartialSuccess">
+        <source>HTTPS development certificate was partially trusted. Continuing because partial trust is usable for CLI HTTPS diagnostics on Linux; browser trust may still be incomplete.</source>
+        <target state="new">HTTPS development certificate was partially trusted. Continuing because partial trust is usable for CLI HTTPS diagnostics on Linux; browser trust may still be incomplete.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TrustProgress">
         <source>Trusting development certificate (may require elevated permissions)...</source>
         <target state="new">Trusting development certificate (may require elevated permissions)...</target>

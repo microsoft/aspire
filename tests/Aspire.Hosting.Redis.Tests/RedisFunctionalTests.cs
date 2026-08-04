@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+
 using System.Net.Http.Json;
 using System.Net;
 using Aspire.TestUtilities;
@@ -128,6 +130,41 @@ public class RedisFunctionalTests(ITestOutputHelper testOutputHelper)
         var value = await db.StringGetAsync("key");
 
         Assert.Equal("value", value);
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public async Task WithModuleLoadsNativeModule()
+    {
+        var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+
+        var redis = builder.AddRedis("redis")
+            .WithModule(RedisModules.Json);
+
+        using var app = builder.Build();
+
+        await app.StartAsync(cts.Token);
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(redis.Resource.Name, cts.Token);
+
+        var hb = Host.CreateApplicationBuilder();
+        hb.AddTestLogging(testOutputHelper);
+
+        hb.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [$"ConnectionStrings:{redis.Resource.Name}"] = $"{await redis.Resource.GetConnectionStringAsync()},allowAdmin=true"
+        });
+
+        hb.AddRedisClient(redis.Resource.Name);
+
+        using var host = hb.Build();
+
+        await host.StartAsync(cts.Token);
+
+        var redisClient = host.Services.GetRequiredService<IConnectionMultiplexer>();
+        var modules = await redisClient.GetDatabase().ExecuteAsync("MODULE", "LIST");
+
+        Assert.Contains(GetModuleNames(modules), static name => string.Equals(name, "ReJSON", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -601,6 +638,24 @@ public class RedisFunctionalTests(ITestOutputHelper testOutputHelper)
         await EnsureRedisInsightEulaAccepted(client, ct);
     }
 
+    private static IEnumerable<string> GetModuleNames(RedisResult modules)
+    {
+        // Redis returns MODULE LIST as an array of name/value arrays:
+        //   1) 1) "name" 2) "ReJSON" 3) "ver" 4) (integer) 80209 ...
+        foreach (var module in (RedisResult[]?)modules ?? [])
+        {
+            var values = (RedisResult[]?)module ?? [];
+
+            for (var i = 0; i < values.Length - 1; i += 2)
+            {
+                if ((string?)values[i] == "name" && (string?)values[i + 1] is { } name)
+                {
+                    yield return name;
+                }
+            }
+        }
+    }
+
     [Fact]
     [RequiresFeature(TestFeature.Docker)]
     public async Task WithRedisCommanderShouldWorkWithPassword()
@@ -643,4 +698,27 @@ public class RedisFunctionalTests(ITestOutputHelper testOutputHelper)
         public int? Port { get; set; }
         public string? Name { get; set; }
     }
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public Task Redis_WithPersistentLifetime_ReusesContainer()
+    {
+        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
+            testOutputHelper,
+            builder => builder.AddRedis("resource").WithPersistentLifetime(),
+            "resource",
+            useTestContainerRegistry: true);
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public Task Redis_WithPersistentLifetimeAndRandomizedPorts_ReusesContainer()
+    {
+        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
+            testOutputHelper,
+            builder => builder.AddRedis("resource").WithPersistentLifetime(),
+            "resource",
+            useTestContainerRegistry: true,
+            randomizePorts: true);
+    }
+
 }

@@ -4,7 +4,8 @@ import { getParserForDocument } from './parsers/AppHostResourceParser';
 import './parsers/csharpAppHostParser';
 import './parsers/jsTsAppHostParser';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
-import { findResourceState, findWorkspaceResourceState } from './resourceStateUtils';
+import { AppHostDisplayInfo } from '../views/AppHostDataRepository';
+import { findResourceState, findWorkspaceResourceState, matchesAppHostPathOrDirectory } from './resourceStateUtils';
 import { ResourceState, StateStyle, HealthStatus } from './resourceConstants';
 
 type GutterCategory = 'running' | 'warning' | 'error' | 'starting' | 'stopped' | 'completed';
@@ -50,9 +51,13 @@ function makeGutterSvgUri(category: GutterCategory): vscode.Uri {
             </svg>`;
             break;
         case 'completed':
-            // Pale green checkmark (lighter than running)
+            // Grey hollow circle with a small check inside — conveys "ran, finished cleanly,
+            // not currently active". Deliberately NOT a bright green check so a stopped
+            // resource is never confused with a running one (the previous pale-green check
+            // was visually too similar to 'running' at gutter icon sizes).
             svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16">
-                <path d="M3 8.5 L6.5 12 L13 4" stroke="#69d1a0" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="8" cy="8" r="6" fill="none" stroke="#6a737d" stroke-width="1.25"/>
+                <path d="M5 8.5 L7.25 10.5 L11 6" stroke="#6a737d" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>`;
             break;
     }
@@ -101,7 +106,10 @@ function classifyState(state: string, stateStyle: string, healthStatus: string, 
 
 export class AspireGutterDecorationProvider implements vscode.Disposable {
     private readonly _disposables: vscode.Disposable[] = [];
+    private readonly _updateVersions = new WeakMap<vscode.TextEditor, number>();
     private _debounceTimer: ReturnType<typeof setTimeout> | undefined;
+    private _nextUpdateVersion = 0;
+    private _isDisposed = false;
 
     constructor(private readonly _treeProvider: AspireAppHostTreeProvider) {
         this._disposables.push(
@@ -124,7 +132,7 @@ export class AspireGutterDecorationProvider implements vscode.Disposable {
             this._debounceTimer = undefined;
             for (const editor of vscode.window.visibleTextEditors) {
                 if (editor.document === document) {
-                    this._applyDecorations(editor);
+                    void this._applyDecorations(editor);
                 }
             }
         }, 250);
@@ -132,45 +140,65 @@ export class AspireGutterDecorationProvider implements vscode.Disposable {
 
     private _updateAllVisibleEditors(): void {
         for (const editor of vscode.window.visibleTextEditors) {
-            this._applyDecorations(editor);
+            void this._applyDecorations(editor);
         }
     }
 
-    private _applyDecorations(editor: vscode.TextEditor): void {
+    private async _applyDecorations(editor: vscode.TextEditor): Promise<void> {
+        const version = ++this._nextUpdateVersion;
+        this._updateVersions.set(editor, version);
         if (!vscode.workspace.getConfiguration('aspire').get<boolean>('enableGutterDecorations', true)) {
-            this._clearDecorations(editor);
+            this._clearDecorations(editor, version);
             return;
         }
 
-        const parser = getParserForDocument(editor.document);
+        const parser = await getParserForDocument(editor.document);
+        if (!this._isCurrentUpdate(editor, version)) {
+            return;
+        }
+
         if (!parser) {
-            this._clearDecorations(editor);
+            this._clearDecorations(editor, version);
             return;
         }
 
         const appHosts = this._treeProvider.appHosts;
         const workspaceResources = this._treeProvider.workspaceResources;
-        if (appHosts.length === 0 && workspaceResources.length === 0) {
-            this._clearDecorations(editor);
+        const workspaceAppHostPath = this._treeProvider.workspaceAppHostPath ?? '';
+        const globalAppHost = this._resolveGlobalAppHostForDocument(editor.document, appHosts);
+        const workspaceAppHostMatchesDocument = workspaceAppHostPath !== '' && this._documentMatchesAppHostPath(editor.document, workspaceAppHostPath);
+        if (globalAppHost === undefined && (!workspaceAppHostMatchesDocument || workspaceResources.length === 0)) {
+            this._clearDecorations(editor, version);
             return;
         }
 
-        const resources = parser.parseResources(editor.document);
+        const resources = await parser.parseResources(editor.document);
+        if (!this._isCurrentUpdate(editor, version)) {
+            return;
+        }
+
         if (resources.length === 0) {
-            this._clearDecorations(editor);
+            this._clearDecorations(editor, version);
             return;
         }
 
-        const findWorkspace = findWorkspaceResourceState(workspaceResources, this._treeProvider.workspaceAppHostPath ?? '');
+        const findWorkspace = workspaceAppHostMatchesDocument
+            ? findWorkspaceResourceState(workspaceResources, workspaceAppHostPath)
+            : () => undefined;
         const buckets = new Map<GutterCategory, vscode.DecorationOptions[]>(
             gutterCategories.map(c => [c, []])
         );
 
+        // Track which (line, category) pairs we've already pushed so chained resources
+        // sharing a line don't double-stack identical decorations, and so two resources
+        // declared on the same line keep distinct icons rather than silently overwriting
+        // each other.
+        const seenLineCategories = new Set<string>();
         for (const parsed of resources) {
             if (parsed.kind !== 'resource') {
                 continue;
             }
-            const match = findResourceState(appHosts, parsed.name)
+            const match = (globalAppHost ? findResourceState([globalAppHost], parsed.name) : undefined)
                 ?? findWorkspace(parsed.name);
             if (!match) {
                 continue;
@@ -178,7 +206,13 @@ export class AspireGutterDecorationProvider implements vscode.Disposable {
 
             const { resource } = match;
             const category = classifyState(resource.state ?? '', resource.stateStyle ?? '', resource.healthStatus ?? '', resource.exitCode);
-            buckets.get(category)!.push({ range: editor.document.lineAt(parsed.range.start.line).range });
+            const line = parsed.range.start.line;
+            const dedupeKey = `${line}:${category}`;
+            if (seenLineCategories.has(dedupeKey)) {
+                continue;
+            }
+            seenLineCategories.add(dedupeKey);
+            buckets.get(category)!.push({ range: editor.document.lineAt(line).range });
         }
 
         for (const [category, options] of buckets) {
@@ -186,13 +220,34 @@ export class AspireGutterDecorationProvider implements vscode.Disposable {
         }
     }
 
-    private _clearDecorations(editor: vscode.TextEditor): void {
+    private _resolveGlobalAppHostForDocument(document: vscode.TextDocument, appHosts: readonly AppHostDisplayInfo[]): AppHostDisplayInfo | undefined {
+        return appHosts.find(host => this._documentMatchesAppHostPath(document, host.appHostPath));
+    }
+
+    private _documentMatchesAppHostPath(document: vscode.TextDocument, appHostPath: string | undefined): boolean {
+        if (!appHostPath) {
+            return false;
+        }
+
+        return matchesAppHostPathOrDirectory(document.uri.fsPath, appHostPath);
+    }
+
+    private _clearDecorations(editor: vscode.TextEditor, version: number): void {
+        if (!this._isCurrentUpdate(editor, version)) {
+            return;
+        }
+
         for (const type of Object.values(decorationTypes)) {
             editor.setDecorations(type, []);
         }
     }
 
+    private _isCurrentUpdate(editor: vscode.TextEditor, version: number): boolean {
+        return !this._isDisposed && this._updateVersions.get(editor) === version;
+    }
+
     dispose(): void {
+        this._isDisposed = true;
         if (this._debounceTimer) {
             clearTimeout(this._debounceTimer);
         }

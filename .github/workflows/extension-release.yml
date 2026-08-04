@@ -1,0 +1,613 @@
+# Extension Release Workflow
+#
+# Prepares a VS Code extension release by:
+# 1. Validating the new version is greater than the current version in package.json
+# 2. Generating release notes from extension commits between two commits
+# 3. Updating the version in extension/package.json
+# 4. Creating a CHANGELOG.md entry
+# 5. Opening a draft PR with the changes
+
+name: Extension Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'New extension version (e.g., 1.0.8)'
+        required: true
+        type: string
+      from_sha:
+        description: 'Start commit SHA. Leave empty to use the latest stable Marketplace VSIX .version SHA.'
+        required: false
+        type: string
+        default: ''
+      to_sha:
+        description: 'End commit SHA (defaults to latest commit on main if empty)'
+        required: false
+        type: string
+        default: ''
+      dry_run:
+        description: 'Validate and generate the release files without pushing a branch or opening a PR'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: extension-release
+  cancel-in-progress: false
+
+jobs:
+  prepare-release:
+    name: Prepare Extension Release
+    runs-on: ubuntu-latest
+    # Dry-run is intentionally allowed in forks so maintainers can validate the
+    # Marketplace baseline, changelog generation, and PR body without bot secrets.
+    if: ${{ github.repository_owner == 'microsoft' || inputs.dry_run }}
+    steps:
+      - name: Check if user is authorized
+        env:
+          ACTOR: ${{ github.actor }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -eo pipefail
+
+          echo "Checking if ${ACTOR} is authorized to run extension releases..."
+          PERMISSION=$(gh api "repos/${REPOSITORY}/collaborators/${ACTOR}/permission" --jq '.permission')
+          echo "User permission level: ${PERMISSION}"
+
+          # `write` is the highest permission level granted to contributors on
+          # microsoft/aspire — nobody holds `maintain`/`admin`, so gating on those
+          # alone would make this workflow undispatchable by anyone. Accept `write`
+          # and above, matching the repo's other contributor-gated workflows
+          # (.github/workflows/apply-test-attributes.yml, backport.yml).
+          if [[ "$PERMISSION" != "admin" && "$PERMISSION" != "maintain" && "$PERMISSION" != "write" ]]; then
+            echo "❌ ERROR: User ${ACTOR} does not have sufficient permissions."
+            echo "Required: 'write', 'maintain', or 'admin' permission level."
+            echo "Current: '${PERMISSION}'"
+            exit 1
+          fi
+
+          echo "✓ User ${ACTOR} is authorized (permission: ${PERMISSION})"
+
+      - name: Checkout Repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: main
+          fetch-depth: 0  # Full history for diff generation
+          persist-credentials: false
+
+      - name: Resolve commit range
+        id: resolve-sha
+        env:
+          INPUT_FROM_SHA: ${{ inputs.from_sha }}
+          INPUT_TO_SHA: ${{ inputs.to_sha }}
+        run: |
+          set -eo pipefail
+
+          WORK_DIR="${RUNNER_TEMP}/extension-release/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -p "$WORK_DIR"
+
+          git fetch --no-tags origin main:refs/remotes/origin/main
+
+          TO_SHA="$INPUT_TO_SHA"
+          if [ -z "$TO_SHA" ]; then
+            TO_SHA=$(git rev-parse origin/main)
+            echo "No end SHA provided, using origin/main: $TO_SHA"
+          fi
+
+          FROM_SHA="$INPUT_FROM_SHA"
+          FROM_SHA_SOURCE="input"
+          BASE_VERSION=""
+
+          if [ -z "$FROM_SHA" ]; then
+            FROM_SHA_SOURCE="marketplace"
+            echo "No start SHA provided. Resolving from the latest stable VS Code Marketplace release..."
+
+            MARKETPLACE_QUERY=$(jq -n '{
+              filters: [
+                {
+                  criteria: [
+                    { filterType: 7, value: "microsoft-aspire.aspire-vscode" }
+                  ],
+                  pageNumber: 1,
+                  pageSize: 1,
+                  sortBy: 0,
+                  sortOrder: 0
+                }
+              ],
+              assetTypes: ["Microsoft.VisualStudio.Services.VSIXPackage"],
+              flags: 914
+            }')
+
+            HTTP_CODE=$(curl -sS -o "$WORK_DIR/marketplace_response.json" -w "%{http_code}" --max-time 60 --retry 2 -X POST \
+              "https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery" \
+              -H "Content-Type: application/json" \
+              -H "Accept: application/json;api-version=7.2-preview.1" \
+              -d "$MARKETPLACE_QUERY")
+
+            if [ "$HTTP_CODE" != "200" ]; then
+              echo "❌ Marketplace query returned HTTP $HTTP_CODE"
+              cat "$WORK_DIR/marketplace_response.json"
+              exit 1
+            fi
+
+            BASE_VERSION=$(jq -r '.results[0].extensions[0].versions[0].version // empty' "$WORK_DIR/marketplace_response.json")
+            VSIX_URL=$(jq -r '.results[0].extensions[0].versions[0].files[]? | select(.assetType == "Microsoft.VisualStudio.Services.VSIXPackage") | .source' "$WORK_DIR/marketplace_response.json")
+
+            if [ -z "$BASE_VERSION" ] || [ -z "$VSIX_URL" ]; then
+              echo "❌ Could not find the latest Marketplace VSIX metadata for microsoft-aspire.aspire-vscode."
+              cat "$WORK_DIR/marketplace_response.json"
+              exit 1
+            fi
+
+            echo "Latest Marketplace version: $BASE_VERSION"
+            curl -fsSL --max-time 60 --retry 2 "$VSIX_URL" -o "$WORK_DIR/latest-marketplace.vsix"
+
+            python3 - "$WORK_DIR/latest-marketplace.vsix" > "$WORK_DIR/marketplace_vsix.json" <<'PY'
+          import json
+          import sys
+          import zipfile
+
+          vsix_path = sys.argv[1]
+          with zipfile.ZipFile(vsix_path) as archive:
+              try:
+                  sha = archive.read("extension/.version").decode("utf-8").strip()
+              except KeyError:
+                  raise SystemExit("The Marketplace VSIX does not contain extension/.version; pass from_sha explicitly.")
+
+              try:
+                  package_json = json.loads(archive.read("extension/package.json").decode("utf-8"))
+                  version = package_json.get("version", "")
+              except (KeyError, ValueError):
+                  # version is only used for a non-fatal mismatch warning, so a
+                  # missing or malformed package.json must not fail the workflow.
+                  version = ""
+
+          print(json.dumps({"sha": sha, "packageVersion": version}))
+          PY
+
+            FROM_SHA=$(jq -r '.sha // empty' "$WORK_DIR/marketplace_vsix.json")
+            VSIX_PACKAGE_VERSION=$(jq -r '.packageVersion // empty' "$WORK_DIR/marketplace_vsix.json")
+
+            if [ "$VSIX_PACKAGE_VERSION" != "$BASE_VERSION" ]; then
+              echo "⚠️ Marketplace metadata version ($BASE_VERSION) does not match VSIX package.json version ($VSIX_PACKAGE_VERSION)."
+            fi
+
+            if [[ ! "$FROM_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+              echo "❌ extension/.version from Marketplace VSIX did not contain a full git SHA: '$FROM_SHA'"
+              echo "Pass from_sha explicitly if you need to use a historical release without embedded commit metadata."
+              exit 1
+            fi
+
+            echo "Resolved Marketplace v${BASE_VERSION} to commit $FROM_SHA"
+          fi
+
+          # Resolve and validate both SHAs (accepts short or full SHAs)
+          FROM_SHA=$(git rev-parse --verify "${FROM_SHA}^{commit}" 2>/dev/null) || {
+            echo "❌ Start SHA does not exist in this checkout: $FROM_SHA"
+            if [ "$FROM_SHA_SOURCE" = "marketplace" ]; then
+              echo "The SHA came from the latest Marketplace VSIX .version file. Pass from_sha explicitly if the shipped commit is not reachable from main."
+            fi
+            exit 1
+          }
+          TO_SHA=$(git rev-parse --verify "${TO_SHA}^{commit}" 2>/dev/null) || {
+            echo "❌ End SHA does not exist: $TO_SHA"
+            exit 1
+          }
+
+          if ! git merge-base --is-ancestor "$FROM_SHA" "$TO_SHA"; then
+            echo "❌ Invalid SHA range: from_sha must be an ancestor of to_sha."
+            echo "from_sha: $FROM_SHA"
+            echo "to_sha: $TO_SHA"
+            echo "The supplied SHAs may be swapped or from unrelated histories."
+            exit 1
+          fi
+
+          echo "from_sha=$FROM_SHA" >> "$GITHUB_OUTPUT"
+          echo "to_sha=$TO_SHA" >> "$GITHUB_OUTPUT"
+          echo "from_sha_source=$FROM_SHA_SOURCE" >> "$GITHUB_OUTPUT"
+          echo "base_version=$BASE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "✓ SHA range: ${FROM_SHA}..${TO_SHA}"
+
+      - name: Validate version format
+        env:
+          INPUT_VERSION: ${{ inputs.release_version }}
+        run: |
+          set -eo pipefail
+
+          VERSION="$INPUT_VERSION"
+          if [[ ! "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "❌ Invalid version format: $VERSION"
+            echo "Expected format: major.minor.patch without leading zeros (e.g., 1.0.8 or 0.9.0)"
+            exit 1
+          fi
+          echo "✓ Version format is valid: $VERSION"
+
+      - name: Check version is greater than current
+        id: version-check
+        env:
+          INPUT_VERSION: ${{ inputs.release_version }}
+        run: |
+          set -eo pipefail
+
+          CURRENT_VERSION=$(jq -r '.version' extension/package.json)
+          NEW_VERSION="$INPUT_VERSION"
+
+          echo "Current version: $CURRENT_VERSION"
+          echo "New version: $NEW_VERSION"
+
+          # Split versions into components
+          IFS='.' read -r CUR_MAJOR CUR_MINOR CUR_PATCH <<< "$CURRENT_VERSION"
+          IFS='.' read -r NEW_MAJOR NEW_MINOR NEW_PATCH <<< "$NEW_VERSION"
+
+          # Compare versions
+          IS_GREATER=false
+          if [ "$NEW_MAJOR" -gt "$CUR_MAJOR" ]; then
+            IS_GREATER=true
+          elif [ "$NEW_MAJOR" -eq "$CUR_MAJOR" ]; then
+            if [ "$NEW_MINOR" -gt "$CUR_MINOR" ]; then
+              IS_GREATER=true
+            elif [ "$NEW_MINOR" -eq "$CUR_MINOR" ]; then
+              if [ "$NEW_PATCH" -gt "$CUR_PATCH" ]; then
+                IS_GREATER=true
+              fi
+            fi
+          fi
+
+          if [ "$IS_GREATER" != "true" ]; then
+            echo "❌ New version ($NEW_VERSION) must be greater than current version ($CURRENT_VERSION)"
+            exit 1
+          fi
+
+          echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "✓ Version bump: $CURRENT_VERSION → $NEW_VERSION"
+
+      - name: Generate extension commit log
+        id: generate-diff
+        env:
+          FROM_SHA: ${{ steps.resolve-sha.outputs.from_sha }}
+          TO_SHA: ${{ steps.resolve-sha.outputs.to_sha }}
+        run: |
+          set -eo pipefail
+
+          WORK_DIR="${RUNNER_TEMP}/extension-release/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -p "$WORK_DIR"
+
+          echo "Generating commit log for extension changes..."
+
+          # Get commit messages for extension/ changes. Keep this focused on the
+          # extension tree because the generated changelog is published to VS Code
+          # users, not to repository maintainers.
+          COMMITS=$(git log --format='%h%x09%s' --no-merges "${FROM_SHA}..${TO_SHA}" -- extension/ 2>/dev/null || echo "")
+
+          if [ -z "$COMMITS" ]; then
+            echo "⚠️ No extension-specific commits found in range. Fallback release notes will use the maintenance entry."
+          fi
+
+          # Write to a file so later steps can read it without multiline output handling.
+          printf '%s\n' "$COMMITS" > "$WORK_DIR/commits.txt"
+
+          COMMIT_COUNT=$(printf '%s\n' "$COMMITS" | awk 'NF { count++ } END { print count + 0 }')
+          echo "commit_count=$COMMIT_COUNT" >> "$GITHUB_OUTPUT"
+          echo "✓ Found $COMMIT_COUNT extension commits in range"
+
+      - name: Generate release notes
+        id: release-notes
+        env:
+          NEW_VERSION: ${{ inputs.release_version }}
+          FROM_SHA: ${{ steps.resolve-sha.outputs.from_sha }}
+          TO_SHA: ${{ steps.resolve-sha.outputs.to_sha }}
+          BASE_VERSION: ${{ steps.resolve-sha.outputs.base_version }}
+        run: |
+          set -eo pipefail
+
+          WORK_DIR="${RUNNER_TEMP}/extension-release/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          RELEASE_NOTES="$WORK_DIR/release_notes.md"
+          : > "$RELEASE_NOTES"
+
+          NOTE_COUNT=0
+          while IFS= read -r line; do
+            if [ -n "$line" ]; then
+              # Commit lines are emitted as: "<short-sha>\t<subject>".
+              MSG=$(printf '%s\n' "$line" | cut -f2-)
+              MSG=$(printf '%s\n' "$MSG" | sed -E 's/^[A-Za-z]+(\([^)]*\))?!?:[[:space:]]*//; s/[[:space:]]*\(#[0-9]+\)$//')
+              MSG=$(printf '%s\n' "$MSG" | perl -0pe 's/\r//g; s/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]//g; s/!\[[^\]]*\]\([^)]+\)//g; s/<[^>\n]*>//g')
+
+              case "$MSG" in
+                ""|Merge\ *|merge\ *|Release\ *|release\ *|Bump\ *|bump\ *|Update\ package-lock*|Update\ yarn.lock*)
+                  continue
+                  ;;
+              esac
+
+              if [ "$NOTE_COUNT" -eq 0 ]; then
+                echo "### Changes (auto-generated from commits)" >> "$RELEASE_NOTES"
+              fi
+
+              printf -- '- %s\n' "$MSG" >> "$RELEASE_NOTES"
+              NOTE_COUNT=$((NOTE_COUNT + 1))
+              if [ "$NOTE_COUNT" -ge 8 ]; then
+                break
+              fi
+            fi
+          done < "$WORK_DIR/commits.txt"
+
+          if [ "$NOTE_COUNT" -eq 0 ]; then
+            {
+              echo "### Maintenance"
+              echo "- No user-facing extension changes were detected."
+            } > "$RELEASE_NOTES"
+          fi
+
+          echo "✓ Release notes generated"
+
+          RELEASE_NOTES_CONTENT=$(printf '%.8000s' "$(cat "$RELEASE_NOTES")")
+          printf '%s\n' "$RELEASE_NOTES_CONTENT" > "$RELEASE_NOTES"
+
+          # The changelog entry committed to the PR is a PLACEHOLDER, not the
+          # deterministic commit list. A separate agentic workflow
+          # (.github/workflows/extension-changelog.md) detects the marker comment
+          # below, generates polished user-facing notes from the extension commit
+          # range, and replaces this block on the PR branch via a safe output. This
+          # keeps AI generation in an agentic workflow (read-only agent + safe
+          # outputs) instead of invoking a model inline here. The deterministic
+          # commit list ("$RELEASE_NOTES") is preserved in the PR body as a
+          # human-reviewable fallback in case the agent never runs (e.g. on a fork).
+          #
+          # The marker carries the full from/to SHAs and the Marketplace base
+          # version so the agent can validate them and recompute the same range.
+          # BASE_VERSION may be empty when no Marketplace baseline was resolved.
+          {
+            echo "## v${NEW_VERSION}"
+            echo ""
+            echo "<!-- aspire-ext-changelog from=${FROM_SHA} to=${TO_SHA} base=${BASE_VERSION} -->"
+            echo "_Release notes are being generated automatically and will replace this placeholder shortly. If this line is still here after the \`extension-changelog\` workflow runs, copy the deterministic commit list from the pull request description into this entry before merging._"
+          } > "$WORK_DIR/changelog_entry.md"
+
+      - name: Update package.json version
+        env:
+          NEW_VERSION: ${{ inputs.release_version }}
+        run: |
+          set -eo pipefail
+
+          cd extension
+          jq --arg v "$NEW_VERSION" '.version = $v' package.json > package.json.tmp
+          mv package.json.tmp package.json
+          echo "✓ Updated extension/package.json version to $NEW_VERSION"
+
+      - name: Update or create CHANGELOG.md
+        env:
+          NEW_VERSION: ${{ inputs.release_version }}
+        run: |
+          set -eo pipefail
+
+          WORK_DIR="${RUNNER_TEMP}/extension-release/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          CHANGELOG="extension/CHANGELOG.md"
+          ENTRY=$(cat "$WORK_DIR/changelog_entry.md")
+
+          if [ -f "$CHANGELOG" ]; then
+            HEADER=$(head -1 "$CHANGELOG")
+            if [[ "$HEADER" == \#* ]]; then
+              {
+                echo "$HEADER"
+                echo ""
+                echo "$ENTRY"
+                echo ""
+                # The changelog starts with a title followed by a blank line. The
+                # new entry already ends with its own separator, so strip only the
+                # leading blank lines from the old body before appending it.
+                tail -n +2 "$CHANGELOG" | sed '/[^[:space:]]/,$!d'
+              } > "${CHANGELOG}.tmp"
+            else
+              echo "⚠️ CHANGELOG.md does not start with a Markdown header. Prepending entry at the top."
+              {
+                echo "$ENTRY"
+                echo ""
+                cat "$CHANGELOG"
+              } > "${CHANGELOG}.tmp"
+            fi
+            mv "${CHANGELOG}.tmp" "$CHANGELOG"
+          else
+            {
+              echo "# Aspire VS Code Extension Changelog"
+              echo ""
+              echo "$ENTRY"
+            } > "$CHANGELOG"
+          fi
+
+          echo "✓ Updated $CHANGELOG"
+          echo ""
+          echo "=== Changelog Entry ==="
+          cat "$WORK_DIR/changelog_entry.md"
+          echo "========================"
+
+      - name: Build pull request body
+        env:
+          NEW_VERSION: ${{ inputs.release_version }}
+          CURRENT_VERSION: ${{ steps.version-check.outputs.current_version }}
+          FROM_SHA: ${{ steps.resolve-sha.outputs.from_sha }}
+          TO_SHA: ${{ steps.resolve-sha.outputs.to_sha }}
+          FROM_SHA_SOURCE: ${{ steps.resolve-sha.outputs.from_sha_source }}
+          BASE_VERSION: ${{ steps.resolve-sha.outputs.base_version }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -eo pipefail
+
+          WORK_DIR="${RUNNER_TEMP}/extension-release/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          RELEASE_NOTES=$(cat "$WORK_DIR/release_notes.md")
+
+          {
+            echo "## VS Code Extension Release v${NEW_VERSION}"
+            echo ""
+            echo "**Version bump:** ${CURRENT_VERSION} → ${NEW_VERSION}"
+            echo "**Commit range:** [\`${FROM_SHA:0:7}\`](https://github.com/${REPOSITORY}/commit/${FROM_SHA})..[\`${TO_SHA:0:7}\`](https://github.com/${REPOSITORY}/commit/${TO_SHA})"
+            if [ "$FROM_SHA_SOURCE" = "marketplace" ]; then
+              echo "**Baseline:** VS Code Marketplace v${BASE_VERSION} (from the shipped VSIX \`extension/.version\`)"
+            else
+              echo "**Baseline:** explicitly supplied \`from_sha\`"
+            fi
+            echo ""
+            echo "### Proposed release notes (deterministic fallback)"
+            echo ""
+            echo "The \`extension-changelog\` agentic workflow generates the final, polished \`extension/CHANGELOG.md\` entry and replaces the placeholder on this branch. The commit-derived list below is the human-reviewable fallback — if the agent does not run, paste it into \`extension/CHANGELOG.md\` before merging."
+            echo ""
+            printf '%s\n' "$RELEASE_NOTES"
+            echo ""
+            echo "### Release instructions"
+            echo ""
+            echo "1. Confirm \`extension/CHANGELOG.md\` is specific, user-facing, and free of internal-only changes. The \`extension-changelog\` agentic workflow replaces the placeholder entry with generated notes shortly after this PR is opened; if the placeholder is still present, fill it in from the deterministic fallback above before merging."
+            echo "2. Get a signed Azure DevOps \`microsoft-aspire\` source build of the merge commit that published the \`aspire-vscode-extension\` artifact with exactly one \`.vsix\`, matching \`.manifest\`, and matching \`.signature.p7s\`:"
+            echo "   - **Stable release:** use the build that runs automatically on merge — it packages the extension as a stable (non-pre-release) VSIX."
+            echo "   - **Pre-release:** the automatic merge build is stable-only, so manually queue the [\`microsoft-aspire\`](https://dev.azure.com/dnceng/internal/_build?definitionId=1602) pipeline on the merge commit with \`Package VS Code Extension as Pre-Release=true\`, then use that build instead. The publish job fails if the VSIX pre-release flag does not match \`IsPrerelease\`."
+            echo "3. Run Azure DevOps pipeline [\`release-publish-nuget\`](https://dev.azure.com/dnceng/internal/_build?definitionId=1600&_a=summary) and select that build under **Resources** → \`aspire-build\`."
+            echo "4. For an extension-only release, use these parameters:"
+            echo ""
+            echo "   | Parameter | Value |"
+            echo "   |-----------|-------|"
+            echo "   | \`ReleaseVersion\` | \`auto\` |"
+            echo "   | \`IsPrerelease\` | \`false\` for a stable release, \`true\` for a pre-release |"
+            echo "   | \`DryRun\` | \`false\` |"
+            echo "   | \`SkipNuGetPublish\` | \`true\` |"
+            echo "   | \`SkipChannelPromotion\` | \`true\` |"
+            echo "   | \`SkipWinGetPublish\` | \`true\` |"
+            echo "   | \`SkipHomebrewValidation\` | \`true\` |"
+            echo "   | \`SkipGitHubTasks\` | \`true\` |"
+            echo "   | \`SkipReleaseAssets\` | \`true\` |"
+            echo "   | \`SkipVSCodeExtensionPublish\` | \`false\` |"
+            echo ""
+            echo "5. For a full Aspire release, keep the normal NuGet/channel/GitHub task settings and additionally set \`SkipVSCodeExtensionPublish=false\`. For a pre-release extension, also use a source build queued with \`Package VS Code Extension as Pre-Release=true\` and set \`IsPrerelease=true\`."
+            echo "6. To validate without publishing, run the same pipeline with \`DryRun=true\` and \`SkipVSCodeExtensionPublish=false\`; the release job validates the VSIX/manifest/signature triplet and Marketplace PAT but skips \`vsce publish\`."
+            echo ""
+            echo "> **Note:** This preparation workflow can also be tested from a fork with \`dry_run=true\`. Dry-run mode resolves the Marketplace baseline, generates the changelog entry, uploads the proposed files as a workflow artifact, and skips bot-token branch/PR creation."
+          } > "$WORK_DIR/pr_body.md"
+
+      - name: Dry-run summary
+        if: ${{ inputs.dry_run }}
+        env:
+          FROM_SHA: ${{ steps.resolve-sha.outputs.from_sha }}
+          TO_SHA: ${{ steps.resolve-sha.outputs.to_sha }}
+        run: |
+          set -eo pipefail
+
+          WORK_DIR="${RUNNER_TEMP}/extension-release/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          # CHANGELOG.md may be newly created (untracked), and `git diff` skips
+          # untracked files. Mark it intent-to-add so the preview diff includes
+          # the changelog entry — the primary artifact a dry run is meant to show.
+          git add -N extension/CHANGELOG.md
+          git diff -- extension/package.json extension/CHANGELOG.md > "$WORK_DIR/proposed_changes.diff"
+
+          {
+            echo "## Extension release dry run"
+            echo ""
+            echo "- Commit range: \`${FROM_SHA}\`..\`${TO_SHA}\`"
+            echo "- Proposed files are available in the \`extension-release-dry-run\` artifact."
+            echo ""
+            echo "### Changelog entry"
+            echo ""
+            cat "$WORK_DIR/changelog_entry.md"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload dry-run release artifacts
+        if: ${{ inputs.dry_run }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: extension-release-dry-run
+          path: |
+            ${{ runner.temp }}/extension-release/${{ github.run_id }}-${{ github.run_attempt }}/changelog_entry.md
+            ${{ runner.temp }}/extension-release/${{ github.run_id }}-${{ github.run_attempt }}/release_notes.md
+            ${{ runner.temp }}/extension-release/${{ github.run_id }}-${{ github.run_attempt }}/pr_body.md
+            ${{ runner.temp }}/extension-release/${{ github.run_id }}-${{ github.run_attempt }}/proposed_changes.diff
+
+      - name: Generate GitHub App Token
+        if: ${{ !inputs.dry_run }}
+        id: app-token
+        uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
+        with:
+          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+
+      - name: Create draft pull request
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          NEW_VERSION: ${{ inputs.release_version }}
+          REPOSITORY: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
+        run: |
+          set -eo pipefail
+
+          WORK_DIR="${RUNNER_TEMP}/extension-release/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          BRANCH_NAME="extension-release/v${NEW_VERSION}"
+
+          # GitHub's Git HTTPS endpoint expects token credentials in the URL/credential
+          # flow (the same pattern used by pr-docs-check.md and
+          # release-update-support-mdx.md). Supplying a bearer extraHeader is not enough
+          # for `git push`, which otherwise falls back to prompting for a username.
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          export GIT_TERMINAL_PROMPT=0
+          SERVER_URL_STRIPPED="${SERVER_URL#https://}"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@${SERVER_URL_STRIPPED}/${REPOSITORY}.git"
+
+          # Create branch and commit
+          git checkout -B "$BRANCH_NAME"
+          git add extension/package.json extension/CHANGELOG.md
+          git commit -m "Prepare VS Code extension release v${NEW_VERSION}"
+          if git ls-remote --exit-code --heads origin "$BRANCH_NAME" >/dev/null 2>&1; then
+            git fetch origin "$BRANCH_NAME:refs/remotes/origin/$BRANCH_NAME"
+          fi
+          git push --force-with-lease origin "$BRANCH_NAME"
+
+          # Create or update draft PR. Capture the PR number directly from each
+          # path (the update path already resolved it; `gh pr create` prints the
+          # new PR's URL) instead of re-querying with `gh pr list` afterwards,
+          # which can transiently return empty immediately after creation.
+          EXISTING_PR=$(gh pr list --head "$BRANCH_NAME" --base main --json number --jq '.[0].number // empty' 2>/dev/null || true)
+          if [ -n "$EXISTING_PR" ]; then
+            gh pr edit "$EXISTING_PR" \
+              --title "Prepare VS Code extension release v${NEW_VERSION}" \
+              --body-file "$WORK_DIR/pr_body.md"
+            PR_NUMBER="$EXISTING_PR"
+            echo "✓ Updated existing draft PR #${PR_NUMBER} for extension release v${NEW_VERSION}"
+          else
+            # `gh pr create` prints the created PR URL (e.g. https://github.com/microsoft/aspire/pull/123)
+            # on its last line; take the trailing path segment as the number.
+            PR_URL=$(gh pr create \
+              --base main \
+              --head "$BRANCH_NAME" \
+              --title "Prepare VS Code extension release v${NEW_VERSION}" \
+              --body-file "$WORK_DIR/pr_body.md" \
+              --draft | tail -n1)
+            PR_NUMBER="${PR_URL##*/}"
+            echo "✓ Created draft PR #${PR_NUMBER} for extension release v${NEW_VERSION}"
+          fi
+
+          # Apply the trigger label using the GitHub App token — not the default
+          # GITHUB_TOKEN — which is what lets the downstream `extension-changelog`
+          # agentic workflow fire on the `labeled` event (workflows are not
+          # triggered by actions performed with the implicit GITHUB_TOKEN).
+          if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "::error::Could not resolve the extension release PR number to apply the trigger label (got '${PR_NUMBER}')."
+            exit 1
+          fi
+          # Ensure the label exists before adding it (`--force` is idempotent: it
+          # updates the label if it already exists and creates it otherwise).
+          gh label create vscode-extension-release \
+            --color BFD4F2 \
+            --description "Bot-created VS Code extension release PR; triggers the extension-changelog agentic workflow." \
+            --force >/dev/null 2>&1 || true
+          # Remove then re-add the label so a fresh `labeled` event always fires,
+          # even on a re-run where the label is already present (adding a label
+          # that already exists on the PR is a no-op that fires no event). On a
+          # re-run the release workflow has just force-pushed a new placeholder,
+          # so the downstream changelog workflow must run again. The remove is a
+          # harmless no-op (with `|| true`) when the label isn't present yet, and
+          # the resulting `unlabeled` event is ignored by extension-changelog
+          # (which only triggers on `labeled`).
+          gh pr edit "$PR_NUMBER" --remove-label vscode-extension-release >/dev/null 2>&1 || true
+          gh pr edit "$PR_NUMBER" --add-label vscode-extension-release
+          echo "✓ Applied 'vscode-extension-release' label to PR #${PR_NUMBER}"
