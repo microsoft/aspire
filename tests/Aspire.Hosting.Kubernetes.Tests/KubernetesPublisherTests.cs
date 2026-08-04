@@ -382,8 +382,8 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PublishAsync_SupportsProjectedSecretVolumes()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env");
 
@@ -447,7 +447,7 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
 
         app.Run();
 
-        var deploymentPath = Path.Combine(tempDir.Path, "templates/myapp/deployment.yaml");
+        var deploymentPath = Path.Combine(workspace.Path, "templates/myapp/deployment.yaml");
         var deployment = await File.ReadAllTextAsync(deploymentPath);
 
         await Verify(deployment, "yaml");
@@ -456,8 +456,8 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PublishAsync_SupportsProjectedConfigMapDownwardApiAndServiceAccountTokenVolumes()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env");
 
@@ -540,7 +540,7 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
 
         app.Run();
 
-        var deploymentPath = Path.Combine(tempDir.Path, "templates/myapp/deployment.yaml");
+        var deploymentPath = Path.Combine(workspace.Path, "templates/myapp/deployment.yaml");
         var deployment = await File.ReadAllTextAsync(deploymentPath);
 
         await Verify(deployment, "yaml");
