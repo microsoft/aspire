@@ -8,11 +8,11 @@
     "build": "tsc"
   },
   "dependencies": {
-    "express": "^5.2.1",
+    "express": "^4.22.2",
     "pg": "^8.13.0"
   },
   "devDependencies": {
-    "@types/express": "^5.0.6",
+    "@types/express": "^4.17.21",
     "@types/node": "^20.0.0",
     "@types/pg": "^8.11.0",
     "tsx": "^4.19.0",
