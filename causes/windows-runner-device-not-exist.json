@@ -1,0 +1,16 @@
+{
+  "id": "windows-runner-device-not-exist",
+  "type": "infra-failure",
+  "title": "Windows runner temp file command path inaccessible: 'A device which does not exist was specified'",
+  "error_pattern": "A device which does not exist was specified. : 'D:\\a\\_temp\\_runner_file_commands\\add_path_...'\nD:\\a\\aspire\\aspire\\.dotnet\\sdk\\10.0.201\\NuGet.targets(196,5): error : A device which does not exist was specified.\nBuild FAILED.",
+  "occurrences": [
+    {
+      "run_id": 30946837201,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/30946837201",
+      "job": "Tests / Hosting-4 / Hosting-4 (windows-latest)",
+      "pr_number": 18943,
+      "observed_at": "2026-08-04T21:05:13Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19002"
+}

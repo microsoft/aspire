@@ -1,0 +1,29 @@
+{
+  "run_id": 30946837201,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/30946837201",
+  "analyzed_at": "2026-08-04T21:05:13Z",
+  "verdict": "transient-infra",
+  "pr": {
+    "number": 18943,
+    "title": "Dashboard: design-token system, typography refresh, UX polish & axe accessibility tests",
+    "author": "IEvangelist",
+    "state": "closed",
+    "head_branch": "dapine/dashboard-css-tokens",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18943"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting-4 / Hosting-4 (windows-latest)",
+      "id": 92124210827,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/30946837201/job/92124210827",
+      "classification": "transient-infra",
+      "reason": "Windows runner infrastructure failure: 'A device which does not exist was specified' when writing to D:\\a\\_temp\\_runner_file_commands\\add_path_* paths during NuGet restore/build. This is a GitHub Actions runner environment issue unrelated to PR changes.",
+      "failed_steps": ["Build test project", "Check for hang dump files", "Upload logs, and test results", "Copy CLI E2E recordings for upload", "Upload CLI E2E recordings", "Generate test results summary", "Post Checkout code"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["windows-runner-device-not-exist"]
+}
