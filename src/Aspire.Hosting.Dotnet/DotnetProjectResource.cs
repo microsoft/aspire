@@ -1,7 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-namespace Aspire.Hosting.ApplicationModel;
+using System.Diagnostics.CodeAnalysis;
+using Aspire.Hosting.ApplicationModel;
+
+namespace Aspire.Hosting.Dotnet;
 
 /// <summary>
 /// A resource that represents a specified C# project or file-based app added by path.
@@ -15,6 +18,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </remarks>
 /// <param name="name">The name of the resource in the application model.</param>
 /// <param name="workingDirectory">The working directory for the app, typically the directory containing the project or <c>.cs</c> file.</param>
+[Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 [AspireExport(ExposeProperties = true)]
 public class DotnetProjectResource(string name, string workingDirectory)
     : ExecutableResource(name, "dotnet", workingDirectory), IResourceWithServiceDiscovery, IProjectLaunchDefaultsResource

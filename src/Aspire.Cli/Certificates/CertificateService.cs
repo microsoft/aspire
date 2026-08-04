@@ -69,7 +69,7 @@ internal sealed class CertificateService(
 
         if (!canPerformTrust)
         {
-            var preCheck = certificateToolRunner.CheckHttpCertificate();
+            var preCheck = certificateToolRunner.CheckHttpCertificate(cancellationToken);
 
             if (!preCheck.HasCertificates && ShouldGenerateHttpsCertificate())
             {
@@ -90,7 +90,7 @@ internal sealed class CertificateService(
                 if (generateResult is EnsureCertificateResult.Succeeded or EnsureCertificateResult.ValidCertificatePresent)
                 {
                     // Refresh the check so subsequent trust-level logic reflects the newly created cert.
-                    preCheck = certificateToolRunner.CheckHttpCertificate();
+                    preCheck = certificateToolRunner.CheckHttpCertificate(cancellationToken);
                 }
                 else
                 {
@@ -136,7 +136,7 @@ internal sealed class CertificateService(
             interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.CertificatesMayNotBeFullyTrusted, trustResultCode));
         }
 
-        var postTrustCheck = certificateToolRunner.CheckHttpCertificate();
+        var postTrustCheck = certificateToolRunner.CheckHttpCertificate(cancellationToken);
         if (postTrustCheck.IsPartiallyTrusted && isLinux)
         {
             ConfigureSslCertDir(environmentVariables);

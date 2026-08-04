@@ -243,6 +243,7 @@ internal static class CliTestHelper
         services.AddTransient<NewCommand>();
         services.AddTransient<InitCommand>();
         services.AddTransient<AppHostLauncher>();
+        services.AddTransient<DcpWorkloadCleanupService>();
         services.AddTransient<RunCommand>();
         services.AddTransient<StopCommand>();
         services.AddTransient<StartCommand>();
@@ -793,13 +794,20 @@ internal sealed class TestBundleService(bool isBundle) : IBundleService
 
     public Layout.LayoutConfiguration? Layout { get; set; }
 
-    public Task EnsureExtractedAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    public Exception? EnsureExtractedException { get; set; }
+
+    public Func<CancellationToken, Task>? EnsureExtractedAsyncCallback { get; set; }
+
+    public Task EnsureExtractedAsync(CancellationToken cancellationToken = default)
+        => EnsureExtractedAsyncCallback?.Invoke(cancellationToken) ?? Task.CompletedTask;
 
     public Task<BundleExtractResult> ExtractAsync(string destinationPath, bool force = false, CancellationToken cancellationToken = default)
         => Task.FromResult(isBundle ? BundleExtractResult.AlreadyUpToDate : BundleExtractResult.NoPayload);
 
     public Task<BundleLayoutLease?> EnsureExtractedAndAcquireLayoutAsync(string holderKind, string? commandName = null, CancellationToken cancellationToken = default)
-        => Task.FromResult(Layout is null ? null : new BundleLayoutLease(Layout, lease: null));
+        => EnsureExtractedException is not null
+            ? Task.FromException<BundleLayoutLease?>(EnsureExtractedException)
+            : Task.FromResult(Layout is null ? null : new BundleLayoutLease(Layout, lease: null));
 
     public string? GetDefaultExtractDir(string processPath) => null;
 }

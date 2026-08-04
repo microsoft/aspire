@@ -163,20 +163,33 @@ builder.Build().Run();
                   "fdurls=$(az afd endpoint list -g \"$RG_NAME\" --profile-name $(az afd profile list -g \"$RG_NAME\" --query \"[0].name\" -o tsv 2>/dev/null) --query \"[].hostName\" -o tsv 2>/dev/null) && " +
                   "echo \"Front Door endpoints: $fdurls\" && " +
                   "failed=0 && " +
+                  // Share a single deadline across every endpoint (see the rationale comment below the
+                  // command) so the whole loop stays bounded no matter how many endpoints are returned.
+                  "deadline=$(( $(date +%s) + 660 )) && " +
                   // Verify ACA endpoints
                   "for url in $urls; do " +
                   "echo \"Checking ACA https://$url...\"; " +
                   "success=0; " +
-                  "for i in $(seq 1 18); do " +
+                  "while true; do " +
                   "STATUS=$(curl -s -o /dev/null -w \"%{http_code}\" \"https://$url\" --max-time 30 2>/dev/null); " +
-                  "if [ \"$STATUS\" = \"200\" ] || [ \"$STATUS\" = \"302\" ]; then echo \"  ✅ $STATUS (attempt $i)\"; success=1; break; fi; " +
-                  "echo \"  Attempt $i: $STATUS, retrying in 10s...\"; sleep 10; " +
+                  "if [ \"$STATUS\" = \"200\" ] || [ \"$STATUS\" = \"302\" ]; then echo \"  ✅ $STATUS\"; success=1; break; fi; " +
+                  "if [ \"$(date +%s)\" -ge \"$deadline\" ]; then break; fi; " +
+                  "echo \"  $STATUS, retrying in 10s...\"; sleep 10; " +
                   "done; " +
-                  "if [ \"$success\" -eq 0 ]; then echo \"  ❌ Failed after 18 attempts\"; failed=1; fi; " +
+                  "if [ \"$success\" -eq 0 ]; then echo \"  ❌ $url not reachable before deadline\"; failed=1; fi; " +
                   "done && " +
                   "if [ \"$failed\" -ne 0 ]; then echo \"❌ One or more endpoint checks failed\"; exit 1; fi");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
+            // The in-terminal verification loop above checks every external ACA endpoint, retrying each
+            // with `curl --max-time 30` + `sleep 10`. `urls` can contain more than one endpoint (for
+            // example the workload plus the Aspire dashboard), and the endpoints are checked
+            // sequentially, so a per-endpoint retry budget would let the total runtime grow with the
+            // number of endpoints. Instead the loop shares a single ~11-minute deadline across all
+            // endpoints (each still gets at least one attempt), which keeps the worst case bounded.
+            // The outer success-prompt wait must exceed that deadline plus the final in-flight
+            // `curl --max-time 30`, so 15 minutes covers it; a shorter wait would abandon a
+            // still-running (and often eventually-successful) loop and fail an otherwise healthy deploy.
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(15));
 
             // Step 11: Exit terminal
             await auto.TypeAsync("exit");

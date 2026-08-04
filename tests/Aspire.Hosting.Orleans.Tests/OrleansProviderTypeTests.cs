@@ -64,9 +64,6 @@ public class OrleansProviderTypeTests
             .WithOrleansProviderType("Redis")
             .WithOrleansProviderType("AdoNet");
 
-        var annotation = Assert.Single(provider.Resource.Annotations.OfType<OrleansProviderTypeAnnotation>());
-        Assert.Equal("AdoNet", annotation.ProviderType);
-
         var orleans = builder.AddOrleans("orleans")
             .WithClustering(provider);
 
@@ -103,20 +100,6 @@ public class OrleansProviderTypeTests
         });
 
         var action = () => provider.WithOrleansProviderType(providerType!);
-
-        var exception = providerType is null
-            ? Assert.Throws<ArgumentNullException>(action)
-            : Assert.Throws<ArgumentException>(action);
-        Assert.Equal(nameof(providerType), exception.ParamName);
-    }
-
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData(" ")]
-    public void CtorOrleansProviderTypeAnnotationShouldThrowWhenProviderTypeIsNullOrWhiteSpace(string? providerType)
-    {
-        var action = () => new OrleansProviderTypeAnnotation(providerType!);
 
         var exception = providerType is null
             ? Assert.Throws<ArgumentNullException>(action)

@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using System.Text.Json;
 using Aspire.Hosting.Testing;
 using Aspire.Hosting.Utils;
@@ -10,6 +12,23 @@ namespace Aspire.Hosting.Tests;
 
 public class WithTerminalTests
 {
+    [Fact]
+    public void TerminalImplementationTypesAreInternal()
+    {
+        Assert.True(typeof(TerminalAnnotation).IsNotPublic);
+        Assert.True(typeof(TerminalHostResource).IsNotPublic);
+        Assert.True(typeof(TerminalHostLayout).IsNotPublic);
+    }
+
+    [Fact]
+    public void TerminalOptionsIsExperimental()
+    {
+        var attribute = Assert.Single(typeof(TerminalOptions).GetCustomAttributes<ExperimentalAttribute>());
+
+        Assert.Equal("ASPIRETERMINAL001", attribute.DiagnosticId);
+        Assert.Equal("https://aka.ms/aspire/diagnostics/{0}", attribute.UrlFormat);
+    }
+
     [Fact]
     public async Task WithTerminalAddsTerminalAnnotation()
     {

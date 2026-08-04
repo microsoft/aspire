@@ -8,6 +8,7 @@
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 #pragma warning disable ASPIREFILESYSTEM001
 #pragma warning disable ASPIREUSERSECRETS001
+#pragma warning disable ASPIREWATCH001
 
 using System.Diagnostics;
 using System.Reflection;
@@ -141,7 +142,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             return _innerBuilder.Configuration["Publishing:Publisher"] switch
             {
                 { } publisher => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Publish, publisher),
-                _ => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+                _ => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { RunConfiguration = BuildRunConfiguration() }
             };
         }
 
@@ -154,9 +155,20 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         return operation switch
         {
-            DistributedApplicationOperation.Run => new DistributedApplicationExecutionContextOptions(operation),
+            DistributedApplicationOperation.Run => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { RunConfiguration = BuildRunConfiguration() },
             DistributedApplicationOperation.Publish => new DistributedApplicationExecutionContextOptions(operation, _innerBuilder.Configuration["Publishing:Publisher"] ?? "manifest"),
             _ => throw new DistributedApplicationException("Invalid operation specified. Valid operations are 'publish' or 'run'.")
+        };
+    }
+
+    private RunConfiguration BuildRunConfiguration()
+    {
+        // Only "true" and "false" (case-insensitively) are accepted. bool.TryParse rejects everything else,
+        // including values some configuration sources emit for booleans such as "1" or "yes". An unusable
+        // value must never fail an otherwise valid run, so anything unrecognized falls back to the default.
+        return new RunConfiguration
+        {
+            WatchEnabled = bool.TryParse(_innerBuilder.Configuration["AppHost:Run:WatchEnabled"], out var watchEnabled) && watchEnabled
         };
     }
 

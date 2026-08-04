@@ -128,9 +128,11 @@ builder.Build().Run();
 
             // Step 8: Set environment variables for deployment
             // - Unset ASPIRE_PLAYGROUND to avoid conflicts
+            // - Unset the job-level Azure__Location=westus3 the CI workflow injects: on Linux it coexists
+            //   with AZURE__LOCATION (case-sensitive env) and .NET config may bind the inherited westus3 instead
             // - Set Azure location to Australia East (DASv4 SKU availability)
             // - Set AZURE__RESOURCEGROUP to use our unique resource group name
-            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=australiaeast && export AZURE__RESOURCEGROUP={resourceGroupName}");
+            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && unset Azure__Location && export AZURE__LOCATION=australiaeast && export AZURE__RESOURCEGROUP={resourceGroupName}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 

@@ -128,7 +128,7 @@ export class MeaningfulEngagementReporter implements vscode.Disposable {
             apphost_present: appHostSummary.languages === 'none' ? 'false' : 'true',
         });
 
-        sendTelemetryEvent('engagement/active', {
+        sendTelemetryEvent('aspire/vscode/engagement/active', {
             trigger,
             apphost_present: appHostSummary.languages === 'none' ? 'false' : 'true',
             apphost_languages: appHostSummary.languages,

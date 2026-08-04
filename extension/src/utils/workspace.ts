@@ -260,7 +260,7 @@ export async function checkCliAvailableOrRedirect(operation: 'command_gate' | 'd
     // Resolve CLI path fresh each time — settings or PATH may have changed
     const startTime = Date.now();
     const result = await resolveCliPath();
-    sendTelemetryEvent('cli/availability', {
+    sendTelemetryEvent('aspire/vscode/cli/availability', {
         available: result.available ? 'true' : 'false',
         source: result.source,
         operation,

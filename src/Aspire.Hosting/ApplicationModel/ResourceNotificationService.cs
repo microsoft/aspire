@@ -585,14 +585,14 @@ public class ResourceNotificationService : IDisposable
             .Distinct(StringComparers.ResourceName)
             .ToArray();
 
-        // Only transition replicas that are actually starting up to "Waiting".
-        // Replicas already in a Running or terminal state should not be clobbered,
-        // as this broadcast targets ALL replicas of the resource (model-level update),
-        // not just the specific replica being started.
+        // Explicit-start resources should not auto-transition to Waiting even if they have dependencies
+        // (they should be considered Waiting only after an attempt is made to start them).
+        // Resources with no instances managed by Aspire do not "start" from Aspire's perspective, 
+        // so they are always allowed to transition to Waiting if they are waiting on dependencies.
+        var allowNotStarted = !resource.HasAnnotationOfType<ExplicitStartupAnnotation>() || !resource.TryGetInstances(out _);
+
         return PublishUpdateAsync(resource, s =>
-            s.State?.Text is null
-            || s.State?.Text == KnownResourceStates.Starting
-            || s.State?.Text == KnownResourceStates.Waiting
+            CanTransitionToWaiting(s.State?.Text, allowNotStarted)
                 ? s with
                 {
                     State = KnownResourceStates.Waiting,
@@ -600,6 +600,12 @@ public class ResourceNotificationService : IDisposable
                 }
                 : s);
     }
+
+    private static bool CanTransitionToWaiting(string? state, bool allowNotStarted) =>
+        state is null
+        || (allowNotStarted && state == KnownResourceStates.NotStarted)
+        || state == KnownResourceStates.Starting
+        || state == KnownResourceStates.Waiting;
 
     private Task ClearWaitingForDependenciesAsync(IResource resource)
     {

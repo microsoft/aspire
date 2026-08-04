@@ -96,7 +96,7 @@ public sealed class AksStarterWithRedisHelmDeploymentTests(ITestOutputHelper out
 
             // Step 3: Create resource group
             output.WriteLine("Step 3: Creating resource group...");
-            await auto.TypeAsync($"az group create --name {resourceGroupName} --location westus3 --output table");
+            await auto.TypeAsync($"az group create --name {resourceGroupName} --location centralus --output table");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
@@ -120,7 +120,7 @@ public sealed class AksStarterWithRedisHelmDeploymentTests(ITestOutputHelper out
                   $"--resource-group {resourceGroupName} " +
                   $"--name {clusterName} " +
                   $"--node-count 1 " +
-                  $"--node-vm-size Standard_D2s_v3 " +
+                  $"--node-vm-size Standard_D2s_v5 " +
                   $"--generate-ssh-keys " +
                   $"--attach-acr {acrName} " +
                   $"--enable-managed-identity " +

@@ -61,26 +61,11 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
         // Add pipeline configuration annotation to set up dependencies between Azure resources
         Annotations.Add(new PipelineConfigurationAnnotation(context =>
         {
-            // Force evaluation of the Bicep template to ensure parameters are expanded
-            _ = GetBicepTemplateString();
-
-            // Find Azure resource references in the parameters
-            var azureReferences = new HashSet<IAzureResource>();
-            foreach (var parameter in Parameters)
-            {
-                ProcessAzureReferences(azureReferences, parameter.Value);
-            }
-
-            foreach (var reference in References)
-            {
-                ProcessAzureReferences(azureReferences, reference);
-            }
-
             // Get the provision steps for this resource
             var provisionSteps = context.GetSteps(this, WellKnownPipelineTags.ProvisionInfrastructure);
 
             // Make this resource's provision steps depend on the provision steps of referenced Azure resources
-            foreach (var azureReference in azureReferences)
+            foreach (var azureReference in GetAzureReferences())
             {
                 var dependencySteps = context.GetSteps(azureReference, WellKnownPipelineTags.ProvisionInfrastructure);
                 provisionSteps.DependsOn(dependencySteps);
@@ -93,6 +78,31 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
     internal string? TemplateString { get; set; }
 
     internal string? TemplateResourceName { get; }
+
+    internal HashSet<IAzureResource> GetAzureReferences()
+    {
+        // Force evaluation of the Bicep template to ensure parameters are expanded.
+        _ = GetBicepTemplateString();
+
+        var azureReferences = GetExplicitAzureReferences();
+        foreach (var parameter in Parameters)
+        {
+            ProcessAzureReferences(azureReferences, parameter.Value);
+        }
+
+        return azureReferences;
+    }
+
+    internal HashSet<IAzureResource> GetExplicitAzureReferences()
+    {
+        var azureReferences = new HashSet<IAzureResource>();
+        foreach (var reference in References)
+        {
+            ProcessAzureReferences(azureReferences, reference);
+        }
+
+        return azureReferences;
+    }
 
     /// <summary>
     /// Parameters that will be passed into the bicep template.

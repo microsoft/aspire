@@ -20,7 +20,7 @@
     "vite": "^6.4.3"
   },
   "overrides": {
-    "postcss": "8.5.10",
+    "postcss": "8.5.20",
     "@babel/core": "7.29.6"
   }
 }

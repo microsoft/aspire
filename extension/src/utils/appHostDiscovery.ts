@@ -429,7 +429,7 @@ function emitAppHostDiscoveryTelemetry(
     candidates: readonly CandidateAppHostDisplayInfo[],
     startTime: number,
 ): void {
-    sendTelemetryEvent('apphost/discovery/result', {
+    sendTelemetryEvent('aspire/vscode/apphost/discovery/result', {
         outcome,
         source,
         apphost_languages: summarizeAppHostLanguages(candidates),

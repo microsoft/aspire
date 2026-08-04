@@ -21,13 +21,23 @@ interface RecordedEvent {
 class FakeTelemetryReporter {
     public events: RecordedEvent[] = [];
 
+    public telemetryLevel: 'all' | 'error' | 'crash' | 'off' = 'all';
+
     sendTelemetryEvent(name: string, properties?: Record<string, string>, measurements?: Record<string, number>): void {
-        this.events.push({ name, properties, measurements });
+        // Extension code now bypasses this path; recording here would only
+        // see a regression to the prefixed channel. Kept as a typed no-op
+        // so the fake still satisfies the TelemetryReporter shape.
     }
 
     sendTelemetryErrorEvent(): void { /* not used here */ }
-    sendDangerousTelemetryEvent(): void { /* not used here */ }
-    sendDangerousTelemetryErrorEvent(): void { /* not used here */ }
+
+    sendDangerousTelemetryEvent(name: string, properties?: Record<string, string>, measurements?: Record<string, number>): void {
+        this.events.push({ name, properties, measurements });
+    }
+
+    sendDangerousTelemetryErrorEvent(name: string, properties?: Record<string, string>, measurements?: Record<string, number>): void {
+        this.events.push({ name, properties, measurements });
+    }
     sendRawTelemetryEvent(): void { /* not used here */ }
     dispose(): Promise<void> { return Promise.resolve(); }
 }
@@ -181,7 +191,7 @@ suite('AppHost discovery', () => {
 
                 assert.strictEqual(fake.events.length, 1);
                 const event = fake.events[0];
-                assert.strictEqual(event.name, 'apphost/discovery/result');
+                assert.strictEqual(event.name, 'aspire/vscode/apphost/discovery/result');
                 assert.deepStrictEqual(event.properties, {
                     outcome: 'success',
                     source: 'ls',
@@ -214,7 +224,7 @@ suite('AppHost discovery', () => {
 
                 assert.strictEqual(fake.events.length, 1);
                 const event = fake.events[0];
-                assert.strictEqual(event.name, 'apphost/discovery/result');
+                assert.strictEqual(event.name, 'aspire/vscode/apphost/discovery/result');
                 assert.deepStrictEqual(event.properties, {
                     outcome: 'error',
                     source: 'all',
