@@ -349,7 +349,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true..
+        ///   Looks up a localized string similar to Installed Aspire agent telemetry hooks for: {0}. Only Aspire asset usage and interactions, MCP tool usage, and reference-file usage are recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true..
         /// </summary>
         internal static string InitCommand_TelemetryHooksInstalled {
             get {
@@ -727,7 +727,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly..
+        ///   Looks up a localized string similar to Record AI agent asset and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly..
         /// </summary>
         internal static string AgentTelemetryCommand_Description {
             get {
@@ -736,7 +736,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The telemetry event type (skill_invocation, tool_invocation, or reference_file_read).
+        ///   Looks up a localized string similar to The telemetry event type (asset_invocation, tool_invocation, or reference_file_read).
         /// </summary>
         internal static string AgentTelemetryCommand_EventTypeDescription {
             get {
@@ -763,11 +763,20 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The Aspire skill name for a skill_invocation event.
+        ///   Looks up a localized string similar to The Aspire agent asset kind (skill or extension).
         /// </summary>
-        internal static string AgentTelemetryCommand_SkillNameDescription {
+        internal static string AgentTelemetryCommand_AssetKindDescription {
             get {
-                return ResourceManager.GetString("AgentTelemetryCommand_SkillNameDescription", resourceCulture);
+                return ResourceManager.GetString("AgentTelemetryCommand_AssetKindDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The Aspire agent asset name for an asset event.
+        /// </summary>
+        internal static string AgentTelemetryCommand_AssetNameDescription {
+            get {
+                return ResourceManager.GetString("AgentTelemetryCommand_AssetNameDescription", resourceCulture);
             }
         }
 

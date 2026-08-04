@@ -9,8 +9,8 @@ public class AgentTelemetryInvocationTests
 {
     [Theory]
     [InlineData("agent telemetry")]
-    [InlineData("agent telemetry --event-type skill_invocation")]
-    [InlineData("agent telemetry --skill-name aspire --timestamp 2026-01-01T00:00:00Z")]
+    [InlineData("agent telemetry --event-type asset_invocation")]
+    [InlineData("agent telemetry --asset-kind skill --asset-name aspire --timestamp 2026-01-01T00:00:00Z")]
     public void Matches_ReturnsTrue_ForAgentTelemetryInvocation(string commandLine)
     {
         Assert.True(AgentTelemetryInvocation.Matches(commandLine.Split(' ')));

@@ -13,8 +13,10 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
 {
-    [Fact]
-    public async Task AgentTelemetry_EmitsReportedActivityWithProvidedTags()
+    [Theory]
+    [InlineData("skill", "aspire")]
+    [InlineData("extension", "aspireify")]
+    public async Task AgentTelemetry_EmitsReportedActivityWithProvidedAssetTags(string assetKind, string assetName)
     {
         var (capturedActivities, listener) = CreateCapturingListener(out var reportedSourceName);
         using (listener)
@@ -27,7 +29,7 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
             using var provider = services.BuildServiceProvider();
 
             var command = provider.GetRequiredService<RootCommand>();
-            var result = command.Parse("agent telemetry --event-type skill_invocation --client-name copilot-cli --session-id 11111111-1111-1111-1111-111111111111 --skill-name aspire --timestamp 2026-01-01T00:00:00Z");
+            var result = command.Parse($"agent telemetry --event-type asset_invocation --client-name copilot-cli --session-id 11111111-1111-1111-1111-111111111111 --asset-kind {assetKind} --asset-name {assetName} --timestamp 2026-01-01T00:00:00Z");
 
             var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -37,11 +39,44 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
             Assert.Equal(TelemetryConstants.Activities.AgentTelemetry, activity.OperationName);
 
             var tags = activity.Tags.ToDictionary(t => t.Key, t => t.Value);
-            Assert.Equal("skill_invocation", tags[TelemetryConstants.Tags.AgentEventType]);
+            Assert.Equal("asset_invocation", tags[TelemetryConstants.Tags.AgentEventType]);
             Assert.Equal("copilot-cli", tags[TelemetryConstants.Tags.AgentClientName]);
             Assert.Equal("11111111-1111-1111-1111-111111111111", tags[TelemetryConstants.Tags.AgentSessionId]);
-            Assert.Equal("aspire", tags[TelemetryConstants.Tags.AgentSkillName]);
+            Assert.Equal(assetKind, tags[TelemetryConstants.Tags.AgentAssetKind]);
+            Assert.Equal(assetName, tags[TelemetryConstants.Tags.AgentAssetName]);
             Assert.Equal("2026-01-01T00:00:00Z", tags[TelemetryConstants.Tags.AgentEventTimestamp]);
+        }
+    }
+
+    [Fact]
+    public async Task AgentTelemetry_EmitsReportedActivityWithProvidedAssetInteractionTags()
+    {
+        var (capturedActivities, listener) = CreateCapturingListener(out var reportedSourceName);
+        using (listener)
+        {
+            using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+            var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+            {
+                options.TelemetryFactory = _ => TestTelemetryHelper.CreateInitializedTelemetry(reportedSourceName, $"Diag.{Path.GetRandomFileName()}");
+            });
+            using var provider = services.BuildServiceProvider();
+
+            var command = provider.GetRequiredService<RootCommand>();
+            var result = command.Parse("agent telemetry --event-type asset_interaction --client-name copilot-cli --asset-kind extension --asset-name aspireify --interaction-type canvas_lifecycle --interaction-name closed --outcome success --duration-ms 9223372036854775807");
+
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.Success, exitCode);
+            var activity = Assert.Single(capturedActivities);
+            var tags = activity.Tags.ToDictionary(t => t.Key, t => t.Value);
+            var tagObjects = activity.TagObjects.ToDictionary(t => t.Key, t => t.Value);
+            Assert.Equal("asset_interaction", tags[TelemetryConstants.Tags.AgentEventType]);
+            Assert.Equal("extension", tags[TelemetryConstants.Tags.AgentAssetKind]);
+            Assert.Equal("aspireify", tags[TelemetryConstants.Tags.AgentAssetName]);
+            Assert.Equal("canvas_lifecycle", tags[TelemetryConstants.Tags.AgentInteractionType]);
+            Assert.Equal("closed", tags[TelemetryConstants.Tags.AgentInteractionName]);
+            Assert.Equal("success", tags[TelemetryConstants.Tags.AgentInteractionOutcome]);
+            Assert.Equal(long.MaxValue, tagObjects[TelemetryConstants.Tags.AgentInteractionDurationMilliseconds]);
         }
     }
 
@@ -69,7 +104,8 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
             var tags = activity.Tags.ToDictionary(t => t.Key, t => t.Value);
             Assert.Equal("tool_invocation", tags[TelemetryConstants.Tags.AgentEventType]);
             Assert.Equal("aspire-list_resources", tags[TelemetryConstants.Tags.AgentToolName]);
-            Assert.False(tags.ContainsKey(TelemetryConstants.Tags.AgentSkillName));
+            Assert.False(tags.ContainsKey(TelemetryConstants.Tags.AgentAssetKind));
+            Assert.False(tags.ContainsKey(TelemetryConstants.Tags.AgentAssetName));
             Assert.False(tags.ContainsKey(TelemetryConstants.Tags.AgentFileReference));
             Assert.False(tags.ContainsKey(TelemetryConstants.Tags.AgentClientName));
         }
@@ -148,7 +184,7 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
             using var provider = services.BuildServiceProvider();
 
             var command = provider.GetRequiredService<RootCommand>();
-            var result = command.Parse("agent telemetry --event-type not_a_real_event --skill-name aspire");
+            var result = command.Parse("agent telemetry --event-type not_a_real_event --asset-kind skill --asset-name aspire");
 
             var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -157,7 +193,8 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
             var activity = Assert.Single(capturedActivities);
             var tags = activity.Tags.ToDictionary(t => t.Key, t => t.Value);
             Assert.False(tags.ContainsKey(TelemetryConstants.Tags.AgentEventType));
-            Assert.Equal("aspire", tags[TelemetryConstants.Tags.AgentSkillName]);
+            Assert.Equal("skill", tags[TelemetryConstants.Tags.AgentAssetKind]);
+            Assert.Equal("aspire", tags[TelemetryConstants.Tags.AgentAssetName]);
         }
     }
 
@@ -177,7 +214,7 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
             var command = provider.GetRequiredService<RootCommand>();
             // Every value fails validation (unknown event type, identifier with a space, absolute path).
             // When nothing survives, the command must emit no span at all rather than a tagless one.
-            var result = command.Parse(["agent", "telemetry", "--event-type", "not_a_real_event", "--skill-name", "bad name", "--file-reference", "/etc/passwd"]);
+            var result = command.Parse(["agent", "telemetry", "--event-type", "not_a_real_event", "--asset-kind", "not-an-asset-kind", "--asset-name", "bad name", "--file-reference", "/etc/passwd"]);
 
             var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -195,7 +232,7 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
 
         var command = provider.GetRequiredService<RootCommand>();
         // A newer hook script may pass a flag this CLI version does not understand; it must not fail.
-        var result = command.Parse("agent telemetry --event-type skill_invocation --some-future-flag value");
+        var result = command.Parse("agent telemetry --event-type asset_invocation --some-future-flag value");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -251,6 +288,33 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
             var activity = Assert.Single(capturedActivities);
             var tags = activity.Tags.ToDictionary(t => t.Key, t => t.Value);
             Assert.Equal("aspire/references/deploy.md", tags[TelemetryConstants.Tags.AgentFileReference]);
+        }
+    }
+
+    [Fact]
+    public async Task AgentTelemetry_NormalizesLegacySkillInvocation()
+    {
+        var (capturedActivities, listener) = CreateCapturingListener(out var reportedSourceName);
+        using (listener)
+        {
+            using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+            var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+            {
+                options.TelemetryFactory = _ => TestTelemetryHelper.CreateInitializedTelemetry(reportedSourceName, $"Diag.{Path.GetRandomFileName()}");
+            });
+            using var provider = services.BuildServiceProvider();
+
+            var command = provider.GetRequiredService<RootCommand>();
+            var result = command.Parse("agent telemetry --event-type skill_invocation --skill-name aspire");
+
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.Success, exitCode);
+            var activity = Assert.Single(capturedActivities);
+            var tags = activity.Tags.ToDictionary(t => t.Key, t => t.Value);
+            Assert.Equal("asset_invocation", tags[TelemetryConstants.Tags.AgentEventType]);
+            Assert.Equal("skill", tags[TelemetryConstants.Tags.AgentAssetKind]);
+            Assert.Equal("aspire", tags[TelemetryConstants.Tags.AgentAssetName]);
         }
     }
 

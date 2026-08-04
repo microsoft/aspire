@@ -290,7 +290,7 @@ public class TelemetryConfigurationTests
             .Build();
         var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
 
-        using var manager = new TelemetryManager(configuration, tagsSource, ["agent", "telemetry", "--event-type", "skill_invocation"]);
+        using var manager = new TelemetryManager(configuration, tagsSource, ["agent", "telemetry", "--event-type", "asset_invocation"]);
 
         Assert.False(manager.HasAzureMonitor);
     }
@@ -301,7 +301,7 @@ public class TelemetryConfigurationTests
         var configuration = new ConfigurationBuilder().Build();
         var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
 
-        using var manager = new TelemetryManager(configuration, tagsSource, ["agent", "telemetry", "--event-type", "skill_invocation"]);
+        using var manager = new TelemetryManager(configuration, tagsSource, ["agent", "telemetry", "--event-type", "asset_invocation"]);
 
         Assert.True(manager.HasAzureMonitor);
     }

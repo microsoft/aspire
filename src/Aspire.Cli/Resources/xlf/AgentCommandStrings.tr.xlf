@@ -2,19 +2,29 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="tr" original="../AgentCommandStrings.resx">
     <body>
+      <trans-unit id="AgentTelemetryCommand_AssetKindDescription">
+        <source>The Aspire agent asset kind</source>
+        <target state="new">The Aspire agent asset kind</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AgentTelemetryCommand_AssetNameDescription">
+        <source>The Aspire agent asset name for an asset event</source>
+        <target state="new">The Aspire agent asset name for an asset event</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AgentTelemetryCommand_ClientNameDescription">
         <source>The AI agent client that produced the event (for example copilot-cli, claude-code, or vscode)</source>
         <target state="new">The AI agent client that produced the event (for example copilot-cli, claude-code, or vscode)</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_Description">
-        <source>Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</source>
-        <target state="new">Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</target>
+        <source>Record AI agent asset and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</source>
+        <target state="new">Record AI agent asset and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_EventTypeDescription">
-        <source>The telemetry event type (skill_invocation, tool_invocation, or reference_file_read)</source>
-        <target state="new">The telemetry event type (skill_invocation, tool_invocation, or reference_file_read)</target>
+        <source>The telemetry event type (asset_invocation, tool_invocation, or reference_file_read)</source>
+        <target state="new">The telemetry event type (asset_invocation, tool_invocation, or reference_file_read)</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_FileReferenceDescription">
@@ -25,11 +35,6 @@
       <trans-unit id="AgentTelemetryCommand_SessionIdDescription">
         <source>The opaque AI agent session identifier</source>
         <target state="new">The opaque AI agent session identifier</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AgentTelemetryCommand_SkillNameDescription">
-        <source>The Aspire skill name for a skill_invocation event</source>
-        <target state="new">The Aspire skill name for a skill_invocation event</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_TimestampDescription">
@@ -248,8 +253,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHooksInstalled">
-        <source>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</source>
-        <target state="new">Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</target>
+        <source>Installed Aspire agent telemetry hooks for: {0}. Only Aspire asset usage and interactions, MCP tool usage, and reference-file usage are recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</source>
+        <target state="new">Installed Aspire agent telemetry hooks for: {0}. Only Aspire asset usage and interactions, MCP tool usage, and reference-file usage are recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_UnsupportedAssetsRequested">

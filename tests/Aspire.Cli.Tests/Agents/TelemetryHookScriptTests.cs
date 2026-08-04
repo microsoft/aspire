@@ -27,7 +27,7 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     [Fact]
     [RequiresTools(["bash"])]
     [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
-    public async Task Bash_SkillInvocation_Copilot_ForwardsSkillName()
+    public async Task Bash_SkillInvocation_Copilot_ForwardsAsset()
     {
         var run = await RunBashHookAsync(
             """{"toolName":"skill","sessionId":"session-1","toolArgs":{"skill":"aspire"}}""",
@@ -35,9 +35,10 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
 
         AssertContinue(run);
         var args = AssertInvoked(run);
-        AssertArg(args, "--event-type", "skill_invocation");
+        AssertArg(args, "--event-type", "asset_invocation");
         AssertArg(args, "--client-name", "copilot-cli");
-        AssertArg(args, "--skill-name", "aspire");
+        AssertArg(args, "--asset-kind", "skill");
+        AssertArg(args, "--asset-name", "aspire");
         AssertArg(args, "--session-id", "session-1");
     }
 
@@ -119,8 +120,9 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertContinue(run);
         var args = AssertInvoked(run);
         // Reading a skill's SKILL.md counts as using the skill, not a reference-file read.
-        AssertArg(args, "--event-type", "skill_invocation");
-        AssertArg(args, "--skill-name", "aspire");
+        AssertArg(args, "--event-type", "asset_invocation");
+        AssertArg(args, "--asset-kind", "skill");
+        AssertArg(args, "--asset-name", "aspire");
     }
 
     [Fact]
@@ -133,10 +135,11 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
 
         AssertContinue(run);
         var args = AssertInvoked(run);
-        AssertArg(args, "--event-type", "skill_invocation");
+        AssertArg(args, "--event-type", "asset_invocation");
         AssertArg(args, "--client-name", "claude-code");
         // Claude prefixes plugin skill names with "aspire:"; the hook strips it before the allowlist match.
-        AssertArg(args, "--skill-name", "aspire-deployment");
+        AssertArg(args, "--asset-kind", "skill");
+        AssertArg(args, "--asset-name", "aspire-deployment");
     }
 
     [Fact]
@@ -162,7 +165,7 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     [Fact]
     [RequiresTools(["bash"])]
     [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
-    public async Task Bash_SkillInvocation_CopilotStringArgs_ForwardsSkillName()
+    public async Task Bash_SkillInvocation_CopilotStringArgs_ForwardsAsset()
     {
         var run = await RunBashHookAsync(
             """{"toolName":"skill","sessionId":"session-1","toolArgs":"{\"skill\":\"aspire\"}"}""",
@@ -170,9 +173,10 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
 
         AssertContinue(run);
         var args = AssertInvoked(run);
-        AssertArg(args, "--event-type", "skill_invocation");
+        AssertArg(args, "--event-type", "asset_invocation");
         AssertArg(args, "--client-name", "copilot-cli");
-        AssertArg(args, "--skill-name", "aspire");
+        AssertArg(args, "--asset-kind", "skill");
+        AssertArg(args, "--asset-name", "aspire");
     }
 
     [Fact]
@@ -188,8 +192,9 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
 
         AssertContinue(run);
         var args = AssertInvoked(run);
-        AssertArg(args, "--event-type", "skill_invocation");
-        AssertArg(args, "--skill-name", "aspire");
+        AssertArg(args, "--event-type", "asset_invocation");
+        AssertArg(args, "--asset-kind", "skill");
+        AssertArg(args, "--asset-name", "aspire");
     }
 
     [Fact]
@@ -204,12 +209,30 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertContinue(run);
         var args = AssertInvoked(run);
         AssertArg(args, "--event-type", "reference_file_read");
+        AssertArg(args, "--asset-kind", "skill");
+        AssertArg(args, "--asset-name", "aspire");
         AssertArg(args, "--file-reference", "aspire/references/deploy.md");
+    }
+
+    [Theory]
+    [InlineData("open_aspireify", "aspireify")]
+    [InlineData("open_aspire_doctor", "aspire-doctor")]
+    [RequiresTools(["bash"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
+    public async Task Bash_ExtensionTool_ForwardsAsset(string toolName, string assetName)
+    {
+        var run = await RunBashHookAsync($$$"""{"toolName":"{{{toolName}}}","toolArgs":{}}""");
+
+        AssertContinue(run);
+        var args = AssertInvoked(run);
+        AssertArg(args, "--event-type", "asset_invocation");
+        AssertArg(args, "--asset-kind", "extension");
+        AssertArg(args, "--asset-name", assetName);
     }
 
     [Fact]
     [RequiresTools(["pwsh"])]
-    public async Task Pwsh_SkillInvocation_Copilot_ForwardsSkillName()
+    public async Task Pwsh_SkillInvocation_Copilot_ForwardsAsset()
     {
         var run = await RunPwshHookAsync(
             """{"toolName":"skill","sessionId":"session-1","toolArgs":{"skill":"aspire"}}""",
@@ -217,9 +240,10 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
 
         AssertContinue(run);
         var args = AssertInvoked(run);
-        AssertArg(args, "--event-type", "skill_invocation");
+        AssertArg(args, "--event-type", "asset_invocation");
         AssertArg(args, "--client-name", "copilot-cli");
-        AssertArg(args, "--skill-name", "aspire");
+        AssertArg(args, "--asset-kind", "skill");
+        AssertArg(args, "--asset-name", "aspire");
         AssertArg(args, "--session-id", "session-1");
     }
 
@@ -293,8 +317,9 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
 
         AssertContinue(run);
         var args = AssertInvoked(run);
-        AssertArg(args, "--event-type", "skill_invocation");
-        AssertArg(args, "--skill-name", "aspire");
+        AssertArg(args, "--event-type", "asset_invocation");
+        AssertArg(args, "--asset-kind", "skill");
+        AssertArg(args, "--asset-name", "aspire");
     }
 
     [Fact]
@@ -306,10 +331,11 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
 
         AssertContinue(run);
         var args = AssertInvoked(run);
-        AssertArg(args, "--event-type", "skill_invocation");
+        AssertArg(args, "--event-type", "asset_invocation");
         AssertArg(args, "--client-name", "claude-code");
         // Claude prefixes plugin skill names with "aspire:"; the hook strips it before the allowlist match.
-        AssertArg(args, "--skill-name", "aspire-deployment");
+        AssertArg(args, "--asset-kind", "skill");
+        AssertArg(args, "--asset-name", "aspire-deployment");
     }
 
     [Fact]
@@ -332,7 +358,7 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
 
     [Fact]
     [RequiresTools(["pwsh"])]
-    public async Task Pwsh_SkillInvocation_CopilotStringArgs_ForwardsSkillName()
+    public async Task Pwsh_SkillInvocation_CopilotStringArgs_ForwardsAsset()
     {
         var run = await RunPwshHookAsync(
             """{"toolName":"skill","sessionId":"session-1","toolArgs":"{\"skill\":\"aspire\"}"}""",
@@ -340,9 +366,10 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
 
         AssertContinue(run);
         var args = AssertInvoked(run);
-        AssertArg(args, "--event-type", "skill_invocation");
+        AssertArg(args, "--event-type", "asset_invocation");
         AssertArg(args, "--client-name", "copilot-cli");
-        AssertArg(args, "--skill-name", "aspire");
+        AssertArg(args, "--asset-kind", "skill");
+        AssertArg(args, "--asset-name", "aspire");
     }
 
     [Fact]
@@ -357,8 +384,9 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
 
         AssertContinue(run);
         var args = AssertInvoked(run);
-        AssertArg(args, "--event-type", "skill_invocation");
-        AssertArg(args, "--skill-name", "aspire");
+        AssertArg(args, "--event-type", "asset_invocation");
+        AssertArg(args, "--asset-kind", "skill");
+        AssertArg(args, "--asset-name", "aspire");
     }
 
     [Fact]
@@ -372,7 +400,24 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertContinue(run);
         var args = AssertInvoked(run);
         AssertArg(args, "--event-type", "reference_file_read");
+        AssertArg(args, "--asset-kind", "skill");
+        AssertArg(args, "--asset-name", "aspire");
         AssertArg(args, "--file-reference", "aspire/references/deploy.md");
+    }
+
+    [Theory]
+    [InlineData("open_aspireify", "aspireify")]
+    [InlineData("open_aspire_doctor", "aspire-doctor")]
+    [RequiresTools(["pwsh"])]
+    public async Task Pwsh_ExtensionTool_ForwardsAsset(string toolName, string assetName)
+    {
+        var run = await RunPwshHookAsync($$$"""{"toolName":"{{{toolName}}}","toolArgs":{}}""");
+
+        AssertContinue(run);
+        var args = AssertInvoked(run);
+        AssertArg(args, "--event-type", "asset_invocation");
+        AssertArg(args, "--asset-kind", "extension");
+        AssertArg(args, "--asset-name", assetName);
     }
 
     private async Task<HookRun> RunBashHookAsync(string payload, Dictionary<string, string?>? extraEnv = null)

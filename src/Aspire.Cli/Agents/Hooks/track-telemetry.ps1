@@ -1,7 +1,7 @@
-# Telemetry tracking hook for Aspire Skills.
+# Telemetry tracking hook for Aspire agent assets.
 #
 # Runs on every agent PostToolUse event. Reads the hook JSON from stdin, detects when an
-# Aspire skill, Aspire MCP tool, or Aspire skill reference file was used, and forwards a
+# Aspire agent asset or Aspire MCP tool was used, and forwards a
 # low-cardinality usage event to `aspire agent telemetry`. The Aspire CLI command owns the
 # actual opt-out + publishing logic; this script only classifies the event and shells out.
 #
@@ -27,6 +27,10 @@ trap {
 # A shared .agents/skills directory can also contain third-party skills, so a path/name is only
 # treated as Aspire when its skill segment is one of these.
 $AspireSkills = @('aspire', 'aspire-init', 'aspireify', 'aspire-orchestration', 'aspire-deployment', 'aspire-monitoring')
+$AspireExtensionTools = @{
+    'open_aspireify' = 'aspireify'
+    'open_aspire_doctor' = 'aspire-doctor'
+}
 
 function Write-Success {
     Write-Output '{"continue":true}'
@@ -122,23 +126,25 @@ function Test-AspireSkill([string] $candidate) {
 
 $shouldTrack = $false
 $eventType = $null
-$skillName = $null
+$agentAssetKind = $null
+$agentAssetName = $null
 $mcpToolName = $null
 $fileReference = $null
 
-# --- skill_invocation via the skill/Skill tool ---
+# --- asset_invocation via the skill/Skill tool ---
 if ($toolName -eq 'skill' -or $toolName -eq 'Skill') {
     $candidate = [string](Get-PayloadField 'skill')
     # Claude prefixes plugin skill names, e.g. "aspire:aspire-deployment".
     if ($candidate.StartsWith('aspire:')) { $candidate = $candidate.Substring(7) }
     if (Test-AspireSkill $candidate) {
-        $skillName = $candidate
-        $eventType = 'skill_invocation'
+        $agentAssetKind = 'skill'
+        $agentAssetName = $candidate
+        $eventType = 'asset_invocation'
         $shouldTrack = $true
     }
 }
 
-# --- skill_invocation / reference_file_read via a file read tool ---
+# --- asset_invocation / reference_file_read via a file read tool ---
 if ($toolName -eq 'view' -or $toolName -eq 'Read' -or $toolName -eq 'read_file') {
     $pathToCheck = Get-PayloadField 'path'
     if (-not $pathToCheck) { $pathToCheck = Get-PayloadField 'filePath' }
@@ -157,18 +163,29 @@ if ($toolName -eq 'view' -or $toolName -eq 'Read' -or $toolName -eq 'read_file')
             if ($remainder -imatch '(^|/)skill\.md$') {
                 # A SKILL.md read is a skill invocation, not a reference-file read.
                 if (-not $shouldTrack) {
-                    $skillName = $skillSegment
-                    $eventType = 'skill_invocation'
+                    $agentAssetKind = 'skill'
+                    $agentAssetName = $skillSegment
+                    $eventType = 'asset_invocation'
                     $shouldTrack = $true
                 }
             } elseif (-not $shouldTrack -and $remainder) {
                 # Forward only the relative path after skills/ (e.g. aspire/references/deploy.md).
+                $agentAssetKind = 'skill'
+                $agentAssetName = $skillSegment
                 $fileReference = "$skillSegment/$remainder"
                 $eventType = 'reference_file_read'
                 $shouldTrack = $true
             }
         }
     }
+}
+
+# --- asset_invocation via an Aspire canvas extension tool ---
+if ($AspireExtensionTools.ContainsKey([string]$toolName)) {
+    $agentAssetKind = 'extension'
+    $agentAssetName = $AspireExtensionTools[[string]$toolName]
+    $eventType = 'asset_invocation'
+    $shouldTrack = $true
 }
 
 # --- tool_invocation via an Aspire MCP tool prefix ---
@@ -191,7 +208,8 @@ if (-not $aspireCmd) { $aspireCmd = 'aspire' }
 # Build the argument vector explicitly so untrusted hook values are passed as discrete args.
 $cmdArgs = @('agent', 'telemetry', '--event-type', $eventType, '--client-name', $clientName, '--timestamp', $timestamp)
 if ($sessionId) { $cmdArgs += @('--session-id', [string]$sessionId) }
-if ($skillName) { $cmdArgs += @('--skill-name', $skillName) }
+if ($agentAssetKind) { $cmdArgs += @('--asset-kind', $agentAssetKind) }
+if ($agentAssetName) { $cmdArgs += @('--asset-name', $agentAssetName) }
 if ($mcpToolName) { $cmdArgs += @('--tool-name', $mcpToolName) }
 if ($fileReference) { $cmdArgs += @('--file-reference', $fileReference) }
 

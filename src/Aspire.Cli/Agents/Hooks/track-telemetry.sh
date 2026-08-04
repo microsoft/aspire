@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Telemetry tracking hook for Aspire Skills.
+# Telemetry tracking hook for Aspire agent assets.
 #
 # Runs on every agent PostToolUse event. Reads the hook JSON from stdin, detects when an
-# Aspire skill, Aspire MCP tool, or Aspire skill reference file was used, and forwards a
+# Aspire agent asset or Aspire MCP tool was used, and forwards a
 # low-cardinality usage event to `aspire agent telemetry`. The Aspire CLI command owns the
 # actual opt-out + publishing logic; this script only classifies the event and shells out.
 #
@@ -36,14 +36,14 @@
 #
 # === Event types emitted ===
 #
-# 1. skill_invocation     - the skill/Skill tool ran with an Aspire skill name, OR a SKILL.md
-#                           under .../skills/<aspire-skill>/SKILL.md was read.   (--skill-name)
+# 1. asset_invocation     - an Aspire skill ran or an Aspire canvas extension tool was used.
+#                                                                  (--asset-kind, --asset-name)
 # 2. tool_invocation      - a tool matching an Aspire MCP prefix ran.            (--tool-name)
 # 3. reference_file_read  - a non-SKILL.md file under .../skills/<aspire-skill>/ was read.
-#                                                                                (--file-reference)
+#                                      (--asset-kind, --asset-name, --file-reference)
 #
-# Privacy: only Aspire-owned identifiers are forwarded. Skill/tool names are matched against an
-# allowlist of the skills shipped by github.com/microsoft/aspire-skills, and reference files are
+# Privacy: only Aspire-owned identifiers are forwarded. Asset/tool names are matched against
+# allowlists shipped by github.com/microsoft/aspire-skills, and reference files are
 # only forwarded as the repo-relative path *after* skills/<skill>/ — never absolute paths, repo
 # names, or user names. The Aspire CLI command independently re-validates and drops anything else.
 
@@ -119,6 +119,16 @@ is_aspire_skill() {
     return 1
 }
 
+# Print the owning Aspire extension asset for a canvas tool, or return non-zero when the tool is
+# not one of the entry points shipped in the extension bundle from github.com/microsoft/aspire-skills.
+get_aspire_extension_asset() {
+    case "$1" in
+        open_aspireify) printf '%s' "aspireify" ;;
+        open_aspire_doctor) printf '%s' "aspire-doctor" ;;
+        *) return 1 ;;
+    esac
+}
+
 # No stdin (interactive) means nothing to track.
 if [ -t 0 ]; then
     exit 0
@@ -170,23 +180,25 @@ fi
 
 shouldTrack=false
 eventType=""
-skillName=""
+agentAssetKind=""
+agentAssetName=""
 mcpToolName=""
 fileReference=""
 
-# --- skill_invocation via the skill/Skill tool ---
+# --- asset_invocation via the skill/Skill tool ---
 if [ "$toolName" = "skill" ] || [ "$toolName" = "Skill" ]; then
     candidate=$(extract_nested_field "$rawInput" "skill")
     # Claude prefixes plugin skill names, e.g. "aspire:aspire-deployment".
     candidate="${candidate#aspire:}"
     if is_aspire_skill "$candidate"; then
-        skillName="$candidate"
-        eventType="skill_invocation"
+        agentAssetKind="skill"
+        agentAssetName="$candidate"
+        eventType="asset_invocation"
         shouldTrack=true
     fi
 fi
 
-# --- skill_invocation / reference_file_read via a file read tool ---
+# --- asset_invocation / reference_file_read via a file read tool ---
 # Copilot CLI: view, Claude Code: Read, VS Code: read_file.
 if [ "$toolName" = "view" ] || [ "$toolName" = "Read" ] || [ "$toolName" = "read_file" ]; then
     pathToCheck=$(extract_nested_path "$rawInput")
@@ -209,14 +221,17 @@ if [ "$toolName" = "view" ] || [ "$toolName" = "Read" ] || [ "$toolName" = "read
                 */SKILL.md|SKILL.md|*/skill.md|skill.md)
                     # A SKILL.md read is a skill invocation, not a reference-file read.
                     if [ "$shouldTrack" = false ]; then
-                        skillName="$skillSegment"
-                        eventType="skill_invocation"
+                        agentAssetKind="skill"
+                        agentAssetName="$skillSegment"
+                        eventType="asset_invocation"
                         shouldTrack=true
                     fi
                     ;;
                 *)
                     if [ "$shouldTrack" = false ] && [ -n "$remainder" ]; then
                         # Forward only the relative path after skills/ (e.g. aspire/references/deploy.md).
+                        agentAssetKind="skill"
+                        agentAssetName="$skillSegment"
                         fileReference="$remainder"
                         eventType="reference_file_read"
                         shouldTrack=true
@@ -225,6 +240,15 @@ if [ "$toolName" = "view" ] || [ "$toolName" = "Read" ] || [ "$toolName" = "read
             esac
         fi
     fi
+fi
+
+# --- asset_invocation via an Aspire canvas extension tool ---
+extensionAsset=$(get_aspire_extension_asset "$toolName")
+if [ -n "$extensionAsset" ]; then
+    agentAssetKind="extension"
+    agentAssetName="$extensionAsset"
+    eventType="asset_invocation"
+    shouldTrack=true
 fi
 
 # --- tool_invocation via an Aspire MCP tool prefix ---
@@ -249,7 +273,8 @@ aspireCmd="${ASPIRE_CLI_COMMAND:-aspire}"
 # (never concatenated into a shell string).
 args=(agent telemetry --event-type "$eventType" --client-name "$clientName" --timestamp "$timestamp")
 [ -n "$sessionId" ] && args+=(--session-id "$sessionId")
-[ -n "$skillName" ] && args+=(--skill-name "$skillName")
+[ -n "$agentAssetKind" ] && args+=(--asset-kind "$agentAssetKind")
+[ -n "$agentAssetName" ] && args+=(--asset-name "$agentAssetName")
 [ -n "$mcpToolName" ] && args+=(--tool-name "$mcpToolName")
 [ -n "$fileReference" ] && args+=(--file-reference "$fileReference")
 

@@ -157,7 +157,7 @@
     <value>(configures detected agent environments)</value>
   </data>
   <data name="InitCommand_TelemetryHooksInstalled" xml:space="preserve">
-    <value>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</value>
+    <value>Installed Aspire agent telemetry hooks for: {0}. Only Aspire asset usage and interactions, MCP tool usage, and reference-file usage are recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</value>
   </data>
   <data name="InitCommand_TelemetryHookSkippedMalformedConfig" xml:space="preserve">
     <value>Skipped the telemetry hook for {0} because its configuration file contains malformed JSON.</value>
@@ -283,10 +283,10 @@
     <value>Comma-separated list of extensions to install. Use '{0}' or '{1}'</value>
   </data>
   <data name="AgentTelemetryCommand_Description" xml:space="preserve">
-    <value>Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</value>
+    <value>Record AI agent asset and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</value>
   </data>
   <data name="AgentTelemetryCommand_EventTypeDescription" xml:space="preserve">
-    <value>The telemetry event type (skill_invocation, tool_invocation, or reference_file_read)</value>
+    <value>The telemetry event type (asset_invocation, tool_invocation, or reference_file_read)</value>
   </data>
   <data name="AgentTelemetryCommand_ClientNameDescription" xml:space="preserve">
     <value>The AI agent client that produced the event (for example copilot-cli, claude-code, or vscode)</value>
@@ -294,8 +294,11 @@
   <data name="AgentTelemetryCommand_SessionIdDescription" xml:space="preserve">
     <value>The opaque AI agent session identifier</value>
   </data>
-  <data name="AgentTelemetryCommand_SkillNameDescription" xml:space="preserve">
-    <value>The Aspire skill name for a skill_invocation event</value>
+  <data name="AgentTelemetryCommand_AssetKindDescription" xml:space="preserve">
+    <value>The Aspire agent asset kind</value>
+  </data>
+  <data name="AgentTelemetryCommand_AssetNameDescription" xml:space="preserve">
+    <value>The Aspire agent asset name for an asset event</value>
   </data>
   <data name="AgentTelemetryCommand_ToolNameDescription" xml:space="preserve">
     <value>The Aspire MCP tool name for a tool_invocation event</value>

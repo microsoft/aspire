@@ -178,7 +178,7 @@ internal static class TelemetryConstants
 
         /// <summary>
         /// Tag for the AI agent telemetry event type forwarded by the hook scripts.
-        /// One of <c>skill_invocation</c>, <c>tool_invocation</c>, or <c>reference_file_read</c>.
+        /// One of <c>asset_invocation</c>, <c>tool_invocation</c>, or <c>reference_file_read</c>.
         /// </summary>
         public const string AgentEventType = "aspire.cli.agent.event_type";
 
@@ -195,9 +195,34 @@ internal static class TelemetryConstants
         public const string AgentSessionId = "aspire.cli.agent.session_id";
 
         /// <summary>
-        /// Tag for the Aspire skill name associated with a <c>skill_invocation</c> event.
+        /// Tag for the kind of agent asset associated with an event.
         /// </summary>
-        public const string AgentSkillName = "aspire.cli.agent.skill_name";
+        public const string AgentAssetKind = "aspire.cli.agent.asset_kind";
+
+        /// <summary>
+        /// Tag for the agent asset name associated with an event.
+        /// </summary>
+        public const string AgentAssetName = "aspire.cli.agent.asset_name";
+
+        /// <summary>
+        /// Tag for the category of interaction associated with an <c>asset_interaction</c> event.
+        /// </summary>
+        public const string AgentInteractionType = "aspire.cli.agent.interaction_type";
+
+        /// <summary>
+        /// Tag for the allowlisted interaction name associated with an <c>asset_interaction</c> event.
+        /// </summary>
+        public const string AgentInteractionName = "aspire.cli.agent.interaction_name";
+
+        /// <summary>
+        /// Tag for the outcome of an <c>asset_interaction</c> event.
+        /// </summary>
+        public const string AgentInteractionOutcome = "aspire.cli.agent.interaction_outcome";
+
+        /// <summary>
+        /// Tag for the duration of an <c>asset_interaction</c> event in milliseconds.
+        /// </summary>
+        public const string AgentInteractionDurationMilliseconds = "aspire.cli.agent.interaction_duration_ms";
 
         /// <summary>
         /// Tag for the Aspire MCP tool name associated with a <c>tool_invocation</c> event.

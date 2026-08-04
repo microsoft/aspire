@@ -3,6 +3,7 @@
 
 using System.CommandLine;
 using System.Globalization;
+using Aspire.Cli.Agents;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 
@@ -11,7 +12,7 @@ namespace Aspire.Cli.Commands;
 /// <summary>
 /// Hidden, machine-facing command invoked by the agent telemetry hook scripts
 /// (<c>track-telemetry.sh</c> / <c>track-telemetry.ps1</c>) on each agent <c>PostToolUse</c>
-/// event. It records a single reported activity describing the Aspire skill, MCP tool, or
+/// event. It records a single reported activity describing the Aspire asset, MCP tool, or
 /// reference-file usage that the hook detected.
 /// </summary>
 /// <remarks>
@@ -30,13 +31,19 @@ namespace Aspire.Cli.Commands;
 internal sealed class AgentTelemetryCommand : BaseCommand
 {
     // Defensive cap so a malformed or hostile hook payload cannot push oversized or
-    // high-cardinality values into the telemetry backend. Real values (skill names, tool names,
+    // high-cardinality values into the telemetry backend. Real values (asset names, tool names,
     // skills-relative reference paths) are well under this length.
     private const int MaxTagValueLength = 256;
 
     // The only event types the hook scripts emit. Anything else is dropped so a script bug or a
     // crafted argument cannot introduce arbitrary, high-cardinality event categories.
-    private static readonly string[] s_knownEventTypes = ["skill_invocation", "tool_invocation", "reference_file_read"];
+    private const string AssetInvocationEventType = "asset_invocation";
+    private const string AssetInteractionEventType = "asset_interaction";
+    private const string LegacySkillInvocationEventType = "skill_invocation";
+
+    private static readonly string[] s_knownEventTypes = [AssetInvocationEventType, AssetInteractionEventType, "tool_invocation", "reference_file_read"];
+    private static readonly string[] s_knownInteractionTypes = ["canvas_lifecycle", "canvas_action", "workflow"];
+    private static readonly string[] s_knownInteractionOutcomes = ["success", "failure", "validation_failed", "timeout"];
 
     private readonly Option<string?> _eventTypeOption = new("--event-type")
     {
@@ -53,10 +60,27 @@ internal sealed class AgentTelemetryCommand : BaseCommand
         Description = AgentCommandStrings.AgentTelemetryCommand_SessionIdDescription
     };
 
-    private readonly Option<string?> _skillNameOption = new("--skill-name")
+    private readonly Option<string?> _assetKindOption = new("--asset-kind")
     {
-        Description = AgentCommandStrings.AgentTelemetryCommand_SkillNameDescription
+        Description = AgentCommandStrings.AgentTelemetryCommand_AssetKindDescription
     };
+
+    private readonly Option<string?> _assetNameOption = new("--asset-name")
+    {
+        Description = AgentCommandStrings.AgentTelemetryCommand_AssetNameDescription
+    };
+
+    private readonly Option<string?> _interactionTypeOption = new("--interaction-type");
+
+    private readonly Option<string?> _interactionNameOption = new("--interaction-name");
+
+    private readonly Option<string?> _interactionOutcomeOption = new("--outcome");
+
+    private readonly Option<string?> _interactionDurationOption = new("--duration-ms");
+
+    // Compatibility for hook scripts materialized by an older CLI and still registered in an
+    // agent configuration after the CLI itself has been updated.
+    private readonly Option<string?> _legacySkillNameOption = new("--skill-name");
 
     private readonly Option<string?> _toolNameOption = new("--tool-name")
     {
@@ -86,7 +110,13 @@ internal sealed class AgentTelemetryCommand : BaseCommand
         Options.Add(_eventTypeOption);
         Options.Add(_clientNameOption);
         Options.Add(_sessionIdOption);
-        Options.Add(_skillNameOption);
+        Options.Add(_assetKindOption);
+        Options.Add(_assetNameOption);
+        Options.Add(_interactionTypeOption);
+        Options.Add(_interactionNameOption);
+        Options.Add(_interactionOutcomeOption);
+        Options.Add(_interactionDurationOption);
+        Options.Add(_legacySkillNameOption);
         Options.Add(_toolNameOption);
         Options.Add(_fileReferenceOption);
         Options.Add(_timestampOption);
@@ -99,7 +129,7 @@ internal sealed class AgentTelemetryCommand : BaseCommand
             // Validate every value up front. Invalid or oversized values are dropped (never recorded),
             // so a parser bug in a hook script cannot leak an absolute path, user name, or other
             // sensitive/high-cardinality data into telemetry.
-            var tags = CollectValidTags(parseResult);
+            var tags = CollectValidTags(parseResult, out var interactionDuration);
 
             // Nothing valid survived validation (for example a newer hook script paired with an older
             // CLI dropped every field): emit no span rather than a tagless one.
@@ -117,6 +147,11 @@ internal sealed class AgentTelemetryCommand : BaseCommand
                 {
                     activity.SetTag(name, value);
                 }
+
+                if (interactionDuration is not null)
+                {
+                    activity.SetTag(TelemetryConstants.Tags.AgentInteractionDurationMilliseconds, interactionDuration.Value);
+                }
             }
         }
         catch
@@ -127,14 +162,38 @@ internal sealed class AgentTelemetryCommand : BaseCommand
         return Task.FromResult(CommandResult.Success());
     }
 
-    private List<(string Name, string Value)> CollectValidTags(ParseResult parseResult)
+    private List<(string Name, string Value)> CollectValidTags(ParseResult parseResult, out long? interactionDuration)
     {
         var tags = new List<(string Name, string Value)>();
+        interactionDuration = null;
 
-        AddIfValid(tags, TelemetryConstants.Tags.AgentEventType, parseResult.GetValue(_eventTypeOption), static v => s_knownEventTypes.Contains(v, StringComparer.Ordinal));
+        var eventType = parseResult.GetValue(_eventTypeOption);
+        var legacySkillName = parseResult.GetValue(_legacySkillNameOption);
+        if (string.Equals(eventType, LegacySkillInvocationEventType, StringComparison.Ordinal))
+        {
+            eventType = AssetInvocationEventType;
+        }
+
+        AddIfValid(tags, TelemetryConstants.Tags.AgentEventType, eventType, static v => s_knownEventTypes.Contains(v, StringComparer.Ordinal));
         AddIfValid(tags, TelemetryConstants.Tags.AgentClientName, parseResult.GetValue(_clientNameOption), static v => IsSafeIdentifier(v, maxLength: 64));
         AddIfValid(tags, TelemetryConstants.Tags.AgentSessionId, parseResult.GetValue(_sessionIdOption), static v => IsSafeIdentifier(v, maxLength: 128));
-        AddIfValid(tags, TelemetryConstants.Tags.AgentSkillName, parseResult.GetValue(_skillNameOption), static v => IsSafeIdentifier(v, maxLength: 128));
+        var assetKindValue = parseResult.GetValue(_assetKindOption) ?? (legacySkillName is not null ? nameof(AgentAssetKind.Skill) : null);
+        if (Enum.TryParse<AgentAssetKind>(assetKindValue, ignoreCase: true, out var assetKind) &&
+            assetKind is AgentAssetKind.Skill or AgentAssetKind.Extension)
+        {
+            tags.Add((TelemetryConstants.Tags.AgentAssetKind, assetKind.ToString().ToLowerInvariant()));
+        }
+
+        AddIfValid(tags, TelemetryConstants.Tags.AgentAssetName, parseResult.GetValue(_assetNameOption) ?? legacySkillName, static v => IsSafeIdentifier(v, maxLength: 128));
+        AddIfValid(tags, TelemetryConstants.Tags.AgentInteractionType, parseResult.GetValue(_interactionTypeOption), static v => s_knownInteractionTypes.Contains(v, StringComparer.Ordinal));
+        AddIfValid(tags, TelemetryConstants.Tags.AgentInteractionName, parseResult.GetValue(_interactionNameOption), static v => IsSafeIdentifier(v, maxLength: 128));
+        AddIfValid(tags, TelemetryConstants.Tags.AgentInteractionOutcome, parseResult.GetValue(_interactionOutcomeOption), static v => s_knownInteractionOutcomes.Contains(v, StringComparer.Ordinal));
+        if (long.TryParse(parseResult.GetValue(_interactionDurationOption), NumberStyles.None, CultureInfo.InvariantCulture, out var parsedInteractionDuration) &&
+            parsedInteractionDuration >= 0)
+        {
+            interactionDuration = parsedInteractionDuration;
+        }
+
         AddIfValid(tags, TelemetryConstants.Tags.AgentToolName, parseResult.GetValue(_toolNameOption), static v => IsSafeIdentifier(v, maxLength: 128));
         AddIfValid(tags, TelemetryConstants.Tags.AgentFileReference, parseResult.GetValue(_fileReferenceOption), IsSafeReference);
         AddIfValid(tags, TelemetryConstants.Tags.AgentEventTimestamp, parseResult.GetValue(_timestampOption), IsValidTimestamp);
