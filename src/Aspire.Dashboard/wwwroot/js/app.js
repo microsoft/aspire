@@ -37,25 +37,6 @@ function getFluentMenuItemForTarget(element) {
     return null;
 }
 
-window.setMenuButtonAccessibility = async function (id, expanded) {
-    const element = document.getElementById(id);
-    if (!element) {
-        return;
-    }
-
-    // FluentButton renders the interactive <button> inside its shadow root. The ARIA menu state must
-    // live on that native control rather than the custom-element host to avoid unsupported attributes
-    // or nested interactive roles. See https://www.w3.org/WAI/ARIA/apg/patterns/menu-button/.
-    await customElements.whenDefined(element.localName);
-    const control = element.shadowRoot?.querySelector("button[part~='control']");
-    if (!control) {
-        return;
-    }
-
-    control.setAttribute("aria-haspopup", "menu");
-    control.setAttribute("aria-expanded", expanded ? "true" : "false");
-};
-
 // Register a global click event listener to handle copy/open button clicks.
 // Required because an "onclick" attribute is denied by CSP.
 document.addEventListener("click", function (e) {

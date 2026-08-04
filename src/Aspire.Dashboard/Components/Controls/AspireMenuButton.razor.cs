@@ -5,7 +5,6 @@ using Aspire.Dashboard.Model;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.FluentUI.AspNetCore.Components;
-using Microsoft.JSInterop;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components;
@@ -18,11 +17,6 @@ public partial class AspireMenuButton : FluentComponentBase
     private Icon? _icon;
     private MenuButtonItem[] _items = [];
     private bool _disabled;
-    private bool? _renderedExpandedState;
-    private FluentButton? _button;
-
-    [Inject]
-    public required IJSRuntime JS { get; init; }
 
     [Parameter]
     public string? Text { get; set; }
@@ -76,15 +70,6 @@ public partial class AspireMenuButton : FluentComponentBase
 
             // Disabled if there are no actionable items
             _disabled = !_items.Any(i => !i.IsDivider);
-        }
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (_button is not null && _renderedExpandedState != _visible)
-        {
-            _renderedExpandedState = _visible;
-            await JS.InvokeVoidAsync("setMenuButtonAccessibility", MenuButtonId, _visible);
         }
     }
 

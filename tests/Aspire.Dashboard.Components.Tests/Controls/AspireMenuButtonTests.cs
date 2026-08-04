@@ -36,30 +36,21 @@ public class AspireMenuButtonTests : DashboardTestContext
         });
 
         var button = cut.Find("#view-options-button");
-        AssertAccessibilityInvocation(expanded: false);
+        Assert.Equal("menu", button.GetAttribute("aria-haspopup"));
+        Assert.Equal("false", button.GetAttribute("aria-expanded"));
 
         button.Click();
 
         cut.WaitForAssertion(() =>
         {
-            AssertAccessibilityInvocation(expanded: true);
+            Assert.Equal("true", cut.Find("#view-options-button").GetAttribute("aria-expanded"));
         });
 
         button.Click();
 
         cut.WaitForAssertion(() =>
         {
-            AssertAccessibilityInvocation(expanded: false, expectedInvocationCount: 2);
+            Assert.Equal("false", cut.Find("#view-options-button").GetAttribute("aria-expanded"));
         });
-
-        void AssertAccessibilityInvocation(bool expanded, int expectedInvocationCount = 1)
-        {
-            var invocations = JSInterop.Invocations
-                .Where(i => i.Identifier == "setMenuButtonAccessibility" &&
-                    string.Equals(i.Arguments[0]?.ToString(), "view-options-button", StringComparison.Ordinal) &&
-                    Equals(i.Arguments[1], expanded))
-                .ToList();
-            Assert.Equal(expectedInvocationCount, invocations.Count);
-        }
     }
 }

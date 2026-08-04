@@ -5,11 +5,17 @@
 @{
     var additionalButtonAttributes = new Dictionary<string, object>(AdditionalAttributes ?? ImmutableDictionary<string, object>.Empty)
     {
-        { "onkeydown", (KeyboardEventArgs args) => OnKeyDown(args) }
+        { "onkeydown", (KeyboardEventArgs args) => OnKeyDown(args) },
+        // Render the ARIA menu-button semantics declaratively on the host <fluent-button>. FluentUI's
+        // web component reflects aria-haspopup/aria-expanded from the host element onto the interactive
+        // <button part="control"> in its shadow root, so the inner control stays in sync without any JS
+        // interop. See https://www.w3.org/WAI/ARIA/apg/patterns/menu-button/.
+        { "aria-haspopup", "menu" },
+        { "aria-expanded", _visible ? "true" : "false" }
     };
 }
 
-<FluentButton @ref="_button" Id="@MenuButtonId" Title="@Title" Appearance="@ButtonAppearance" IconStart="@IconStart" @onclick="ToggleMenu" Disabled="@_disabled" AdditionalAttributes="@additionalButtonAttributes" Class="@ButtonClass">
+<FluentButton Id="@MenuButtonId" Title="@Title" Appearance="@ButtonAppearance" IconStart="@IconStart" @onclick="ToggleMenu" Disabled="@_disabled" AdditionalAttributes="@additionalButtonAttributes" Class="@ButtonClass">
     @if (string.IsNullOrWhiteSpace(Text))
     {
         <FluentIcon Value="@_icon" Color="@IconColor" CustomColor="@IconCustomColor" />
