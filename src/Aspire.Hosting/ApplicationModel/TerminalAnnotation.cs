@@ -107,15 +107,6 @@ public sealed class TerminalOptions
     public int Rows { get; set; } = 30;
 
     /// <summary>
-    /// Gets or sets the shell to use for the terminal session.
-    /// </summary>
-    /// <remarks>
-    /// When <c>null</c>, the default shell for the resource is used.
-    /// For containers, this is typically <c>/bin/sh</c>. For executables, the process itself serves as the terminal program.
-    /// </remarks>
-    public string? Shell { get; set; }
-
-    /// <summary>
     /// Gets or sets a value indicating whether the per-replica terminal host resources
     /// (named <c>{parent}-terminalhost-{index}</c>) should appear in the resource list.
     /// </summary>

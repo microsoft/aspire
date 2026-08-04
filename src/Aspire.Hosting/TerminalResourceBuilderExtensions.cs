@@ -427,12 +427,6 @@ public static class TerminalResourceBuilderExtensions
             context.Args.Add("--rows");
             context.Args.Add(options.Rows.ToString(CultureInfo.InvariantCulture));
 
-            if (!string.IsNullOrEmpty(options.Shell))
-            {
-                context.Args.Add("--shell");
-                context.Args.Add(options.Shell);
-            }
-
             return Task.CompletedTask;
         }));
     }

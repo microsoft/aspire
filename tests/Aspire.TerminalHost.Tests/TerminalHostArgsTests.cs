@@ -19,11 +19,10 @@ public class TerminalHostArgsTests
         Assert.Equal("/tmp/ctrl.sock", args.ControlUdsPath);
         Assert.Equal(120, args.Columns);
         Assert.Equal(30, args.Rows);
-        Assert.Null(args.Shell);
     }
 
     [Fact]
-    public void ParseAcceptsOptionalDimensionsAndShell()
+    public void ParseAcceptsOptionalDimensions()
     {
         var args = TerminalHostArgs.Parse([
             "--producer-uds", "/tmp/p.sock",
@@ -31,12 +30,10 @@ public class TerminalHostArgsTests
             "--control-uds", "/tmp/ctrl.sock",
             "--columns", "200",
             "--rows", "50",
-            "--shell", "/bin/bash",
         ]);
 
         Assert.Equal(200, args.Columns);
         Assert.Equal(50, args.Rows);
-        Assert.Equal("/bin/bash", args.Shell);
     }
 
     [Fact]

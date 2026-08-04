@@ -41,7 +41,6 @@ public class WithTerminalTests
         Assert.NotNull(annotation);
         Assert.Equal(120, annotation.Options.Columns);
         Assert.Equal(30, annotation.Options.Rows);
-        Assert.Null(annotation.Options.Shell);
 
         // Until BeforeStartEvent fires the per-replica hosts are not yet materialized:
         // TerminalHosts is empty and IsInitialized is false. This deferral is what
@@ -70,14 +69,12 @@ public class WithTerminalTests
         {
             options.Columns = 200;
             options.Rows = 50;
-            options.Shell = "/bin/bash";
         });
 
         var annotation = resource.Resource.Annotations.OfType<TerminalAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
         Assert.Equal(200, annotation.Options.Columns);
         Assert.Equal(50, annotation.Options.Rows);
-        Assert.Equal("/bin/bash", annotation.Options.Shell);
     }
 
     [Fact]
@@ -480,7 +477,6 @@ public class WithTerminalTests
         {
             options.Columns = 200;
             options.Rows = 50;
-            options.Shell = "/bin/bash";
         });
 
         await PublishBeforeStartAsync(builder);
@@ -506,8 +502,11 @@ public class WithTerminalTests
             Assert.Contains("200", args);
             Assert.Contains("--rows", args);
             Assert.Contains("50", args);
-            Assert.Contains("--shell", args);
-            Assert.Contains("/bin/bash", args);
+            // The terminal host never selected the shell: DCP allocates the PTY for the
+            // resource's own process (there is no shell field on the DCP TerminalSpec), so
+            // no shell flag is forwarded. Guards against re-introducing the misleading
+            // TerminalOptions.Shell no-op that only forwarded --shell to the host.
+            Assert.DoesNotContain("--shell", args);
         }
     }
 

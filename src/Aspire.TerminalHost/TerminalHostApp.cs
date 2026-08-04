@@ -99,18 +99,9 @@ public sealed class TerminalHostApp : IAsyncDisposable
     /// </summary>
     public async Task<int> RunAsync(CancellationToken cancellationToken)
     {
-        if (_args.Shell is { } shell)
-        {
-            _logger.LogInformation(
-                "Aspire terminal host starting: shell hint='{Shell}', size={Cols}x{Rows}, producer='{Producer}', consumer='{Consumer}'.",
-                shell, _args.Columns, _args.Rows, _args.ProducerUdsPath, _args.ConsumerUdsPath);
-        }
-        else
-        {
-            _logger.LogInformation(
-                "Aspire terminal host starting: size={Cols}x{Rows}, producer='{Producer}', consumer='{Consumer}'.",
-                _args.Columns, _args.Rows, _args.ProducerUdsPath, _args.ConsumerUdsPath);
-        }
+        _logger.LogInformation(
+            "Aspire terminal host starting: size={Cols}x{Rows}, producer='{Producer}', consumer='{Consumer}'.",
+            _args.Columns, _args.Rows, _args.ProducerUdsPath, _args.ConsumerUdsPath);
 
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken, _shutdownCts.Token);
