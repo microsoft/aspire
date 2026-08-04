@@ -239,6 +239,7 @@ export class ConfigInfoProvider {
 
                 try {
                     childProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
+                        createProcessGroup: true,
                         stdoutCallback: (data) => {
                             output += data;
                         },

@@ -1024,6 +1024,7 @@ export class AppHostDataRepository {
 
             stream.receivedData = false;
             const describeProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
+                createProcessGroup: true,
                 noExtensionVariables: true,
                 lineCallback: (line) => {
                     if (this._describeStreams.get(appHostPath) !== stream || stream.process !== describeProcess) {
@@ -1395,6 +1396,7 @@ export class AppHostDataRepository {
             });
 
             cliProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
+                createProcessGroup: true,
                 noExtensionVariables: true,
                 env: options.env,
                 stdoutCallback: (data) => { stdout.append(data); },
@@ -1587,6 +1589,7 @@ export class AppHostDataRepository {
         const psFollowStderr = new LimitedOutputBuffer(AppHostDataRepository._oneShotOutputBufferLimit);
 
         psProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
+            createProcessGroup: true,
             noExtensionVariables: true,
             stdoutCallback: (data) => {
                 psFollowStdout.append(data);
@@ -1971,6 +1974,7 @@ export class AppHostDataRepository {
         };
 
         psProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
+            createProcessGroup: true,
             noExtensionVariables: true,
             stdoutCallback: (data) => { stdout += data; },
             stderrCallback: (data) => { stderr += data; },
