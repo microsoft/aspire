@@ -759,6 +759,63 @@ suite('AppHost discovery', () => {
             }
         });
 
+        test('new callers bypass stale active discovery without cancelling existing subscribers', async () => {
+            const watcherCallbacks = stubFileSystemWatchers(sandbox);
+            const clock = sandbox.useFakeTimers();
+            const discoveryOptions: cliModule.SpawnProcessOptions[] = [];
+            const discoveryKills: sinon.SinonStub[] = [];
+            const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args = [], options) => {
+                const kill = sandbox.stub().returns(true);
+                discoveryOptions.push(options!);
+                discoveryKills.push(kill);
+                return {
+                    killed: false,
+                    kill,
+                } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+            const staleCandidate = {
+                path: buildPath('workspace', 'Old', 'AppHost.csproj'),
+                language: 'csharp',
+                status: 'buildable',
+            };
+            const freshCandidate = {
+                path: buildPath('workspace', 'New', 'AppHost.csproj'),
+                language: 'csharp',
+                status: 'buildable',
+            };
+
+            try {
+                const firstDiscovery = service.discover(workspaceFolder);
+                await waitForMicrotasks();
+                assert.strictEqual(spawnStub.callCount, 1);
+
+                watcherCallbacks[0]();
+                await clock.tickAsync(250);
+
+                const secondDiscovery = service.discover(workspaceFolder);
+                await waitForMicrotasks();
+                assert.strictEqual(spawnStub.callCount, 2);
+                assert.deepStrictEqual(discoveryKills.map(kill => kill.callCount), [0, 0]);
+
+                discoveryOptions[1].lineCallback?.(JSON.stringify(freshCandidate));
+                discoveryOptions[1].exitCallback?.(0);
+                assert.deepStrictEqual(await secondDiscovery, [freshCandidate]);
+
+                discoveryOptions[0].lineCallback?.(JSON.stringify(staleCandidate));
+                discoveryOptions[0].exitCallback?.(0);
+                assert.deepStrictEqual(await firstDiscovery, [staleCandidate]);
+
+                assert.deepStrictEqual(await service.discover(workspaceFolder), [freshCandidate]);
+                assert.strictEqual(spawnStub.callCount, 2);
+            }
+            finally {
+                service.dispose();
+                clock.restore();
+            }
+        });
+
         test('repeated project changes do not restart active discovery', async () => {
             const watcherCallbacks = stubFileSystemWatchers(sandbox);
             const clock = sandbox.useFakeTimers();

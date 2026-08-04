@@ -102,6 +102,12 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         this._ensureWatchers(workspaceFolder, key);
 
         let cachedDiscovery = this._cache.get(key);
+        if (cachedDiscovery?.stale) {
+            // A watcher can invalidate shared work without cancelling its existing subscribers.
+            // New callers must start against the current workspace instead of joining that stale work.
+            this._cache.delete(key);
+            cachedDiscovery = undefined;
+        }
         if (!cachedDiscovery) {
             const startTime = Date.now();
             const cancellationSource = new vscode.CancellationTokenSource();
