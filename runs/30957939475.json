@@ -1,0 +1,29 @@
+{
+  "run_id": 30957939475,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/30957939475",
+  "analyzed_at": "2026-08-04T23:37:14Z",
+  "verdict": "transient-infra",
+  "pr": {
+    "number": 18987,
+    "title": "Use run wording for no-debug AppHost launches",
+    "author": "vivekjm",
+    "state": "closed",
+    "head_branch": "fix/run-session-message",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18987"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / RabbitMQ.Client / RabbitMQ.Client (ubuntu-latest)",
+      "id": 92157993355,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/30957939475/job/92157993355",
+      "classification": "transient-infra",
+      "reason": "All tests passed (failed: 0). The job failed only in 'Upload logs, and test results' step due to ECONNRESET network error when creating the artifact.",
+      "failed_steps": ["Upload logs, and test results"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["artifact-upload-econnreset"]
+}

@@ -1,0 +1,16 @@
+{
+  "id": "artifact-upload-econnreset",
+  "type": "infra-failure",
+  "title": "GitHub artifact upload fails with ECONNRESET network error",
+  "error_pattern": "Failed to CreateArtifact: Unable to make request: ECONNRESET",
+  "occurrences": [
+    {
+      "run_id": 30957939475,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/30957939475",
+      "job": "Tests / RabbitMQ.Client / RabbitMQ.Client (ubuntu-latest)",
+      "pr_number": 18987,
+      "observed_at": "2026-08-04T23:37:14Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19005"
+}
