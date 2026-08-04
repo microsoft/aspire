@@ -19,7 +19,7 @@
     "jws": "^3.2.3"
   },
   "devDependencies": {
-    "@types/express": "^4.17.21",
+    "@types/express": "^5.0.6",
     "@types/node": "^20.10.5",
     "@types/pg": "^8.10.9",
     "@types/uuid": "^9.0.7",
