@@ -4,7 +4,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Dotnet;
 using Aspire.Hosting.Utils;
 

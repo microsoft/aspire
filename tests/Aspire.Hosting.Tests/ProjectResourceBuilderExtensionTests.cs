@@ -6,6 +6,8 @@
 #pragma warning disable ASPIREPROJECTS001 // WithProjectDefaults is experimental.
 #pragma warning disable ASPIREEXTENSION001 // Debug support APIs are experimental.
 
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Aspire.Hosting.Utils;
@@ -16,6 +18,29 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "2")]
 public class ProjectResourceBuilderExtensionTests
 {
+    [Fact]
+    public void ProjectLaunchDefaultsAnnotationIsTaggedWithExpectedExperimentalDiagnostic()
+    {
+        var attribute = Assert.Single(typeof(ProjectLaunchDefaultsAnnotation).GetCustomAttributes<ExperimentalAttribute>());
+
+        Assert.Equal("ASPIREPROJECTS001", attribute.DiagnosticId);
+        Assert.Equal("https://aka.ms/aspire/diagnostics/{0}", attribute.UrlFormat);
+    }
+
+    [Fact]
+    public void WithProjectDefaultsIsTaggedWithExpectedExperimentalDiagnostic()
+    {
+        var method = typeof(ProjectResourceBuilderExtensions).GetMethod(
+            nameof(ProjectResourceBuilderExtensions.WithProjectDefaults),
+            BindingFlags.Public | BindingFlags.Static);
+
+        Assert.NotNull(method);
+        var attribute = Assert.Single(method!.GetCustomAttributes<ExperimentalAttribute>());
+
+        Assert.Equal("ASPIREPROJECTS001", attribute.DiagnosticId);
+        Assert.Equal("https://aka.ms/aspire/diagnostics/{0}", attribute.UrlFormat);
+    }
+
     [Fact]
     public void WithPersistentLifetimeAddsPersistenceAnnotation()
     {

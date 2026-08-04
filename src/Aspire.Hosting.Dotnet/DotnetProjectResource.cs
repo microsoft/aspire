@@ -18,8 +18,6 @@ namespace Aspire.Hosting.Dotnet;
 /// <c>dotnet run --file &lt;path&gt;</c> for a file-based app (a <c>.cs</c> file).
 /// </para>
 /// </remarks>
-/// <param name="name">The name of the resource in the application model.</param>
-/// <param name="workingDirectory">The working directory for the app, typically the directory containing the project or <c>.cs</c> file.</param>
 [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 [AspireExport(ExposeProperties = true)]
 public class DotnetProjectResource : ExecutableResource, IResourceWithServiceDiscovery
