@@ -126,6 +126,9 @@ const hostedAgentWithProtocol = await builder.addExecutable(
     'node',
     '.',
     ['-e', hostedAgentScript]);
+// Both hosted agents run as plain host processes (not containers), so they must not share the
+// default 8088 target port or the second process fails to bind with EADDRINUSE.
+await hostedAgentWithProtocol.withHttpEndpoint({ targetPort: 8089 });
 await hostedAgentWithProtocol.asHostedAgentWithProtocol(project, HostedAgentProtocol.Invocations, '1.0.0');
 
 const api = await builder.addContainer('api', 'nginx');

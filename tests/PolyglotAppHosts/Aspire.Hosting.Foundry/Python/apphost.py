@@ -133,6 +133,9 @@ server.listen(port, '127.0.0.1');
         "node",
         ".",
         ["-e", hosted_agent_script])
+    # Both hosted agents run as plain host processes (not containers), so they must not share the
+    # default 8088 target port or the second process fails to bind with EADDRINUSE.
+    hosted_agent_with_protocol.with_http_endpoint(target_port=8089)
     hosted_agent_with_protocol.as_hosted_agent_with_protocol(
         project,
         HostedAgentProtocol.INVOCATIONS,

@@ -129,6 +129,9 @@ server.listen(port, '127.0.0.1');
                 "-e",
                 hostedAgentScript
             });
+        // Both hosted agents run as plain host processes (not containers), so they must not share the
+        // default 8088 target port or the second process fails to bind with EADDRINUSE.
+        hostedAgentWithProtocol.withHttpEndpoint(new WithHttpEndpointOptions().targetPort(8089.0));
         hostedAgentWithProtocol.asHostedAgentWithProtocol(project, HostedAgentProtocol.INVOCATIONS, "1.0.0");
 
         var api = builder.addContainer("api", "nginx");

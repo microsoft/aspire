@@ -145,6 +145,9 @@ server.listen(port, '127.0.0.1');
 			"-e",
 			hostedAgentScript,
 		})
+	// Both hosted agents run as plain host processes (not containers), so they must not share the
+	// default 8088 target port or the second process fails to bind with EADDRINUSE.
+	hostedAgentWithProtocol.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{TargetPort: aspire.Float64Ptr(8089)})
 	hostedAgentWithProtocol.AsHostedAgentWithProtocol(project, aspire.HostedAgentProtocolInvocations, "1.0.0", nil)
 
 	_ = builder.AddContainer("api", "nginx")
