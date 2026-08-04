@@ -1554,6 +1554,72 @@ suite('AppHost discovery', () => {
             }
         });
 
+        test('late stream callbacks do not report candidates after buffered fallback begins', async () => {
+            stubFileSystemWatchers(sandbox);
+            const lateStreamCandidate = {
+                path: buildPath('workspace', 'Late', 'AppHost.csproj'),
+                language: 'csharp',
+                status: 'buildable',
+            };
+            const bufferedCandidate = {
+                path: buildPath('workspace', 'Fallback', 'apphost.ts'),
+                language: 'typescript/nodejs',
+                status: 'buildable',
+            };
+            let streamOptions: cliModule.SpawnProcessOptions | undefined;
+            let bufferedOptions: cliModule.SpawnProcessOptions | undefined;
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
+                const childProcess = Object.assign(new EventEmitter(), {
+                    killed: false,
+                    exitCode: null,
+                    signalCode: null as NodeJS.Signals | null,
+                    kill: sandbox.stub(),
+                });
+                childProcess.kill.callsFake(() => {
+                    childProcess.killed = true;
+                    childProcess.signalCode = 'SIGTERM';
+                    childProcess.emit('exit', null, childProcess.signalCode);
+                    childProcess.emit('close', null, childProcess.signalCode);
+                    return true;
+                });
+
+                if (args.includes('--stream')) {
+                    streamOptions = options;
+                }
+                else if (args[0] === 'ls') {
+                    bufferedOptions = options;
+                }
+                return childProcess as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+            try {
+                const observed: CandidateAppHostDisplayInfo[] = [];
+                const discovery = service.discover(
+                    makeWorkspaceFolder(buildPath('workspace')),
+                    false,
+                    undefined,
+                    candidate => observed.push(candidate));
+                await waitForMicrotasks();
+
+                assert.ok(streamOptions);
+                streamOptions.lineCallback?.('{"path":');
+                await waitForMicrotasks();
+
+                assert.ok(bufferedOptions);
+                streamOptions.lineCallback?.(JSON.stringify(lateStreamCandidate));
+                assert.deepStrictEqual(observed, []);
+
+                bufferedOptions.stdoutCallback?.(JSON.stringify([bufferedCandidate]));
+                bufferedOptions.exitCallback?.(0);
+                assert.deepStrictEqual(await discovery, [bufferedCandidate]);
+                assert.deepStrictEqual(observed, []);
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
         test('adapts legacy get-apphosts candidates as buildable C# AppHosts', async () => {
             stubFileSystemWatchers(sandbox);
             const appHostPath = buildPath('workspace', 'AppHost', 'AppHost.csproj');

@@ -670,6 +670,12 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                     },
                     lineCallback: onLine
                         ? line => {
+                            // readline can deliver lines that were already queued when a parser failure
+                            // settled this process. Do not publish those lines while fallback is running.
+                            if (settled) {
+                                return;
+                            }
+
                             try {
                                 onActivity?.();
                                 onLine(line);
