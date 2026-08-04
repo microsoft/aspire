@@ -1655,9 +1655,11 @@ suite('getResourceIcon', () => {
         assert.strictEqual(icon.id, 'circle-outline');
     });
 
-    test('FailedToStart shows error icon', () => {
+    test('FailedToStart shows warning icon', () => {
         const icon = getResourceIcon(makeResource({ state: ResourceState.FailedToStart }));
-        assert.strictEqual(icon.id, 'error');
+        assert.strictEqual(icon.id, 'warning');
+        assert.ok(icon.color instanceof vscode.ThemeColor);
+        assert.strictEqual(icon.color.id, 'list.warningForeground');
     });
 
     test('RuntimeUnhealthy shows warning icon', () => {

@@ -12,7 +12,7 @@ import {
     codeLensResourceStoppedWithExitCode,
     codeLensResourceStoppedError,
     codeLensResourceStoppedErrorWithExitCode,
-    codeLensResourceError,
+    codeLensResourceFailedToStart,
     codeLensResourceRuntimeUnhealthy,
     codeLensResourceValueMissing,
 } from '../loc/strings';
@@ -63,10 +63,11 @@ suite('getCodeLensStateLabel', () => {
         assert.strictEqual(getCodeLensStateLabel(ResourceState.NotStarted, ''), codeLensResourceNotStarted);
     });
 
-    // --- Error states ---
+    // --- Warning states ---
 
-    test('FailedToStart returns error label', () => {
-        assert.strictEqual(getCodeLensStateLabel(ResourceState.FailedToStart, ''), codeLensResourceError);
+    test('FailedToStart returns warning label', () => {
+        assert.strictEqual(getCodeLensStateLabel(ResourceState.FailedToStart, ''), codeLensResourceFailedToStart);
+        assert.ok(codeLensResourceFailedToStart.includes('$(warning)'));
     });
 
     test('RuntimeUnhealthy returns warning label', () => {
@@ -146,6 +147,6 @@ suite('getCodeLensStateLabel', () => {
     });
 
     test('FailedToStart ignores stateStyle', () => {
-        assert.strictEqual(getCodeLensStateLabel(ResourceState.FailedToStart, StateStyle.Warning), codeLensResourceError);
+        assert.strictEqual(getCodeLensStateLabel(ResourceState.FailedToStart, StateStyle.Error), codeLensResourceFailedToStart);
     });
 });

@@ -210,7 +210,7 @@ export const codeLensResourceStopped = vscode.l10n.t('$(circle-outline)\u200A St
 export const codeLensResourceStoppedWithExitCode = (exitCode: number) => vscode.l10n.t('$(circle-outline)\u200A Stopped (Exit Code: {0})', exitCode);
 export const codeLensResourceStoppedError = vscode.l10n.t('$(error)\u200A Stopped');
 export const codeLensResourceStoppedErrorWithExitCode = (exitCode: number) => vscode.l10n.t('$(error)\u200A Stopped (Exit Code: {0})', exitCode);
-export const codeLensResourceError = vscode.l10n.t('$(error)\u200A Error');
+export const codeLensResourceFailedToStart = vscode.l10n.t('$(warning)\u200A Failed to start');
 export const codeLensResourceRuntimeUnhealthy = vscode.l10n.t('$(warning)\u200A Runtime unhealthy');
 export const codeLensResourceValueMissing = vscode.l10n.t('$(warning)\u200A Value missing');
 export const codeLensRestart = vscode.l10n.t('$(debug-restart)\u200A Restart');

@@ -129,6 +129,10 @@ suite('AspireGutterDecorationProvider', () => {
         assert.strictEqual(classifyState(ResourceState.RuntimeUnhealthy, '', ''), 'warning');
     });
 
+    test('FailedToStart uses the warning decoration category', () => {
+        assert.strictEqual(classifyState(ResourceState.FailedToStart, '', ''), 'warning');
+    });
+
     test('does not emit resource decorations from a different running AppHost', () => {
         const runningHostPath = p('repo', 'RunningAppHost', 'AppHost.csproj');
         const stoppedHostPath = p('repo', 'StoppedAppHost', 'AppHost.cs');

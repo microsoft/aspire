@@ -83,7 +83,6 @@ export function classifyState(state: string, stateStyle: string, healthStatus: s
             }
             return 'running';
         case ResourceState.FailedToStart:
-            return 'error';
         case ResourceState.RuntimeUnhealthy:
             return 'warning';
         case ResourceState.Starting:
