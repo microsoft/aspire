@@ -1,0 +1,16 @@
+{
+  "id": "dnceng-nuget-feed-503",
+  "type": "infra-failure",
+  "title": "dnceng NuGet feed returns HTTP 503 Service Unavailable during package restore",
+  "error_pattern": "Response status code does not indicate success: 503 (Service Unavailable).\n  Failed to download package '...' from 'https://pkgs.dev.azure.com/dnceng/9ee6d478-d288-47f7-aacc-f6e6d082ae6d/_packaging/45bacae2-5efb-47c8-91e5-8ec20c22b4f8/nuget/v3/flat2/...'. Response status code does not indicate success: 503 (Service Unavailable).",
+  "occurrences": [
+    {
+      "run_id": 30906478483,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/30906478483",
+      "job": "Tests / Hosting-1 / Hosting-1 (windows-latest)",
+      "pr_number": 1056,
+      "observed_at": "2026-08-04T12:21:00Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/18994"
+}

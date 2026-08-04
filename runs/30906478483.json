@@ -1,0 +1,64 @@
+{
+  "run_id": 30906478483,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/30906478483",
+  "analyzed_at": "2026-08-04T12:21:00Z",
+  "verdict": "transient-infra",
+  "pr": {
+    "number": 1056,
+    "title": null,
+    "author": null,
+    "state": null,
+    "head_branch": null,
+    "base_branch": null,
+    "url": null
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting-1 / Hosting-1 (windows-latest)",
+      "id": 91983086369,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/30906478483/job/91983086369",
+      "classification": "transient-infra",
+      "reason": "All 27 tests passed successfully. The job failed with exit code -1073741502 (0xC0000142 STATUS_DLL_INIT_FAILED) only in post-test upload/cleanup steps, which is a known Windows runner infrastructure issue.",
+      "failed_steps": ["Check for hang dump files", "Upload logs, and test results", "Copy CLI E2E recordings for upload", "Upload CLI E2E recordings", "Generate test results summary", "Post Checkout code"]
+    },
+    {
+      "name": "Tests / Templates-BuildAndRunStarterTemplateBuiltInTest / Templates-BuildAndRunStarterTemplateBuiltInTest (ubuntu-latest)",
+      "id": 91983948687,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/30906478483/job/91983948687",
+      "classification": "transient-infra",
+      "reason": "NuGet package restore failed with HTTP 503 Service Unavailable from pkgs.dev.azure.com/dnceng feed. Multiple packages could not be downloaded. This is a transient NuGet feed outage, not related to PR changes.",
+      "failed_steps": ["Run nuget dependent tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / Templates-XUnit_Default_NewUpAndBuildSupportProjectTemplatesTests / Templates-XUnit_Default_NewUpAndBuildSupportProjectTemplatesTests (ubuntu-latest)",
+      "id": 91983948711,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/30906478483/job/91983948711",
+      "classification": "transient-infra",
+      "reason": "NuGet package restore failed with HTTP 503 Service Unavailable from pkgs.dev.azure.com/dnceng feed. Multiple packages could not be downloaded. This is a transient NuGet feed outage, not related to PR changes.",
+      "failed_steps": ["Run nuget dependent tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Templates.Tests.XUnit_Default_NewUpAndBuildSupportProjectTemplatesTests.CanNewAndBuild(templateName: \"aspire-xunit\", extraTestCreationArgs: \"\", sdk: Net11, tfm: Net8, error: null)",
+      "job": "Tests / Templates-XUnit_Default_NewUpAndBuildSupportProjectTemplatesTests / Templates-XUnit_Default_NewUpAndBuildSupportProjectTemplatesTests (ubuntu-latest)",
+      "error": "Aspire.Templates.Tests.ToolCommandException : `dotnet new aspire-apphost  -o \"new_build_aspire_xunit_g2exlbbf_h0h.AppHost\" -f net8.0` . Output: The template \"Aspire AppHost\" was created successfully. ... Retrying 'FindPackagesByIdAsync' for source 'https://pkgs.dev.azure.com/dnceng/...'. Response status code does not indicate success: 503 (Service Unavailable).",
+      "stack_trace": "at Aspire.Templates.Tests.AspireProject.CreateNewTemplateProjectAsync(...) in /_/tests/Shared/TemplatesTesting/AspireProject.cs:line 128\n   at Aspire.Templates.Tests.NewUpAndBuildSupportProjectTemplatesBase.CanNewAndBuildActual(...) in /_/tests/Aspire.Templates.Tests/NewUpAndBuildSupportProjectTemplatesTests.cs:line 35",
+      "classification": "flaky",
+      "reason": "NuGet restore inside the test failed due to HTTP 503 from the dnceng NuGet feed. This is a transient infrastructure outage unrelated to PR changes."
+    },
+    {
+      "name": "Aspire.Templates.Tests.BuildAndRunStarterTemplateBuiltInTest.BuildAndRunStarterTemplateBuiltInTest_Test(config: \"Debug\", testType: \"mstest\")",
+      "job": "Tests / Templates-BuildAndRunStarterTemplateBuiltInTest / Templates-BuildAndRunStarterTemplateBuiltInTest (ubuntu-latest)",
+      "error": "Aspire.Templates.Tests.ToolCommandException : `dotnet new aspire-starter -t mstest -o \"starter test.Debug-mstest_edrnrnzg_0po\" -f net9.0` . Output: The template \"Aspire Starter App (ASP.NET Core/Blazor)\" was created successfully. ... Retrying 'FindPackagesByIdAsync' for source 'https://pkgs.dev.azure.com/dnceng/...'. Response status code does not indicate success: 503 (Service Unavailable).",
+      "stack_trace": "at Aspire.Templates.Tests.AspireProject.CreateNewTemplateProjectAsync(...) in /_/tests/Shared/TemplatesTesting/AspireProject.cs:line 128\n   at Aspire.Templates.Tests.BuildAndRunStarterTemplateBuiltInTest.BuildAndRunStarterTemplateBuiltInTest_Test(...) in /_/tests/Aspire.Templates.Tests/BuildAndRunStarterTemplateBuiltInTest.cs:line 36",
+      "classification": "flaky",
+      "reason": "NuGet restore inside the test failed due to HTTP 503 from the dnceng NuGet feed. This is a transient infrastructure outage unrelated to PR changes."
+    }
+  ],
+  "causes": ["windows-process-init-failure-0xc0000142", "dnceng-nuget-feed-503"]
+}
