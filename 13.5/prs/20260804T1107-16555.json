@@ -1,0 +1,9 @@
+{
+  "author": "ndhansen",
+  "comment": "New Kubernetes projected volumes feature; community contribution from ndhansen",
+  "mergedAt": "2026-08-04T11:07:09Z",
+  "number": 16555,
+  "runDate": "2026-08-04T12:35:28Z",
+  "status": "included",
+  "title": "Add support for kubernetes projected volumes"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Automated security dependency bump for JavaScript playground and template lockfiles; routine maintenance with no meaningful user-facing functional change",
+  "mergedAt": "2026-08-04T10:07:10Z",
+  "number": 18858,
+  "runDate": "2026-08-04T12:35:28Z",
+  "status": "excluded",
+  "title": "[auto-sec] Consolidate Aspire JavaScript template dependency security remediations"
+}

@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [
+    "@ndhansen"
+  ],
+  "description": "The Kubernetes publisher now supports projected volumes, allowing secrets, config maps, service account tokens, and downward API data to be mounted into the same directory. This enables scenarios requiring multiple volume sources under a single mount point.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🗂️",
+  "firstMergedAt": "2026-08-04T11:07:09Z",
+  "lastMergedAt": "2026-08-04T11:07:09Z",
+  "name": "Kubernetes projected volume support",
+  "owner": "mitchdenny",
+  "prs": [
+    16555
+  ]
+}

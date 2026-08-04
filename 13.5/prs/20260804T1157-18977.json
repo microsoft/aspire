@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Seals CommandProgressOptions before initial API ship; minor pre-release type design tweak with no user-facing impact",
+  "mergedAt": "2026-08-04T11:57:58Z",
+  "number": 18977,
+  "runDate": "2026-08-04T12:35:28Z",
+  "status": "excluded",
+  "title": "Seal CommandProgressOptions"
+}

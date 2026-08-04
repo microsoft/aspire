@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Terminal API cleanup: makes internal types internal, breaking change in experimental API",
+  "mergedAt": "2026-08-04T11:50:12Z",
+  "number": 18978,
+  "runDate": "2026-08-04T12:35:28Z",
+  "status": "included",
+  "title": "Fix terminal API surface"
+}

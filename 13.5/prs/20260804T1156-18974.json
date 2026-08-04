@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Documentation-only change (XML doc corrections); no user-facing functional change",
+  "mergedAt": "2026-08-04T11:56:38Z",
+  "number": 18974,
+  "runDate": "2026-08-04T12:35:28Z",
+  "status": "excluded",
+  "title": "Clarify interaction API documentation"
+}
