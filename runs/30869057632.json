@@ -1,0 +1,38 @@
+{
+  "run_id": 30869057632,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/30869057632",
+  "analyzed_at": "2026-08-04T02:20:19Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 18930,
+    "title": "Fix waiting for custom resources",
+    "author": "karolz-ms",
+    "state": "closed",
+    "head_branch": "dev/karolz/fix-waitfor-self-driven-resources",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18930"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.Docker / Hosting.Docker (ubuntu-latest)",
+      "id": 91869622072,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/30869057632/job/91869622072",
+      "classification": "flaky-test",
+      "reason": "Test DeployWithDashboard_PrintsDashboardAndServiceEndpoints failed because docker could not bind port 0.0.0.0:56774 (address already in use). This is a known intermittent port conflict on shared CI runners, unrelated to PR changes (PR only modifies Aspire.Hosting orchestration and notification code, not Docker compose tests).",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Docker.Tests.DockerComposeTests.DeployWithDashboard_PrintsDashboardAndServiceEndpoints",
+      "job": "Tests / Hosting.Docker / Hosting.Docker (ubuntu-latest)",
+      "error": "Assert.Contains() Failure: Filter not matched in collection\nCollection: []",
+      "stack_trace": "at Aspire.Hosting.Docker.Tests.DockerComposeTests.DeployWithDashboard_PrintsDashboardAndServiceEndpoints() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Docker.Tests/DockerComposeTests.cs:line 460\n   at Aspire.Hosting.Docker.Tests.DockerComposeTests.DeployWithDashboard_PrintsDashboardAndServiceEndpoints() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Docker.Tests/DockerComposeTests.cs:line 500",
+      "classification": "flaky",
+      "reason": "Docker failed to bind host port 0.0.0.0:56774 (address already in use) when running docker compose up. This is a known flaky failure (prior cause: docker-compose-port-already-in-use). The test is in Aspire.Hosting.Docker.Tests which is not modified by this PR."
+    }
+  ],
+  "causes": ["docker-compose-port-already-in-use"]
+}

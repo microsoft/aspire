@@ -3,7 +3,7 @@
   "type": "flaky-test",
   "title": "Flaky: DockerComposeTests.DeployWithDashboard_PrintsDashboardAndServiceEndpoints fails due to port already in use",
   "test_name": "Aspire.Hosting.Docker.Tests.DockerComposeTests.DeployWithDashboard_PrintsDashboardAndServiceEndpoints",
-  "error_pattern": "Error response from daemon: failed to set up container networking: driver failed programming external connectivity on endpoint aspire-env-...-nginx-1: failed to bind host port for 0.0.0.0:5XXXX:172.18.0.2:80/tcp: address already in use\n'docker compose up' failed with exit code 1.\nAssert.Contains() Failure: Filter not matched in collection",
+  "error_pattern": "Error response from daemon: failed to set up container networking: driver failed programming external connectivity on endpoint aspire-env-...-nginx-1: failed to bind host port for 0.0.0.0:56774:172.18.0.3:80/tcp: address already in use\n'docker compose up' failed with exit code 1.\nAssert.Contains() Failure: Filter not matched in collection\nCollection: []",
   "occurrences": [
     {
       "run_id": 29060081150,
@@ -18,6 +18,13 @@
       "job": "Tests / Hosting.Docker / Hosting.Docker (ubuntu-latest)",
       "pr_number": 18738,
       "observed_at": "2026-07-13T03:11:02Z"
+    },
+    {
+      "run_id": 30869057632,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/30869057632",
+      "job": "Tests / Hosting.Docker / Hosting.Docker (ubuntu-latest)",
+      "pr_number": 18930,
+      "observed_at": "2026-08-04T02:20:19Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/18719"
