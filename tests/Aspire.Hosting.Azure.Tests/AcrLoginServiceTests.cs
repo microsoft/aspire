@@ -4,6 +4,7 @@
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
 using System.Net;
+using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Tests.Publishing;
 using Azure.Core;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -43,6 +44,39 @@ public class AcrLoginServiceTests
         var login = Assert.Single(runtime.LoginToRegistryCalls);
         Assert.Equal("registry.azurecr.io", login.registryServer);
         Assert.Equal("refresh-token", login.password);
+    }
+
+    [Fact]
+    public async Task GetRefreshTokenAsync_RetriesTransientExchangeFailures()
+    {
+        var handler = new CallbackHttpMessageHandler((attempt, _) =>
+        {
+            if (attempt == 1)
+            {
+                throw new HttpRequestException("Transient socket failure");
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"refresh_token":"refresh-token","expires_in":3600}""")
+            });
+        });
+        var timeProvider = new ImmediateTimeProvider();
+        var service = new AcrLoginService(
+            new TestHttpClientFactory(handler),
+            new ThrowingContainerRuntimeResolver(),
+            NullLogger<AcrLoginService>.Instance,
+            timeProvider);
+
+        var token = await service.GetRefreshTokenAsync(
+            "registry.azurecr.io",
+            "tenant",
+            new StaticTokenCredential());
+
+        Assert.Equal("00000000-0000-0000-0000-000000000000", token.Username);
+        Assert.Equal("refresh-token", token.Token);
+        Assert.Equal(2, handler.CallCount);
+        Assert.Equal(1, timeProvider.DelayCount);
     }
 
     [Fact]
@@ -211,6 +245,14 @@ public class AcrLoginServiceTests
         {
             IsDisposed = true;
             return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class ThrowingContainerRuntimeResolver : IContainerRuntimeResolver
+    {
+        public Task<IContainerRuntime> ResolveAsync(CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
         }
     }
 }

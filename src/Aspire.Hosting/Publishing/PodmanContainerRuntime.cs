@@ -14,7 +14,7 @@ namespace Aspire.Hosting.Publishing;
 
 internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContainerRuntime>
 {
-    public PodmanContainerRuntime(ILogger<PodmanContainerRuntime> logger) : base(logger)
+    public PodmanContainerRuntime(ILogger<PodmanContainerRuntime> logger, IProcessRunner processRunner) : base(logger, processRunner)
     {
     }
 
@@ -55,7 +55,7 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
             }
         };
 
-        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
+        var (pendingProcessResult, processDisposable) = ProcessRunner.Run(spec);
 
         await using (processDisposable)
         {
@@ -244,6 +244,19 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
         {
             return false;
         }
+    }
+
+    public override Task<string> InspectImageManifestAsync(string imageName, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(imageName);
+        var escapedImageName = EscapeArgument(imageName);
+
+        // Podman does not support Docker's --verbose manifest inspection option.
+        return ExecuteContainerCommandForOutputAsync(
+            $"manifest inspect \"{escapedImageName}\"",
+            "inspect image manifest",
+            imageName,
+            cancellationToken);
     }
 }
 

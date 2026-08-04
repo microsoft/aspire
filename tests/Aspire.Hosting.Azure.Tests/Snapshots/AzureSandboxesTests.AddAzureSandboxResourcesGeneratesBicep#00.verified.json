@@ -1,0 +1,9 @@
+﻿{
+  "type": "azure.bicep.v0",
+  "path": "hostgroup.module.bicep",
+  "params": {
+    "hostmi_outputs_id": "{hostmi.outputs.id}",
+    "userPrincipalId": "",
+    "principalType": ""
+  }
+}

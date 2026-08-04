@@ -5,6 +5,7 @@
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
 using Aspire.Hosting.Publishing;
+using Aspire.Hosting.Dcp.Process;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Tests.Publishing;
@@ -25,7 +26,32 @@ public class ContainerRuntimeBaseTests
         Assert.Contains("stderr-final-line", exception.Message);
     }
 
-    private sealed class TestContainerRuntime(string? runtimeExecutable = null) : ContainerRuntimeBase<TestContainerRuntime>(NullLogger<TestContainerRuntime>.Instance)
+    [Fact]
+    public async Task ExecuteContainerCommandForOutputAsync_ReturnsStdoutOnly()
+    {
+        var runtime = new TestContainerRuntime();
+
+        var output = await runtime.RunCommandForOutputAsync().WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal("{\"json\":true}", output);
+    }
+
+    [Fact]
+    public async Task InspectImageCommandsEscapeQuotesInImageName()
+    {
+        var processRunner = new CapturingProcessRunner();
+        var runtime = new TestContainerRuntime(processRunner);
+
+        await runtime.InspectImageConfigAsync("registry/image\" --help", TestContext.Current.CancellationToken);
+        await runtime.InspectImageManifestAsync("registry/image\" --help", TestContext.Current.CancellationToken);
+
+        Assert.Collection(
+            processRunner.Arguments,
+            arguments => Assert.Equal("image inspect \"registry/image\\\" --help\" --format \"{{json .Config}}\"", arguments),
+            arguments => Assert.Equal("manifest inspect --verbose \"registry/image\\\" --help\"", arguments));
+    }
+
+    private sealed class TestContainerRuntime(IProcessRunner? processRunner = null, string? runtimeExecutable = null) : ContainerRuntimeBase<TestContainerRuntime>(NullLogger<TestContainerRuntime>.Instance, processRunner ?? new DefaultProcessRunner())
     {
         protected override string RuntimeExecutable => runtimeExecutable ?? (OperatingSystem.IsWindows() ? "cmd" : "sh");
 
@@ -51,6 +77,33 @@ public class ContainerRuntimeBaseTests
                 "Test command succeeded.",
                 "Test command failed with exit code {0}.",
                 cancellationToken);
+        }
+
+        public Task<string> RunCommandForOutputAsync(CancellationToken cancellationToken = default)
+        {
+            return ExecuteContainerCommandForOutputAsync(
+                OperatingSystem.IsWindows()
+                    ? "/c \"echo {\"\"json\"\":true} & echo stderr-line 1>&2\""
+                    : "-c \"echo '{\\\"json\\\":true}'; echo stderr-line 1>&2\"",
+                "test output",
+                "test-image",
+                cancellationToken);
+        }
+    }
+
+    private sealed class CapturingProcessRunner : IProcessRunner
+    {
+        public List<string?> Arguments { get; } = [];
+
+        public (Task<ProcessResult>, IAsyncDisposable) Run(ProcessSpec processSpec)
+        {
+            Arguments.Add(processSpec.Arguments);
+            return (Task.FromResult(new ProcessResult(0)), new NoOpAsyncDisposable());
+        }
+
+        private sealed class NoOpAsyncDisposable : IAsyncDisposable
+        {
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
         }
     }
 }
