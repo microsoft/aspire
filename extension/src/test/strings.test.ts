@@ -1,4 +1,5 @@
 import * as assert from 'assert';
+import { launchingWithAppHost, launchingWithDirectory } from '../loc/strings';
 import { formatText } from '../utils/strings';
 
 suite('utils/strings tests', () => {
@@ -17,5 +18,23 @@ suite('utils/strings tests', () => {
         const expectedOutputWithNoEmojis = 'This is a test without emojis.';
         const resultWithNoEmojis = formatText(inputWithNoEmojis);
         assert.strictEqual(resultWithNoEmojis, expectedOutputWithNoEmojis);
+	});
+});
+
+suite('loc/strings tests', () => {
+	test('formats launch messages with the session type', () => {
+		assert.deepStrictEqual(
+			[
+				launchingWithAppHost('debug', '/workspace/apphost.cs'),
+				launchingWithAppHost('run', '/workspace/apphost.cs'),
+				launchingWithDirectory('debug', '/workspace'),
+				launchingWithDirectory('run', '/workspace'),
+			],
+			[
+				'Launching Aspire debug session for AppHost /workspace/apphost.cs...',
+				'Launching Aspire run session for AppHost /workspace/apphost.cs...',
+				'Launching Aspire debug session using directory /workspace: attempting to determine effective AppHost...',
+				'Launching Aspire run session using directory /workspace: attempting to determine effective AppHost...',
+			]);
 	});
 });

@@ -6,7 +6,7 @@ import { AspireResourceExtendedDebugConfiguration, AspireResourceDebugSession, E
 import { extensionLogOutputChannel } from "../utils/logging";
 import AspireDcpServer, { generateDcpIdPrefix } from "../dcp/AspireDcpServer";
 import { spawnCliProcess } from "./languages/cli";
-import { disconnectingFromSession, launchingRunWithAppHost, launchingRunWithDirectory, launchingWithAppHost, launchingWithDirectory, processExceptionOccurred, processExitedWithCode, aspireDashboard, appHostSessionTerminated } from "../loc/strings";
+import { disconnectingFromSession, launchingWithAppHost, launchingWithDirectory, processExceptionOccurred, processExitedWithCode, aspireDashboard, appHostSessionTerminated } from "../loc/strings";
 import { projectDebuggerExtension } from "./languages/dotnet";
 import { AnsiColors } from "../utils/AspireTerminalProvider";
 import { applyTextStyle } from "../utils/strings";
@@ -302,14 +302,15 @@ export class AspireDebugSession implements vscode.DebugAdapter {
 
     const args = buildAspireCommandArgs(command, commandArgs, extensionArgs);
     const commandLabel = `aspire ${command}`;
+    const sessionType = noDebug ? 'run' : 'debug';
 
     if (appHostIsDirectory) {
-      this.sendMessageWithEmoji("📁", noDebug ? launchingRunWithDirectory(appHostPath) : launchingWithDirectory(appHostPath));
+      this.sendMessageWithEmoji("📁", launchingWithDirectory(sessionType, appHostPath));
 
       void this.spawnAspireCommand(args, appHostPath, noDebug, commandLabel);
     }
     else {
-      this.sendMessageWithEmoji("📂", noDebug ? launchingRunWithAppHost(appHostPath) : launchingWithAppHost(appHostPath));
+      this.sendMessageWithEmoji("📂", launchingWithAppHost(sessionType, appHostPath));
 
       const workspaceFolder = path.dirname(appHostPath);
       void this.spawnAspireCommand(args, workspaceFolder, noDebug, commandLabel);
