@@ -95,6 +95,49 @@ public class ResourceNotificationTests
     }
 
     [Theory]
+    [InlineData(null, false, false, 0, 0, false)]
+    [InlineData(nameof(KnownResourceStates.Starting), true, false, 0, 0, false)]
+    [InlineData(null, true, true, 0, 0, true)]
+    [InlineData(nameof(KnownResourceStates.Starting), true, true, 0, 0, true)]
+    [InlineData("running", true, true, 0, 0, false)]
+    [InlineData(nameof(KnownResourceStates.Running), true, true, 0, 1, true)]
+    [InlineData(nameof(KnownResourceStates.Running), true, true, null, 1, false)]
+    [InlineData(nameof(KnownResourceStates.Running), true, true, 0, null, false)]
+    public void ResourceReadyEventClearDecisionHandlesStateAndRestartChanges(
+        string? state,
+        bool hasNewResourceReadyEvent,
+        bool reuseResourceReadyEvent,
+        int? previousStartOffset,
+        int? newStartOffset,
+        bool expected)
+    {
+        var resourceReadyEvent = new EventSnapshot(Task.CompletedTask);
+        var startTime = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var previousState = new CustomResourceSnapshot
+        {
+            ResourceType = "test",
+            State = KnownResourceStates.Running,
+            StartTimeStamp = previousStartOffset is int previousOffset ? startTime.AddSeconds(previousOffset) : null,
+            ResourceReadyEvent = resourceReadyEvent,
+            Properties = []
+        };
+        var newState = previousState with
+        {
+            State = state,
+            StartTimeStamp = newStartOffset is int currentOffset ? startTime.AddSeconds(currentOffset) : null,
+            ResourceReadyEvent = hasNewResourceReadyEvent
+                ? reuseResourceReadyEvent
+                    ? resourceReadyEvent
+                    : new EventSnapshot(new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously).Task)
+                : null
+        };
+
+        var actual = ResourceNotificationService.ShouldClearResourceReadyEvent(previousState, newState);
+
+        Assert.Equal(expected, actual);
+    }
+
+    [Theory]
     [InlineData(null, true)]
     [InlineData(nameof(KnownResourceStates.Starting), true)]
     [InlineData("starting", true)]
@@ -1758,16 +1801,20 @@ public class ResourceNotificationTests
         Assert.Equal("ResourceReady failed", ex.Message);
     }
 
-    [Fact]
-    public async Task WaitForResourceHealthyAsyncDoesNotUseStaleResourceReadyEventAfterRestart()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WaitForResourceHealthyAsyncDoesNotUseStaleResourceReadyEventAfterRestart(bool restartKeepsRunningState)
     {
         var resource = new CustomResource("myResource");
         var notificationService = ResourceNotificationServiceTestHelpers.Create();
         var firstResourceReadyEvent = new EventSnapshot(Task.CompletedTask);
+        var firstStartTime = DateTime.UtcNow;
 
         await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
         {
             State = KnownResourceStates.Running,
+            StartTimeStamp = firstStartTime,
             ResourceReadyEvent = firstResourceReadyEvent
         }).DefaultTimeout();
 
@@ -1776,11 +1823,12 @@ public class ResourceNotificationTests
 
         await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
         {
-            State = KnownResourceStates.Starting
+            State = restartKeepsRunningState ? KnownResourceStates.Running : KnownResourceStates.Starting,
+            StartTimeStamp = restartKeepsRunningState ? firstStartTime.AddSeconds(1) : snapshot.StartTimeStamp
         }).DefaultTimeout();
 
-        Assert.True(notificationService.TryGetCurrentState(resource.Name, out var startingEvent));
-        Assert.Null(startingEvent.Snapshot.ResourceReadyEvent);
+        Assert.True(notificationService.TryGetCurrentState(resource.Name, out var restartEvent));
+        Assert.Null(restartEvent.Snapshot.ResourceReadyEvent);
 
         var secondWaitTask = notificationService.WaitForResourceHealthyAsync(resource.Name);
 
