@@ -623,10 +623,6 @@ public class ResourceNotificationTests
     [Fact]
     public async Task WaitForDependenciesDoesNotTransitionNotStartedExplicitStartResourceToWaiting()
     {
-        // The same protection has to apply to a single-instance explicit start resource, not just to replicas.
-        // The public WaitForDependenciesAsync can be called on a stopped resource by any integration, and
-        // ApplicationOrchestrator.StartResourceAsync reads "Waiting" as proof that startup is already in flight -
-        // so relabelling here would make the start command silently never reach DCP.
         var dependency = new CustomResource("dependency");
         var resource = new CustomResource("resource");
         resource.Annotations.Add(new ExplicitStartupAnnotation());
@@ -652,6 +648,43 @@ public class ResourceNotificationTests
 
         Assert.True(notificationService.TryGetCurrentState("resource-abc123", out var notStartedEvent));
         Assert.Equal(KnownResourceStates.NotStarted, notStartedEvent.Snapshot.State?.Text);
+    }
+
+    [Fact]
+    public async Task WaitForDependenciesTransitionsNotStartedExplicitStartResourceWithoutDcpInstancesToWaiting()
+    {
+        // Resources not managed by Aspire (no instances) should transition to "Waiting" directly from NotStarted,
+        // regardless whether they have ExplicitStartAnnotation or not. The annotation does not really makes a difference here
+        // because it is only used to control the behavior of the orchestrator when starting a resource
+        // and since the resource has no instances, it is not subject to the orchestrator's start logic.
+        var dependency = new CustomResource("dependency");
+        var resource = new CustomResource("resource");
+        resource.Annotations.Add(new ExplicitStartupAnnotation());
+        resource.Annotations.Add(new WaitAnnotation(dependency, WaitType.WaitUntilStarted));
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        await notificationService.PublishUpdateAsync(resource, s => s with
+        {
+            State = KnownResourceStates.NotStarted
+        }).DefaultTimeout();
+
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var waitTask = notificationService.WaitForDependenciesAsync(resource, cts.Token);
+
+        var waitingEvent = await notificationService.WaitForResourceAsync(
+            resource.Name,
+            re => re.Snapshot.State?.Text == KnownResourceStates.Waiting,
+            cts.Token).DefaultTimeout();
+
+        Assert.Equal(new[] { dependency.Name }, GetWaitingForDependencies(waitingEvent));
+
+        await notificationService.PublishUpdateAsync(dependency, s => s with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+
+        await waitTask.DefaultTimeout();
     }
 
     [Fact]

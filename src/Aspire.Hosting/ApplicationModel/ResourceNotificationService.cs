@@ -585,9 +585,11 @@ public class ResourceNotificationService : IDisposable
             .Distinct(StringComparers.ResourceName)
             .ToArray();
 
-        // "NotStarted" is only OK to transition to Waiting if the resource is not of "explicit startup" kind. 
-        // See the remarks in CanTransitionToWaiting for details.
-        var allowNotStarted = !resource.HasAnnotationOfType<ExplicitStartupAnnotation>();
+        // Explicit-start resources should not auto-transition to Waiting even if they have dependencies
+        // (they should be considered Waiting only after an attempt is made to start them).
+        // Resources with no instances managed by Aspire do not "start" from Aspire's perspective, 
+        // so they are always allowed to transition to Waiting if they are waiting on dependencies.
+        var allowNotStarted = !resource.HasAnnotationOfType<ExplicitStartupAnnotation>() || !resource.TryGetInstances(out _);
 
         return PublishUpdateAsync(resource, s =>
             CanTransitionToWaiting(s.State?.Text, allowNotStarted)
@@ -599,42 +601,6 @@ public class ResourceNotificationService : IDisposable
                 : s);
     }
 
-    /// <summary>
-    /// Determines whether a resource in the specified state may be transitioned to <see cref="KnownResourceStates.Waiting"/>
-    /// while its dependencies are being awaited.
-    /// </summary>
-    /// <remarks>
-    /// This is an allow-list of the states that mean "has not started yet". It ensures that resources/instances that are
-    /// in running, stopping, or in one of terminal states cannot be transitioned to waiting.
-    ///
-    /// Transition from <see cref="KnownResourceStates.NotStarted"/> is conditional, because that state carries two
-    /// different meanings:
-    /// <list type="bullet">
-    /// <item>
-    /// For resources that are started automatically it means "just created--about to start". Such resources can publish
-    /// <see cref="BeforeResourceStartedEvent"/> from <c>OnInitializeResource</c>, so there they are still in the initial
-    /// state supplied by <c>WithInitialState</c> when the wait is published, rather than having been moved to
-    /// "Starting" by the orchestrator first. Refusing the transition here silently skipped the wait itself.
-    /// See https://github.com/microsoft/aspire/issues/17453.
-    /// </item>
-    /// <item>
-    /// For a resource with explicit startup it means "not started--on purpose". Relabeling such a resource
-    /// "Waiting" would misreport it and make its start command a no-op, because
-    /// <c>ApplicationOrchestrator.StartResourceAsync</c> reads "Waiting" as proof that startup is already in flight and
-    /// therefore never forwards the start to DCP. This matters even for a resource with a single instance, since the
-    /// public <see cref="WaitForDependenciesAsync"/> can be called on it by any integration.
-    /// </item>
-    /// </list>
-    ///
-    /// <see cref="ExplicitStartupAnnotation"/> distinguishes the two, and it is an exact signal rather than a heuristic:
-    /// DCP only ever reports an instance as "NotStarted" from its two explicit-start paths (a resource that is not ready
-    /// to be created yet, and one created with <c>Spec.Start = false</c>). Stopping a resource does not produce
-    /// "NotStarted" - containers report "Exited" and executables "Finished"/"Terminated". So for a DCP-managed resource,
-    /// sitting in "NotStarted" and being an explicit-start resource are the same thing.
-    ///
-    /// The annotation lives on the model resource, so every replica is covered by this single check. That is what makes
-    /// it safe for the wait to be published as a model-level update even though replicas are started individually.
-    /// </remarks>
     private static bool CanTransitionToWaiting(string? state, bool allowNotStarted) =>
         state is null
         || (allowNotStarted && state == KnownResourceStates.NotStarted)

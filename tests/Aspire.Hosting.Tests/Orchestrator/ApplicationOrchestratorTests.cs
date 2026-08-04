@@ -1019,6 +1019,49 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         await resourceNotificationService.WaitForResourceAsync(connectionString.Resource.Name, KnownResourceStates.Running, TestContext.Current.CancellationToken).DefaultTimeout();
     }
 
+    [Fact]
+    public async Task ExplicitStartResourceWithoutDcpInstancesReportsWaitingForItsDependency()
+    {
+        // Resources not managed by Aspire (no instances) should transition to "Waiting" directly from NotStarted,
+        // regardless whether they have ExplicitStartAnnotation or not. The annotation does not really makes a difference here
+        // because it is only used to control the behavior of the orchestrator when starting a resource
+        // and since the resource has no instances, it is not subject to the orchestrator's start logic.
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var blockerReleased = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var blocker = AddSelfDrivenResource(builder, "blocker", blockerReleased.Task);
+        var waiter = builder.AddConnectionString("waiter", ReferenceExpression.Create($"Host=localhost;Port=5678"))
+            .WaitFor(blocker)
+            .WithExplicitStart();
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events, applicationEventing: builder.Eventing);
+        await appOrchestrator.RunApplicationAsync();
+
+        await events.PublishAsync(new OnResourcesPreparedContext(CancellationToken.None));
+
+        var waitingEvent = await resourceNotificationService.WaitForResourceAsync(
+            waiter.Resource.Name,
+            re => re.Snapshot.State?.Text == KnownResourceStates.Waiting,
+            TestContext.Current.CancellationToken).DefaultTimeout();
+
+        var waitingFor = waitingEvent.Snapshot.Properties.SingleOrDefault(p => p.Name == KnownProperties.Resource.WaitingFor)?.Value;
+        Assert.Equal(new[] { blocker.Resource.Name }, Assert.IsAssignableFrom<IEnumerable<string>>(waitingFor));
+
+        blockerReleased.SetResult();
+
+        // The resource starts without anyone issuing a start command, which is what makes "Waiting" - rather than
+        // "NotStarted" - the honest label for the period above.
+        await resourceNotificationService.WaitForResourceAsync(blocker.Resource.Name, KnownResourceStates.Running, TestContext.Current.CancellationToken).DefaultTimeout();
+        await resourceNotificationService.WaitForResourceAsync(waiter.Resource.Name, KnownResourceStates.Running, TestContext.Current.CancellationToken).DefaultTimeout();
+    }
+
     /// <summary>
     /// Publishes <paramref name="state"/> for every DCP instance (replica) of <paramref name="resource"/>, as an
     /// individual per-instance update rather than a model-level one.
