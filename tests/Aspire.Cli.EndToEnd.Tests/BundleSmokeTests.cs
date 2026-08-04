@@ -175,9 +175,10 @@ public sealed class BundleSmokeTests(ITestOutputHelper output)
         await auto.RunCommandAsync(
             "DNX_HIVE=$(find \"$HOME/.aspire/hives\" -mindepth 2 -maxdepth 2 -type d -name packages -print -quit); " +
             "test -n \"$DNX_HIVE\"; " +
-            "test -f NuGet.config || dotnet new nugetconfig; " +
-            "dotnet nuget list source --configfile NuGet.config | grep -F \"$DNX_HIVE\" >/dev/null || " +
-            "dotnet nuget add source \"$DNX_HIVE\" --name aspire-dnx-local --configfile NuGet.config",
+            "NUGET_CONFIG=$(find . -maxdepth 1 -type f -iname nuget.config -print -quit); " +
+            "if [ -z \"$NUGET_CONFIG\" ]; then NUGET_CONFIG=NuGet.config; dotnet new nugetconfig; fi; " +
+            "dotnet nuget list source --configfile \"$NUGET_CONFIG\" | grep -F \"$DNX_HIVE\" >/dev/null || " +
+            "dotnet nuget add source \"$DNX_HIVE\" --name aspire-dnx-local --configfile \"$NUGET_CONFIG\"",
             counter);
 
         // Remove both supported Aspire installation locations while leaving the SDK-adjacent DNX
@@ -234,15 +235,13 @@ public sealed class BundleSmokeTests(ITestOutputHelper output)
         Assert.True(File.Exists(appHostSourcePath), $"Expected AppHost source file to exist at: {appHostSourcePath}");
 
         var appHostSource = File.ReadAllText(appHostSourcePath);
-        Assert.Contains("#:sdk Aspire.AppHost.Sdk", appHostSource);
+        var sdkDirective = File.ReadLines(appHostSourcePath).First();
+        Assert.StartsWith("#:sdk Aspire.AppHost.Sdk@", sdkDirective);
         Assert.Contains("var builder = DistributedApplication.CreateBuilder(args);", appHostSource);
         Assert.DoesNotContain("AspireUseCliBundle", appHostSource);
         appHostSource = appHostSource.Replace(
-            "#:sdk Aspire.AppHost.Sdk",
-            """
-            #:sdk Aspire.AppHost.Sdk
-            #:property AspireUseCliBundle=true
-            """,
+            sdkDirective,
+            $"{sdkDirective}{Environment.NewLine}#:property AspireUseCliBundle=true",
             StringComparison.Ordinal);
 
         File.WriteAllText(
