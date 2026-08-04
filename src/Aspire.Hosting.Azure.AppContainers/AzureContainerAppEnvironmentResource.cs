@@ -7,6 +7,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Azure.Provisioning;
@@ -237,15 +238,14 @@ public class AzureContainerAppEnvironmentResource :
     }
 
     // Relationship type used to serialize deployment of container apps that share a managed
-    // environment. Defined locally because KnownRelationshipTypes is internal to Aspire.Hosting and
-    // not visible to this assembly.
-    private const string DependsOnRelationshipType = "DependsOn";
+    // environment.
+    private const string DependsOnRelationshipType = KnownRelationshipTypes.DependsOn;
 
     // Relationship types that express an ordering dependency between resources. These mirror the
-    // internal KnownRelationshipTypes values added by WithReference/WaitFor and the DependsOn
-    // relationship used to serialize deployment.
-    private const string ReferenceRelationshipType = "Reference";
-    private const string WaitForRelationshipType = "WaitFor";
+    // KnownRelationshipTypes values added by WithReference/WaitFor and the DependsOn relationship
+    // used to serialize deployment.
+    private const string ReferenceRelationshipType = KnownRelationshipTypes.Reference;
+    private const string WaitForRelationshipType = KnownRelationshipTypes.WaitFor;
 
     private static readonly object s_serialDeploymentOrderingLock = new();
 
