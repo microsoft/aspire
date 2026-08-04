@@ -1,7 +1,12 @@
 import * as assert from 'assert';
+import { spawnSync } from 'child_process';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import * as sinon from 'sinon';
 import { getCliSpawnCommand, getCliSpawnDiagnostics, mergeCliSpawnEnvironment } from '../debugger/languages/cli';
 import { terminalCommandArgumentControlCharacters } from '../loc/strings';
+import { getCmdShimSpawnCommandWithoutVerbatimArguments } from '../utils/cmdShim';
 import { EnvironmentVariables } from '../utils/environment';
 
 suite('spawnCliProcess tests', () => {
@@ -14,7 +19,7 @@ suite('spawnCliProcess tests', () => {
             const result = getCliSpawnCommand('C:\\Tools\\Aspire CLI\\aspire.cmd', ['config', 'info']);
 
             assert.strictEqual(result.command, process.env.ComSpec);
-            assert.deepStrictEqual(result.args, ['/d', '/v:off', '/s', '/c', 'call "C:\\Tools\\Aspire CLI\\aspire.cmd" "config" "info"']);
+            assert.deepStrictEqual(result.args, ['/d', '/v:off', '/s', '/c', '""C:\\Tools\\Aspire CLI\\aspire.cmd" "config" "info""']);
             assert.strictEqual(result.windowsVerbatimArguments, true);
         }
         finally {
@@ -41,7 +46,6 @@ suite('spawnCliProcess tests', () => {
                 'echo',
                 '--',
                 '--message=hello & del C:\\important',
-                '--path=%PATH%',
                 '--literal="quoted"',
             ]);
 
@@ -51,7 +55,7 @@ suite('spawnCliProcess tests', () => {
                 '/v:off',
                 '/s',
                 '/c',
-                'call "C:\\Tools\\Aspire CLI\\aspire.cmd" "resource" "api&whoami" "echo" "--" "--message=hello & del C:\\important" "--path=%%PATH%%" "--literal=""quoted"""'
+                '""C:\\Tools\\Aspire CLI\\aspire.cmd" "resource" "api&whoami" "echo" "--" "--message=hello & del C:\\important" "--literal=""quoted""""'
             ]);
             assert.strictEqual(result.windowsVerbatimArguments, true);
         }
@@ -64,6 +68,90 @@ suite('spawnCliProcess tests', () => {
             else {
                 process.env.ComSpec = originalComSpec;
             }
+        }
+    });
+
+    test('does not rewrite percent sequences that cmd command lines cannot escape', () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+
+        try {
+            const result = getCliSpawnCommand(
+                'C:\\Tools\\Aspire CLI\\aspire.cmd',
+                ['resource', 'api', 'echo', '--', '--path=%PATH%'],
+            );
+
+            assert.strictEqual(
+                result.args[4],
+                '""C:\\Tools\\Aspire CLI\\aspire.cmd" "resource" "api" "echo" "--" "--path=%PATH%""');
+        }
+        finally {
+            platformStub.restore();
+        }
+    });
+
+    test('does not rewrite percent sequences in non-verbatim cmd wrappers', () => {
+        const result = getCmdShimSpawnCommandWithoutVerbatimArguments(
+            'C:\\tools\\%ASPIRE_HOME%\\aspire.cmd',
+            ['--path=%PATH%'],
+        );
+
+        assert.deepStrictEqual(result.args, [
+            '/d',
+            '/v:off',
+            '/c',
+            'C:\\tools\\%ASPIRE_HOME%\\aspire.cmd',
+            '--path^=%PATH%',
+        ]);
+    });
+
+    test('rejects non-verbatim cmd wrappers with multiple tokens requiring libuv quotes', () => {
+        assert.throws(
+            () => getCmdShimSpawnCommandWithoutVerbatimArguments(
+                'C:\\Program Files\\Aspire\\aspire.cmd',
+                ['--message=hello world'],
+            ),
+            /cannot safely quote arguments containing whitespace or quotes/);
+    });
+
+    test('rejects empty arguments in non-verbatim cmd wrappers', () => {
+        assert.throws(
+            () => getCmdShimSpawnCommandWithoutVerbatimArguments(
+                'C:\\Program Files\\Aspire\\aspire.cmd',
+                ['agent', ''],
+            ),
+            /cannot safely quote arguments containing whitespace or quotes/);
+    });
+
+    test('runs non-verbatim cmd wrappers from paths combining spaces and metacharacters', function () {
+        if (process.platform !== 'win32') {
+            this.skip();
+        }
+
+        const tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire mcp&a^b(x),c;d-[e]-'));
+
+        try {
+            const wrapperPath = path.join(tempDirectory, 'aspire.cmd');
+            fs.writeFileSync(wrapperPath, [
+                '@echo off',
+                'if "%~1"=="echo-argument" (',
+                '  echo(%~2',
+                '  exit /b 0',
+                ')',
+                'exit /b 1',
+                '',
+            ].join('\r\n'));
+
+            const { command, args } = getCmdShimSpawnCommandWithoutVerbatimArguments(
+                wrapperPath,
+                ['echo-argument', 'mcp-started'],
+            );
+            const result = spawnSync(command, args, { encoding: 'utf8' });
+
+            assert.strictEqual(result.status, 0, result.stderr);
+            assert.strictEqual(result.stdout.trim(), 'mcp-started');
+        }
+        finally {
+            fs.rmSync(tempDirectory, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
         }
     });
 
@@ -132,7 +220,7 @@ suite('spawnCliProcess tests', () => {
                 '/v:off',
                 '/s',
                 '/c',
-                String.raw`call "C:\Tools\Aspire CLI\aspire.cmd" "--path=C:\temp\\" "next"`
+                String.raw`""C:\Tools\Aspire CLI\aspire.cmd" "--path=C:\temp\\" "next""`
             ]);
             assert.strictEqual(result.windowsVerbatimArguments, true);
         }
@@ -164,7 +252,7 @@ suite('spawnCliProcess tests', () => {
                 '/v:off',
                 '/s',
                 '/c',
-                String.raw`call "C:\Tools\Aspire CLI\aspire.cmd" "--literal=C:\temp\\""quoted"""`
+                String.raw`""C:\Tools\Aspire CLI\aspire.cmd" "--literal=C:\temp\\""quoted""""`
             ]);
             assert.strictEqual(result.windowsVerbatimArguments, true);
         }

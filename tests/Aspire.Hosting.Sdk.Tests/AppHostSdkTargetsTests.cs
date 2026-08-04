@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Security;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Xunit;
 
 namespace Aspire.Hosting.Sdk.Tests;
@@ -104,8 +105,26 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
 
         var properties = await GetComputeRunArgumentsPropertiesAsync(project, [$"-p:AspireCliPath={aspireCliPath}"]);
 
-        Assert.Equal(aspireCliPath, properties["RunCommand"]);
-        Assert.Equal(GetExpectedExplicitAspireRunArguments(project), properties["RunArguments"]);
+        AssertUsesExplicitAspireCli(properties, project, aspireCliPath);
+    }
+
+    [Theory]
+    [InlineData(".cmd")]
+    [InlineData(".BAT")]
+    public async Task ComputeRunArgumentsWrapsConfiguredAspireCommandShimOnWindows(string extension)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake cli !& (shim)^,;=+[]{}~@"));
+        var aspireCliPath = await CreateFakeAspireCommandShimAsync(fakeCliDirectory.FullName, extension);
+
+        var properties = await GetComputeRunArgumentsPropertiesAsync(
+            project,
+            ["-p:OS=Windows_NT", "-p:RunArguments=--custom foo"],
+            new Dictionary<string, string> { ["AspireCliPath"] = aspireCliPath });
+
+        Assert.Equal("cmd", properties["RunCommand"]);
+        Assert.Equal(GetExpectedWindowsCommandShimRunArguments(project, aspireCliPath, "--custom foo"), properties["RunArguments"]);
     }
 
     [Fact]
@@ -216,6 +235,45 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
             await File.ReadAllLinesAsync(captureFile));
     }
 
+    [Fact]
+    public async Task DotNetRunUsesConfiguredAspireCommandShimWhenCliBundleIsEnabled()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Skip("This test validates native cmd.exe command-shim execution.");
+        }
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake cli !& (shim)^,;=+[]{}~@"));
+        var captureFile = Path.Combine(workspace.Path, "aspire-args.txt");
+        var aspireCliPath = await CreateFakeAspireCommandShimAsync(fakeCliDirectory.FullName);
+
+        var environment = new Dictionary<string, string>
+        {
+            ["ASPIRE_TEST_CAPTURE_PATH"] = captureFile,
+            ["AspireCliPath"] = aspireCliPath
+        };
+
+        var result = await RunDotNetWithArgumentsAsync(
+            project.ProjectDirectory,
+            ["run", "--project", project.ProjectFile, "--", "--custom", "value with spaces"],
+            environment);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.Equal(
+            [
+                "run",
+                "--project",
+                project.ProjectFile,
+                "--no-build",
+                "--",
+                "--custom",
+                "value with spaces"
+            ],
+            await File.ReadAllLinesAsync(captureFile));
+    }
+
     [Theory]
     [InlineData("13.4.0")]
     [InlineData("13.4.1")]
@@ -269,8 +327,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
             project,
             [$"-p:AspireCliPath={cliPath}", "-p:RunArguments=--custom foo"]);
 
-        Assert.Equal(cliPath, properties["RunCommand"]);
-        Assert.Equal(GetExpectedExplicitAspireRunArguments(project, "--custom foo"), properties["RunArguments"]);
+        AssertUsesExplicitAspireCli(properties, project, cliPath, "--custom foo");
     }
 
     [Fact]
@@ -286,8 +343,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
             project,
             [$"-p:AspireCliPath={cliPath}", "-p:RunArguments=--custom foo"]);
 
-        Assert.Equal(cliPath, properties["RunCommand"]);
-        Assert.Equal(GetExpectedExplicitAspireRunArguments(project, "--custom foo"), properties["RunArguments"]);
+        AssertUsesExplicitAspireCli(properties, project, cliPath, "--custom foo");
     }
 
     [Fact]
@@ -472,8 +528,30 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     {
         if (OperatingSystem.IsWindows())
         {
-            var windowsAspirePath = Path.Combine(fakeCliDirectory, "aspire.cmd");
-            await File.WriteAllTextAsync(windowsAspirePath, """
+            return await CreateFakeAspireCommandShimAsync(fakeCliDirectory);
+        }
+
+        var aspirePath = Path.Combine(fakeCliDirectory, "aspire");
+        await File.WriteAllTextAsync(aspirePath, """
+            #!/bin/sh
+            if [ "$1" = "--version" ]; then
+                echo "13.5.0"
+                exit 0
+            fi
+            printf '%s\n' "$@" > "$ASPIRE_TEST_CAPTURE_PATH"
+            """);
+        File.SetUnixFileMode(aspirePath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+        return aspirePath;
+    }
+
+    private static async Task<string> CreateFakeAspireCommandShimAsync(string fakeCliDirectory, string extension = ".cmd")
+    {
+        var aspirePath = Path.Combine(fakeCliDirectory, $"aspire{extension}");
+
+        if (OperatingSystem.IsWindows())
+        {
+            await File.WriteAllTextAsync(aspirePath, """
                 @echo off
                 if "%~1"=="--version" (
                     echo 13.5.0
@@ -487,10 +565,9 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                 goto loop
                 """);
 
-            return windowsAspirePath;
+            return aspirePath;
         }
 
-        var aspirePath = Path.Combine(fakeCliDirectory, "aspire");
         await File.WriteAllTextAsync(aspirePath, """
             #!/bin/sh
             if [ "$1" = "--version" ]; then
@@ -686,6 +763,33 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         var arguments = $"run --project \"{project.ProjectFile}\" --no-build --";
 
         return string.IsNullOrEmpty(extraArguments) ? arguments : $"{arguments} {extraArguments}";
+    }
+
+    private static string GetExpectedWindowsCommandShimRunArguments(RunHookProject project, string cliPath, string? extraArguments = null)
+    {
+        var escapedCliPath = Regex.Replace(cliPath, """[ \t()[\]{}!^`<>&|;,+="~@]""", "^$0");
+        var arguments = $"/D /V:OFF /C {escapedCliPath} run --project \"{project.ProjectFile}\" --no-build --";
+
+        return string.IsNullOrEmpty(extraArguments) ? arguments : $"{arguments} {extraArguments}";
+    }
+
+    private static void AssertUsesExplicitAspireCli(
+        Dictionary<string, string> properties,
+        RunHookProject project,
+        string cliPath,
+        string? expectedArguments = null)
+    {
+        if (OperatingSystem.IsWindows()
+            && (cliPath.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase)
+                || cliPath.EndsWith(".bat", StringComparison.OrdinalIgnoreCase)))
+        {
+            Assert.Equal("cmd", properties["RunCommand"]);
+            Assert.Equal(GetExpectedWindowsCommandShimRunArguments(project, cliPath, expectedArguments), properties["RunArguments"]);
+            return;
+        }
+
+        Assert.Equal(cliPath, properties["RunCommand"]);
+        Assert.Equal(GetExpectedExplicitAspireRunArguments(project, expectedArguments), properties["RunArguments"]);
     }
 
     private static void AssertUsesDotNetRun(Dictionary<string, string> properties, RunHookProject project, string expectedArguments = "")

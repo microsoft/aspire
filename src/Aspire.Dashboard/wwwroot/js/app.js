@@ -431,6 +431,98 @@ window.scrollToElement = function (elementId) {
     }
 };
 
+// ===== Data grid column auto-fit =====
+// Double-clicking a FluentDataGrid column's resize handle expands (or shrinks) that column so the
+// widest visible cell content fits, then animates the change. FluentDataGrid renders as
+// <table class="fluent-data-grid"> laid out with display:grid; the column widths live in the
+// table's inline grid-template-columns, e.g.:
+//   grid-template-columns: 1.5fr 1.25fr 1fr 2.25fr 2.25fr minmax(150px, 1.5fr);
+// We measure a column's natural content width by momentarily setting just that track to
+// max-content, read the resolved width, then animate the fully-resolved px template from the old
+// width to the fitted width.
+//
+// This is intentionally self-contained (it does not rely on Fluent's internal resize JS) so it
+// keeps working across Fluent UI Blazor upgrades, and it's wired as a document-level listener so it
+// survives Blazor SPA navigations and applies to every grid (Resources, Console, Structured,
+// Traces, Metrics).
+const AUTOFIT_ANIMATING_CLASS = "autofit-animating";
+const AUTOFIT_CONTENT_PADDING = 8; // a little breathing room past the measured content
+const AUTOFIT_MIN_WIDTH = 48;      // never collapse a column to nothing
+
+function autoFitGridColumn(handle) {
+    const grid = handle.closest("table.fluent-data-grid");
+    const header = handle.closest(".column-header");
+    if (!grid || !header) {
+        return;
+    }
+
+    const headers = Array.from(grid.querySelectorAll(".column-header"));
+    const columnIndex = headers.indexOf(header);
+    if (columnIndex < 0) {
+        return;
+    }
+
+    // Resolve the current tracks to concrete px so we have an explicit, animatable start state.
+    // getComputedStyle always returns used px values (fr / minmax resolved), space separated.
+    const startTracks = getComputedStyle(grid).gridTemplateColumns.split(" ");
+    // Guard against grids whose resolved track count doesn't line up with the header cells (e.g. an
+    // extra structural track); bailing avoids corrupting the layout with a misaligned template.
+    if (startTracks.length !== headers.length) {
+        return;
+    }
+
+    // Measure: let only this column grow to its content, read the resulting width, then restore.
+    // A grid max-content track sizes to the widest content contribution of the rendered cells,
+    // which is exactly "fit to the longest value currently on screen".
+    const measureTracks = startTracks.slice();
+    measureTracks[columnIndex] = "max-content";
+    grid.classList.remove(AUTOFIT_ANIMATING_CLASS);
+    grid.style.gridTemplateColumns = measureTracks.join(" ");
+    // Force layout so the max-content measurement reflects the real content width.
+    void grid.offsetWidth;
+
+    // Cap the fit so one very long value (e.g. a big URL/source) can't swallow the whole grid.
+    const maxWidth = Math.max(200, grid.clientWidth * 0.7);
+    const measured = header.getBoundingClientRect().width + AUTOFIT_CONTENT_PADDING;
+    const fitWidth = Math.min(Math.max(measured, AUTOFIT_MIN_WIDTH), maxWidth);
+
+    // Restore the start widths (still no transition) so the animation begins from the old size.
+    grid.style.gridTemplateColumns = startTracks.join(" ");
+    void grid.offsetWidth;
+
+    // Animate to the fitted width. Only this one track changes; the others stay pinned to their
+    // current px, so the grid grows/shrinks predictably - matching normal drag-resize behavior.
+    const targetTracks = startTracks.slice();
+    targetTracks[columnIndex] = `${fitWidth.toFixed(2)}px`;
+    grid.classList.add(AUTOFIT_ANIMATING_CLASS);
+    grid.style.gridTemplateColumns = targetTracks.join(" ");
+
+    const cleanup = function (e) {
+        // transitionend fires per animated property; only react to the one we drive.
+        if (e && e.propertyName !== "grid-template-columns") {
+            return;
+        }
+        grid.classList.remove(AUTOFIT_ANIMATING_CLASS);
+        grid.removeEventListener("transitionend", cleanup);
+    };
+    grid.addEventListener("transitionend", cleanup);
+    // Fallback in case transitionend never fires (no measurable change, reduced motion, or a
+    // browser that can't interpolate grid-template-columns and snaps instantly instead).
+    setTimeout(cleanup, 500);
+}
+
+// Register a global double-click listener for grid resize handles. The handle class is
+// "resize-handle" in current Fluent UI Blazor; "col-width-draghandle" is matched too for resilience
+// against a rename. closest() with a descendant selector confirms the handle is inside a grid.
+document.addEventListener("dblclick", function (e) {
+    const handle = e.target.closest?.(".fluent-data-grid .resize-handle, .fluent-data-grid .col-width-draghandle");
+    if (handle) {
+        // Prevent the double-click from selecting the header text while we resize.
+        e.preventDefault();
+        autoFitGridColumn(handle);
+    }
+});
+
 // taken from https://learn.microsoft.com/en-us/aspnet/core/blazor/file-downloads?view=aspnetcore-8.0#download-from-a-stream
 window.downloadStreamAsFile = async function (fileName, contentStreamReference) {
     const arrayBuffer = await contentStreamReference.arrayBuffer();
@@ -443,3 +535,345 @@ window.downloadStreamAsFile = async function (fileName, contentStreamReference) 
     anchorElement.remove();
     URL.revokeObjectURL(url);
 };
+
+// ===== Scroll-to-bottom button for live-data scroll containers =====
+// Console logs, traces, and structured logs can grow to thousands of lines. Add a floating jump-to-
+// bottom button only when those regions meaningfully overflow and the user isn't already near the end.
+//
+// Design notes:
+// - The control is appended to <body> and positioned with `position: fixed`, tracking the target's
+//   getBoundingClientRect(). We deliberately do NOT wrap or inject nodes inside the scroll container
+//   because that DOM is owned by Blazor's renderer; adding foreign children there can trip Blazor's
+//   node diffing. A body-level sibling is invisible to the render tree.
+// - Discovery re-runs on a debounced MutationObserver so it survives Blazor SPA navigation;
+//   registration is idempotent (guarded by a WeakSet).
+// - Reposition/visibility updates are throttled through requestAnimationFrame and driven by the
+//   container's own 'scroll', a ResizeObserver, and window scroll/resize (capture-phase, because
+//   inner scroll events don't bubble to window).
+(function initializeScrollButtonsFeature() {
+    const TARGET_SELECTOR = ".continuous-scroll-overflow";
+
+    // Only surface the buttons once there's a meaningful amount to scroll past, so they stay out of
+    // the way for small content. Roughly 1.5 viewports of the region reads as "large" in practice.
+    const OVERFLOW_THRESHOLD_PX = 240;
+    // How far from an edge the user must be before the matching button appears.
+    const EDGE_THRESHOLD_PX = 120;
+
+    // The only body-level structural changes we care about: a scroll target appearing/disappearing,
+    // or a dialog opening/closing (updateEntry() also keys visibility off whether a dialog is open).
+    // Used to cheaply skip the rescan on high-churn mutations that touch none of these.
+    const MUTATION_TRIGGER_SELECTOR = TARGET_SELECTOR + ", fluent-dialog";
+
+    const CHEVRON_DOWN = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.47 7.03a.75.75 0 0 1 1.06-1.06L10 10.44l4.47-4.47a.75.75 0 1 1 1.06 1.06l-5 5a.75.75 0 0 1-1.06 0l-5-5Z"/></svg>';
+
+    const registered = new WeakSet();
+    const controls = []; // { container, root, bottomBtn, resizeObserver }
+    let rafPending = false;
+
+    function scheduleUpdate() {
+        if (rafPending) {
+            return;
+        }
+        rafPending = true;
+        requestAnimationFrame(function () {
+            rafPending = false;
+            updateAll();
+        });
+    }
+
+    function makeButton(kind, label, svg) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "scroll-button scroll-to-" + kind;
+        btn.setAttribute("aria-label", label);
+        btn.setAttribute("title", label);
+        // Supplemental affordance only - keyboard users can already scroll the focused region
+        // natively, so keep these out of the tab order to avoid extra tab stops per container.
+        btn.tabIndex = -1;
+        btn.innerHTML = svg;
+        return btn;
+    }
+
+    function register(container) {
+        if (registered.has(container)) {
+            return;
+        }
+        registered.add(container);
+
+        const root = document.createElement("div");
+        root.className = "scroll-buttons";
+        // The label is localized in .NET and rendered onto <body> by App.razor. This button is created
+        // purely in JS, so read it from the document and retain a defensive accessible-name fallback.
+        const labels = document.body?.dataset ?? {};
+        const bottomBtn = makeButton("bottom", labels.scrollToBottomLabel || "Scroll to bottom", CHEVRON_DOWN);
+        root.appendChild(bottomBtn);
+        document.body.appendChild(root);
+
+        bottomBtn.addEventListener("click", function () {
+            container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+        });
+
+        const entry = { container, root, bottomBtn };
+        controls.push(entry);
+
+        container.addEventListener("scroll", scheduleUpdate, { passive: true });
+        const ro = new ResizeObserver(scheduleUpdate);
+        ro.observe(container);
+        entry.resizeObserver = ro;
+
+        scheduleUpdate();
+    }
+
+    function updateEntry(entry) {
+        const container = entry.container;
+        const root = entry.root;
+
+        // Drop controls whose container has been removed (page navigation, dialog closed).
+        if (!container.isConnected) {
+            if (entry.resizeObserver) {
+                entry.resizeObserver.disconnect();
+            }
+            root.remove();
+            return false;
+        }
+
+        const rect = container.getBoundingClientRect();
+        const overflow = container.scrollHeight - container.clientHeight;
+        let active = rect.width > 0 && rect.height > 0 && overflow > OVERFLOW_THRESHOLD_PX;
+
+        // When a modal dialog is open, only show buttons for containers inside it; otherwise the
+        // page's own buttons would float on top of the dialog surface.
+        const openDialog = document.querySelector("fluent-dialog");
+        if (openDialog && !openDialog.contains(container)) {
+            active = false;
+        }
+
+        root.classList.toggle("is-active", active);
+        if (!active) {
+            return true;
+        }
+
+        // Center the control horizontally over the region and anchor it near the visible bottom edge.
+        // Clamp its span to the viewport and exclude the scrollbar from the horizontal center.
+        const PAD = 12;
+        const scrollbarWidth = container.offsetWidth - container.clientWidth;
+        const visibleTop = Math.max(rect.top, 0);
+        const visibleBottom = Math.min(rect.bottom, window.innerHeight);
+        root.style.right = "auto";
+        root.style.bottom = "auto";
+        root.style.left = (rect.left + (rect.width - scrollbarWidth) / 2) + "px";
+        root.style.top = (visibleTop + PAD) + "px";
+        root.style.height = Math.max(0, (visibleBottom - visibleTop) - PAD * 2) + "px";
+
+        const atBottom = overflow - container.scrollTop <= EDGE_THRESHOLD_PX;
+        entry.bottomBtn.classList.toggle("is-visible", !atBottom);
+        return true;
+    }
+
+    function updateAll() {
+        for (let i = controls.length - 1; i >= 0; i--) {
+            const keep = updateEntry(controls[i]);
+            if (!keep) {
+                registered.delete(controls[i].container);
+                controls.splice(i, 1);
+            }
+        }
+    }
+
+    function scan() {
+        for (const el of document.querySelectorAll(TARGET_SELECTOR)) {
+            register(el);
+        }
+    }
+
+    // Debounced rescan so SPA navigation and dialog opens are picked up without thrashing.
+    let scanTimer = null;
+    function scheduleScan() {
+        if (scanTimer !== null) {
+            return;
+        }
+        scanTimer = setTimeout(function () {
+            scanTimer = null;
+            scan();
+            scheduleUpdate();
+        }, 200);
+    }
+
+    // Inner scroll events don't bubble, so listen in the capture phase to catch every region.
+    window.addEventListener("scroll", scheduleUpdate, { passive: true, capture: true });
+    window.addEventListener("resize", scheduleUpdate, { passive: true });
+
+    function start() {
+        scan();
+        // A body-wide subtree observer is required because scroll targets are inserted deep in
+        // Blazor's render tree (SPA navigation) and dialogs are appended at the <body> level. But
+        // reacting to every mutation batch would run a document-wide querySelectorAll scan on a
+        // 200ms cadence for nothing on high-churn pages (streaming console logs, large grids). So we
+        // first cheaply check whether a batch actually added or removed a scroll target (or a dialog)
+        // before scheduling a rescan; pure content churn inside an already-registered container is
+        // ignored. This keeps discovery correct while dropping the continuous idle cost.
+        new MutationObserver(onBodyMutations).observe(document.body, { childList: true, subtree: true });
+    }
+
+    function onBodyMutations(mutations) {
+        for (const m of mutations) {
+            if (nodeListHasTrigger(m.addedNodes) || nodeListHasTrigger(m.removedNodes)) {
+                scheduleScan();
+                return;
+            }
+        }
+    }
+
+    function nodeListHasTrigger(nodes) {
+        for (const node of nodes) {
+            // Only element nodes can be (or contain) a scroll region or dialog; skip text/comment
+            // churn, which is what streaming log output mostly produces.
+            if (node.nodeType !== 1) {
+                continue;
+            }
+            if (node.matches?.(MUTATION_TRIGGER_SELECTOR) || node.querySelector?.(MUTATION_TRIGGER_SELECTOR)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", start, { once: true });
+    } else {
+        start();
+    }
+})();
+
+// ===== Menu-button ARIA (aria-haspopup + aria-expanded) =====
+// AspireMenuButton renders a <fluent-button> that opens a <fluent-menu>. The ARIA menu-button pattern
+// (https://www.w3.org/WAI/ARIA/apg/patterns/menu-button/) wants aria-haspopup="menu" + aria-expanded on
+// the trigger, but FAST/FluentUI's <fluent-button> host is a role-less custom element whose real control
+// is a native <button part="control"> in its (open) shadow root. Neither attribute may live on the
+// role-less host: aria-expanded there is an axe-core aria-allowed-attr violation, and role="button" on the
+// host would trip nested-interactive against the inner <button>. Both therefore live on the inner control,
+// which has an implicit role=button:
+//  - aria-haspopup is global, so we set it on the inner <button>, where it's valid and FAST leaves it be.
+//  - aria-expanded is what FluentMenu.razor.js stamps onto its anchor (this host) on every open/close, and
+//    FAST reflects the host's aria-expanded onto the inner control. We move that state onto the inner
+//    control and strip the host copy (keeping the host axe-clean), re-pinning the inner control whenever
+//    FAST clears it in response to the host attribute being removed, so the trigger keeps reporting its
+//    expanded/collapsed state to assistive tech.
+// The component just marks each trigger host with data-aspire-menu-trigger; a single document-level
+// observer then covers every menu button, including ones revealed by SPA navigation or opened in dialogs.
+(function initializeMenuButtonAccessibilityFeature() {
+    const TRIGGER_SELECTOR = "fluent-button[data-aspire-menu-trigger]";
+    const registered = new WeakSet();
+
+    function getControl(host) {
+        return host.shadowRoot && host.shadowRoot.querySelector('[part~="control"]');
+    }
+
+    // Reconcile the menu-button ARIA onto the inner native <button>. `expanded` is the state ("true" or
+    // "false") the trigger should report. Returns false until the custom element has upgraded and rendered
+    // its shadow control, so the caller can retry.
+    function applyAria(host, expanded) {
+        const control = getControl(host);
+        if (!control) {
+            return false;
+        }
+        if (control.getAttribute("aria-haspopup") !== "menu") {
+            control.setAttribute("aria-haspopup", "menu");
+        }
+        // Strip the aria-expanded FluentMenu stamps on the role-less host (axe-core aria-allowed-attr) and
+        // pin the desired value onto the inner control instead. The equality guards keep re-pinning (after
+        // FAST clears the inner control) from recursing through the observer indefinitely - setting an
+        // attribute to a new value queues another mutation record, but setting it to its current value is
+        // skipped, so the reconcile settles.
+        if (host.hasAttribute("aria-expanded")) {
+            host.removeAttribute("aria-expanded");
+        }
+        if (control.getAttribute("aria-expanded") !== expanded) {
+            control.setAttribute("aria-expanded", expanded);
+        }
+        return true;
+    }
+
+    function register(host) {
+        if (registered.has(host)) {
+            return;
+        }
+        // The trigger is collapsed until FluentMenu.razor.js reports otherwise via the host's aria-expanded.
+        const state = { expanded: host.getAttribute("aria-expanded") ?? "false" };
+        if (!applyAria(host, state.expanded)) {
+            // The element isn't upgraded yet; retry once its definition is ready (upgrades of already-
+            // parsed elements complete synchronously once the tag is defined).
+            customElements.whenDefined("fluent-button").then(() => register(host));
+            return;
+        }
+        registered.add(host);
+        // A single observer, scoped to aria-expanded on this button, covers both sources of drift so it
+        // stays cheap even on grid pages that render many menu buttons:
+        //  - the host, where FluentMenu.razor.js stamps the authoritative expanded state on open/close, and
+        //  - the inner control, where FAST clears aria-expanded once the host copy is removed.
+        const observer = new MutationObserver(function (mutations) {
+            for (const m of mutations) {
+                // Capture the authoritative state from the host before applyAria strips it below.
+                if (m.target === host && host.hasAttribute("aria-expanded")) {
+                    state.expanded = host.getAttribute("aria-expanded");
+                }
+            }
+            applyAria(host, state.expanded);
+        });
+        observer.observe(host, { attributes: true, attributeFilter: ["aria-expanded"] });
+        const control = getControl(host);
+        if (control) {
+            observer.observe(control, { attributes: true, attributeFilter: ["aria-expanded"] });
+        }
+    }
+
+    function scan() {
+        for (const host of document.querySelectorAll(TRIGGER_SELECTOR)) {
+            register(host);
+        }
+    }
+
+    let scanTimer = null;
+    function scheduleScan() {
+        if (scanTimer !== null) {
+            return;
+        }
+        scanTimer = setTimeout(function () {
+            scanTimer = null;
+            scan();
+        }, 100);
+    }
+
+    function nodeListHasTrigger(nodes) {
+        for (const node of nodes) {
+            if (node.nodeType !== 1) {
+                continue;
+            }
+            if (node.matches?.(TRIGGER_SELECTOR) || node.querySelector?.(TRIGGER_SELECTOR)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function start() {
+        scan();
+        // Menu buttons are inserted deep in Blazor's render tree (SPA navigation) and inside dialogs
+        // appended at <body>. Only rescan when a batch actually adds a trigger, so streaming-log/grid
+        // churn doesn't cost a document-wide query.
+        new MutationObserver(function (mutations) {
+            for (const m of mutations) {
+                if (nodeListHasTrigger(m.addedNodes)) {
+                    scheduleScan();
+                    return;
+                }
+            }
+        }).observe(document.body, { childList: true, subtree: true });
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", start, { once: true });
+    } else {
+        start();
+    }
+})();

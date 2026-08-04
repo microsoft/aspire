@@ -18,6 +18,15 @@
     align-content: center;
 }
 
+::deep .fluent-data-grid {
+    --datagrid-hover-color: color-mix(in srgb, var(--accent-fill-rest) 8%, var(--dialog-background-color));
+}
+
+::deep .fluent-data-grid-row[row-type='sticky-header'] .column-header {
+    background-color: var(--dialog-background-color);
+    border-bottom: 1px solid var(--neutral-stroke-divider-rest);
+}
+
 .button-container {
     display: grid;
     grid-template-columns: 1fr auto;

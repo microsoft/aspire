@@ -43,8 +43,12 @@ export const rpcServerNotInitialized = vscode.l10n.t('RPC server is not initiali
 export const extensionContextNotInitialized = vscode.l10n.t('Extension context is not initialized.');
 export const aspireDebugSessionNotInitialized = vscode.l10n.t('Aspire debug session is not initialized');
 export const errorRetrievingAppHosts = vscode.l10n.t('Error retrieving AppHosts in the current workspace. Debug options may be incomplete.');
-export const launchingWithDirectory = (appHostPath: string) => vscode.l10n.t('Launching Aspire debug session using directory {0}: attempting to determine effective AppHost...', appHostPath);
-export const launchingWithAppHost = (appHostPath: string) => vscode.l10n.t('Launching Aspire debug session for AppHost {0}...', appHostPath);
+export const launchingWithDirectory = (sessionType: 'run' | 'debug', appHostPath: string) => sessionType === 'run'
+    ? vscode.l10n.t('Launching Aspire run session using directory {0}: attempting to determine effective AppHost...', appHostPath)
+    : vscode.l10n.t('Launching Aspire debug session using directory {0}: attempting to determine effective AppHost...', appHostPath);
+export const launchingWithAppHost = (sessionType: 'run' | 'debug', appHostPath: string) => sessionType === 'run'
+    ? vscode.l10n.t('Launching Aspire run session for AppHost {0}...', appHostPath)
+    : vscode.l10n.t('Launching Aspire debug session for AppHost {0}...', appHostPath);
 export const disconnectingFromSession = vscode.l10n.t('Disconnecting from Aspire debug session... Child processes will be stopped.');
 export const processExitedWithCode = (code: number | string) => vscode.l10n.t('Process exited with code {0}.', code);
 export const failedToStartPythonProgram = (errorMessage: string) => vscode.l10n.t('Failed to start Python program: {0}.', errorMessage);
@@ -122,6 +126,8 @@ export const appHostOpenSourceActionLabel = vscode.l10n.t('Open AppHost source')
 export const appHostRunActionLabel = vscode.l10n.t('Run AppHost');
 export const appHostDebugActionLabel = vscode.l10n.t('Debug AppHost');
 export const appHostPathLabel = vscode.l10n.t('Path');
+export const appHostPathCopiedToClipboard = vscode.l10n.t('AppHost path copied to clipboard.');
+export const appHostPathInvalid = vscode.l10n.t('Could not determine the AppHost path to copy.');
 export const appHostStartingDescription = vscode.l10n.t('Starting...');
 export const appHostStoppingDescription = vscode.l10n.t('Stopping...');
 export const resourceCountDescription = (count: number) => vscode.l10n.t('({0} resources)', count);
@@ -210,7 +216,9 @@ export const codeLensResourceStopped = vscode.l10n.t('$(circle-outline)\u200A St
 export const codeLensResourceStoppedWithExitCode = (exitCode: number) => vscode.l10n.t('$(circle-outline)\u200A Stopped (Exit Code: {0})', exitCode);
 export const codeLensResourceStoppedError = vscode.l10n.t('$(error)\u200A Stopped');
 export const codeLensResourceStoppedErrorWithExitCode = (exitCode: number) => vscode.l10n.t('$(error)\u200A Stopped (Exit Code: {0})', exitCode);
-export const codeLensResourceError = vscode.l10n.t('$(error)\u200A Error');
+export const codeLensResourceFailedToStart = vscode.l10n.t('$(warning)\u200A Failed to start');
+export const codeLensResourceFailedToStartError = vscode.l10n.t('$(error)\u200A Failed to start');
+export const codeLensResourceRuntimeUnhealthy = vscode.l10n.t('$(warning)\u200A Runtime unhealthy');
 export const codeLensResourceValueMissing = vscode.l10n.t('$(warning)\u200A Value missing');
 export const codeLensRestart = vscode.l10n.t('$(debug-restart)\u200A Restart');
 export const codeLensStop = vscode.l10n.t('$(debug-stop)\u200A Stop');

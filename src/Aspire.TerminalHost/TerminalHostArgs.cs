@@ -34,12 +34,6 @@ internal sealed class TerminalHostArgs
     public int Rows { get; init; } = 30;
 
     /// <summary>
-    /// Optional shell name. Informational only (the host does not spawn a PTY itself —
-    /// that is DCP's responsibility); included so the host can log it on startup.
-    /// </summary>
-    public string? Shell { get; init; }
-
-    /// <summary>
     /// Parses command-line arguments. The argument shape is:
     /// <list type="bullet">
     ///   <item><c>--producer-uds PATH</c> (required) — path the host LISTENS on; DCP dials.</item>
@@ -47,7 +41,7 @@ internal sealed class TerminalHostArgs
     ///   <item><c>--control-uds PATH</c> (required) — path the host LISTENS on; AppHost dials for status/shutdown RPC.</item>
     ///   <item><c>--columns N</c> (optional, default 120)</item>
     ///   <item><c>--rows N</c> (optional, default 30)</item>
-    ///   <item><c>--shell NAME</c> (optional, informational)</item>
+    ///   <item><c>--shell NAME</c> (optional, accepted for compatibility and ignored)</item>
     /// </list>
     /// Every option is single-valued and may only be specified once; duplicates throw
     /// <see cref="TerminalHostArgsException"/>. We use <c>System.CommandLine</c> so the
@@ -69,8 +63,11 @@ internal sealed class TerminalHostArgs
             "Initial PTY width in columns (default 120).", defaultValue: 120);
         var rowsOption = SingleValueOption<int>("--rows", required: false,
             "Initial PTY height in rows (default 30).", defaultValue: 30);
+        // Older Aspire.Hosting packages can run with a newer CLI-provided terminal host
+        // and still emit --shell. Accept the argument so that mixed-version AppHosts start,
+        // but ignore it because DCP launches the resource process that owns the PTY.
         var shellOption = SingleValueOption<string?>("--shell", required: false,
-            "Informational shell name, logged on startup.");
+            "Legacy shell hint accepted for compatibility and ignored.");
 
         // Cols / rows must be positive. System.CommandLine has no built-in range validator
         // for ints, so attach one explicitly. Skip when the value couldn't be converted at
@@ -135,7 +132,6 @@ internal sealed class TerminalHostArgs
             ControlUdsPath = parseResult.GetValue(controlOption)!,
             Columns = parseResult.GetValue(columnsOption),
             Rows = parseResult.GetValue(rowsOption),
-            Shell = parseResult.GetValue(shellOption),
         };
     }
 
@@ -160,7 +156,7 @@ internal sealed class TerminalHostArgs
 
         // System.CommandLine accepts repeated occurrences of single-valued options and
         // silently keeps the last value (last-write-wins). For this host every flag
-        // identifies a per-replica resource (UDS path, dimensions, shell), so a duplicate
+        // identifies a per-replica resource (UDS path, dimensions), so a duplicate
         // is unambiguously a misuse by the caller - reject it uniformly across all flags.
         option.Validators.Add(r =>
         {
@@ -178,4 +174,3 @@ internal sealed class TerminalHostArgs
 /// Thrown when the terminal host receives malformed command-line arguments.
 /// </summary>
 internal sealed class TerminalHostArgsException(string message) : Exception(message);
-

@@ -75,6 +75,22 @@ export async function executeE2eControlCommand(
     return await applyE2eControl({ command }, options?.waitFor ?? 'applied', timeoutMs);
 }
 
+export async function snapshotClipboardForE2E(): Promise<void> {
+    await executeE2eControlCommand({ name: 'snapshotClipboard' });
+}
+
+export async function restoreClipboardSnapshotForE2E(): Promise<void> {
+    await executeE2eControlCommand({ name: 'restoreClipboardSnapshot' });
+}
+
+export async function captureWorkspaceAppHostPathClipboardExpectationForE2E(): Promise<void> {
+    await executeE2eControlCommand({ name: 'captureWorkspaceAppHostPathClipboardExpectation' });
+}
+
+export async function assertClipboardMatchesLastExpectationForE2E(): Promise<void> {
+    await executeE2eControlCommand({ name: 'assertClipboardMatchesLastExpectation' });
+}
+
 export async function runE2eTeardown(cleanups: ReadonlyArray<() => unknown | Promise<unknown>>, failureMessage: string): Promise<void> {
     const failures: unknown[] = [];
     for (const cleanup of cleanups) {

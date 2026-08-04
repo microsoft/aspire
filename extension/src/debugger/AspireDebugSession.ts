@@ -302,14 +302,15 @@ export class AspireDebugSession implements vscode.DebugAdapter {
 
     const args = buildAspireCommandArgs(command, commandArgs, extensionArgs);
     const commandLabel = `aspire ${command}`;
+    const sessionType = noDebug ? 'run' : 'debug';
 
     if (appHostIsDirectory) {
-      this.sendMessageWithEmoji("📁", launchingWithDirectory(appHostPath));
+      this.sendMessageWithEmoji("📁", launchingWithDirectory(sessionType, appHostPath));
 
       void this.spawnAspireCommand(args, appHostPath, noDebug, commandLabel);
     }
     else {
-      this.sendMessageWithEmoji("📂", launchingWithAppHost(appHostPath));
+      this.sendMessageWithEmoji("📂", launchingWithAppHost(sessionType, appHostPath));
 
       const workspaceFolder = path.dirname(appHostPath);
       void this.spawnAspireCommand(args, workspaceFolder, noDebug, commandLabel);

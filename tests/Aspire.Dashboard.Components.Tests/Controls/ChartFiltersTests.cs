@@ -88,6 +88,7 @@ public class ChartFiltersTests : DashboardTestContext
         var cut = RenderChartFilters(dimensionFilter);
 
         Assert.DoesNotContain("(None)", cut.Markup);
+        Assert.Single(cut.FindAll(".chart-filter-button-container"));
         Assert.Contains("aria-label=\"All tags\"", cut.Markup);
     }
 

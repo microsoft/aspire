@@ -26,7 +26,16 @@
     flex-direction: column;
 }
 
+::deep .trace-summary-layout {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100%;
+    min-height: 0;
+    container-type: inline-size;
+}
+
 ::deep .tracedetails-grid-container {
+    margin-top: 4px;
     flex: 1;
     min-height: 0;
     overflow: auto;
@@ -41,11 +50,22 @@
 
 ::deep .trace-view-grid .fluent-data-grid-row:not([row-type='header']) {
     background: var(--fill-color);
-    border-bottom: calc(var(--stroke-width) * 1px) solid var(--neutral-stroke-divider-rest);
 }
 
-::deep .fluent-data-grid-row[row-type='sticky-header'] th:first-child {
-    margin-left: 5px;
+/*
+    FluentDataGrid applies default inline padding to header cells (measured 16px on
+    the Resource column, 8px on Ticks/Actions), but this component zeroes the body
+    cells' padding (see the `td` rule below). Without matching the two, every header
+    label sits inset from its column - most visibly the "Resource" label and the
+    time-tick labels, which then no longer line up with the waterfall gridlines in
+    the rows below. Zero the header cells' inline padding so each label is flush
+    with its column like the body (this also drops a stray 5px nudge that used to be
+    on the first cell). `padding-inline` (the logical property) plus a
+    higher-specificity selector and !important are all required to override
+    FluentUI's own `padding-inline-start` rule on the cell.
+*/
+::deep .trace-view-grid .fluent-data-grid-row[row-type='sticky-header'] th {
+    padding-inline: 0 !important;
 }
 
 ::deep .trace-view-grid .fluent-data-grid-row {
@@ -54,9 +74,16 @@
     align-items: center;
 }
 
-::deep .trace-view-grid td:not(.empty-content-cell) {
-    padding: 0;
-    border: 0;
+::deep .trace-view-grid .fluent-data-grid-row td:not(.empty-content-cell) {
+    /* Re-zero the cell padding + border that two global app.css grid rules (compact row padding and
+       row separators, both !important) otherwise force onto every data-grid cell. The waterfall relies
+       on each row being exactly the tick height (32px) with no padding or border so (a) the per-row
+       vertical time ticks stack edge-to-edge into continuous lines instead of dashes, and (b) horizontal
+       row separators don't appear (this grid intentionally has none). This selector is (0,4,1) — one
+       class more specific than the (0,3,1) global padding rule — and uses !important so it wins the
+       cascade against those globals. */
+    padding: 0 !important;
+    border: 0 !important;
     border-radius: 0;
     vertical-align: middle;
 }
@@ -83,7 +110,7 @@
 ::deep .ticks .tick {
     width: 1px;
     height: 32px;
-    background: #d8d8d8;
+    background: var(--trace-tick-background-color);
     grid-row: 1;
 }
 
@@ -190,19 +217,33 @@
 
 ::deep .trace-header {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas: "details filters";
+    align-items: center;
+    column-gap: var(--aspire-space-sm);
+    min-width: 0;
     width: 100%;
+    box-sizing: border-box;
+    /* This toolbar stays inside the summary pane so the details pane can extend to the page top.
+       Match the shared FluentToolbar gutter explicitly because this host is a responsive grid. */
+    padding: var(--layout-top-padding) var(--layout-right-padding) 4px var(--layout-left-padding);
 }
 
 ::deep .trace-header-details {
     grid-area: details;
+    align-items: center;
+    min-width: 0;
+    min-height: 32px;
 }
 
 ::deep .trace-header-details .fluent-overflow-item {
     align-content: center;
     padding-right: 8px;
     white-space: nowrap;
+}
+
+::deep .trace-header-details .fluent-overflow-item strong {
+    margin-left: var(--aspire-space-xs);
 }
 
 ::deep .trace-header-details .fluent-overflow-more {
@@ -217,6 +258,44 @@
     grid-area: filters;
     display: flex;
     align-items: center;
+    min-width: 0;
+    /*
+        These controls live in a plain flex row (not a FluentToolbar), so the
+        `slot="end"` DesktopToolbarDividers between them collapse to a zero-size box
+        and contribute no spacing, leaving the filter, span-type select, "no
+        filters" text and the two buttons butted together. Match the 8px
+        inter-control gap that FluentToolbar applies via its shadow `::part(end)` so
+        this toolbar is spaced like every other one.
+    */
+    gap: var(--aspire-space-sm);
+}
+
+@container (max-width: 900px) {
+    ::deep .trace-header {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas:
+            "details"
+            "filters";
+        row-gap: var(--aspire-space-sm);
+    }
+
+    ::deep .trace-header-filters {
+        flex-wrap: wrap;
+    }
+
+    ::deep .trace-header-filters fluent-search {
+        flex: 1 1 180px;
+        min-width: 0;
+        max-width: 100%;
+    }
+}
+
+/* Once the pane is too narrow for a balanced single row, give search its own row rather than
+   orphaning the final action button on a third visual group. */
+@container (max-width: 560px) {
+    ::deep .trace-header-filters fluent-search {
+        flex: 1 0 100%;
+    }
 }
 
 ::deep .span-button-container {

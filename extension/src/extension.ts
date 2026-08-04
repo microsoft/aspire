@@ -47,7 +47,7 @@ import { cloneAppHostState, createStateSnapshot, getDashboardUrl } from './exten
 import { createE2eStateFileBridge, isE2eBridgeEnabled } from './testing/e2eStateFileBridge';
 import type { AspireAppHostState, AspireExtensionApi, AspireExtensionStateSnapshot, WaitForStateOptions } from './types/extensionApi';
 import { AppHostsViewTelemetry } from './views/AppHostsViewTelemetry';
-import { registerCliPathEnvironmentSync } from './utils/cliPathEnvironment';
+import { initializeCliPathEnvironmentSync } from './utils/cliPathEnvironment';
 
 let aspireExtensionContext = new AspireExtensionContext();
 
@@ -66,13 +66,15 @@ export async function activate(context: vscode.ExtensionContext) {
   const testRunSessionManager = new TestRunSessionManager();
 
   // Keep VS Code's contributed terminal/task environment in sync with the
-  // aspire.aspireCliExecutablePath setting so MSBuild's ResolveAspireCliBundle
-  // task and tools spawned from integrated terminals see the configured CLI
-  // path (https://github.com/microsoft/aspire/issues/18073). Registered before
-  // any command can fire so the first user-initiated terminal already inherits
-  // AspireCliPath when the setting is configured.
-  registerCliPathEnvironmentSync(context.environmentVariableCollection, context.subscriptions, undefined, () => {
-    terminalProvider.closeAllOpenAspireTerminals();
+  // configured or discovered CLI path so MSBuild's ResolveAspireCliBundle task
+  // and tools spawned from integrated terminals use the same installation as
+  // the extension (https://github.com/microsoft/aspire/issues/18073). Start
+  // resolution before other activation work, then await it before returning so
+  // the first user-initiated terminal already inherits AspireCliPath.
+  const cliPathEnvironmentInitialization = initializeCliPathEnvironmentSync(context.environmentVariableCollection, context.subscriptions, undefined, () => {
+    terminalProvider.invalidateSharedAspireTerminal();
+  }).catch(error => {
+    extensionLogOutputChannel.warn(`Initial Aspire CLI path resolution failed: ${String(error)}`);
   });
 
   const rpcServer = await AspireRpcServer.create(
@@ -413,6 +415,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const e2eStateFileBridge = createE2eStateFileBridge(context, aspireExtensionContext, dataRepository, appHostLaunchService, appHostTreeProvider, terminalProvider, onDidChangeStateEmitter.event);
   context.subscriptions.push(e2eStateFileBridge);
 
+  await cliPathEnvironmentInitialization;
   const api = createExtensionApi(context, rpcServer, dcpServer, testRunSessionManager, dataRepository, appHostLaunchService, appHostTreeProvider, onDidChangeStateEmitter.event);
 
   return Object.freeze(api);

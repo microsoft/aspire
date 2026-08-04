@@ -30,6 +30,9 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
     public required IStringLocalizer<Resources.Layout> Loc { get; init; }
 
     [Inject]
+    public required IStringLocalizer<Resources.StructuredLogs> StructuredLogsLoc { get; init; }
+
+    [Inject]
     public required IJSRuntime JS { get; init; }
 
     private Task NavigateToAsync(string url)
@@ -134,7 +137,7 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
         }
 
         yield return new MobileNavMenuEntry(
-            Loc[nameof(Resources.Layout.NavMenuStructuredLogsTab)],
+            StructuredLogsLoc[nameof(Resources.StructuredLogs.StructuredLogsHeader)],
             () => NavigateToAsync(DashboardUrls.StructuredLogsUrl()),
             DesktopNavMenu.StructuredLogsIcon(),
             ActiveIcon: DesktopNavMenu.StructuredLogsIcon(active: true),
