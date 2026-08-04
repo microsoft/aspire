@@ -169,6 +169,43 @@ suite('AspireDebugSession tests', () => {
         }
     });
 
+    test('describes a no-debug directory launch as an Aspire run session', async () => {
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace',
+                command: 'run',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const terminalProvider = {
+            isCliDebugLoggingEnabled: () => false,
+        };
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, {} as any, terminalProvider as any, () => { });
+        sinon.stub(aspireDebugSession as any, 'isDirectory').resolves(true);
+        const spawnStub = sinon.stub(aspireDebugSession, 'spawnAspireCommand').resolves();
+        const messages: any[] = [];
+        const subscription = aspireDebugSession.onDidSendMessage(message => messages.push(message));
+
+        try {
+            aspireDebugSession.handleMessage({ command: 'launch', seq: 1, arguments: { noDebug: true } });
+
+            await waitFor(() => spawnStub.calledOnce);
+            const launchOutput = messages.find(message => message.event === 'output')?.body.output;
+            assert.strictEqual(launchOutput, '📁  Launching Aspire run session using directory /workspace: attempting to determine effective AppHost...\n');
+        }
+        finally {
+            subscription.dispose();
+        }
+    });
+
     test('omits AppHost target version in start telemetry before async enrichment', async () => {
         const fake = new FakeTelemetryReporter();
         const restoreReporter = __setReporterForTests(fake as unknown as TelemetryReporter);
