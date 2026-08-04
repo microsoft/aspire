@@ -36,7 +36,7 @@
     <div class="resource-action-slot">
         <AspireMenuButton ButtonAppearance="Appearance.Lightweight"
                           Icon="@(new Icons.Regular.Size20.MoreHorizontal())"
-                          Items="@_menuItems"
+                          ItemsProvider="GetMenuItems"
                           @ref="_menuButton"
                           Title="@ControlLoc[nameof(ControlsStrings.ActionsButtonText)]" />
     </div>

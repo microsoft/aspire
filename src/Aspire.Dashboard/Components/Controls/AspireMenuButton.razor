@@ -3,6 +3,7 @@
 @inherits FluentComponentBase
 
 @{
+    // Do not add aria-expanded here. Its presence signals that FluentMenu has finished initializing.
     var additionalButtonAttributes = new Dictionary<string, object>(AdditionalAttributes ?? ImmutableDictionary<string, object>.Empty)
     {
         { "onkeydown", (KeyboardEventArgs args) => OnKeyDown(args) },
@@ -36,4 +37,8 @@
     }
 </FluentButton>
 
-<AspireMenu Anchor="@MenuButtonId" @bind-Open="@_visible" Items="_items" RestoreFocusOnItemClick="@RestoreFocusOnItemClick" />
+@* Render lazily because FluentMenu is expensive: building menu items and initializing its JavaScript interop add significant overhead when many menu buttons are displayed. *@
+@if (_renderMenu)
+{
+    <AspireMenu Anchor="@MenuButtonId" Open="@_visible" OpenChanged="OnMenuOpenChanged" OnRenderComplete="OnMenuRenderComplete" Items="_items" RestoreFocusOnItemClick="@RestoreFocusOnItemClick" />
+}

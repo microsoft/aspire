@@ -183,6 +183,8 @@ internal static class FluentUISetupHelpers
     public static void SetupFluentUIComponents(TestContext context)
     {
         context.Services.AddFluentUIComponents();
+        context.JSInterop.SetupVoid("prepareForFluentMenuInitialization", _ => true).SetVoidResult();
+        context.JSInterop.SetupVoid("waitForFluentMenuInitialization", _ => true).SetVoidResult();
 
         // Setting a provider ID on menu service is required to simulate <FluentMenuProvider> on the page.
         // This makes FluentMenu render without error.
