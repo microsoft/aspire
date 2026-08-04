@@ -1,0 +1,38 @@
+{
+  "run_id": 30862724453,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/30862724453",
+  "analyzed_at": "2026-08-04T00:07:09Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 18969,
+    "title": "Bound aspire doctor checks with timeouts",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "doctor-check-timeouts",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18969"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Cli / Cli (windows-latest)",
+      "id": 91848321138,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/30862724453/job/91848321138",
+      "classification": "flaky-test",
+      "reason": "Test LaunchAsync_WithGracefulServices_SignalerThrows_StillEscalatesToTreeKill failed due to timing: expected tree-kill within 15s but took 24.6s. This is a known intermittent timing issue under CI load. The test file ProcessGuestLauncherTests.cs is not in the PR's changed files.",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Projects.ProcessGuestLauncherTests.LaunchAsync_WithGracefulServices_SignalerThrows_StillEscalatesToTreeKill",
+      "job": "Tests / Cli / Cli (windows-latest)",
+      "error": "Expected escalation to tree-kill within 15s of Expire() but it took 00:00:24.6176764.",
+      "stack_trace": "at Aspire.Cli.Tests.Projects.ProcessGuestLauncherTests.LaunchAsync_WithGracefulServices_SignalerThrows_StillEscalatesToTreeKill() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Projects\\ProcessGuestLauncherTests.cs:line 308",
+      "classification": "flaky",
+      "reason": "Timing-based failure: expected action within 15s but took 24.6s under CI load. ProcessGuestLauncherTests.cs is not in the PR's changed files. This matches a known prior cause (processguest-signalerThrows-treekill-timeout)."
+    }
+  ],
+  "causes": ["processguest-signalerThrows-treekill-timeout"]
+}
