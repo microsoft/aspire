@@ -3,10 +3,16 @@
 
 using System.Runtime.InteropServices;
 using Aspire.Cli.Npm;
+using Aspire.Cli.Telemetry;
+using Aspire.Cli.Tests.Acquisition;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Npm;
 
+[Collection(EnvVarMutatingTestCollection.Name)]
 public class NpmRunnerTests
 {
     [Fact]
@@ -142,6 +148,42 @@ public class NpmRunnerTests
     }
 
     [Fact]
+    public async Task InstallGlobalAsync_UsesInternalRegistryForDependencies()
+    {
+        var tempDirectory = Directory.CreateTempSubdirectory("aspire-npm-runner-test-");
+
+        try
+        {
+            WriteFakeNpm(tempDirectory);
+            var argumentsPath = Path.Combine(tempDirectory.FullName, "arguments.txt");
+            var existingPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+            using var pathOverride = new EnvVarOverride("PATH", $"{tempDirectory.FullName}{Path.PathSeparator}{existingPath}");
+            using var pathExtensionsOverride = OperatingSystem.IsWindows() ? new EnvVarOverride("PATHEXT", ".CMD") : null;
+            using var argumentsPathOverride = new EnvVarOverride("NPM_ARGS_FILE", argumentsPath);
+            using var profilingTelemetry = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+            var runner = new NpmRunner(new TestEnvironment(), NullLogger<NpmRunner>.Instance, profilingTelemetry);
+            var tarballPath = Path.Combine(tempDirectory.FullName, "playwright-cli.tgz");
+
+            var result = await runner.InstallGlobalAsync(tarballPath, TestContext.Current.CancellationToken);
+
+            Assert.True(result);
+            Assert.Equal(
+                [
+                    "install",
+                    "-g",
+                    tarballPath,
+                    "--registry",
+                    "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/"
+                ],
+                await File.ReadAllLinesAsync(argumentsPath, TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            tempDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void TryExtractLastVersion_SingleVersion_ReturnsTrimmedVersion()
     {
         var result = NpmRunner.TryExtractLastVersion("0.1.1\n", out var version);
@@ -198,5 +240,37 @@ public class NpmRunnerTests
         var result = NpmRunner.TryExtractLastVersion(output, out var version);
         Assert.True(result);
         Assert.Equal("1.0.0", version);
+    }
+
+    private static void WriteFakeNpm(DirectoryInfo directory)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            File.WriteAllText(
+                Path.Combine(directory.FullName, "npm.cmd"),
+                """
+                @echo off
+                if not "%~1"=="" echo %~1>>"%NPM_ARGS_FILE%"
+                if not "%~2"=="" echo %~2>>"%NPM_ARGS_FILE%"
+                if not "%~3"=="" echo %~3>>"%NPM_ARGS_FILE%"
+                if not "%~4"=="" echo %~4>>"%NPM_ARGS_FILE%"
+                if not "%~5"=="" echo %~5>>"%NPM_ARGS_FILE%"
+                exit /b 0
+                """);
+            return;
+        }
+
+        var npmPath = Path.Combine(directory.FullName, "npm");
+        File.WriteAllText(
+            npmPath,
+            """
+            #!/bin/sh
+            printf '%s\n' "$@" > "$NPM_ARGS_FILE"
+            """);
+        File.SetUnixFileMode(
+            npmPath,
+            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+            UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+            UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
     }
 }

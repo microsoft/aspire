@@ -143,7 +143,7 @@ internal sealed class NpmRunner(IEnvironment environment, ILogger<NpmRunner> log
         {
             var output = await RunNpmCommandInDirectoryAsync(
                 npmPath,
-                ["install", "-g", tarballPath],
+                ["install", "-g", tarballPath, "--registry", InternalRegistry],
                 tempDir,
                 cancellationToken);
 
