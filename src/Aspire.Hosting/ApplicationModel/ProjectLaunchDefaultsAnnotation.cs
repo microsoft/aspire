@@ -15,6 +15,8 @@ namespace Aspire.Hosting.ApplicationModel;
 [Experimental("ASPIREPROJECTS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class ProjectLaunchDefaultsAnnotation : IResourceAnnotation
 {
+    private IProjectMetadata? _appliedProjectMetadata;
+
     /// <summary>
     /// The config host for each endpoint that originated from Kestrel configuration. Used when
     /// rebuilding the <c>Kestrel__Endpoints__*__Url</c> override environment variables.
@@ -33,14 +35,31 @@ public sealed class ProjectLaunchDefaultsAnnotation : IResourceAnnotation
     internal bool HasKestrelEndpoints => KestrelEndpointAnnotationHosts.Count > 0;
 
     /// <summary>
-    /// True if <see cref="ProjectResourceBuilderExtensions.WithProjectDefaults{TProjectResource}(IResourceBuilder{TProjectResource}, ProjectResourceOptions)"/>
-    /// has already run for the resource, otherwise false.
+    /// Records the project metadata used to materialize project defaults.
     /// </summary>
-    /// <remarks>
-    /// The flag is used to ensure that multiple calls to <see cref="ProjectResourceBuilderExtensions.WithProjectDefaults{TProjectResource}(IResourceBuilder{TProjectResource}, ProjectResourceOptions)"/>
-    /// are idempotent and don't add duplicate endpoints or environment variables.
-    /// </remarks>
-    internal bool Applied { get; set; }
+    internal bool TrySetAppliedProjectMetadata(IProjectMetadata projectMetadata)
+    {
+        if (_appliedProjectMetadata is not null)
+        {
+            return false;
+        }
+
+        _appliedProjectMetadata = projectMetadata;
+        return true;
+    }
+
+    /// <summary>
+    /// Validates that project metadata has not changed since project defaults were materialized.
+    /// </summary>
+    internal void ValidateProjectMetadata(IResource resource, IProjectMetadata projectMetadata)
+    {
+        if (_appliedProjectMetadata is not null && !ReferenceEquals(projectMetadata, _appliedProjectMetadata))
+        {
+            throw new InvalidOperationException(
+                $"Resource '{resource.Name}' project metadata was replaced after project defaults were applied. " +
+                $"Project metadata must remain unchanged after {nameof(ProjectResourceBuilderExtensions.WithProjectDefaults)} configures the resource.");
+        }
+    }
 }
 
 internal static class ProjectLaunchDefaultsExtensions

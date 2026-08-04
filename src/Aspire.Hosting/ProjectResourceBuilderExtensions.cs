@@ -456,7 +456,7 @@ public static class ProjectResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="options">Options controlling launch profile and Kestrel endpoint handling.</param>
     /// <returns>The resource builder.</returns>
-    /// <exception cref="InvalidOperationException">The resource does not carry an <see cref="IProjectMetadata"/> annotation.</exception>
+    /// <exception cref="InvalidOperationException">The resource does not carry exactly one <see cref="IProjectMetadata"/> annotation, project metadata changes after defaults are applied, or defaults were already applied.</exception>
     /// <remarks>
     /// <para>
     /// This is the wiring shared by every .NET-launched resource: OpenTelemetry exporter configuration,
@@ -470,6 +470,10 @@ public static class ProjectResourceBuilderExtensions
     /// packages that add their own .NET resource type, such as <c>Aspire.Hosting.Dotnet</c>; use
     /// <see cref="AddProject{TProject}(IDistributedApplicationBuilder, string)"/> for ordinary projects.
     /// </para>
+    /// <para>
+    /// The project metadata annotation must not be added, removed, or replaced after this method returns.
+    /// Aspire validates this before the distributed application starts or publishes.
+    /// </para>
     /// </remarks>
     [Experimental("ASPIREPROJECTS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Project launch defaults are applied by the .NET language integration, not by polyglot app hosts.")]
@@ -479,15 +483,7 @@ public static class ProjectResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(options);
 
-        // Validated eagerly so callers get a clear, resource-specific error instead of a generic
-        // "Sequence contains no elements" exception later when GetConfiguration() resolves this same
-        // annotation type.
-        if (!builder.Resource.TryGetLastAnnotation<IProjectMetadata>(out _))
-        {
-            throw new InvalidOperationException(
-                $"Resource '{builder.Resource.Name}' does not carry an {nameof(IProjectMetadata)} annotation. " +
-                $"{nameof(WithProjectDefaults)} is only applicable to resources that represent C# projects.");
-        }
+        var projectMetadata = builder.Resource.GetProjectMetadata();
 
         // Carries the per-endpoint state the wiring below needs, and marks the resource as
         // ".NET-launched" for core features such as the Rebuild command.
@@ -499,7 +495,7 @@ public static class ProjectResourceBuilderExtensions
 
         // Applying the defaults twice is rejected rather than ignored because most of the settings and infrastructure
         // added below are not idempotent.
-        if (launchDefaults.Applied)
+        if (!launchDefaults.TrySetAppliedProjectMetadata(projectMetadata))
         {
             throw new InvalidOperationException(
                 $"Project defaults have already been applied to resource '{builder.Resource.Name}'. " +
@@ -507,8 +503,6 @@ public static class ProjectResourceBuilderExtensions
                 $"{nameof(AddCSharpApp)} and AddDotnetProject already call it. " +
                 $"Pass {nameof(ProjectResourceOptions)} to the method that adds the resource instead.");
         }
-
-        launchDefaults.Applied = true;
 
         builder.WithDebugSupport(
             mode => ProjectLaunchConfigurationFactory.Create(builder.Resource, mode),
@@ -519,12 +513,13 @@ public static class ProjectResourceBuilderExtensions
         // resolving the SDK version shells out to `dotnet --version`.
         builder.OnBeforeResourceStarted(async (r, e, ct) =>
         {
-            if (!r.TryGetLastAnnotation<IProjectMetadata>(out var projectMetadata) || !projectMetadata.IsFileBasedApp)
+            var currentProjectMetadata = r.GetProjectMetadata();
+            if (!currentProjectMetadata.IsFileBasedApp)
             {
                 return;
             }
 
-            var projectDirectory = Path.GetDirectoryName(projectMetadata.ProjectPath);
+            var projectDirectory = Path.GetDirectoryName(currentProjectMetadata.ProjectPath);
             if (await DotnetSdkUtils.TryGetVersionAsync(projectDirectory).ConfigureAwait(false) is { Major: < 10 } version)
             {
                 throw new DistributedApplicationException($"File-based apps are only supported on .NET 10 or later. The version active in '{projectDirectory}' is {version}.");
@@ -1023,12 +1018,7 @@ public static class ProjectResourceBuilderExtensions
 
     private static IConfiguration GetConfiguration(IResource projectResource)
     {
-        // Last-wins, matching how project metadata is resolved everywhere else in the app model:
-        // an annotation added later is an intentional override of an earlier one.
-        if (!projectResource.TryGetLastAnnotation<IProjectMetadata>(out var projectMetadata))
-        {
-            throw new InvalidOperationException($"Resource '{projectResource.Name}' does not carry an {nameof(IProjectMetadata)} annotation.");
-        }
+        var projectMetadata = projectResource.GetProjectMetadata();
 
         // For testing
         if (projectMetadata.Configuration is { } configuration)
@@ -1059,7 +1049,8 @@ public static class ProjectResourceBuilderExtensions
     private static void AddRebuilderResource<TProjectResource>(IResourceBuilder<TProjectResource> builder, TProjectResource projectResource)
         where TProjectResource : class, IResource
     {
-        if (!projectResource.TryGetLastAnnotation<IProjectMetadata>(out var projectMetadata) || projectMetadata.IsFileBasedApp)
+        var projectMetadata = projectResource.GetProjectMetadata();
+        if (projectMetadata.IsFileBasedApp)
         {
             return;
         }

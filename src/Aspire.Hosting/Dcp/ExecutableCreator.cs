@@ -175,7 +175,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 // Only plain executables carrying project metadata need it applied here.
                 if (er.ModelResource is not ProjectResource)
                 {
-                    if (er.ModelResource.TryGetLastAnnotation<IProjectMetadata>(out var plainProjectMetadata))
+                    if (er.ModelResource.TryGetProjectMetadata(out var plainProjectMetadata))
                     {
                         // Clear and re-apply the launch configuration to ensure proper restart behavior.
                         await ApplyProjectLaunchConfigurationAsync(exe, er.ModelResource, plainProjectMetadata, supportsDebuggingAnnotation, cancellationToken).ConfigureAwait(false);
@@ -217,7 +217,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
         foreach (var project in modelProjectResources)
         {
-            if (!project.TryGetLastAnnotation<IProjectMetadata>(out var projectMetadata))
+            if (!project.TryGetProjectMetadata(out var projectMetadata))
             {
                 throw new InvalidOperationException($"Project resource '{project.Name}' is missing required metadata."); // Should never happen.
             }

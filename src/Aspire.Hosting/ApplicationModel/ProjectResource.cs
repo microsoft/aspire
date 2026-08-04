@@ -275,7 +275,7 @@ public class ProjectResource : Resource, IResourceWithEnvironment, IResourceWith
     private string DebuggerToString()
     {
         var path = "<unknown>";
-        if (this.TryGetLastAnnotation<IProjectMetadata>(out var metadata))
+        if (this.TryGetProjectMetadata(out var metadata))
         {
             path = metadata.ProjectPath;
         }

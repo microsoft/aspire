@@ -85,11 +85,8 @@ public class ResourceSnapshotBuilderTests
     }
 
     [Fact]
-    public void ProjectSnapshotUsesTheLastProjectMetadataAnnotation()
+    public void ProjectSnapshotRejectsMultipleProjectMetadataAnnotations()
     {
-        // Project metadata is resolved last-wins across the app model, so a ProjectResource carrying an
-        // overriding annotation has to survive snapshot generation instead of throwing
-        // "Sequence contains more than one matching element" from GetProjectMetadata().
         var project = new ProjectResource("project");
         project.Annotations.Add(new TestProjectMetadata());
         project.Annotations.Add(new OverrideTestProjectMetadata());
@@ -102,15 +99,14 @@ public class ResourceSnapshotBuilderTests
             ProcessId = 1234
         };
 
-        var snapshot = CreateSnapshotBuilder(new Dictionary<string, IResource>
-        {
-            [project.Name] = project
-        }).ToSnapshot(executable, CreatePreviousSnapshot());
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            CreateSnapshotBuilder(new Dictionary<string, IResource>
+            {
+                [project.Name] = project
+            }).ToSnapshot(executable, CreatePreviousSnapshot()));
 
-        // Both the path and the launch profile must come from the overriding annotation, proving the
-        // whole metadata object is resolved last-wins rather than merged.
-        Assert.Equal("/app/override.csproj", GetProperty(snapshot, KnownProperties.Project.Path).Value);
-        Assert.Equal("http", GetProperty(snapshot, KnownProperties.Project.LaunchProfile).Value);
+        Assert.Contains(project.Name, exception.Message);
+        Assert.Contains("more than one", exception.Message);
     }
 
     [Fact]

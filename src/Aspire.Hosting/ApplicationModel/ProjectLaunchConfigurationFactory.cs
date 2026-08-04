@@ -12,7 +12,7 @@ internal static class ProjectLaunchConfigurationFactory
 {
     public static ProjectLaunchConfiguration Create(IResource resource, string mode)
     {
-        if (!resource.TryGetLastAnnotation<IProjectMetadata>(out var projectMetadata))
+        if (!resource.TryGetProjectMetadata(out var projectMetadata))
         {
             throw new InvalidOperationException(
                 $"Resource '{resource.Name}' cannot produce a \"{KnownLaunchConfigurationTypes.Project}\" launch configuration because it has no project metadata. " +

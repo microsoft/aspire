@@ -107,26 +107,36 @@ public class ProjectResourceBuilderExtensionTests
     }
 
     [Fact]
-    public async Task WithProjectDefaultsUsesTheLastProjectMetadataAnnotation()
+    public void WithProjectDefaultsThrowsWhenResourceHasMultipleProjectMetadataAnnotations()
     {
-        // Project metadata is resolved last-wins everywhere else in the app model, so a resource
-        // carrying an overriding annotation must not trip a "Sequence contains more than one element"
-        // exception from the project-defaults wiring.
         using var builder = TestDistributedApplicationBuilder.Create();
 
         var project = builder.AddResource(new ProjectResource("project"))
                              .WithAnnotation<IProjectMetadata>(new TestProject())
-                             .WithAnnotation<IProjectMetadata>(new OverrideTestProject())
-                             .WithProjectDefaults(new ProjectResourceOptions { ExcludeLaunchProfile = true });
+                             .WithAnnotation<IProjectMetadata>(new OverrideTestProject());
 
-        var launchConfiguration = Assert.IsType<ProjectLaunchConfiguration>(
-            await project.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.NoDebug));
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => project.WithProjectDefaults(new ProjectResourceOptions { ExcludeLaunchProfile = true }));
 
-        Assert.Equal("override.csproj", launchConfiguration.ProjectPath);
+        Assert.Contains(project.Resource.Name, exception.Message);
+        Assert.Contains("more than one", exception.Message);
+    }
 
-        // The public accessor must agree with the project-defaults wiring, otherwise the same resource
-        // shape throws later on the DCP snapshot / image build / manifest paths that go through it.
-        Assert.Equal("override.csproj", project.Resource.GetProjectMetadata().ProjectPath);
+    [Theory]
+    [InlineData(ResourceAnnotationMutationBehavior.Append, "more than one")]
+    [InlineData(ResourceAnnotationMutationBehavior.Replace, "replaced")]
+    public void ProjectMetadataConsumersRejectChangesAfterProjectDefaultsAreApplied(
+        ResourceAnnotationMutationBehavior mutationBehavior,
+        string expectedMessage)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddProject<TestProject>("project", options => options.ExcludeLaunchProfile = true);
+        project.WithAnnotation<IProjectMetadata>(new OverrideTestProject(), mutationBehavior);
+
+        var exception = Assert.Throws<InvalidOperationException>(project.Resource.GetProjectMetadata);
+
+        Assert.Contains(project.Resource.Name, exception.Message);
+        Assert.Contains(expectedMessage, exception.Message);
     }
 
     [Fact]

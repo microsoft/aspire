@@ -991,15 +991,15 @@ public class ProjectResourceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void GetProjectMetadataReturnsTheLastAnnotationWhenSeveralArePresent()
+    public void GetProjectMetadataThrowsWhenSeveralAnnotationsArePresent()
     {
-        // Project metadata is resolved last-wins across the app model, so the public accessor must agree
-        // with the annotation-based consumers rather than rejecting an overriding annotation.
         var resource = new ProjectResource("projectName");
         resource.Annotations.Add(new TestProject());
         resource.Annotations.Add(new OverrideTestProject());
 
-        Assert.Equal("override-path", resource.GetProjectMetadata().ProjectPath);
+        var exception = Assert.Throws<InvalidOperationException>(resource.GetProjectMetadata);
+        Assert.Contains("projectName", exception.Message);
+        Assert.Contains("more than one", exception.Message);
     }
 
     [Fact]
