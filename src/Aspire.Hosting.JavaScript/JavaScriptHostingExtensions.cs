@@ -2078,7 +2078,7 @@ public static partial class JavaScriptHostingExtensions
                         hash.IndexOfAnyExcept("0123456789abcdefABCDEF") < 0 &&
                         integrity[..integritySeparator] is "sha224" or "sha256" or "sha384" or "sha512")
                     {
-                        return (version.ToString(), (integrity[..integritySeparator].ToString(), hash.ToString()));
+                        return (version.ToString(), (integrity[..integritySeparator].ToString(), hash.ToString().ToLowerInvariant()));
                     }
 
                     if (!hasIntegrity)

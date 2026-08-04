@@ -438,6 +438,32 @@ public class AddJavaScriptAppTests(ITestOutputHelper outputHelper)
         Assert.All(integrityLines, line => Assert.Contains($"\"{algorithm}\" \"abcdef\" \"$archive\"", line));
     }
 
+    [Fact]
+    public async Task VerifyPnpmDockerfileNormalizesPackageManagerIntegrityHash()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+        await File.WriteAllTextAsync(
+            Path.Combine(appDir, "package.json"),
+            """
+            {
+              "packageManager": "pnpm@10.30.1+sha512.ABCDEF"
+            }
+            """);
+
+        var pnpmApp = builder.AddJavaScriptApp("js", appDir)
+            .WithPnpm()
+            .WithBuildScript("build");
+
+        await ManifestUtils.GetManifest(pnpmApp.Resource, workspace.Path);
+
+        var dockerfile = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "js.Dockerfile"));
+        Assert.Contains("\"sha512\" \"abcdef\" \"$archive\"", dockerfile);
+    }
+
     [Theory]
     [InlineData("10.30.1")]
     [InlineData("v10.30.1")]
