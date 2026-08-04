@@ -311,6 +311,19 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
             return false;
         }
     }
+
+    public override Task<string> InspectImageManifestAsync(string imageName, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(imageName);
+        var escapedImageName = EscapeArgument(imageName);
+
+        // Podman does not support Docker's --verbose manifest inspection option.
+        return ExecuteContainerCommandForOutputAsync(
+            $"manifest inspect \"{escapedImageName}\"",
+            "inspect image manifest",
+            imageName,
+            cancellationToken);
+    }
 }
 
 /// <summary>
