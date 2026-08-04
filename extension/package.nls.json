@@ -94,6 +94,8 @@
   "aspire-vscode.strings.errorRetrievingAppHosts": "Error retrieving AppHosts in the current workspace. Debug options may be incomplete.",
   "aspire-vscode.strings.launchingWithDirectory": "Launching Aspire debug session using directory {0}: attempting to determine effective AppHost...",
   "aspire-vscode.strings.launchingWithAppHost": "Launching Aspire debug session for AppHost {0}...",
+  "aspire-vscode.strings.launchingRunWithDirectory": "Launching Aspire run session using directory {0}: attempting to determine effective AppHost...",
+  "aspire-vscode.strings.launchingRunWithAppHost": "Launching Aspire run session for AppHost {0}...",
   "aspire-vscode.strings.disconnectingFromSession": "Disconnecting from Aspire debug session... Child processes will be stopped.",
   "aspire-vscode.strings.processExitedWithCode": "Process exited with code {0}.",
   "aspire-vscode.strings.failedToStartPythonProgram": "Failed to start Python program: {0}.",
