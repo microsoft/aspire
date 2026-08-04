@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "DotnetProjectResource moved to Aspire.Hosting.Dotnet namespace with experimental diagnostic",
+  "mergedAt": "2026-08-04T00:36:02Z",
+  "number": 18981,
+  "runDate": "2026-08-04T06:50:05Z",
+  "status": "included",
+  "title": "Fix DotnetProjectResource API surface"
+}

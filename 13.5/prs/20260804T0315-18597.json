@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "CLI bug fix for misleading exit code -1 error message",
+  "mergedAt": "2026-08-04T03:15:30Z",
+  "number": 18597,
+  "runDate": "2026-08-04T06:50:05Z",
+  "status": "included",
+  "title": "Fix guest AppHost unknown exit code message"
+}

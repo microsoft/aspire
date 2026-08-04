@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "VS Code extension telemetry wire names improvement",
+  "mergedAt": "2026-08-04T01:30:14Z",
+  "number": 18562,
+  "runDate": "2026-08-04T06:50:05Z",
+  "status": "included",
+  "title": "vscode telemetry: emit Aspire wire names without losing VS Code safeguards"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "When the CLI loses the guest AppHost backchannel before the exit code is available, it no longer reports a misleading synthetic exit code -1 and instead shows a clearer error message.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-08-04T03:15:30Z",
+  "lastMergedAt": "2026-08-04T03:15:30Z",
+  "name": "Improved error when guest AppHost exit code is unavailable",
+  "owner": "adamint",
+  "prs": [
+    18597
+  ]
+}

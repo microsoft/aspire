@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Bug fix for custom resource wait behavior being skipped",
+  "mergedAt": "2026-08-04T01:32:22Z",
+  "number": 18930,
+  "runDate": "2026-08-04T06:50:05Z",
+  "status": "included",
+  "title": "Fix waiting for custom resources"
+}

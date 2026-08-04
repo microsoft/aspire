@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a bug where the wait behavior for custom resources was sometimes skipped entirely, allowing resources to start before their dependencies were ready.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-08-04T01:32:22Z",
+  "lastMergedAt": "2026-08-04T01:32:22Z",
+  "name": "Fix resource wait skipping for custom resources",
+  "owner": "karolz-ms",
+  "prs": [
+    18930
+  ]
+}

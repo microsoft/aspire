@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": true,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "OrleansProviderTypeAnnotation is now an internal implementation type. The supported public API is WithOrleansProviderType, which continues to work as before.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔒",
+  "firstMergedAt": "2026-08-04T04:23:20Z",
+  "lastMergedAt": "2026-08-04T04:23:20Z",
+  "name": "Orleans provider annotation made internal",
+  "owner": "sebastienros",
+  "prs": [
+    18975
+  ]
+}
