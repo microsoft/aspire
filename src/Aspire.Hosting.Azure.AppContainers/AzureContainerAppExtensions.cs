@@ -1200,7 +1200,7 @@ public static class AzureContainerAppExtensions
         var resource = new AzureContainerRegistryResource(name, configureInfrastructure);
         if (builder.ExecutionContext.IsPublishMode)
         {
-            builder.AddResource(resource);
+            builder.AddResource(resource).WithIconName("Archive");
         }
         return resource;
     }

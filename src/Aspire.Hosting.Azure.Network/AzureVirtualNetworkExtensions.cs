@@ -275,6 +275,7 @@ public static class AzureVirtualNetworkExtensions
         }
 
         return builder.ApplicationBuilder.AddResource(subnet)
+            .WithIconName("Router")
             .ExcludeFromManifest();
     }
 

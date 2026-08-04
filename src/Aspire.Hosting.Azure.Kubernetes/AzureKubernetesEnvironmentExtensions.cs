@@ -186,6 +186,7 @@ public static class AzureKubernetesEnvironmentExtensions
         }
 
         return builder.ApplicationBuilder.AddResource(nodePool)
+            .WithIconName("Cpu")
             .ExcludeFromManifest();
     }
 
@@ -477,6 +478,7 @@ public static class AzureKubernetesEnvironmentExtensions
         }
 
         return builder.ApplicationBuilder.AddResource(lb)
+            .WithIconName("GlobeArrowForward")
             .ExcludeFromManifest();
     }
 

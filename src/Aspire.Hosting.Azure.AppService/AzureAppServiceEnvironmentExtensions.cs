@@ -551,7 +551,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
         var resource = new AzureContainerRegistryResource(name, ContainerRegistryInfrastructure.ConfigureContainerRegistry);
         if (builder.ExecutionContext.IsPublishMode)
         {
-            builder.AddResource(resource);
+            builder.AddResource(resource).WithIconName("Archive");
         }
         return resource;
     }

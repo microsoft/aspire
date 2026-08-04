@@ -255,6 +255,7 @@ public static class KubernetesEnvironmentExtensions
         }
 
         return builder.ApplicationBuilder.AddResource(nodePool)
+            .WithIconName("ServerMultiple")
             .ExcludeFromManifest();
     }
 
