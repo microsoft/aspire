@@ -11,6 +11,32 @@ public class TemplatePackageLockTests
     [InlineData("ts-starter")]
     [InlineData("py-starter")]
     [InlineData("java-starter")]
+    public void StarterFrontendPackageJson_UsesNpm10CompatibleBraceExpansionOverride(string templateName)
+    {
+        var filePath = Path.Combine(
+            GetRepoRoot(),
+            "src",
+            "Aspire.Cli",
+            "Templating",
+            "Templates",
+            templateName,
+            "frontend",
+            "package.json");
+
+        using var packageJson = JsonDocument.Parse(File.ReadAllText(filePath));
+        var overrides = packageJson.RootElement.GetProperty("overrides");
+
+        Assert.True(overrides.TryGetProperty("minimatch@3.1.5", out var minimatchOverride));
+        Assert.Equal(
+            "2.1.3",
+            minimatchOverride.GetProperty("brace-expansion").GetString());
+        Assert.False(overrides.TryGetProperty("brace-expansion@1", out _));
+    }
+
+    [Theory]
+    [InlineData("ts-starter")]
+    [InlineData("py-starter")]
+    [InlineData("java-starter")]
     public void StarterFrontendPackageLock_UsesPublicNpmRegistry(string templateName)
     {
         var filePath = Path.Combine(
