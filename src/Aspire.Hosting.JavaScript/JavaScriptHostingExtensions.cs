@@ -1994,14 +1994,14 @@ public static class JavaScriptHostingExtensions
         var pnpmPackageManager = GetPnpmPackageManager(workingDirectory);
         var initializeDockerStage = new Action<DockerfileStage>(stage =>
         {
-            stage.Arg("NPM_CONFIG_REGISTRY", DefaultNpmRegistry);
+            stage.Arg("NPM_REGISTRY", DefaultNpmRegistry);
             if (pnpmPackageManager.Integrity is { } integrity)
             {
-                stage.Run($"archive=\"$(npm pack --json pnpm@{pnpmPackageManager.Version} | node -e 'const result = JSON.parse(require(\"fs\").readFileSync(0, \"utf8\")); process.stdout.write(result[0].filename)')\" && echo \"{integrity.Hash}  $archive\" | {integrity.Algorithm}sum -c && npm install --global \"./$archive\" && rm \"$archive\"");
+                stage.Run($"archive=\"$(npm pack --json pnpm@{pnpmPackageManager.Version} --registry \"$NPM_REGISTRY\" | node -e 'const result = JSON.parse(require(\"fs\").readFileSync(0, \"utf8\")); process.stdout.write(result[0].filename)')\" && node -e 'const [algorithm, expected, file] = process.argv.slice(1); const actual = require(\"crypto\").createHash(algorithm).update(require(\"fs\").readFileSync(file)).digest(\"hex\"); if (actual !== expected) {{ console.error(\"Integrity check failed for \" + file); process.exit(1); }}' \"{integrity.Algorithm}\" \"{integrity.Hash}\" \"$archive\" && npm install --global --registry \"$NPM_REGISTRY\" \"./$archive\" && rm \"$archive\"");
             }
             else
             {
-                stage.Run($"npm install --global pnpm@{pnpmPackageManager.Version}");
+                stage.Run($"npm install --global --registry \"$NPM_REGISTRY\" pnpm@{pnpmPackageManager.Version}");
             }
         });
 
