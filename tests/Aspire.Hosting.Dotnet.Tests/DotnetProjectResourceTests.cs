@@ -338,12 +338,11 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AddDotnetProject_InDebugSession_OmitsDotnetRunScaffolding_WhenActiveCustomDebugSupportRewritesArgs()
+    public async Task AddDotnetProject_InDebugSession_OmitsDotnetRunScaffolding_WhenActiveCustomDebugSupportOwnsEntrypointArgs()
     {
-        // A stacked custom WithDebugSupport with an argsCallback rewrites the arguments for debugging
-        // (RewritesArgumentsForDebugging == true), so no Process fallback is offered and that callback owns
-        // Spec.Args. The `dotnet run …` scaffolding must be omitted; re-emitting it would pollute the args
-        // the custom callback rewrites.
+        // A stacked custom WithDebugSupport that declares entrypoint arguments owns the tool invocation, so no
+        // Process fallback is offered and Spec.Args is composed from that entrypoint plus the program arguments.
+        // The `dotnet run …` scaffolding must be omitted; re-emitting it would duplicate the tool invocation.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
@@ -356,16 +355,16 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         var projectPath = Path.Combine(builder.AppHostDirectory, "MyService", "MyService.csproj");
         var app = builder.AddDotnetProject("svc", projectPath, o => o.ExcludeLaunchProfile = true)
                          .WithArgs("--config", "prod.yaml")
-                         .WithDebugSupport(_ => new ExecutableLaunchConfiguration("custom"), "custom", ctx => ctx.Args.Add("rewritten-arg"));
+                         .WithDebugSupport(_ => new ExecutableLaunchConfiguration("custom"), "custom", ctx => ctx.Args.Add("entrypoint-arg"));
 
         using var application = builder.Build();
         var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource, application.Services);
 
-        // Only the user args plus the custom callback's rewrite remain; no `dotnet run …` scaffolding.
+        // Only the custom entrypoint plus the user args remain; no `dotnet run …` scaffolding.
         Assert.Collection(args,
+            arg => Assert.Equal("entrypoint-arg", arg),
             arg => Assert.Equal("--config", arg),
-            arg => Assert.Equal("prod.yaml", arg),
-            arg => Assert.Equal("rewritten-arg", arg));
+            arg => Assert.Equal("prod.yaml", arg));
     }
 
     [Theory]

@@ -3672,16 +3672,16 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ProjectResource_WithArgumentRewritingDebugSupport_DoesNotOfferProcessFallback_InDebugSession()
+    public async Task ProjectResource_WithEntrypointArgumentsDebugSupport_DoesNotOfferProcessFallback_InDebugSession()
     {
-        // A ProjectResource can, via the generic WithDebugSupport(argsCallback: ...), rewrite its arguments
-        // for debugging (ProjectResource implements IResourceWithArgs). Those args are valid only for IDE
-        // launch, so DCP must NOT advertise a Process fallback that would later run a broken command. This
+        // A ProjectResource can, via the generic WithDebugSupport(entrypointArgsCallback: ...), declare a tool
+        // invocation prefix (ProjectResource implements IResourceWithArgs). That prefix is withheld from Spec.Args
+        // for the IDE, so DCP must NOT advertise a Process fallback that would later run a broken command. This
         // mirrors the guard already applied to plain executables in PreparePlainExecutables.
         var builder = DistributedApplication.CreateBuilder();
         var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
 
-        // Replace the default "project" debug support with a custom launch type that also rewrites arguments.
+        // Replace the default "project" debug support with a custom launch type that also owns entrypoint arguments.
         var defaultAnnotation = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
         if (defaultAnnotation is not null)
         {
@@ -3691,7 +3691,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         projectBuilder.WithDebugSupport(
             mode => new ExecutableLaunchConfiguration("test") { Mode = mode },
             "test",
-            argsCallback: _ => { /* rewrites arguments for debugging */ });
+            entrypointArgsCallback: ctx => ctx.Args.Add("run"));
 
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -3715,11 +3715,11 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ProjectResource_WithoutArgumentRewriting_OffersProcessFallback_InDebugSession()
+    public async Task ProjectResource_WithoutEntrypointArguments_OffersProcessFallback_InDebugSession()
     {
-        // The common case: a default AddProject ("project" launch type, no argument rewriting) keeps the
+        // The common case: a default AddProject ("project" launch type, no entrypoint arguments) keeps the
         // Process fallback so an IDE launch rejection can still start the project. Guards against the
-        // RewritesArgumentsForDebugging guard accidentally dropping the fallback for ordinary projects.
+        // entrypoint-argument guard accidentally dropping the fallback for ordinary projects.
         var builder = DistributedApplication.CreateBuilder();
         builder.AddProject<Projects.ServiceA>("proj", launchProfileName: null);
 
@@ -4442,12 +4442,11 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
         });
 
-        var debugArgsCallbackInvoked = false;
         var resource = builder.AddProject<Projects.ServiceA>("ServiceA").WithTerminal();
         resource.WithDebugSupport(
             mode => new ProjectLaunchConfiguration { ProjectPath = "/test/path", Mode = mode },
             "project",
-            argsCallback: _ => debugArgsCallbackInvoked = true);
+            entrypointArgsCallback: ctx => ctx.Args.Add("entrypoint-arg"));
 
         // Simulate a debug session whose capability list advertises "project" support.
         var configDict = new Dictionary<string, string?>
@@ -4472,7 +4471,9 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var exe = GetCreatedExecutableForResource(kubernetesService, "ServiceA");
         Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
-        Assert.False(debugArgsCallbackInvoked);
+        // Process execution keeps the full command line, so the entrypoint prefix is passed through.
+        Assert.NotNull(exe.Spec.Args);
+        Assert.Contains("entrypoint-arg", exe.Spec.Args);
         Assert.NotNull(exe.Spec.Terminal);
     }
 
@@ -5898,28 +5899,21 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PlainExecutable_ExtensionMode_ArgsRewritingDebugSupport_OmitsProcessFallback()
+    public async Task PlainExecutable_ExtensionMode_EntrypointArgsDebugSupport_WithholdsPrefixAndOmitsProcessFallback()
     {
-        // A non-"project" debuggable executable whose WithDebugSupport supplies an argsCallback (e.g. Go/Python,
-        // which strip the process entrypoint so the IDE debugger owns it) is left with Spec.Args holding only the
-        // application arguments. A Process fallback would then run `ExecutablePath <app-args>` — the wrong command —
-        // so no Process fallback must be advertised for it.
+        // A non-"project" debuggable executable that declares entrypoint arguments (e.g. Go/Python, where the IDE
+        // debugger owns the `go run <pkg>` / `python -m <mod>` tool invocation) must not pass the prefix to the
+        // launched program. Because the DCP Executable spec has a single args field, the resulting Spec.Args cannot
+        // also serve a Process fallback, so no fallback is advertised even though the launch type is not "project".
         var builder = DistributedApplication.CreateBuilder();
 
         var debuggableExecutable = new TestExecutableResource("test-working-directory");
         builder.AddResource(debuggableExecutable)
-            .WithArgs("run", "app-arg")
+            .WithArgs("app-arg")
             .WithDebugSupport(
                 mode => new ExecutableLaunchConfiguration("test") { Mode = mode },
                 "test",
-                argsCallback: static ctx =>
-                {
-                    // Mimic Go/Python stripping the process entrypoint token, leaving only the application args.
-                    if (ctx.Args.Count > 0)
-                    {
-                        ctx.Args.RemoveAt(0);
-                    }
-                });
+                entrypointArgsCallback: static ctx => ctx.Args.Add("run"));
 
         var configDict = new Dictionary<string, string?>
         {
@@ -5939,33 +5933,78 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var exe = GetCreatedExecutableForResource(kubernetesService, "TestExecutable");
         Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
-        // Because the debug support registered an argsCallback (RewritesArgumentsForDebugging), Spec.Args can be
-        // rewritten to an IDE-only shape, so no Process fallback is advertised even though the launch type is not
-        // "project".
+        Assert.Equal(["app-arg"], exe.Spec.Args);
         Assert.Null(exe.Spec.FallbackExecutionTypes);
+
+        // The dashboard still shows the resource's real command line, prefix included. The prefix has no effective
+        // argument index because it is not passed to the launched program.
+        Assert.True(exe.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var displayArgs));
+        Assert.Collection(displayArgs,
+            arg =>
+            {
+                Assert.Equal("run", arg.Argument);
+                Assert.Null(arg.EffectiveArgumentIndex);
+            },
+            arg =>
+            {
+                Assert.Equal("app-arg", arg.Argument);
+                Assert.Equal(0, arg.EffectiveArgumentIndex);
+            });
     }
 
     [Fact]
-    public async Task PlainExecutable_ExtensionMode_ArgsRewritingDebugSupport_LaunchConfigFailure_FailsWithoutProcessFallback()
+    public async Task PlainExecutable_ExtensionMode_EmptyEntrypointArgs_OffersProcessFallback()
     {
-        // When the launch configuration producer throws for an args-rewriting debug resource, Spec.Args has already
-        // had its entrypoint stripped for the IDE, so a Process fallback would launch a broken command. The failure
-        // must propagate (the resource fails to start) instead of silently falling back to Process execution.
+        // Declaring entrypoint arguments does not always produce a prefix — a Python "Executable" entrypoint
+        // contributes nothing, for example. Nothing is withheld from Spec.Args in that case, so the Process
+        // fallback remains usable and must be advertised.
+        var builder = DistributedApplication.CreateBuilder();
+
+        var debuggableExecutable = new TestExecutableResource("test-working-directory");
+        builder.AddResource(debuggableExecutable)
+            .WithArgs("app-arg")
+            .WithDebugSupport(
+                mode => new ExecutableLaunchConfiguration("test") { Mode = mode },
+                "test",
+                entrypointArgsCallback: static _ => { });
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo { ProtocolsSupported = ["test"], SupportedLaunchConfigurations = ["test"] }),
+            [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234",
+            [KnownConfigNames.DebugSessionRunMode] = "Debug"
+        };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "TestExecutable");
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        Assert.Equal(["app-arg"], exe.Spec.Args);
+        Assert.NotNull(exe.Spec.FallbackExecutionTypes);
+        Assert.Equal(ExecutionType.Process, Assert.Single(exe.Spec.FallbackExecutionTypes));
+    }
+
+    [Fact]
+    public async Task PlainExecutable_ExtensionMode_EntrypointArgsDebugSupport_LaunchConfigFailure_FallsBackWithFullCommandLine()
+    {
+        // When the launch configuration producer throws, the resource switches to Process execution before its
+        // command line is composed, so the entrypoint prefix is emitted and the fallback runs the real command.
         var builder = DistributedApplication.CreateBuilder();
 
         var resource = new TestExecutableResource("test-working-directory");
         builder.AddResource(resource)
-            .WithArgs("run", "app-arg")
+            .WithArgs("app-arg")
             .WithDebugSupport(
                 ThrowingLaunchConfiguration,
                 "test",
-                argsCallback: static ctx =>
-                {
-                    if (ctx.Args.Count > 0)
-                    {
-                        ctx.Args.RemoveAt(0);
-                    }
-                });
+                entrypointArgsCallback: static ctx => ctx.Args.Add("run"));
 
         var configDict = new Dictionary<string, string?>
         {
@@ -5990,8 +6029,11 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         await appExecutor.RunApplicationAsync();
 
-        Assert.Empty(kubernetesService.CreatedResources.OfType<Executable>());
-        Assert.Same(resource, Assert.Single(failedResources));
+        Assert.Empty(failedResources);
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "TestExecutable");
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+        Assert.Equal(["run", "app-arg"], exe.Spec.Args);
 
         static Task<ExecutableLaunchConfiguration> ThrowingLaunchConfiguration(string mode, CancellationToken cancellationToken)
         {

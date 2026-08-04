@@ -993,37 +993,10 @@ public static class PythonAppResourceBuilderExtensions
                     WorkingDirectory = workingDirectory
                 };
             },
-            "python",
-            static ctx =>
-            {
-                // Remove entrypoint-specific arguments that VS Code will handle.
-                // We need to verify the annotation to ensure we remove the correct args.
-                if (!ctx.Resource.TryGetLastAnnotation<PythonEntrypointAnnotation>(out var annotation))
-                {
-                    return;
-                }
-
-                // For Module type: remove "-m" and module name (2 args)
-                if (annotation.Type == EntrypointType.Module)
-                {
-                    if (ctx.Args is [string arg0, string arg1, ..] &&
-                        arg0 == "-m" &&
-                        arg1 == annotation.Entrypoint)
-                    {
-                        ctx.Args.RemoveAt(0); // Remove "-m"
-                        ctx.Args.RemoveAt(0); // Remove module name
-                    }
-                }
-                // For Script type: remove script path (1 arg)
-                else if (annotation.Type == EntrypointType.Script)
-                {
-                    if (ctx.Args is [string arg0, ..] &&
-                        arg0 == annotation.Entrypoint)
-                    {
-                        ctx.Args.RemoveAt(0); // Remove script path
-                    }
-                }
-            });
+            // The entrypoint arguments (`-m <module>` / `<script>`) are declared by WithEntrypoint, which is also
+            // reachable on Python resources that never opt into debugging. They carry the same "python" launch
+            // configuration type, so they are automatically withheld when VS Code launches the interpreter itself.
+            "python");
 
         return builder;
     }
@@ -1047,8 +1020,8 @@ public static class PythonAppResourceBuilderExtensions
     /// <item><description><b>Executable</b>: Runs the executable directly from the virtual environment</description></item>
     /// </list>
     /// <para>
-    /// <b>Important:</b> This method resets all command-line arguments. If you need to add arguments after changing
-    /// the entrypoint, call <c>WithArgs</c> after this method.
+    /// <b>Note:</b> The entrypoint arguments always lead the resource's command line, so arguments added with
+    /// <c>WithArgs</c> before or after this call are preserved and stay after the entrypoint.
     /// </para>
     /// </remarks>
     /// <example>
@@ -1092,15 +1065,12 @@ public static class PythonAppResourceBuilderExtensions
         },
         ResourceAnnotationMutationBehavior.Replace);
 
-        builder.WithArgs(static context =>
+        builder.WithEntrypointArgs("python", static context =>
         {
             if (!context.Resource.TryGetLastAnnotation<PythonEntrypointAnnotation>(out var existingAnnotation))
             {
                 return;
             }
-
-            // Clear existing args since we're replacing the entrypoint
-            context.Args.Clear();
 
             var entrypointType = existingAnnotation.Type;
             var entrypoint = existingAnnotation.Entrypoint;
