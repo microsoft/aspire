@@ -9,7 +9,7 @@ resource recipepack 'Radius.Core/recipePacks@2025-08-01-preview' = {
     recipes: {
       'Radius.Data/postgreSqlDatabases': {
         recipeKind: 'bicep'
-        recipeLocation: 'ghcr.io/radius-project/recipes/local-dev/postgresqldatabases:latest'
+        recipeLocation: 'ghcr.io/radius-project/kube-recipes/postgresqldatabases:latest'
       }
       'Radius.Compute/containers': {
         recipeKind: 'bicep'
@@ -45,12 +45,8 @@ resource db 'Radius.Data/postgreSqlDatabases@2025-08-01-preview' = {
   properties: {
     application: app.id
     environment: myenv.id
-    recipe: {
-      parameters: {
-        password: db_password
-        username: 'postgres'
-      }
-    }
+    username: 'postgres'
+    password: db_password
   }
 }
 
