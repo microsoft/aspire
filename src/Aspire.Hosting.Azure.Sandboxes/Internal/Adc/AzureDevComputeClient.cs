@@ -347,29 +347,15 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
         throw new InvalidOperationException($"ADC request '{method} {path}' failed with HTTP {(int)response.StatusCode} ({response.ReasonPhrase}). {message}{permissionHint}");
     }
 
-    private static async Task<string> GetErrorMessageAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    private static Task<string> GetErrorMessageAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (response.Content.Headers.ContentLength == 0)
         {
-            return string.Empty;
+            return Task.FromResult(string.Empty);
         }
 
-        try
-        {
-            var problem = await response.Content.ReadFromJsonAsync<AzureDevComputeProblemDetails>(s_jsonSerializerOptions, cancellationToken).ConfigureAwait(false);
-            if (problem is not null)
-            {
-                return string.Join(
-                    " ",
-                    new[] { problem.Title, problem.Detail }
-                        .Where(static value => !string.IsNullOrWhiteSpace(value)));
-            }
-        }
-        catch (JsonException)
-        {
-        }
-
-        return "The service returned an unrecognized error response.";
+        return Task.FromResult("The service returned an error response whose details were redacted.");
     }
 
     private static string GetSandboxGroupPath(AzureDevComputeResourceScope scope)
@@ -582,11 +568,4 @@ internal sealed class AzureDevComputeSandboxPort
     public required int Port { get; init; }
 
     public required Uri Url { get; init; }
-}
-
-internal sealed class AzureDevComputeProblemDetails
-{
-    public string? Title { get; init; }
-
-    public string? Detail { get; init; }
 }

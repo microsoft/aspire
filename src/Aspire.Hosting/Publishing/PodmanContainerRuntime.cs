@@ -252,10 +252,9 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
         var remoteImageName = imageName.StartsWith("docker://", StringComparison.OrdinalIgnoreCase)
             ? imageName
             : $"docker://{imageName}";
-        var escapedImageName = EscapeArgument(remoteImageName);
 
         var manifest = await ExecuteContainerCommandForOutputAsync(
-            $"manifest inspect \"{escapedImageName}\"",
+            ["manifest", "inspect", remoteImageName],
             "inspect image manifest",
             imageName,
             cancellationToken).ConfigureAwait(false);
@@ -271,9 +270,8 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
         var localImageName = imageName.StartsWith("docker://", StringComparison.OrdinalIgnoreCase)
             ? imageName["docker://".Length..]
             : imageName;
-        var escapedLocalImageName = EscapeArgument(localImageName);
         var imageMetadata = await ExecuteContainerCommandForOutputAsync(
-            $"image inspect --format \"{{{{json .}}}}\" \"{escapedLocalImageName}\"",
+            ["image", "inspect", "--format", "{{json .}}", localImageName],
             "inspect image metadata",
             imageName,
             cancellationToken).ConfigureAwait(false);

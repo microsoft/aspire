@@ -98,10 +98,9 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime, ICont
     public virtual Task<string> InspectImageConfigAsync(string imageName, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(imageName);
-        var escapedImageName = EscapeArgument(imageName);
 
         return ExecuteContainerCommandForOutputAsync(
-            $"image inspect \"{escapedImageName}\" --format \"{{{{json .Config}}}}\"",
+            ["image", "inspect", imageName, "--format", "{{json .Config}}"],
             "inspect image config",
             imageName,
             cancellationToken);
@@ -110,10 +109,9 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime, ICont
     public virtual Task<string> InspectImageManifestAsync(string imageName, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(imageName);
-        var escapedImageName = EscapeArgument(imageName);
 
         return ExecuteContainerCommandForOutputAsync(
-            $"manifest inspect --verbose \"{escapedImageName}\"",
+            ["manifest", "inspect", "--verbose", imageName],
             "inspect image manifest",
             imageName,
             cancellationToken);
@@ -356,8 +354,32 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime, ICont
             stdout.Add(output);
             _logger.LogDebug("{RuntimeName} (stdout): {Output}", RuntimeExecutable, output);
         });
+        return await ExecuteContainerCommandForOutputAsync(spec, stdout, operationName, imageName, cancellationToken).ConfigureAwait(false);
+    }
 
-        _logger.LogDebug("Running {RuntimeName} with arguments: {ArgumentList}", Name, spec.Arguments);
+    protected async Task<string> ExecuteContainerCommandForOutputAsync(
+        IReadOnlyList<string> argumentList,
+        string operationName,
+        string imageName,
+        CancellationToken cancellationToken)
+    {
+        var stdout = new List<string>();
+        var spec = CreateProcessSpec(argumentList, retainOutput: true, onOutputData: output =>
+        {
+            stdout.Add(output);
+            _logger.LogDebug("{RuntimeName} (stdout): {Output}", RuntimeExecutable, output);
+        });
+        return await ExecuteContainerCommandForOutputAsync(spec, stdout, operationName, imageName, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<string> ExecuteContainerCommandForOutputAsync(
+        ProcessSpec spec,
+        List<string> stdout,
+        string operationName,
+        string imageName,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogDebug("Running {RuntimeName} with arguments: {ArgumentList}", Name, spec.ArgumentList ?? (object?)spec.Arguments);
         var (pendingProcessResult, processDisposable) = _processRunner.Run(spec);
 
         ProcessResult processResult;
@@ -380,9 +402,24 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime, ICont
 
     private ProcessSpec CreateProcessSpec(string arguments, bool retainOutput = false, Action<string>? onOutputData = null)
     {
+        return CreateProcessSpecCore(arguments, argumentList: null, retainOutput, onOutputData);
+    }
+
+    private ProcessSpec CreateProcessSpec(IReadOnlyList<string> argumentList, bool retainOutput = false, Action<string>? onOutputData = null)
+    {
+        return CreateProcessSpecCore(arguments: null, argumentList, retainOutput, onOutputData);
+    }
+
+    private ProcessSpec CreateProcessSpecCore(
+        string? arguments,
+        IReadOnlyList<string>? argumentList,
+        bool retainOutput,
+        Action<string>? onOutputData)
+    {
         return new ProcessSpec(RuntimeExecutable)
         {
             Arguments = arguments,
+            ArgumentList = argumentList,
             RetainedOutputLineCount = retainOutput ? ProcessSpec.DefaultRetainedOutputLineCount : null,
             OnOutputData = onOutputData ?? (output =>
             {
