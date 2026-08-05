@@ -57,7 +57,7 @@ const publishedApi = await api.publishAsAzureSandbox(sandboxes, {
     endpoints: [
         {
             name: "http",
-            anonymous: true
+            anonymous: false
         }
     ]
 });
