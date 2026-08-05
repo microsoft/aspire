@@ -98,7 +98,7 @@ public class ContainerRuntimeBaseTests
         {
             return ExecuteContainerCommandForOutputAsync(
                 OperatingSystem.IsWindows()
-                    ? "/c \"echo stdout-only & echo stderr-line 1>&2\""
+                    ? "/c \"echo stdout-only& echo stderr-line 1>&2\""
                     : "-c \"echo stdout-only; echo stderr-line 1>&2\"",
                 "test output",
                 "test-image",
