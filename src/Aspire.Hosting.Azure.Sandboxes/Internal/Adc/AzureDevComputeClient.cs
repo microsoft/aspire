@@ -229,7 +229,7 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
                 continue;
             }
 
-            if (!ShouldRetry(response.StatusCode) || attempt >= MaxRetryCount)
+            if (!ShouldRetry(method, response.StatusCode) || attempt >= MaxRetryCount)
             {
                 return response;
             }
@@ -241,10 +241,10 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
         }
     }
 
-    private static bool ShouldRetry(HttpStatusCode statusCode) =>
+    private static bool ShouldRetry(HttpMethod method, HttpStatusCode statusCode) =>
         statusCode == HttpStatusCode.Forbidden ||
         statusCode == HttpStatusCode.TooManyRequests ||
-        (int)statusCode >= 500;
+        ((int)statusCode >= 500 && CanRetryAfterNetworkFailure(method));
 
     private static bool CanRetryAfterNetworkFailure(HttpMethod method) =>
         method == HttpMethod.Get ||
