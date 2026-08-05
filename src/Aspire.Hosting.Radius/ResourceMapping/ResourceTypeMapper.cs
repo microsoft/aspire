@@ -183,6 +183,23 @@ internal sealed class ResourceTypeMapper
     }
 
     /// <summary>
+    /// The Radius type each backing-resource mapping actually emits — the legacy fallback when one
+    /// is configured, otherwise the <c>Radius.*</c> type — paired with the mapping key it came from.
+    /// </summary>
+    /// <remarks>
+    /// Exists so <c>RadiusBackingConnections</c>'s schema table can be asserted total over this
+    /// classification. Without that assertion, adding a mapping (or dropping a
+    /// <see cref="RadiusTypeMapping.LegacyFallbackType"/>) would leave the new emitted type without
+    /// a schema, and the publisher would fall back to routing Aspire's locally-generated password
+    /// into the deployed connection string — the defect
+    /// <see href="https://github.com/microsoft/aspire/issues/18935"/> describes.
+    /// </remarks>
+    internal static IEnumerable<(string MappingKey, string EmittedType)> GetEmittedBackingTypes() =>
+        s_typeMappings
+            .Where(static kvp => !string.Equals(kvp.Value.RadiusType, RadiusResourceTypes.Containers, StringComparison.Ordinal))
+            .Select(static kvp => (kvp.Key, kvp.Value.LegacyFallbackType ?? kvp.Value.RadiusType));
+
+    /// <summary>
     /// Gets the key used to look up the type mapping. Walks the type hierarchy to find the
     /// most specific match (e.g., <c>RedisResource</c> inherits from <c>ContainerResource</c>
     /// but should match as Redis).
