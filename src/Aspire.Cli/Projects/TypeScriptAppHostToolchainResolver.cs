@@ -28,6 +28,7 @@ internal static class TypeScriptAppHostToolchainResolver
     private const string YarnConfigFileName = ".yarnrc.yml";
     private const string PackageLockFileName = "package-lock.json";
     private const string PnpmLockFileName = "pnpm-lock.yaml";
+    // Disposable incremental compiler state used to speed up subsequent type checks.
     private const string TypeCheckTsBuildInfoFileName = "./node_modules/.tmp/tsconfig.apphost.typecheck.tsbuildinfo";
 
     public static bool IsTypeScriptLanguage(LanguageInfo? language)
