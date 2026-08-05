@@ -389,11 +389,19 @@ internal sealed class GuestRuntime
         return result.ToArray();
     }
 
-    private static string? GetCompiledAppHostFilePath(FileInfo? appHostFile) =>
-        appHostFile is null
-            ? null
-            : Path.Combine(
-                appHostFile.DirectoryName!,
-                CompiledAppHostOutputDirectory,
-                Path.ChangeExtension(appHostFile.Name, appHostFile.Extension.Equals(".mts", StringComparison.OrdinalIgnoreCase) ? ".mjs" : ".js"));
+    private static string? GetCompiledAppHostFilePath(FileInfo? appHostFile)
+    {
+        if (appHostFile is null)
+        {
+            return null;
+        }
+
+        var compiledFileName = Path.ChangeExtension(appHostFile.Name, appHostFile.Extension.Equals(".mts", StringComparison.OrdinalIgnoreCase) ? ".mjs" : ".js");
+
+        // Combine the compiled output directory and file name as a single forward-slash relative path
+        // before joining it to the app host's directory. Passing them as separate Path.Combine segments
+        // would insert a platform-specific separator (e.g. '\' on Windows) between every segment, producing
+        // a path with mixed separators that doesn't match the forward-slash-only relative path callers expect.
+        return Path.Combine(appHostFile.DirectoryName!, $"{CompiledAppHostOutputDirectory}/{compiledFileName}");
+    }
 }
