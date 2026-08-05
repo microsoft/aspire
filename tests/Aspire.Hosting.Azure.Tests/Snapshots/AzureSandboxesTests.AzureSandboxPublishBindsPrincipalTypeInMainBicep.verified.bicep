@@ -13,21 +13,20 @@ resource rg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
   location: location
 }
 
-module included_storage 'included-storage/included-storage.bicep' = {
-  name: 'included-storage'
+module sandboxes_acr 'sandboxes-acr/sandboxes-acr.bicep' = {
+  name: 'sandboxes-acr'
   scope: rg
   params: {
     location: location
   }
 }
 
-module included_storage_roles 'included-storage-roles/included-storage-roles.bicep' = {
-  name: 'included-storage-roles'
+module sandboxes 'sandboxes/sandboxes.bicep' = {
+  name: 'sandboxes'
   scope: rg
   params: {
     location: location
-    included_storage_outputs_name: included_storage.outputs.name
+    userPrincipalId: principalId
     principalType: principalType
-    principalId: principalId
   }
 }

@@ -76,7 +76,7 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
             return steps;
         }));
 
-        Annotations.Add(new PipelineConfigurationAnnotation(context =>
+        Annotations.Add(new PipelineConfigurationAnnotation(async context =>
         {
             foreach (var computeResource in context.Model.GetComputeResources())
             {
@@ -89,7 +89,7 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
 
                 foreach (var annotation in annotations)
                 {
-                    annotation.Callback(context);
+                    await annotation.Callback(context).ConfigureAwait(false);
                 }
             }
         }));
@@ -174,6 +174,23 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
                 continue;
             }
 
+            if (resource.TryGetLastAnnotation<AppIdentityAnnotation>(out var appIdentity))
+            {
+                if (appIdentity.IdentityResource is not AzureUserAssignedIdentityResource userAssignedIdentity)
+                {
+                    throw new NotSupportedException(
+                        $"Compute resource '{resource.Name}' uses an application identity type that Azure sandboxes do not support.");
+                }
+
+                if (this.IsExisting())
+                {
+                    throw new InvalidOperationException(
+                        $"Compute resource '{resource.Name}' uses managed identity '{userAssignedIdentity.Name}', but existing Azure sandbox group '{Name}' is read-only. Attach the identity to the existing sandbox group outside Aspire before deploying.");
+                }
+
+                AddUserAssignedIdentity(userAssignedIdentity);
+            }
+
             resource.Annotations.Add(new ContainerBuildOptionsCallbackAnnotation(static buildOptions =>
             {
                 // ADC requires a single Docker-format linux/amd64 manifest. Buildx's default OCI
@@ -187,14 +204,13 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
             var sandboxContainer = new AzureSandboxContainerResource(
                 $"{resource.Name}-sandbox-container",
                 resource,
-                this,
-                autoSuspend: false);
+                this);
 
             sandboxContainer.Annotations.Add(ManifestPublishingCallbackAnnotation.Ignore);
             sandboxContainer.Annotations.Add(new PipelineStepAnnotation(_ => AzureSandboxContainerDeployment.CreatePipelineSteps(sandboxContainer)));
-            sandboxContainer.Annotations.Add(new PipelineConfigurationAnnotation(context =>
+            sandboxContainer.Annotations.Add(new PipelineConfigurationAnnotation(async context =>
             {
-                AzureSandboxContainerDeployment.ConfigureDeployOrdering(context, sandboxContainer);
+                await AzureSandboxContainerDeployment.ConfigureDeployOrderingAsync(context, sandboxContainer).ConfigureAwait(false);
                 AzureSandboxContainerDeployment.ConfigureDestroyOrdering(context, sandboxContainer);
             }));
 
@@ -267,5 +283,22 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
         }
 
         return DefaultContainerRegistry;
+    }
+
+    internal void AddUserAssignedIdentity(AzureUserAssignedIdentityResource identity)
+    {
+        ArgumentNullException.ThrowIfNull(identity);
+        if (UserAssignedIdentities.Contains(identity))
+        {
+            return;
+        }
+
+        UserAssignedIdentities.Add(identity);
+        ManagedIdentityType = ManagedIdentityType switch
+        {
+            ManagedServiceIdentityType.None => ManagedServiceIdentityType.UserAssigned,
+            ManagedServiceIdentityType.SystemAssigned => ManagedServiceIdentityType.SystemAssignedUserAssigned,
+            _ => ManagedIdentityType
+        };
     }
 }

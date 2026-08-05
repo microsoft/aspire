@@ -12,8 +12,7 @@ internal sealed class AzureSandboxContainerResource : Resource, IResourceWithPar
     public AzureSandboxContainerResource(
         string name,
         IResource targetResource,
-        AzureSandboxGroupResource parent,
-        bool autoSuspend)
+        AzureSandboxGroupResource parent)
         : base(name)
     {
         ArgumentNullException.ThrowIfNull(targetResource);
@@ -21,12 +20,10 @@ internal sealed class AzureSandboxContainerResource : Resource, IResourceWithPar
 
         TargetResource = targetResource;
         Parent = parent;
-        AutoSuspend = autoSuspend;
     }
 
     public IResource TargetResource { get; }
 
     public AzureSandboxGroupResource Parent { get; }
 
-    public bool AutoSuspend { get; }
 }

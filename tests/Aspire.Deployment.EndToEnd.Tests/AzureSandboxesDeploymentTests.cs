@@ -35,8 +35,7 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
         if (DeploymentE2ETestHelpers.IsRunningInCI &&
             !string.Equals(Environment.GetEnvironmentVariable(EnableSandboxesEnvironmentVariable), "true", StringComparison.OrdinalIgnoreCase))
         {
-            output.WriteLine($"Azure sandboxes deployment tests are disabled. Set {EnableSandboxesEnvironmentVariable}=true for the deployment-testing environment to enable them.");
-            return;
+            Assert.Skip($"Azure sandboxes deployment tests require preview enrollment and are disabled for this deployment environment. Set {EnableSandboxesEnvironmentVariable}=true only after the environment has the required sandbox preview access and role assignments.");
         }
 
         var subscriptionId = AzureAuthenticationHelpers.TryGetSubscriptionId();
