@@ -36,6 +36,7 @@ public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning
     public Dictionary<string, BuildImageSecretValue>? CapturedBuildSecrets { get; private set; }
     public string? CapturedStage { get; private set; }
     public Func<string, string, ContainerImageBuildOptions?, Dictionary<string, string?>, Dictionary<string, BuildImageSecretValue>, string?, CancellationToken, Task>? BuildImageAsyncCallback { get; set; }
+    public Func<string, CancellationToken, Task<string>>? InspectImageManifestAsyncCallback { get; set; }
 
     public Task<bool> CheckIfRunningAsync(CancellationToken cancellationToken)
     {
@@ -129,6 +130,11 @@ public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning
         if (shouldFail)
         {
             throw new InvalidOperationException("Fake container runtime is configured to fail");
+        }
+
+        if (InspectImageManifestAsyncCallback is not null)
+        {
+            return InspectImageManifestAsyncCallback(imageName, cancellationToken);
         }
 
         return Task.FromResult("{}");

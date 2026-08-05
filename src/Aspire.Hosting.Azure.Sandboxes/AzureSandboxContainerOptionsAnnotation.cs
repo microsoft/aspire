@@ -69,6 +69,7 @@ public sealed class AzureSandboxOptions
 /// <summary>
 /// Azure Container Apps sandbox resource tiers.
 /// </summary>
+[Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public enum AzureSandboxTier
 {
     /// <summary>0.25 vCPU, 0.5 GiB memory, and 20 GiB disk.</summary>

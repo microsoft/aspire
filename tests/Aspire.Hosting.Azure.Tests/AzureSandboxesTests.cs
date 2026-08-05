@@ -15,6 +15,7 @@ using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
+using Aspire.Hosting.Tests.Publishing;
 using Aspire.Hosting.Utils;
 using Azure.Core;
 using Microsoft.Extensions.DependencyInjection;
@@ -883,11 +884,90 @@ public class AzureSandboxesTests
 
         Assert.Equal("example.azurecr.io/site@sha256:amd64", verboseReference);
 
+        var pinnedIndexReference = AzureSandboxContainerDeployment.ResolveLinuxAmd64ManifestReference(
+            """
+            {
+              "manifests": [
+                {
+                  "digest": "sha256:linux-amd64",
+                  "platform": { "os": "linux", "architecture": "amd64" }
+                },
+                {
+                  "digest": "sha256:linux-arm64",
+                  "platform": { "os": "linux", "architecture": "arm64" }
+                }
+              ]
+            }
+            """,
+            "example.azurecr.io/site@sha256:index");
+
+        Assert.Equal("example.azurecr.io/site@sha256:linux-amd64", pinnedIndexReference);
+
+        var pinnedManifestReference = AzureSandboxContainerDeployment.ResolveLinuxAmd64ManifestReference(
+            """
+            {
+              "Descriptor": {
+                "digest": "sha256:linux-amd64",
+                "platform": { "os": "linux", "architecture": "amd64" }
+              }
+            }
+            """,
+            "example.azurecr.io/site@sha256:linux-amd64");
+
+        Assert.Equal("example.azurecr.io/site@sha256:linux-amd64", pinnedManifestReference);
+
+        var incompatiblePlatformException = Assert.Throws<InvalidOperationException>(() =>
+            AzureSandboxContainerDeployment.ResolveLinuxAmd64ManifestReference(
+                """
+                {
+                  "Descriptor": {
+                    "digest": "sha256:windows-amd64",
+                    "platform": { "os": "windows", "architecture": "amd64" }
+                  }
+                }
+                """,
+                "example.azurecr.io/site@sha256:windows-amd64"));
+        Assert.Contains("require linux/amd64", incompatiblePlatformException.Message);
+
+        var unverifiablePlatformException = Assert.Throws<InvalidOperationException>(() =>
+            AzureSandboxContainerDeployment.ResolveLinuxAmd64ManifestReference(
+                """{ "Descriptor": { "digest": "sha256:unknown" } }""",
+                "example.azurecr.io/site@sha256:unknown"));
+        Assert.Contains("platform could not be verified", unverifiablePlatformException.Message);
+
         var exception = Assert.Throws<InvalidOperationException>(() =>
             AzureSandboxContainerDeployment.ResolveLinuxAmd64ManifestReference(
                 """{ "schemaVersion": 2 }""",
                 "example.azurecr.io/site:latest"));
         Assert.Contains("mutable", exception.Message);
+    }
+
+    [Fact]
+    public async Task DigestPinnedSandboxImageReferencesAreInspected()
+    {
+        var runtime = new FakeContainerRuntime
+        {
+            InspectImageManifestAsyncCallback = static (_, _) => Task.FromResult(
+                """
+                {
+                  "manifests": [
+                    {
+                      "digest": "sha256:linux-amd64",
+                      "platform": { "os": "linux", "architecture": "amd64" }
+                    }
+                  ]
+                }
+                """)
+        };
+
+        var reference = await AzureSandboxContainerDeployment.ResolveContainerImageReferenceForDiskImageAsync(
+            runtime,
+            "example.azurecr.io/site@sha256:index",
+            CancellationToken.None);
+
+        Assert.True(runtime.WasInspectImageManifestCalled);
+        Assert.Equal(["example.azurecr.io/site@sha256:index"], runtime.InspectImageManifestCalls);
+        Assert.Equal("example.azurecr.io/site@sha256:linux-amd64", reference);
     }
 
     [Fact]
