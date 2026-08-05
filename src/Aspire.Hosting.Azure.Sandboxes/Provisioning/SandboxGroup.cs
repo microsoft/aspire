@@ -11,6 +11,13 @@ namespace Aspire.Hosting.Azure.Sandboxes.Provisioning;
 internal sealed class SandboxGroup(string bicepIdentifier, string? resourceVersion = null)
     : ProvisionableResource(bicepIdentifier, "Microsoft.App/sandboxGroups", resourceVersion ?? SandboxesResourceVersions.SandboxGroup)
 {
+    // Sandbox Group names are 1-63 characters and allow letters, numbers, and interior hyphens:
+    // https://learn.microsoft.com/rest/api/container-instances/sandbox-groups/create-or-update
+    private static readonly ResourceNameRequirements s_nameRequirements = new(
+        minLength: 1,
+        maxLength: 63,
+        validCharacters: ResourceNameCharacters.Alphanumeric | ResourceNameCharacters.Hyphen);
+
     public BicepValue<ResourceIdentifier> Id
     {
         get { Initialize(); return _id!; }
@@ -63,4 +70,6 @@ internal sealed class SandboxGroup(string bicepIdentifier, string? resourceVersi
         _identity = DefineModelProperty<ManagedServiceIdentity>(nameof(Identity), ["identity"]);
         _tags = DefineDictionaryProperty<string>(nameof(Tags), ["tags"]);
     }
+
+    public override ResourceNameRequirements GetResourceNameRequirements() => s_nameRequirements;
 }
