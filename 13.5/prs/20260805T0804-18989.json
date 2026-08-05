@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Performance improvement - lazy initialization of dashboard menus reduces overhead when many menus are displayed",
+  "mergedAt": "2026-08-05T08:04:37Z",
+  "number": 18989,
+  "runDate": "2026-08-05T12:34:18Z",
+  "status": "included",
+  "title": "Lazily initialize dashboard menus"
+}
