@@ -7,7 +7,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.DevTunnels;
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 internal sealed class DevTunnelHealthCheck(
     IDevTunnelClient devTunnelClient,
     LoggedOutNotificationManager loggedOutNotificationManager,
@@ -76,4 +75,3 @@ internal sealed class DevTunnelHealthCheck(
         }
     }
 }
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

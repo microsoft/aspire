@@ -6,50 +6,10 @@ import { extensionLogOutputChannel } from './logging';
 import { resolveCliPath } from './cliPath';
 import { AppHostDiscoveryService, AppHostProjectSearchResult, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult } from './appHostDiscovery';
 import type { AppHostCandidate } from './appHostDiscovery';
+import { sendTelemetryEvent } from './telemetry';
+import { getCommonExcludeGlob } from './workspaceFileSearch';
 
-/**
- * Common file patterns to exclude from workspace file searches.
- * These patterns match typical build outputs, dependencies, and generated files
- * that should not be searched when looking for Aspire configuration files.
- */
-const commonExcludePatterns = [
-    // Build outputs
-    '**/artifacts/**',
-    '**/[Bb]in/**',
-    '**/[Oo]bj/**',
-    '**/[Dd]ebug/**',
-    '**/[Rr]elease/**',
-    '**/dist/**',
-    '**/out/**',
-    '**/build/**',
-    '**/target/**',
-    '**/publish/**',
-
-    // Dependencies
-    '**/node_modules/**',
-    '**/.venv/**',
-    '**/packages/**',
-
-    // IDE/Tool directories
-    '**/.vs/**',
-    '**/.vscode-test/**',
-    '**/.worktrees/**',
-    '**/.idea/**',
-    '**/.git/**',
-
-    // Generated/Cache
-    '**/.angular/**',
-    '**/.aspire/modules/**',
-    '**/.azurite/**',
-];
-
-/**
- * Returns a glob pattern suitable for use as an exclude pattern in vscode.workspace.findFiles.
- * This excludes common build outputs, dependencies, and generated directories.
- */
-export function getCommonExcludeGlob(): string {
-    return `{${commonExcludePatterns.join(',')}}`;
-}
+export { getCommonExcludeGlob } from './workspaceFileSearch';
 
 /**
  * Searches for Aspire configuration files in the workspace, excluding common build output
@@ -296,9 +256,17 @@ async function promptToAddAppHostPathToSettingsFile(result: AppHostProjectSearch
  * If not available, shows a message prompting to open Aspire CLI installation steps.
  * @returns An object containing the CLI path to use and whether CLI is available
  */
-export async function checkCliAvailableOrRedirect(): Promise<{ cliPath: string; available: boolean }> {
+export async function checkCliAvailableOrRedirect(operation: 'command_gate' | 'debug_gate'): Promise<{ cliPath: string; available: boolean }> {
     // Resolve CLI path fresh each time — settings or PATH may have changed
+    const startTime = Date.now();
     const result = await resolveCliPath();
+    sendTelemetryEvent('aspire/vscode/cli/availability', {
+        available: result.available ? 'true' : 'false',
+        source: result.source,
+        operation,
+    }, {
+        duration_ms: Date.now() - startTime,
+    });
 
     if (result.available) {
         // Show informational message if CLI was found at default path (not on PATH)

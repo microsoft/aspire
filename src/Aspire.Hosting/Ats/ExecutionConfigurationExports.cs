@@ -114,7 +114,8 @@ internal static class ExecutionConfigurationExports
                 KeyPathExpression = string.Empty,
                 PfxPathExpression = string.Empty,
                 IsKeyPathReferenced = false,
-                IsPfxPathReferenced = false
+                IsPfxPathReferenced = false,
+                IsCertificateWithKeyPathReferenced = false,
             };
         }
 
@@ -126,6 +127,7 @@ internal static class ExecutionConfigurationExports
             PfxPathExpression = additionalData.PfxPathReference.ValueExpression,
             IsKeyPathReferenced = additionalData.IsKeyPathReferenced,
             IsPfxPathReferenced = additionalData.IsPfxPathReferenced,
+            IsCertificateWithKeyPathReferenced = additionalData.IsCertificateWithKeyPathReferenced,
             Password = additionalData.Password
         };
     }
@@ -216,6 +218,11 @@ internal sealed class HttpsCertificateExecutionConfigurationExportData
     /// Indicates whether the key path was referenced.
     /// </summary>
     public required bool IsKeyPathReferenced { get; init; }
+
+    /// <summary>
+    /// Indicates whether the key path was referenced.
+    /// </summary>
+    public required bool IsCertificateWithKeyPathReferenced { get; init; }
 
     /// <summary>
     /// Indicates whether the PFX path was referenced.

@@ -7,6 +7,7 @@ using Aspire.Cli.Packaging;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Shared;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Mcp;
 
@@ -24,7 +25,7 @@ internal static class MockPackagingServiceFactory
                     GetIntegrationPackagesAsyncCallback = (_, _, _, _) =>
                         Task.FromResult<IEnumerable<NuGetPackageCli>>(packages)
                 };
-                return Task.FromResult<IEnumerable<PackageChannel>>([PackageChannel.CreateImplicitChannel(cache, new TestFeatures())]);
+                return Task.FromResult<IEnumerable<PackageChannel>>([PackageChannel.CreateImplicitChannel(cache, new TestFeatures(), NullLogger.Instance)]);
             }
         };
     }

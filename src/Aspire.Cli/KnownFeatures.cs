@@ -31,6 +31,7 @@ internal static class KnownFeatures
     public static string NuGetSignatureVerificationEnabled => "nugetSignatureVerificationEnabled";
     public static string AspireSkillsRemoteFetchEnabled => "aspireSkillsRemoteFetchEnabled";
     public static string TypeScriptAppHostCompiledRunner => "typescriptAppHostCompiledRunner";
+    public static string TerminalCommandsEnabled => "terminalCommandsEnabled";
 
     private static readonly Dictionary<string, FeatureMetadata> s_featureMetadata = new()
     {
@@ -91,7 +92,12 @@ internal static class KnownFeatures
 
         [TypeScriptAppHostCompiledRunner] = new(
             TypeScriptAppHostCompiledRunner,
-            "Use tsgo emitted JavaScript to run TypeScript AppHosts instead of tsx",
+            "Use TypeScript emitted JavaScript to run TypeScript AppHosts instead of tsx",
+            DefaultValue: false),
+
+        [TerminalCommandsEnabled] = new(
+            TerminalCommandsEnabled,
+            "(Experimental) Enable the 'aspire terminal' command group ('aspire terminal ps', 'aspire terminal attach'). Used in conjunction with the experimental WithTerminal() API (ASPIRETERMINAL001). Hidden by default while the API surface is in preview.",
             DefaultValue: false)
     };
 

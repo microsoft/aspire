@@ -45,7 +45,7 @@ internal sealed class LsCommand : BaseCommand
         ConsoleEnvironment consoleEnvironment,
         ProfilingTelemetry profilingTelemetry,
         CommonCommandServices services,
-        TimeProvider? timeProvider = null)
+        TimeProvider timeProvider)
         : base("ls", SharedCommandStrings.LsCommandDescription, services)
     {
         _projectLocator = projectLocator;
@@ -53,7 +53,7 @@ internal sealed class LsCommand : BaseCommand
         _hostEnvironment = hostEnvironment;
         _consoleEnvironment = consoleEnvironment;
         _profilingTelemetry = profilingTelemetry;
-        _timeProvider = timeProvider ?? TimeProvider.System;
+        _timeProvider = timeProvider;
 
         Options.Add(s_formatOption);
         Options.Add(s_allOption);

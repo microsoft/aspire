@@ -4,7 +4,7 @@
 # 1. Creates a Git tag for the release
 # 2. Creates a GitHub Release with release notes
 # 3. Creates a PR to merge release branch back to main
-# 4. Creates a PR to update PackageValidationBaselineVersion
+# 4. Creates a branch/PR to update PackageValidationBaselineVersion
 #
 # Designed for idempotency - safe to re-run after partial failures.
 #
@@ -63,6 +63,11 @@ on:
         default: false
       skip_baseline_pr:
         description: 'Skip baseline version PR creation (set true if already completed)'
+        required: false
+        type: boolean
+        default: false
+      defer_baseline_pr:
+        description: 'Create the baseline branch but defer PR creation to a later workflow'
         required: false
         type: boolean
         default: false
@@ -154,6 +159,7 @@ jobs:
           echo "Skip GitHub Release: ${{ inputs.skip_github_release }}"
           echo "Skip Merge PR: ${{ inputs.skip_merge_pr }}"
           echo "Skip Baseline PR: ${{ inputs.skip_baseline_pr }}"
+          echo "Defer Baseline PR: ${{ inputs.defer_baseline_pr }}"
           echo "==================================="
 
           if [ "${{ inputs.dry_run }}" == "true" ]; then
@@ -416,7 +422,7 @@ jobs:
   # baseline-pr: runs in parallel with merge-pr after the release job.
   # ----------------------------------------------------------------------------
   baseline-pr:
-    name: Create Baseline Version PR
+    name: Create Baseline Version Branch/PR
     needs: release
     if: inputs.skip_baseline_pr != true && inputs.is_prerelease != true
     runs-on: ubuntu-latest
@@ -441,7 +447,7 @@ jobs:
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
 
-      - name: Check for Existing Baseline PR
+      - name: Check for Existing Baseline Branch and PR
         id: check-baseline-pr
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -458,8 +464,23 @@ jobs:
             echo "pr_exists=false" >> $GITHUB_OUTPUT
           fi
 
+          if git ls-remote --exit-code --heads origin "$BRANCH_NAME" >/dev/null; then
+            echo "✓ Baseline update branch already exists: $BRANCH_NAME"
+            echo "branch_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "No existing baseline update branch found"
+            echo "branch_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout Existing Baseline Branch
+        if: steps.check-baseline-pr.outputs.pr_exists != 'true' && steps.check-baseline-pr.outputs.branch_exists == 'true' && inputs.dry_run != true
+        run: |
+          BRANCH_NAME="update-baseline-${{ inputs.release_version }}"
+          git fetch origin "$BRANCH_NAME:$BRANCH_NAME"
+          git checkout "$BRANCH_NAME"
+
       - name: Update PackageValidationBaselineVersion
-        if: steps.check-baseline-pr.outputs.pr_exists != 'true'
+        if: steps.check-baseline-pr.outputs.pr_exists != 'true' && steps.check-baseline-pr.outputs.branch_exists != 'true'
         run: |
           VERSION="${{ inputs.release_version }}"
           FILE="src/Directory.Build.props"
@@ -497,9 +518,14 @@ jobs:
           echo "   ─────────────────────────────────────"
           echo ""
           echo "   Commit message: Update PackageValidationBaselineVersion to $VERSION"
+          if [ "${{ inputs.defer_baseline_pr }}" == "true" ]; then
+            echo "   Note: PR creation is deferred. release-publish-nuget.yml dispatches update-nix-cli-flake.yml later, after CLI release assets are uploaded, to add eng/nix/versions.json and open the PR from this branch."
+          else
+            echo "   Note: release-publish-nuget.yml dispatches update-nix-cli-flake.yml later, after CLI release assets are uploaded, to add eng/nix/versions.json to this same branch."
+          fi
 
       - name: Create Branch and Commit for Baseline PR
-        if: steps.check-baseline-pr.outputs.pr_exists != 'true' && inputs.dry_run != true
+        if: steps.check-baseline-pr.outputs.pr_exists != 'true' && steps.check-baseline-pr.outputs.branch_exists != 'true' && inputs.dry_run != true
         run: |
           BRANCH_NAME="update-baseline-${{ inputs.release_version }}"
           VERSION="${{ inputs.release_version }}"
@@ -514,8 +540,14 @@ jobs:
 
           echo "✓ Created branch: $BRANCH_NAME"
 
+      - name: Baseline PR Deferred
+        if: steps.check-baseline-pr.outputs.pr_exists != 'true' && inputs.defer_baseline_pr == true && inputs.dry_run != true
+        run: |
+          echo "Baseline branch update-baseline-${{ inputs.release_version }} is ready."
+          echo "PR creation is deferred until update-nix-cli-flake.yml commits eng/nix/versions.json to the same branch."
+
       - name: Create Baseline PR
-        if: steps.check-baseline-pr.outputs.pr_exists != 'true' && inputs.dry_run != true
+        if: steps.check-baseline-pr.outputs.pr_exists != 'true' && inputs.defer_baseline_pr != true && inputs.dry_run != true
         uses: ./.github/actions/create-pull-request
         with:
           token: ${{ steps.app-token.outputs.token }}
@@ -527,6 +559,7 @@ jobs:
 
             ## Changes
             - Updated `src/Directory.Build.props` with new baseline version
+            - When the release pipeline also runs the Nix updater, `eng/nix/versions.json` is committed to this same branch after CLI release assets are uploaded
 
             ---
             *Created automatically by the release workflow.*
@@ -612,7 +645,7 @@ jobs:
           |-----|--------|
           | Release Tasks (tag + GitHub release) | ${RELEASE_STATUS} |
           | Create Merge-Back PR | ${MERGE_STATUS} |
-          | Create Baseline Version PR | ${BASELINE_STATUS} |
+          | Create Baseline Version Branch/PR | ${BASELINE_STATUS} |
 
           ## Details
           - **Tag**: v${{ inputs.release_version }}

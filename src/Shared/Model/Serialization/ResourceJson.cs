@@ -243,10 +243,10 @@ internal sealed class ResourceCommandJson
     public string? State { get; set; }
 
     /// <summary>
-    /// The zero-based index at which the command was registered.
+    /// The sort order of the command for display purposes.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public int? RegistrationOrder { get; set; }
+    public int? SortOrder { get; set; }
 
     /// <summary>
     /// The ordered inputs that describe the invocation arguments accepted by the command.

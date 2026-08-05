@@ -1,0 +1,20 @@
+.chart-filter-button-container {
+    display: inline-flex;
+    width: 32px;
+    height: 32px;
+}
+
+.chart-filter-button-container ::deep .chart-filter-button {
+    width: 32px;
+    min-width: 32px;
+    max-width: 32px;
+    height: 32px;
+    flex: 0 0 32px;
+}
+
+.chart-filter-button-container ::deep .chart-filter-button::part(control) {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    padding: 0;
+}

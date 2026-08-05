@@ -18,7 +18,11 @@ public static class AzureResourceExtensions
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <returns>The configured <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// This API only changes the manifest representation; it does not change the resource model used by other publishers.
+    /// </remarks>
     /// <ats-returns>The resource builder.</ats-returns>
+    [Obsolete("PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.")]
     [AspireExport]
     public static IResourceBuilder<T> PublishAsConnectionString<T>(this IResourceBuilder<T> builder)
         where T : IAzureResource, IResourceWithConnectionString

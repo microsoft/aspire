@@ -1,4 +1,4 @@
-# Aspire.Hosting.Kubernetes library
+# Kubernetes hosting integration
 
 Provides publishing extensions to Aspire for Kubernetes.
 
@@ -10,25 +10,38 @@ Provides publishing extensions to Aspire for Kubernetes.
 
 Aspire shells out to `helm upgrade --install` to deploy the generated chart and validates the Helm version up front, so missing or older installs produce a clear actionable error instead of cryptic flag failures.
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire Kubernetes Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.Kubernetes` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Kubernetes
+```bash
+aspire add Aspire.Hosting.Kubernetes
 ```
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add the environment:
+In the AppHost, add the environment:
+
+**C#**
 
 ```csharp
 builder.AddKubernetesEnvironment("k8s");
 ```
 
+**TypeScript**
+
+```typescript
+await builder.addKubernetesEnvironment("k8s");
+```
+
 ```shell
 aspire publish -o k8s-artifacts
 ```
+
+## Additional documentation
+
+https://aspire.dev/integrations/gallery/
+https://aspire.dev/integrations/compute/kubernetes/
 
 ## Feedback & contributing
 

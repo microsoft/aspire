@@ -409,94 +409,6 @@ public class EndpointReferenceTests
     }
 
     [Fact]
-    public async Task GetValueAsync_AllocatesEndpointOnDemandWhenCallerIsUnknown()
-    {
-        var (_, _, expression, allocationCount) = CreateOnDemandEndpointExpression();
-
-        var url = await expression.GetValueAsync(new ValueProviderContext());
-
-        Assert.Equal("http://localhost:8080", url);
-        Assert.Equal(1, allocationCount());
-    }
-
-    [Fact]
-    public async Task GetValueAsync_AllocatesEndpointOnDemandForSelfReference()
-    {
-        var (resource, _, expression, allocationCount) = CreateOnDemandEndpointExpression();
-
-        var url = await expression.GetValueAsync(new ValueProviderContext { Caller = resource, ExecutionContext = CreateExecutionContext() });
-
-        Assert.Equal("http://localhost:8080", url);
-        Assert.Equal(1, allocationCount());
-    }
-
-    [Fact]
-    public async Task GetValueAsync_AllocatesEndpointOnDemandWhenEndpointResourceWaitsOnCaller()
-    {
-        var caller = new TestResource("caller");
-        var (resource, _, expression, allocationCount) = CreateOnDemandEndpointExpression();
-        resource.Annotations.Add(new WaitAnnotation(caller, WaitType.WaitUntilStarted));
-
-        var url = await expression.GetValueAsync(new ValueProviderContext { Caller = caller, ExecutionContext = CreateExecutionContext() });
-
-        Assert.Equal("http://localhost:8080", url);
-        Assert.Equal(1, allocationCount());
-    }
-
-    [Fact]
-    public async Task GetValueAsync_AllocatesEndpointOnDemandWhenEndpointResourceReferencesCaller()
-    {
-        var caller = new TestResource("caller");
-        var (resource, _, expression, allocationCount) = CreateOnDemandEndpointExpression();
-        var callerEndpoint = new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "http", name: "http");
-        caller.Annotations.Add(callerEndpoint);
-        resource.Annotations.Add(new EnvironmentCallbackAnnotation(context =>
-        {
-            context.EnvironmentVariables["CALLER_URL"] = new EndpointReference(caller, callerEndpoint);
-        }));
-
-        var url = await expression.GetValueAsync(new ValueProviderContext { Caller = caller, ExecutionContext = CreateExecutionContext() });
-
-        Assert.Equal("http://localhost:8080", url);
-        Assert.Equal(1, allocationCount());
-    }
-
-    [Fact]
-    public async Task GetValueAsync_AllocatesEndpointOnDemandWhenEndpointResourceTransitivelyDependsOnCaller()
-    {
-        var caller = new TestResource("caller");
-        var intermediate = new TestResource("intermediate");
-        var (resource, _, expression, allocationCount) = CreateOnDemandEndpointExpression();
-
-        resource.Annotations.Add(new WaitAnnotation(intermediate, WaitType.WaitUntilStarted));
-        intermediate.Annotations.Add(new WaitAnnotation(caller, WaitType.WaitUntilStarted));
-
-        var url = await expression.GetValueAsync(new ValueProviderContext { Caller = caller, ExecutionContext = CreateExecutionContext() });
-
-        Assert.Equal("http://localhost:8080", url);
-        Assert.Equal(1, allocationCount());
-    }
-
-    [Fact]
-    public async Task GetValueAsync_WaitsForEndpointAllocationWhenContainerEndpointResourceDoesNotDependOnCaller()
-    {
-        var caller = new TestResource("caller");
-        var (_, annotation, expression, allocationCount) = CreateOnDemandEndpointExpression(isContainerEndpoint: true);
-
-        var getValueTask = expression.GetValueAsync(new ValueProviderContext { Caller = caller, ExecutionContext = CreateExecutionContext() });
-
-        Assert.False(getValueTask.IsCompleted);
-        Assert.Equal(0, allocationCount());
-
-        annotation.AllocatedEndpoint = new AllocatedEndpoint(annotation, "localhost", 8081);
-
-        var url = await getValueTask;
-
-        Assert.Equal("http://localhost:8081", url);
-        Assert.Equal(0, allocationCount());
-    }
-
-    [Fact]
     public void EndpointAnnotation_ThrowsWhenEndpointNameNotDefined_ListsAvailableEndpoints()
     {
         var resource = new TestResource("api-boston");
@@ -561,29 +473,6 @@ public class EndpointReferenceTests
     private sealed class TestResource(string name) : Resource(name), IResourceWithEndpoints
     {
     }
-
-    private static (TestResource Resource, EndpointAnnotation Endpoint, EndpointReferenceExpression Expression, Func<int> AllocationCount) CreateOnDemandEndpointExpression(bool isContainerEndpoint = false)
-    {
-        var resource = new TestResource("test");
-        var annotation = new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "http", name: "http");
-        var allocationCount = 0;
-
-        if (isContainerEndpoint)
-        {
-            resource.Annotations.Add(new ContainerImageAnnotation { Image = "test-image" });
-        }
-
-        resource.Annotations.Add(annotation);
-        resource.Annotations.Add(new OnDemandEndpointAllocationAnnotation((endpoint, networkId) =>
-        {
-            allocationCount++;
-            return new AllocatedEndpoint(endpoint, "localhost", 8080, EndpointBindingMode.SingleAddress, networkId: networkId);
-        }));
-
-        return (resource, annotation, new EndpointReference(resource, annotation).Property(EndpointProperty.Url), () => allocationCount);
-    }
-
-    private static DistributedApplicationExecutionContext CreateExecutionContext() => new(DistributedApplicationOperation.Run);
 
     private struct WithWaitStartedNotification<T>
     {

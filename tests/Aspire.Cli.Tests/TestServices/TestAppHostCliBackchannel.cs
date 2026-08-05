@@ -278,4 +278,16 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
             ]
         };
     }
+
+    public Func<string, string, CancellationToken, Task<UploadFileResponse>>? UploadFileAsyncCallback { get; set; }
+
+    public async Task<UploadFileResponse> UploadFileAsync(string filePath, string fileName, CancellationToken cancellationToken)
+    {
+        if (UploadFileAsyncCallback is not null)
+        {
+            return await UploadFileAsyncCallback(filePath, fileName, cancellationToken).ConfigureAwait(false);
+        }
+
+        return new UploadFileResponse { FileId = Guid.NewGuid().ToString("N") };
+    }
 }

@@ -23,20 +23,20 @@ public class ConformanceTests : ConformanceTests<TestDbContext, MicrosoftEntityF
     // https://github.com/open-telemetry/opentelemetry-dotnet/blob/031ed48714e16ba4a5b099b6e14647994a0b9c1b/src/OpenTelemetry.Instrumentation.SqlClient/Implementation/SqlActivitySourceHelper.cs#L31
     protected override string ActivitySourceName => "OpenTelemetry.Instrumentation.SqlClient";
 
-    protected override string[] RequiredLogCategories => new string[]
-    {
-        "Microsoft.EntityFrameworkCore.Infrastructure",
-        "Microsoft.EntityFrameworkCore.ChangeTracking",
-        "Microsoft.EntityFrameworkCore.Infrastructure",
-        "Microsoft.EntityFrameworkCore.Database.Command",
-        "Microsoft.EntityFrameworkCore.Query",
-        "Microsoft.EntityFrameworkCore.Database.Transaction",
-        "Microsoft.EntityFrameworkCore.Database.Connection",
-        "Microsoft.EntityFrameworkCore.Model",
-        "Microsoft.EntityFrameworkCore.Model.Validation",
-        "Microsoft.EntityFrameworkCore.Update",
-        "Microsoft.EntityFrameworkCore.Migrations"
-    };
+    protected override RequiredLogCategory[] RequiredLogCategories =>
+    [
+        new("Microsoft.EntityFrameworkCore.Infrastructure"),
+        new("Microsoft.EntityFrameworkCore.ChangeTracking"),
+        new("Microsoft.EntityFrameworkCore.Infrastructure"),
+        new("Microsoft.EntityFrameworkCore.Database.Command"),
+        new("Microsoft.EntityFrameworkCore.Query"),
+        new("Microsoft.EntityFrameworkCore.Database.Transaction"),
+        new("Microsoft.EntityFrameworkCore.Database.Connection"),
+        new("Microsoft.EntityFrameworkCore.Model"),
+        new("Microsoft.EntityFrameworkCore.Model.Validation"),
+        new("Microsoft.EntityFrameworkCore.Update"),
+        new("Microsoft.EntityFrameworkCore.Migrations"),
+    ];
 
     protected override string ValidJsonConfig => """
         {

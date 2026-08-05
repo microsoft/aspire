@@ -29,13 +29,13 @@ internal interface IExtensionRpcTarget
     Task<string[]> GetCliCapabilitiesAsync();
 }
 
-internal class ExtensionRpcTarget(IConfiguration configuration) : IExtensionRpcTarget
+internal class ExtensionRpcTarget(IConfiguration configuration, CliExecutionContext executionContext) : IExtensionRpcTarget
 {
     public Func<string, ValidationResult>? ValidationFunction { get; set; }
 
     public Task<string> GetCliVersionAsync()
     {
-        return Task.FromResult(VersionHelper.GetDefaultTemplateVersion());
+        return Task.FromResult(executionContext.IdentityVersion);
     }
 
     public Task<ValidationResult?> ValidatePromptInputStringAsync(string input)

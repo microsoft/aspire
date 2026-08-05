@@ -134,6 +134,41 @@ public class RedisFunctionalTests(ITestOutputHelper testOutputHelper)
 
     [Fact]
     [RequiresFeature(TestFeature.Docker)]
+    public async Task WithModuleLoadsNativeModule()
+    {
+        var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+
+        var redis = builder.AddRedis("redis")
+            .WithModule(RedisModules.Json);
+
+        using var app = builder.Build();
+
+        await app.StartAsync(cts.Token);
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(redis.Resource.Name, cts.Token);
+
+        var hb = Host.CreateApplicationBuilder();
+        hb.AddTestLogging(testOutputHelper);
+
+        hb.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [$"ConnectionStrings:{redis.Resource.Name}"] = $"{await redis.Resource.GetConnectionStringAsync()},allowAdmin=true"
+        });
+
+        hb.AddRedisClient(redis.Resource.Name);
+
+        using var host = hb.Build();
+
+        await host.StartAsync(cts.Token);
+
+        var redisClient = host.Services.GetRequiredService<IConnectionMultiplexer>();
+        var modules = await redisClient.GetDatabase().ExecuteAsync("MODULE", "LIST");
+
+        Assert.Contains(GetModuleNames(modules), static name => string.Equals(name, "ReJSON", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task VerifyWithRedisInsightImportDatabases()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
@@ -601,6 +636,24 @@ public class RedisFunctionalTests(ITestOutputHelper testOutputHelper)
         response.EnsureSuccessStatusCode();
 
         await EnsureRedisInsightEulaAccepted(client, ct);
+    }
+
+    private static IEnumerable<string> GetModuleNames(RedisResult modules)
+    {
+        // Redis returns MODULE LIST as an array of name/value arrays:
+        //   1) 1) "name" 2) "ReJSON" 3) "ver" 4) (integer) 80209 ...
+        foreach (var module in (RedisResult[]?)modules ?? [])
+        {
+            var values = (RedisResult[]?)module ?? [];
+
+            for (var i = 0; i < values.Length - 1; i += 2)
+            {
+                if ((string?)values[i] == "name" && (string?)values[i + 1] is { } name)
+                {
+                    yield return name;
+                }
+            }
+        }
     }
 
     [Fact]

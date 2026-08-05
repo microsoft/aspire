@@ -74,7 +74,7 @@ what `brew install` fetches from the GitHub release URL.
 |---|---|---|---|
 | `.github/workflows/tests.yml` | Prerelease casks (artifacts only) | — | — |
 | `azure-pipelines.yml` (prepare stage) | Stable or prerelease casks (artifacts only) | — | — |
-| `release-publish-nuget.yml` (release) | — | Stable cask, LiveRelease mode | — (autobump handles bumps; see below) |
+| `release-publish-nuget.yml` (release) | — | Stable cask, LiveRelease mode (only when `SkipHomebrewValidation=false`) | — (autobump handles bumps; see below) |
 
 The release pipeline's `HomebrewValidateJob` runs `validate-cask-artifact.sh`
 in LiveRelease mode against the cask emitted by the source build, after the
@@ -85,8 +85,9 @@ the source-build prepare stage can only validate offline because the
 GitHub release for the version being built does not exist yet. Failures
 in this job catch problems that would otherwise only surface to end
 users running `brew install aspire`, or block Homebrew/homebrew-cask's
-autobump PR a few hours later. Gated by `SkipHomebrewValidation` for
-partial-failure re-runs.
+autobump PR a few hours later. Gated by `SkipHomebrewValidation`, which
+defaults to `true`; the job only runs when `SkipHomebrewValidation=false`
+(opt in per release, or when re-running after a partial failure).
 
 ### Submission: upstream autobump
 

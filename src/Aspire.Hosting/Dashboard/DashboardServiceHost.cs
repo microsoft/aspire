@@ -1,9 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
+
 using System.Diagnostics;
 using System.Net;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Dcp;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -40,12 +43,14 @@ internal sealed class DashboardServiceHost : IHostedService
         DistributedApplicationModel applicationModel,
         IConfiguration configuration,
         DistributedApplicationExecutionContext executionContext,
+        IOptions<DcpOptions> dcpOptions,
         ILoggerFactory loggerFactory,
         IConfigureOptions<LoggerFilterOptions> loggerOptions,
         ResourceNotificationService resourceNotificationService,
         ResourceLoggerService resourceLoggerService,
         ResourceCommandService resourceCommandService,
-        InteractionService interactionService)
+        InteractionService interactionService,
+        IFileSystemService fileSystemService)
     {
         _logger = loggerFactory.CreateLogger<DashboardServiceHost>();
 
@@ -104,6 +109,8 @@ internal sealed class DashboardServiceHost : IHostedService
             builder.Services.AddSingleton(resourceNotificationService);
             builder.Services.AddSingleton(resourceLoggerService);
             builder.Services.AddSingleton(interactionService);
+            builder.Services.AddSingleton(fileSystemService);
+            builder.Services.AddSingleton<IFileUploadStore, FileUploadStore>();
 
             builder.WebHost.ConfigureKestrel(ConfigureKestrel);
 
@@ -129,31 +136,21 @@ internal sealed class DashboardServiceHost : IHostedService
             var uri = configuration.GetUri(KnownConfigNames.ResourceServiceEndpointUrl)
                 ?? configuration.GetUri(KnownConfigNames.Legacy.ResourceServiceEndpointUrl);
             var allowUnsecuredTransport = configuration.GetBool(KnownConfigNames.AllowUnsecuredTransport) ?? false;
+            var randomizePorts = dcpOptions.Value.RandomizePorts;
 
-            var scheme = ResolveScheme(uri, allowUnsecuredTransport);
+            var endpoint = ResolveEndpoint(uri, randomizePorts, allowUnsecuredTransport);
 
-            if (uri is null)
+            if (endpoint.UseListenLocalhost)
             {
-                // Listen on a random port.
-                kestrelOptions.Listen(IPAddress.Loopback, port: 0, ConfigureListen);
-                _logger.LogDebug("Resource service endpoint not configured. Listening on {Scheme}://127.0.0.1:<random>.", scheme);
-            }
-            else if (IPAddress.TryParse(uri.Host, out var ip) && IPAddress.IsLoopback(ip))
-            {
-                // Bind to the exact loopback address specified (e.g. 127.0.0.1 or [::1]).
-                kestrelOptions.Listen(ip, uri.Port, ConfigureListen);
-                _logger.LogDebug("Resource service endpoint configured: {Uri}", uri);
-            }
-            else if (uri.IsLoopback || IsLocalhostOrLocalhostTld(uri))
-            {
-                // For "localhost" or *.localhost hosts, bind to both IPv4 and IPv6 loopback.
-                kestrelOptions.ListenLocalhost(uri.Port, ConfigureListen);
-                _logger.LogDebug("Resource service endpoint configured: {Uri}", uri);
+                kestrelOptions.ListenLocalhost(endpoint.Port, ConfigureListen);
             }
             else
             {
-                throw new ArgumentException($"{KnownConfigNames.ResourceServiceEndpointUrl} must contain a local loopback address.");
+                kestrelOptions.Listen(endpoint.BindAddress, endpoint.Port, ConfigureListen);
             }
+
+            _logger.LogDebug("Resource service endpoint: configured={Uri}, binding={BindAddress}:{Port}, scheme={Scheme}",
+                uri?.ToString() ?? "(none)", endpoint.BindAddress, endpoint.Port, endpoint.Scheme);
 
             void ConfigureListen(ListenOptions options)
             {
@@ -161,11 +158,55 @@ internal sealed class DashboardServiceHost : IHostedService
                 // which cannot negotiate between HTTP/1.1 and HTTP/2.
                 options.Protocols = HttpProtocols.Http2;
 
-                if (string.Equals(scheme, "https", StringComparison.Ordinal))
+                if (string.Equals(endpoint.Scheme, "https", StringComparison.Ordinal))
                 {
                     options.UseHttps();
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// Resolves the endpoint that the resource service should bind to based on the configured URI,
+    /// port randomization settings, and transport security preferences.
+    /// </summary>
+    internal static ResourceServiceEndpointInfo ResolveEndpoint(Uri? configuredUri, bool randomizePorts, bool allowUnsecuredTransport)
+    {
+        var scheme = ResolveScheme(configuredUri, allowUnsecuredTransport);
+
+        // When randomizePorts is true (e.g. --isolated mode), override a fixed configured
+        // port to 0 so multiple instances don't collide. A configured port of 0 is already
+        // dynamic, so no override is needed.
+        var effectivePort = (randomizePorts && configuredUri is not null && configuredUri.Port != 0) ? 0 : configuredUri?.Port ?? 0;
+
+        if (configuredUri is null)
+        {
+            // No configured endpoint — bind to IPv4 loopback on a random port.
+            return new ResourceServiceEndpointInfo(IPAddress.Loopback, Port: 0, UseListenLocalhost: false, scheme);
+        }
+        else if (IPAddress.TryParse(configuredUri.DnsSafeHost, out var ip) && IPAddress.IsLoopback(ip))
+        {
+            // Bind to the exact loopback address specified (e.g. 127.0.0.1 or [::1]).
+            // Use DnsSafeHost to strip brackets from IPv6 literals so TryParse succeeds.
+            return new ResourceServiceEndpointInfo(ip, effectivePort, UseListenLocalhost: false, scheme);
+        }
+        else if (configuredUri.IsLoopback || IsLocalhostOrLocalhostTld(configuredUri))
+        {
+            // For "localhost" or *.localhost hosts, bind to both IPv4 and IPv6 loopback.
+            // Kestrel does not support ListenLocalhost with port 0, so fall back to
+            // binding on IPv4 loopback when a dynamic port is needed.
+            if (effectivePort == 0)
+            {
+                return new ResourceServiceEndpointInfo(IPAddress.Loopback, Port: 0, UseListenLocalhost: false, scheme);
+            }
+            else
+            {
+                return new ResourceServiceEndpointInfo(IPAddress.Loopback, effectivePort, UseListenLocalhost: true, scheme);
+            }
+        }
+        else
+        {
+            throw new ArgumentException($"{KnownConfigNames.ResourceServiceEndpointUrl} must contain a local loopback address.");
         }
     }
 
@@ -244,3 +285,12 @@ internal sealed class DashboardServiceHost : IHostedService
         }
     }
 }
+
+/// <summary>
+/// Describes the resolved endpoint binding for the resource service.
+/// </summary>
+internal readonly record struct ResourceServiceEndpointInfo(
+    IPAddress BindAddress,
+    int Port,
+    bool UseListenLocalhost,
+    string Scheme);

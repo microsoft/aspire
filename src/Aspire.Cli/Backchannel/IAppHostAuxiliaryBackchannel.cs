@@ -54,6 +54,16 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     Task<GetAppHostInfoResponse?> GetAppHostInfoV2Async(CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Gets a value indicating whether the AppHost advertises the
+    /// <c>terminals.v1</c> capability — covers both the per-replica terminal info
+    /// surface returned by <see cref="GetTerminalInfoAsync"/> AND the per-resource
+    /// list returned by <see cref="ListTerminalsAsync"/> (with current grid size,
+    /// attached peer count, and peer details on <see cref="TerminalReplicaInfo"/>).
+    /// These surfaces ship together and are gated by a single capability flag.
+    /// </summary>
+    bool SupportsTerminalsV1 { get; }
+
+    /// <summary>
     /// Gets the Dashboard URLs from the AppHost.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -171,4 +181,23 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
         string status,
         int timeoutSeconds,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets terminal information for a resource.
+    /// </summary>
+    /// <param name="resourceName">The resource name.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Terminal information for the resource.</returns>
+    Task<GetTerminalInfoResponse> GetTerminalInfoAsync(
+        string resourceName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lists every <c>WithTerminal</c>-enabled resource in the AppHost. Returns an empty list when
+    /// no resource is configured. Each entry includes per-replica current grid size and attached
+    /// peer details (when <see cref="TerminalSummary.IsHostReachable"/> is true). Backs
+    /// <c>aspire terminal ps</c>. Gated on <see cref="SupportsTerminalsV1"/>; older AppHosts
+    /// without this capability return an empty response.
+    /// </summary>
+    Task<ListTerminalsResponse> ListTerminalsAsync(CancellationToken cancellationToken = default);
 }

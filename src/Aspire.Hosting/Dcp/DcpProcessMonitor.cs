@@ -1,19 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Globalization;
-using System.Runtime.InteropServices;
 using SystemProcess = System.Diagnostics.Process;
 
 namespace Aspire.Hosting.Dcp;
 
 internal sealed record DcpProcessIdentity(int ProcessId, DateTime Timestamp);
 
-internal static partial class DcpProcessMonitor
+internal static class DcpProcessMonitor
 {
-    private const int DefaultLinuxClockTicksPerSecond = 100;
-    private const int LinuxClockTicksPerSecondConfigName = 2; // _SC_CLK_TCK
-
     internal static DcpProcessIdentity GetMonitorProcessIdentity(SystemProcess parentProcess)
     {
         ArgumentNullException.ThrowIfNull(parentProcess);
@@ -50,54 +45,27 @@ internal static partial class DcpProcessMonitor
         }
     }
 
-    private static DateTime? GetLinuxProcessIdentityTimestamp(int processId)
+    private static DateTime GetLinuxProcessIdentityTimestamp(int processId)
     {
-        var statPath = Path.Combine(
-            Environment.GetEnvironmentVariable("HOST_PROC") ?? "/proc",
-            processId.ToString(CultureInfo.InvariantCulture),
-            "stat");
+        // DCP inspects the *host* process table, so honor HOST_PROC when this check runs inside a
+        // container whose host /proc is mounted elsewhere. Orphan/liveness detection deliberately uses the
+        // current namespace's /proc instead (see ProcessStartTimeHelper.TryGetProcessStartTime), which is
+        // why the /proc root is a parameter of the shared reader rather than baked into it.
+        var procRoot = Environment.GetEnvironmentVariable("HOST_PROC") ?? "/proc";
 
-        string contents;
-        try
+        // Share the /proc start-ticks reader with every other Aspire watchdog so there is one Linux
+        // process-identity implementation. The value is boot-relative (field 22 of /proc/<pid>/stat),
+        // which is why it is immune to wall-clock drift.
+        if (ProcessStartTimeHelper.TryGetLinuxProcessStartTicks(processId, procRoot) is not { } startTicks)
         {
-            contents = File.ReadAllText(statPath);
-        }
-        catch (IOException ex)
-        {
-            throw new InvalidOperationException($"Could not read monitor process stat file '{statPath}'.", ex);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            throw new InvalidOperationException($"Could not read monitor process stat file '{statPath}'.", ex);
+            throw new InvalidOperationException($"Could not read a valid start time for monitor process {processId} from '{procRoot}'.");
         }
 
-        // /proc/<pid>/stat fields start as:
-        //   12345 (process name may contain spaces or parentheses) S 1 2 3 ...
-        // The process start time is field 22, in clock ticks since boot. Match DCP's
-        // Linux identity time by converting that monotonic value into a DateTime
-        // offset from DateTime.MinValue instead of estimating a wall-clock time.
-        var closeParenIndex = contents.LastIndexOf(')');
-        if (closeParenIndex < 0 || closeParenIndex + 2 >= contents.Length)
-        {
-            throw new InvalidOperationException($"Monitor process stat file '{statPath}' was malformed.");
-        }
-
-        var fields = contents[(closeParenIndex + 2)..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (fields.Length < 20 || !ulong.TryParse(fields[19], CultureInfo.InvariantCulture, out var startTicks))
-        {
-            throw new InvalidOperationException($"Monitor process stat file '{statPath}' did not contain a valid start time.");
-        }
-
-        var startTimeMilliseconds = (startTicks * 1000) / (ulong)GetLinuxClockTicksPerSecond();
+        // Convert the boot-relative start ticks into a DateTime offset from DateTime.MinValue instead of
+        // estimating a wall-clock time. Kept in milliseconds for parity with the timestamp DCP compares
+        // against, which is a distinct identity domain from the whole-second value used by the orphan
+        // detectors, so the two never cross-compare.
+        var startTimeMilliseconds = (startTicks * 1000) / (ulong)ProcessStartTimeHelper.GetLinuxClockTicksPerSecond();
         return DateTime.SpecifyKind(DateTime.MinValue, DateTimeKind.Utc).AddMilliseconds(startTimeMilliseconds);
     }
-
-    private static int GetLinuxClockTicksPerSecond()
-    {
-        var result = sysconf(LinuxClockTicksPerSecondConfigName);
-        return result > 0 ? (int)result : DefaultLinuxClockTicksPerSecond;
-    }
-
-    [LibraryImport("libc", SetLastError = true, EntryPoint = "sysconf")]
-    private static partial long sysconf(int name);
 }

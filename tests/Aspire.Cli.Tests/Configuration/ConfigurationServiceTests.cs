@@ -39,7 +39,7 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SetConfigurationAsync_WorksWithJsonComments()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var contentWithComments = """
             {
@@ -62,7 +62,7 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SetConfigurationAsync_WorksWithTrailingCommas()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var contentWithTrailingCommas = """
             {
@@ -84,7 +84,7 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SetConfigurationAsync_WorksWithCommentsAndTrailingCommas()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var content = """
             {
@@ -106,28 +106,25 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SetConfigurationAsync_CreatesNewFile_WhenNoneExists()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
-        // Delete the sentinel .aspire/settings.json so there is truly no settings file
-        var sentinelPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "settings.json");
-        if (File.Exists(sentinelPath))
-        {
-            File.Delete(sentinelPath);
-        }
-
-        var (service, settingsFilePath) = CreateService(workspace);
+        // The workspace has .aspire/settings.json (the legacy sentinel) but no
+        // aspire.config.json. FindNearestSettingsFile will find the sentinel and
+        // write to it.
+        var legacySettingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "settings.json");
+        var (service, _) = CreateService(workspace);
 
         await service.SetConfigurationAsync("channel", "staging", isGlobal: false);
 
-        Assert.True(File.Exists(settingsFilePath));
-        var result = File.ReadAllText(settingsFilePath);
+        Assert.True(File.Exists(legacySettingsPath));
+        var result = File.ReadAllText(legacySettingsPath);
         Assert.Contains("staging", result);
     }
 
     [Fact]
     public async Task SetConfigurationAsync_HandlesEmptyFile()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var (service, settingsFilePath) = CreateService(workspace, "");
 
@@ -140,7 +137,7 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeleteConfigurationAsync_WorksWithJsonComments()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var contentWithComments = """
             {
@@ -163,7 +160,7 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeleteConfigurationAsync_ReturnsFalse_WhenFileDoesNotExist()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var (service, _) = CreateService(workspace);
 
@@ -175,7 +172,7 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeleteConfigurationAsync_ReturnsFalse_WhenFileIsEmpty()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var (service, _) = CreateService(workspace, "");
 
@@ -187,7 +184,7 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetAllConfigurationAsync_ParsesCommentsCorrectly()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var contentWithComments = """
             {
@@ -210,7 +207,7 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetConfigurationFromDirectoryAsync_WithContinueSearchWhenKeyMissing_WalksUpWhenNearestConfigDoesNotContainKey()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var (service, _) = CreateService(
             workspace,
@@ -241,7 +238,7 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetConfigurationFromDirectoryAsync_WhenNearestConfigDoesNotContainKey_DoesNotReadParentConfig()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var (service, _) = CreateService(
             workspace,
@@ -268,7 +265,7 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetConfigurationFromDirectoryAsync_FindsNearestParentConfigWhenStartDirectoryHasNoConfig()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var (service, _) = CreateService(
             workspace,
@@ -288,7 +285,7 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SetConfigurationAsync_SetsNestedValues()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var (service, settingsFilePath) = CreateService(workspace, "{}");
 
@@ -302,7 +299,7 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SetConfigurationAsync_WritesBooleanStringAsJsonString()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var (service, settingsFilePath) = CreateService(workspace, "{}");
 
@@ -324,7 +321,7 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SetConfigurationAsync_ChannelWithBooleanLikeValue_StaysAsString()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var (service, settingsFilePath) = CreateService(workspace, "{}");
 
@@ -347,7 +344,7 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SetConfigurationAsync_WritesStringValueAsString()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var (service, settingsFilePath) = CreateService(workspace, "{}");
 

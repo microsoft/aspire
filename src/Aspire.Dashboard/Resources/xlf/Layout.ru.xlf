@@ -97,6 +97,16 @@
         <target state="translated">Структурированные</target>
         <note />
       </trans-unit>
+      <trans-unit id="NavMenuToggleCollapse">
+        <source>Collapse navigation to icons</source>
+        <target state="new">Collapse navigation to icons</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NavMenuToggleExpand">
+        <source>Expand navigation labels</source>
+        <target state="new">Expand navigation labels</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NavMenuTracesTab">
         <source>Traces</source>
         <target state="translated">Трассировки</target>
@@ -105,26 +115,6 @@
       <trans-unit id="PageLayoutViewFilters">
         <source>View filters</source>
         <target state="translated">Просмотреть фильтры</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ReconnectFailedText">
-        <source>Failed to rejoin.&lt;br /&gt;Please retry or reload the page.</source>
-        <target state="translated">Не удалось повторно присоединиться.&lt;br /&gt;Повторите попытку или перезагрузите страницу.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ReconnectFirstAttemptText">
-        <source>Rejoining the server...</source>
-        <target state="translated">Повторное присоединение к серверу...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ReconnectRepeatedAttemptText">
-        <source>Rejoin failed... trying again in &lt;span id="components-seconds-to-next-attempt"&gt;&lt;/span&gt; seconds.</source>
-        <target state="translated">Не удалось повторно присоединиться... Повторная попытка через &lt;span id="components-seconds-to-next-attempt"&gt;&lt;/span&gt; с.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ReconnectRetryButtonText">
-        <source>Retry</source>
-        <target state="translated">Повторить попытку</target>
         <note />
       </trans-unit>
     </body>

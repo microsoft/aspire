@@ -12,6 +12,14 @@ const path = require('path');
 // friendly error path used by the rest of the launcher (try/catch around main).
 let ridPackageNames = null;
 
+function getRidPackageNames() {
+  if (ridPackageNames === null) {
+    ridPackageNames = loadRidPackageNames();
+  }
+
+  return ridPackageNames;
+}
+
 function loadRidPackageNames() {
   const packageMapPath = path.join(__dirname, 'aspire-package-map.json');
   let raw;
@@ -117,8 +125,34 @@ function isMusl() {
   return false;
 }
 
-function resolveNativeBinary(rid, expectedVersion) {
-  const packageName = ridPackageNames.get(rid);
+function optionalDependenciesInstallMessage(pointerPackageName) {
+  return `Reinstall ${pointerPackageName} without disabling npm optional dependencies ` +
+    '(do not use --omit=optional, --no-optional, or npm_config_optional=false).';
+}
+
+function isUnsupportedPlatformError(error) {
+  return error && typeof error.message === 'string' && error.message.startsWith('Unsupported platform: ');
+}
+
+function runNpmPostinstallCheck(packageJson, ridDetector = detectRid) {
+  let rid;
+  try {
+    rid = ridDetector();
+  } catch (error) {
+    if (isUnsupportedPlatformError(error)) {
+      // Unsupported platforms intentionally keep the shim-install behavior so
+      // users get the friendly launcher diagnostic only when they try to run it.
+      return;
+    }
+
+    throw error;
+  }
+
+  resolveNativeBinary(rid, packageJson.version, packageJson.name);
+}
+
+function resolveNativeBinary(rid, expectedVersion, pointerPackageName) {
+  const packageName = getRidPackageNames().get(rid);
   if (!packageName) {
     throw new Error(`No Aspire CLI npm package is available for RID '${rid}'.`);
   }
@@ -136,7 +170,7 @@ function resolveNativeBinary(rid, expectedVersion) {
 
     throw new Error(
       `The Aspire CLI native package '${packageName}' was not installed. ` +
-      'Reinstall @microsoft/aspire-cli with optional dependencies enabled.',
+      optionalDependenciesInstallMessage(pointerPackageName),
       { cause: error });
   }
 
@@ -275,14 +309,18 @@ function needsCopy(sourcePath, targetPath) {
 }
 
 function main() {
-  // Lazy-initialize so a missing/corrupt aspire-package-map.json reaches the
-  // top-level try/catch and produces a friendly error instead of a Node stack.
-  if (ridPackageNames === null) {
-    ridPackageNames = loadRidPackageNames();
-  }
   const packageJson = require(path.join(__dirname, '..', 'package.json'));
+
+  if (process.argv[2] === '--npm-postinstall-check') {
+    // npm does not warn when users explicitly omit optional dependencies. Fail
+    // the top-level package install on supported platforms so the missing native
+    // RID package is reported during install instead of at first `aspire` launch.
+    runNpmPostinstallCheck(packageJson);
+    return;
+  }
+
   const rid = detectRid();
-  const nativeBinary = resolveNativeBinary(rid, packageJson.version);
+  const nativeBinary = resolveNativeBinary(rid, packageJson.version, packageJson.name);
   const executablePath = ensureCachedBinary(nativeBinary.binaryPath, nativeBinary.binaryName, packageJson.version, rid);
 
   // Forward terminating signals to the child so programmatic `kill <wrapper>`
@@ -368,6 +406,7 @@ if (require.main === module) {
 
 module.exports = {
   __testing: {
-    detectRid
+    detectRid,
+    runNpmPostinstallCheck
   }
 };

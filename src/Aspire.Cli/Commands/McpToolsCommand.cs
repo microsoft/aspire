@@ -6,9 +6,7 @@ using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
-using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
@@ -29,13 +27,11 @@ internal sealed class McpToolsCommand : BaseCommand
     };
 
     public McpToolsCommand(
-        IAuxiliaryBackchannelMonitor backchannelMonitor,
-        IProjectLocator projectLocator,
-        ILogger<McpToolsCommand> logger,
+        AppHostConnectionResolver connectionResolver,
         CommonCommandServices services)
         : base("tools", McpCommandStrings.ToolsCommand_Description, services)
     {
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, services.ExecutionContext, logger);
+        _connectionResolver = connectionResolver;
 
         Options.Add(s_appHostOption);
         Options.Add(s_formatOption);

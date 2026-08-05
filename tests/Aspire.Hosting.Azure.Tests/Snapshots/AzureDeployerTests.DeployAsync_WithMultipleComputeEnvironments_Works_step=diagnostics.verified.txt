@@ -17,9 +17,9 @@ Steps with no dependencies run first, followed by steps that depend on them.
   1. azure-prepare-resources
   2. validate-compute-environments
   3. prepare-azure-app-service-aas-env
-  4. prepare-azure-container-apps-aca-env
-  5. validate-azure-app-service
-  6. validate-azure-container-apps
+  4. validate-azure-container-apps
+  5. prepare-azure-container-apps-aca-env
+  6. validate-azure-app-service
   7. before-start
   8. process-parameters
   9. build-prereq
@@ -55,11 +55,11 @@ Steps with no dependencies run first, followed by steps that depend on them.
  39. deploy-cache
  40. deploy-python-app
  41. destroy-prereq
- 42. destroy-azure-azure634f9
+ 42. destroy-azure-azure-environment
  43. destroy
  44. diagnostics
  45. publish-prereq
- 46. publish-azure634f9
+ 46. publish-azure-environment
  47. validate-appservice-config-aas-env
  48. publish
  49. publish-manifest
@@ -73,7 +73,7 @@ Shows each step's dependencies, associated resources, tags, and descriptions.
 Step: azure-prepare-resources
     Description: Prepares the Azure resources.
     Dependencies: none
-    Resource: azure634f9 (AzureEnvironmentResource)
+    Resource: azure-environment (AzureEnvironmentResource)
 
 Step: before-start
     Description: Aggregation step for operations that run before the application starts.
@@ -105,7 +105,7 @@ Step: check-container-runtime
 Step: create-provisioning-context
     Description: Creates the Azure provisioning context for infrastructure deployment.
     Dependencies: ✓ deploy-prereq, ✓ validate-azure-login
-    Resource: azure634f9 (AzureEnvironmentResource)
+    Resource: azure-environment (AzureEnvironmentResource)
 
 Step: deploy
     Description: Aggregation step for all deploy operations. All deploy steps should be required by this step.
@@ -135,12 +135,12 @@ Step: deploy-python-app
 
 Step: destroy
     Description: Aggregation step for all destroy operations. All destroy steps should be required by this step.
-    Dependencies: ✓ destroy-azure-azure634f9
+    Dependencies: ✓ destroy-azure-azure-environment
 
-Step: destroy-azure-azure634f9
-    Description: Destroys the Azure resource group and all resources for azure634f9.
+Step: destroy-azure-azure-environment
+    Description: Destroys the Azure resource group and all resources for azure-environment.
     Dependencies: ✓ destroy-prereq
-    Resource: azure634f9 (AzureEnvironmentResource)
+    Resource: azure-environment (AzureEnvironmentResource)
 
 Step: destroy-prereq
     Description: Prerequisite step that runs before any destroy operations.
@@ -167,7 +167,7 @@ Step: prepare-azure-app-service-aas-env
 
 Step: prepare-azure-container-apps-aca-env
     Description: Prepares Azure Container Apps deployment targets for aca-env.
-    Dependencies: ✓ azure-prepare-resources, ✓ validate-compute-environments
+    Dependencies: ✓ azure-prepare-resources, ✓ validate-azure-container-apps, ✓ validate-compute-environments
     Resource: aca-env (AzureContainerAppEnvironmentResource)
 
 Step: print-api-service-summary
@@ -237,7 +237,7 @@ Step: provision-api-service-website
 Step: provision-azure-bicep-resources
     Description: Aggregation step for all Azure infrastructure provisioning operations.
     Dependencies: ✓ create-provisioning-context, ✓ deploy-prereq, ✓ provision-aas-env, ✓ provision-aas-env-acr, ✓ provision-aca-env, ✓ provision-aca-env-acr, ✓ provision-api-service-website, ✓ provision-cache-containerapp, ✓ provision-python-app-containerapp, ✓ provision-storage
-    Resource: azure634f9 (AzureEnvironmentResource)
+    Resource: azure-environment (AzureEnvironmentResource)
     Tags: provision-infra
 
 Step: provision-cache-containerapp
@@ -260,12 +260,12 @@ Step: provision-storage
 
 Step: publish
     Description: Aggregation step for all publish operations. All publish steps should be required by this step.
-    Dependencies: ✓ publish-azure634f9, ✓ validate-appservice-config-aas-env
+    Dependencies: ✓ publish-azure-environment, ✓ validate-appservice-config-aas-env
 
-Step: publish-azure634f9
-    Description: Publishes the Azure environment configuration for azure634f9.
+Step: publish-azure-environment
+    Description: Publishes the Azure environment configuration for azure-environment.
     Dependencies: ✓ publish-prereq
-    Resource: azure634f9 (AzureEnvironmentResource)
+    Resource: azure-environment (AzureEnvironmentResource)
 
 Step: publish-manifest
     Description: Publishes the Aspire application model as a JSON manifest file.
@@ -302,12 +302,12 @@ Step: validate-azure-app-service
     Dependencies: none
 
 Step: validate-azure-container-apps
-    Dependencies: none
+    Dependencies: ✓ azure-prepare-resources
 
 Step: validate-azure-login
     Description: Validates Azure CLI authentication before deployment.
     Dependencies: ✓ deploy-prereq
-    Resource: azure634f9 (AzureEnvironmentResource)
+    Resource: azure-environment (AzureEnvironmentResource)
 
 Step: validate-build-only-container-references
     Description: Validates that build-only containers are consumed by another resource before publish or deploy.
@@ -338,9 +338,10 @@ If targeting 'before-start':
   Direct dependencies: azure-prepare-resources, prepare-azure-app-service-aas-env, prepare-azure-container-apps-aca-env, validate-azure-app-service, validate-azure-container-apps, validate-compute-environments
   Total steps: 7
   Execution order:
-    [0] azure-prepare-resources | validate-azure-app-service | validate-azure-container-apps | validate-compute-environments (parallel)
-    [1] prepare-azure-app-service-aas-env | prepare-azure-container-apps-aca-env (parallel)
-    [2] before-start
+    [0] azure-prepare-resources | validate-azure-app-service | validate-compute-environments (parallel)
+    [1] prepare-azure-app-service-aas-env | validate-azure-container-apps (parallel)
+    [2] prepare-azure-container-apps-aca-env
+    [3] before-start
 
 If targeting 'build':
   Direct dependencies: build-api-service, build-python-app
@@ -460,19 +461,19 @@ If targeting 'deploy-python-app':
     [10] deploy-python-app
 
 If targeting 'destroy':
-  Direct dependencies: destroy-azure-azure634f9
+  Direct dependencies: destroy-azure-azure-environment
   Total steps: 3
   Execution order:
     [0] destroy-prereq
-    [1] destroy-azure-azure634f9
+    [1] destroy-azure-azure-environment
     [2] destroy
 
-If targeting 'destroy-azure-azure634f9':
+If targeting 'destroy-azure-azure-environment':
   Direct dependencies: destroy-prereq
   Total steps: 2
   Execution order:
     [0] destroy-prereq
-    [1] destroy-azure-azure634f9
+    [1] destroy-azure-azure-environment
 
 If targeting 'destroy-prereq':
   Direct dependencies: none
@@ -516,11 +517,12 @@ If targeting 'prepare-azure-app-service-aas-env':
     [1] prepare-azure-app-service-aas-env
 
 If targeting 'prepare-azure-container-apps-aca-env':
-  Direct dependencies: azure-prepare-resources, validate-compute-environments
-  Total steps: 3
+  Direct dependencies: azure-prepare-resources, validate-azure-container-apps, validate-compute-environments
+  Total steps: 4
   Execution order:
     [0] azure-prepare-resources | validate-compute-environments (parallel)
-    [1] prepare-azure-container-apps-aca-env
+    [1] validate-azure-container-apps
+    [2] prepare-azure-container-apps-aca-env
 
 If targeting 'print-api-service-summary':
   Direct dependencies: provision-api-service-website
@@ -711,21 +713,21 @@ If targeting 'provision-storage':
     [4] provision-storage
 
 If targeting 'publish':
-  Direct dependencies: publish-azure634f9, validate-appservice-config-aas-env
+  Direct dependencies: publish-azure-environment, validate-appservice-config-aas-env
   Total steps: 6
   Execution order:
     [0] process-parameters | validate-build-only-container-references (parallel)
     [1] publish-prereq
-    [2] publish-azure634f9 | validate-appservice-config-aas-env (parallel)
+    [2] publish-azure-environment | validate-appservice-config-aas-env (parallel)
     [3] publish
 
-If targeting 'publish-azure634f9':
+If targeting 'publish-azure-environment':
   Direct dependencies: publish-prereq
   Total steps: 4
   Execution order:
     [0] process-parameters | validate-build-only-container-references (parallel)
     [1] publish-prereq
-    [2] publish-azure634f9
+    [2] publish-azure-environment
 
 If targeting 'publish-manifest':
   Direct dependencies: none
@@ -807,10 +809,11 @@ If targeting 'validate-azure-app-service':
     [0] validate-azure-app-service
 
 If targeting 'validate-azure-container-apps':
-  Direct dependencies: none
-  Total steps: 1
+  Direct dependencies: azure-prepare-resources
+  Total steps: 2
   Execution order:
-    [0] validate-azure-container-apps
+    [0] azure-prepare-resources
+    [1] validate-azure-container-apps
 
 If targeting 'validate-azure-login':
   Direct dependencies: deploy-prereq

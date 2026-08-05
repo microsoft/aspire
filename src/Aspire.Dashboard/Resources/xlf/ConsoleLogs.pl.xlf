@@ -32,6 +32,11 @@
         <target state="new">No logs found</target>
         <note />
       </trans-unit>
+      <trans-unit id="ConsoleLogsNoLogsMatchFilter">
+        <source>No logs match the filter</source>
+        <target state="new">No logs match the filter</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ConsoleLogsNoResourceSelected">
         <source>No resource selected</source>
         <target state="translated">Nie wybrano zasobu</target>
@@ -67,6 +72,11 @@
         <target state="translated">Ustawienia</target>
         <note />
       </trans-unit>
+      <trans-unit id="ConsoleLogsTextFilter">
+        <source>Console logs filter</source>
+        <target state="new">Console logs filter</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ConsoleLogsTimestampHide">
         <source>Hide timestamps</source>
         <target state="translated">Ukryj sygnatury czasowe</target>
@@ -87,6 +97,16 @@
         <target state="translated">Nieznany stan</target>
         <note />
       </trans-unit>
+      <trans-unit id="ConsoleLogsViewConsoleOption">
+        <source>Console logs</source>
+        <target state="new">Console logs</target>
+        <note>Option in the View dropdown that shows the resource's console logs.</note>
+      </trans-unit>
+      <trans-unit id="ConsoleLogsViewTerminalOption">
+        <source>Terminal</source>
+        <target state="new">Terminal</target>
+        <note>Option in the View dropdown that shows the resource's interactive terminal.</note>
+      </trans-unit>
       <trans-unit id="ConsoleLogsWatchingLogs">
         <source>Watching logs...</source>
         <target state="translated">Trwa oglądanie dzienników...</target>
@@ -105,6 +125,26 @@
       <trans-unit id="LogStatusLabel">
         <source>Service log status</source>
         <target state="translated">Stan dziennika usługi</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalToolbarDecreaseFontSize">
+        <source>Decrease font size</source>
+        <target state="new">Decrease font size</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalToolbarGridSize">
+        <source>Terminal dimensions</source>
+        <target state="new">Terminal dimensions</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalToolbarGridSizeAuto">
+        <source>Fit</source>
+        <target state="new">Fit</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalToolbarIncreaseFontSize">
+        <source>Increase font size</source>
+        <target state="new">Increase font size</target>
         <note />
       </trans-unit>
     </body>

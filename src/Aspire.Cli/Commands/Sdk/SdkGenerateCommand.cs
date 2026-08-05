@@ -5,7 +5,6 @@ using System.CommandLine;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
-using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Commands.Sdk;
@@ -21,6 +20,7 @@ internal sealed class SdkGenerateCommand : BaseCommand
 {
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly IAppHostServerProjectFactory _appHostServerProjectFactory;
+    private readonly IAppHostServerSessionFactory _serverSessionFactory;
     private readonly ILogger<SdkGenerateCommand> _logger;
 
     private static readonly Argument<FileInfo> s_integrationArgument = new("integration")
@@ -41,12 +41,14 @@ internal sealed class SdkGenerateCommand : BaseCommand
     public SdkGenerateCommand(
         ILanguageDiscovery languageDiscovery,
         IAppHostServerProjectFactory appHostServerProjectFactory,
+        IAppHostServerSessionFactory serverSessionFactory,
         ILogger<SdkGenerateCommand> logger,
         CommonCommandServices services)
         : base("generate", "Generate typed SDKs from an Aspire integration library for use in other languages.", services)
     {
         _languageDiscovery = languageDiscovery;
         _appHostServerProjectFactory = appHostServerProjectFactory;
+        _serverSessionFactory = serverSessionFactory;
         _logger = logger;
 
         Arguments.Add(s_integrationArgument);
@@ -124,7 +126,7 @@ internal sealed class SdkGenerateCommand : BaseCommand
             var integrations = new List<IntegrationReference>();
             if (codeGenPackage is not null)
             {
-                integrations.Add(IntegrationReference.FromPackage(codeGenPackage, VersionHelper.GetDefaultTemplateVersion()));
+                integrations.Add(IntegrationReference.FromPackage(codeGenPackage, ExecutionContext.IdentityVersion));
             }
 
             // Add the integration project as a project reference
@@ -135,7 +137,7 @@ internal sealed class SdkGenerateCommand : BaseCommand
             _logger.LogDebug("Building AppHost server for SDK generation");
 
             var prepareResult = await appHostServerProject.PrepareAsync(
-                VersionHelper.GetDefaultTemplateVersion(),
+                ExecutionContext.IdentityVersion,
                 integrations,
                 cancellationToken: cancellationToken);
 
@@ -152,11 +154,11 @@ internal sealed class SdkGenerateCommand : BaseCommand
                 return CliExitCodes.FailedToBuildArtifacts;
             }
 
-            await using var serverSession = AppHostServerSession.Start(
-                appHostServerProject,
-                environmentVariables: null,
-                debug: false,
-                _logger);
+            await using var serverSession = _serverSessionFactory.Create(appHostServerProject, environmentVariables: null, debug: false, gracefulShutdownSignaler: null, shutdownService: null, isolateConsole: false, cancellationToken);
+            // Short-lived RPC session: StartAsync() spawns the server. We never observe the
+            // exit-code task (WaitForExitAsync) because disposal flows the exit code through the
+            // activity scope and the only failure mode we care about surfaces via the RPC call below.
+            await serverSession.StartAsync();
 
             // Connect and generate code
             var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);

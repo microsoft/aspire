@@ -37,6 +37,10 @@ internal sealed class AspireSkillsBundle
     /// </summary>
     public static async Task<AspireSkillsBundle> LoadAsync(DirectoryInfo bundleDirectory, CancellationToken cancellationToken)
     {
+        // physical-binary-version-by-design (see docs/specs/cli-identity-sidecar.md):
+        // this parameterless convenience overload is only used by tests, which assert against
+        // the running test-host assembly version. Production paths (AspireSkillsInstaller) flow
+        // CliExecutionContext.IdentitySdkVersion through the explicit-version overload instead.
         return await LoadAsync(
             bundleDirectory,
             VersionHelper.GetDefaultSdkVersion(),

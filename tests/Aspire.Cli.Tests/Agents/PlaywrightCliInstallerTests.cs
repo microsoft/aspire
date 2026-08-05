@@ -60,7 +60,7 @@ public class PlaywrightCliInstallerTests
             var version = SemVersion.Parse("0.1.1", SemVersionStyles.Strict);
             var npmRunner = new TestNpmRunner
             {
-                ResolveResult = new NpmPackageInfo { Version = version, Integrity = "sha512-abc123" }
+                ResolveResult = new NpmPackageInfo { Version = version }
             };
             var playwrightRunner = new TestPlaywrightCliRunner
             {
@@ -96,7 +96,7 @@ public class PlaywrightCliInstallerTests
             var version = SemVersion.Parse("0.1.1", SemVersionStyles.Strict);
             var npmRunner = new TestNpmRunner
             {
-                ResolveResult = new NpmPackageInfo { Version = version, Integrity = "sha512-abc123" }
+                ResolveResult = new NpmPackageInfo { Version = version }
             };
             var playwrightRunner = new TestPlaywrightCliRunner
             {
@@ -130,7 +130,7 @@ public class PlaywrightCliInstallerTests
             var installedVersion = SemVersion.Parse("0.2.0", SemVersionStyles.Strict);
             var npmRunner = new TestNpmRunner
             {
-                ResolveResult = new NpmPackageInfo { Version = targetVersion, Integrity = "sha512-abc123" }
+                ResolveResult = new NpmPackageInfo { Version = targetVersion }
             };
             var playwrightRunner = new TestPlaywrightCliRunner
             {
@@ -164,7 +164,7 @@ public class PlaywrightCliInstallerTests
             var version = SemVersion.Parse("0.1.1", SemVersionStyles.Strict);
             var npmRunner = new TestNpmRunner
             {
-                ResolveResult = new NpmPackageInfo { Version = version, Integrity = "sha512-abc123" },
+                ResolveResult = new NpmPackageInfo { Version = version },
                 PackResult = null
             };
             var playwrightRunner = new TestPlaywrightCliRunner();
@@ -186,49 +186,6 @@ public class PlaywrightCliInstallerTests
     }
 
     [Fact]
-    public async Task InstallAsync_WhenIntegrityCheckFails_ReturnsErrorMessage()
-    {
-        var version = SemVersion.Parse("0.1.1", SemVersionStyles.Strict);
-        // Create a temp file with known content and a non-matching hash
-        var tempDir = Path.Combine(Path.GetTempPath(), $"test-playwright-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempDir);
-        var tarballPath = Path.Combine(tempDir, "package.tgz");
-        await File.WriteAllBytesAsync(tarballPath, [1, 2, 3]);
-
-        try
-        {
-            var npmRunner = new TestNpmRunner
-            {
-                ResolveResult = new NpmPackageInfo { Version = version, Integrity = "sha512-definitelyWrongHash" },
-                PackResult = tarballPath
-            };
-            var playwrightRunner = new TestPlaywrightCliRunner();
-            var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
-
-            var repoRoot = CreateTestRepoRoot();
-            try
-            {
-                var (status, message) = await installer.InstallAsync(repoRoot, s_emptySkillDirs, CancellationToken.None);
-
-                Assert.Equal(PlaywrightInstallStatus.Failed, status);
-                Assert.NotNull(message);
-                Assert.False(npmRunner.InstallGlobalCalled);
-            }
-            finally
-            {
-                if (Directory.Exists(repoRoot))
-                {
-                    Directory.Delete(repoRoot, recursive: true);
-                }
-            }
-        }
-        finally
-        {
-            Directory.Delete(tempDir, true);
-        }
-    }
-
-    [Fact]
     public async Task InstallAsync_WhenIntegrityCheckPasses_InstallsGlobally()
     {
         var version = SemVersion.Parse("0.1.1", SemVersionStyles.Strict);
@@ -238,15 +195,11 @@ public class PlaywrightCliInstallerTests
         var content = new byte[] { 10, 20, 30, 40, 50 };
         await File.WriteAllBytesAsync(tarballPath, content);
 
-        // Compute the correct SRI hash for the content
-        var hash = SHA512.HashData(content);
-        var integrity = $"sha512-{Convert.ToBase64String(hash)}";
-
         try
         {
             var npmRunner = new TestNpmRunner
             {
-                ResolveResult = new NpmPackageInfo { Version = version, Integrity = integrity },
+                ResolveResult = new NpmPackageInfo { Version = version },
                 PackResult = tarballPath,
                 InstallGlobalResult = true
             };
@@ -280,6 +233,50 @@ public class PlaywrightCliInstallerTests
     }
 
     [Fact]
+    public async Task InstallAsync_UsesDownloadedTarballDigestForProvenance()
+    {
+        var version = SemVersion.Parse("0.1.1", SemVersionStyles.Strict);
+        var tempDir = Directory.CreateTempSubdirectory("test-playwright-").FullName;
+        var tarballPath = Path.Combine(tempDir, "package.tgz");
+        var content = new byte[] { 10, 20, 30, 40, 50 };
+        await File.WriteAllBytesAsync(tarballPath, content);
+        var expectedIntegrity = $"sha512-{Convert.ToBase64String(SHA512.HashData(content))}";
+
+        try
+        {
+            var npmRunner = new TestNpmRunner
+            {
+                ResolveResult = new NpmPackageInfo { Version = version },
+                PackResult = tarballPath,
+                InstallGlobalResult = true
+            };
+            var provenanceChecker = new TestNpmProvenanceChecker();
+            var playwrightRunner = new TestPlaywrightCliRunner { InstallSkillsResult = true };
+            var installer = new PlaywrightCliInstaller(npmRunner, provenanceChecker, playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+            var repoRoot = CreateTestRepoRoot();
+
+            try
+            {
+                var (status, _) = await installer.InstallAsync(repoRoot, s_emptySkillDirs, CancellationToken.None);
+
+                Assert.Equal(PlaywrightInstallStatus.Installed, status);
+                Assert.Equal(expectedIntegrity, provenanceChecker.CapturedSriIntegrity);
+            }
+            finally
+            {
+                if (Directory.Exists(repoRoot))
+                {
+                    Directory.Delete(repoRoot, recursive: true);
+                }
+            }
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task InstallAsync_WhenGlobalInstallFails_ReturnsErrorMessage()
     {
         var version = SemVersion.Parse("0.1.1", SemVersionStyles.Strict);
@@ -289,14 +286,11 @@ public class PlaywrightCliInstallerTests
         var content = new byte[] { 10, 20, 30 };
         await File.WriteAllBytesAsync(tarballPath, content);
 
-        var hash = SHA512.HashData(content);
-        var integrity = $"sha512-{Convert.ToBase64String(hash)}";
-
         try
         {
             var npmRunner = new TestNpmRunner
             {
-                ResolveResult = new NpmPackageInfo { Version = version, Integrity = integrity },
+                ResolveResult = new NpmPackageInfo { Version = version },
                 PackResult = tarballPath,
                 InstallGlobalResult = false
             };
@@ -336,14 +330,11 @@ public class PlaywrightCliInstallerTests
         var content = new byte[] { 99, 100 };
         await File.WriteAllBytesAsync(tarballPath, content);
 
-        var hash = SHA512.HashData(content);
-        var integrity = $"sha512-{Convert.ToBase64String(hash)}";
-
         try
         {
             var npmRunner = new TestNpmRunner
             {
-                ResolveResult = new NpmPackageInfo { Version = targetVersion, Integrity = integrity },
+                ResolveResult = new NpmPackageInfo { Version = targetVersion },
                 PackResult = tarballPath,
                 InstallGlobalResult = true
             };
@@ -379,54 +370,23 @@ public class PlaywrightCliInstallerTests
     }
 
     [Fact]
-    public void VerifyIntegrity_WithMatchingHash_ReturnsTrue()
+    public void ComputeIntegrity_ReturnsSha512SriValue()
     {
-        var tempPath = Path.GetTempFileName();
+        var tempDir = Directory.CreateTempSubdirectory("test-playwright-").FullName;
+        var tempPath = Path.Combine(tempDir, "package.tgz");
         try
         {
             var content = "test content for hashing"u8.ToArray();
             File.WriteAllBytes(tempPath, content);
 
             var hash = SHA512.HashData(content);
-            var integrity = $"sha512-{Convert.ToBase64String(hash)}";
+            var expectedIntegrity = $"sha512-{Convert.ToBase64String(hash)}";
 
-            Assert.True(PlaywrightCliInstaller.VerifyIntegrity(tempPath, integrity));
+            Assert.Equal(expectedIntegrity, PlaywrightCliInstaller.ComputeIntegrity(tempPath));
         }
         finally
         {
-            File.Delete(tempPath);
-        }
-    }
-
-    [Fact]
-    public void VerifyIntegrity_WithNonMatchingHash_ReturnsFalse()
-    {
-        var tempPath = Path.GetTempFileName();
-        try
-        {
-            File.WriteAllText(tempPath, "some content");
-
-            Assert.False(PlaywrightCliInstaller.VerifyIntegrity(tempPath, "sha512-wronghash"));
-        }
-        finally
-        {
-            File.Delete(tempPath);
-        }
-    }
-
-    [Fact]
-    public void VerifyIntegrity_WithNonSha512Prefix_ReturnsFalse()
-    {
-        var tempPath = Path.GetTempFileName();
-        try
-        {
-            File.WriteAllText(tempPath, "some content");
-
-            Assert.False(PlaywrightCliInstaller.VerifyIntegrity(tempPath, "sha256-somehash"));
-        }
-        finally
-        {
-            File.Delete(tempPath);
+            Directory.Delete(tempDir, recursive: true);
         }
     }
 
@@ -440,7 +400,7 @@ public class PlaywrightCliInstallerTests
             var version = SemVersion.Parse("0.1.7", SemVersionStyles.Strict);
             var npmRunner = new TestNpmRunner
             {
-                ResolveResult = new NpmPackageInfo { Version = version, Integrity = "sha512-abc123" }
+                ResolveResult = new NpmPackageInfo { Version = version }
             };
             var provenanceChecker = new TestNpmProvenanceChecker();
             var playwrightRunner = new TestPlaywrightCliRunner();
@@ -478,7 +438,7 @@ public class PlaywrightCliInstallerTests
             var version = SemVersion.Parse("0.1.1", SemVersionStyles.Strict);
             var npmRunner = new TestNpmRunner
             {
-                ResolveResult = new NpmPackageInfo { Version = version, Integrity = "sha512-abc123" }
+                ResolveResult = new NpmPackageInfo { Version = version }
             };
             var provenanceChecker = new TestNpmProvenanceChecker { ProvenanceOutcome = ProvenanceVerificationOutcome.SourceRepositoryMismatch };
             var playwrightRunner = new TestPlaywrightCliRunner();
@@ -489,7 +449,8 @@ public class PlaywrightCliInstallerTests
             Assert.Equal(PlaywrightInstallStatus.Failed, status);
             Assert.NotNull(message);
             Assert.True(provenanceChecker.ProvenanceCalled);
-            Assert.False(npmRunner.PackCalled);
+            Assert.True(npmRunner.PackCalled);
+            Assert.False(npmRunner.InstallGlobalCalled);
         }
         finally
         {
@@ -509,12 +470,11 @@ public class PlaywrightCliInstallerTests
         var tarballPath = Path.Combine(tempDir, "package.tgz");
         await File.WriteAllBytesAsync(tarballPath, [10, 20, 30]);
 
-        // Use a mismatched integrity hash — validation is disabled so it should still succeed.
         try
         {
             var npmRunner = new TestNpmRunner
             {
-                ResolveResult = new NpmPackageInfo { Version = version, Integrity = "sha512-wronghash" },
+                ResolveResult = new NpmPackageInfo { Version = version },
                 PackResult = tarballPath
             };
             var provenanceChecker = new TestNpmProvenanceChecker { ProvenanceOutcome = ProvenanceVerificationOutcome.AttestationFetchFailed };
@@ -561,7 +521,7 @@ public class PlaywrightCliInstallerTests
             var version = SemVersion.Parse("0.2.0", SemVersionStyles.Strict);
             var npmRunner = new TestNpmRunner
             {
-                ResolveResult = new NpmPackageInfo { Version = version, Integrity = "sha512-abc123" }
+                ResolveResult = new NpmPackageInfo { Version = version }
             };
             var playwrightRunner = new TestPlaywrightCliRunner();
             var configuration = new ConfigurationBuilder()
@@ -586,6 +546,47 @@ public class PlaywrightCliInstallerTests
         }
     }
 
+    [Theory]
+    [InlineData(">=0.2.0")]
+    [InlineData("latest")]
+    [InlineData("0.2")]
+    [InlineData("not-a-version")]
+    [InlineData("v0.2.0")]
+    public async Task InstallAsync_WhenVersionOverrideIsNotStrictSemVer_ReturnsFailed(string invalidVersion)
+    {
+        var tempDir = CreateTestRepoRoot();
+
+        try
+        {
+            var npmRunner = new TestNpmRunner
+            {
+                ResolveResult = new NpmPackageInfo { Version = SemVersion.Parse("0.2.0", SemVersionStyles.Strict) }
+            };
+            var playwrightRunner = new TestPlaywrightCliRunner();
+            var configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    [PlaywrightCliInstaller.VersionOverrideKey] = invalidVersion
+                })
+                .Build();
+            var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), configuration, NullLogger<PlaywrightCliInstaller>.Instance);
+
+            var (status, message) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
+
+            Assert.Equal(PlaywrightInstallStatus.Failed, status);
+            Assert.NotNull(message);
+            Assert.Contains(invalidVersion, message);
+            Assert.Null(npmRunner.ResolvedVersionRange);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
     [Fact]
     public async Task InstallAsync_WhenNoVersionOverride_UsesDefaultRange()
     {
@@ -596,7 +597,7 @@ public class PlaywrightCliInstallerTests
             var version = SemVersion.Parse("0.1.1", SemVersionStyles.Strict);
             var npmRunner = new TestNpmRunner
             {
-                ResolveResult = new NpmPackageInfo { Version = version, Integrity = "sha512-abc123" }
+                ResolveResult = new NpmPackageInfo { Version = version }
             };
             var playwrightRunner = new TestPlaywrightCliRunner();
             var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
@@ -640,7 +641,7 @@ public class PlaywrightCliInstallerTests
             };
             var npmRunner = new TestNpmRunner
             {
-                ResolveResult = new NpmPackageInfo { Version = version, Integrity = "sha512-abc123" }
+                ResolveResult = new NpmPackageInfo { Version = version }
             };
 
             var installer = new PlaywrightCliInstaller(
@@ -735,7 +736,7 @@ public class PlaywrightCliInstallerTests
             };
             var npmRunner = new TestNpmRunner
             {
-                ResolveResult = new NpmPackageInfo { Version = version, Integrity = "sha512-abc123" }
+                ResolveResult = new NpmPackageInfo { Version = version }
             };
 
             var installer = new PlaywrightCliInstaller(
@@ -786,7 +787,7 @@ public class PlaywrightCliInstallerTests
             };
             var npmRunner = new TestNpmRunner
             {
-                ResolveResult = new NpmPackageInfo { Version = version, Integrity = "sha512-abc123" }
+                ResolveResult = new NpmPackageInfo { Version = version }
             };
 
             var installer = new PlaywrightCliInstaller(
@@ -836,7 +837,7 @@ public class PlaywrightCliInstallerTests
             };
             var npmRunner = new TestNpmRunner
             {
-                ResolveResult = new NpmPackageInfo { Version = version, Integrity = "sha512-abc123" }
+                ResolveResult = new NpmPackageInfo { Version = version }
             };
 
             var installer = new PlaywrightCliInstaller(
@@ -1002,8 +1003,7 @@ public class PlaywrightCliInstallerTests
         public bool IsAvailable => true;
 
         public NpmPackageInfo? ResolveResult { get; set; }
-        public string? PackResult { get; set; }
-        public bool AuditResult { get; set; } = true;
+        public string? PackResult { get; set; } = string.Empty;
         public bool InstallGlobalResult { get; set; } = true;
 
         public bool PackCalled { get; private set; }
@@ -1019,11 +1019,14 @@ public class PlaywrightCliInstallerTests
         public Task<string?> PackAsync(string packageName, string version, string outputDirectory, CancellationToken cancellationToken)
         {
             PackCalled = true;
+            if (PackResult == string.Empty)
+            {
+                PackResult = Path.Combine(outputDirectory, "package.tgz");
+                File.WriteAllBytes(PackResult, [1, 2, 3]);
+            }
+
             return Task.FromResult(PackResult);
         }
-
-        public Task<bool> AuditSignaturesAsync(string packageName, string version, CancellationToken cancellationToken)
-            => Task.FromResult(AuditResult);
 
         public Task<bool> InstallGlobalAsync(string tarballPath, CancellationToken cancellationToken)
         {
@@ -1037,11 +1040,13 @@ public class PlaywrightCliInstallerTests
         public ProvenanceVerificationOutcome ProvenanceOutcome { get; set; } = ProvenanceVerificationOutcome.Verified;
         public bool ProvenanceCalled { get; private set; }
         public Func<WorkflowRefInfo, bool>? CapturedValidateWorkflowRef { get; private set; }
+        public string? CapturedSriIntegrity { get; private set; }
 
-        public Task<ProvenanceVerificationResult> VerifyProvenanceAsync(string packageName, string version, string expectedSourceRepository, string expectedWorkflowPath, string expectedBuildType, Func<WorkflowRefInfo, bool>? validateWorkflowRef, CancellationToken cancellationToken, string? sriIntegrity = null)
+        public Task<ProvenanceVerificationResult> VerifyProvenanceAsync(string packageName, string version, string expectedSourceRepository, string expectedWorkflowPath, string expectedBuildType, Func<WorkflowRefInfo, bool>? validateWorkflowRef, string? sriIntegrity, CancellationToken cancellationToken)
         {
             ProvenanceCalled = true;
             CapturedValidateWorkflowRef = validateWorkflowRef;
+            CapturedSriIntegrity = sriIntegrity;
             return Task.FromResult(new ProvenanceVerificationResult
             {
                 Outcome = ProvenanceOutcome,

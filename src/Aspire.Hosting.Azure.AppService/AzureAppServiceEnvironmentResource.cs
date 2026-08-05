@@ -9,6 +9,7 @@ using System.Globalization;
 using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.AppService;
+using Azure.Core;
 using Aspire.Hosting.Pipelines;
 using Azure.Provisioning;
 using Azure.Provisioning.AppService;
@@ -24,12 +25,18 @@ namespace Aspire.Hosting.Azure;
 /// Represents an Azure App Service Environment resource.
 /// </summary>
 #pragma warning disable CS0618 // Type or member is obsolete
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 public class AzureAppServiceEnvironmentResource :
     AzureProvisioningResource,
     IAzureComputeEnvironmentResource,
-    IAzureContainerRegistry
+    IAzureContainerRegistry,
+    IAzureDelegatedSubnetResource
 #pragma warning restore CS0618 // Type or member is obsolete
+#pragma warning restore ASPIREAZURE003
 {
+    /// <inheritdoc />
+    string IAzureDelegatedSubnetResource.DelegatedSubnetServiceName => "Microsoft.Web/serverFarms";
+
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureAppServiceEnvironmentResource"/> class.
     /// </summary>
@@ -362,6 +369,21 @@ public class AzureAppServiceEnvironmentResource :
     /// Gets the suffix added to each web app created in this App Service Environment.
     /// </summary>
     internal BicepOutputReference WebSiteSuffix => new("webSiteSuffix", this);
+
+    /// <summary>
+    /// Gets the delegated subnet ID configured for this environment, if any.
+    /// </summary>
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+    internal BicepValue<ResourceIdentifier>? GetDelegatedSubnetId(AzureResourceInfrastructure infra)
+    {
+        if (this.TryGetLastAnnotation<DelegatedSubnetAnnotation>(out var subnetAnnotation))
+        {
+            return subnetAnnotation.SubnetId.AsProvisioningParameter(infra);
+        }
+
+        return null;
+    }
+#pragma warning restore ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
     /// <summary>
     /// When true, HTTP endpoints are not upgraded to HTTPS. Default is false (HTTP→HTTPS upgrade is enabled).

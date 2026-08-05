@@ -23,17 +23,17 @@ public sealed class ResourceSourceViewModelTests
 
         if (testData.ExecutableArguments is not null)
         {
-            properties.TryAdd(KnownProperties.Executable.Args, new ResourcePropertyViewModel(KnownProperties.Executable.Args, Value.ForList(testData.ExecutableArguments.Select(Value.ForString).ToArray()), false, null, 0));
+            properties.TryAdd(KnownProperties.Executable.Args, new ResourcePropertyViewModel(KnownProperties.Executable.Args, Value.ForList(testData.ExecutableArguments.Select(Value.ForString).ToArray()), false, null, 0, displayName: null, isHighlighted: false));
         }
 
         if (testData.AppArgs is not null)
         {
-            properties.TryAdd(KnownProperties.Resource.AppArgs, new ResourcePropertyViewModel(KnownProperties.Resource.AppArgs, Value.ForList(testData.AppArgs.Select(Value.ForString).ToArray()), false, null, 0));
+            properties.TryAdd(KnownProperties.Resource.AppArgs, new ResourcePropertyViewModel(KnownProperties.Resource.AppArgs, Value.ForList(testData.AppArgs.Select(Value.ForString).ToArray()), false, null, 0, displayName: null, isHighlighted: false));
         }
 
         if (testData.AppArgsSensitivity is not null)
         {
-            properties.TryAdd(KnownProperties.Resource.AppArgsSensitivity, new ResourcePropertyViewModel(KnownProperties.Resource.AppArgsSensitivity, Value.ForList(testData.AppArgsSensitivity.Select(b => Value.ForNumber(Convert.ToInt32(b))).ToArray()), false, null, 0));
+            properties.TryAdd(KnownProperties.Resource.AppArgsSensitivity, new ResourcePropertyViewModel(KnownProperties.Resource.AppArgsSensitivity, Value.ForList(testData.AppArgsSensitivity.Select(b => Value.ForNumber(Convert.ToInt32(b))).ToArray()), false, null, 0, displayName: null, isHighlighted: false));
         }
 
         var resource = ModelTestHelpers.CreateResource(
@@ -70,7 +70,7 @@ public sealed class ResourceSourceViewModelTests
 
         void AddStringProperty(string propertyName, string? propertyValue)
         {
-            properties.TryAdd(propertyName, new ResourcePropertyViewModel(propertyName, propertyValue is null ? Value.ForNull() : Value.ForString(propertyValue), false, null, 0));
+            properties.TryAdd(propertyName, new ResourcePropertyViewModel(propertyName, propertyValue is null ? Value.ForNull() : Value.ForString(propertyValue), false, null, 0, displayName: null, isHighlighted: false));
         }
     }
 

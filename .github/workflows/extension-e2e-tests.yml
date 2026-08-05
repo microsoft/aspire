@@ -180,6 +180,24 @@ jobs:
             cliBinary: aspire.exe
             useXvfb: false
           - name: Linux
+            shardName: debug-startup-timeout
+            spec: out/test-e2e/test-e2e/debugStartupTimeout.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            unsetCliStartTimeout: true
+          - name: Windows
+            shardName: debug-startup-timeout
+            spec: out/test-e2e/test-e2e/debugStartupTimeout.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+            unsetCliStartTimeout: true
+          - name: Linux
             shardName: zero-to-running
             spec: out/test-e2e/test-e2e/zeroToRunning.e2e.test.js
             runner: ubuntu-latest
@@ -420,6 +438,7 @@ jobs:
           ASPIRE_EXTENSION_E2E_VSIX: ${{ github.workspace }}/extension/out/aspire-extension.vsix
           ASPIRE_EXTENSION_E2E_SHARD: ${{ matrix.shardName }}
           ASPIRE_EXTENSION_E2E_SPEC: ${{ matrix.spec }}
+          ASPIRE_EXTENSION_E2E_UNSET_CLI_START_TIMEOUT: ${{ matrix.unsetCliStartTimeout }}
           # Linux E2E jobs run under Xvfb, where ffmpeg recordings are compact
           # and useful for diagnosing timing-sensitive flakes after the fact.
           ASPIRE_EXTENSION_E2E_RECORDING_MODE: ${{ matrix.useXvfb && 'always' || 'off' }}

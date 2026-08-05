@@ -3,6 +3,8 @@
   <PropertyGroup>
     <TargetFrameworks>net8.0;net472</TargetFrameworks>
     <IsPackable>false</IsPackable>
+    <!-- MSBuild task assembly, not a polyglot integration, so opt out of the default 'polyglot' NuGet tag. -->
+    <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible>
     <!-- MSBuild Task assemblies don't need XML docs -->
     <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>

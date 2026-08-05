@@ -4,7 +4,6 @@
 using System.Collections.Concurrent;
 using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
-using Aspire.Cli.Tests.Mcp;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Shared;
@@ -17,7 +16,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RestorePackagesAsync_UsesWorkspaceAspireDirectoryForRestoreArtifacts()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostDirectory = workspace.CreateDirectory("apphost");
         var layoutRoot = workspace.CreateDirectory("layout");
@@ -37,7 +36,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
             new LayoutProcessRunner(executionFactory),
             new TestFeatures(),
-            TestExecutionContextFactory.CreateTestContext(),
+            new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
         var manifestPath = await service.RestorePackagesAsync(
@@ -58,7 +57,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RestorePackagesAsync_UsesDistinctCachePathsForDifferentSources()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostDirectory = workspace.CreateDirectory("apphost");
         var layoutRoot = workspace.CreateDirectory("layout");
@@ -73,7 +72,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
             new LayoutProcessRunner(executionFactory),
             new TestFeatures(),
-            TestExecutionContextFactory.CreateTestContext(),
+            new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
         var resultA = await service.RestorePackagesAsync(
@@ -92,7 +91,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RestorePackagesAsync_PassesNuGetConfigToRestore()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostDirectory = workspace.CreateDirectory("apphost");
         var layoutRoot = workspace.CreateDirectory("layout");
@@ -115,7 +114,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
             new LayoutProcessRunner(executionFactory),
             new TestFeatures(),
-            TestExecutionContextFactory.CreateTestContext(),
+            new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
         await service.RestorePackagesAsync(
@@ -129,7 +128,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RestorePackagesAsync_UsesCachedManifestWithoutRunningHelper()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostDirectory = workspace.CreateDirectory("apphost");
         var layoutRoot = workspace.CreateDirectory("layout");
@@ -161,7 +160,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
             new LayoutProcessRunner(executionFactory),
             new TestFeatures(),
-            TestExecutionContextFactory.CreateTestContext(),
+            new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
         var result = await service.RestorePackagesAsync(packageList, workingDirectory: appHostDirectory.FullName);
@@ -173,7 +172,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RestorePackagesAsync_RegeneratesCachedManifestWhenManifestIsInvalid()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostDirectory = workspace.CreateDirectory("apphost");
         var layoutRoot = workspace.CreateDirectory("layout");
@@ -212,7 +211,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
             new LayoutProcessRunner(executionFactory),
             new TestFeatures(),
-            TestExecutionContextFactory.CreateTestContext(),
+            new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
         var result = await service.RestorePackagesAsync(packageList, workingDirectory: appHostDirectory.FullName);
@@ -226,7 +225,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RestorePackagesAsync_UsesDistinctCachePathsWhenManagedHelperChanges()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostDirectory = workspace.CreateDirectory("apphost");
         var layoutRoot = workspace.CreateDirectory("layout");
@@ -241,7 +240,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
             new LayoutProcessRunner(executionFactory),
             new TestFeatures(),
-            TestExecutionContextFactory.CreateTestContext(),
+            new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
         var resultA = await service.RestorePackagesAsync(
@@ -260,7 +259,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RestorePackagesAsync_SharesRestoreCacheAcrossAppHostsInSameWorkspace()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var firstAppHost = workspace.CreateDirectory(Path.Combine("apps", "api"));
         var secondAppHost = workspace.CreateDirectory(Path.Combine("apps", "web"));
@@ -276,7 +275,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
             new LayoutProcessRunner(executionFactory),
             new TestFeatures(),
-            TestExecutionContextFactory.CreateTestContext(),
+            new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
         var restoreRoot = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "integrations", "package-restore");
@@ -305,7 +304,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RestorePackagesAsync_SerializesConcurrentRestoreForSameCachePath()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostDirectory = workspace.CreateDirectory("apphost");
         var layoutRoot = workspace.CreateDirectory("layout");
@@ -355,7 +354,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
             new LayoutProcessRunner(executionFactory),
             new TestFeatures(),
-            TestExecutionContextFactory.CreateTestContext(),
+            new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
         var packageList = new List<(string Id, string Version)> { ("Aspire.Hosting.JavaScript", "9.4.0") };
@@ -376,7 +375,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RestorePackagesAsync_IgnoresLockedLegacyLibsDirectory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostDirectory = workspace.CreateDirectory("apphost");
         var layoutRoot = workspace.CreateDirectory("layout");
@@ -404,7 +403,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
             new LayoutProcessRunner(executionFactory),
             new TestFeatures(),
-            TestExecutionContextFactory.CreateTestContext(),
+            new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
         using var lockedFile = new FileStream(lockedFilePath, FileMode.Open, FileAccess.Read, FileShare.None);

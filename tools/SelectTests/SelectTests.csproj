@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- net10.0: Microsoft.Build 18.3.x (used by the Layer 1 ProjectGraph) ships only net10.0/net472
+         managed assets, and the graph is loaded from the repo-local net10.0 SDK via MSBuildLocator. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" />
+    <PackageReference Include="System.CommandLine" />
+    <PackageReference Include="YamlDotNet" />
+    <!-- Layer 1 (affected-projects) builds an MSBuild ProjectGraph from Aspire.slnx. The engine
+         assemblies are loaded at runtime from the repo-local SDK via MSBuildLocator, so they are
+         excluded from runtime output (ExcludeAssets=runtime) and only used at compile time. -->
+    <PackageReference Include="Microsoft.Build" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.Build.Framework" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.Build.Locator" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Infrastructure.Tests" />
+  </ItemGroup>
+
+</Project>

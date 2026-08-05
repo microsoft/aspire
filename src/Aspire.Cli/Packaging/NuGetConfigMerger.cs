@@ -578,36 +578,10 @@ internal class NuGetConfigMerger
 
             var sourcesWithoutAnyPatterns = existingSourceKeys.Except(sourcesWithPatterns, StringComparer.OrdinalIgnoreCase).ToArray();
 
-            // Only add wildcard patterns to sources that originally had NO patterns at all
-            // Sources that had patterns but lost them due to remapping should be removed entirely
-
-            // Check the original packageSourceMapping to see which sources had patterns originally
-            var originalSourcesWithPatterns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var originalPsm = context.PackageSourceMapping;
-            if (originalPsm != null)
-            {
-                foreach (var ps in originalPsm.Elements("packageSource"))
-                {
-                    var originalSourceKey = (string?)ps.Attribute("key");
-                    if (!string.IsNullOrEmpty(originalSourceKey) && ps.Elements("package").Any())
-                    {
-                        // Add the original key
-                        originalSourcesWithPatterns.Add(originalSourceKey);
-
-                        // Also add the proper key if this was a URL-based key
-                        if (context.UrlToExistingKey.TryGetValue(originalSourceKey, out var properKey))
-                        {
-                            originalSourcesWithPatterns.Add(properKey);
-                        }
-                    }
-                }
-            }
-
             // Only give wildcard patterns to sources that:
             // 1. Have no patterns now
-            // 2. Originally had no patterns either (were unmapped before) OR still have some patterns left
-            // 3. Are not safe to remove (user-defined sources)
-            // 4. Are required by the current channel OR are not Microsoft-controlled sources
+            // 2. Are not safe to remove (user-defined sources)
+            // 3. Are required by the current channel OR are not Microsoft-controlled sources
             foreach (var sourceKey in sourcesWithoutAnyPatterns)
             {
                 // Get the source URL to check if it's safe to give it a wildcard pattern
@@ -634,52 +608,6 @@ internal class NuGetConfigMerger
 
                     packageSourceMapping.Add(packageSourceElement);
                     sourcesInUse.Add(sourceKey);
-                }
-            }
-
-            // Also give wildcard patterns to sources that still have some patterns left but should remain fully functional
-            // when there's a wildcard mapping that could interfere with their ability to serve packages
-            // But only for user-defined sources, not Microsoft-controlled feeds
-            var sourcesWithPatternsLeft = packageSourceMapping.Elements("packageSource")
-                .Where(ps => ps.Elements("package").Any() && !ps.Elements("package").Any(p => (string?)p.Attribute("pattern") == "*"))
-                .Select(ps => (string?)ps.Attribute("key"))
-                .Where(key => !string.IsNullOrEmpty(key))
-                .Cast<string>()
-                .ToArray();
-
-            foreach (var sourceKey in sourcesWithPatternsLeft)
-            {
-                // Get the source URL to check if it's a user-defined source
-                var sourceElement = context.ExistingAdds
-                    .FirstOrDefault(add => string.Equals((string?)add.Attribute("key"), sourceKey, StringComparison.OrdinalIgnoreCase));
-                var sourceValue = (string?)sourceElement?.Attribute("value");
-                var isRequiredByCurrentChannel = context.RequiredSources.Contains(sourceKey, StringComparer.OrdinalIgnoreCase) ||
-                    context.RequiredSources.Contains(sourceValue ?? "", StringComparer.OrdinalIgnoreCase);
-                var requiredSourceHasWildcard = context.Mappings.Any(m =>
-                    m.PackageFilter == PackageMapping.AllPackages &&
-                    (string.Equals(m.Source, sourceKey, StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(m.Source, sourceValue, StringComparison.OrdinalIgnoreCase)));
-
-                if (isRequiredByCurrentChannel && !requiredSourceHasWildcard)
-                {
-                    continue;
-                }
-
-                // For user-defined sources that still have patterns, also give them wildcard patterns
-                // to ensure they can serve other packages too. But skip Microsoft-controlled sources
-                // that have specific patterns as they are intended to serve specific packages only.
-                if (!IsSourceSafeToRemove(sourceKey, sourceValue) && !IsMicrosoftControlledSource(sourceKey, sourceValue))
-                {
-                    var packageSourceElement = packageSourceMapping.Elements("packageSource")
-                        .FirstOrDefault(ps => string.Equals((string?)ps.Attribute("key"), sourceKey, StringComparison.OrdinalIgnoreCase));
-
-                    if (packageSourceElement != null)
-                    {
-                        var wildcardPackage = new XElement("package");
-                        wildcardPackage.SetAttributeValue("pattern", "*");
-                        packageSourceElement.Add(wildcardPackage);
-                        sourcesInUse.Add(sourceKey);
-                    }
                 }
             }
         }

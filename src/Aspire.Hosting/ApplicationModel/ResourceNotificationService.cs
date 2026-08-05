@@ -585,14 +585,14 @@ public class ResourceNotificationService : IDisposable
             .Distinct(StringComparers.ResourceName)
             .ToArray();
 
-        // Only transition replicas that are actually starting up to "Waiting".
-        // Replicas already in a Running or terminal state should not be clobbered,
-        // as this broadcast targets ALL replicas of the resource (model-level update),
-        // not just the specific replica being started.
+        // Explicit-start resources should not auto-transition to Waiting even if they have dependencies
+        // (they should be considered Waiting only after an attempt is made to start them).
+        // Resources with no instances managed by Aspire do not "start" from Aspire's perspective, 
+        // so they are always allowed to transition to Waiting if they are waiting on dependencies.
+        var allowNotStarted = !resource.HasAnnotationOfType<ExplicitStartupAnnotation>() || !resource.TryGetInstances(out _);
+
         return PublishUpdateAsync(resource, s =>
-            s.State?.Text is null
-            || s.State?.Text == KnownResourceStates.Starting
-            || s.State?.Text == KnownResourceStates.Waiting
+            CanTransitionToWaiting(s.State?.Text, allowNotStarted)
                 ? s with
                 {
                     State = KnownResourceStates.Waiting,
@@ -600,6 +600,12 @@ public class ResourceNotificationService : IDisposable
                 }
                 : s);
     }
+
+    private static bool CanTransitionToWaiting(string? state, bool allowNotStarted) =>
+        state is null
+        || (allowNotStarted && state == KnownResourceStates.NotStarted)
+        || state == KnownResourceStates.Starting
+        || state == KnownResourceStates.Waiting;
 
     private Task ClearWaitingForDependenciesAsync(IResource resource)
     {
@@ -1066,7 +1072,7 @@ public class ResourceNotificationService : IDisposable
             else
             {
                 // Command already exists in snapshot. Update its state based on annotation callback.
-                var newState = annotation.UpdateState(new UpdateCommandStateContext { ResourceSnapshot = previousState, ServiceProvider = _serviceProvider });
+                var newState = annotation.UpdateState(new UpdateCommandStateContext { ResourceSnapshot = previousState, Services = _serviceProvider });
 
                 if (existingCommand.State != newState)
                 {
@@ -1109,16 +1115,14 @@ public class ResourceNotificationService : IDisposable
 
         static ResourceCommandSnapshot CreateCommandFromAnnotation(ResourceCommandAnnotation annotation, CustomResourceSnapshot previousState, IServiceProvider serviceProvider)
         {
-            var state = annotation.UpdateState(new UpdateCommandStateContext { ResourceSnapshot = previousState, ServiceProvider = serviceProvider });
+            var state = annotation.UpdateState(new UpdateCommandStateContext { ResourceSnapshot = previousState, Services = serviceProvider });
 
 #pragma warning disable CS0618 // Parameter is obsolete but still flowed for compatibility.
-#pragma warning disable ASPIREINTERACTION001 // Command arguments intentionally reuse the experimental interaction input model.
             return new ResourceCommandSnapshot(annotation.Name, state, annotation.DisplayName, annotation.DisplayDescription, annotation.Parameter, annotation.ConfirmationMessage, annotation.IconName, annotation.IconVariant, annotation.IsHighlighted)
             {
                 Arguments = annotation.Arguments,
                 Visibility = annotation.Visibility
             };
-#pragma warning restore ASPIREINTERACTION001
 #pragma warning restore CS0618
         }
     }

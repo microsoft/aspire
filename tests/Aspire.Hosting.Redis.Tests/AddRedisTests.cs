@@ -656,6 +656,57 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         Assert.DoesNotContain("--save", args.Substring(saveIndex + 1));
     }
 
+    [Fact]
+    public async Task WithModuleAddsCommandLineArgsForWellKnownModule()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        var redis = builder.AddRedis("myRedis")
+            .WithModule(RedisModules.Json);
+
+        var args = await GetCommandLineArgs(redis);
+
+        Assert.Contains("--loadmodule /usr/local/lib/redis/modules/rejson.so", args);
+    }
+
+    [Fact]
+    public async Task WithModuleAddsCommandLineArgsForModulePath()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        var redis = builder.AddRedis("myRedis")
+            .WithModule("/opt/redis/custom-module");
+
+        var args = await GetCommandLineArgs(redis);
+
+        Assert.Contains("--loadmodule /opt/redis/custom-module", args);
+    }
+
+    [Fact]
+    public async Task WithModuleAddsCommandLineArgsForMultipleModules()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        var redis = builder.AddRedis("myRedis")
+            .WithModule(RedisModules.Search)
+            .WithModule("/opt/redis/custom-module.so");
+
+        var args = await GetCommandLineArgs(redis);
+
+        Assert.Contains("--loadmodule /usr/local/lib/redis/modules/redisearch.so --loadmodule /opt/redis/custom-module.so", args);
+    }
+
+    [Fact]
+    public async Task WithModuleDeduplicatesCommandLineArgsForSameModule()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        var redis = builder.AddRedis("myRedis")
+            .WithModule(RedisModules.Json)
+            .WithModule("/usr/local/lib/redis/modules/rejson.so");
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(redis.Resource);
+
+        Assert.Equal(1, args.Count(arg => arg == "--loadmodule"));
+        Assert.Equal(1, args.Count(arg => arg == "/usr/local/lib/redis/modules/rejson.so"));
+    }
+
     private static async Task<string> GetCommandLineArgs(IResourceBuilder<RedisResource> builder)
     {
         var args = await ArgumentEvaluator.GetArgumentListAsync(builder.Resource);

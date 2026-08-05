@@ -19,9 +19,9 @@ internal static class NuGetSignatureVerificationEnabler
     /// has explicitly set it to "false". The behavior can be disabled via the
     /// <see cref="KnownFeatures.NuGetSignatureVerificationEnabled"/> feature flag.
     /// </summary>
-    public static void Apply(Dictionary<string, string> environmentVariables, IFeatures features, CliExecutionContext executionContext)
+    public static void Apply(Dictionary<string, string> environmentVariables, IFeatures features, IEnvironment environment)
     {
-        if (!OperatingSystem.IsLinux() ||
+        if (!environment.IsLinux() ||
             !features.IsFeatureEnabled(
                 KnownFeatures.NuGetSignatureVerificationEnabled,
                 KnownFeatures.GetFeatureMetadata(KnownFeatures.NuGetSignatureVerificationEnabled)!.DefaultValue))
@@ -29,7 +29,7 @@ internal static class NuGetSignatureVerificationEnabler
             return;
         }
 
-        var value = executionContext.GetEnvironmentVariable(DotNetNuGetSignatureVerification);
+        var value = environment.GetEnvironmentVariable(DotNetNuGetSignatureVerification);
 
         // If the user explicitly set it to "false", respect that
         var effectiveValue = bool.TryParse(value, out var boolValue) && !boolValue

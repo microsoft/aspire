@@ -108,6 +108,11 @@ public static class TestTrxBuilder
             new XAttribute("testId", $"test-{index}"),
             new XAttribute("testName", testCase.DisplayName),
             new XAttribute("outcome", testCase.Outcome),
+            // Real MTP `--report-trx` files stamp startTime/endTime as ISO-8601
+            // DateTimeOffset. Emit them when supplied so tests can exercise readers
+            // against the real attribute shape (e.g. TimeSpan.Parse pitfalls).
+            testCase.StartTime is null ? null : new XAttribute("startTime", testCase.StartTime),
+            testCase.EndTime is null ? null : new XAttribute("endTime", testCase.EndTime),
             new XElement(
                 s_namespace + "Output",
                 CreateErrorInfoElement(testCase),
@@ -135,4 +140,6 @@ public sealed record TestTrxCase(
     string ErrorMessage = "",
     string StackTrace = "",
     string StdOut = "",
-    string? TestMethodName = null);
+    string? TestMethodName = null,
+    string? StartTime = null,
+    string? EndTime = null);

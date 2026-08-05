@@ -3,8 +3,10 @@
 
 using Microsoft.AspNetCore.InternalTesting;
 using System.Globalization;
+using System.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.Configuration;
 using Semver;
 
@@ -21,6 +23,42 @@ public class DotNetSdkInstallerTests
         var (success, _, _) = await installer.CheckAsync().DefaultTimeout();
 
         Assert.True(success);
+    }
+
+    [Fact]
+    public async Task CheckAsync_WhenCanceled_KillsDotNetProcessTree()
+    {
+        var tempDirectory = Directory.CreateTempSubdirectory();
+        var parentPidFile = Path.Combine(tempDirectory.FullName, "dotnet-parent.pid");
+        var childPidFile = Path.Combine(tempDirectory.FullName, "dotnet-child.pid");
+        var parentPid = 0;
+        var childPid = 0;
+        using var cancellationTokenSource = new CancellationTokenSource();
+
+        try
+        {
+            var startInfo = await CreateBlockingDotNetShimAsync(tempDirectory, parentPidFile, childPidFile);
+            var installer = new DotNetSdkInstaller(CreateEmptyConfiguration(), _ => startInfo);
+            var checkTask = installer.CheckAsync(cancellationTokenSource.Token);
+
+            parentPid = await ProcessTestHelpers.WaitForProcessIdAsync(parentPidFile, TestContext.Current.CancellationToken)
+                .DefaultTimeout();
+            childPid = await ProcessTestHelpers.WaitForProcessIdAsync(childPidFile, TestContext.Current.CancellationToken)
+                .DefaultTimeout();
+
+            cancellationTokenSource.Cancel();
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => checkTask).DefaultTimeout();
+            Assert.True(ProcessTestHelpers.WaitForProcessExit(parentPid, TimeSpan.FromSeconds(10)), $"Expected dotnet process {parentPid} to exit.");
+            Assert.True(ProcessTestHelpers.WaitForProcessExit(childPid, TimeSpan.FromSeconds(10)), $"Expected child process {childPid} to exit.");
+        }
+        finally
+        {
+            cancellationTokenSource.Cancel();
+            ProcessTestHelpers.TryKillProcess(parentPid);
+            ProcessTestHelpers.TryKillProcess(childPid);
+            tempDirectory.Delete(recursive: true);
+        }
     }
 
     [Fact]
@@ -247,4 +285,56 @@ public class DotNetSdkInstallerTests
             })
             .Build();
     }
+
+    private static async Task<ProcessStartInfo> CreateBlockingDotNetShimAsync(DirectoryInfo directory, string parentPidFile, string childPidFile)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var scriptFile = Path.Combine(directory.FullName, "dotnet-shim.ps1");
+            var script =
+                "$child = Start-Process cmd.exe -ArgumentList '/c', 'ping -n 60 127.0.0.1 > nul' -PassThru" + Environment.NewLine +
+                $"$PID | Set-Content -Path '{parentPidFile.Replace("'", "''", StringComparison.Ordinal)}'" + Environment.NewLine +
+                $"$child.Id | Set-Content -Path '{childPidFile.Replace("'", "''", StringComparison.Ordinal)}'" + Environment.NewLine +
+                "$child.WaitForExit()" + Environment.NewLine;
+            await File.WriteAllTextAsync(scriptFile, script);
+
+            var startInfo = new ProcessStartInfo("powershell.exe")
+            {
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+            startInfo.ArgumentList.Add("-NoProfile");
+            startInfo.ArgumentList.Add("-ExecutionPolicy");
+            startInfo.ArgumentList.Add("Bypass");
+            startInfo.ArgumentList.Add("-File");
+            startInfo.ArgumentList.Add(scriptFile);
+            return startInfo;
+        }
+
+        var shellFile = Path.Combine(directory.FullName, "dotnet");
+        var shellScript =
+            "#!/usr/bin/env bash" + Environment.NewLine +
+            $"echo $$ > '{EscapeShellPath(parentPidFile)}'" + Environment.NewLine +
+            "sleep 60 &" + Environment.NewLine +
+            $"echo $! > '{EscapeShellPath(childPidFile)}'" + Environment.NewLine +
+            "wait $!" + Environment.NewLine;
+        await File.WriteAllTextAsync(shellFile, shellScript);
+        File.SetUnixFileMode(
+            shellFile,
+            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+            UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+            UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+
+        return new ProcessStartInfo(shellFile)
+        {
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+    }
+
+    private static string EscapeShellPath(string path) => path.Replace("'", "'\"'\"'", StringComparison.Ordinal);
 }

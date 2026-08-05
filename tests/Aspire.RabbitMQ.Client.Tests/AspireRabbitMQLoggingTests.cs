@@ -105,6 +105,35 @@ public class AspireRabbitMQLoggingTests
     }
 
     [Fact]
+    public void ForwardsEventIdWithoutLevelName()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Services.AddSingleton<RabbitMQEventSourceLogForwarder>();
+
+        var logger = new TestLogger();
+        builder.Services.AddSingleton<ILoggerProvider>(sp => new LoggerProvider(logger));
+
+        using var host = builder.Build();
+        host.Services.GetRequiredService<RabbitMQEventSourceLogForwarder>().Start();
+
+        LogInfo("info");
+        LogWarn("warn");
+        LogError("error", new InvalidOperationException("test"));
+
+        var logs = logger.Logs.ToArray();
+        Assert.Equal(3, logs.Length);
+
+        Assert.Equal(1, logs[0].EventId.Id);
+        Assert.True(string.IsNullOrEmpty(logs[0].EventId.Name));
+
+        Assert.Equal(2, logs[1].EventId.Id);
+        Assert.True(string.IsNullOrEmpty(logs[1].EventId.Name));
+
+        Assert.Equal(3, logs[2].EventId.Id);
+        Assert.True(string.IsNullOrEmpty(logs[2].EventId.Name));
+    }
+
+    [Fact]
     public void TestExceptionWithoutInnerException()
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
@@ -239,7 +268,7 @@ public class AspireRabbitMQLoggingTests
 
     private sealed class TestLogger : ILogger
     {
-        public BlockingCollection<(LogLevel Level, string Message, object? State)> Logs { get; } = new();
+        public BlockingCollection<(LogLevel Level, string Message, object? State, EventId EventId)> Logs { get; } = new();
         public Action? LoggedMessage { get; set; }
 
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull =>
@@ -249,7 +278,7 @@ public class AspireRabbitMQLoggingTests
 
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         {
-            Logs.Add((logLevel, formatter(state, exception), state));
+            Logs.Add((logLevel, formatter(state, exception), state, eventId));
             LoggedMessage?.Invoke();
         }
     }

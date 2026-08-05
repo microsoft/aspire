@@ -1,4 +1,4 @@
-import { createBuilder } from './.aspire/modules/aspire.mjs';
+import { createBuilder, RedisModules } from './.aspire/modules/aspire.mjs';
 
 const builder = await createBuilder();
 
@@ -15,6 +15,10 @@ await cache.withPersistence({ interval: 600000000, keysChangedThreshold: 5 });
 
 // withDataBindMount on RedisResource
 await cache2.withDataBindMount("/tmp/redis-data");
+
+// withModule on RedisResource - well-known and custom module paths
+await cache.withModule(RedisModules.Json);
+await cache.withModule("/opt/redis/custom-module.so");
 
 // withHostPort on RedisResource
 await cache.withHostPort({ port: 6379 });

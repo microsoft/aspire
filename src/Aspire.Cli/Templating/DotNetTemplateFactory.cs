@@ -3,14 +3,12 @@
 
 using System.CommandLine;
 using System.Globalization;
-using System.Runtime.InteropServices;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
-using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
@@ -28,7 +26,8 @@ internal class DotNetTemplateFactory(
     IFeatures features,
     AspireCliTelemetry telemetry,
     ICliHostEnvironment hostEnvironment,
-    TemplateNuGetConfigService templateNuGetConfigService)
+    TemplateNuGetConfigService templateNuGetConfigService,
+    IEnvironment environment)
     : ITemplateFactory
 {
     // Template-specific options
@@ -106,8 +105,8 @@ internal class DotNetTemplateFactory(
         }
 
         // Fall back to checking for dotnet on the system PATH.
-        var dotnetFileName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "dotnet.exe" : "dotnet";
-        var pathVariable = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+        var dotnetFileName = environment.IsWindows() ? "dotnet.exe" : "dotnet";
+        var pathVariable = environment.GetEnvironmentVariable("PATH") ?? string.Empty;
 
         foreach (var directory in pathVariable.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
         {
@@ -529,24 +528,28 @@ internal class DotNetTemplateFactory(
             _ = await certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
 
             // Persist the resolved channel into the scaffolded project's aspire.config.json
-            // for Explicit channels (pr-<N>, daily, staging, local). Without this pin, `aspire
-            // update` on the new project skips the local-config step in its channel-resolution
-            // precedence and falls through to either an interactive prompt (when hives exist)
-            // or the Implicit/nuget.org channel — silently moving a project scaffolded by a
-            // PR or daily CLI onto stable/nuget.org. Implicit channels (stable/nuget.org) are
-            // not persisted so `aspire add`/`aspire restore` continue to use the ambient
-            // NuGet config without a per-project pin. Mirrors the TypeScript starter behavior
-            // in CliTemplateFactory.TypeScriptStarterTemplate.
-            if (selectedTemplateDetails.Channel.Type is PackageChannelType.Explicit)
+            // for channels whose name should be pinned (pr-<N>, daily, staging, local).
+            // Without this pin, `aspire update` on the new project skips the local-config
+            // step in its channel-resolution precedence and falls through to either an
+            // interactive prompt (when hives exist) or the Implicit/nuget.org channel —
+            // silently moving a project scaffolded by a PR or daily CLI onto stable/nuget.org.
+            // The `stable` channel is intentionally NOT persisted (ShouldPersistChannelName
+            // excludes it): its packages live on nuget.org, so `aspire add`/`aspire restore`
+            // continue to use the ambient NuGet config without a per-project pin. Mirrors the
+            // TypeScript starter behavior in CliTemplateFactory.TypeScriptStarterTemplate.
+            if (selectedTemplateDetails.Channel.ShouldPersistChannelName())
             {
                 var config = AspireConfigFile.LoadOrCreate(outputPath);
                 config.Channel = selectedTemplateDetails.Channel.Name;
                 config.Save(outputPath);
             }
 
-            // For explicit channels, optionally create or update a NuGet.config. If none exists in the current
-            // working directory, create one in the newly created project's output directory.
-            if (!await TemplateNuGetConfigService.CreateOrUpdateNuGetConfigForSourceOverrideAsync(inputs.Source, selectedTemplateDetails.Channel, outputPath, cancellationToken))
+            // For channels that route Aspire packages to a custom feed, optionally create or update
+            // a NuGet.config. If none exists in the current working directory, create one in the
+            // newly created project's output directory. The `stable` channel is skipped inside
+            // PromptToCreateOrUpdateNuGetConfigAsync (ShouldCreateNuGetConfig) because its packages
+            // are on nuget.org and a <clear/>-based config would clobber the user's ambient sources.
+            if (!await TemplateNuGetConfigService.CreateOrUpdateNuGetConfigForSourceOverrideAsync(inputs.Source, selectedTemplateDetails.Channel, outputPath, cancellationToken, executionContext.NuGetServiceIndexOverride))
             {
                 await templateNuGetConfigService.PromptToCreateOrUpdateNuGetConfigAsync(selectedTemplateDetails.Channel, outputPath, cancellationToken);
             }
@@ -614,7 +617,7 @@ internal class DotNetTemplateFactory(
             {
                 var defaultPath = pathDeriver(executionContext, projectName);
                 var validator = OutputPathHelper.CreateOutputPathValidator(executionContext.WorkingDirectory.FullName);
-                return await prompter.PromptForOutputPath(defaultPath, parseResult, validator, cancellationToken, outputPathResolver);
+                return await prompter.PromptForOutputPath(defaultPath, parseResult, validator, outputPathResolver, cancellationToken);
             },
             interactionService);
     }

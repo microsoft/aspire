@@ -19,6 +19,8 @@ export type Capability =
     | 'bun' // Support for running Bun projects
     | 'oven.bun-vscode' // Bun debug adapter extension identifier
     | 'browser' // Support for browser debugging (built-in to VS Code via js-debug)
+    | 'maui' // Support for running .NET MAUI projects
+    | 'ms-dotnettools.dotnet-maui' // MAUI debug adapter extension identifier
     | 'azure-functions'; // Support for running Azure Functions projects
 
 export type Capabilities = Capability[];
@@ -46,6 +48,10 @@ export function isGoInstalled() {
 
 export function isAzureFunctionsExtensionInstalled() {
     return isExtensionInstalled("ms-azuretools.vscode-azurefunctions");
+}
+
+export function isMauiInstalled() {
+    return isExtensionInstalled("ms-dotnettools.dotnet-maui");
 }
 
 export function isNodeInstalled() {
@@ -94,6 +100,11 @@ export function getSupportedCapabilities(): Capabilities {
     if (isBunInstalled()) {
         capabilities.push("bun");
         capabilities.push("oven.bun-vscode");
+    }
+
+    if (isMauiInstalled()) {
+        capabilities.push("maui");
+        capabilities.push("ms-dotnettools.dotnet-maui");
     }
 
     return capabilities;

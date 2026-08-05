@@ -123,6 +123,18 @@
   <data name="InitCommand_ConfiguresDetectedAgentEnvironments" xml:space="preserve">
     <value>(configures detected agent environments)</value>
   </data>
+  <data name="InitCommand_TelemetryHooksInstalled" xml:space="preserve">
+    <value>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</value>
+  </data>
+  <data name="InitCommand_TelemetryHookSkippedMalformedConfig" xml:space="preserve">
+    <value>Skipped the telemetry hook for {0} because its configuration file contains malformed JSON.</value>
+  </data>
+  <data name="InitCommand_TelemetryHookSkippedUnexpectedShape" xml:space="preserve">
+    <value>Skipped the telemetry hook for {0} because its configuration has an unexpected shape.</value>
+  </data>
+  <data name="InitCommand_TelemetryHookWriteFailed" xml:space="preserve">
+    <value>Skipped the telemetry hook for {0} because its configuration could not be written.</value>
+  </data>
   <data name="SkillDescription_Aspire" xml:space="preserve">
     <value>Aspire CLI commands and workflows for distributed apps</value>
   </data>
@@ -198,6 +210,9 @@
   <data name="PlaywrightCliInstaller_FailedToResolvePackage" xml:space="preserve">
     <value>Failed to resolve {0} from the npm registry.</value>
   </data>
+  <data name="PlaywrightCliInstaller_InvalidVersionOverride" xml:space="preserve">
+    <value>The value of configuration setting '{0}' ('{1}') is not a valid SemVer 2.0 version.</value>
+  </data>
   <data name="PlaywrightCliInstaller_ProvenanceVerificationFailed" xml:space="preserve">
     <value>Provenance verification failed for {0}: {1}</value>
   </data>
@@ -224,5 +239,29 @@
   </data>
   <data name="InitCommand_SkillsOptionDescription" xml:space="preserve">
     <value>Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'</value>
+  </data>
+  <data name="AgentTelemetryCommand_Description" xml:space="preserve">
+    <value>Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</value>
+  </data>
+  <data name="AgentTelemetryCommand_EventTypeDescription" xml:space="preserve">
+    <value>The telemetry event type (skill_invocation, tool_invocation, or reference_file_read)</value>
+  </data>
+  <data name="AgentTelemetryCommand_ClientNameDescription" xml:space="preserve">
+    <value>The AI agent client that produced the event (for example copilot-cli, claude-code, or vscode)</value>
+  </data>
+  <data name="AgentTelemetryCommand_SessionIdDescription" xml:space="preserve">
+    <value>The opaque AI agent session identifier</value>
+  </data>
+  <data name="AgentTelemetryCommand_SkillNameDescription" xml:space="preserve">
+    <value>The Aspire skill name for a skill_invocation event</value>
+  </data>
+  <data name="AgentTelemetryCommand_ToolNameDescription" xml:space="preserve">
+    <value>The Aspire MCP tool name for a tool_invocation event</value>
+  </data>
+  <data name="AgentTelemetryCommand_FileReferenceDescription" xml:space="preserve">
+    <value>The Aspire skills-relative reference file path for a reference_file_read event</value>
+  </data>
+  <data name="AgentTelemetryCommand_TimestampDescription" xml:space="preserve">
+    <value>The timestamp recorded for the event</value>
   </data>
 </root>

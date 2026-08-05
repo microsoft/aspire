@@ -5,15 +5,22 @@ description: |
   release/13.3 branch, pending PR reviews, and discussions. Generates
   a 7-day burndown chart using cached daily snapshots.
 
+max-daily-ai-credits: -1
+
 on:
   schedule: daily around 9am
   workflow_dispatch:
+
+# Only run in the canonical repository. Forks don't have the required
+# secrets/permissions for this report workflow.
+if: github.repository == 'microsoft/aspire'
 
 permissions:
   contents: read
   issues: read
   pull-requests: read
   discussions: read
+  copilot-requests: write
 
 network: defaults
 

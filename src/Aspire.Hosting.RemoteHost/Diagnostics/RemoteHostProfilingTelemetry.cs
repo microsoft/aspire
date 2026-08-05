@@ -17,6 +17,8 @@ internal sealed class RemoteHostProfilingTelemetry(IConfiguration configuration)
 
     private readonly ActivitySource _activitySource = new(ActivitySourceName);
 
+    internal ActivitySource ActivitySource => _activitySource;
+
     internal static class EnvironmentVariables
     {
         public const string Enabled = KnownConfigNames.ProfilingEnabled;

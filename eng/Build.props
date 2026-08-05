@@ -7,8 +7,8 @@
       BuildTestsOnly         - if 'true', builds only test projects, defaults to 'false'
       SkipTestProjects       - if 'true', skips building test projects, defaults to 'false'
       SkipPlaygroundProjects - if 'true', skips building playground projects, defaults to 'false'
-      SkipBundleDeps         - if 'true', skips building eng/dcppack, eng/dashboardpack, Aspire.Dashboard, and Aspire.Cli projects during the main managed build, defaults to 'false'
-      BuildBundleDepsOnly    - if 'true', builds only the RID-specific eng/dcppack and eng/dashboardpack projects for $(TargetRids), plus Aspire.Dashboard for restore, defaults to 'false'
+      SkipBundleDeps         - if 'true', skips building eng/dcppack, eng/dashboardpack, Aspire.Dashboard, Aspire.TerminalHost, and Aspire.Cli projects during the main managed build, defaults to 'false'
+      BuildBundleDepsOnly    - if 'true', builds only the RID-specific eng/dcppack and eng/dashboardpack projects for $(TargetRids), plus Aspire.Dashboard and Aspire.TerminalHost for restore, defaults to 'false'
       TargetRids             - colon separated list of RIDs to build native projects for
   -->
 
@@ -34,6 +34,10 @@
     <!-- Dashboard is invoked by dashboardpack via MSBuild task (not ProjectReference),
          so it must be explicitly included to ensure restore generates its assets file. -->
     <ProjectToBuild Include="$(RepoRoot)src\Aspire.Dashboard\Aspire.Dashboard.csproj" />
+    <!-- TerminalHost is shipped only via the CLI managed bundle (no per-RID packaging
+         project), but it still needs to be restored so the bundle build can copy its
+         publish output. -->
+    <ProjectToBuild Include="$(RepoRoot)src\Aspire.TerminalHost\Aspire.TerminalHost.csproj" />
   </ItemGroup>
 
   <!-- `$(BuildTestsOnly)` allows building only test projects, skipping the following directories:
@@ -48,6 +52,7 @@
     <ProjectToBuild Remove="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.Tool.csproj" />
     <ProjectToBuild Remove="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.csproj" Condition="'$(SkipBundleDeps)' == 'true'" />
     <ProjectToBuild Remove="$(RepoRoot)src\Aspire.Dashboard\Aspire.Dashboard.csproj" Condition="'$(SkipBundleDeps)' == 'true'" />
+    <ProjectToBuild Remove="$(RepoRoot)src\Aspire.TerminalHost\Aspire.TerminalHost.csproj" Condition="'$(SkipBundleDeps)' == 'true'" />
     <ProjectToBuild Include="$(RepoRoot)eng\dcppack\**\*.csproj" Condition="'$(SkipBundleDeps)' != 'true'" />
     <ProjectToBuild Include="$(RepoRoot)eng\dashboardpack\**\*.csproj" Condition="'$(SkipBundleDeps)' != 'true'" />
 

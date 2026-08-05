@@ -25,7 +25,7 @@ public class ConformanceTests : ConformanceTests<QdrantClient, QdrantClientSetti
 
     protected override ServiceLifetime ServiceLifetime => ServiceLifetime.Singleton;
 
-    protected override string[] RequiredLogCategories => Array.Empty<string>();
+    protected override RequiredLogCategory[] RequiredLogCategories => [];
 
     protected override string ActivitySourceName => "";
 

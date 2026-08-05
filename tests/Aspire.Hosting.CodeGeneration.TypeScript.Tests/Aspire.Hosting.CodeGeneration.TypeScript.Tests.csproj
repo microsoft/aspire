@@ -5,6 +5,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Using Include="Aspire.Tests.Utils" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Hosting.CodeGeneration.TypeScript\Aspire.Hosting.CodeGeneration.TypeScript.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Browsers\Aspire.Hosting.Browsers.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting\Aspire.Hosting.csproj" />
@@ -18,10 +22,9 @@
   <ItemGroup>
     <PackageReference Include="Verify.XunitV3" />
   </ItemGroup>
-
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)TestModuleInitializer.cs" Link="shared/TestModuleInitializer.cs" />
-    <Compile Include="$(TestsSharedDir)TempDirectory.cs" Link="shared/TempDirectory.cs" />
+    <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared/TemporaryWorkspace.cs" />
   </ItemGroup>
 
 </Project>

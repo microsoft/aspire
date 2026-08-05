@@ -10,6 +10,7 @@ internal static class AspireRepositoryDetector
 #if DEBUG
     private const string AspireSolutionFileName = "Aspire.slnx";
 
+    private static readonly object s_cacheLock = new();
     private static string? s_cachedRepoRoot;
     private static bool s_cacheInitialized;
 #endif
@@ -27,22 +28,33 @@ internal static class AspireRepositoryDetector
 
         return null;
 #else
-        if (s_cacheInitialized)
+        if (startPath is not null)
         {
-            return s_cachedRepoRoot;
+            return DetectRepositoryRootCore(startPath);
         }
 
-        s_cachedRepoRoot = DetectRepositoryRootCore(startPath);
-        s_cacheInitialized = true;
-        return s_cachedRepoRoot;
+        lock (s_cacheLock)
+        {
+            if (s_cacheInitialized)
+            {
+                return s_cachedRepoRoot;
+            }
+
+            s_cachedRepoRoot = DetectRepositoryRootCore(startPath);
+            s_cacheInitialized = true;
+            return s_cachedRepoRoot;
+        }
 #endif
     }
 
 #if DEBUG
     internal static void ResetCache()
     {
-        s_cachedRepoRoot = null;
-        s_cacheInitialized = false;
+        lock (s_cacheLock)
+        {
+            s_cachedRepoRoot = null;
+            s_cacheInitialized = false;
+        }
     }
 
     private static string? DetectRepositoryRootCore(string? startPath)

@@ -19,7 +19,6 @@ using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Dcp;
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
@@ -46,10 +45,10 @@ internal sealed class DcpHost
     // These environment variables should never be inherited by DCP from the app host.
     private static readonly string[] s_doNotInheritEnvironmentVars =
     [
-        "ASPNETCORE_URLS",
+        KnownAspNetCoreConfigNames.Urls,
         "DOTNET_LAUNCH_PROFILE",
-        "ASPNETCORE_ENVIRONMENT",
-        "DOTNET_ENVIRONMENT",
+        KnownAspNetCoreConfigNames.Environment,
+        KnownAspNetCoreConfigNames.DotNetEnvironment,
         KnownConfigNames.AspireLogLevel,
     ];
 
@@ -695,5 +694,3 @@ internal sealed class DcpHost
         return false;
     }
 }
-
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

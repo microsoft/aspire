@@ -4,10 +4,9 @@
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
-using Aspire.TestUtilities;
 using Aspire.Hosting;
-using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
+using Aspire.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Polly.Timeout;
 using SamplesIntegrationTests;
@@ -36,27 +35,42 @@ public class AppHostTests
         var appHostType = testEndpoints.AppHostType!;
         var resourceEndpoints = testEndpoints.ResourceEndpoints!;
         var appHost = await DistributedApplicationTestFactory.CreateAsync(appHostType, _testOutput);
-        var projects = appHost.Resources.OfType<ProjectResource>();
         await using var app = await appHost.BuildAsync();
+
+        Task[]? waitForTextTasks = null;
+        TestEndpoints.ReadyStateText[]? readyStateTexts = null;
+
+        if (testEndpoints.WaitForTexts is { Count: > 0 })
+        {
+            // Subscribe before StartAsync so we don't miss readiness lines that can be emitted
+            // immediately during startup under CI contention.
+            readyStateTexts = testEndpoints.WaitForTexts.ToArray();
+            waitForTextTasks = readyStateTexts
+                .Select(wait =>
+                {
+                    // Compile once per wait entry; the callback runs for each emitted log line.
+                    var regex = new Regex(wait.Pattern);
+                    return app.WaitForTextAsync(log => regex.IsMatch(log), wait.ResourceName);
+                })
+                .ToArray();
+        }
 
         await app.StartAsync();
 
-        if (testEndpoints.WaitForTexts != null)
+        if (waitForTextTasks is not null && readyStateTexts is not null)
         {
-            // If specific ready to start texts are available use it
-            var tasks = testEndpoints.WaitForTexts.Select(x => app.WaitForTextAsync(log => new Regex(x.Pattern).IsMatch(log), x.ResourceName)).ToArray();
             try
             {
-                await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromMinutes(5));
+                await Task.WhenAll(waitForTextTasks).WaitAsync(TimeSpan.FromMinutes(5));
             }
             catch (TimeoutException te)
             {
                 StringBuilder sb = new();
-                for (int i = 0; i < testEndpoints.WaitForTexts.Count; i++)
+                for (int i = 0; i < readyStateTexts.Length; i++)
                 {
-                    if (!tasks[i].IsCompleted)
+                    if (!waitForTextTasks[i].IsCompleted)
                     {
-                        sb.AppendLine($"Timed out waiting for this text from resource {testEndpoints.WaitForTexts[i].ResourceName}: {testEndpoints.WaitForTexts[i].Pattern}");
+                        sb.AppendLine($"Timed out waiting for this text from resource {readyStateTexts[i].ResourceName}: {readyStateTexts[i].Pattern}");
                     }
                 }
 
@@ -65,18 +79,36 @@ public class AppHostTests
         }
         else
         {
-            var applicationModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-
             await app.WaitForResources().WaitAsync(TimeSpan.FromMinutes(5));
 
             if (testEndpoints.WaitForResources?.Count > 0)
             {
                 // Wait until each resource transitions to the required state
-                var timeout = TimeSpan.FromMinutes(5);
-                foreach (var (ResourceName, TargetState) in testEndpoints.WaitForResources)
+                var waits = testEndpoints.WaitForResources.ToArray();
+                var waitForResourceTasks = waits
+                    .Select(wait =>
+                    {
+                        _testOutput.WriteLine($"Waiting for resource '{wait.ResourceName}' to reach state '{wait.TargetState}' in app '{appHost.AppHostAssembly}'");
+                        return app.WaitForResource(wait.ResourceName, wait.TargetState).WaitAsync(TimeSpan.FromMinutes(5));
+                    })
+                    .ToArray();
+
+                try
                 {
-                    _testOutput.WriteLine($"Waiting for resource '{ResourceName}' to reach state '{TargetState}' in app '{appHost.AppHostAssembly}'");
-                    await app.WaitForResource(ResourceName, TargetState).WaitAsync(TimeSpan.FromMinutes(5));
+                    await Task.WhenAll(waitForResourceTasks);
+                }
+                catch (TimeoutException te)
+                {
+                    StringBuilder sb = new();
+                    for (int i = 0; i < waits.Length; i++)
+                    {
+                        if (!waitForResourceTasks[i].IsCompletedSuccessfully)
+                        {
+                            sb.AppendLine($"Timed out waiting for resource '{waits[i].ResourceName}' to reach state '{waits[i].TargetState}' in app '{appHost.AppHostAssembly}'");
+                        }
+                    }
+
+                    throw new XunitException(sb.ToString(), te);
                 }
             }
         }

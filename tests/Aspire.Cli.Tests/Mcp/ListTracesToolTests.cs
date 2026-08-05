@@ -435,6 +435,7 @@ public class ListTracesToolTests
         IDashboardInfoProvider dashboardInfoProvider = new BackchannelDashboardInfoProvider(actualMonitor, NullLogger<BackchannelDashboardInfoProvider>.Instance);
         return new ListTracesTool(
             dashboardInfoProvider,
+            actualMonitor,
             httpClientFactory ?? s_httpClientFactory,
             NullLogger<ListTracesTool>.Instance);
     }

@@ -166,15 +166,13 @@ internal sealed class DoctorCommand : BaseCommand
     private void OutputCheckResult(EnvironmentCheckResult result)
     {
         var (icon, color) = GetStatusIconAndColor(result.Status);
-        var iconPrefix = ConsoleHelpers.FormatEmojiPrefix(icon, _ansiConsole, suppressColor: true);
 
-        // Primary grid: icon + message (wrapped lines stay aligned with message text)
-        var messageGrid = new Grid();
-        messageGrid.AddColumn();
-        messageGrid.AddRow(
-            new Markup($"[{color}]{iconPrefix}{result.Message.EscapeMarkup()}[/]"));
+        var messageMarkup = new Markup($"[{color}]{result.Message.EscapeMarkup()}[/]");
 
-        _ansiConsole.Write(new Padder(messageGrid, new Padding(2, 0)));
+        // Use a two-column grid so wrapped message text stays aligned past the icon.
+        var grid = ConsoleHelpers.CreateEmojiGrid(icon, _ansiConsole, messageMarkup);
+
+        _ansiConsole.Write(new Padder(grid, new Padding(2, 0)));
 
         // Secondary grid: details, fix suggestions, and links (indented further than message)
         var hasDetails = !string.IsNullOrEmpty(result.Details);
@@ -230,6 +228,7 @@ internal sealed class DoctorCommand : BaseCommand
             "apphost" => DoctorCommandStrings.AppHostCategoryHeader,
             "container" => DoctorCommandStrings.ContainerCategoryHeader,
             "environment" => DoctorCommandStrings.EnvironmentCategoryHeader,
+            "devtools" => DoctorCommandStrings.DevelopmentToolsCategoryHeader,
             _ => category
         };
     }
@@ -243,6 +242,7 @@ internal sealed class DoctorCommand : BaseCommand
             "sdk" => 2,
             "container" => 3,
             "environment" => 4,
+            "devtools" => 5,
             _ => 99
         };
     }

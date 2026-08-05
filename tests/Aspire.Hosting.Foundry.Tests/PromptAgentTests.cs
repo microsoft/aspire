@@ -3,14 +3,20 @@
 
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREFOUNDRY001 // Preview tool types
+#pragma warning disable ASPIREPIPELINES001 // Pipeline APIs are experimental
+#pragma warning disable ASPIREAZURE001 // Azure types are experimental
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Foundry.Tests;
 
-public class PromptAgentTests
+public class PromptAgentTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AddPromptAgent_CreatesResource()
@@ -534,5 +540,69 @@ public class PromptAgentTests
         Assert.Same(project.Resource, ci.Resource.Project);
         Assert.Same(project.Resource, fs.Resource.Project);
         Assert.Same(project.Resource, ws.Resource.Project);
+    }
+
+    [Fact]
+    public async Task AddPromptAgent_RunMode_BeforeStartStepDependsOnPrepareResources()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
+
+        var agent = project.AddPromptAgent("my-agent", model, instructions: "Test agent");
+
+        builder.Build();
+
+        var annotations = agent.Resource.Annotations.OfType<PipelineStepAnnotation>().ToList();
+        Assert.NotEmpty(annotations);
+
+        using var serviceProvider = builder.Services.BuildServiceProvider();
+        var pipelineContext = new PipelineContext(
+            serviceProvider.GetRequiredService<DistributedApplicationModel>(),
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            serviceProvider,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        var steps = new List<PipelineStep>();
+        foreach (var annotation in annotations)
+        {
+            steps.AddRange(await annotation.CreateStepsAsync(new PipelineStepFactoryContext
+            {
+                PipelineContext = pipelineContext,
+                Resource = agent.Resource
+            }));
+        }
+
+        var beforeStartStep = steps.SingleOrDefault(s => s.Name == "deploy-my-agent-before-start");
+        Assert.NotNull(beforeStartStep);
+
+        Assert.Equal(new[] { AzureEnvironmentResource.PrepareResourcesStepName }, beforeStartStep.DependsOnSteps);
+    }
+
+    [Fact]
+    public async Task AddPromptAgent_RunMode_BeforeStartPipelineExecutesSuccessfully()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var activityReporter = new TestPipelineActivityReporter(testOutputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter>(activityReporter);
+
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
+        project.AddPromptAgent("my-agent", model, instructions: "Test agent");
+
+        using var app = builder.Build();
+
+        // This calls the real pipeline resolution + validation + execution.
+        // If any DependsOnSteps reference a non-existent step, it throws InvalidOperationException.
+        await app.ExecuteBeforeStartHooksAsync(default);
+
+        // Verify the prompt agent's deploy step was created and executed by the pipeline.
+        Assert.Contains("deploy-my-agent-before-start", activityReporter.CreatedSteps);
+        // Verify the azure-prepare-resources step (the dependency) was also executed.
+        Assert.Contains(AzureEnvironmentResource.PrepareResourcesStepName, activityReporter.CreatedSteps);
     }
 }

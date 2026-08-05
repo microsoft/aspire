@@ -89,7 +89,7 @@ public class ResourceDependencyTests
         var executionContext = new DistributedApplicationExecutionContext(
             new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
             {
-                ServiceProvider = serviceProvider
+                Services = serviceProvider
             });
 
         var dependencies = await container.Resource.GetResourceDependenciesAsync(executionContext);

@@ -15,6 +15,7 @@ public sealed class QdrantContainerFixture : IAsyncLifetime
     public IContainer? Container { get; private set; }
 
     private const int GrpcPort = 6334;
+    private const int HttpPort = 6333;
 
     public string GetConnectionString()
     {
@@ -33,7 +34,9 @@ public sealed class QdrantContainerFixture : IAsyncLifetime
             Container = new ContainerBuilder()
               .WithImage($"{ComponentTestConstants.AspireTestContainerRegistry}/{QdrantContainerImageTags.Image}:{QdrantContainerImageTags.Tag}")
               .WithPortBinding(GrpcPort, true)
-              .WithWaitStrategy(Wait.ForUnixContainer().UntilExternalTcpPortIsAvailable(GrpcPort))
+              .WithPortBinding(HttpPort, true)
+              .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(request =>
+                  request.ForPort((ushort)HttpPort).ForPath("/healthz")))
               .Build();
 
             await Container.StartAsync();

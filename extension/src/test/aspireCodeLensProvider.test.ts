@@ -229,6 +229,27 @@ suite('AspireCodeLensProvider builder lens', () => {
         harness.dispose();
     });
 
+    test('emits builder lenses when .mts document matches a running global AppHost', async () => {
+        const appHostPath = p('repo', 'AppHost', 'apphost.mts');
+        const harness = createHarness({ appHosts: [makeAppHost(appHostPath)] });
+
+        const doc = createMockDocument([
+            'import { createBuilder } from "@aspire/sdk";',
+            'const builder = await createBuilder();',
+            'await builder.addRedis("cache");',
+        ].join('\n'), appHostPath);
+        const lenses = await harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
+        const builderLenses = lenses.filter(l =>
+            l.command?.command === 'aspire-vscode.codeLensOpenDashboard' ||
+            l.command?.command === 'aspire-vscode.codeLensViewAppHostLogs'
+        );
+
+        assert.strictEqual(builderLenses.length, 2);
+        assert.deepStrictEqual(builderLenses[0].command?.arguments, [appHostPath]);
+        assert.deepStrictEqual(builderLenses[1].command?.arguments, [appHostPath]);
+        harness.dispose();
+    });
+
     test('emits builder lenses when Windows AppHost path casing differs from document path', async () => {
         const platformStub = sinon.stub(process, 'platform').value('win32');
         const docPath = p('repo', 'AppHost', 'AppHost.cs');

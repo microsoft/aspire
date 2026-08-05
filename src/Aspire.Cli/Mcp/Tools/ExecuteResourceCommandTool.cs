@@ -90,6 +90,13 @@ internal sealed class ExecuteResourceCommandTool(
             throw new McpProtocolException(McpErrorMessages.NoAppHostRunning, McpErrorCode.InternalError);
         }
 
+        // Check if the resource is excluded from MCP before executing commands.
+        var excludedResult = await McpToolHelpers.CheckResourceExcludedAsync(connection, resourceName, cancellationToken).ConfigureAwait(false);
+        if (excludedResult is not null)
+        {
+            return excludedResult;
+        }
+
         try
         {
             logger.LogDebug("Executing command '{CommandName}' on resource '{ResourceName}' via backchannel", commandName, resourceName);

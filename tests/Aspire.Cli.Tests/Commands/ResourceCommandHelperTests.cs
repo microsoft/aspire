@@ -4,7 +4,6 @@
 using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
-using Aspire.Cli.Interaction;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -112,41 +111,6 @@ public class ResourceCommandHelperTests
         Assert.NotEqual(0, exitCode);
         Assert.NotNull(capturedRawText);
         Assert.Equal("{\"errors\": [\"invalid host\"]}", capturedRawText);
-    }
-
-    [Fact]
-    public async Task ExecuteGenericCommandAsync_RoutesStatusToStderr_ResultToStdout()
-    {
-        var connection = new TestAppHostAuxiliaryBackchannel
-        {
-            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
-            {
-                Success = true,
-                Value = new ExecuteResourceCommandResult
-                {
-                    Value = "some output",
-                    Format = CommandResultFormat.Text
-                }
-            }
-        };
-
-        var interactionService = new TestInteractionService
-        {
-            DisplayRawTextCallback = (_) => { }
-        };
-
-        var exitCode = await ResourceCommandHelper.ExecuteGenericCommandAsync(
-            connection,
-            interactionService,
-            NullLogger.Instance,
-            "myResource",
-            "my-command",
-            arguments: null,
-            cancellationToken: CancellationToken.None).DefaultTimeout();
-
-        Assert.Equal(0, exitCode);
-        // Status messages should be routed to stderr
-        Assert.Equal(ConsoleOutput.Error, interactionService.Console);
     }
 
     [Fact]

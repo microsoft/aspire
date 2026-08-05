@@ -2,7 +2,7 @@
 
 How to set up your machine, the code layout, and the fastest inner-loop for changes.
 
-Bug fixes, new commands, debugger-language support, walkthrough content, settings, and docs are all welcome. To find a starting point, browse [`area-extension` issues labeled `good first issue` or `help wanted`](https://github.com/microsoft/aspire/issues?q=is%3Aissue+is%3Aopen+label%3Aarea-extension+label%3A%22good+first+issue%22%2C%22help+wanted%22).
+Bug fixes, new commands, debugger-language support, walkthrough content, settings, and docs are all welcome. To find a starting point, browse [`area-vscode-extension` issues labeled `good first issue` or `help wanted`](https://github.com/microsoft/aspire/issues?q=is%3Aissue+is%3Aopen+label%3Aarea-vscode-extension+label%3A%22good+first+issue%22%2C%22help+wanted%22).
 
 ## Install prerequisites
 
@@ -59,11 +59,17 @@ Run `build.ps1` (Windows) or `build.sh` (Mac/Linux) from the repository root to 
 
 ### Optional: set the CLI path
 
-If you want to effectively debug the Aspire CLI together with the Aspire VS Code extension, you must set the `Aspire Cli Executable Path` setting to the Aspire CLI output path. The output path, relative to the Aspire repository root directory, is `artifacts/bin/Aspire.Cli/Debug/net10.0/aspire`.
+If you want to effectively debug the Aspire CLI together with the Aspire VS Code extension, set the `Aspire Cli Executable Path` setting to the Aspire CLI output path. The raw local build output path, relative to the Aspire repository root directory, is `artifacts/bin/Aspire.Cli/Debug/net10.0/aspire`. Pointing at the raw build output makes the extension invoke your dev CLI, but that raw path is intentionally not forwarded as `AspireCliPath` (see Dogfooding below). To also dogfood bundle metadata, use an installed/bundled CLI layout instead.
 
 You may also want to use the `Run Extension (cli stop on entry)` launch configuration, as `Run Extension` does not prevent the Aspire CLI from executing immediately.
 
 You can use the `Aspire: Extension settings` command to open VS Code settings directly to the Aspire extension category.
+
+#### Dogfooding a CLI build alongside the extension
+
+When `Aspire Cli Executable Path` points at an existing **absolute** path that is not a raw framework-dependent local CLI build output, the extension forwards that value as the `AspireCliPath` MSBuild property/environment variable to every terminal, task, and debug process it creates. The Aspire SDK's `ResolveAspireCliBundle` task uses `AspireCliPath` (defined in [`src/Aspire.Hosting.Tasks/ResolveAspireCliBundle.cs`](/src/Aspire.Hosting.Tasks/ResolveAspireCliBundle.cs)) to locate the matching bundle layout — DCP, dashboard, and terminal-host binaries — and bakes those paths into the built AppHost as `[AssemblyMetadata]` attributes. Without this forwarding, MSBuild probes `PATH` and can stamp the *stable* CLI's bundle into the AppHost while the extension is launching it through the *dev* CLI, producing surprising runtime mismatches such as `<unresolved-aspire-terminalhost>` even though the new CLI is correctly invoked (tracked in [issue #18073](https://github.com/microsoft/aspire/issues/18073)).
+
+A relative value (for example the bare `aspire` literal) or an absolute path that no longer exists is intentionally not forwarded because `ResolveAspireCliBundle` stops with a warning for invalid explicit `AspireCliPath` values instead of probing `PATH`. A raw framework-dependent local build output such as `artifacts/bin/Aspire.Cli/Debug/net10.0/aspire` is also not forwarded because it can make `ResolveAspireCliBundle` fall back to unrelated `ASPIRE_HOME` metadata. Symlinks to that raw local build output are filtered the same way. To dogfood bundle metadata end-to-end, point the setting at an installed/bundled CLI layout with a sidecar or adjacent bundle assets. Clear the setting to revert to default PATH/ASPIRE_HOME resolution.
 
 ## Running tests
 
@@ -95,7 +101,7 @@ Run the full local E2E suite from `extension/`:
 ASPIRE_EXTENSION_E2E_CLI_PATH=/path/to/aspire corepack yarn test:e2e
 ```
 
-On Linux, run the E2E command under `xvfb-run -a` when no desktop session is available. On Windows, `ASPIRE_EXTENSION_E2E_CLI_PATH` can point at an `.exe` or `.cmd` wrapper, including paths with spaces. Set `ASPIRE_EXTENSION_E2E_VSIX=/path/to/aspire-extension.vsix` to test an existing package instead of letting the runner create one. The runner defaults to VS Code 1.122.1 and the ExTester version pinned in `package.json` and `yarn.lock`; override with `ASPIRE_EXTENSION_E2E_VSCODE_VERSION` when you need to investigate VS Code-specific behavior. To investigate another ExTester version, update the pinned `vscode-extension-tester` package and regenerate `yarn.lock` from `dotnet-public-npm`. The VS Code user data is forced to English (`locale.json` plus `VSCODE_NLS_CONFIG`) so UI text assertions are deterministic across machines.
+On Linux, run the E2E command under `xvfb-run -a` when no desktop session is available. On Windows, `ASPIRE_EXTENSION_E2E_CLI_PATH` can point at an `.exe` or `.cmd` wrapper, including paths with spaces. Set `ASPIRE_EXTENSION_E2E_VSIX=/path/to/aspire-extension.vsix` to test an existing package instead of letting the runner create one. The runner defaults to VS Code 1.122.1 and the ExTester version pinned in `package.json` and `yarn.lock`; override with `ASPIRE_EXTENSION_E2E_VSCODE_VERSION` when you need to investigate VS Code-specific behavior. To investigate another ExTester version, update the pinned `vscode-extension-tester` package and regenerate `yarn.lock` from `dotnet-public-npm`. The runner retries external VS Code and ChromeDriver downloads five times by default; override `ASPIRE_EXTENSION_E2E_SETUP_DOWNLOAD_RETRY_ATTEMPTS`, `ASPIRE_EXTENSION_E2E_SETUP_DOWNLOAD_RETRY_DELAY_MS`, or `ASPIRE_EXTENSION_E2E_SETUP_DOWNLOAD_TIMEOUT_MS` when diagnosing acquisition issues. The VS Code user data is forced to English (`locale.json` plus `VSCODE_NLS_CONFIG`) so UI text assertions are deterministic across machines.
 
 Some extension E2E tests intentionally cover bugs fixed by the current repo-built CLI. When running the extension suite against an older published CLI to check backward compatibility, set `ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS=true` so those current-CLI-only regressions are skipped instead of failing on the older CLI bug.
 

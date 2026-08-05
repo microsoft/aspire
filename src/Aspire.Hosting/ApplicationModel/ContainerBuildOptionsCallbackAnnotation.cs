@@ -37,6 +37,7 @@ public sealed class ContainerBuildOptionsCallbackAnnotation(Func<ContainerBuildO
 /// Context for configuring container build options via a callback.
 /// </summary>
 [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport(ExposeProperties = true)]
 public sealed class ContainerBuildOptionsCallbackContext
 {
     /// <summary>

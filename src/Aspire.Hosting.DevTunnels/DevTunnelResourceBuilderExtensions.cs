@@ -89,7 +89,6 @@ public static partial class DevTunnelsResourceBuilderExtensions
 
         // Health check
         var healtCheckKey = $"{name}-check";
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         builder.Services.AddHealthChecks().Add(new HealthCheckRegistration(
             healtCheckKey,
             services => new DevTunnelHealthCheck(
@@ -100,7 +99,6 @@ public static partial class DevTunnelsResourceBuilderExtensions
             failureStatus: default,
             tags: default,
             timeout: default));
-#pragma warning restore ASPIREINTERACTION001
 
         var rb = builder.AddResource(tunnelResource)
             .WithArgs("host", tunnelResource.ResolvedTunnelId, "--nologo")

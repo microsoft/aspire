@@ -2,6 +2,46 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="es" original="../AgentCommandStrings.resx">
     <body>
+      <trans-unit id="AgentTelemetryCommand_ClientNameDescription">
+        <source>The AI agent client that produced the event (for example copilot-cli, claude-code, or vscode)</source>
+        <target state="new">The AI agent client that produced the event (for example copilot-cli, claude-code, or vscode)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AgentTelemetryCommand_Description">
+        <source>Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</source>
+        <target state="new">Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AgentTelemetryCommand_EventTypeDescription">
+        <source>The telemetry event type (skill_invocation, tool_invocation, or reference_file_read)</source>
+        <target state="new">The telemetry event type (skill_invocation, tool_invocation, or reference_file_read)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AgentTelemetryCommand_FileReferenceDescription">
+        <source>The Aspire skills-relative reference file path for a reference_file_read event</source>
+        <target state="new">The Aspire skills-relative reference file path for a reference_file_read event</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AgentTelemetryCommand_SessionIdDescription">
+        <source>The opaque AI agent session identifier</source>
+        <target state="new">The opaque AI agent session identifier</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AgentTelemetryCommand_SkillNameDescription">
+        <source>The Aspire skill name for a skill_invocation event</source>
+        <target state="new">The Aspire skill name for a skill_invocation event</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AgentTelemetryCommand_TimestampDescription">
+        <source>The timestamp recorded for the event</source>
+        <target state="new">The timestamp recorded for the event</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AgentTelemetryCommand_ToolNameDescription">
+        <source>The Aspire MCP tool name for a tool_invocation event</source>
+        <target state="new">The Aspire MCP tool name for a tool_invocation event</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AspireSkillsInstaller_ArchiveHashVerificationFailed">
         <source>Embedded Aspire skills archive failed SHA-256 verification. Expected '{0}', got '{1}'.</source>
         <target state="new">Embedded Aspire skills archive failed SHA-256 verification. Expected '{0}', got '{1}'.</target>
@@ -122,6 +162,26 @@
         <target state="new">Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_TelemetryHookSkippedMalformedConfig">
+        <source>Skipped the telemetry hook for {0} because its configuration file contains malformed JSON.</source>
+        <target state="new">Skipped the telemetry hook for {0} because its configuration file contains malformed JSON.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_TelemetryHookSkippedUnexpectedShape">
+        <source>Skipped the telemetry hook for {0} because its configuration has an unexpected shape.</source>
+        <target state="new">Skipped the telemetry hook for {0} because its configuration has an unexpected shape.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_TelemetryHookWriteFailed">
+        <source>Skipped the telemetry hook for {0} because its configuration could not be written.</source>
+        <target state="new">Skipped the telemetry hook for {0} because its configuration could not be written.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_TelemetryHooksInstalled">
+        <source>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</source>
+        <target state="new">Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_WorkspaceRootOptionDescription">
         <source>Path to the workspace root directory</source>
         <target state="new">Path to the workspace root directory</target>
@@ -170,6 +230,11 @@
       <trans-unit id="PlaywrightCliInstaller_IntegrityVerificationFailed">
         <source>Integrity verification failed for {0}. The downloaded package may have been tampered with.</source>
         <target state="new">Integrity verification failed for {0}. The downloaded package may have been tampered with.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PlaywrightCliInstaller_InvalidVersionOverride">
+        <source>The value of configuration setting '{0}' ('{1}') is not a valid SemVer 2.0 version.</source>
+        <target state="new">The value of configuration setting '{0}' ('{1}') is not a valid SemVer 2.0 version.</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_ProvenanceVerificationFailed">

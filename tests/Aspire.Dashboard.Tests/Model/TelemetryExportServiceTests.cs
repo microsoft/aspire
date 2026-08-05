@@ -1192,7 +1192,9 @@ public sealed class TelemetryExportServiceTests
                     Value.ForList(Value.ForString("dependency-resource")),
                     isValueSensitive: false,
                     knownProperty: null,
-                    priority: 0)
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false)
             },
             relationships: [new RelationshipViewModel("dependency", "Reference")]);
 
@@ -1312,19 +1314,25 @@ public sealed class TelemetryExportServiceTests
                     Value.ForList(Value.ForNumber(6379), Value.ForNumber(6380)),
                     isValueSensitive: false,
                     knownProperty: null,
-                    priority: 0),
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false),
                 ["resource.exitCode"] = new(
                     "resource.exitCode",
                     Value.ForNumber(0),
                     isValueSensitive: false,
                     knownProperty: null,
-                    priority: 0),
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false),
                 ["resource.enabled"] = new(
                     "resource.enabled",
                     Value.ForBool(true),
                     isValueSensitive: false,
                     knownProperty: null,
-                    priority: 0)
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false)
             });
 
         // Act

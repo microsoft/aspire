@@ -33,11 +33,11 @@ public sealed class DefaultInstrumentUnitResolver(IStringLocalizer<ControlsStrin
 
         // Hard code for instrument names that don't have units
         // but have a descriptive name that lets us infer the unit.
-        if (instrument.Name.EndsWith(".count"))
+        if (instrument.Name.EndsWith(".count", StringComparison.Ordinal))
         {
             return UntitleCase(loc[nameof(ControlsStrings.PlotlyChartCount)], titleCase);
         }
-        else if (instrument.Name.EndsWith(".length"))
+        else if (instrument.Name.EndsWith(".length", StringComparison.Ordinal))
         {
             return UntitleCase(loc[nameof(ControlsStrings.PlotlyChartLength)], titleCase);
         }

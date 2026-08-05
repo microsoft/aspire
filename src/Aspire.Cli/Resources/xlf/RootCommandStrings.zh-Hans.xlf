@@ -52,6 +52,11 @@ The Aspire CLI collects usage data. It is collected by Microsoft and is used to 
 Read more about Aspire CLI telemetry: {0}</target>
         <note>{0} is a clickable URL</note>
       </trans-unit>
+      <trans-unit id="IdentityOverrideNotice">
+        <source>Aspire CLI is emulating identity '{0}' version '{1}'. Behavior may differ from the installed build; identity was overridden via environment variables or the install sidecar.</source>
+        <target state="new">Aspire CLI is emulating identity '{0}' version '{1}'. Behavior may differ from the installed build; identity was overridden via environment variables or the install sidecar.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoLogoArgumentDescription">
         <source>Suppress the startup banner and telemetry notice</source>
         <target state="needs-review-translation">抑制显示启动横幅和遥测通知。</target>

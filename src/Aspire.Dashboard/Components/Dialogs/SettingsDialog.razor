@@ -17,11 +17,17 @@
         </div>
 
         <div class="input-container">
+            @* Fluent's Label renders a standalone <label> that it does NOT associate with the
+               underlying <fluent-select> combobox, so the combobox has no programmatic accessible
+               name and fails axe's aria-input-field-name (WCAG 4.1.2). Pin the name explicitly with
+               aria-label so assistive tech announces the control; the visible Label stays for sighted
+               users. See AccessibilityTests.DashboardDialog_HasNoSeriousOrCriticalWcagViolations. *@
             <FluentSelect
                 TOption="CultureInfo"
                 ChangeOnEnterOnly="true"
                 Position="SelectPosition.Below"
                 Label="@Loc[nameof(Dialogs.SettingsDialogLanguage)]"
+                aria-label="@Loc[nameof(Dialogs.SettingsDialogLanguage)]"
                 Items="@_languageOptions"
                 OptionValue="@(c => c!.Name)"
                 OptionText="@(c => c!.NativeName.Humanize())"

@@ -30,7 +30,6 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
     private const string PackageJsonFileName = "package.json";
     private const string AppHostTsConfigFileName = "tsconfig.apphost.json";
     private const string AppHostTypeCheckTsBuildInfoFileName = "./node_modules/.tmp/tsconfig.apphost.typecheck.tsbuildinfo";
-    private const string AppHostCompileTsBuildInfoFileName = "./node_modules/.tmp/tsconfig.apphost.compile.tsbuildinfo";
     private const string AppHostPackageName = "aspire-apphost";
     private const string EslintConfigFileName = "eslint.config.mjs";
 
@@ -147,9 +146,6 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         var scripts = EnsureObject(packageJson, "scripts");
         scripts["aspire:lint"] = "eslint apphost.mts";
         scripts["aspire:start"] = "aspire run";
-        scripts["aspire:typecheck"] = $"tsgo --noEmit --incremental --tsBuildInfoFile {AppHostTypeCheckTsBuildInfoFileName} -p {AppHostTsConfigFileName}";
-        scripts["aspire:compile"] = $"tsgo --incremental --tsBuildInfoFile {AppHostCompileTsBuildInfoFileName} -p {AppHostTsConfigFileName}";
-        scripts["aspire:execute"] = $"tsx --tsconfig {AppHostTsConfigFileName}";
         scripts["aspire:build"] = $"tsc -p {AppHostTsConfigFileName}";
         scripts["aspire:dev"] = $"tsc --watch -p {AppHostTsConfigFileName}";
 
@@ -165,12 +161,15 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
 
         EnsureDependency(packageJson, "dependencies", "vscode-jsonrpc", "^8.2.0");
         EnsureDependency(packageJson, "devDependencies", "@types/node", "^22.0.0");
-        EnsureDependency(packageJson, "devDependencies", "@typescript/native-preview", "^7.0.0-dev.20260523.1");
+        EnsureDependency(packageJson, "devDependencies", "@typescript/native", "npm:typescript@^7.0.2");
         EnsureDependency(packageJson, "devDependencies", "eslint", "^10.0.3");
         EnsureDependency(packageJson, "devDependencies", "nodemon", "^3.1.14");
         EnsureDependency(packageJson, "devDependencies", "tsx", "^4.21.0");
-        EnsureDependency(packageJson, "devDependencies", "typescript", "^5.9.3");
-        EnsureDependency(packageJson, "devDependencies", "typescript-eslint", "^8.57.1");
+        // TypeScript 7 does not expose the legacy programmatic API yet. Keep TypeScript 6 under
+        // the standard package name for typescript-eslint while @typescript/native supplies tsc.
+        // See https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/
+        EnsureDependency(packageJson, "devDependencies", "typescript", "npm:@typescript/typescript6@^6.0.2");
+        EnsureDependency(packageJson, "devDependencies", "typescript-eslint", "^8.65.0");
 
         return packageJson.ToJsonString(s_jsonSerializerOptions);
     }
@@ -267,14 +266,14 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
             [
                 new CommandSpec
                 {
-                    Command = "npm",
-                    Args = ["run", "aspire:typecheck"]
+                    Command = "npx",
+                    Args = ["--no-install", "tsc", "--noEmit", "--incremental", "--tsBuildInfoFile", AppHostTypeCheckTsBuildInfoFileName, "-p", AppHostTsConfigFileName]
                 }
             ],
             Execute = new CommandSpec
             {
-                Command = "npm",
-                Args = ["run", "aspire:execute", "--", "{appHostFile}"]
+                Command = "npx",
+                Args = ["--no-install", "tsx", "--tsconfig", AppHostTsConfigFileName, "{appHostFile}"]
             },
             WatchExecute = new CommandSpec
             {
@@ -287,7 +286,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
                     "--ext", "ts,mts",
                     "--ignore", "node_modules/",
                     "--ignore", ".aspire/modules/",
-                    "--exec", "npm run aspire:typecheck && npm run aspire:execute -- \"{appHostFile}\""
+                    "--exec", $"npx --no-install tsc --noEmit --incremental --tsBuildInfoFile {AppHostTypeCheckTsBuildInfoFileName} -p {AppHostTsConfigFileName} && npx --no-install tsx --tsconfig {AppHostTsConfigFileName} \"{{appHostFile}}\""
                 ]
             },
             MigrationFiles = new Dictionary<string, string>

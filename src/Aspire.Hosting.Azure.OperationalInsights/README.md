@@ -1,6 +1,6 @@
-# Aspire.Hosting.Azure.OperationalInsights library
+# Azure Log Analytics hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure Azure Log Analytics.
+Use this integration to model, configure, and orchestrate Azure Log Analytics in an Aspire solution.
 
 ## Getting started
 
@@ -8,29 +8,24 @@ Provides extension methods and resource definitions for an Aspire AppHost to con
 
 - Azure subscription - [create one for free](https://azure.microsoft.com/free/)
 
-### Install the package
+### Add the integration
 
-Install the Aspire Azure Operational Insights Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.Azure.OperationalInsights` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Azure.OperationalInsights
+```bash
+aspire add Aspire.Hosting.Azure.OperationalInsights
 ```
 
 ## Configure Azure Provisioning for local development
 
-Adding Azure resources to the Aspire application model will automatically enable development-time provisioning
+Adding Azure resources to the AppHost model will automatically enable development-time provisioning
 for Azure resources so that you don't need to configure them manually. Provisioning requires a number of settings
-to be available via .NET configuration. Set these values in user secrets in order to allow resources to be configured
-automatically.
+to be available via AppHost configuration. From your AppHost directory, set these values with `aspire secret set`:
 
-```json
-{
-    "Azure": {
-      "SubscriptionId": "<your subscription id>",
-      "ResourceGroupPrefix": "<prefix for the resource group>",
-      "Location": "<azure location>"
-    }
-}
+```bash
+aspire secret set Azure:SubscriptionId "<your subscription id>"
+aspire secret set Azure:ResourceGroupPrefix "<prefix for the resource group>"
+aspire secret set Azure:Location "<azure location>"
 ```
 
 > NOTE: Developers must have Owner access to the target subscription so that role assignments
@@ -38,7 +33,7 @@ automatically.
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add an Azure Log Analytics workspace and pass the workspace ID via an environment variable:
+In the AppHost, add an Azure Log Analytics workspace and pass the workspace ID via an environment variable:
 
 ```csharp
 var laws = builder.AddAzureLogAnalyticsWorkspace("laws");
@@ -53,6 +48,8 @@ var myService = builder.AddProject<Projects.MyService>()
 
 ## Additional documentation
 
+* https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/cloud/azure/azure-log-analytics/
 * https://learn.microsoft.com/azure/azure-monitor/logs/log-analytics-workspace-overview
 
 ## Feedback & contributing

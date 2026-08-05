@@ -945,7 +945,16 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
             // Use Handle directly for handle types in DTOs since Handle implements Serialize/Deserialize
             AtsTypeCategory.Handle => "Handle",
             AtsTypeCategory.Dto => MapDtoType(typeRef.TypeId),
-            AtsTypeCategory.Callback => "Value", // Callbacks can't be serialized in DTOs
+            // DTO callback properties remain weakly typed (a serde_json::Value) in Rust. Unlike Go, Java,
+            // Python, and TypeScript -- whose generators emit strongly-typed DTO callbacks and whose
+            // runtimes auto-register closures embedded in serialized DTO maps -- Rust DTOs are built on
+            // serde derive, and a Box<dyn Fn> closure is not serde-serializable. Supporting it would
+            // require serde-skipping the field plus a hand-written to_map that registers the closure via
+            // the global register_callback. This matches the existing behavior for all other DTO
+            // callbacks (e.g. HttpCommandExportOptions.PrepareRequest from PR #17950), and there is no
+            // Rust polyglot bench to validate a runtime implementation, so Rust DTO callbacks are left
+            // weakly typed as a known follow-up.
+            AtsTypeCategory.Callback => "Value",
             AtsTypeCategory.Array => $"Vec<{MapTypeRefToRustForDto(typeRef.ElementType, false)}>",
             AtsTypeCategory.List => $"Vec<{MapTypeRefToRustForDto(typeRef.ElementType, false)}>",
             AtsTypeCategory.Dict => $"HashMap<{MapTypeRefToRustForDto(typeRef.KeyType, false)}, {MapTypeRefToRustForDto(typeRef.ValueType, false)}>",

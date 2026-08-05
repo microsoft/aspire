@@ -4,7 +4,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 
-#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to exercise resource command arguments.
 #pragma warning disable ASPIREPROCESSCOMMAND001 // Process command APIs are experimental.
 
 internal static class CommandResources
@@ -45,6 +44,61 @@ internal static class CommandResources
             commandOptions: new CommandOptions
             {
                 IconName = "CloudDatabase",
+                IsHighlighted = true
+            });
+        // Commands with unknown/missing icons to stress test issue #18385.
+        iconCommands.WithCommand(
+            name: "unknown-icon",
+            displayName: "Unknown icon",
+            executeCommand: (c) =>
+            {
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions
+            {
+                IconName = "Bracket"
+            });
+        iconCommands.WithCommand(
+            name: "unknown-icon-highlighted",
+            displayName: "Simulate knockout — prediction phase",
+            executeCommand: (c) =>
+            {
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions
+            {
+                IconName = "Bracket",
+                IsHighlighted = true
+            });
+        iconCommands.WithCommand(
+            name: "unknown-icon-highlighted-short",
+            displayName: "Short",
+            executeCommand: (c) =>
+            {
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions
+            {
+                IconName = "NotARealIconName",
+                IsHighlighted = true
+            });
+        iconCommands.WithCommand(
+            name: "no-icon",
+            displayName: "No icon at all",
+            executeCommand: (c) =>
+            {
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions());
+        iconCommands.WithCommand(
+            name: "no-icon-highlighted",
+            displayName: "No icon highlighted with a very long display name to test overflow",
+            executeCommand: (c) =>
+            {
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions
+            {
                 IsHighlighted = true
             });
 
@@ -877,7 +931,7 @@ internal static class CommandResources
                 displayName: "Stop all resources",
                 executeCommand: async (c) =>
                 {
-                    await ExecuteCommandForAllResourcesAsync(c.ServiceProvider, KnownResourceCommands.StopCommand, c.CancellationToken);
+                    await ExecuteCommandForAllResourcesAsync(c.Services, KnownResourceCommands.StopCommand, c.CancellationToken);
                     return CommandResults.Success();
                 },
                 commandOptions: new() { IconName = "Stop", IconVariant = IconVariant.Filled })
@@ -886,7 +940,7 @@ internal static class CommandResources
                 displayName: "Start all resources",
                 executeCommand: async (c) =>
                 {
-                    await ExecuteCommandForAllResourcesAsync(c.ServiceProvider, KnownResourceCommands.StartCommand, c.CancellationToken);
+                    await ExecuteCommandForAllResourcesAsync(c.Services, KnownResourceCommands.StartCommand, c.CancellationToken);
                     return CommandResults.Success();
                 },
                 commandOptions: new() { IconName = "Play", IconVariant = IconVariant.Filled });
@@ -1173,4 +1227,4 @@ internal static class CommandResources
 }
 
 #pragma warning restore ASPIREPROCESSCOMMAND001
-#pragma warning restore ASPIREINTERACTION001
+

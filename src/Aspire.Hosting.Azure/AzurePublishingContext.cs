@@ -175,7 +175,14 @@ public sealed class AzurePublishingContext(
             if (resource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAnnotation))
             {
                 await VisitAsync(existingAnnotation.ResourceGroup, MapParameterAsync, cancellationToken).ConfigureAwait(false);
+                await VisitAsync(existingAnnotation.Subscription, MapParameterAsync, cancellationToken).ConfigureAwait(false);
                 await VisitAsync(existingAnnotation.Name, MapParameterAsync, cancellationToken).ConfigureAwait(false);
+            }
+
+            if (resource.Scope is { } scope)
+            {
+                await VisitAsync(scope.ResourceGroup, MapParameterAsync, cancellationToken).ConfigureAwait(false);
+                await VisitAsync(scope.Subscription, MapParameterAsync, cancellationToken).ConfigureAwait(false);
             }
 
             // Map parameters for the resource itself
@@ -249,6 +256,39 @@ public sealed class AzurePublishingContext(
             };
         }
 
+        BicepValue<string> GetScopeExpression(AzureBicepResource resource)
+        {
+            if (resource.Scope is null)
+            {
+                return new IdentifierExpression(rg.BicepIdentifier);
+            }
+
+            if (resource.Scope.IsTenantScope)
+            {
+                return new FunctionCallExpression(new IdentifierExpression("tenant"));
+            }
+
+            if (resource.Scope.ResourceGroup is not null && resource.Scope.Subscription is not null)
+            {
+                return new FunctionCallExpression(
+                    new IdentifierExpression("resourceGroup"),
+                    ResolveValue(Eval(resource.Scope.Subscription)).Compile(),
+                    ResolveValue(Eval(resource.Scope.ResourceGroup)).Compile());
+            }
+
+            if (resource.Scope.ResourceGroup is not null)
+            {
+                return new FunctionCallExpression(new IdentifierExpression("resourceGroup"), ResolveValue(Eval(resource.Scope.ResourceGroup)).Compile());
+            }
+
+            if (resource.Scope.Subscription is not null)
+            {
+                return new FunctionCallExpression(new IdentifierExpression("subscription"), ResolveValue(Eval(resource.Scope.Subscription)).Compile());
+            }
+
+            throw new InvalidOperationException("The Azure Bicep resource scope must specify a resource group, subscription, or tenant scope.");
+        }
+
         var computeEnvironments = new List<IAzureComputeEnvironmentResource>();
 
         var computeEnvironmentTask = await step.CreateTaskAsync(
@@ -269,15 +309,8 @@ public sealed class AzurePublishingContext(
             )
             .ConfigureAwait(false);
 
-            BicepValue<string> scope = resource.Scope?.ResourceGroup switch
-            {
-                string rgName => new FunctionCallExpression(new IdentifierExpression("resourceGroup"), new StringLiteralExpression(rgName)),
-                ParameterResource p => new FunctionCallExpression(new IdentifierExpression("resourceGroup"), ParameterLookup[p].Value.Compile()),
-                _ => new IdentifierExpression(rg.BicepIdentifier)
-            };
-
             var module = moduleMap[resource];
-            module.Scope = scope;
+            module.Scope = GetScopeExpression(resource);
             module.Parameters.Add("location", locationParam);
 
             foreach (var parameter in resource.Parameters)

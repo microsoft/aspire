@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
+using System.CommandLine;
 using System.Text;
 
 namespace Aspire.Cli.Tests.Interaction;
@@ -22,13 +23,13 @@ public class ConsoleInteractionServiceTests
     private static readonly DirectoryInfo s_logsDirectory = s_tempRoot.CreateSubdirectory("logs");
 
     private static CliExecutionContext CreateExecutionContext(bool debugMode = false, string? logFilePath = null) =>
-        new(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), s_runtimeDirectory, s_logsDirectory, logFilePath ?? "test.log", debugMode: debugMode);
+        new(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), s_runtimeDirectory, s_logsDirectory, logFilePath ?? "test.log", identityChannel: "local", debugMode: debugMode);
 
     private static ConsoleInteractionService CreateInteractionService(IAnsiConsole console, CliExecutionContext? executionContext = null, ICliHostEnvironment? hostEnvironment = null)
     {
         executionContext ??= CreateExecutionContext();
         var consoleEnvironment = new ConsoleEnvironment(console, console);
-        return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment ?? TestHelpers.CreateInteractiveHostEnvironment(), NullLoggerFactory.Instance, new ConsoleLogBufferContext());
+        return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment ?? TestHelpers.CreateInteractiveHostEnvironment(), new EnvironmentProcessPathProvider(), NullLoggerFactory.Instance, new ConsoleLogBufferContext());
     }
 
     [Fact]
@@ -515,6 +516,90 @@ public class ConsoleInteractionServiceTests
         Assert.Contains("9.0.0-preview.1 [rc]", outputString);
     }
 
+    private static (ConsoleInteractionService InteractionService, StringBuilder Output) CreateInteractionServiceWithOutputCapture()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output))
+        });
+
+        // Use a wide profile so assertions on full message text aren't broken by line wrapping.
+        console.Profile.Width = 512;
+
+        return (CreateInteractionService(console), output);
+    }
+
+    [Fact]
+    public void DisplayIncompatibleVersionError_AppHostOlderThanCli_SuggestsUpdatingAppHost()
+    {
+        // Arrange
+        var (interactionService, output) = CreateInteractionServiceWithOutputCapture();
+        var ex = new AppHostIncompatibleException("Incompatible", "baseline.v2");
+
+        // Act - hosting version is older than any CLI version.
+        var exitCode = interactionService.DisplayIncompatibleVersionError(ex, "0.1.0");
+
+        // Assert
+        Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode);
+        var outputString = output.ToString();
+        Assert.Contains(InteractionServiceStrings.AppHostNotCompatibleUpdateAppHost, outputString);
+        Assert.Contains("aspire update", outputString);
+    }
+
+    [Fact]
+    public void DisplayIncompatibleVersionError_CliOlderThanAppHost_SuggestsUpdatingCli()
+    {
+        // Arrange
+        var (interactionService, output) = CreateInteractionServiceWithOutputCapture();
+        var ex = new AppHostIncompatibleException("Incompatible", "baseline.v2");
+
+        // Act - hosting version is newer than any CLI version.
+        var exitCode = interactionService.DisplayIncompatibleVersionError(ex, "999.0.0");
+
+        // Assert
+        Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode);
+        var outputString = output.ToString();
+        Assert.Contains(InteractionServiceStrings.AppHostNotCompatibleUpdateCli, outputString);
+        Assert.Contains("To update, run:", outputString);
+    }
+
+    [Fact]
+    public void DisplayIncompatibleVersionError_SameVersion_ShowsGenericMessageWithoutUpdateCommand()
+    {
+        // Arrange
+        var (interactionService, output) = CreateInteractionServiceWithOutputCapture();
+        var ex = new AppHostIncompatibleException("Incompatible", "baseline.v2");
+
+        // Act - same version on both sides (incompatible for another reason, e.g. a capability).
+        var exitCode = interactionService.DisplayIncompatibleVersionError(ex, VersionHelper.GetDefaultTemplateVersion());
+
+        // Assert
+        Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode);
+        var outputString = output.ToString();
+        Assert.Contains(InteractionServiceStrings.AppHostNotCompatibleConsiderUpgrading, outputString);
+        Assert.DoesNotContain("To update, run:", outputString);
+    }
+
+    [Fact]
+    public void DisplayIncompatibleVersionError_UnparseableVersion_ShowsGenericMessage()
+    {
+        // Arrange
+        var (interactionService, output) = CreateInteractionServiceWithOutputCapture();
+        var ex = new AppHostIncompatibleException("Incompatible", "baseline.v2");
+
+        // Act - the caller passes the required capability when no version is available.
+        var exitCode = interactionService.DisplayIncompatibleVersionError(ex, "baseline.v2");
+
+        // Assert
+        Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode);
+        var outputString = output.ToString();
+        Assert.Contains(InteractionServiceStrings.AppHostNotCompatibleConsiderUpgrading, outputString);
+        Assert.DoesNotContain("To update, run:", outputString);
+    }
+
     [Fact]
     public void DisplayMessage_WithMarkupCharactersInMessage_AutoEscapesByDefault()
     {
@@ -694,7 +779,7 @@ public class ConsoleInteractionServiceTests
 
         var executionContext = CreateExecutionContext();
         var consoleEnvironment = new ConsoleEnvironment(stdoutConsole, stderrConsole);
-        var interactionService = new ConsoleInteractionService(consoleEnvironment, executionContext, TestHelpers.CreateInteractiveHostEnvironment(), NullLoggerFactory.Instance, new ConsoleLogBufferContext());
+        var interactionService = new ConsoleInteractionService(consoleEnvironment, executionContext, TestHelpers.CreateInteractiveHostEnvironment(), new EnvironmentProcessPathProvider(), NullLoggerFactory.Instance, new ConsoleLogBufferContext());
 
         // Console defaults to Standard (stdout), but errors should still go to stderr
         interactionService.DisplayError("Something went wrong");
@@ -723,7 +808,7 @@ public class ConsoleInteractionServiceTests
 
         var executionContext = CreateExecutionContext();
         var consoleEnvironment = new ConsoleEnvironment(stdoutConsole, stderrConsole);
-        var interactionService = new ConsoleInteractionService(consoleEnvironment, executionContext, TestHelpers.CreateInteractiveHostEnvironment(), NullLoggerFactory.Instance, new ConsoleLogBufferContext());
+        var interactionService = new ConsoleInteractionService(consoleEnvironment, executionContext, TestHelpers.CreateInteractiveHostEnvironment(), new EnvironmentProcessPathProvider(), NullLoggerFactory.Instance, new ConsoleLogBufferContext());
 
         interactionService.DisplayMessage(KnownEmojis.Information, "Status update");
 
@@ -1170,8 +1255,8 @@ public class ConsoleInteractionServiceTests
         var console = CreateInteractiveConsoleWithInput(output, "");
         var interactionService = CreateInteractionService(console);
 
-        var option = new System.CommandLine.Option<string?>("--value");
-        var command = new System.CommandLine.RootCommand { option };
+        var option = new Option<string?>("--value");
+        var command = new RootCommand { option };
         var parseResult = command.Parse("--value bad-value");
         var binding = PromptBinding.Create(parseResult, option);
         Func<string, ValidationResult> validator = v =>
@@ -1233,8 +1318,8 @@ public class ConsoleInteractionServiceTests
         var console = CreateInteractiveConsoleWithInput(output, "");
         var interactionService = CreateInteractionService(console, hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
 
-        var option = new System.CommandLine.Option<bool>("--confirm");
-        var command = new System.CommandLine.RootCommand { option };
+        var option = new Option<bool>("--confirm");
+        var command = new RootCommand { option };
         var parseResult = command.Parse("");
         var binding = PromptBinding.Create(parseResult, option);
 
@@ -1263,8 +1348,8 @@ public class ConsoleInteractionServiceTests
         var console = CreateInteractiveConsoleWithInput(output, "");
         var interactionService = CreateInteractionService(console, hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
 
-        var option = new System.CommandLine.Option<bool?>("--confirm");
-        var command = new System.CommandLine.RootCommand { option };
+        var option = new Option<bool?>("--confirm");
+        var command = new RootCommand { option };
         var parseResult = command.Parse("");
         var binding = PromptBinding.CreateBoolConfirm(parseResult, option, interactiveDefault: true, nonInteractiveDefault: false);
 
@@ -1280,8 +1365,8 @@ public class ConsoleInteractionServiceTests
         var console = CreateInteractiveConsoleWithInput(output, "\n");
         var interactionService = CreateInteractionService(console);
 
-        var option = new System.CommandLine.Option<bool?>("--confirm");
-        var command = new System.CommandLine.RootCommand { option };
+        var option = new Option<bool?>("--confirm");
+        var command = new RootCommand { option };
         var parseResult = command.Parse("");
         var binding = PromptBinding.CreateBoolConfirm(parseResult, option, interactiveDefault: true, nonInteractiveDefault: false);
 
@@ -1362,8 +1447,8 @@ public class ConsoleInteractionServiceTests
     [Fact]
     public void PromptBinding_CreateWithoutDefault_HasNoExplicitDefault()
     {
-        var option = new System.CommandLine.Option<bool>("--flag");
-        var command = new System.CommandLine.RootCommand { option };
+        var option = new Option<bool>("--flag");
+        var command = new RootCommand { option };
         var parseResult = command.Parse("");
 
         var binding = PromptBinding.Create(parseResult, option);
@@ -1374,8 +1459,8 @@ public class ConsoleInteractionServiceTests
     [Fact]
     public void PromptBinding_CreateWithDefault_HasExplicitDefault()
     {
-        var option = new System.CommandLine.Option<bool>("--flag");
-        var command = new System.CommandLine.RootCommand { option };
+        var option = new Option<bool>("--flag");
+        var command = new RootCommand { option };
         var parseResult = command.Parse("");
 
         var binding = PromptBinding.Create(parseResult, option, true);
@@ -1390,8 +1475,8 @@ public class ConsoleInteractionServiceTests
     [InlineData("--nuget-config-dir", "'--nuget-config-dir'")]
     public void PromptBinding_SymbolDisplayName_DoesNotDoubleDash(string optionName, string expectedDisplay)
     {
-        var option = new System.CommandLine.Option<string?>(optionName);
-        var command = new System.CommandLine.RootCommand { option };
+        var option = new Option<string?>(optionName);
+        var command = new RootCommand { option };
         var parseResult = command.Parse("");
 
         var binding = PromptBinding.Create(parseResult, option);
@@ -1420,8 +1505,8 @@ public class ConsoleInteractionServiceTests
         var interactionService = CreateInteractionService(console, hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
         var choices = new[] { "option1", "option2", "option3" };
 
-        var option = new System.CommandLine.Option<string?>("--choice");
-        var command = new System.CommandLine.RootCommand { option };
+        var option = new Option<string?>("--choice");
+        var command = new RootCommand { option };
         var parseResult = command.Parse("--choice invalid");
         var binding = PromptBinding.Create(parseResult, option);
 
@@ -1442,8 +1527,8 @@ public class ConsoleInteractionServiceTests
         var interactionService = CreateInteractionService(console, hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
         var choices = new[] { "alpha", "beta", "gamma" };
 
-        var option = new System.CommandLine.Option<string?>("--items");
-        var command = new System.CommandLine.RootCommand { option };
+        var option = new Option<string?>("--items");
+        var command = new RootCommand { option };
         var parseResult = command.Parse("--items invalid");
         var binding = PromptBinding.Create(parseResult, option);
 
@@ -1469,8 +1554,8 @@ public class ConsoleInteractionServiceTests
         var visibleChoices = new[] { "alpha", "beta", "ux-only-entry" };
         var bindingChoices = new[] { "alpha", "beta" };
 
-        var option = new System.CommandLine.Option<string?>("--items");
-        var command = new System.CommandLine.RootCommand { option };
+        var option = new Option<string?>("--items");
+        var command = new RootCommand { option };
         var parseResult = command.Parse("--items invalid");
         var binding = PromptBinding.Create(parseResult, option);
 
@@ -1495,8 +1580,8 @@ public class ConsoleInteractionServiceTests
         var interactionService = CreateInteractionService(console, hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
         var choices = new[] { "alpha", "beta" };
 
-        var option = new System.CommandLine.Option<string?>("--items");
-        var command = new System.CommandLine.RootCommand { option };
+        var option = new Option<string?>("--items");
+        var command = new RootCommand { option };
         var parseResult = command.Parse("--items invalid");
         var binding = PromptBinding.Create(parseResult, option);
 
@@ -1518,6 +1603,34 @@ public class ConsoleInteractionServiceTests
     }
 
     [Fact]
+    public async Task PromptForSelectionsAsync_NonInteractive_CliProvidedInvalidValue_WithUnescapedClosingBracketInChoiceLabel_DoesNotThrowInvalidOperationException()
+    {
+        // Non-interactive error reporting should tolerate literal brackets in labels.
+        // These labels can come from user data and are not guaranteed to be valid Spectre markup.
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "");
+        var interactionService = CreateInteractionService(console, hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
+        var choices = new[] { "alpha", "beta" };
+
+        var option = new Option<string?>("--items");
+        var command = new RootCommand { option };
+        var parseResult = command.Parse("--items invalid");
+        var binding = PromptBinding.Create(parseResult, option);
+
+        await Assert.ThrowsAsync<NonInteractiveException>(() =>
+            interactionService.PromptForSelectionsAsync(
+                "Select:",
+                choices,
+                x => $"{x}]",
+                binding: binding,
+                cancellationToken: CancellationToken.None));
+
+        var outputString = output.ToString();
+        Assert.Contains("alpha]", outputString);
+        Assert.Contains("beta]", outputString);
+    }
+
+    [Fact]
     public async Task PromptForSelectionAsync_NonInteractive_WithDefaultValue_ReturnsMatch()
     {
         var output = new StringBuilder();
@@ -1525,8 +1638,8 @@ public class ConsoleInteractionServiceTests
         var interactionService = CreateInteractionService(console, hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
         var choices = new[] { "option1", "option2" };
 
-        var option = new System.CommandLine.Option<string?>("--choice");
-        var command = new System.CommandLine.RootCommand { option };
+        var option = new Option<string?>("--choice");
+        var command = new RootCommand { option };
         var parseResult = command.Parse("");
         var binding = PromptBinding.Create(parseResult, option, "option2");
 
@@ -1543,8 +1656,8 @@ public class ConsoleInteractionServiceTests
         var interactionService = CreateInteractionService(console);
         var choices = new[] { "option1", "option2" };
 
-        var option = new System.CommandLine.Option<string?>("--choice");
-        var command = new System.CommandLine.RootCommand { option };
+        var option = new Option<string?>("--choice");
+        var command = new RootCommand { option };
         var parseResult = command.Parse("--choice option1");
         var binding = PromptBinding.Create(parseResult, option);
 
@@ -1561,8 +1674,8 @@ public class ConsoleInteractionServiceTests
         var interactionService = CreateInteractionService(console);
         var choices = new[] { "alpha", "beta", "gamma" };
 
-        var option = new System.CommandLine.Option<string?>("--items");
-        var command = new System.CommandLine.RootCommand { option };
+        var option = new Option<string?>("--items");
+        var command = new RootCommand { option };
         var parseResult = command.Parse("--items alpha,gamma");
         var binding = PromptBinding.Create(parseResult, option);
 
@@ -1576,8 +1689,8 @@ public class ConsoleInteractionServiceTests
     [Fact]
     public void PromptBinding_InvertedBoolConfirm_SymbolDisplayName_IsCorrect()
     {
-        var option = new System.CommandLine.Option<bool?>("--yes");
-        var command = new System.CommandLine.RootCommand { option };
+        var option = new Option<bool?>("--yes");
+        var command = new RootCommand { option };
         var parseResult = command.Parse("--yes");
 
         var binding = PromptBinding.CreateInvertedBoolConfirm(parseResult, option, defaultValue: true);
@@ -1588,8 +1701,8 @@ public class ConsoleInteractionServiceTests
     [Fact]
     public void PromptBinding_BoolConfirm_SymbolDisplayName_IsCorrect()
     {
-        var option = new System.CommandLine.Option<bool?>("--include");
-        var command = new System.CommandLine.RootCommand { option };
+        var option = new Option<bool?>("--include");
+        var command = new RootCommand { option };
         var parseResult = command.Parse("--include");
 
         var binding = PromptBinding.CreateBoolConfirm(parseResult, option, defaultValue: false);
@@ -1650,8 +1763,8 @@ public class ConsoleInteractionServiceTests
         var interactionService = CreateInteractionService(AnsiConsole.Console, hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
         var choices = new[] { "option1", "option2" };
 
-        var option = new System.CommandLine.Option<string?>("--choice");
-        var command = new System.CommandLine.RootCommand { option };
+        var option = new Option<string?>("--choice");
+        var command = new RootCommand { option };
         var parseResult = command.Parse("");
         var binding = PromptBinding.Create(parseResult, option);
 
@@ -1667,8 +1780,8 @@ public class ConsoleInteractionServiceTests
         var interactionService = CreateInteractionService(console);
         var choices = new[] { "option1", "option2" };
 
-        var option = new System.CommandLine.Option<string?>("--choice");
-        var command = new System.CommandLine.RootCommand { option };
+        var option = new Option<string?>("--choice");
+        var command = new RootCommand { option };
         var parseResult = command.Parse("--choice option1");
         var binding = PromptBinding.Create(parseResult, option);
 
@@ -1686,8 +1799,8 @@ public class ConsoleInteractionServiceTests
         var interactionService = CreateInteractionService(console);
         var choices = new[] { "alpha", "beta", "gamma" };
 
-        var option = new System.CommandLine.Option<string?>("--items");
-        var command = new System.CommandLine.RootCommand { option };
+        var option = new Option<string?>("--items");
+        var command = new RootCommand { option };
         var parseResult = command.Parse("--items alpha,gamma");
         var binding = PromptBinding.Create(parseResult, option);
 
@@ -1705,8 +1818,8 @@ public class ConsoleInteractionServiceTests
         var interactionService = CreateInteractionService(console, hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
         var choices = new[] { "option1", "option2" };
 
-        var option = new System.CommandLine.Option<string?>("--choice");
-        var command = new System.CommandLine.RootCommand { option };
+        var option = new Option<string?>("--choice");
+        var command = new RootCommand { option };
         var parseResult = command.Parse("");
         var binding = PromptBinding.Create(parseResult, option, "option2");
 
@@ -1724,8 +1837,8 @@ public class ConsoleInteractionServiceTests
         var interactionService = CreateInteractionService(console, hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
         var choices = new[] { "alpha", "beta", "gamma" };
 
-        var option = new System.CommandLine.Option<string?>("--items");
-        var command = new System.CommandLine.RootCommand { option };
+        var option = new Option<string?>("--items");
+        var command = new RootCommand { option };
         var parseResult = command.Parse("");
         var binding = PromptBinding.Create(parseResult, option, "alpha,beta");
 

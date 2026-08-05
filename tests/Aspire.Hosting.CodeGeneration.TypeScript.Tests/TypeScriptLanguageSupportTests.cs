@@ -7,18 +7,18 @@ using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.TypeScript.Tests;
 
-public sealed class TypeScriptLanguageSupportTests
+public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelper)
 {
     private readonly TypeScriptLanguageSupport _languageSupport = new();
 
     [Fact]
     public void Scaffold_CreatesAppHostSpecificScriptsAndTsConfig_ForNewProject()
     {
-        using var testDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var files = _languageSupport.Scaffold(new ScaffoldRequest
         {
-            TargetPath = testDir.Path,
+            TargetPath = workspace.Path,
             ProjectName = "BrownfieldApp"
         });
 
@@ -36,9 +36,6 @@ public sealed class TypeScriptLanguageSupportTests
         Assert.True(packageJson["private"]?.GetValue<bool>());
         Assert.Equal("module", packageJson["type"]?.GetValue<string>());
         Assert.Equal("aspire run", scripts["aspire:start"]?.GetValue<string>());
-        Assert.Equal("tsgo --noEmit --incremental --tsBuildInfoFile ./node_modules/.tmp/tsconfig.apphost.typecheck.tsbuildinfo -p tsconfig.apphost.json", scripts["aspire:typecheck"]?.GetValue<string>());
-        Assert.Equal("tsgo --incremental --tsBuildInfoFile ./node_modules/.tmp/tsconfig.apphost.compile.tsbuildinfo -p tsconfig.apphost.json", scripts["aspire:compile"]?.GetValue<string>());
-        Assert.Equal("tsx --tsconfig tsconfig.apphost.json", scripts["aspire:execute"]?.GetValue<string>());
         Assert.Equal("tsc -p tsconfig.apphost.json", scripts["aspire:build"]?.GetValue<string>());
         Assert.Equal("tsc --watch -p tsconfig.apphost.json", scripts["aspire:dev"]?.GetValue<string>());
         Assert.Equal("eslint apphost.mts", scripts["aspire:lint"]?.GetValue<string>());
@@ -48,11 +45,11 @@ public sealed class TypeScriptLanguageSupportTests
         Assert.Equal("npm run aspire:lint", scripts["prebuild"]?.GetValue<string>());
         Assert.Equal("npm run aspire:build", scripts["build"]?.GetValue<string>());
         Assert.Equal("npm run aspire:dev", scripts["watch"]?.GetValue<string>());
-        Assert.Equal("^7.0.0-dev.20260523.1", devDependencies["@typescript/native-preview"]?.GetValue<string>());
+        Assert.Equal("npm:typescript@^7.0.2", devDependencies["@typescript/native"]?.GetValue<string>());
         Assert.Equal("^4.21.0", devDependencies["tsx"]?.GetValue<string>());
-        Assert.Equal("^5.9.3", devDependencies["typescript"]?.GetValue<string>());
+        Assert.Equal("npm:@typescript/typescript6@^6.0.2", devDependencies["typescript"]?.GetValue<string>());
         Assert.Equal("^10.0.3", devDependencies["eslint"]?.GetValue<string>());
-        Assert.Equal("^8.57.1", devDependencies["typescript-eslint"]?.GetValue<string>());
+        Assert.Equal("^8.65.0", devDependencies["typescript-eslint"]?.GetValue<string>());
 
         var engines = packageJson["engines"]!.AsObject();
         Assert.Equal("^20.19.0 || ^22.13.0 || >=24", engines["node"]?.GetValue<string>());
@@ -64,8 +61,6 @@ public sealed class TypeScriptLanguageSupportTests
         Assert.Contains("project: './tsconfig.apphost.json'", files["eslint.config.mjs"]);
 
         var tsConfig = ParseJson(files["tsconfig.apphost.json"]);
-        Assert.True(tsConfig["compilerOptions"]?["incremental"]?.GetValue<bool>());
-        Assert.Equal("./node_modules/.tmp/tsconfig.apphost.tsbuildinfo", tsConfig["compilerOptions"]?["tsBuildInfoFile"]?.GetValue<string>());
         Assert.Equal("./dist/apphost", tsConfig["compilerOptions"]?["outDir"]?.GetValue<string>());
         Assert.Contains("apphost.ts", tsConfig["include"]!.AsArray().Select(node => node?.GetValue<string>()));
     }
@@ -73,9 +68,9 @@ public sealed class TypeScriptLanguageSupportTests
     [Fact]
     public void Scaffold_BrownfieldOutput_ContainsOnlyAspireEntries()
     {
-        using var testDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        File.WriteAllText(Path.Combine(testDir.Path, "package.json"), """
+        File.WriteAllText(Path.Combine(workspace.Path, "package.json"), """
             {
               "name": "vite-brownfield",
               "version": "2.0.0",
@@ -98,7 +93,7 @@ public sealed class TypeScriptLanguageSupportTests
 
         var files = _languageSupport.Scaffold(new ScaffoldRequest
         {
-            TargetPath = testDir.Path,
+            TargetPath = workspace.Path,
             ProjectName = "Ignored"
         });
 
@@ -116,9 +111,6 @@ public sealed class TypeScriptLanguageSupportTests
 
         // Scaffold should only contain Aspire-desired scripts
         Assert.Equal("aspire run", scripts["aspire:start"]?.GetValue<string>());
-        Assert.Equal("tsgo --noEmit --incremental --tsBuildInfoFile ./node_modules/.tmp/tsconfig.apphost.typecheck.tsbuildinfo -p tsconfig.apphost.json", scripts["aspire:typecheck"]?.GetValue<string>());
-        Assert.Equal("tsgo --incremental --tsBuildInfoFile ./node_modules/.tmp/tsconfig.apphost.compile.tsbuildinfo -p tsconfig.apphost.json", scripts["aspire:compile"]?.GetValue<string>());
-        Assert.Equal("tsx --tsconfig tsconfig.apphost.json", scripts["aspire:execute"]?.GetValue<string>());
         Assert.Equal("tsc -p tsconfig.apphost.json", scripts["aspire:build"]?.GetValue<string>());
         Assert.Equal("tsc --watch -p tsconfig.apphost.json", scripts["aspire:dev"]?.GetValue<string>());
         Assert.Equal("eslint apphost.mts", scripts["aspire:lint"]?.GetValue<string>());
@@ -130,9 +122,9 @@ public sealed class TypeScriptLanguageSupportTests
         Assert.Equal("^8.2.0", dependencies["vscode-jsonrpc"]?.GetValue<string>());
         Assert.Equal("^4.21.0", devDependencies["tsx"]?.GetValue<string>());
         Assert.Equal("^22.0.0", devDependencies["@types/node"]?.GetValue<string>());
-        Assert.Equal("^7.0.0-dev.20260523.1", devDependencies["@typescript/native-preview"]?.GetValue<string>());
+        Assert.Equal("npm:typescript@^7.0.2", devDependencies["@typescript/native"]?.GetValue<string>());
         Assert.Equal("^3.1.14", devDependencies["nodemon"]?.GetValue<string>());
-        Assert.Equal("^5.9.3", devDependencies["typescript"]?.GetValue<string>());
+        Assert.Equal("npm:@typescript/typescript6@^6.0.2", devDependencies["typescript"]?.GetValue<string>());
         Assert.False(devDependencies.ContainsKey("vite"));
 
         // engines.node is always set
@@ -143,9 +135,9 @@ public sealed class TypeScriptLanguageSupportTests
     [Fact]
     public void Scaffold_NestedBrownfieldPackage_UsesStableAppHostPackageName()
     {
-        using var testDir = new TestTempDirectory();
-        File.WriteAllText(Path.Combine(testDir.Path, "package.json"), """{ "name": "existing-app" }""");
-        var appHostDirectory = Directory.CreateDirectory(Path.Combine(testDir.Path, "aspire-apphost"));
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.Path, "package.json"), """{ "name": "existing-app" }""");
+        var appHostDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "aspire-apphost"));
 
         var files = _languageSupport.Scaffold(new ScaffoldRequest
         {
@@ -164,9 +156,9 @@ public sealed class TypeScriptLanguageSupportTests
     [Fact]
     public void Scaffold_AlwaysOutputsAspireVersions_RegardlessOfExistingDependencies()
     {
-        using var testDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        File.WriteAllText(Path.Combine(testDir.Path, "package.json"), """
+        File.WriteAllText(Path.Combine(workspace.Path, "package.json"), """
             {
               "dependencies": {
                 "vscode-jsonrpc": "^8.1.0"
@@ -182,7 +174,7 @@ public sealed class TypeScriptLanguageSupportTests
 
         var files = _languageSupport.Scaffold(new ScaffoldRequest
         {
-            TargetPath = testDir.Path,
+            TargetPath = workspace.Path,
             ProjectName = "Ignored"
         });
 
@@ -194,17 +186,17 @@ public sealed class TypeScriptLanguageSupportTests
         // PackageJsonMerger handles semver comparison with existing on-disk versions.
         Assert.Equal("^8.2.0", dependencies["vscode-jsonrpc"]?.GetValue<string>());
         Assert.Equal("^22.0.0", devDependencies["@types/node"]?.GetValue<string>());
-        Assert.Equal("^7.0.0-dev.20260523.1", devDependencies["@typescript/native-preview"]?.GetValue<string>());
+        Assert.Equal("npm:typescript@^7.0.2", devDependencies["@typescript/native"]?.GetValue<string>());
         Assert.Equal("^3.1.14", devDependencies["nodemon"]?.GetValue<string>());
         Assert.Equal("^4.21.0", devDependencies["tsx"]?.GetValue<string>());
-        Assert.Equal("^5.9.3", devDependencies["typescript"]?.GetValue<string>());
+        Assert.Equal("npm:@typescript/typescript6@^6.0.2", devDependencies["typescript"]?.GetValue<string>());
     }
 
     [Fact]
     public void Scaffold_DoesNotEmitRootTsConfig_WhenOneAlreadyExists()
     {
-        using var testDir = new TestTempDirectory();
-        var existingTsConfigPath = Path.Combine(testDir.Path, "tsconfig.json");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var existingTsConfigPath = Path.Combine(workspace.Path, "tsconfig.json");
         var existingTsConfig = """
             {
               "compilerOptions": {
@@ -217,7 +209,7 @@ public sealed class TypeScriptLanguageSupportTests
 
         var files = _languageSupport.Scaffold(new ScaffoldRequest
         {
-            TargetPath = testDir.Path,
+            TargetPath = workspace.Path,
             ProjectName = "BrownfieldApp"
         });
 
@@ -234,11 +226,11 @@ public sealed class TypeScriptLanguageSupportTests
     [InlineData(55571)]
     public void Scaffold_GeneratesProfilePortsOutsideWindowsEphemeralRange(int? portSeed)
     {
-        using var testDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var files = _languageSupport.Scaffold(new ScaffoldRequest
         {
-            TargetPath = testDir.Path,
+            TargetPath = workspace.Path,
             ProjectName = "PortsApp",
             PortSeed = portSeed
         });
@@ -268,20 +260,20 @@ public sealed class TypeScriptLanguageSupportTests
         var preExecute = Assert.Single(runtimeSpec.PreExecute!);
         var watchExecute = Assert.IsType<CommandSpec>(runtimeSpec.WatchExecute);
 
-        Assert.Equal("npm", preExecute.Command);
-        Assert.Equal(new[] { "run", "aspire:typecheck" }, preExecute.Args);
-        Assert.Equal(new[] { "run", "aspire:execute", "--", "{appHostFile}" }, runtimeSpec.Execute.Args);
-        Assert.Contains("npm run aspire:typecheck && npm run aspire:execute -- \"{appHostFile}\"", watchExecute.Args);
+        Assert.Equal("npx", preExecute.Command);
+        Assert.Equal(new[] { "--no-install", "tsc", "--noEmit", "--incremental", "--tsBuildInfoFile", "./node_modules/.tmp/tsconfig.apphost.typecheck.tsbuildinfo", "-p", "tsconfig.apphost.json" }, preExecute.Args);
+        Assert.Equal(new[] { "--no-install", "tsx", "--tsconfig", "tsconfig.apphost.json", "{appHostFile}" }, runtimeSpec.Execute.Args);
+        Assert.Contains("npx --no-install tsc --noEmit --incremental --tsBuildInfoFile ./node_modules/.tmp/tsconfig.apphost.typecheck.tsbuildinfo -p tsconfig.apphost.json && npx --no-install tsx --tsconfig tsconfig.apphost.json \"{appHostFile}\"", watchExecute.Args);
     }
 
     [Fact]
     public void Scaffold_EmitsScaffoldedEslintConfigVerbatim()
     {
-        using var testDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var files = _languageSupport.Scaffold(new ScaffoldRequest
         {
-            TargetPath = testDir.Path,
+            TargetPath = workspace.Path,
             ProjectName = "SnapshotApp"
         });
 
@@ -297,11 +289,11 @@ public sealed class TypeScriptLanguageSupportTests
     [Fact]
     public void Scaffold_EmitsScaffoldedAppHostTsConfigVerbatim()
     {
-        using var testDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var files = _languageSupport.Scaffold(new ScaffoldRequest
         {
-            TargetPath = testDir.Path,
+            TargetPath = workspace.Path,
             ProjectName = "SnapshotApp"
         });
 

@@ -8,7 +8,6 @@
     <None Include="$(RepoRoot)src\Components\Aspire.StackExchange.Redis\ConfigurationSchema.json" CopyToOutputDirectory="PreserveNewest" />
     <Compile Include="$(RepoRoot)src\Aspire.Hosting.Redis\RedisContainerImageTags.cs" />
   </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\..\src\Components\Aspire.StackExchange.Redis\Aspire.StackExchange.Redis.csproj" />
     <ProjectReference Include="..\..\src\Components\Aspire.StackExchange.Redis.DistributedCaching\Aspire.StackExchange.Redis.DistributedCaching.csproj" />

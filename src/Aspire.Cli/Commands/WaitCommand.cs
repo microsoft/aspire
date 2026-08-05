@@ -4,7 +4,6 @@
 using System.CommandLine;
 using System.Globalization;
 using Aspire.Cli.Backchannel;
-using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
 
@@ -40,16 +39,15 @@ internal sealed class WaitCommand : BaseCommand
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", SharedCommandStrings.AppHostOptionDescription);
 
     public WaitCommand(
-        IAuxiliaryBackchannelMonitor backchannelMonitor,
-        IProjectLocator projectLocator,
+        AppHostConnectionResolver connectionResolver,
         ILogger<WaitCommand> logger,
         CommonCommandServices services,
-        TimeProvider? timeProvider = null)
+        TimeProvider timeProvider)
         : base("wait", WaitCommandStrings.Description, services)
     {
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, ExecutionContext, logger);
+        _connectionResolver = connectionResolver;
         _logger = logger;
-        _timeProvider = timeProvider ?? TimeProvider.System;
+        _timeProvider = timeProvider;
 
         Arguments.Add(s_resourceArgument);
         Options.Add(s_statusOption);

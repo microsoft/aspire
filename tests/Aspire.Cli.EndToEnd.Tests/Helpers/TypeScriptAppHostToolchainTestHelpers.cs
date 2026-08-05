@@ -75,14 +75,12 @@ internal static class TypeScriptAppHostToolchainTestHelpers
     /// </summary>
     internal static string GetTypeCheckCommand(string toolchain, string tsConfigFileName)
     {
-        _ = tsConfigFileName;
-
         return NormalizeToolchain(toolchain) switch
         {
-            "bun" => "bun run aspire:typecheck",
-            "yarn" => "yarn run aspire:typecheck",
-            "pnpm" => "pnpm run aspire:typecheck",
-            "npm" => "npm run aspire:typecheck",
+            "bun" => $"bun run tsc --noEmit --incremental --tsBuildInfoFile ./node_modules/.tmp/tsconfig.apphost.typecheck.tsbuildinfo -p {tsConfigFileName}",
+            "yarn" => $"yarn run tsc --noEmit --incremental --tsBuildInfoFile ./node_modules/.tmp/tsconfig.apphost.typecheck.tsbuildinfo -p {tsConfigFileName}",
+            "pnpm" => $"pnpm exec tsc --noEmit --incremental --tsBuildInfoFile ./node_modules/.tmp/tsconfig.apphost.typecheck.tsbuildinfo -p {tsConfigFileName}",
+            "npm" => $"npx --no-install tsc --noEmit --incremental --tsBuildInfoFile ./node_modules/.tmp/tsconfig.apphost.typecheck.tsbuildinfo -p {tsConfigFileName}",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, "Unsupported TypeScript AppHost toolchain.")
         };
     }

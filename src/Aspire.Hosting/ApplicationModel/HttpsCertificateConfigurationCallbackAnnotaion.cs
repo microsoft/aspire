@@ -22,16 +22,19 @@ public sealed class HttpsCertificateConfigurationCallbackAnnotation(Func<HttpsCe
 /// Context provided to a <see cref="HttpsCertificateConfigurationCallbackAnnotation"/> callback.
 /// </summary>
 [Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport]
 public sealed class HttpsCertificateConfigurationCallbackAnnotationContext
 {
     /// <summary>
     /// Gets the <see cref="DistributedApplicationExecutionContext"/> for this session.
     /// </summary>
+    [AspireExport]
     public required DistributedApplicationExecutionContext ExecutionContext { get; init; }
 
     /// <summary>
     /// Gets the resource to which the annotation is applied.
     /// </summary>
+    [AspireExport]
     public required IResource Resource { get; init; }
 
     /// <summary>
@@ -78,25 +81,48 @@ public sealed class HttpsCertificateConfigurationCallbackAnnotationContext
     /// <summary>
     /// A value provider that will resolve to a path to the certificate file.
     /// </summary>
+    [AspireExport]
     public required ReferenceExpression CertificatePath { get; init; }
 
     /// <summary>
     /// A value provider that will resolve to a path to the private key for the certificate.
     /// </summary>
+    [AspireExport]
     public required ReferenceExpression KeyPath { get; init; }
+
+    /// <summary>
+    /// A value provider that will resolve to a path to the certificate and key concatenated together in PEM format.
+    /// </summary>
+    [AspireExport]
+    public required ReferenceExpression CertificateWithKeyPath { get; init; }
 
     /// <summary>
     /// A value provider that will resolve to a path to a PFX file for the key pair.
     /// </summary>
+    [AspireExport]
     public required ReferenceExpression PfxPath { get; init; }
 
     /// <summary>
     /// A value provider that will resolve to the password for the private key, if applicable.
     /// </summary>
+    [AspireExportIgnore(Reason = "Password is typed as IValueProvider, which has no ATS-exported representation and no guaranteed concrete type to expose it as. The certificate paths (exposed as ReferenceExpression) cover the common configuration scenarios.")]
     public required IValueProvider? Password { get; init; }
 
     /// <summary>
     /// Gets the <see cref="CancellationToken"/> that can be used to cancel the operation.
     /// </summary>
+    [AspireExport]
     public required CancellationToken CancellationToken { get; init; }
+
+    /// <summary>
+    /// Gets the editor used to manipulate the command-line arguments in polyglot callbacks.
+    /// </summary>
+    [AspireExport("HttpsCertificateConfigurationCallbackAnnotationContext.arguments", MethodName = "arguments")]
+    internal CommandLineArgsEditor ArgumentsEditor => new(Arguments);
+
+    /// <summary>
+    /// Gets the editor used to set environment variables in polyglot callbacks.
+    /// </summary>
+    [AspireExport]
+    internal EnvironmentEditor Environment => new(EnvironmentVariables);
 }

@@ -28,6 +28,8 @@
     <Compile Include="$(SharedDir)KnownResourceNames.cs" Link="Utils\KnownResourceNames.cs" />
     <Compile Include="$(SharedDir)KnownEndpointNames.cs" Link="Utils\KnownEndpointNames.cs" />
     <Compile Include="$(SharedDir)EnvironmentVariableNameEncoder.cs" Link="ApplicationModel\EnvironmentVariableNameEncoder.cs" />
+    <Compile Include="$(SharedDir)FileUploadHelpers.cs" Link="Utils\FileUploadHelpers.cs" />
+    <Compile Include="$(SharedDir)KnownAspNetCoreConfigNames.cs" Link="Utils\KnownAspNetCoreConfigNames.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
     <Compile Include="$(SharedDir)KnownContainerRuntimes.cs" Link="Utils\KnownContainerRuntimes.cs" />
     <Compile Include="$(SharedDir)ContainerRuntimeDetector.cs" Link="Publishing\ContainerRuntimeDetector.cs" />
@@ -55,10 +57,13 @@
     <Compile Include="$(SharedDir)LocaleHelpers.cs" Link="Utils\LocaleHelpers.cs" />
     <Compile Include="$(SharedDir)PathLookupHelper.cs" Link="Utils\PathLookupHelper.cs" />
     <Compile Include="$(SharedDir)BackchannelConstants.cs" Link="Backchannel\BackchannelConstants.cs" />
+    <Compile Include="$(SharedDir)TerminalHost\*.cs" Link="Backchannel\TerminalHost\%(Filename)%(Extension)" />
     <Compile Include="$(SharedDir)UserSecrets\UserSecretsPathHelper.cs" Link="UserSecrets\UserSecretsPathHelper.cs" />
+    <Compile Include="$(SharedDir)UserSecrets\UserSecretsJsonOptions.cs" Link="UserSecrets\UserSecretsJsonOptions.cs" />
     <Compile Include="$(SharedDir)X509Certificate2Extensions.cs" Link="Utils\X509Certificate2Extensions.cs" />
     <Compile Include="$(SharedDir)PasswordGenerator.cs" Link="Utils\PasswordGenerator.cs" />
     <Compile Include="$(SharedDir)ProcessSignaler.cs" Link="Utils\ProcessSignaler.cs" />
+    <Compile Include="$(SharedDir)ProcessStartTimeHelper.cs" Link="Utils\ProcessStartTimeHelper.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -125,7 +130,10 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Aspire.Hosting.Tests" />
+    <InternalsVisibleTo Include="Aspire.Hosting.TestUtilities" />
     <InternalsVisibleTo Include="Aspire.Hosting.Yarp.Tests" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Dotnet" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Dotnet.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Go" />
     <InternalsVisibleTo Include="Aspire.Hosting.Go.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.JavaScript" />
@@ -138,7 +146,10 @@
     <InternalsVisibleTo Include="Aspire.TestUtilities" />
     <InternalsVisibleTo Include="Aspire.Cli.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Kubernetes" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Radius" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Radius.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.RemoteHost.Tests" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Foundry.Tests" />
   </ItemGroup>
 
   <!-- Include the integration analyzer in the package -->

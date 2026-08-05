@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { AspireDebugSession } from '../debugger/AspireDebugSession';
+import type { AspireDebugSession, DashboardLaunchBehavior } from '../debugger/AspireDebugSession';
 
 export interface ErrorResponse {
     error: ErrorDetails;
@@ -103,6 +103,21 @@ export function isAzureFunctionsLaunchConfiguration(obj: any): obj is AzureFunct
     return obj && obj.type === 'azure-functions';
 }
 
+export interface MauiLaunchConfiguration extends ExecutableLaunchConfiguration {
+    type: "maui";
+    project_path: string;
+    target_framework?: string;
+    platform?: string;
+    target_kind?: string;
+    device?: string;
+    runtime_identifier?: string;
+    msbuild_properties?: Record<string, string>;
+}
+
+export function isMauiLaunchConfiguration(obj: any): obj is MauiLaunchConfiguration {
+    return obj && obj.type === 'maui';
+}
+
 export interface EnvVar {
     name: string;
     value: string;
@@ -173,7 +188,7 @@ export interface StartAppHostOptions {
 export interface AspireResourceDebugSession {
     id: string;
     session: vscode.DebugSession;
-    stopSession(): void;
+    stopSession(): Thenable<void>;
 }
 
 export interface AspireResourceExtendedDebugConfiguration extends vscode.DebugConfiguration {
@@ -189,8 +204,10 @@ export interface AspireExtendedDebugConfiguration extends vscode.DebugConfigurat
     program: string;
     debuggers?: AspireDebuggersConfiguration;
     command?: AspireCommandType;
+    dashboardBrowser?: DashboardLaunchBehavior;
     args?: string[];
     step?: string;
+    skipCliAvailabilityCheck?: boolean;
     env?: { [key: string]: string };
 }
 

@@ -12,7 +12,6 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -487,12 +486,12 @@ internal sealed class AspireSkillsInstaller(
         }
     }
 
-    private static Task<AspireSkillsBundle> LoadCachedBundleAsync(string cacheDirectory, CancellationToken cancellationToken)
+    private Task<AspireSkillsBundle> LoadCachedBundleAsync(string cacheDirectory, CancellationToken cancellationToken)
     {
         return AspireSkillsBundle.LoadAsync(
             new DirectoryInfo(cacheDirectory),
-            VersionHelper.GetDefaultSdkVersion(),
-            VersionHelper.GetDefaultSdkVersion(),
+            executionContext.IdentitySdkVersion,
+            executionContext.IdentitySdkVersion,
             skipCompatibilityCheck: true,
             cancellationToken);
     }
@@ -555,12 +554,12 @@ internal sealed class AspireSkillsInstaller(
         }
     }
 
-    private static Task<AspireSkillsBundle> LoadStagedBundleAsync(string stageDir, bool skipCompatibilityCheck, CancellationToken cancellationToken)
+    private Task<AspireSkillsBundle> LoadStagedBundleAsync(string stageDir, bool skipCompatibilityCheck, CancellationToken cancellationToken)
     {
         return AspireSkillsBundle.LoadAsync(
             new DirectoryInfo(stageDir),
-            VersionHelper.GetDefaultSdkVersion(),
-            VersionHelper.GetDefaultSdkVersion(),
+            executionContext.IdentitySdkVersion,
+            executionContext.IdentitySdkVersion,
             skipCompatibilityCheck,
             cancellationToken);
     }

@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <!-- This list of runtimes needs to match the set of RIDs covered by eng/terminalhostpack/. -->
+    <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;linux-musl-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RollForward>Major</RollForward>
+    <!--
+      CS1591: Missing XML comment for publicly visible type or member - this assembly is
+              shipped only as a tools/ payload (per-RID Aspire.TerminalHost.Sdk packages and
+              the bundled aspire-managed.exe terminalhost arm); it has no public API contract.
+      CS8002: Disable strong name signing because Hex1b package is not signed.
+      CA2007: This is a console executable with no SynchronizationContext; every await
+              in this assembly explicitly uses ConfigureAwait(false), but the analyzer
+              still fires on lambdas. Suppressed project-wide so the noise doesn't drown
+              out real diagnostics.
+    -->
+    <NoWarn>$(NoWarn);CS1591;CS8002;CA2007</NoWarn>
+  </PropertyGroup>
+
+  <!-- Used by publishing infrastructure to get the version to use for blob publishing -->
+  <Target Name="ReturnPackageVersion" Returns="$(PackageVersion)" />
+
+  <ItemGroup>
+    <PackageReference Include="Hex1b" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="StreamJsonRpc" />
+    <PackageReference Include="System.CommandLine" />
+    <PackageReference Include="System.IO.Hashing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\TerminalHost\*.cs" Link="Shared\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.TerminalHost.Tests" />
+  </ItemGroup>
+
+</Project>

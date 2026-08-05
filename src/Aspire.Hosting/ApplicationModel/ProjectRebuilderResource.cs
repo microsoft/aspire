@@ -11,15 +11,15 @@ namespace Aspire.Hosting.ApplicationModel;
 /// so that the build process benefits from DCP's lifecycle management (automatic cleanup on shutdown),
 /// structured log capture, and visibility in the dashboard's diagnostics.
 /// </remarks>
-internal sealed class ProjectRebuilderResource : ExecutableResource, IResourceWithParent<ProjectResource>
+internal sealed class ProjectRebuilderResource : ExecutableResource, IResourceWithParent<IProjectLaunchDefaultsResource>
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="ProjectRebuilderResource"/> class.
     /// </summary>
     /// <param name="name">The name of the rebuilder resource.</param>
-    /// <param name="parent">The project resource this rebuilder is associated with.</param>
+    /// <param name="parent">The .NET resource this rebuilder is associated with.</param>
     /// <param name="projectPath">The path to the project file.</param>
-    public ProjectRebuilderResource(string name, ProjectResource parent, string projectPath)
+    public ProjectRebuilderResource(string name, IProjectLaunchDefaultsResource parent, string projectPath)
         : base(name, "dotnet", Path.GetDirectoryName(projectPath)!)
     {
         Parent = parent;
@@ -27,9 +27,9 @@ internal sealed class ProjectRebuilderResource : ExecutableResource, IResourceWi
     }
 
     /// <summary>
-    /// Gets the parent project resource.
+    /// Gets the parent .NET resource.
     /// </summary>
-    public ProjectResource Parent { get; }
+    public IProjectLaunchDefaultsResource Parent { get; }
 
     /// <summary>
     /// Gets the path to the project file.

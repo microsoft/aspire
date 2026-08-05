@@ -446,7 +446,7 @@ public static class ContainerResourceBuilderExtensions
         if (parsedReference.Digest is { })
         {
             const string prefix = "sha256:";
-            if (!parsedReference.Digest.StartsWith(prefix))
+            if (!parsedReference.Digest.StartsWith(prefix, StringComparison.Ordinal))
             {
                 throw new ArgumentOutOfRangeException(nameof(image), parsedReference.Digest, "invalid digest format");
             }
@@ -1430,7 +1430,7 @@ public static class ContainerResourceBuilderExtensions
     /// builder.AddContainer("mycontainer", "myimage")
     ///     .WithContainerFiles("/", (context, cancellationToken) =>
     ///     {
-    ///         var appModel = context.ServiceProvider.GetRequiredService&lt;DistributedApplicationModel&gt;();
+    ///         var appModel = context.Services.GetRequiredService&lt;DistributedApplicationModel&gt;();
     ///         var postgresInstances = appModel.Resources.OfType&lt;PostgresDatabaseResource&gt;();
     ///
     ///         return [
@@ -1457,8 +1457,7 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <remarks>This method is not available in polyglot app hosts.</remarks>
-    [AspireExportIgnore(Reason = "ContainerFileSystemCallbackContext exposes IServiceProvider and IResource — .NET runtime types not usable from polyglot hosts.")]
+    [AspireExportIgnore(Reason = "Exposed to ATS via the WithContainerFilesCallbackExport shim, which accepts integer file-mode options and lets polyglot callbacks build the IEnumerable<ContainerFileSystemItem> result through ContainerFileSystemCallbackContext factory methods (createFile/createDirectory/createCertificateFile).")]
     public static IResourceBuilder<T> WithContainerFiles<T>(this IResourceBuilder<T> builder, string destinationPath, Func<ContainerFileSystemCallbackContext, CancellationToken, Task<IEnumerable<ContainerFileSystemItem>>> callback, int? defaultOwner = null, int? defaultGroup = null, UnixFileMode? umask = null) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -1490,8 +1489,7 @@ public static class ContainerResourceBuilderExtensions
     /// <param name="defaultGroup">The default group ID for the created or updated file system. Defaults to 0 for root if not set.</param>
     /// <param name="umask">The umask <see cref="UnixFileMode"/> permissions to exclude from the default file and folder permissions. This takes away (rather than granting) default permissions to files and folders without an explicit mode permission set.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <remarks>This method is not available in polyglot app hosts.</remarks>
-    [AspireExportIgnore(Reason = "Uses UnixFileMode parameter which is not ATS-compatible.")]
+    [AspireExportIgnore(Reason = "Exposed to ATS via the WithContainerFilesExport shim overload, which accepts integer file-mode options (ContainerFilesOptions) in place of the UnixFileMode parameter.")]
     public static IResourceBuilder<T> WithContainerFiles<T>(this IResourceBuilder<T> builder, string destinationPath, string sourcePath, int? defaultOwner = null, int? defaultGroup = null, UnixFileMode? umask = null) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -1542,8 +1540,10 @@ public static class ContainerResourceBuilderExtensions
     /// In publish mode, Aspire creates a read-only bind mount and ignores those options.
     /// </para>
     /// <para>
-    /// Inline file entries and callbacks are only available in .NET apphosts because ATS does not support the recursive,
-    /// polymorphic <see cref="ContainerFileSystemItem"/> hierarchy or callbacks that use .NET services.
+    /// To produce entries dynamically (including inline file contents and OpenSSL certificate files), polyglot app hosts
+    /// use the <c>withContainerFilesCallback</c> overload and build the entries via the factory methods on
+    /// <see cref="ContainerFileSystemCallbackContext"/>. Passing a pre-built <see cref="ContainerFileSystemItem"/> collection
+    /// remains .NET-only.
     /// </para>
     /// </remarks>
     /// <ats-summary>Creates or updates files and folders in a container by copying them from a source path on the host.</ats-summary>
@@ -1583,6 +1583,55 @@ public static class ContainerResourceBuilderExtensions
         var umask = umaskValue is { } value ? (UnixFileMode)value : (UnixFileMode?)null;
 
         return builder.WithContainerFiles(destinationPath, sourcePath, defaultOwner, defaultGroup, umask);
+    }
+
+    /// <summary>
+    /// Creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
+    /// </summary>
+    /// <typeparam name="T">The type of container resource.</typeparam>
+    /// <param name="builder">The resource builder for the container resource.</param>
+    /// <param name="destinationPath">The destination absolute path in the container.</param>
+    /// <param name="callback">
+    /// A callback that returns the file system entries to create or update. Use the factory methods on
+    /// <see cref="ContainerFileSystemCallbackContext"/> (createFile, createDirectory, createCertificateFile) to build the entries.
+    /// </param>
+    /// <param name="options">Options for the created or updated file system entries.</param>
+    /// <returns>The resource builder.</returns>
+    [AspireExport("withContainerFilesCallback", MethodName = "withContainerFilesCallback")]
+    internal static IResourceBuilder<T> WithContainerFilesCallbackExport<T>(
+        this IResourceBuilder<T> builder,
+        string destinationPath,
+        Func<ContainerFileSystemCallbackContext, CancellationToken, Task<IEnumerable<ContainerFileSystemItem>>> callback,
+        ContainerFilesOptions? options = null)
+        where T : ContainerResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(destinationPath);
+        ArgumentNullException.ThrowIfNull(callback);
+
+        if (options is null)
+        {
+            return builder.WithContainerFiles(destinationPath, callback);
+        }
+
+        var defaultOwner = GetIntegralContainerFilesOption(
+            options.DefaultOwner,
+            nameof(ContainerFilesOptions.DefaultOwner),
+            minValue: 0,
+            maxValue: int.MaxValue);
+        var defaultGroup = GetIntegralContainerFilesOption(
+            options.DefaultGroup,
+            nameof(ContainerFilesOptions.DefaultGroup),
+            minValue: 0,
+            maxValue: int.MaxValue);
+        var umaskValue = GetIntegralContainerFilesOption(
+            options.Umask,
+            nameof(ContainerFilesOptions.Umask),
+            minValue: 0,
+            maxValue: 0xFFF);
+        var umask = umaskValue is { } value ? (UnixFileMode)value : (UnixFileMode?)null;
+
+        return builder.WithContainerFiles(destinationPath, callback, defaultOwner, defaultGroup, umask);
     }
 
     private static int? GetIntegralContainerFilesOption(double? value, string paramName, int minValue, int maxValue)

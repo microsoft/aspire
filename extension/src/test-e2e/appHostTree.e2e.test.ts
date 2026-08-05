@@ -1,18 +1,21 @@
 import * as assert from 'assert';
-import { getResources, getTerminalCommandCount, getTreeAppHostLabel, waitForCommandOutcome, waitForDashboardUrl, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
-import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
+import { getCommandInvocationCount, getResources, getTerminalCommandCount, getTreeAppHostLabel, waitForCommandOutcome, waitForDashboardUrl, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
+import { assertClipboardMatchesLastExpectationForE2E, captureWorkspaceAppHostPathClipboardExpectationForE2E, executeE2eControlCommand, restoreClipboardSnapshotForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, snapshotClipboardForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
-import { cancelActiveInput, clickTreeItem, openAspireView, waitForTreeItem } from './helpers/vscode';
+import { cancelActiveInput, clickTreeItem, executeCommandFromPalette, openAspireView, waitForChildTreeItem, waitForNotificationMessage, waitForTreeItem } from './helpers/vscode';
 
 suite('Aspire AppHost tree E2E', function () {
     this.timeout(240000);
 
     teardown(async () => {
         await runE2eTeardown([
+            () => restoreClipboardSnapshotForE2E(),
             () => setCliUnavailableForE2E(false),
             () => setTerminalCommandExecutionSuppressedForE2E(false),
             () => restoreWorkspaceCliPath(),
+            () => executeE2eControlCommand({ name: 'stopDebugging' }),
             () => stopPrimaryAppHostIfRunning(),
+            () => waitForNoDebugSessions().catch(() => undefined),
             () => waitForNoRunningAppHost().catch(() => undefined),
         ], 'AppHost tree E2E teardown failed.');
     });
@@ -27,6 +30,33 @@ suite('Aspire AppHost tree E2E', function () {
         const item = await waitForTreeItem(section, label);
         assert.strictEqual(await item.getLabel(), label);
         assert.ok(stateFile.state.workspaceAppHostCandidatePaths.length >= 1);
+    });
+
+    test('clicking the Path tree item copies the AppHost path and shows a confirmation notification', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+        await snapshotClipboardForE2E();
+        const discovered = await waitForWorkspaceAppHost();
+        const appHostLabel = getTreeAppHostLabel(discovered.state);
+        const section = await openAspireView();
+
+        // The Path row only appears under an idle (non-running) workspace AppHost item, so exercise
+        // it before starting the AppHost. See https://github.com/microsoft/aspire/issues/18578.
+        const idleItem = await waitForTreeItem(section, appHostLabel);
+        await idleItem.expand();
+
+        // Labels below match loc/strings.ts (appHostPathLabel / appHostPathCopiedToClipboard); the
+        // E2E host runs in English so the literals are stable, mirroring other tree-item labels
+        // asserted in this suite (e.g. 'Run AppHost').
+        const pathItem = await waitForChildTreeItem(idleItem, 'Path');
+        await captureWorkspaceAppHostPathClipboardExpectationForE2E();
+        await pathItem.click();
+
+        // The notification only fires after a successful copy, so its appearance proves the click
+        // routed through aspire-vscode.copyAppHostPath rather than reading a stale clipboard value.
+        await waitForNotificationMessage('AppHost path copied to clipboard.');
+
+        await assertClipboardMatchesLastExpectationForE2E();
     });
 
     test('runs, shows resources and dashboard state, routes resource commands, and stops from the tree', async () => {
@@ -79,4 +109,57 @@ suite('Aspire AppHost tree E2E', function () {
         await stopPrimaryAppHostIfRunning();
         await waitForNoRunningAppHost();
     });
+
+    test('workspace view return clears stale stopped AppHost after returning to Aspire view', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+        const discovered = await waitForWorkspaceAppHost();
+        const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
+
+        await executeE2eControlCommand({ name: 'switchToWorkspaceView' });
+
+        // Prior tests can leave a debug session attached to the same AppHost path.
+        // Normalize to a no-debug/no-running baseline before validating stale-state clearing.
+        await executeE2eControlCommand({ name: 'stopDebugging' });
+        await waitForNoDebugSessions(120000);
+        await stopAppHostIfRunning(appHostPath);
+        await waitForNoRunningAppHost(120000, appHostPath);
+
+        await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
+        await waitForCommandOutcome('aspire-vscode.runAppHost', 'success');
+        await waitForRunningAppHost();
+
+        await executeCommandFromPalette('workbench.view.explorer');
+        await stopAppHostIfRunning(appHostPath);
+
+        await openAspireView();
+        await waitForNoRunningAppHost(120000, appHostPath);
+    });
+
+    test('global view return clears stale stopped AppHost after returning to Aspire view', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+        const discovered = await waitForWorkspaceAppHost();
+        const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
+
+        await executeE2eControlCommand({ name: 'switchToGlobalView' });
+
+        // Prior tests can leave a debug session attached to the same AppHost path.
+        // Normalize to a no-debug/no-running baseline before validating stale-state clearing.
+        await executeE2eControlCommand({ name: 'stopDebugging' });
+        await waitForNoDebugSessions(120000);
+        await stopAppHostIfRunning(appHostPath);
+        await waitForNoRunningAppHost(120000, appHostPath);
+
+        await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
+        await waitForCommandOutcome('aspire-vscode.runAppHost', 'success');
+        await waitForRunningAppHost();
+
+        await executeCommandFromPalette('workbench.view.explorer');
+        await stopAppHostIfRunning(appHostPath);
+
+        await openAspireView();
+        await waitForNoRunningAppHost(120000, appHostPath);
+    });
+
 });

@@ -23,7 +23,7 @@ using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Hosting.Docker.Tests;
 
-public class DockerComposeTests(ITestOutputHelper output)
+public class DockerComposeTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task DockerComposeSetsComputeEnvironment()
@@ -47,9 +47,8 @@ public class DockerComposeTests(ITestOutputHelper output)
     [Fact]
     public void PublishingDockerComposeEnviromentPublishesFile()
     {
-        var tempDir = Directory.CreateTempSubdirectory(".docker-compose-test");
-        output.WriteLine($"Temp directory: {tempDir.FullName}");
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.FullName);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
@@ -61,18 +60,15 @@ public class DockerComposeTests(ITestOutputHelper output)
         var app = builder.Build();
         app.Run();
 
-        var composeFile = Path.Combine(tempDir.FullName, "docker-compose.yaml");
+        var composeFile = Path.Combine(workspace.Path, "docker-compose.yaml");
         Assert.True(File.Exists(composeFile), "Docker Compose file was not created.");
-
-        tempDir.Delete(recursive: true);
     }
 
     [Fact]
     public async Task DockerComposeOnlyExposesExternalEndpoints()
     {
-        var tempDir = Directory.CreateTempSubdirectory(".docker-compose-test");
-        output.WriteLine($"Temp directory: {tempDir.FullName}");
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.FullName);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
@@ -86,14 +82,12 @@ public class DockerComposeTests(ITestOutputHelper output)
         var app = builder.Build();
         app.Run();
 
-        var composeFile = Path.Combine(tempDir.FullName, "docker-compose.yaml");
+        var composeFile = Path.Combine(workspace.Path, "docker-compose.yaml");
         Assert.True(File.Exists(composeFile), "Docker Compose file was not created.");
 
         var composeContent = File.ReadAllText(composeFile);
 
         await Verify(composeContent, "yaml");
-
-        tempDir.Delete(recursive: true);
     }
 
     [Fact]
@@ -150,9 +144,10 @@ public class DockerComposeTests(ITestOutputHelper output)
     [Fact]
     public async Task MultipleDockerComposeEnvironmentsSupported()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputPath = Path.Combine(workspace.Path, "output");
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath);
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
         var env1 = builder.AddDockerComposeEnvironment("env1");
@@ -169,15 +164,15 @@ public class DockerComposeTests(ITestOutputHelper output)
         // Publishing will stop the app when it is done
         await app.RunAsync();
 
-        await VerifyDirectory(tempDir.Path);
+        await VerifyDirectory(outputPath);
     }
 
     [Fact]
     public async Task DashboardWithForwardedHeadersWritesEnvVar()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
         builder.AddDockerComposeEnvironment("env")
@@ -189,7 +184,7 @@ public class DockerComposeTests(ITestOutputHelper output)
         using var app = builder.Build();
         app.Run();
 
-        var composeFile = Path.Combine(tempDir.Path, "docker-compose.yaml");
+        var composeFile = Path.Combine(workspace.Path, "docker-compose.yaml");
         Assert.True(File.Exists(composeFile), "Docker Compose file was not created.");
         var composeContent = File.ReadAllText(composeFile);
 
@@ -199,9 +194,9 @@ public class DockerComposeTests(ITestOutputHelper output)
     [Fact]
     public async Task DockerSwarmDeploymentLabelsSerializedCorrectly()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
         builder.AddDockerComposeEnvironment("swarm-env");
@@ -223,7 +218,7 @@ public class DockerComposeTests(ITestOutputHelper output)
         using var app = builder.Build();
         app.Run();
 
-        var composeFile = Path.Combine(tempDir.Path, "docker-compose.yaml");
+        var composeFile = Path.Combine(workspace.Path, "docker-compose.yaml");
         Assert.True(File.Exists(composeFile), "Docker Compose file was not created.");
         var composeContent = File.ReadAllText(composeFile);
 
@@ -235,9 +230,9 @@ public class DockerComposeTests(ITestOutputHelper output)
     [Fact]
     public async Task DockerSwarmUpdateConfigSerializedCorrectly()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
         builder.AddDockerComposeEnvironment("swarm-env");
@@ -262,7 +257,7 @@ public class DockerComposeTests(ITestOutputHelper output)
         using var app = builder.Build();
         app.Run();
 
-        var composeFile = Path.Combine(tempDir.Path, "docker-compose.yaml");
+        var composeFile = Path.Combine(workspace.Path, "docker-compose.yaml");
         Assert.True(File.Exists(composeFile), "Docker Compose file was not created.");
         var composeContent = File.ReadAllText(composeFile);
 
@@ -313,7 +308,7 @@ public class DockerComposeTests(ITestOutputHelper output)
     [RequiresFeature(TestFeature.Docker)]
     public async Task DockerComposeProjectNameIncludesAppHostShaInArguments()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
         var testSink = new TestSink();
 
         // Set a known AppHost SHA in configuration
@@ -322,7 +317,7 @@ public class DockerComposeTests(ITestOutputHelper output)
         // Helper to create a builder with the same configuration
         IDistributedApplicationTestingBuilder CreateBuilder(string step)
         {
-            var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: step);
+            var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: step);
 
             // Add TestLoggerProvider to capture logs during publish, set minimum level to Debug
             builder.Services.AddLogging(logging =>
@@ -349,7 +344,7 @@ public class DockerComposeTests(ITestOutputHelper output)
             }
 
             // Verify that docker-compose.yaml was created
-            var composePath = Path.Combine(tempDir.Path, "docker-compose.yaml");
+            var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
             Assert.True(File.Exists(composePath));
 
             // Check for docker compose up command with project name
@@ -374,10 +369,10 @@ public class DockerComposeTests(ITestOutputHelper output)
     [Fact]
     public async Task DashboardPrintSummaryStepIsCreatedAndWiredCorrectly()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: WellKnownPipelineSteps.Diagnostics);
-        var mockActivityReporter = new TestPipelineActivityReporter(output);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: WellKnownPipelineSteps.Diagnostics);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
@@ -411,24 +406,24 @@ public class DockerComposeTests(ITestOutputHelper output)
     [ActiveIssue("https://github.com/microsoft/aspire/issues/15078", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public async Task DeployWithDashboard_PrintsDashboardAndServiceEndpoints()
     {
-        using var tempDir = new TestTempDirectory();
-        var mockActivityReporter = new TestPipelineActivityReporter(output);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
 
         // Use a unique project name to avoid conflicts with other tests
         var projectId = Guid.NewGuid().ToString("N")[..8];
 
         // Use a random port in the dynamic/private port range (49152-65535) to avoid conflicts
         var hostPort = Random.Shared.Next(49152, 65535);
-        output.WriteLine($"Using random host port: {hostPort}");
+        outputHelper.WriteLine($"Using random host port: {hostPort}");
 
         // Helper to create a builder with the same configuration
         IDistributedApplicationTestingBuilder CreateBuilder(string step)
         {
-            var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: step);
+            var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: step);
             builder.Configuration["AppHost:PathSha256"] = projectId;
             builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
             builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
-            builder.Services.AddLogging(logging => logging.AddXunit(output));
+            builder.Services.AddLogging(logging => logging.AddXunit(outputHelper));
 
             // Add a Docker Compose environment with dashboard enabled
             builder.AddDockerComposeEnvironment("env")
@@ -456,10 +451,10 @@ public class DockerComposeTests(ITestOutputHelper output)
                 .Select(l => l.Message)
                 .ToList();
 
-            output.WriteLine("Dashboard logs:");
+            outputHelper.WriteLine("Dashboard logs:");
             foreach (var log in dashboardLogs)
             {
-                output.WriteLine($"  {log}");
+                outputHelper.WriteLine($"  {log}");
             }
 
             Assert.Contains(dashboardLogs, msg => msg.Contains("env-dashboard"));
@@ -470,10 +465,10 @@ public class DockerComposeTests(ITestOutputHelper output)
                 .Select(l => l.Message)
                 .ToList();
 
-            output.WriteLine("Nginx logs:");
+            outputHelper.WriteLine("Nginx logs:");
             foreach (var log in nginxLogs)
             {
-                output.WriteLine($"  {log}");
+                outputHelper.WriteLine($"  {log}");
             }
 
             Assert.Contains(nginxLogs, msg => msg.Contains("nginx"));
@@ -485,7 +480,7 @@ public class DockerComposeTests(ITestOutputHelper output)
             mockActivityReporter.Clear();
 
             // Clean up using the built-in docker-compose-down pipeline step
-            output.WriteLine("Running cleanup: docker-compose-down-env step");
+            outputHelper.WriteLine("Running cleanup: docker-compose-down-env step");
             using var cleanupApp = CreateBuilder("docker-compose-down-env").Build();
             await cleanupApp.RunAsync();
 
@@ -494,14 +489,14 @@ public class DockerComposeTests(ITestOutputHelper output)
                 .Where(s => s.Contains("docker-compose-down", StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
-            output.WriteLine("Cleanup steps:");
+            outputHelper.WriteLine("Cleanup steps:");
             foreach (var step in mockActivityReporter.CreatedSteps)
             {
-                output.WriteLine($"  {step}");
+                outputHelper.WriteLine($"  {step}");
             }
 
             Assert.Contains(downSteps, s => s.Contains("docker-compose-down-env", StringComparison.OrdinalIgnoreCase));
-            output.WriteLine("Cleanup complete");
+            outputHelper.WriteLine("Cleanup complete");
         }
     }
 
@@ -686,11 +681,11 @@ public class DockerComposeTests(ITestOutputHelper output)
     [Fact]
     public async Task PushImageToRegistry_WithLocalRegistry_OnlyTagsImage()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var fakeRuntime = new FakeContainerRuntime();
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: "push-servicea");
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: "push-servicea");
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IContainerRuntime>(fakeRuntime);
         builder.Services.AddSingleton<IContainerRuntimeResolver>(sp => (IContainerRuntimeResolver)sp.GetRequiredService<IContainerRuntime>());
@@ -717,11 +712,11 @@ public class DockerComposeTests(ITestOutputHelper output)
     [Fact]
     public async Task PushImageToRegistry_WithRemoteRegistry_PushesImage()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var fakeRuntime = new FakeContainerRuntime();
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: "push-servicea");
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: "push-servicea");
         builder.Services.AddSingleton<IResourceContainerImageManager>(new MockImageBuilderWithRuntime(fakeRuntime));
         builder.Services.AddSingleton<IContainerRuntime>(fakeRuntime);
         builder.Services.AddSingleton<IContainerRuntimeResolver>(sp => (IContainerRuntimeResolver)sp.GetRequiredService<IContainerRuntime>());
@@ -756,10 +751,10 @@ public class DockerComposeTests(ITestOutputHelper output)
     [Fact]
     public async Task DockerComposeUp_DependsOnPushSteps_WhenResourcesNeedToBePushed()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: WellKnownPipelineSteps.Diagnostics);
-        var mockActivityReporter = new TestPipelineActivityReporter(output);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: WellKnownPipelineSteps.Diagnostics);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
@@ -783,10 +778,10 @@ public class DockerComposeTests(ITestOutputHelper output)
                         .Select(s => s.Message)
                         .ToList();
 
-        output.WriteLine("Diagnostics logs:");
+        outputHelper.WriteLine("Diagnostics logs:");
         foreach (var log in logs)
         {
-            output.WriteLine($"  {log}");
+            outputHelper.WriteLine($"  {log}");
         }
 
         // Verify docker-compose-up-env step exists
@@ -804,10 +799,10 @@ public class DockerComposeTests(ITestOutputHelper output)
     [Fact]
     public async Task DockerComposeUp_DependsOnMultiplePushSteps_WhenMultipleResourcesNeedToBePushed()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: WellKnownPipelineSteps.Diagnostics);
-        var mockActivityReporter = new TestPipelineActivityReporter(output);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: WellKnownPipelineSteps.Diagnostics);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
@@ -834,10 +829,10 @@ public class DockerComposeTests(ITestOutputHelper output)
                         .Select(s => s.Message)
                         .ToList();
 
-        output.WriteLine("Diagnostics logs:");
+        outputHelper.WriteLine("Diagnostics logs:");
         foreach (var log in logs)
         {
-            output.WriteLine($"  {log}");
+            outputHelper.WriteLine($"  {log}");
         }
 
         // Verify docker-compose-up-env step exists
@@ -926,19 +921,19 @@ public class DockerComposeTests(ITestOutputHelper output)
     [Fact]
     public async Task DestroyCompose_WithState_RunsComposeDown()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var fakeRuntime = new FakeContainerRuntime();
         var stateManager = new InMemoryDeploymentStateManager();
         stateManager.SetSection("DockerCompose:env", new System.Text.Json.Nodes.JsonObject
         {
-            ["OutputPath"] = tempDir.Path,
+            ["OutputPath"] = workspace.Path,
             ["ProjectName"] = "aspire-env-test",
-            ["ComposeFilePath"] = Path.Combine(tempDir.Path, "docker-compose.yaml")
+            ["ComposeFilePath"] = Path.Combine(workspace.Path, "docker-compose.yaml")
         });
 
-        var mockActivityReporter = new TestPipelineActivityReporter(output);
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: WellKnownPipelineSteps.Destroy);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: WellKnownPipelineSteps.Destroy);
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IContainerRuntime>(fakeRuntime);
         builder.Services.AddSingleton<IContainerRuntimeResolver>(sp => (IContainerRuntimeResolver)sp.GetRequiredService<IContainerRuntime>());
@@ -969,13 +964,13 @@ public class DockerComposeTests(ITestOutputHelper output)
     [Fact]
     public async Task DestroyCompose_WithNoState_ReportsNothingToDestroy()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var fakeRuntime = new FakeContainerRuntime();
         var stateManager = new InMemoryDeploymentStateManager();
-        var mockActivityReporter = new TestPipelineActivityReporter(output);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: WellKnownPipelineSteps.Destroy);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: WellKnownPipelineSteps.Destroy);
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IContainerRuntime>(fakeRuntime);
         builder.Services.AddSingleton<IContainerRuntimeResolver>(sp => (IContainerRuntimeResolver)sp.GetRequiredService<IContainerRuntime>());
@@ -1000,14 +995,14 @@ public class DockerComposeTests(ITestOutputHelper output)
     [Fact]
     public async Task DeployThenDestroy_RoundTrip_UsesPersistedState()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var fakeRuntime = new FakeContainerRuntime();
         var stateManager = new InMemoryDeploymentStateManager();
-        var mockActivityReporter = new TestPipelineActivityReporter(output);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
 
         // Step 1: Deploy — this should persist state
-        var deployBuilder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: WellKnownPipelineSteps.Deploy);
+        var deployBuilder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: WellKnownPipelineSteps.Deploy);
         deployBuilder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         deployBuilder.Services.AddSingleton<IContainerRuntime>(fakeRuntime);
         deployBuilder.Services.AddSingleton<IContainerRuntimeResolver>(sp => (IContainerRuntimeResolver)sp.GetRequiredService<IContainerRuntime>());
@@ -1031,7 +1026,7 @@ public class DockerComposeTests(ITestOutputHelper output)
         fakeRuntime = new FakeContainerRuntime(); // fresh runtime to track destroy calls
         mockActivityReporter.Clear();
 
-        var destroyBuilder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: WellKnownPipelineSteps.Destroy);
+        var destroyBuilder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: WellKnownPipelineSteps.Destroy);
         destroyBuilder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         destroyBuilder.Services.AddSingleton<IContainerRuntime>(fakeRuntime);
         destroyBuilder.Services.AddSingleton<IContainerRuntimeResolver>(sp => (IContainerRuntimeResolver)sp.GetRequiredService<IContainerRuntime>());

@@ -1,7 +1,5 @@
 {
   "aspire.closeDashboardOnDebugEnd": true,
-  "aspire.dashboardBrowser": "integratedBrowser",
-  "aspire.enableAspireDashboardAutoLaunch": "launch",
   "aspire.enableAutoRestore": false,
   "aspire.enableSettingsFileCreationPromptOnStartup": false,
   "aspire.appHostDiscoveryTimeoutMs": 120000,

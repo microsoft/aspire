@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable AZPROVISION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
@@ -284,6 +283,7 @@ public static class AzureKustoBuilderExtensions
         crp.SetParameter(ClientRequestProperties.OptionQueryConsistency, ClientRequestProperties.OptionQueryConsistency_Strong);
 
         var script = databaseResource.GetDatabaseCreationScript();
+        var hasCustomScript = databaseResource.Annotations.OfType<AzureKustoCreateDatabaseScriptAnnotation>().Any();
 
         var logger = serviceProvider.GetRequiredService<ResourceLoggerService>().GetLogger(databaseResource);
         var rns = serviceProvider.GetRequiredService<ResourceNotificationService>();
@@ -292,7 +292,18 @@ public static class AzureKustoBuilderExtensions
 
         try
         {
+            if (hasCustomScript)
+            {
+                logger.LogInformation("Executing custom creation script for database '{DatabaseName}'", databaseResource.DatabaseName);
+            }
+
             await AzureKustoEmulatorResiliencePipelines.Default.ExecuteAsync(async ct => await adminProvider.ExecuteControlCommandAsync(databaseResource.DatabaseName, script, crp).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+
+            if (hasCustomScript)
+            {
+                logger.LogInformation("Completed custom creation script for database '{DatabaseName}'", databaseResource.DatabaseName);
+            }
+
             logger.LogDebug("Database '{DatabaseName}' created successfully", databaseResource.DatabaseName);
         }
         catch (Exception e)
@@ -394,7 +405,7 @@ public static class AzureKustoBuilderExtensions
             {
                 // If the launcher fails (which may mean we're in a remote session or can't detect a browser),
                 // show a notification with a clickable link to the Kusto Web Explorer
-                var interactionService = context.ServiceProvider.GetRequiredService<IInteractionService>();
+                var interactionService = context.Services.GetRequiredService<IInteractionService>();
                 if (interactionService.IsAvailable)
                 {
                     _ = await interactionService.PromptMessageBoxAsync(

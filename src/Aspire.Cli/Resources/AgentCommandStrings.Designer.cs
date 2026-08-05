@@ -250,6 +250,42 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true..
+        /// </summary>
+        internal static string InitCommand_TelemetryHooksInstalled {
+            get {
+                return ResourceManager.GetString("InitCommand_TelemetryHooksInstalled", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Skipped the telemetry hook for {0} because its configuration file contains malformed JSON..
+        /// </summary>
+        internal static string InitCommand_TelemetryHookSkippedMalformedConfig {
+            get {
+                return ResourceManager.GetString("InitCommand_TelemetryHookSkippedMalformedConfig", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Skipped the telemetry hook for {0} because its configuration has an unexpected shape..
+        /// </summary>
+        internal static string InitCommand_TelemetryHookSkippedUnexpectedShape {
+            get {
+                return ResourceManager.GetString("InitCommand_TelemetryHookSkippedUnexpectedShape", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Skipped the telemetry hook for {0} because its configuration could not be written..
+        /// </summary>
+        internal static string InitCommand_TelemetryHookWriteFailed {
+            get {
+                return ResourceManager.GetString("InitCommand_TelemetryHookWriteFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Aspire CLI commands and workflows for distributed apps.
         /// </summary>
         internal static string SkillDescription_Aspire {
@@ -475,6 +511,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to The value of configuration setting &apos;{0}&apos; (&apos;{1}&apos;) is not a valid SemVer 2.0 version..
+        /// </summary>
+        internal static string PlaywrightCliInstaller_InvalidVersionOverride {
+            get {
+                return ResourceManager.GetString("PlaywrightCliInstaller_InvalidVersionOverride", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Provenance verification failed for {0}: {1}.
         /// </summary>
         internal static string PlaywrightCliInstaller_ProvenanceVerificationFailed {
@@ -552,6 +597,78 @@ namespace Aspire.Cli.Resources {
         internal static string InitCommand_SkillsOptionDescription {
             get {
                 return ResourceManager.GetString("InitCommand_SkillsOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly..
+        /// </summary>
+        internal static string AgentTelemetryCommand_Description {
+            get {
+                return ResourceManager.GetString("AgentTelemetryCommand_Description", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The telemetry event type (skill_invocation, tool_invocation, or reference_file_read).
+        /// </summary>
+        internal static string AgentTelemetryCommand_EventTypeDescription {
+            get {
+                return ResourceManager.GetString("AgentTelemetryCommand_EventTypeDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The AI agent client that produced the event (for example copilot-cli, claude-code, or vscode).
+        /// </summary>
+        internal static string AgentTelemetryCommand_ClientNameDescription {
+            get {
+                return ResourceManager.GetString("AgentTelemetryCommand_ClientNameDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The opaque AI agent session identifier.
+        /// </summary>
+        internal static string AgentTelemetryCommand_SessionIdDescription {
+            get {
+                return ResourceManager.GetString("AgentTelemetryCommand_SessionIdDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The Aspire skill name for a skill_invocation event.
+        /// </summary>
+        internal static string AgentTelemetryCommand_SkillNameDescription {
+            get {
+                return ResourceManager.GetString("AgentTelemetryCommand_SkillNameDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The Aspire MCP tool name for a tool_invocation event.
+        /// </summary>
+        internal static string AgentTelemetryCommand_ToolNameDescription {
+            get {
+                return ResourceManager.GetString("AgentTelemetryCommand_ToolNameDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The Aspire skills-relative reference file path for a reference_file_read event.
+        /// </summary>
+        internal static string AgentTelemetryCommand_FileReferenceDescription {
+            get {
+                return ResourceManager.GetString("AgentTelemetryCommand_FileReferenceDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The timestamp recorded for the event.
+        /// </summary>
+        internal static string AgentTelemetryCommand_TimestampDescription {
+            get {
+                return ResourceManager.GetString("AgentTelemetryCommand_TimestampDescription", resourceCulture);
             }
         }
     }

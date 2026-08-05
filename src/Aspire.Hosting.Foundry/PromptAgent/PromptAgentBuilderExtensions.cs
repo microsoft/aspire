@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable OPENAI001 // Responses API is experimental
-#pragma warning disable ASPIREINTERACTION001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
@@ -82,14 +81,14 @@ public static class PromptAgentBuilderExtensions
             {
                 var message = ctx.Arguments.GetString("message")!;
 
+                var endpoint = await agent.Project.Endpoint.GetValueAsync(ctx.CancellationToken).ConfigureAwait(false);
+                if (string.IsNullOrEmpty(endpoint))
+                {
+                    return CommandResults.Failure("Project endpoint is not available.");
+                }
+
                 try
                 {
-                    var endpoint = await agent.Project.Endpoint.GetValueAsync(ctx.CancellationToken).ConfigureAwait(false);
-                    if (string.IsNullOrEmpty(endpoint))
-                    {
-                        throw new InvalidOperationException("Project endpoint is not available.");
-                    }
-
                     var projectClient = new AIProjectClient(new Uri(endpoint), new DefaultAzureCredential());
                     var agentRef = new AgentReference(name: name);
                     var responseClient = projectClient.ProjectOpenAIClient.GetProjectResponsesClientForAgent(agentRef);
@@ -104,6 +103,7 @@ public static class PromptAgentBuilderExtensions
             },
             commandOptions: new()
             {
+                Progress = new() { Message = "Sending message to agent..." },
                 IconName = "ChatSparkle",
                 IconVariant = IconVariant.Regular,
                 IsHighlighted = true,
