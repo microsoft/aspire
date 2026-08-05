@@ -296,6 +296,59 @@ public class AzureSandboxesTests
     }
 
     [Fact]
+    public void ConnectorTriggerRequiresUniquePhysicalNameWithinNamespace()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var gateway = builder.AddAzureConnectorGateway("gateway");
+        var outlook = gateway.AddConnection("outlook", "office365");
+        var sharepoint = gateway.AddConnection("sharepoint", "sharepointonline");
+        var listener = builder.AddContainer("listener", "image")
+            .WithHttpEndpoint(name: "http", targetPort: 8080)
+            .WithExternalHttpEndpoints();
+        outlook.AddTriggerConfig(
+            "new-email",
+            "OnNewEmailV3",
+            listener.GetEndpoint("http"),
+            new AzureConnectorGatewayTriggerOptions { TriggerName = "shared-trigger" });
+
+        var exception = Assert.Throws<InvalidOperationException>(() => sharepoint.AddTriggerConfig(
+            "new-file",
+            "GetOnNewFileItems",
+            listener.GetEndpoint("http"),
+            new AzureConnectorGatewayTriggerOptions { TriggerName = "shared-trigger" }));
+
+        Assert.Equal(
+            "Trigger configuration 'shared-trigger' is already registered on Connector Namespace 'gateway'.",
+            exception.Message);
+        Assert.Equal("new-email", Assert.Single(gateway.Resource.TriggerConfigs).Name);
+        Assert.Empty(sharepoint.Resource.AccessPolicies);
+    }
+
+    [Fact]
+    public void ExistingConnectorConnectionRejectsImplicitTriggerAccessPolicy()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var connection = builder.AddAzureConnectorGateway("gateway")
+            .AddConnection("office365", "office365")
+            .AsExisting();
+        var listener = builder.AddContainer("listener", "image")
+            .WithHttpEndpoint(name: "http", targetPort: 8080)
+            .WithExternalHttpEndpoints();
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => connection.AddTriggerConfig("new-email", "OnNewEmailV3", listener.GetEndpoint("http")));
+
+        Assert.Equal(
+            "Existing connector connection 'office365' is read-only and cannot create a trigger because trigger provisioning requires a new connection access policy.",
+            exception.Message);
+        Assert.Empty(connection.Resource.AccessPolicies);
+        Assert.Empty(listener.Resource.Annotations.OfType<AzureConnectorGatewayEndpointAuthorizationAnnotation>());
+        Assert.Empty(connection.Resource.Parent.TriggerConfigs);
+    }
+
+    [Fact]
     public async Task AddAzureSandboxResourcesGeneratesBicep()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

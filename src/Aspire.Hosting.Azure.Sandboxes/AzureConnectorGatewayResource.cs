@@ -48,6 +48,8 @@ public sealed class AzureConnectorGatewayResource : AzureProvisioningResource
 
     internal List<AzureConnectorGatewayMcpServerConfigResource> McpServerConfigs { get; } = [];
 
+    internal List<AzureConnectorGatewayTriggerConfigResource> TriggerConfigs { get; } = [];
+
     /// <inheritdoc/>
     public override ProvisionableResource AddAsExistingResource(AzureResourceInfrastructure infra)
     {

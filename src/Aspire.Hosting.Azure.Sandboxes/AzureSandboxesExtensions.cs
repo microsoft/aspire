@@ -514,10 +514,15 @@ public static class AzureSandboxesExtensions
     /// <param name="callbackEndpoint">The external Azure sandbox endpoint that receives trigger notifications.</param>
     /// <param name="options">The optional trigger configuration.</param>
     /// <returns>A resource builder for the trigger configuration.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when the connection is existing, the callback endpoint is not external, or the physical trigger name is already registered.
+    /// </exception>
     /// <remarks>
     /// The trigger is provisioned after the sandbox endpoint exists. The integration grants the
     /// Connector Namespace managed identity access to the connection and adds that identity to the
-    /// sandbox port's Microsoft Entra allow-list. The callback remains non-anonymous.
+    /// sandbox port's Microsoft Entra allow-list. The callback remains non-anonymous. Existing
+    /// connections are rejected because adding a trigger would otherwise mutate the connection by
+    /// implicitly provisioning a new access policy.
     /// </remarks>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
@@ -534,9 +539,21 @@ public static class AzureSandboxesExtensions
         ArgumentException.ThrowIfNullOrWhiteSpace(operationName);
         ArgumentNullException.ThrowIfNull(callbackEndpoint);
 
+        if (builder.Resource.IsExisting)
+        {
+            throw new InvalidOperationException(
+                $"Existing connector connection '{builder.Resource.Name}' is read-only and cannot create a trigger because trigger provisioning requires a new connection access policy.");
+        }
+
         var triggerName = options?.TriggerName ?? name;
         ValidateConnectorResourceName(triggerName, nameof(options));
         ValidateTriggerParameters(options?.Parameters);
+        if (builder.Resource.Parent.TriggerConfigs.Any(trigger =>
+            string.Equals(trigger.TriggerName, triggerName, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException(
+                $"Trigger configuration '{triggerName}' is already registered on Connector Namespace '{builder.Resource.Parent.Name}'.");
+        }
 
         var callbackResource = callbackEndpoint.Resource;
         var callbackEndpointAnnotation = callbackResource.Annotations
@@ -571,8 +588,10 @@ public static class AzureSandboxesExtensions
                 builder.Resource.Parent));
         }
 
-        return builder.ApplicationBuilder.AddResource(trigger)
+        var triggerBuilder = builder.ApplicationBuilder.AddResource(trigger)
             .WithRelationship(callbackResource, "Callback");
+        builder.Resource.Parent.TriggerConfigs.Add(trigger);
+        return triggerBuilder;
     }
 
     /// <summary>

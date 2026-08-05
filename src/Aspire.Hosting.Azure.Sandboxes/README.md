@@ -174,7 +174,7 @@ After deployment, open `https://connectors.azure.com/<subscription-id>/<resource
 * `WithAccessPolicy` grants one explicitly identified Microsoft Entra principal access to a connection. `WithIdentityAccessPolicy` uses a user-assigned managed identity output without hard-coding its principal ID. Neither API completes downstream OAuth consent.
 * Do not put credentials, tokens, or other secrets in trigger parameters, MCP descriptions, or operation metadata.
 
-Existing Connector Namespace resources can be referenced with the standard Azure `PublishAsExisting`/`AsExisting` APIs. Existing connection and MCP server configuration children can be marked with `AsExisting()`. Existing resources are emitted as read-only Bicep references; adding an access policy or a new sibling child remains an explicit provisioning operation.
+Existing Connector Namespace resources can be referenced with the standard Azure `PublishAsExisting`/`AsExisting` APIs. Existing connection and MCP server configuration children can be marked with `AsExisting()`. Existing resources are emitted as read-only Bicep references; adding an access policy or a new sibling child remains an explicit provisioning operation. `AddTriggerConfig` rejects an existing connection because trigger creation requires a new Connector Namespace identity access policy; manage that access policy and trigger outside Aspire when the connection must remain existing.
 
 ## Preview limitations
 
