@@ -787,10 +787,9 @@ public static class AzureSandboxesExtensions
             AutoSuspendInterval = options.AutoSuspendInterval,
             AutoSuspendMode = options.AutoSuspendMode,
             AutoDeleteEnabled = options.AutoDeleteEnabled,
-            AutoDeleteIntervalInDays = options.AutoDeleteIntervalInDays,
-            AutoDeleteIntervalInSeconds = options.AutoDeleteIntervalInSeconds,
+            AutoDeleteInterval = options.AutoDeleteInterval,
             AutoDeleteTrigger = options.AutoDeleteTrigger,
-            PublicEndpointReadyTimeoutSeconds = options.PublicEndpointReadyTimeoutSeconds,
+            PublicEndpointReadyTimeout = options.PublicEndpointReadyTimeout,
             Endpoints = options.Endpoints?.Select(static endpoint => new AzureSandboxEndpointOptions
             {
                 Name = endpoint.Name,
@@ -901,12 +900,17 @@ public static class AzureSandboxesExtensions
             throw new ArgumentException($"'{options.Tier}' is not a valid Azure sandbox tier.", nameof(options));
         }
 
-        ValidateOptionalNonNegative(options.AutoSuspendInterval, nameof(AzureSandboxOptions.AutoSuspendInterval));
-        ValidateOptionalAllowedValue(options.AutoSuspendMode, nameof(AzureSandboxOptions.AutoSuspendMode), "Memory", "Disk", "None");
-        ValidateOptionalNonNegative(options.AutoDeleteIntervalInDays, nameof(AzureSandboxOptions.AutoDeleteIntervalInDays));
-        ValidateOptionalNonNegative(options.AutoDeleteIntervalInSeconds, nameof(AzureSandboxOptions.AutoDeleteIntervalInSeconds));
-        ValidateOptionalAllowedValue(options.AutoDeleteTrigger, nameof(AzureSandboxOptions.AutoDeleteTrigger), "AfterSuspend", "AfterCreation");
-        ValidateOptionalPositive(options.PublicEndpointReadyTimeoutSeconds, nameof(AzureSandboxOptions.PublicEndpointReadyTimeoutSeconds));
+        ValidateOptionalWholeSecondDuration(
+            options.AutoSuspendInterval,
+            nameof(AzureSandboxOptions.AutoSuspendInterval),
+            TimeSpan.FromSeconds(int.MaxValue));
+        ValidateOptionalEnum(options.AutoSuspendMode, nameof(AzureSandboxOptions.AutoSuspendMode));
+        ValidateOptionalWholeSecondDuration(options.AutoDeleteInterval, nameof(AzureSandboxOptions.AutoDeleteInterval));
+        ValidateOptionalEnum(options.AutoDeleteTrigger, nameof(AzureSandboxOptions.AutoDeleteTrigger));
+        ValidateOptionalPositiveDuration(
+            options.PublicEndpointReadyTimeout,
+            nameof(AzureSandboxOptions.PublicEndpointReadyTimeout),
+            TimeSpan.FromSeconds(int.MaxValue));
 
         if (options.Endpoints is null)
         {
@@ -933,46 +937,49 @@ public static class AzureSandboxesExtensions
         }
     }
 
-    private static void ValidateOptionalPositive(int? value, string paramName)
-    {
-        if (value <= 0)
-        {
-            throw new ArgumentOutOfRangeException(paramName, "The value must be positive.");
-        }
-    }
-
-    private static void ValidateOptionalNonNegative(int? value, string paramName)
-    {
-        if (value < 0)
-        {
-            throw new ArgumentOutOfRangeException(paramName, "The value cannot be negative.");
-        }
-    }
-
-    private static void ValidateOptionalNonNegative(long? value, string paramName)
-    {
-        if (value < 0)
-        {
-            throw new ArgumentOutOfRangeException(paramName, "The value cannot be negative.");
-        }
-    }
-
-    private static void ValidateOptionalAllowedValue(string? value, string paramName, params string[] allowedValues)
+    private static void ValidateOptionalWholeSecondDuration(TimeSpan? value, string paramName, TimeSpan? maximum = null)
     {
         if (value is null)
         {
             return;
         }
 
-        foreach (var allowedValue in allowedValues)
+        if (value < TimeSpan.Zero)
         {
-            if (string.Equals(value, allowedValue, StringComparison.Ordinal))
-            {
-                return;
-            }
+            throw new ArgumentOutOfRangeException(paramName, "The value cannot be negative.");
         }
 
-        throw new ArgumentException($"The value '{value}' is not supported. Supported values: {string.Join(", ", allowedValues)}.", paramName);
+        if (value.Value.Ticks % TimeSpan.TicksPerSecond != 0)
+        {
+            throw new ArgumentException("The value must use whole-second precision.", paramName);
+        }
+
+        if (maximum is not null && value > maximum)
+        {
+            throw new ArgumentOutOfRangeException(paramName, $"The value cannot exceed {maximum}.");
+        }
+    }
+
+    private static void ValidateOptionalPositiveDuration(TimeSpan? value, string paramName, TimeSpan? maximum = null)
+    {
+        if (value is not null && value <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(paramName, "The value must be positive.");
+        }
+
+        if (maximum is not null && value > maximum)
+        {
+            throw new ArgumentOutOfRangeException(paramName, $"The value cannot exceed {maximum}.");
+        }
+    }
+
+    private static void ValidateOptionalEnum<TEnum>(TEnum? value, string paramName)
+        where TEnum : struct, Enum
+    {
+        if (value is not null && !Enum.IsDefined(value.Value))
+        {
+            throw new ArgumentException($"'{value}' is not a valid {typeof(TEnum).Name} value.", paramName);
+        }
     }
 
     private static void ApplyManagedServiceIdentity(ManagedServiceIdentity identity, AzureSandboxGroupResource resource, AzureResourceInfrastructure infrastructure)

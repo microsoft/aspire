@@ -4,8 +4,9 @@
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
-using Aspire.Hosting.Publishing;
+using System.Text.Json;
 using Aspire.Hosting.Dcp.Process;
+using Aspire.Hosting.Publishing;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Tests.Publishing;
@@ -66,6 +67,37 @@ public class ContainerRuntimeBaseTests
             arguments => Assert.Equal("manifest inspect \"docker://registry/image:tag\"", arguments));
     }
 
+    [Fact]
+    public async Task PodmanResolvesDigestForPlainSingleImageManifest()
+    {
+        var processRunner = new CapturingProcessRunner(
+        [
+            new ProcessResult(0,
+            [
+                """{ "schemaVersion": 2, "config": { "digest": "sha256:config" }, "layers": [] }"""
+            ]),
+            new ProcessResult(0,
+            [
+                """{ "Digest": "sha256:linux-amd64", "Os": "linux", "Architecture": "amd64" }"""
+            ])
+        ]);
+        var runtime = new PodmanContainerRuntime(NullLogger<PodmanContainerRuntime>.Instance, processRunner);
+
+        var manifest = await runtime.InspectImageManifestAsync(
+            "docker://registry/image\" --help:tag",
+            TestContext.Current.CancellationToken);
+
+        using var document = JsonDocument.Parse(manifest);
+        var descriptor = document.RootElement.GetProperty("Descriptor");
+        Assert.Equal("sha256:linux-amd64", descriptor.GetProperty("digest").GetString());
+        Assert.Equal("linux", descriptor.GetProperty("platform").GetProperty("os").GetString());
+        Assert.Equal("amd64", descriptor.GetProperty("platform").GetProperty("architecture").GetString());
+        Assert.Collection(
+            processRunner.Arguments,
+            arguments => Assert.Equal("manifest inspect \"docker://registry/image\\\" --help:tag\"", arguments),
+            arguments => Assert.Equal("image inspect --format \"{{json .}}\" \"registry/image\\\" --help:tag\"", arguments));
+    }
+
     private sealed class TestContainerRuntime(IProcessRunner? processRunner = null, string? runtimeExecutable = null) : ContainerRuntimeBase<TestContainerRuntime>(NullLogger<TestContainerRuntime>.Instance, processRunner ?? new DefaultProcessRunner())
     {
         protected override string RuntimeExecutable => runtimeExecutable ?? (OperatingSystem.IsWindows() ? "cmd" : "sh");
@@ -106,14 +138,21 @@ public class ContainerRuntimeBaseTests
         }
     }
 
-    private sealed class CapturingProcessRunner : IProcessRunner
+    private sealed class CapturingProcessRunner(IEnumerable<ProcessResult>? results = null) : IProcessRunner
     {
+        private readonly Queue<ProcessResult> _results = new(results ?? []);
+
         public List<string?> Arguments { get; } = [];
 
         public (Task<ProcessResult>, IAsyncDisposable) Run(ProcessSpec processSpec)
         {
             Arguments.Add(processSpec.Arguments);
-            return (Task.FromResult(new ProcessResult(0)), new NoOpAsyncDisposable());
+            var result = _results.Count > 0 ? _results.Dequeue() : new ProcessResult(0);
+            foreach (var output in result.ProcessOutput)
+            {
+                processSpec.OnOutputData?.Invoke(output);
+            }
+            return (Task.FromResult(result), new NoOpAsyncDisposable());
         }
 
         private sealed class NoOpAsyncDisposable : IAsyncDisposable

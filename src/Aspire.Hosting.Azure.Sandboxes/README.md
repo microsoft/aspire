@@ -35,8 +35,8 @@ builder.AddProject<Projects.ApiService>("api")
     {
         Tier = AzureSandboxTier.Medium,
         AutoSuspendEnabled = true,
-        AutoSuspendInterval = 900,
-        AutoSuspendMode = "Disk",
+        AutoSuspendInterval = TimeSpan.FromMinutes(15),
+        AutoSuspendMode = AzureSandboxAutoSuspendMode.Disk,
         Endpoints =
         [
             new AzureSandboxEndpointOptions
@@ -175,6 +175,14 @@ After deployment, open `https://connectors.azure.com/<subscription-id>/<resource
 * Do not put credentials, tokens, or other secrets in trigger parameters, MCP descriptions, or operation metadata.
 
 Existing Connector Namespace resources can be referenced with the standard Azure `PublishAsExisting`/`AsExisting` APIs. Existing connection and MCP server configuration children can be marked with `AsExisting()`. Existing resources are emitted as read-only Bicep references; adding an access policy or a new sibling child remains an explicit provisioning operation. `AddTriggerConfig` rejects an existing connection because trigger creation requires a new Connector Namespace identity access policy; manage that access policy and trigger outside Aspire when the connection must remain existing.
+
+Duration options use `TimeSpan` in C#. Generated TypeScript SDKs represent `TimeSpan` values as .NET ticks, where one second is `10_000_000`.
+
+## Deployment architecture
+
+Sandbox groups are ARM resources, but sandbox instances, disk images, ports, and lifecycle settings are currently exposed only through the regional Azure Dev Compute preview data plane. Aspire therefore performs sandbox deployment in-process rather than through an ARM deployment script. This lets the deployment pipeline inspect local container images, resolve and validate immutable Linux/amd64 digests, report polling progress, persist deployment state, retain a previous endpoint generation during updates, and clean up stale or failed data-plane resources.
+
+This design means Aspire owns retry, polling, state recovery, and cleanup behavior while the preview data-plane contract evolves. The implementation is intentionally isolated in the Sandboxes integration and should be reevaluated when Azure provides a stable ARM resource or deployment primitive for these operations.
 
 ## Preview limitations
 

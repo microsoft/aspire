@@ -40,17 +40,18 @@ Aspire.Hosting.Azure.Sandboxes/Aspire.Hosting.Azure.AzureSandboxEndpointOptions 
   Name: string # Gets or sets the Aspire endpoint name.
 Aspire.Hosting.Azure.Sandboxes/Aspire.Hosting.Azure.AzureSandboxOptions # Configures Azure sandbox runtime options for a compute resource.
   AutoDeleteEnabled?: boolean # Gets or sets a value indicating whether auto-delete is enabled.
-  AutoDeleteIntervalInDays?: number # Gets or sets the delete interval, in days.
-  AutoDeleteIntervalInSeconds?: number # Gets or sets the delete interval, in seconds.
-  AutoDeleteTrigger: string # Gets or sets the auto-delete trigger. Supported values are `AfterSuspend` and `AfterCreation`.
+  AutoDeleteInterval?: timespan # Gets or sets the interval before auto-delete runs.
+  AutoDeleteTrigger?: enum:Aspire.Hosting.Azure.AzureSandboxAutoDeleteTrigger # Gets or sets the event that starts the auto-delete interval.
   AutoSuspendEnabled?: boolean # Gets or sets a value indicating whether auto-suspend is enabled.
-  AutoSuspendInterval?: number # Gets or sets the idle interval, in seconds, before auto-suspend runs.
-  AutoSuspendMode: string # Gets or sets the sandbox suspend mode. Supported values are `Memory`, `Disk`, and `None`.
+  AutoSuspendInterval?: timespan # Gets or sets the idle interval before auto-suspend runs.
+  AutoSuspendMode?: enum:Aspire.Hosting.Azure.AzureSandboxAutoSuspendMode # Gets or sets the sandbox suspend mode.
   Endpoints: Aspire.Hosting.Azure.Sandboxes/Aspire.Hosting.Azure.AzureSandboxEndpointOptions[] # Gets or sets endpoint-specific sandbox option overrides.
-  PublicEndpointReadyTimeoutSeconds?: number # Gets or sets the number of seconds to wait for an exposed HTTP endpoint to become ready.
+  PublicEndpointReadyTimeout?: timespan # Gets or sets how long to wait for an exposed HTTP endpoint to become ready.
   Tier: enum:Aspire.Hosting.Azure.AzureSandboxTier # Gets or sets the resource tier.
 
 # Enum Types
+enum:Aspire.Hosting.Azure.AzureSandboxAutoDeleteTrigger = AfterSuspend | AfterCreation
+enum:Aspire.Hosting.Azure.AzureSandboxAutoSuspendMode = None | Memory | Disk
 enum:Aspire.Hosting.Azure.AzureSandboxTier = ExtraSmall | Small | Medium | Large | ExtraLarge
 
 # Capabilities

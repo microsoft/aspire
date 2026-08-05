@@ -218,6 +218,21 @@ namespace Aspire.Hosting.Azure
         public required string Value { get { throw null; } set { } }
     }
 
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public enum AzureSandboxAutoDeleteTrigger
+    {
+        AfterSuspend = 0,
+        AfterCreation = 1
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public enum AzureSandboxAutoSuspendMode
+    {
+        None = 0,
+        Memory = 1,
+        Disk = 2
+    }
+
     [AspireDto]
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public sealed partial class AzureSandboxEndpointOptions
@@ -237,7 +252,7 @@ namespace Aspire.Hosting.Azure
 
         public AzureContainerRegistryResource? ContainerRegistry { get { throw null; } }
 
-        public BicepOutputReference Id { get { throw null; } }
+        public BicepOutputReference IdOutputReference { get { throw null; } }
 
         public BicepOutputReference NameOutputReference { get { throw null; } }
 
@@ -256,21 +271,19 @@ namespace Aspire.Hosting.Azure
     {
         public bool? AutoDeleteEnabled { get { throw null; } set { } }
 
-        public int? AutoDeleteIntervalInDays { get { throw null; } set { } }
+        public System.TimeSpan? AutoDeleteInterval { get { throw null; } set { } }
 
-        public long? AutoDeleteIntervalInSeconds { get { throw null; } set { } }
-
-        public string? AutoDeleteTrigger { get { throw null; } set { } }
+        public AzureSandboxAutoDeleteTrigger? AutoDeleteTrigger { get { throw null; } set { } }
 
         public bool? AutoSuspendEnabled { get { throw null; } set { } }
 
-        public int? AutoSuspendInterval { get { throw null; } set { } }
+        public System.TimeSpan? AutoSuspendInterval { get { throw null; } set { } }
 
-        public string? AutoSuspendMode { get { throw null; } set { } }
+        public AzureSandboxAutoSuspendMode? AutoSuspendMode { get { throw null; } set { } }
 
         public AzureSandboxEndpointOptions[]? Endpoints { get { throw null; } set { } }
 
-        public int? PublicEndpointReadyTimeoutSeconds { get { throw null; } set { } }
+        public System.TimeSpan? PublicEndpointReadyTimeout { get { throw null; } set { } }
 
         public AzureSandboxTier Tier { get { throw null; } set { } }
     }

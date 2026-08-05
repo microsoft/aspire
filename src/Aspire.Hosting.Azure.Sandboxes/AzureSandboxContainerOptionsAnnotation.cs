@@ -26,14 +26,14 @@ public sealed class AzureSandboxOptions
     public bool? AutoSuspendEnabled { get; set; }
 
     /// <summary>
-    /// Gets or sets the idle interval, in seconds, before auto-suspend runs.
+    /// Gets or sets the idle interval before auto-suspend runs.
     /// </summary>
-    public int? AutoSuspendInterval { get; set; }
+    public TimeSpan? AutoSuspendInterval { get; set; }
 
     /// <summary>
-    /// Gets or sets the sandbox suspend mode. Supported values are <c>Memory</c>, <c>Disk</c>, and <c>None</c>.
+    /// Gets or sets the sandbox suspend mode.
     /// </summary>
-    public string? AutoSuspendMode { get; set; }
+    public AzureSandboxAutoSuspendMode? AutoSuspendMode { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether auto-delete is enabled.
@@ -41,24 +41,19 @@ public sealed class AzureSandboxOptions
     public bool? AutoDeleteEnabled { get; set; }
 
     /// <summary>
-    /// Gets or sets the delete interval, in days.
+    /// Gets or sets the interval before auto-delete runs.
     /// </summary>
-    public int? AutoDeleteIntervalInDays { get; set; }
+    public TimeSpan? AutoDeleteInterval { get; set; }
 
     /// <summary>
-    /// Gets or sets the delete interval, in seconds.
+    /// Gets or sets the event that starts the auto-delete interval.
     /// </summary>
-    public long? AutoDeleteIntervalInSeconds { get; set; }
+    public AzureSandboxAutoDeleteTrigger? AutoDeleteTrigger { get; set; }
 
     /// <summary>
-    /// Gets or sets the auto-delete trigger. Supported values are <c>AfterSuspend</c> and <c>AfterCreation</c>.
+    /// Gets or sets how long to wait for an exposed HTTP endpoint to become ready.
     /// </summary>
-    public string? AutoDeleteTrigger { get; set; }
-
-    /// <summary>
-    /// Gets or sets the number of seconds to wait for an exposed HTTP endpoint to become ready.
-    /// </summary>
-    public int? PublicEndpointReadyTimeoutSeconds { get; set; }
+    public TimeSpan? PublicEndpointReadyTimeout { get; set; }
 
     /// <summary>
     /// Gets or sets endpoint-specific sandbox option overrides.
@@ -86,6 +81,35 @@ public enum AzureSandboxTier
 
     /// <summary>4 vCPU, 8 GiB memory, and 80 GiB disk.</summary>
     ExtraLarge
+}
+
+/// <summary>
+/// Azure Container Apps sandbox auto-suspend modes.
+/// </summary>
+[Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+public enum AzureSandboxAutoSuspendMode
+{
+    /// <summary>Disables snapshot preservation.</summary>
+    None,
+
+    /// <summary>Preserves memory and disk state.</summary>
+    Memory,
+
+    /// <summary>Preserves disk state only.</summary>
+    Disk
+}
+
+/// <summary>
+/// Events that can start the Azure Container Apps sandbox auto-delete interval.
+/// </summary>
+[Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+public enum AzureSandboxAutoDeleteTrigger
+{
+    /// <summary>Starts the interval after the sandbox is suspended.</summary>
+    AfterSuspend,
+
+    /// <summary>Starts the interval after the sandbox is created.</summary>
+    AfterCreation
 }
 
 /// <summary>

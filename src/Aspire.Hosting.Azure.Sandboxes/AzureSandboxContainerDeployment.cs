@@ -334,17 +334,49 @@ internal static class AzureSandboxContainerDeployment
             AutoSuspendPolicy = hasAutoSuspendOverride || !resource.AutoSuspend ? new AzureDevComputeSandboxAutoSuspendPolicy
             {
                 Enabled = options?.AutoSuspendEnabled ?? resource.AutoSuspend,
-                Interval = options?.AutoSuspendInterval,
-                Mode = options?.AutoSuspendMode
+                Interval = ToInt32Seconds(options?.AutoSuspendInterval, nameof(AzureSandboxOptions.AutoSuspendInterval)),
+                Mode = options?.AutoSuspendMode?.ToString()
             } : null,
             AutoDeletePolicy = hasAutoDeleteOverride ? new AzureDevComputeSandboxAutoDeletePolicy
             {
                 Enabled = options!.AutoDeleteEnabled!.Value,
-                DeleteIntervalInDays = options.AutoDeleteIntervalInDays,
-                DeleteIntervalInSeconds = options.AutoDeleteIntervalInSeconds,
-                Trigger = options.AutoDeleteTrigger
+                DeleteIntervalInSeconds = ToInt64Seconds(options.AutoDeleteInterval, nameof(AzureSandboxOptions.AutoDeleteInterval)),
+                Trigger = options.AutoDeleteTrigger?.ToString()
             } : null
         };
+    }
+
+    private static int? ToInt32Seconds(TimeSpan? value, string propertyName)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        if (value < TimeSpan.Zero || value.Value.Ticks % TimeSpan.TicksPerSecond != 0)
+        {
+            throw new InvalidOperationException($"{propertyName} must be a non-negative whole-second duration.");
+        }
+
+        var seconds = value.Value.Ticks / TimeSpan.TicksPerSecond;
+        return seconds <= int.MaxValue
+            ? (int)seconds
+            : throw new InvalidOperationException($"{propertyName} exceeds the maximum supported ADC interval.");
+    }
+
+    private static long? ToInt64Seconds(TimeSpan? value, string propertyName)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        if (value < TimeSpan.Zero || value.Value.Ticks % TimeSpan.TicksPerSecond != 0)
+        {
+            throw new InvalidOperationException($"{propertyName} must be a non-negative whole-second duration.");
+        }
+
+        return value.Value.Ticks / TimeSpan.TicksPerSecond;
     }
 
     private static async Task<AzureDevComputeDiskImage> CreateDiskImageAsync(
@@ -1388,10 +1420,10 @@ internal static class AzureSandboxContainerDeployment
         }
     }
 
-    private static TimeSpan GetPublicEndpointReadyTimeout(AzureSandboxContainerResource resource)
+    internal static TimeSpan GetPublicEndpointReadyTimeout(AzureSandboxContainerResource resource)
     {
-        var timeoutSeconds = GetAzureSandboxContainerOptions(resource.TargetResource)?.PublicEndpointReadyTimeoutSeconds ?? PublicEndpointTimeoutSeconds;
-        return TimeSpan.FromSeconds(timeoutSeconds);
+        return GetAzureSandboxContainerOptions(resource.TargetResource)?.PublicEndpointReadyTimeout ??
+            TimeSpan.FromSeconds(PublicEndpointTimeoutSeconds);
     }
 
     private static async Task WaitForPublicHttpAsync(string publicUrl, TimeSpan timeout, CancellationToken cancellationToken)
