@@ -199,6 +199,9 @@ namespace Projects%3B
     <_AspireCliInvocationMode Condition="'$(AspireCliInvocationMode)' != ''">$(AspireCliInvocationMode)</_AspireCliInvocationMode>
     <_AspireUseDnxCliRunHook Condition="'$(_AspireCliInvocationMode.ToLowerInvariant())' == 'dnx'">true</_AspireUseDnxCliRunHook>
     <_AspireCliDnxPackageId>aspire.cli</_AspireCliDnxPackageId>
+    <!-- Project Resource v2 is expected to remove Aspire.AppHost.Sdk. When that happens,
+         replace AspireHostingSDKVersion as the paired CLI version source.
+         See https://github.com/microsoft/aspire/issues/16386. -->
     <_AspireCliDnxPackageReference>$(_AspireCliDnxPackageId)@$(AspireHostingSDKVersion)</_AspireCliDnxPackageReference>
   </PropertyGroup>
 
@@ -210,6 +213,8 @@ namespace Projects%3B
       <Output TaskParameter="ResolvedInvocationMode" PropertyName="_AspireResolvedCliInvocationMode" />
       <Output TaskParameter="ResolvedAspireCliPath" PropertyName="_AspireResolvedCliPath" />
       <Output TaskParameter="ResolvedDnxPath" PropertyName="_AspireResolvedDnxPath" />
+      <Output TaskParameter="ResolvedDnxHostPath" PropertyName="_AspireResolvedDnxHostPath" />
+      <Output TaskParameter="ResolvedDnxHostArguments" PropertyName="_AspireResolvedDnxHostArguments" />
     </ResolveAspireCliInvocation>
 
     <PropertyGroup>
@@ -273,7 +278,7 @@ namespace Projects%3B
            and concurrent stream draining. -->
       <_AspireCliVersionCommand Condition="'$(AspireCliPath)' != ''">"$(AspireCliPath)" --version</_AspireCliVersionCommand>
       <_AspireCliVersionCommand Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Aspire'">"$(_AspireResolvedCliPath)" --version</_AspireCliVersionCommand>
-      <_AspireCliVersionCommand Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx'">"$(_AspireResolvedDnxPath)" --yes $(_AspireCliDnxPackageReference) -- --version</_AspireCliVersionCommand>
+      <_AspireCliVersionCommand Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx'">"$(_AspireResolvedDnxHostPath)" $(_AspireResolvedDnxHostArguments) --yes $(_AspireCliDnxPackageReference) -- --version</_AspireCliVersionCommand>
       <!-- A first-time DNX invocation may need to restore Aspire.Cli before reporting its version. -->
       <_AspireCliVersionTimeout>5000</_AspireCliVersionTimeout>
       <_AspireCliVersionTimeout Condition="'$(_AspireResolvedCliInvocationMode)' == 'Dnx'">120000</_AspireCliVersionTimeout>
@@ -356,22 +361,20 @@ namespace Projects%3B
       <_AspireRunWorkingDirectory Condition="'$(FileBasedProgram)' == 'true' and '@(_AspireFileBasedAppHostDirectory)' != ''">@(_AspireFileBasedAppHostDirectory)</_AspireRunWorkingDirectory>
       <_AspireCliPathIsWindowsCommandShim Condition="'$(OS)' == 'Windows_NT' and '$(AspireCliPath)' != '' and ($(AspireCliPath.ToLowerInvariant().EndsWith('.cmd')) or $(AspireCliPath.ToLowerInvariant().EndsWith('.bat')))">true</_AspireCliPathIsWindowsCommandShim>
       <_AspireCliPathForCommandShim Condition="'$(_AspireCliPathIsWindowsCommandShim)' == 'true'">$([System.Text.RegularExpressions.Regex]::Replace($(AspireCliPath), '[ \t()[\]{}!^`&lt;&gt;&amp;|;,+="~@]', '^$0'))</_AspireCliPathForCommandShim>
+      <_AspireResolvedCliPathIsWindowsCommandShim Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Aspire' and '$(OS)' == 'Windows_NT' and ($(_AspireResolvedCliPath.ToLowerInvariant().EndsWith('.cmd')) or $(_AspireResolvedCliPath.ToLowerInvariant().EndsWith('.bat')))">true</_AspireResolvedCliPathIsWindowsCommandShim>
+      <_AspireResolvedCliPathForCommandShim Condition="'$(_AspireResolvedCliPathIsWindowsCommandShim)' == 'true'">$([System.Text.RegularExpressions.Regex]::Replace($(_AspireResolvedCliPath), '[ \t()[\]{}!^`&lt;&gt;&amp;|;,+="~@]', '^$0'))</_AspireResolvedCliPathForCommandShim>
       <RunCommand Condition="'$(AspireCliPath)' != '' and '$(_AspireCliPathIsWindowsCommandShim)' != 'true'">$(AspireCliPath)</RunCommand>
       <RunCommand Condition="'$(_AspireCliPathIsWindowsCommandShim)' == 'true'">cmd</RunCommand>
-      <!-- On Windows, PATH-resolved Aspire and DNX commands can be .cmd or .bat shims.
-           dotnet run starts RunCommand directly, so use cmd to execute the exact resolved
-           path supplied in RunArguments below. -->
-      <RunCommand Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx' and '$(OS)' == 'Windows_NT'">cmd</RunCommand>
-      <RunCommand Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx' and '$(OS)' != 'Windows_NT'">$(_AspireResolvedDnxPath)</RunCommand>
-      <RunCommand Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Aspire' and '$(OS)' == 'Windows_NT'">cmd</RunCommand>
-      <RunCommand Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Aspire' and '$(OS)' != 'Windows_NT'">$(_AspireResolvedCliPath)</RunCommand>
+      <RunCommand Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx'">$(_AspireResolvedDnxHostPath)</RunCommand>
+      <RunCommand Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Aspire' and '$(_AspireResolvedCliPathIsWindowsCommandShim)' == 'true'">cmd</RunCommand>
+      <RunCommand Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Aspire' and '$(_AspireResolvedCliPathIsWindowsCommandShim)' != 'true'">$(_AspireResolvedCliPath)</RunCommand>
       <!-- dotnet run appends application arguments after ComputeRunArguments, so the double-dash separator
            must be present even when RunArguments is initially empty. -->
       <RunArguments Condition="'$(AspireCliPath)' != '' or '$(_AspireResolvedCliInvocationMode)' == 'Aspire'">run --project "$(_AspireRunProject)" --no-build --</RunArguments>
       <!-- Bundle opt-in authorizes DNX to restore the Aspire CLI version paired with this AppHost SDK
            from the user's configured NuGet sources. dotnet run is noninteractive, so DNX cannot ask
            for confirmation during the launch. -->
-      <RunArguments Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx'">--yes $(_AspireCliDnxPackageReference) -- run --project "$(_AspireRunProject)" --no-build --</RunArguments>
+      <RunArguments Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx'">$(_AspireResolvedDnxHostArguments) --yes $(_AspireCliDnxPackageReference) -- run --project "$(_AspireRunProject)" --no-build --</RunArguments>
       <!-- The explicit-shim command line is emitted as:
              cmd /D /V:OFF /C C:\path^ with^ spaces\aspire.cmd run [separator] user-arg
            Keep the caret-escaped shim path unquoted because a leading quote makes cmd.exe strip
@@ -381,12 +384,8 @@ namespace Projects%3B
            branch, and percent expansion remains an unavoidable cmd command-string limitation.
            See https://learn.microsoft.com/windows-server/administration/windows-commands/cmd. -->
       <RunArguments Condition="'$(_AspireCliPathIsWindowsCommandShim)' == 'true'">/D /V:OFF /C $(_AspireCliPathForCommandShim) $(RunArguments)</RunArguments>
-      <!-- cmd searches its working directory before PATH. Pass the exact path that was already probed
-           so a same-named shim beside the AppHost cannot replace the selected CLI at launch time. -->
-      <RunArguments Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx' and '$(OS)' == 'Windows_NT'">/D /S /C ""$(_AspireResolvedDnxPath)" $(RunArguments)</RunArguments>
-      <RunArguments Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Aspire' and '$(OS)' == 'Windows_NT'">/D /S /C ""$(_AspireResolvedCliPath)" $(RunArguments)</RunArguments>
+      <RunArguments Condition="'$(_AspireResolvedCliPathIsWindowsCommandShim)' == 'true'">/D /V:OFF /C $(_AspireResolvedCliPathForCommandShim) $(RunArguments)</RunArguments>
       <RunArguments Condition="'$(_AspireOriginalRunArguments)' != ''">$(RunArguments) $(_AspireOriginalRunArguments)</RunArguments>
-      <RunArguments Condition="'$(AspireCliPath)' == '' and ('$(_AspireResolvedCliInvocationMode)' == 'Dnx' or '$(_AspireResolvedCliInvocationMode)' == 'Aspire') and '$(OS)' == 'Windows_NT'">$(RunArguments)"</RunArguments>
       <RunWorkingDirectory>$(_AspireRunWorkingDirectory)</RunWorkingDirectory>
     </PropertyGroup>
   </Target>
@@ -396,7 +395,7 @@ namespace Projects%3B
           Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(_AspireUseDnxCliRunHook)' == 'true' and '$(AspireCliPath)' == ''">
     <Error Code="ASPIRE011"
            Condition="'$(_AspireResolvedDnxPath)' == ''"
-           Text="$(MSBuildProjectName) is configured with AspireCliInvocationMode=Dnx, but the dnx command could not be found on PATH. Install or use the .NET SDK 10.0 or later, run 'dotnet tool restore' if the project uses a local tool manifest, set AspireCliInvocationMode=Path to use the global aspire command, or set AspireCliPath to an explicit Aspire CLI executable." />
+           Text="$(MSBuildProjectName) is configured with AspireCliInvocationMode=Dnx, but the dnx command could not be found on PATH. Install or use the .NET SDK 10.0 or later, set AspireCliInvocationMode=Path to use the global aspire command, or set AspireCliPath to an explicit Aspire CLI executable." />
   </Target>
 
   <!-- This target registers the location of the Aspire orchestration dependencies -->

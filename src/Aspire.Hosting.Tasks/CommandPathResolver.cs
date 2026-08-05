@@ -25,8 +25,8 @@ internal static class CommandPathResolver
         //   C:\Tools;"C:\Program Files\dotnet";C:\Users\user\.dotnet\tools
         foreach (var pathEntry in path.Split(Path.PathSeparator))
         {
-            var directory = pathEntry.Trim().Trim('"');
-            if (string.IsNullOrWhiteSpace(directory))
+            var directory = TryGetFullPath(pathEntry.Trim().Trim('"'));
+            if (directory is null)
             {
                 continue;
             }
@@ -39,6 +39,23 @@ internal static class CommandPathResolver
                     yield return candidate;
                 }
             }
+        }
+    }
+
+    private static string? TryGetFullPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        try
+        {
+            return Path.GetFullPath(path);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException or System.Security.SecurityException)
+        {
+            return null;
         }
     }
 
