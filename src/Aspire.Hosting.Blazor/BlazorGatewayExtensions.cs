@@ -86,7 +86,7 @@ public static class BlazorGatewayExtensions
     /// <see cref="DotnetProjectResource"/>.
     /// </remarks>
     [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "The DotnetProjectResource-backed Blazor gateway is experimental and not yet stable for ATS export.")]
+    [AspireExport]
     public static IResourceBuilder<DotnetProjectResource> AddDotnetProjectBlazorGateway(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name)
@@ -190,7 +190,7 @@ public static class BlazorGatewayExtensions
     /// <param name="otlpPrefix">The URL path prefix for OTLP proxy routes. Defaults to <c>"_otlp"</c>.</param>
     /// <param name="proxyTelemetry"><see langword="true"/> to expose the OTLP proxy for the client app; otherwise, <see langword="false"/>.</param>
     [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "The DotnetProjectResource-backed Blazor gateway is experimental and not yet stable for ATS export.")]
+    [AspireExport("withDotnetProjectBlazorClientApp", MethodName = "withBlazorClientApp")]
     public static IResourceBuilder<DotnetProjectResource> WithBlazorClientApp(
         this IResourceBuilder<DotnetProjectResource> gateway,
         IResourceBuilder<BlazorWasmAppResource> wasmApp,
