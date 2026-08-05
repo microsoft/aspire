@@ -167,13 +167,16 @@ Every value a consumer sees for a backing resource is therefore projected from t
 |-------|----------------|
 | Host / port (and anything composed from them: `ConnectionStrings__*`, `*_HOST`, `*_PORT`, `*_URI`, service discovery) | `<resource>.properties.host` / `<resource>.properties.port` |
 | Password, for resources emitted as legacy `Applications.*` types (Redis, MongoDB, RabbitMQ) | `<resource>.listSecrets().password` — the recipe generates the credential |
+| User name, for resources emitted as legacy `Applications.*` types (MongoDB, RabbitMQ) | `<resource>.properties.username` — but only when the AppHost supplied one as a parameter (see the known limitations) |
 | Password and user name, for resources emitted as `Radius.*` types (PostgreSQL, SQL Server) | Passed *into* the recipe as `recipe.parameters`, using the same secure Bicep parameter Aspire composes into the connection string, so both sides agree by construction |
 
-Because the substitution happens on the underlying values rather than on formatted strings, connection strings, URIs, and the individual connection properties emitted by `WithReference` all resolve consistently.
+Because the substitution happens on the underlying values rather than on formatted strings, connection strings, URIs, and the individual connection properties emitted by `WithReference` all resolve consistently. Values that appear inside a URI are wrapped in `uriComponent(...)` so a recipe-generated credential containing `@`, `/`, or `:` cannot corrupt the URI.
+
+A password or user name the AppHost supplies as a parameter is *not* used when deploying to Radius — the recipe generates its own. Aspire replaces it and logs a warning, since the parameter's value never reaches the cluster. Passwords Aspire generated itself are replaced silently.
 
 Radius additionally injects its own `CONNECTION_<NAME>_<PROPERTY>` environment variables for every entry in a container's `connections` block. Those are separate from — and not a replacement for — the `ConnectionStrings__*` variables Aspire's client integrations read.
 
-Referencing a backing resource that is deployed to a *different* Radius environment fails the publish: another environment's recipe outputs are not reachable from the generated Bicep. Deploy the consumer and the backing resource to the same environment.
+Referencing a backing resource that is deployed to a *different* Radius environment fails the publish with `ASPIRERADIUS060`: another environment's recipe outputs are not reachable from the generated Bicep. Deploy the consumer and the backing resource to the same environment. The same failure surfaces from the Kubernetes, Azure Container Apps, and Azure App Service publishers when *they* reference a Radius-owned backing resource, as the public `RadiusBackingResourceEndpointException`.
 
 ### Diagnostics
 
@@ -193,12 +196,21 @@ Runtime validation codes:
 | `ASPIRERADIUS010` | Provider config | A cloud-provider credential callback did not select a credential. |
 | `ASPIRERADIUS011` | Provider config | Conflicting cloud-provider credentials across environments sharing a Radius installation. |
 | `ASPIRERADIUS056` | Publish | Two emitted constructs map to the same Bicep identifier (e.g. a resource named `app` or `recipepack` colliding with a synthesized construct, or two resource names that sanitize to the same identifier such as `my-x` and `my.x`). Bicep symbols share one flat namespace; rename the conflicting resource. |
+| `ASPIRERADIUS060` | Publish | A Radius-owned backing resource has no derivable address, so a reference to its endpoint cannot be resolved. Raised as the public `RadiusBackingResourceEndpointException`, including from other publishers. |
+| `ASPIRERADIUS061` | Publish | A resource references a parameter that is also a backing resource's credential. The recipe generates that credential, so the referencing resource receives the recipe's value rather than the parameter's. |
+| `ASPIRERADIUS062` | Publish | An emitted Radius type has no connection schema, or its schema declares no host or port output, so its connection information cannot be projected. Indicates a resource type mapping added without a matching schema entry. |
+| `ASPIRERADIUS063` | Publish | More than one database on a single server resource is referenced by consumers, but the recipe provisions one. |
+| `ASPIRERADIUS064` | Publish | A `ReferenceExpression` requested a string format the publisher cannot express in Bicep. |
+| `ASPIRERADIUS065` | Publish | A projected connection value targets a construct a `ConfigureRadiusInfrastructure` callback removed. |
 
 ### Known limitations
 
 * For `ASPIRERADIUS011`, AWS access-key credential conflicts are compared by the Aspire parameter name that supplies the access-key ID, not by the resolved access-key value. Two environments that use different parameter names for the same key can be flagged as a false conflict, while the same parameter name with different values is not flagged.
 * Recipe customization, multiple Radius resource groups, secret stores, and cloud-managed resources are not part of this release; they are planned for follow-up releases.
-* A backing resource's recipe provisions a single database, so declaring more than one database on a server resource (for example two `AddDatabase(...)` calls on one `AddPostgres(...)`) fails the publish. Declare one database per resource.
+* A backing resource's recipe provisions a single database. Referencing more than one database from a single server resource (for example `WithReference` on two `AddDatabase(...)` children of one `AddPostgres(...)`) fails the publish with `ASPIRERADIUS063`. Declaring extra databases nobody references is allowed, but only one is created; a warning names the one that was. A server with no `AddDatabase(...)` child publishes with a warning and lets the recipe pick the database name.
+* Default user names are not projected. MongoDB's `admin` and RabbitMQ's `guest` are composed into the connection string as literal text with no value to substitute, so they keep their default value even though the recipe may have created a different user. Supply a user name parameter (`AddMongoDB(name, userName: ...)`, `AddRabbitMQ(name, userName: ...)`) to get the recipe's user name projected.
+* Legacy `Applications.Messaging/rabbitMQQueues` requires a `queue` property that Aspire does not emit, because the Aspire RabbitMQ resource has no queue concept.
+* URI escaping is emitted as Bicep's `uriComponent(...)` and evaluated by the Radius deployment engine, which may leave `!'()*` unescaped where Aspire's in-process escaping would not. Those characters are legal unescaped in the parts of a URI where credentials appear, so this is a cosmetic difference.
 
 ## Additional documentation
 

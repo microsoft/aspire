@@ -1,0 +1,288 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Radius.Publishing;
+using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+
+namespace Aspire.Hosting.Radius.Tests.Publishing;
+
+/// <summary>
+/// Covers how the publisher resolves container environment values: which failures it is allowed to
+/// skip, which credentials it replaces, and how it escapes values destined for a URI.
+/// </summary>
+public class BackingResourceValueResolutionTests
+{
+    private static (string Bicep, RecordingLogger Logger) GenerateBicep(Action<IDistributedApplicationBuilder> configure)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddRadiusEnvironment("myenv");
+        configure(builder);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
+
+        var logger = new RecordingLogger();
+        return (new RadiusBicepPublishingContext(radiusEnv).GenerateBicep(model, logger), logger);
+    }
+
+    /// <summary>
+    /// A value whose provider only knows its answer after another deployment — an Azure Bicep output
+    /// is the real-world case — cannot be produced while publishing, so the variable is dropped.
+    /// </summary>
+    /// <remarks>
+    /// This pins the behaviour the publisher's narrow catch preserves. It is deliberately covered
+    /// with a stand-in provider rather than a real Azure resource: the condition under test is
+    /// "the provider raised <see cref="InvalidOperationException"/>", and reproducing it through
+    /// <c>Aspire.Hosting.Azure</c> would add a package reference without testing anything more.
+    /// The warning matters as much as the skip — before, this was logged at Debug and so never
+    /// appeared in a normal publish.
+    /// </remarks>
+    [Fact]
+    public void ValueOnlyKnownAfterAnotherDeployment_SkipsJustThatVariable()
+    {
+        var (bicep, logger) = GenerateBicep(b =>
+        {
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithEnvironment(context =>
+                {
+                    context.EnvironmentVariables["UNRESOLVABLE"] = new ThrowingValueProvider(
+                        new InvalidOperationException("The output 'x' does not have a value."));
+                    context.EnvironmentVariables["RESOLVABLE"] = "kept";
+                });
+        });
+
+        Assert.DoesNotContain("UNRESOLVABLE", bicep, StringComparison.Ordinal);
+        Assert.Contains("'kept'", bicep, StringComparison.Ordinal);
+
+        var warnings = logger.Matching(LogLevel.Warning, "UNRESOLVABLE", "omitted from the Radius output");
+        Assert.Single(warnings);
+    }
+
+    /// <summary>
+    /// Any other failure is a real error and must fail the publish.
+    /// </summary>
+    /// <remarks>
+    /// The publisher used to wrap the whole value resolution in
+    /// <c>catch (InvalidOperationException)</c>, so whether a bug surfaced depended on the
+    /// exception's type rather than on the publisher having judged the value unavailable. This test
+    /// is the reason the skip now has a dedicated type.
+    /// </remarks>
+    [Fact]
+    public void UnexpectedResolutionFailure_FailsThePublish()
+    {
+        var ex = Assert.Throws<NotSupportedException>(() => GenerateBicep(b =>
+        {
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithEnvironment(context =>
+                {
+                    context.EnvironmentVariables["BROKEN"] = new ThrowingValueProvider(
+                        new NotSupportedException("something genuinely wrong"));
+                });
+        }));
+
+        Assert.Equal("something genuinely wrong", ex.Message);
+    }
+
+    /// <summary>
+    /// A reference to an endpoint the target resource does not declare is detected before anything
+    /// reads the missing annotation, so it is skipped as an unavailable value rather than surfacing
+    /// as an indistinguishable <see cref="InvalidOperationException"/>.
+    /// </summary>
+    [Fact]
+    public void ReferenceToUndeclaredEndpoint_SkipsJustThatVariable()
+    {
+        var (bicep, logger) = GenerateBicep(b =>
+        {
+            var backend = b.AddContainer("backend", "myapp/backend", "latest").WithHttpEndpoint(targetPort: 8080);
+
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithEnvironment("MISSING", backend.GetEndpoint("does-not-exist").Property(EndpointProperty.Host))
+                .WithEnvironment("PRESENT", backend.GetEndpoint("http").Property(EndpointProperty.Host));
+        });
+
+        Assert.DoesNotContain("MISSING", bicep, StringComparison.Ordinal);
+        Assert.Contains("backend-backend.default.svc.cluster.local", bicep, StringComparison.Ordinal);
+        Assert.Single(logger.Matching(LogLevel.Warning, "MISSING", "is not defined on resource 'backend'"));
+    }
+
+    /// <summary>
+    /// A user name supplied as a parameter is replaced by the one the recipe created, exactly as the
+    /// password is. Without this the connection string names a user the recipe never provisioned.
+    /// </summary>
+    [Fact]
+    public Task UserNameParameter_IsProjectedFromRecipeOutputs()
+    {
+        var (bicep, _) = GenerateBicep(b =>
+        {
+            var mongoUser = b.AddParameter("mongouser");
+            var rabbitUser = b.AddParameter("rabbituser");
+            var mongo = b.AddMongoDB("mongo", userName: mongoUser);
+            var rabbit = b.AddRabbitMQ("rabbit", userName: rabbitUser);
+
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithReference(mongo)
+                .WithReference(rabbit);
+        });
+
+        return Verify(bicep, extension: "bicep");
+    }
+
+    /// <summary>
+    /// Known gap: the default user names ("admin" for MongoDB, "guest" for RabbitMQ) are appended
+    /// through <c>ReferenceExpressionBuilder.AppendFormatted(string?, string?)</c>, which formats
+    /// immediately and writes the result into the format string. They therefore arrive at the
+    /// publisher as opaque literal text with no value provider to substitute, and keep their default
+    /// value in the emitted connection string. Pinned so the gap is visible rather than forgotten.
+    /// </summary>
+    [Fact]
+    public void DefaultUserName_RemainsALiteral()
+    {
+        var (bicep, _) = GenerateBicep(b =>
+        {
+            var mongo = b.AddMongoDB("mongo");
+            b.AddContainer("api", "myapp/api", "latest").WithReference(mongo);
+        });
+
+        Assert.Contains("mongodb://admin:", bicep, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// An extra database nobody references cannot produce a wrong connection string, so it must not
+    /// break a model that published before.
+    /// </summary>
+    [Fact]
+    public void UnreferencedSecondDatabase_DoesNotFailThePublish()
+    {
+        var (bicep, logger) = GenerateBicep(b =>
+        {
+            var pg = b.AddPostgres("pg");
+            var used = pg.AddDatabase("used");
+            pg.AddDatabase("unused");
+
+            b.AddContainer("api", "myapp/api", "latest").WithReference(used);
+        });
+
+        Assert.Contains("'used'", bicep, StringComparison.Ordinal);
+        Assert.Single(logger.Matching(LogLevel.Warning, "declares 2 databases", "'used' was passed"));
+    }
+
+    /// <summary>
+    /// A server with no <c>AddDatabase(...)</c> child is a valid, common model, so the omitted
+    /// <c>database</c> recipe parameter is a warning rather than a failure.
+    /// </summary>
+    [Fact]
+    public void ServerWithNoDatabase_WarnsRatherThanFailing()
+    {
+        var (bicep, logger) = GenerateBicep(b =>
+        {
+            var sql = b.AddSqlServer("sqlserver");
+            b.AddContainer("api", "myapp/api", "latest").WithReference(sql);
+        });
+
+        Assert.Contains("sqlserver.properties.host", bicep, StringComparison.Ordinal);
+        Assert.Single(logger.Matching(LogLevel.Warning, "sqlserver", "declares no database"));
+    }
+
+    /// <summary>
+    /// Replacing a password Aspire generated for run mode is invisible and correct. Replacing one
+    /// the AppHost author chose is a decision being overridden, so it has to be reported — otherwise
+    /// they debug a credential mismatch against a value that never reached the cluster.
+    /// </summary>
+    [Fact]
+    public void UserSuppliedPassword_IsReportedWhenReplacedByTheRecipeSecret()
+    {
+        var (_, logger) = GenerateBicep(b =>
+        {
+            var password = b.AddParameter("cachepassword", "hunter2", secret: true);
+            var cache = b.AddRedis("cache", password: password);
+            b.AddContainer("api", "myapp/api", "latest").WithReference(cache);
+        });
+
+        Assert.Single(logger.Matching(LogLevel.Warning, "cachepassword", "is not used when deploying"));
+    }
+
+    /// <summary>
+    /// A password Aspire generated has no deploy-time meaning, so replacing it is not worth a
+    /// warning. Pinned so the warning above cannot become noise on every model.
+    /// </summary>
+    [Fact]
+    public void GeneratedPassword_IsReplacedSilently()
+    {
+        var (_, logger) = GenerateBicep(b =>
+        {
+            var cache = b.AddRedis("cache");
+            b.AddContainer("api", "myapp/api", "latest").WithReference(cache);
+        });
+
+        Assert.Empty(logger.Matching(LogLevel.Warning, "is not used when deploying"));
+    }
+
+    /// <summary>
+    /// A parameter that was substituted for a recipe-generated secret is rewritten everywhere it
+    /// appears, so an unrelated consumer of the same parameter silently receives another resource's
+    /// credential. The intent is genuinely ambiguous there, so it is reported rather than rejected.
+    /// </summary>
+    [Fact]
+    public void SubstitutedParameterUsedElsewhere_IsReported()
+    {
+        var (_, logger) = GenerateBicep(b =>
+        {
+            var shared = b.AddParameter("shared", "hunter2", secret: true);
+            var cache = b.AddRedis("cache", password: shared);
+
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithReference(cache)
+                .WithEnvironment("ADMIN_PASSWORD", shared);
+        });
+
+        Assert.Single(logger.Matching(LogLevel.Warning, "references parameter 'shared'", "credential of 'cache'"));
+    }
+
+    /// <summary>
+    /// Values a <c>ReferenceExpression</c> declared with the <c>uri</c> format must be
+    /// percent-encoded in the emitted Bicep. Aspire escapes them with <c>Uri.EscapeDataString</c>
+    /// when it resolves such a value itself, but the publisher emits an expression whose value is
+    /// only known at deploy time, so the escaping has to be emitted as a <c>uriComponent(...)</c>
+    /// call. It matters more since the fix: the password now comes from an alphabet the recipe
+    /// chooses rather than Aspire's URL-safe generated one, so an unescaped <c>@</c> or <c>/</c>
+    /// would corrupt the URI.
+    /// </summary>
+    [Fact]
+    public void UriFormattedValues_AreEscapedInTheEmittedBicep()
+    {
+        var (bicep, _) = GenerateBicep(b =>
+        {
+            var cache = b.AddRedis("cache");
+            var pgdb = b.AddPostgres("pg").AddDatabase("pgdb");
+
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithReference(cache)
+                .WithReference(pgdb);
+        });
+
+        // The recipe-generated secret (listSecrets) and the recipe-input parameter both need it.
+        Assert.Contains("uriComponent(cache.listSecrets().password)", bicep, StringComparison.Ordinal);
+        Assert.Contains("uriComponent(pg_password)", bicep, StringComparison.Ordinal);
+
+        // Non-URI values are untouched: escaping a connection-string password would corrupt it.
+        Assert.Contains("value: cache.listSecrets().password", bicep, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A value provider whose resolution fails, standing in for any resource whose outputs are only
+    /// known after its own deployment.
+    /// </summary>
+    private sealed class ThrowingValueProvider(Exception exception) : IValueProvider
+    {
+        public ValueTask<string?> GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken = default)
+            => throw exception;
+
+        public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken = default)
+            => throw exception;
+    }
+}

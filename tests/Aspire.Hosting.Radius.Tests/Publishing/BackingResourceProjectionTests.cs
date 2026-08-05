@@ -69,13 +69,8 @@ public class BackingResourceProjectionTests
                 .WithReference(sql);
         });
 
-        // No endpoint-derived Kubernetes FQDN may survive for a backing resource.
-        Assert.DoesNotContain("cache-cache", bicep, StringComparison.Ordinal);
-        Assert.DoesNotContain("pg-pg", bicep, StringComparison.Ordinal);
-        Assert.DoesNotContain("mongo-mongo", bicep, StringComparison.Ordinal);
-        Assert.DoesNotContain("rabbit-rabbit", bicep, StringComparison.Ordinal);
-        Assert.DoesNotContain("sqlserver-sqlserver", bicep, StringComparison.Ordinal);
-
+        // The snapshot is the assertion: it pins the whole emitted document, so an endpoint-derived
+        // `{name}-{name}` Kubernetes FQDN reappearing for any backing resource shows up as a diff.
         return Verify(bicep, extension: "bicep");
     }
 
@@ -96,8 +91,6 @@ public class BackingResourceProjectionTests
                 .WithEnvironment("CUSTOM_PORT", cache.GetEndpoint("tcp").Property(EndpointProperty.Port))
                 .WithEnvironment("CUSTOM_URL", cache.GetEndpoint("tcp").Property(EndpointProperty.Url));
         });
-
-        Assert.DoesNotContain("cache-cache", bicep, StringComparison.Ordinal);
 
         return Verify(bicep, extension: "bicep");
     }
@@ -127,7 +120,7 @@ public class BackingResourceProjectionTests
     /// generates its own - so the parameter must not be emitted as the value a consumer reads.
     /// </summary>
     [Fact]
-    public void LegacyBackingResource_DoesNotLeakAspireGeneratedPasswordParameter()
+    public Task LegacyBackingResource_DoesNotLeakAspireGeneratedPasswordParameter()
     {
         var bicep = GenerateBicep(b =>
         {
@@ -135,8 +128,10 @@ public class BackingResourceProjectionTests
             b.AddContainer("api", "myapp/api", "latest").WithReference(cache);
         });
 
-        Assert.Contains("cache.listSecrets().password", bicep, StringComparison.Ordinal);
-        Assert.DoesNotContain("param cache_password", bicep, StringComparison.Ordinal);
+        // Snapshotted rather than asserted with DoesNotContain: the guarantee is about the whole
+        // document (no `param cache_password` anywhere, and every consumer value reading
+        // listSecrets()), which a substring absence check cannot express.
+        return Verify(bicep, extension: "bicep");
     }
 
     /// <summary>
@@ -163,8 +158,12 @@ public class BackingResourceProjectionTests
         RadiusTestHelper.AttachDeploymentTargets(radiusEnvA, model);
         var context = new RadiusBicepPublishingContext(radiusEnvA);
 
-        var ex = Assert.ThrowsAny<Exception>(() => context.GenerateBicep(model));
+        // The concrete type matters: the publisher's env-var loop skips values that raise
+        // RadiusUnresolvableValueException, so this must not be one of those.
+        var ex = Assert.Throws<RadiusBackingResourceEndpointException>(() => context.GenerateBicep(model));
+        Assert.Equal("cache", ex.Resource.Name);
         Assert.Contains("same Radius environment", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("ASPIRERADIUS060", ex.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -175,7 +174,7 @@ public class BackingResourceProjectionTests
     [Fact]
     public void MultipleDatabasesOnOneBackingResource_FailsWithActionableMessage()
     {
-        var ex = Assert.ThrowsAny<Exception>(() => GenerateBicep(b =>
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(b =>
         {
             var pg = b.AddPostgres("pg");
             var first = pg.AddDatabase("first");
@@ -186,6 +185,7 @@ public class BackingResourceProjectionTests
         }));
 
         Assert.Contains("single database", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("ASPIRERADIUS063", ex.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -196,7 +196,7 @@ public class BackingResourceProjectionTests
     [Fact]
     public void SharedPasswordParameterAcrossBackingResources_FailsWithActionableMessage()
     {
-        var ex = Assert.ThrowsAny<Exception>(() => GenerateBicep(b =>
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(b =>
         {
             var shared = b.AddParameter("shared", secret: true);
             var cacheA = b.AddRedis("cachea", password: shared);
@@ -207,6 +207,7 @@ public class BackingResourceProjectionTests
         }));
 
         Assert.Contains("its own parameter", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("ASPIRERADIUS061", ex.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -215,7 +216,7 @@ public class BackingResourceProjectionTests
     /// environment variables pointing at a symbol that no longer exists.
     /// </summary>
     [Fact]
-    public void CallbackRenamingBackingResource_RewiresProjectedEnvironmentValues()
+    public Task CallbackRenamingBackingResource_RewiresProjectedEnvironmentValues()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         builder.AddRadiusEnvironment("myenv")
@@ -233,9 +234,9 @@ public class BackingResourceProjectionTests
         RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
         var bicep = new RadiusBicepPublishingContext(radiusEnv).GenerateBicep(model);
 
-        Assert.Contains("renamed_cache.properties.host", bicep, StringComparison.Ordinal);
-        Assert.Contains("renamed_cache.listSecrets().password", bicep, StringComparison.Ordinal);
-        Assert.DoesNotContain("value: cache.properties.host", bicep, StringComparison.Ordinal);
+        // Snapshotted so the assertion covers every rewritten value, not just the two that were
+        // spot-checked; a value left pointing at the old `cache` symbol would show as a diff.
+        return Verify(bicep, extension: "bicep");
     }
 
     /// <summary>
@@ -258,8 +259,9 @@ public class BackingResourceProjectionTests
         RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
         var context = new RadiusBicepPublishingContext(radiusEnv);
 
-        var ex = Assert.ThrowsAny<Exception>(() => context.GenerateBicep(model));
+        var ex = Assert.Throws<InvalidOperationException>(() => context.GenerateBicep(model));
         Assert.Contains("removed or replaced that resource", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("ASPIRERADIUS065", ex.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
