@@ -85,7 +85,7 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
                 $"Expected {TypeScriptAppHostToolchainTestHelpers.GetDisplayName(toolchain)} restore to create '{lockFilePath}'.");
         }
 
-        await auto.TypeAsync(TypeScriptAppHostToolchainTestHelpers.GetTypeCheckCommand(toolchain, "tsconfig.apphost.json"));
+        await auto.TypeAsync(TypeScriptAppHostToolchainTestHelpers.GetBuildCommand(toolchain, "tsconfig.apphost.json"));
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 

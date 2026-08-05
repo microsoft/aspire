@@ -17,6 +17,8 @@ namespace Aspire.Cli.Projects;
 /// </summary>
 internal sealed class GuestRuntime
 {
+    private const string CompiledAppHostOutputDirectory = "node_modules/.tmp/aspire-apphost";
+
     private readonly RuntimeSpec _spec;
     private readonly ILogger _logger;
     private readonly FileLoggerProvider? _fileLoggerProvider;
@@ -157,7 +159,7 @@ internal sealed class GuestRuntime
     /// <param name="afterAppHostLaunchedAsync">Callback invoked after the AppHost execute command has launched.</param>
     /// <param name="appHostLaunchOptions">
     /// Optional launch options forwarded to the launcher for the long-running AppHost execute command only.
-    /// Pre-execute commands (e.g. <c>tsc --noEmit</c>) and dependency installation are short-lived and
+    /// Pre-execute commands (e.g. a TypeScript build) and dependency installation are short-lived and
     /// keep today's force-kill behavior, so this is not passed there.
     /// </param>
     /// <returns>A tuple of the exit code and captured output (null when launched via extension).</returns>
@@ -358,6 +360,7 @@ internal sealed class GuestRuntime
         {
             var replaced = arg
                 .Replace("{appHostFile}", appHostFile?.FullName ?? "")
+                .Replace("{compiledAppHostFile}", GetCompiledAppHostFilePath(appHostFile) ?? "")
                 .Replace("{appHostDir}", directory.FullName);
 
             if (replaced.Contains("{args}"))
@@ -385,4 +388,12 @@ internal sealed class GuestRuntime
 
         return result.ToArray();
     }
+
+    private static string? GetCompiledAppHostFilePath(FileInfo? appHostFile) =>
+        appHostFile is null
+            ? null
+            : Path.Combine(
+                appHostFile.DirectoryName!,
+                CompiledAppHostOutputDirectory,
+                Path.ChangeExtension(appHostFile.Name, appHostFile.Extension.Equals(".mts", StringComparison.OrdinalIgnoreCase) ? ".mjs" : ".js"));
 }

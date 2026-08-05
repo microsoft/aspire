@@ -25,7 +25,6 @@
     "@typescript/native": "npm:typescript@^7.0.2",
     "eslint": "^10.0.3",
     "nodemon": "^3.1.14",
-    "tsx": "^4.22.3",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "typescript-eslint": "^8.65.0"
   },

@@ -6,7 +6,7 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
-    "outDir": "./dist/apphost",
+    "outDir": "./node_modules/.tmp/aspire-apphost",
     "rootDir": ".",
     "strict": true
   },

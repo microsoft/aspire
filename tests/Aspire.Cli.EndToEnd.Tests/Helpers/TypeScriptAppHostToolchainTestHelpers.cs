@@ -71,16 +71,16 @@ internal static class TypeScriptAppHostToolchainTestHelpers
         $"{GetCommandName(toolchain)} install";
 
     /// <summary>
-    /// Gets the no-emit type-check command for a toolchain.
+    /// Gets the incremental AppHost build command for a toolchain.
     /// </summary>
-    internal static string GetTypeCheckCommand(string toolchain, string tsConfigFileName)
+    internal static string GetBuildCommand(string toolchain, string tsConfigFileName)
     {
         return NormalizeToolchain(toolchain) switch
         {
-            "bun" => $"bun run tsc --noEmit --incremental --tsBuildInfoFile ./node_modules/.tmp/tsconfig.apphost.typecheck.tsbuildinfo -p {tsConfigFileName}",
-            "yarn" => $"yarn run tsc --noEmit --incremental --tsBuildInfoFile ./node_modules/.tmp/tsconfig.apphost.typecheck.tsbuildinfo -p {tsConfigFileName}",
-            "pnpm" => $"pnpm exec tsc --noEmit --incremental --tsBuildInfoFile ./node_modules/.tmp/tsconfig.apphost.typecheck.tsbuildinfo -p {tsConfigFileName}",
-            "npm" => $"npx --no-install tsc --noEmit --incremental --tsBuildInfoFile ./node_modules/.tmp/tsconfig.apphost.typecheck.tsbuildinfo -p {tsConfigFileName}",
+            "bun" => $"bun run tsc --incremental --tsBuildInfoFile ./node_modules/.tmp/aspire-apphost.tsbuildinfo --outDir ./node_modules/.tmp/aspire-apphost --rootDir . --noEmit false -p {tsConfigFileName}",
+            "yarn" => $"yarn run tsc --incremental --tsBuildInfoFile ./node_modules/.tmp/aspire-apphost.tsbuildinfo --outDir ./node_modules/.tmp/aspire-apphost --rootDir . --noEmit false -p {tsConfigFileName}",
+            "pnpm" => $"pnpm exec tsc --incremental --tsBuildInfoFile ./node_modules/.tmp/aspire-apphost.tsbuildinfo --outDir ./node_modules/.tmp/aspire-apphost --rootDir . --noEmit false -p {tsConfigFileName}",
+            "npm" => $"npx --no-install tsc --incremental --tsBuildInfoFile ./node_modules/.tmp/aspire-apphost.tsbuildinfo --outDir ./node_modules/.tmp/aspire-apphost --rootDir . --noEmit false -p {tsConfigFileName}",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, "Unsupported TypeScript AppHost toolchain.")
         };
     }

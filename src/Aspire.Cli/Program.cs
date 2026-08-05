@@ -449,7 +449,7 @@ public class Program
         // IsolatedProcess is provided by WindowsConsoleProcessJob.Shared — a process-wide
         // job created on first isolated spawn. The OS closes the job handle automatically on
         // process exit, firing KILL_ON_JOB_CLOSE on any assigned children that haven't already
-        // exited (e.g. orphaned tsx after the CLI crashes). On non-Windows, process-group
+        // exited (e.g. an orphaned TypeScript AppHost after the CLI crashes). On non-Windows, process-group
         // reparenting + ordinary signal delivery cover the same case, so nothing is needed.
         builder.Services.AddTransient<LayoutProcessRunner>();
         builder.Services.AddTransient<ProcessTreeGracefulShutdownService>();
