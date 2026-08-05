@@ -33,6 +33,21 @@ namespace Aspire.Hosting.Radius;
 /// environment-variable resolution, so this exception is not swallowed there.
 /// </para>
 /// </remarks>
+/// <example>
+/// Deploying the consumer and the backing resource to the same Radius environment resolves it.
+/// An AppHost that publishes several environments can report the offending resource:
+/// <code language="csharp">
+/// try
+/// {
+///     await app.RunAsync();
+/// }
+/// catch (RadiusBackingResourceEndpointException ex)
+/// {
+///     Console.Error.WriteLine($"'{ex.Resource.Name}' is provisioned by a Radius recipe in " +
+///                             "another environment, so its address cannot be resolved here.");
+/// }
+/// </code>
+/// </example>
 public sealed class RadiusBackingResourceEndpointException : InvalidOperationException
 {
     /// <summary>
