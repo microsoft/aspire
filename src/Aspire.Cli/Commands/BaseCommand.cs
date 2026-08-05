@@ -25,9 +25,12 @@ internal abstract class BaseCommand : Command
 
     // JSON output cannot display update notifications, so apply this invocation-level gate outside
     // the overridable command policy to prevent metadata-only consumers from bypassing it.
-    internal bool PrefetchesCliPackageMetadata => PrefetchesCliPackageMetadataCore && !_isJsonFormatRequested;
+    internal bool PrefetchesCliPackageMetadata => (UpdateNotificationsEnabled || RequiresCliPackageMetadata) && !_isJsonFormatRequested;
 
-    internal virtual bool PrefetchesCliPackageMetadataCore => UpdateNotificationsEnabled;
+    internal virtual bool RequiresCliPackageMetadata => false;
+
+    internal bool ShouldPrefetchCliPackageMetadata(bool updateNotificationsEnabled)
+        => PrefetchesCliPackageMetadata && (updateNotificationsEnabled || RequiresCliPackageMetadata);
 
     /// <summary>
     /// Gets the help group for this command.

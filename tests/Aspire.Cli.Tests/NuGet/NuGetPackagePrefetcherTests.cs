@@ -241,6 +241,26 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
         await AssertPrefetchingAsync(provider, command, command.Name, expectedTemplatePrefetch, expectedCliPrefetch);
     }
 
+    [Theory]
+    [InlineData(typeof(UpdateCommand), true)]
+    [InlineData(typeof(AddCommand), false)]
+    public async Task DisabledUpdateNotificationsOnlyPrefetchRequiredCliPackageMetadata(Type commandType, bool expectedCliPrefetch)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = Assert.IsAssignableFrom<BaseCommand>(provider.GetRequiredService(commandType));
+
+        await AssertPrefetchingAsync(
+            provider,
+            command,
+            command.Name,
+            expectedTemplatePrefetch: false,
+            expectedCliPrefetch,
+            updateNotificationsEnabled: false);
+    }
+
     [Fact]
     public async Task GeneratedTemplateCommandStartsBothPackageMetadataPrefetches()
     {
@@ -431,10 +451,11 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
         BaseCommand command,
         string commandLine,
         bool expectedTemplatePrefetch,
-        bool expectedCliPrefetch)
+        bool expectedCliPrefetch,
+        bool updateNotificationsEnabled = true)
     {
         var features = new TestFeatures();
-        features.SetFeature(KnownFeatures.UpdateNotificationsEnabled, true);
+        features.SetFeature(KnownFeatures.UpdateNotificationsEnabled, updateNotificationsEnabled);
 
         var templateStarted = false;
         var packagingService = new TestPackagingService
@@ -484,7 +505,7 @@ internal sealed class TestCommand : BaseCommand
     private readonly bool _prefetchesCliPackages;
 
     internal override bool PrefetchesTemplatePackageMetadata => _prefetchesTemplatePackages;
-    internal override bool PrefetchesCliPackageMetadataCore => _prefetchesCliPackages;
+    internal override bool RequiresCliPackageMetadata => _prefetchesCliPackages;
 
     public TestCommand(bool prefetchesTemplatePackages = false, bool prefetchesCliPackages = false)
         : base("test", "Test command", new CommonCommandServices(null!, null!, null!, null!, null!, null!, null!, null!))
