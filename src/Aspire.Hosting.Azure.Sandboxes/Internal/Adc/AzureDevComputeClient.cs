@@ -43,7 +43,11 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
 
     private const string ApiVersion = "2026-02-01-preview";
     private const int MaxRetryCount = 6;
+    private const int MaxForbiddenRetryCount = 2;
     private const int PageSize = 100;
+    private static readonly TimeSpan s_defaultRetryDelay = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan s_maxRetryDelay = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan s_maxForbiddenRetryDelay = TimeSpan.FromSeconds(2);
     private static readonly string[] s_authorizationScopes = [AuthorizationScope];
     private static readonly JsonSerializerOptions s_jsonSerializerOptions = new(JsonSerializerDefaults.Web)
     {
@@ -223,9 +227,30 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
             }
             catch (HttpRequestException ex) when (attempt < MaxRetryCount && CanRetryAfterNetworkFailure(method))
             {
-                var networkRetryDelay = retryDelay ?? TimeSpan.FromSeconds(5);
+                var networkRetryDelay = ClampRetryDelay(retryDelay ?? s_defaultRetryDelay, s_maxRetryDelay);
                 logger.LogInformation(ex, "ADC request {Method} {Path} failed with a transient network error. Retrying after {Delay}.", method.Method, path, networkRetryDelay);
                 await Task.Delay(networkRetryDelay, cancellationToken).ConfigureAwait(false);
+                continue;
+            }
+
+            if (response.StatusCode == HttpStatusCode.Forbidden)
+            {
+                if (attempt >= MaxForbiddenRetryCount)
+                {
+                    return response;
+                }
+
+                var forbiddenRetryDelay = ClampRetryDelay(
+                    GetRetryDelay(response, retryDelay ?? s_defaultRetryDelay, DateTimeOffset.UtcNow),
+                    s_maxForbiddenRetryDelay);
+                response.Dispose();
+                logger.LogWarning(
+                    "ADC request {Method} {Path} returned HTTP 403. Waiting briefly for the Container Apps SandboxGroup Data Owner role assignment to propagate (retry {RetryAttempt} of {MaxRetryAttempts}). If this persists, verify the role assignment on the sandbox group.",
+                    method.Method,
+                    path,
+                    attempt + 1,
+                    MaxForbiddenRetryCount);
+                await Task.Delay(forbiddenRetryDelay, cancellationToken).ConfigureAwait(false);
                 continue;
             }
 
@@ -234,7 +259,7 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
                 return response;
             }
 
-            var delay = GetRetryDelay(response);
+            var delay = GetRetryDelay(response, retryDelay ?? s_defaultRetryDelay, DateTimeOffset.UtcNow);
             response.Dispose();
             logger.LogInformation("ADC request {Method} {Path} returned a transient HTTP response. Retrying after {Delay}.", method.Method, path, delay);
             await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
@@ -242,7 +267,6 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
     }
 
     private static bool ShouldRetry(HttpMethod method, HttpStatusCode statusCode) =>
-        statusCode == HttpStatusCode.Forbidden ||
         statusCode == HttpStatusCode.TooManyRequests ||
         ((int)statusCode >= 500 && CanRetryAfterNetworkFailure(method));
 
@@ -250,19 +274,34 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
         method == HttpMethod.Get ||
         method == HttpMethod.Delete;
 
-    private TimeSpan GetRetryDelay(HttpResponseMessage response)
+    internal static TimeSpan GetRetryDelay(
+        HttpResponseMessage response,
+        TimeSpan defaultDelay,
+        DateTimeOffset now)
     {
+        ArgumentNullException.ThrowIfNull(response);
+
         if (response.Headers.RetryAfter?.Delta is { } delta)
         {
-            return delta;
+            return ClampRetryDelay(delta, s_maxRetryDelay);
         }
 
         if (response.Headers.RetryAfter?.Date is { } retryDate)
         {
-            return retryDate > DateTimeOffset.UtcNow ? retryDate - DateTimeOffset.UtcNow : TimeSpan.Zero;
+            return ClampRetryDelay(retryDate > now ? retryDate - now : TimeSpan.Zero, s_maxRetryDelay);
         }
 
-        return retryDelay ?? TimeSpan.FromSeconds(5);
+        return ClampRetryDelay(defaultDelay, s_maxRetryDelay);
+    }
+
+    private static TimeSpan ClampRetryDelay(TimeSpan delay, TimeSpan maximum)
+    {
+        if (delay <= TimeSpan.Zero)
+        {
+            return TimeSpan.Zero;
+        }
+
+        return delay > maximum ? maximum : delay;
     }
 
     private async Task<HttpResponseMessage> SendCoreAsync(AzureDevComputeResourceScope scope, HttpMethod method, string path, object? content, CancellationToken cancellationToken)
@@ -302,7 +341,10 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
         }
 
         var message = await GetErrorMessageAsync(response, cancellationToken).ConfigureAwait(false);
-        throw new InvalidOperationException($"ADC request '{method} {path}' failed with HTTP {(int)response.StatusCode} ({response.ReasonPhrase}). {message}");
+        var permissionHint = response.StatusCode == HttpStatusCode.Forbidden
+            ? " Verify that the calling principal has the Container Apps SandboxGroup Data Owner role on the sandbox group; newly-created role assignments can take a short time to propagate."
+            : string.Empty;
+        throw new InvalidOperationException($"ADC request '{method} {path}' failed with HTTP {(int)response.StatusCode} ({response.ReasonPhrase}). {message}{permissionHint}");
     }
 
     private static async Task<string> GetErrorMessageAsync(HttpResponseMessage response, CancellationToken cancellationToken)

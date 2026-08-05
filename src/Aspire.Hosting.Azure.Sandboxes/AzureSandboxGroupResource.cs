@@ -103,7 +103,7 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
     /// <summary>
     /// Gets the Azure resource ID output reference.
     /// </summary>
-    public BicepOutputReference Id => new("id", this);
+    public BicepOutputReference IdOutputReference => new("id", this);
 
     internal ManagedServiceIdentityType ManagedIdentityType { get; set; } = ManagedServiceIdentityType.None;
 
