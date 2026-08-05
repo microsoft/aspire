@@ -105,6 +105,11 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
     /// </summary>
     public BicepOutputReference IdOutputReference => new("id", this);
 
+    /// <summary>
+    /// Gets the Azure resource location output reference.
+    /// </summary>
+    public BicepOutputReference LocationOutputReference => new("location", this);
+
     internal ManagedServiceIdentityType ManagedIdentityType { get; set; } = ManagedServiceIdentityType.None;
 
     internal List<AzureUserAssignedIdentityResource> UserAssignedIdentities { get; } = [];

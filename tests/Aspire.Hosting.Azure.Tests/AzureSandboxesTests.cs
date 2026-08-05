@@ -368,6 +368,23 @@ public class AzureSandboxesTests
     }
 
     [Fact]
+    public void ExistingSandboxDataPlaneScopeUsesActualResourceOutputs()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        sandboxGroup.Resource.Outputs["id"] = "/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/existing-rg/providers/Microsoft.App/sandboxGroups/existing-group";
+        sandboxGroup.Resource.Outputs["location"] = "eastus2";
+
+        var scope = AzureSandboxContainerDeployment.CreateDataPlaneScope(sandboxGroup.Resource);
+
+        Assert.Equal("11111111-1111-1111-1111-111111111111", scope.SubscriptionId);
+        Assert.Equal("existing-rg", scope.ResourceGroupName);
+        Assert.Equal("existing-group", scope.SandboxGroupName);
+        Assert.Equal("eastus2", scope.Region);
+    }
+
+    [Fact]
     public async Task AddAzureSandboxResourcesGeneratesBicep()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -870,6 +887,9 @@ public class AzureSandboxesTests
 
         previousState.Data["EndpointSecurityFingerprint"] = fingerprint;
         Assert.False(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint));
+        previousState.Data["PendingSecurityCleanup"] = true;
+        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint));
+        previousState.Data["PendingSecurityCleanup"] = false;
 
         var anonymousFingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
         [
@@ -882,6 +902,25 @@ public class AzureSandboxesTests
             endpoints,
             "example/image@sha256:second");
         Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, updatedImageFingerprint));
+    }
+
+    [Fact]
+    public void SandboxDiskImageFailureRedactsServiceStatusDetails()
+    {
+        const string secret = "short-lived-acr-refresh-token";
+        var exception = AzureSandboxContainerDeployment.CreateDiskImageFailureException(
+            new AzureDevComputeDiskImage
+            {
+                Id = "disk-1",
+                Status = new AzureDevComputeDiskImageStatus
+                {
+                    State = "Failed",
+                    ErrorMessage = $"Authentication failed using {secret}"
+                }
+            });
+
+        Assert.DoesNotContain(secret, exception.Message);
+        Assert.Contains("Service-provided error details were redacted", exception.Message);
     }
 
     [Fact]

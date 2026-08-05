@@ -213,8 +213,7 @@ internal static class AzureSandboxContainerDeployment
         var deploymentStateManager = context.Services.GetRequiredService<IDeploymentStateManager>();
         var azureState = await GetAzureStateAsync(deploymentStateManager, context.CancellationToken).ConfigureAwait(false);
 
-        var sandboxGroupName = GetRequiredOutput(resource.Parent, "name");
-        var dataPlaneScope = new AzureDevComputeResourceScope(azureState.SubscriptionId, azureState.ResourceGroup, sandboxGroupName, azureState.Location);
+        var dataPlaneScope = CreateDataPlaneScope(resource.Parent);
         var client = CreateAzureDevComputeClient(context);
 
         var stateSection = await deploymentStateManager.AcquireSectionAsync(GetStateSectionName(resource), context.CancellationToken).ConfigureAwait(false);
@@ -313,6 +312,8 @@ internal static class AzureSandboxContainerDeployment
             var securityConfigurationChanged = HasSecurityRelevantEndpointChange(
                 previousStateSection,
                 endpointSecurityFingerprint);
+            var pendingSecurityCleanup = previousStateSection.Data["PendingSecurityCleanup"]?.GetValue<bool>() == true;
+            securityConfigurationChanged |= pendingSecurityCleanup;
             var previousOwnerId = previousStateSection.Data["OwnerId"]?.GetValue<string>();
             var ownerChanged = !string.IsNullOrWhiteSpace(previousOwnerId) &&
                 !string.Equals(previousOwnerId, ownerId, StringComparison.Ordinal);
@@ -330,6 +331,7 @@ internal static class AzureSandboxContainerDeployment
             stateSection.Data["DeployId"] = deployId;
             stateSection.Data["Ports"] = portStates;
             stateSection.Data["EndpointSecurityFingerprint"] = endpointSecurityFingerprint;
+            stateSection.Data["PendingSecurityCleanup"] = securityConfigurationChanged;
             await deploymentStateManager.SaveSectionAsync(stateSection, context.CancellationToken).ConfigureAwait(false);
             deploymentCommitted = true;
 
@@ -374,6 +376,12 @@ internal static class AzureSandboxContainerDeployment
                         s_noExcludedIds,
                         s_noExcludedIds,
                         throwOnError: false).ConfigureAwait(false);
+                }
+
+                if (securityConfigurationChanged)
+                {
+                    stateSection.Data["PendingSecurityCleanup"] = false;
+                    await deploymentStateManager.SaveSectionAsync(stateSection, context.CancellationToken).ConfigureAwait(false);
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -602,7 +610,7 @@ internal static class AzureSandboxContainerDeployment
 
             if (IsTerminalDiskImageFailure(diskImage))
             {
-                throw new InvalidOperationException($"Sandbox disk image '{diskImage.Id}' failed to become ready. {diskImage.Status.ErrorMessage}");
+                throw CreateDiskImageFailureException(diskImage);
             }
 
             await Task.Delay(TimeSpan.FromSeconds(2), context.CancellationToken).ConfigureAwait(false);
@@ -618,6 +626,13 @@ internal static class AzureSandboxContainerDeployment
     private static bool IsTerminalDiskImageFailure(AzureDevComputeDiskImage diskImage) =>
         diskImage.Status.State.Contains("fail", StringComparison.OrdinalIgnoreCase) ||
         diskImage.Status.State.Contains("error", StringComparison.OrdinalIgnoreCase);
+
+    internal static InvalidOperationException CreateDiskImageFailureException(AzureDevComputeDiskImage diskImage)
+    {
+        ArgumentNullException.ThrowIfNull(diskImage);
+        return new InvalidOperationException(
+            $"Sandbox disk image '{diskImage.Id}' failed to become ready (terminal state: '{diskImage.Status.State}'). Service-provided error details were redacted.");
+    }
 
     private static Task<AzureDevComputeSandbox> CreateSandboxAsync(
         PipelineStepContext context,
@@ -1522,6 +1537,11 @@ internal static class AzureSandboxContainerDeployment
             return false;
         }
 
+        if (previousStateSection.Data["PendingSecurityCleanup"]?.GetValue<bool>() == true)
+        {
+            return true;
+        }
+
         var previousFingerprint = previousStateSection.Data["EndpointSecurityFingerprint"]?.GetValue<string>();
         return !string.Equals(previousFingerprint, currentFingerprint, StringComparison.Ordinal);
     }
@@ -1776,6 +1796,26 @@ internal static class AzureSandboxContainerDeployment
         }
 
         return value.ToString()!;
+    }
+
+    internal static AzureDevComputeResourceScope CreateDataPlaneScope(AzureSandboxGroupResource sandboxGroup)
+    {
+        ArgumentNullException.ThrowIfNull(sandboxGroup);
+
+        var resourceId = new global::Azure.Core.ResourceIdentifier(GetRequiredOutput(sandboxGroup, "id"));
+        if (string.IsNullOrWhiteSpace(resourceId.SubscriptionId) ||
+            string.IsNullOrWhiteSpace(resourceId.ResourceGroupName) ||
+            string.IsNullOrWhiteSpace(resourceId.Name))
+        {
+            throw new InvalidOperationException(
+                $"Azure sandbox group '{sandboxGroup.Name}' returned an invalid resource ID '{resourceId}'.");
+        }
+
+        return new AzureDevComputeResourceScope(
+            resourceId.SubscriptionId,
+            resourceId.ResourceGroupName,
+            resourceId.Name,
+            GetRequiredOutput(sandboxGroup, "location"));
     }
 
     private static string CreateSandboxResourceName(string resourceName, string deployId)
