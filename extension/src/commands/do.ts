@@ -1,11 +1,10 @@
 import * as vscode from 'vscode';
 import { AspireEditorCommandProvider } from '../editor/AspireEditorCommandProvider';
-import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { enterPipelineStep } from '../loc/strings';
 
-export async function doCommand(terminalProvider: AspireTerminalProvider, editorCommandProvider: AspireEditorCommandProvider) {
-    const step = await resolveStep(terminalProvider);
+export async function doCommand(configInfoProvider: ConfigInfoProvider, editorCommandProvider: AspireEditorCommandProvider) {
+    const step = await resolveStep(configInfoProvider);
     if (step === undefined) {
         throw new vscode.CancellationError();
     }
@@ -18,8 +17,7 @@ export async function doCommand(terminalProvider: AspireTerminalProvider, editor
  * Returns the user-provided step name if the CLI doesn't support interactive prompting (old CLI).
  * Returns undefined if the user cancels.
  */
-async function resolveStep(terminalProvider: AspireTerminalProvider): Promise<string | null | undefined> {
-    const configInfoProvider = new ConfigInfoProvider(terminalProvider);
+async function resolveStep(configInfoProvider: ConfigInfoProvider): Promise<string | null | undefined> {
     if (await configInfoProvider.hasCapability('pipelines')) {
         // New CLI: it will prompt for the step via interaction service
         return null;

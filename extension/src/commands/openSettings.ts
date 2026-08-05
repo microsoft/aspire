@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
 
 /**
@@ -13,8 +12,8 @@ import { ConfigInfoProvider } from '../utils/configInfoProvider';
  * in the current workspace. The path is resolved by the CLI via `aspire config info`.
  * Creates the file with an empty JSON object if it doesn't exist.
  */
-export async function openLocalSettingsCommand(terminalProvider: AspireTerminalProvider): Promise<void> {
-    const configInfo = await new ConfigInfoProvider(terminalProvider).getConfigInfo();
+export async function openLocalSettingsCommand(configInfoProvider: ConfigInfoProvider): Promise<void> {
+    const configInfo = await configInfoProvider.getConfigInfo();
     if (!configInfo) {
         throw new vscode.CancellationError();
     }
@@ -31,8 +30,8 @@ export async function openLocalSettingsCommand(terminalProvider: AspireTerminalP
  * The path is resolved by the CLI via `aspire config info`.
  * Creates the file with an empty JSON object if it doesn't exist.
  */
-export async function openGlobalSettingsCommand(terminalProvider: AspireTerminalProvider): Promise<void> {
-    const configInfo = await new ConfigInfoProvider(terminalProvider).getConfigInfo();
+export async function openGlobalSettingsCommand(configInfoProvider: ConfigInfoProvider): Promise<void> {
+    const configInfo = await configInfoProvider.getConfigInfo();
     if (!configInfo) {
         throw new vscode.CancellationError();
     }

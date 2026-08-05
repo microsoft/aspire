@@ -48,6 +48,7 @@ import { createE2eStateFileBridge, isE2eBridgeEnabled } from './testing/e2eState
 import type { AspireAppHostState, AspireExtensionApi, AspireExtensionStateSnapshot, WaitForStateOptions } from './types/extensionApi';
 import { AppHostsViewTelemetry } from './views/AppHostsViewTelemetry';
 import { initializeCliPathEnvironmentSync } from './utils/cliPathEnvironment';
+import { ConfigInfoProvider } from './utils/configInfoProvider';
 
 let aspireExtensionContext = new AspireExtensionContext();
 
@@ -63,6 +64,8 @@ export async function activate(context: vscode.ExtensionContext) {
   });
 
   const terminalProvider = new AspireTerminalProvider(context.subscriptions);
+  const configInfoProvider = new ConfigInfoProvider(terminalProvider);
+  context.subscriptions.push(configInfoProvider);
   const testRunSessionManager = new TestRunSessionManager();
 
   // Keep VS Code's contributed terminal/task environment in sync with the
@@ -157,14 +160,14 @@ export async function activate(context: vscode.ExtensionContext) {
   const cliInitCommandRegistration = vscode.commands.registerCommand('aspire-vscode.init', () => tryExecuteCommand('aspire-vscode.init', terminalProvider, initCommand));
   const cliDeployCommandRegistration = vscode.commands.registerCommand('aspire-vscode.deploy', () => tryExecuteCommand('aspire-vscode.deploy', terminalProvider, () => deployCommand(editorCommandProvider)));
   const cliPublishCommandRegistration = vscode.commands.registerCommand('aspire-vscode.publish', () => tryExecuteCommand('aspire-vscode.publish', terminalProvider, () => publishCommand(editorCommandProvider)));
-  const cliDoCommandRegistration = vscode.commands.registerCommand('aspire-vscode.do', () => tryExecuteCommand('aspire-vscode.do', terminalProvider, (tp) => doCommand(tp, editorCommandProvider)));
+  const cliDoCommandRegistration = vscode.commands.registerCommand('aspire-vscode.do', () => tryExecuteCommand('aspire-vscode.do', terminalProvider, () => doCommand(configInfoProvider, editorCommandProvider)));
   const cliUpdateCommandRegistration = vscode.commands.registerCommand('aspire-vscode.update', () => tryExecuteCommand('aspire-vscode.update', terminalProvider, (tp) => updateCommand(tp, editorCommandProvider)));
   const cliUpdateSelfCommandRegistration = vscode.commands.registerCommand('aspire-vscode.updateSelf', () => tryExecuteCommand('aspire-vscode.updateSelf', terminalProvider, updateSelfCommand));
   const openTerminalCommandRegistration = vscode.commands.registerCommand('aspire-vscode.openTerminal', () => tryExecuteCommand('aspire-vscode.openTerminal', terminalProvider, openTerminalCommand));
   const configureLaunchJsonCommandRegistration = vscode.commands.registerCommand('aspire-vscode.configureLaunchJson', () => tryExecuteCommand('aspire-vscode.configureLaunchJson', terminalProvider, configureLaunchJsonCommand));
   const settingsCommandRegistration = vscode.commands.registerCommand('aspire-vscode.settings', () => tryExecuteCommand('aspire-vscode.settings', terminalProvider, settingsCommand));
-  const openLocalSettingsCommandRegistration = vscode.commands.registerCommand('aspire-vscode.openLocalSettings', () => tryExecuteCommand('aspire-vscode.openLocalSettings', terminalProvider, openLocalSettingsCommand));
-  const openGlobalSettingsCommandRegistration = vscode.commands.registerCommand('aspire-vscode.openGlobalSettings', () => tryExecuteCommand('aspire-vscode.openGlobalSettings', terminalProvider, openGlobalSettingsCommand));
+  const openLocalSettingsCommandRegistration = vscode.commands.registerCommand('aspire-vscode.openLocalSettings', () => tryExecuteCommand('aspire-vscode.openLocalSettings', terminalProvider, () => openLocalSettingsCommand(configInfoProvider)));
+  const openGlobalSettingsCommandRegistration = vscode.commands.registerCommand('aspire-vscode.openGlobalSettings', () => tryExecuteCommand('aspire-vscode.openGlobalSettings', terminalProvider, () => openGlobalSettingsCommand(configInfoProvider)));
   const runAppHostCommandRegistration = registerInstrumentedCommand('aspire-vscode.runAppHostCommand', 'editor', () => editorCommandProvider.tryExecuteRunAppHost(true));
   const debugAppHostCommandRegistration = registerInstrumentedCommand('aspire-vscode.debugAppHostCommand', 'editor', () => editorCommandProvider.tryExecuteRunAppHost(false));
 
@@ -173,7 +176,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const verifyCliInstalledRegistration = registerInstrumentedCommand('aspire-vscode.verifyCliInstalled', 'walkthrough', verifyCliInstalledCommand);
 
   // Aspire panel - running app hosts tree view
-  const dataRepository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService);
+  const dataRepository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService, configInfoProvider);
   const appHostTreeProvider = new AspireAppHostTreeProvider(dataRepository, terminalProvider, appHostLaunchService, context.globalState);
   const appHostTreeView = vscode.window.createTreeView('aspire-vscode.appHosts', {
     treeDataProvider: appHostTreeProvider,

@@ -272,11 +272,13 @@ export class AppHostDataRepository {
 
     private readonly _configChangeDisposable: vscode.Disposable;
     private _disposed = false;
+    private readonly _ownsConfigInfoProvider: boolean;
 
-    constructor(private readonly _terminalProvider: AspireTerminalProvider, appHostDiscoveryService?: AppHostDiscoveryService) {
+    constructor(private readonly _terminalProvider: AspireTerminalProvider, appHostDiscoveryService?: AppHostDiscoveryService, configInfoProvider?: ConfigInfoProvider) {
         this._appHostDiscoveryService = appHostDiscoveryService ?? new AppHostDiscoveryService(_terminalProvider);
         this._ownsAppHostDiscoveryService = appHostDiscoveryService === undefined;
-        this._configInfoProvider = new ConfigInfoProvider(_terminalProvider);
+        this._configInfoProvider = configInfoProvider ?? new ConfigInfoProvider(_terminalProvider);
+        this._ownsConfigInfoProvider = configInfoProvider === undefined;
         this._appHostDiscoveryChangeDisposable = this._appHostDiscoveryService.onDidChangeCandidates(workspaceFolder => {
             const rootFolder = vscode.workspace.workspaceFolders?.[0];
             if (rootFolder?.uri.toString() === workspaceFolder.uri.toString()) {
@@ -641,6 +643,9 @@ export class AppHostDataRepository {
         this._onDidChangeData.dispose();
         if (this._ownsAppHostDiscoveryService) {
             this._appHostDiscoveryService.dispose();
+        }
+        if (this._ownsConfigInfoProvider) {
+            this._configInfoProvider.dispose();
         }
     }
 
