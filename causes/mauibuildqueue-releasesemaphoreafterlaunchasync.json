@@ -18,6 +18,13 @@
       "job": "Tests / Hosting.Maui / Hosting.Maui (windows-latest)",
       "pr_number": 1056,
       "observed_at": "2026-08-04T10:41:37Z"
+    },
+    {
+      "run_id": 31047577163,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/31047577163",
+      "job": "Tests / Hosting-1 / Hosting-1 (windows-latest)",
+      "pr_number": 18850,
+      "observed_at": "2026-08-05T21:46:46Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/18592"
