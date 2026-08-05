@@ -265,7 +265,9 @@ regenerate polyglot SDKs/api (additive).
 gateway is unchanged, the new variant works in run mode, and the generated Blazor APIs compile from
 TypeScript, Go, Java, and Python AppHosts. *Depends on: none.*
 
-**Status: ✅ Complete** — commit `435f5d08`, PR [#18442](https://github.com/microsoft/aspire/pull/18442).
+**Status: ✅ Complete** — initial implementation commit `435f5d08`, PR
+[#18442](https://github.com/microsoft/aspire/pull/18442); polyglot exports and validation added in follow-up PR
+[#19026](https://github.com/microsoft/aspire/pull/19026).
 
 ### Session 1b — `AddDotnetProject` playground sample (early dogfood harness)
 Add a **committed** `playground/` sample (name TBD, e.g. `ProjectV2AppHost`) that models services via
