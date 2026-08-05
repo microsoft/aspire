@@ -58,13 +58,14 @@ public class ContainerRuntimeBaseTests
     {
         var processRunner = new CapturingProcessRunner();
         var runtime = new PodmanContainerRuntime(NullLogger<PodmanContainerRuntime>.Instance, processRunner);
+        const string maliciousImageName = "registry/image\\\" --help";
 
-        await runtime.InspectImageManifestAsync("registry/image\" --help", TestContext.Current.CancellationToken);
+        await runtime.InspectImageManifestAsync(maliciousImageName, TestContext.Current.CancellationToken);
         await runtime.InspectImageManifestAsync("docker://registry/image:tag", TestContext.Current.CancellationToken);
 
         Assert.Collection(
             processRunner.ArgumentLists,
-            arguments => Assert.Equal(["manifest", "inspect", "docker://registry/image\" --help"], arguments),
+            arguments => Assert.Equal(["manifest", "inspect", $"docker://{maliciousImageName}"], arguments),
             arguments => Assert.Equal(["manifest", "inspect", "docker://registry/image:tag"], arguments));
     }
 
@@ -83,9 +84,10 @@ public class ContainerRuntimeBaseTests
             ])
         ]);
         var runtime = new PodmanContainerRuntime(NullLogger<PodmanContainerRuntime>.Instance, processRunner);
+        const string maliciousImageName = "registry/image\\\" --help:tag";
 
         var manifest = await runtime.InspectImageManifestAsync(
-            "docker://registry/image\" --help:tag",
+            $"docker://{maliciousImageName}",
             TestContext.Current.CancellationToken);
 
         using var document = JsonDocument.Parse(manifest);
@@ -95,8 +97,8 @@ public class ContainerRuntimeBaseTests
         Assert.Equal("amd64", descriptor.GetProperty("platform").GetProperty("architecture").GetString());
         Assert.Collection(
             processRunner.ArgumentLists,
-            arguments => Assert.Equal(["manifest", "inspect", "docker://registry/image\" --help:tag"], arguments),
-            arguments => Assert.Equal(["image", "inspect", "--format", "{{json .}}", "registry/image\" --help:tag"], arguments));
+            arguments => Assert.Equal(["manifest", "inspect", $"docker://{maliciousImageName}"], arguments),
+            arguments => Assert.Equal(["image", "inspect", "--format", "{{json .}}", maliciousImageName], arguments));
     }
 
     private sealed class TestContainerRuntime(IProcessRunner? processRunner = null, string? runtimeExecutable = null) : ContainerRuntimeBase<TestContainerRuntime>(NullLogger<TestContainerRuntime>.Instance, processRunner ?? new DefaultProcessRunner())
