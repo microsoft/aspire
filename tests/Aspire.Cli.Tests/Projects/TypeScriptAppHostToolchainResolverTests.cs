@@ -89,6 +89,37 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     }
 
     [Fact]
+    public void Resolve_WhenParentPackageManagerPredatesTypeScriptAliasFixes_Throws()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("apps").CreateSubdirectory("apphost");
+        File.WriteAllText(
+            Path.Combine(appHostDirectory.FullName, "package.json"),
+            """{ "devDependencies": { "@typescript/native": "npm:typescript@^7.0.2" } }""");
+        var parentPackageJsonPath = Path.Combine(appHostDirectory.Parent!.FullName, "package.json");
+        File.WriteAllText(parentPackageJsonPath, """{ "packageManager": "yarn@4.17.1" }""");
+
+        var exception = Assert.Throws<YarnVersionNotSupportedException>(() => TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, new TestEnvironment(), logger: null));
+
+        Assert.Equal($"Yarn 4.18.0 or later is required for TypeScript AppHosts. Upgrade 'yarn@4.17.1' in {parentPackageJsonPath}, or use npm, pnpm, or Bun.", exception.Message);
+    }
+
+    [Fact]
+    public void Resolve_WhenLegacyAppHostUsesOlderModernYarnFromParent_ReturnsYarn()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("apps").CreateSubdirectory("apphost");
+        File.WriteAllText(
+            Path.Combine(appHostDirectory.FullName, "package.json"),
+            """{ "devDependencies": { "typescript": "^5.9.3" } }""");
+        File.WriteAllText(Path.Combine(appHostDirectory.Parent!.FullName, "package.json"), """{ "packageManager": "yarn@4.14.1" }""");
+
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, new TestEnvironment(), logger: null);
+
+        Assert.Equal(TypeScriptAppHostToolchain.Yarn, toolchain);
+    }
+
+    [Fact]
     public void Resolve_WhenYarnLockIsClassic_Throws()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -165,6 +196,45 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
             $"Yarn 4.18.0 or later is required for TypeScript AppHosts. Set \"packageManager\": \"yarn@4.18.0\" in {packageJsonPath} " +
             $"so Aspire can verify the Yarn version selected for {yarnLockPath}, or use npm, pnpm, or Bun.",
             exception.Message);
+    }
+
+    [Fact]
+    public void Resolve_WhenNativeTypeScriptUsesParentYarnLockWithoutVersionMetadata_Throws()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("apps").CreateSubdirectory("apphost");
+        File.WriteAllText(
+            Path.Combine(appHostDirectory.FullName, "package.json"),
+            """{ "devDependencies": { "@typescript/native": "npm:typescript@^7.0.2" } }""");
+        var parentDirectory = appHostDirectory.Parent!;
+        var parentPackageJsonPath = Path.Combine(parentDirectory.FullName, "package.json");
+        File.WriteAllText(parentPackageJsonPath, """{ "name": "workspace" }""");
+        var yarnLockPath = Path.Combine(parentDirectory.FullName, "yarn.lock");
+        File.WriteAllText(yarnLockPath, string.Empty);
+
+        var exception = Assert.Throws<YarnVersionNotSupportedException>(() => TypeScriptAppHostToolchainResolver.ResolveWithReason(appHostDirectory, new TestEnvironment()));
+
+        Assert.Equal(
+            $"Yarn 4.18.0 or later is required for TypeScript AppHosts. Set \"packageManager\": \"yarn@4.18.0\" in {parentPackageJsonPath} " +
+            $"so Aspire can verify the Yarn version selected for {yarnLockPath}, or use npm, pnpm, or Bun.",
+            exception.Message);
+    }
+
+    [Fact]
+    public void Resolve_WhenLegacyAppHostUsesParentYarnLockWithoutVersionMetadata_ReturnsYarn()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("apps").CreateSubdirectory("apphost");
+        File.WriteAllText(
+            Path.Combine(appHostDirectory.FullName, "package.json"),
+            """{ "devDependencies": { "typescript": "^5.9.3" } }""");
+        var parentDirectory = appHostDirectory.Parent!;
+        File.WriteAllText(Path.Combine(parentDirectory.FullName, "package.json"), """{ "name": "workspace" }""");
+        File.WriteAllText(Path.Combine(parentDirectory.FullName, "yarn.lock"), string.Empty);
+
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, new TestEnvironment(), logger: null);
+
+        Assert.Equal(TypeScriptAppHostToolchain.Yarn, toolchain);
     }
 
     [Fact]

@@ -34,11 +34,11 @@ RUN case "$NODE_VERSION" in 22|24) ;; *) echo "Unsupported NODE_VERSION: $NODE_V
 # NPM_REGISTRY and would acquire pnpm and Yarn outside dotnet-public-npm.
 RUN npm install --global --force --registry "${NPM_REGISTRY}" \
     pnpm@10.0.0 \
-    @yarnpkg/cli-dist@4.18.0 \
+    @yarnpkg/cli-dist@4.14.1 \
     bun@1.2.0 \
     "@typescript/native-preview@${TSGO_VERSION}" && \
     test "$(pnpm --version)" = "10.0.0" && \
-    test "$(yarn --version)" = "4.18.0" && \
+    test "$(yarn --version)" = "4.14.1" && \
     test "$(bun --version)" = "1.2.0" && \
     test "$(tsgo --version)" = "Version ${TSGO_VERSION}"
 

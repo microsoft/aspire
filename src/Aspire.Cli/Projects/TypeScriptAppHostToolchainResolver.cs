@@ -57,9 +57,13 @@ internal static class TypeScriptAppHostToolchainResolver
 
     internal static TypeScriptAppHostToolchainResolution ResolveWithReason(DirectoryInfo appHostDirectory, IEnvironment environment)
     {
+        // Workspace-level package manager markers can live in the parent directory, while the
+        // TypeScript aliases that constrain the Yarn version remain in the AppHost package.
+        var appHostRequiresYarnTypeScriptAliasFixes = RequiresYarnTypeScriptAliasFixes(appHostDirectory);
+
         foreach (var candidateDirectory in EnumerateCandidateDirectories(appHostDirectory, environment))
         {
-            if (TryGetToolchainFromPackageJson(candidateDirectory, out var configuredToolchain, out var reason))
+            if (TryGetToolchainFromPackageJson(candidateDirectory, appHostRequiresYarnTypeScriptAliasFixes, out var configuredToolchain, out var reason))
             {
                 return new(configuredToolchain, reason);
             }
@@ -87,7 +91,7 @@ internal static class TypeScriptAppHostToolchainResolver
                     throw CreateYarnVersionNotSupportedException($"the Yarn lockfile at {yarnLockFilePath}");
                 }
 
-                if (RequiresYarnTypeScriptAliasFixes(candidateDirectory))
+                if (appHostRequiresYarnTypeScriptAliasFixes || RequiresYarnTypeScriptAliasFixes(candidateDirectory))
                 {
                     throw CreateYarnVersionMetadataRequiredException(yarnLockFilePath, candidateDirectory);
                 }
@@ -98,7 +102,7 @@ internal static class TypeScriptAppHostToolchainResolver
             var yarnConfigFilePath = Path.Combine(candidateDirectory.FullName, YarnConfigFileName);
             if (File.Exists(yarnConfigFilePath))
             {
-                if (RequiresYarnTypeScriptAliasFixes(candidateDirectory))
+                if (appHostRequiresYarnTypeScriptAliasFixes || RequiresYarnTypeScriptAliasFixes(candidateDirectory))
                 {
                     throw CreateYarnVersionMetadataRequiredException(yarnConfigFilePath, candidateDirectory);
                 }
@@ -343,7 +347,11 @@ internal static class TypeScriptAppHostToolchainResolver
         return "tsconfig.apphost.json";
     }
 
-    private static bool TryGetToolchainFromPackageJson(DirectoryInfo appHostDirectory, out TypeScriptAppHostToolchain toolchain, out string reason)
+    private static bool TryGetToolchainFromPackageJson(
+        DirectoryInfo appHostDirectory,
+        bool appHostRequiresYarnTypeScriptAliasFixes,
+        out TypeScriptAppHostToolchain toolchain,
+        out string reason)
     {
         toolchain = default;
         reason = string.Empty;
@@ -369,7 +377,8 @@ internal static class TypeScriptAppHostToolchainResolver
             {
                 if (toolchain == TypeScriptAppHostToolchain.Yarn &&
                     (IsYarnClassicPackageManager(packageManager) ||
-                     RequiresYarnTypeScriptAliasFixes(packageJson) && IsUnsupportedYarnPackageManager(packageManager)))
+                     (appHostRequiresYarnTypeScriptAliasFixes || RequiresYarnTypeScriptAliasFixes(packageJson)) &&
+                     IsUnsupportedYarnPackageManager(packageManager)))
                 {
                     throw CreateYarnVersionNotSupportedException($"'{packageManager}' in {packageJsonPath}");
                 }

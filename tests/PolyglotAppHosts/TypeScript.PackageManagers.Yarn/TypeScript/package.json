@@ -2,7 +2,7 @@
   "name": "polyglot-typescript-yarn-validation",
   "version": "1.0.0",
   "type": "module",
-  "packageManager": "yarn@4.18.0",
+  "packageManager": "yarn@4.14.1",
   "scripts": {
     "build": "tsc --noEmit",
     "dev": "tsc --noEmit --watch"
