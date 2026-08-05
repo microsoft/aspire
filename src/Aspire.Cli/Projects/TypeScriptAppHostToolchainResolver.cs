@@ -29,7 +29,6 @@ internal static class TypeScriptAppHostToolchainResolver
     private const string PackageLockFileName = "package-lock.json";
     private const string PnpmLockFileName = "pnpm-lock.yaml";
     private const string TypeCheckTsBuildInfoFileName = "./node_modules/.tmp/tsconfig.apphost.typecheck.tsbuildinfo";
-    private const string CompileTsBuildInfoFileName = "./node_modules/.tmp/tsconfig.apphost.compile.tsbuildinfo";
 
     public static bool IsTypeScriptLanguage(LanguageInfo? language)
     {
@@ -136,9 +135,9 @@ internal static class TypeScriptAppHostToolchainResolver
         };
     }
 
-    public static RuntimeSpec ApplyToRuntimeSpec(RuntimeSpec baseRuntimeSpec, TypeScriptAppHostToolchain toolchain, bool useCompiledRunner = false)
+    public static RuntimeSpec ApplyToRuntimeSpec(RuntimeSpec baseRuntimeSpec, TypeScriptAppHostToolchain toolchain)
     {
-        if (toolchain == TypeScriptAppHostToolchain.Npm && !useCompiledRunner)
+        if (toolchain == TypeScriptAppHostToolchain.Npm)
         {
             return baseRuntimeSpec;
         }
@@ -153,9 +152,9 @@ internal static class TypeScriptAppHostToolchainResolver
             DetectionPatterns = baseRuntimeSpec.DetectionPatterns,
             Initialize = baseRuntimeSpec.Initialize,
             InstallDependencies = CreateInstallCommand(toolchain),
-            PreExecute = CreatePreExecuteCommands(toolchain, tsConfigFileName, useCompiledRunner),
-            Execute = CreateExecuteCommand(toolchain, tsConfigFileName, useCompiledRunner),
-            WatchExecute = CreateWatchCommand(toolchain, tsConfigFileName, useCompiledRunner),
+            PreExecute = CreatePreExecuteCommands(toolchain, tsConfigFileName),
+            Execute = CreateExecuteCommand(toolchain, tsConfigFileName),
+            WatchExecute = CreateWatchCommand(toolchain, tsConfigFileName),
             PublishExecute = baseRuntimeSpec.PublishExecute,
             ExtensionLaunchCapability = baseRuntimeSpec.ExtensionLaunchCapability,
             MigrationFiles = baseRuntimeSpec.MigrationFiles
@@ -179,34 +178,16 @@ internal static class TypeScriptAppHostToolchainResolver
         };
     }
 
-    private static CommandSpec[] CreatePreExecuteCommands(TypeScriptAppHostToolchain toolchain, string tsConfigFileName, bool useCompiledRunner)
+    private static CommandSpec[] CreatePreExecuteCommands(TypeScriptAppHostToolchain toolchain, string tsConfigFileName)
     {
         return
         [
-            CreateTypeScriptCommand(toolchain, tsConfigFileName, emit: useCompiledRunner)
+            CreateTypeCheckCommand(toolchain, tsConfigFileName)
         ];
     }
 
-    private static CommandSpec CreateExecuteCommand(TypeScriptAppHostToolchain toolchain, string tsConfigFileName, bool useCompiledRunner)
+    private static CommandSpec CreateExecuteCommand(TypeScriptAppHostToolchain toolchain, string tsConfigFileName)
     {
-        if (useCompiledRunner)
-        {
-            if (toolchain == TypeScriptAppHostToolchain.Bun)
-            {
-                return new CommandSpec
-                {
-                    Command = "bun",
-                    Args = ["run", "{compiledAppHostFile}"]
-                };
-            }
-
-            return new CommandSpec
-            {
-                Command = "node",
-                Args = ["{compiledAppHostFile}"]
-            };
-        }
-
         if (toolchain == TypeScriptAppHostToolchain.Bun)
         {
             return new CommandSpec
@@ -232,14 +213,12 @@ internal static class TypeScriptAppHostToolchainResolver
         };
     }
 
-    private static CommandSpec CreateWatchCommand(TypeScriptAppHostToolchain toolchain, string tsConfigFileName, bool useCompiledRunner)
+    private static CommandSpec CreateWatchCommand(TypeScriptAppHostToolchain toolchain, string tsConfigFileName)
     {
-        var typeScriptCommand = CreateTypeScriptCommandString(toolchain, tsConfigFileName, emit: useCompiledRunner);
-        var execCommand = useCompiledRunner
-            ? $"{typeScriptCommand} && {CreateCompiledRunCommandString(toolchain)}"
-            : toolchain == TypeScriptAppHostToolchain.Bun
-                ? $"{typeScriptCommand} && bun run \"{{appHostFile}}\""
-                : $"{typeScriptCommand} && {CreateTypeScriptRunCommandString(toolchain, tsConfigFileName)}";
+        var typeCheckCommand = CreateTypeCheckCommandString(toolchain, tsConfigFileName);
+        var execCommand = toolchain == TypeScriptAppHostToolchain.Bun
+            ? $"{typeCheckCommand} && bun run \"{{appHostFile}}\""
+            : $"{typeCheckCommand} && {CreateTypeScriptRunCommandString(toolchain, tsConfigFileName)}";
 
         return toolchain switch
         {
@@ -288,35 +267,20 @@ internal static class TypeScriptAppHostToolchainResolver
                     "--exec", execCommand
                 ]
             },
-            TypeScriptAppHostToolchain.Npm => new CommandSpec
-            {
-                Command = "npx",
-                Args =
-                [
-                    "--no-install",
-                    "nodemon",
-                    "--signal", "SIGTERM",
-                    "--watch", ".",
-                    "--ext", "ts,mts",
-                    "--ignore", "node_modules/",
-                    "--ignore", ".aspire/modules/",
-                    "--exec", execCommand
-                ]
-            },
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
         };
     }
 
-    private static CommandSpec CreateTypeScriptCommand(TypeScriptAppHostToolchain toolchain, string tsConfigFileName, bool emit)
+    private static CommandSpec CreateTypeCheckCommand(TypeScriptAppHostToolchain toolchain, string tsConfigFileName)
     {
         return new CommandSpec
         {
             Command = toolchain == TypeScriptAppHostToolchain.Npm ? "npx" : GetCommandName(toolchain),
-            Args = CreateTypeScriptCommandArgs(toolchain, tsConfigFileName, emit)
+            Args = CreateTypeCheckCommandArgs(toolchain, tsConfigFileName)
         };
     }
 
-    private static string[] CreateTypeScriptCommandArgs(TypeScriptAppHostToolchain toolchain, string tsConfigFileName, bool emit)
+    private static string[] CreateTypeCheckCommandArgs(TypeScriptAppHostToolchain toolchain, string tsConfigFileName)
     {
         var commandArgs = toolchain switch
         {
@@ -326,40 +290,30 @@ internal static class TypeScriptAppHostToolchainResolver
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
         };
 
-        if (!emit)
-        {
-            commandArgs.Add("--noEmit");
-        }
-
         commandArgs.AddRange(
         [
+            "--noEmit",
             "--incremental",
-            "--tsBuildInfoFile", emit ? CompileTsBuildInfoFileName : TypeCheckTsBuildInfoFileName,
+            "--tsBuildInfoFile", TypeCheckTsBuildInfoFileName,
             "-p", tsConfigFileName
         ]);
 
         return [.. commandArgs];
     }
 
-    private static string CreateTypeScriptCommandString(TypeScriptAppHostToolchain toolchain, string tsConfigFileName, bool emit)
+    private static string CreateTypeCheckCommandString(TypeScriptAppHostToolchain toolchain, string tsConfigFileName)
     {
-        var command = CreateTypeScriptCommand(toolchain, tsConfigFileName, emit);
+        var command = CreateTypeCheckCommand(toolchain, tsConfigFileName);
         return $"{command.Command} {string.Join(" ", command.Args)}";
     }
 
     private static string CreateTypeScriptRunCommandString(TypeScriptAppHostToolchain toolchain, string tsConfigFileName) =>
         toolchain switch
         {
-            TypeScriptAppHostToolchain.Npm => $"npx --no-install tsx --tsconfig {tsConfigFileName} \"{{appHostFile}}\"",
             TypeScriptAppHostToolchain.Yarn => $"yarn run tsx --tsconfig {tsConfigFileName} \"{{appHostFile}}\"",
             TypeScriptAppHostToolchain.Pnpm => $"pnpm exec tsx --tsconfig {tsConfigFileName} \"{{appHostFile}}\"",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
         };
-
-    private static string CreateCompiledRunCommandString(TypeScriptAppHostToolchain toolchain) =>
-        toolchain == TypeScriptAppHostToolchain.Bun
-            ? "bun run \"{compiledAppHostFile}\""
-            : "node \"{compiledAppHostFile}\"";
 
     private static string GetTsConfigFileName(RuntimeSpec runtimeSpec)
     {

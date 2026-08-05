@@ -12,7 +12,6 @@ namespace Aspire.Cli.Tests.Projects;
 public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper outputHelper)
 {
     private const string TypeCheckTsBuildInfoFileName = "./node_modules/.tmp/tsconfig.apphost.typecheck.tsbuildinfo";
-    private const string CompileTsBuildInfoFileName = "./node_modules/.tmp/tsconfig.apphost.compile.tsbuildinfo";
 
     [Fact]
     public void Resolve_WhenPackageManagerIsBun_ReturnsBun()
@@ -363,37 +362,6 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
         Assert.Equal(["--no-install", "tsx", "--tsconfig", "tsconfig.apphost.json", "{appHostFile}"], runtimeSpec.Execute.Args);
         Assert.Equal("npx", runtimeSpec.WatchExecute?.Command);
         Assert.Contains($"npx --no-install tsc --noEmit --incremental --tsBuildInfoFile {TypeCheckTsBuildInfoFileName} -p tsconfig.apphost.json && npx --no-install tsx --tsconfig tsconfig.apphost.json \"{{appHostFile}}\"", runtimeSpec.WatchExecute?.Args ?? []);
-    }
-
-    [Theory]
-    [InlineData(0, "npx", "node", "node \"{compiledAppHostFile}\"")]
-    [InlineData(1, "bun", "bun", "bun run \"{compiledAppHostFile}\"")]
-    [InlineData(2, "yarn", "node", "node \"{compiledAppHostFile}\"")]
-    [InlineData(3, "pnpm", "node", "node \"{compiledAppHostFile}\"")]
-    public void ApplyToRuntimeSpec_WhenCompiledRunnerEnabled_CompilesThenRunsCompiledAppHost(int toolchainValue, string compilerCommandName, string executeCommand, string watchExecuteCommand)
-    {
-        var toolchain = (TypeScriptAppHostToolchain)toolchainValue;
-        var baseRuntimeSpec = CreateBaseRuntimeSpec();
-
-        var runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(baseRuntimeSpec, toolchain, useCompiledRunner: true);
-
-        var preExecute = Assert.Single(runtimeSpec.PreExecute!);
-        Assert.Equal(compilerCommandName, preExecute.Command);
-        var expectedCompilerArgs = toolchain switch
-        {
-            TypeScriptAppHostToolchain.Npm => new[] { "--no-install", "tsc", "--incremental", "--tsBuildInfoFile", CompileTsBuildInfoFileName, "-p", "tsconfig.apphost.json" },
-            TypeScriptAppHostToolchain.Bun or TypeScriptAppHostToolchain.Yarn => new[] { "run", "tsc", "--incremental", "--tsBuildInfoFile", CompileTsBuildInfoFileName, "-p", "tsconfig.apphost.json" },
-            TypeScriptAppHostToolchain.Pnpm => new[] { "exec", "tsc", "--incremental", "--tsBuildInfoFile", CompileTsBuildInfoFileName, "-p", "tsconfig.apphost.json" },
-            _ => throw new InvalidOperationException()
-        };
-        Assert.Equal(expectedCompilerArgs, preExecute.Args);
-        Assert.Equal(executeCommand, runtimeSpec.Execute.Command);
-        var expectedExecuteArgs = toolchain == TypeScriptAppHostToolchain.Bun
-            ? new[] { "run", "{compiledAppHostFile}" }
-            : new[] { "{compiledAppHostFile}" };
-        Assert.Equal(expectedExecuteArgs, runtimeSpec.Execute.Args);
-        Assert.Equal(compilerCommandName, runtimeSpec.WatchExecute?.Command);
-        Assert.Contains($"{compilerCommandName} {string.Join(" ", expectedCompilerArgs)} && {watchExecuteCommand}", runtimeSpec.WatchExecute?.Args ?? []);
     }
 
     private static RuntimeSpec CreateBaseRuntimeSpec()
