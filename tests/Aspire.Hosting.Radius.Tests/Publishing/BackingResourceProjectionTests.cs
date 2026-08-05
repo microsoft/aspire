@@ -21,7 +21,7 @@ namespace Aspire.Hosting.Radius.Tests.Publishing;
 ///
 /// Every consumer-visible value is therefore projected from the backing resource's own Radius
 /// construct: <c>properties.host</c>/<c>properties.port</c> for the address, and either
-/// <c>listSecrets()</c> (legacy <c>Applications.*</c> types) or the recipe parameters Aspire itself
+/// <c>listSecrets()</c> (legacy <c>Applications.*</c> types) or the schema properties Aspire itself
 /// supplies (<c>Radius.*</c> UDTs) for credentials. Because the substitution happens at the value
 /// level, connection strings, URIs and splatted connection properties all compose correctly without
 /// this package duplicating any connection-string format.
@@ -47,7 +47,7 @@ public class BackingResourceProjectionTests
     /// database, MongoDB, RabbitMQ and SQL Server. A single <c>WithReference</c> emits both
     /// <c>ConnectionStrings__x</c> and the splatted <c>X_HOST</c>/<c>X_PORT</c>/<c>X_PASSWORD</c>/
     /// <c>X_URI</c> properties, so all of them must be projected, not just the connection string.
-    /// Also pins the recipe parameters the UDT types require.
+    /// Also pins the required schema properties the UDT types take.
     /// </summary>
     [Fact]
     public Task AllBackingResourceTypes_ProjectRecipeOutputs()

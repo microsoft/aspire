@@ -35,12 +35,12 @@ public class BackingResourceValueResolutionTests
     /// is the real-world case — cannot be produced while publishing, so the variable is dropped.
     /// </summary>
     /// <remarks>
-    /// This pins the behaviour the publisher's narrow catch preserves. It is deliberately covered
+    /// This pins the behaviour the publisher's narrow skip preserves. It is deliberately covered
     /// with a stand-in provider rather than a real Azure resource: the condition under test is
-    /// "the provider raised <see cref="InvalidOperationException"/>", and reproducing it through
-    /// <c>Aspire.Hosting.Azure</c> would add a package reference without testing anything more.
-    /// The warning matters as much as the skip — before, this was logged at Debug and so never
-    /// appeared in a normal publish.
+    /// "the value declares deployment-substituted semantics (<c>IManifestExpressionProvider</c>) and
+    /// cannot produce a value now", and reproducing it through <c>Aspire.Hosting.Azure</c> would add
+    /// a package reference without testing anything more. The warning matters as much as the skip —
+    /// before, this was logged at Debug and so never appeared in a normal publish.
     /// </remarks>
     [Fact]
     public void ValueOnlyKnownAfterAnotherDeployment_SkipsJustThatVariable()
@@ -50,7 +50,7 @@ public class BackingResourceValueResolutionTests
             b.AddContainer("api", "myapp/api", "latest")
                 .WithEnvironment(context =>
                 {
-                    context.EnvironmentVariables["UNRESOLVABLE"] = new ThrowingValueProvider(
+                    context.EnvironmentVariables["UNRESOLVABLE"] = new ThrowingDeploymentOutput(
                         new InvalidOperationException("The output 'x' does not have a value."));
                     context.EnvironmentVariables["RESOLVABLE"] = "kept";
                 });
@@ -61,6 +61,27 @@ public class BackingResourceValueResolutionTests
 
         var warnings = logger.Matching(LogLevel.Warning, "UNRESOLVABLE", "omitted from the Radius output");
         Assert.Single(warnings);
+    }
+
+    /// <summary>
+    /// A plain value provider may use <see cref="InvalidOperationException"/> for a genuine invalid
+    /// state, so it must not be mistaken for a deferred deployment output and silently dropped. Only
+    /// a value that positively declares deployment-substituted semantics is eligible for the skip.
+    /// </summary>
+    [Fact]
+    public void InvalidOperationFromAPlainValueProvider_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(b =>
+        {
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithEnvironment(context =>
+                {
+                    context.EnvironmentVariables["BROKEN"] = new ThrowingValueProvider(
+                        new InvalidOperationException("the provider is in a genuinely invalid state"));
+                });
+        }));
+
+        Assert.Equal("the provider is in a genuinely invalid state", ex.Message);
     }
 
     /// <summary>
@@ -173,7 +194,7 @@ public class BackingResourceValueResolutionTests
 
     /// <summary>
     /// A server with no <c>AddDatabase(...)</c> child is a valid, common model, so the omitted
-    /// <c>database</c> recipe parameter is a warning rather than a failure.
+    /// <c>database</c> property is a warning rather than a failure.
     /// </summary>
     [Fact]
     public void ServerWithNoDatabase_WarnsRatherThanFailing()
@@ -274,11 +295,26 @@ public class BackingResourceValueResolutionTests
     }
 
     /// <summary>
-    /// A value provider whose resolution fails, standing in for any resource whose outputs are only
-    /// known after its own deployment.
+    /// A value provider whose resolution fails and which claims no deployment-substituted semantics.
     /// </summary>
     private sealed class ThrowingValueProvider(Exception exception) : IValueProvider
     {
+        public ValueTask<string?> GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken = default)
+            => throw exception;
+
+        public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken = default)
+            => throw exception;
+    }
+
+    /// <summary>
+    /// Stands in for a resource output that another deployment substitutes — an Azure
+    /// <c>BicepOutputReference</c> is the real-world shape: an <see cref="IValueProvider"/> that also
+    /// declares a manifest expression and cannot produce a value until its own deployment has run.
+    /// </summary>
+    private sealed class ThrowingDeploymentOutput(Exception exception) : IValueProvider, IManifestExpressionProvider
+    {
+        public string ValueExpression => "{other.outputs.x}";
+
         public ValueTask<string?> GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken = default)
             => throw exception;
 

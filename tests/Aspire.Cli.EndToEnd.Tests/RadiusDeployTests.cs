@@ -227,4 +227,195 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
             await KubernetesDeployTestHelpers.CleanupKindClusterOutOfBandAsync(clusterName, output);
         }
     }
+
+    /// <summary>
+    /// Deploys a container that reaches a PostgreSQL database provisioned by a Radius recipe, and
+    /// proves the projected connection values actually authenticate against the deployed database.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="DeployRadiusContainerToKind"/> covers only a container workload, and the AKS
+    /// deployment test covers Redis, which is emitted as a legacy <c>Applications.*</c> type and
+    /// therefore exercises the <c>listSecrets()</c> branch. Neither proves anything about the
+    /// <c>Radius.*</c> UDT branch, where Aspire has to write <c>username</c>/<c>password</c>/
+    /// <c>database</c> onto the resource for the recipe to consume. Only a real deployment can show
+    /// that the targeted Radius version accepts those properties and that the credential handed to
+    /// the consumer is the one the recipe provisioned.
+    /// </para>
+    /// <para>
+    /// The check runs <c>psql</c> from a throwaway pod using the values read back out of the
+    /// <em>deployed</em> consumer's env, rather than from the generated Bicep: that is the only way
+    /// to observe what the deploy actually resolved. The pod reuses the same
+    /// <c>postgres:16-alpine</c> image the recipe already pulled onto the node
+    /// (<c>--image-pull-policy=IfNotPresent</c>), so the test adds no new registry round-trip.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task DeployRadiusPostgresBackingResourceToKind()
+    {
+        const string PostgresProjectName = "AspireRadiusPostgresDeployTest";
+
+        // Matches the image tag the Radius Kubernetes PostgreSQL recipe deploys, so the verification
+        // pod runs from an image already present on the node.
+        // https://github.com/radius-project/resource-types-contrib/blob/main/Data/postgreSqlDatabases/recipes/kubernetes/bicep/kubernetes-postgresql.bicep
+        const string PostgresImage = "postgres:16-alpine";
+
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        using var workspace = TemporaryWorkspace.Create(output);
+
+        var clusterName = KubernetesDeployTestHelpers.GenerateUniqueClusterName();
+        var radiusNamespace = $"radius-{clusterName[..16]}";
+
+        output.WriteLine($"Cluster name: {clusterName}");
+        output.WriteLine($"Radius namespace: {radiusNamespace}");
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.VerifyPullRequestCliVersionAsync(counter);
+
+        try
+        {
+            // =================================================================
+            // Phase 1: Cluster + Radius control plane
+            // =================================================================
+            await auto.InstallKindAndHelmAsync(counter);
+            await auto.CreateKindClusterWithRegistryAsync(counter, clusterName);
+            await auto.InstallRadCliAsync(counter);
+            await auto.InstallRadiusControlPlaneAsync(counter, clusterName);
+
+            // =================================================================
+            // Phase 2: Scaffold the AppHost
+            // =================================================================
+            await auto.AspireNewCSharpEmptyAppHostAsync(PostgresProjectName, counter);
+
+            await auto.TypeAsync($"cd {PostgresProjectName}");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            await auto.TypeAsync("aspire add Aspire.Hosting.Radius");
+            await auto.EnterAsync();
+            await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromSeconds(180));
+
+            await auto.TypeAsync("aspire add Aspire.Hosting.PostgreSQL");
+            await auto.EnterAsync();
+            await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromSeconds(180));
+
+            // The database password is the parameter Aspire generates for run mode. The publisher
+            // emits it as a @secure() Bicep parameter, writes it onto the Radius resource's
+            // `password` property for the recipe, and composes the same value into the consumer's
+            // connection values — the agreement this test verifies end to end.
+            var appHostFilePath = Path.Combine(
+                workspace.WorkspaceRoot.FullName,
+                PostgresProjectName,
+                "apphost.cs");
+            var content = File.ReadAllText(appHostFilePath);
+            const string buildRunPattern = "builder.Build().Run();";
+            Assert.Contains(buildRunPattern, content);
+            var radiusWiring = $$"""
+                builder.AddRadiusEnvironment("radius").WithNamespace("{{radiusNamespace}}");
+                var appdb = builder.AddPostgres("pg").AddDatabase("appdb");
+                builder.AddContainer("web", "{{ContainerImage}}", "{{ContainerImageTag}}")
+                    .WithImageSHA256("{{ContainerImageDigest}}")
+                    .WithHttpEndpoint(targetPort: {{ContainerPort}})
+                    .WithReference(appdb);
+                """;
+            content = content.Replace(buildRunPattern, radiusWiring + Environment.NewLine + Environment.NewLine + buildRunPattern);
+            File.WriteAllText(appHostFilePath, content);
+
+            await auto.TypeAsync("unset ASPIRE_PLAYGROUND");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            // =================================================================
+            // Phase 3: Publish and assert the emitted resource shape
+            // =================================================================
+            await auto.TypeAsync("aspire publish -o radius-output --non-interactive");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
+
+            var appBicepPath = Path.Combine(workspace.WorkspaceRoot.FullName, PostgresProjectName, "radius-output", "app.bicep");
+            Assert.True(File.Exists(appBicepPath), $"Expected generated Bicep at '{appBicepPath}'.");
+            var appBicep = File.ReadAllText(appBicepPath);
+            Assert.Contains("Radius.Data/postgreSqlDatabases", appBicep);
+
+            // username/password/database are `required` schema properties on the resource, read by
+            // the recipe as context.resource.properties.<name>. Emitting them anywhere else (for
+            // example under properties.recipe.parameters) fails schema validation before the recipe
+            // runs, which is precisely what the deploy below would catch.
+            Assert.Contains("username: 'postgres'", appBicep);
+            Assert.Contains("database: 'appdb'", appBicep);
+
+            // =================================================================
+            // Phase 4: Create the app namespace, then deploy
+            // =================================================================
+            await auto.TypeAsync($"kubectl create namespace {radiusNamespace} --context kind-{clusterName}");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
+
+            // Longer than the container-only deploy: this one also pulls the PostgreSQL recipe and
+            // waits for the database the recipe provisions.
+            await auto.TypeAsync("aspire deploy");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(20));
+
+            // =================================================================
+            // Phase 5: Verify the projected credentials reach the database
+            // =================================================================
+            await auto.TypeAsync($"kubectl wait --for=condition=Available deployment -n {radiusNamespace} -l radapp.io/resource=pg --timeout=300s");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(6));
+
+            await auto.TypeAsync($"kubectl wait --for=condition=Ready pod -n {radiusNamespace} -l radapp.io/resource=web --timeout=300s");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(6));
+
+            // Read the values out of the *deployed* consumer rather than the generated Bicep: only
+            // the deployed spec shows what Radius actually resolved the recipe outputs and the
+            // @secure() parameter to. `WithReference(appdb)` splats the connection properties as
+            // APPDB_* alongside ConnectionStrings__appdb.
+            var webDeployment = $"kubectl get deployment -n {radiusNamespace} -l radapp.io/resource=web -o jsonpath='{{.items[0].metadata.name}}'";
+            await auto.TypeAsync($"WEB_DEPLOY=$({webDeployment}) && echo \"Resolved deployment: $WEB_DEPLOY\"");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            var envValue = $"kubectl get deployment -n {radiusNamespace} $WEB_DEPLOY -o jsonpath=";
+            await auto.TypeAsync(
+                $"PGHOST=$({envValue}'{{.spec.template.spec.containers[0].env[?(@.name==\"APPDB_HOST\")].value}}') && " +
+                $"PGPORT=$({envValue}'{{.spec.template.spec.containers[0].env[?(@.name==\"APPDB_PORT\")].value}}') && " +
+                $"PGUSER=$({envValue}'{{.spec.template.spec.containers[0].env[?(@.name==\"APPDB_USERNAME\")].value}}') && " +
+                $"PGDATABASE=$({envValue}'{{.spec.template.spec.containers[0].env[?(@.name==\"APPDB_DATABASENAME\")].value}}') && " +
+                $"PGPASSWORD=$({envValue}'{{.spec.template.spec.containers[0].env[?(@.name==\"APPDB_PASSWORD\")].value}}') && " +
+                "echo \"projected host=$PGHOST port=$PGPORT user=$PGUSER database=$PGDATABASE password_length=${#PGPASSWORD}\"");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            // A wrong password, user, or database name fails here rather than producing a silently
+            // misconfigured app — the failure mode https://github.com/microsoft/aspire/issues/18935
+            // describes. The success marker is split in the shell source (PGVERIFY''_OK evaluates to
+            // PGVERIFY_OK) so the contiguous token appears only in the loop's output, never in the
+            // echoed command line.
+            await auto.TypeAsync("for i in $(seq 1 20); do " +
+                $"if kubectl run pgcheck$i -n {radiusNamespace} --rm -i --restart=Never --image={PostgresImage} " +
+                "--image-pull-policy=IfNotPresent --env=PGPASSWORD=\"$PGPASSWORD\" --command -- " +
+                "psql -h \"$PGHOST\" -p \"$PGPORT\" -U \"$PGUSER\" -d \"$PGDATABASE\" -tAc 'select 1' | grep -q '^1$'; " +
+                "then echo PGVERIFY''_OK; break; fi; " +
+                "echo \"Attempt $i: psql could not connect, retrying...\"; sleep 10; done");
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("PGVERIFY_OK", timeout: TimeSpan.FromMinutes(5));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(1));
+
+            await auto.CleanupKubernetesDeploymentAsync(counter, clusterName);
+        }
+        finally
+        {
+            await KubernetesDeployTestHelpers.CleanupKindClusterOutOfBandAsync(clusterName, output);
+        }
+    }
 }
