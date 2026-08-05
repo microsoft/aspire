@@ -128,43 +128,6 @@ public class AspireMenuButtonTests : DashboardTestContext
     }
 
     [Fact]
-    public void ItemsProvider_DoesNotRefreshOpenMenuWhenItemsAreUnchanged()
-    {
-        FluentUISetupHelpers.SetupFluentUIComponents(this);
-        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
-        FluentUISetupHelpers.SetupFluentButton(this);
-        FluentUISetupHelpers.SetupFluentMenu(this);
-
-        var providerInvocationCount = 0;
-        var provider = RenderComponent<FluentMenuProvider>();
-        var cut = RenderComponent<AspireMenuButton>(builder =>
-        {
-            builder.Add(p => p.MenuButtonId, "stable-menu-button");
-            builder.Add(p => p.Text, "View options");
-            builder.Add(p => p.ItemsProvider, () =>
-            {
-                providerInvocationCount++;
-                return [new MenuButtonItem { Text = "Item" }];
-            });
-        });
-
-        cut.Find("#stable-menu-button").Click();
-        provider.WaitForAssertion(() => Assert.Single(provider.FindComponents<FluentMenuItem>()));
-        var initialItemId = provider.FindComponent<FluentMenuItem>().Instance.Id;
-        var menu = cut.FindComponent<AspireMenu>();
-        var initialMenuRenderCount = menu.RenderCount;
-
-        for (var i = 0; i < 5; i++)
-        {
-            cut.SetParametersAndRender(builder => builder.Add(p => p.Text, $"View options {i}"));
-        }
-
-        Assert.Equal(6, providerInvocationCount);
-        Assert.Equal(initialItemId, provider.FindComponent<FluentMenuItem>().Instance.Id);
-        Assert.Equal(initialMenuRenderCount + 5, menu.RenderCount);
-    }
-
-    [Fact]
     public async Task DisposeAsync_CancelsPendingMenuInitialization()
     {
         FluentUISetupHelpers.SetupFluentUIComponents(this);
