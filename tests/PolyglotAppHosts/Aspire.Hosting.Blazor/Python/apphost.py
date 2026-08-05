@@ -15,4 +15,8 @@ with create_builder() as builder:
     gateway.with_otlp_exporter(protocol=OtlpProtocol.HTTP_PROTOBUF)
     gateway.with_blazor_client_app(blazor_app)
 
+    dotnet_project_blazor_app = builder.add_blazor_wasm_project("dotnet-app", "./src/Client/Client.csproj")
+    dotnet_project_gateway = builder.add_dotnet_project_blazor_gateway("dotnet-gateway")
+    dotnet_project_gateway.with_blazor_client_app(dotnet_project_blazor_app)
+
     builder.run()
