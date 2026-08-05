@@ -1,6 +1,6 @@
-# Aspire.Hosting.Azure.Sandboxes library
+# Azure Container Apps Sandboxes hosting integration
 
-Provides an experimental Aspire deployment target for Azure Container Apps Sandboxes.
+Use this integration to deploy container-backed Aspire compute resources to Azure Container Apps Sandboxes.
 
 ## Getting started
 
@@ -10,14 +10,14 @@ Provides an experimental Aspire deployment target for Azure Container Apps Sandb
 * Permission to create sandbox groups, Azure Container Registry resources, and scoped role assignments.
 * Docker or Podman for building and inspecting Linux/amd64 OCI images.
 
-The integration grants the deployment identity the **Container Apps SandboxGroup Data Owner** role on the provisioned sandbox group.
+The integration grants the deployment identity the **Container Apps SandboxGroup Data Owner** role on a sandbox group that it provisions. When using an existing sandbox group, grant that role to the deployment identity before deploying.
 
 ### Install the package
 
-In your AppHost project, install the Aspire Azure Sandboxes Hosting library with [NuGet](https://www.nuget.org):
+In your AppHost project, install the Azure Container Apps Sandboxes hosting integration:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Azure.Sandboxes
+```bash
+aspire add Aspire.Hosting.Azure.Sandboxes
 ```
 
 ## Usage example

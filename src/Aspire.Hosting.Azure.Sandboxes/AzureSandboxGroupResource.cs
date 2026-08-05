@@ -17,7 +17,7 @@ namespace Aspire.Hosting.Azure;
 /// <summary>
 /// Represents an Azure Container Apps sandbox group.
 /// </summary>
-[AspireExport(ExposeProperties = true)]
+[AspireExport]
 [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzureComputeEnvironmentResource
 {

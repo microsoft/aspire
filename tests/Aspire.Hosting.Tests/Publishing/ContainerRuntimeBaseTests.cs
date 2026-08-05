@@ -50,7 +50,21 @@ public class ContainerRuntimeBaseTests
             arguments => Assert.Equal("image inspect \"registry/image\\\" --help\" --format \"{{json .Config}}\"", arguments),
             arguments => Assert.Equal("manifest inspect --verbose \"registry/image\\\" --help\"", arguments));
     }
-    private sealed class TestContainerRuntime(IProcessRunner? processRunner = null, string? runtimeExecutable = null) : ContainerRuntimeBase<TestContainerRuntime>(NullLogger<TestContainerRuntime>.Instance, processRunner ?? new DefaultProcessRunner())
+    [Fact]
+    public async Task PodmanInspectsRemoteImageManifestsUsingRegistryTransport()
+    {
+        var processRunner = new CapturingProcessRunner();
+        var runtime = new PodmanContainerRuntime(NullLogger<PodmanContainerRuntime>.Instance, processRunner);
+
+        await runtime.InspectImageManifestAsync("registry/image\" --help", TestContext.Current.CancellationToken);
+        await runtime.InspectImageManifestAsync("docker://registry/image:tag", TestContext.Current.CancellationToken);
+
+        Assert.Collection(
+            processRunner.Arguments,
+            arguments => Assert.Equal("manifest inspect \"docker://registry/image\\\" --help\"", arguments),
+            arguments => Assert.Equal("manifest inspect \"docker://registry/image:tag\"", arguments));
+    }
+
     private sealed class TestContainerRuntime(IProcessRunner? processRunner = null, string? runtimeExecutable = null) : ContainerRuntimeBase<TestContainerRuntime>(NullLogger<TestContainerRuntime>.Instance, processRunner ?? new DefaultProcessRunner())
     {
         protected override string RuntimeExecutable => runtimeExecutable ?? (OperatingSystem.IsWindows() ? "cmd" : "sh");

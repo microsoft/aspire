@@ -41,19 +41,6 @@ namespace Aspire.Hosting
 
 namespace Aspire.Hosting.Azure
 {
-    [AspireExport(ExposeProperties = true)]
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public sealed partial class AzureSandboxContainerResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<AzureSandboxGroupResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource
-    {
-        public AzureSandboxContainerResource(string name, ApplicationModel.IResource targetResource, AzureSandboxGroupResource parent, bool autoSuspend) : base(default!) { }
-
-        public bool AutoSuspend { get { throw null; } }
-
-        public AzureSandboxGroupResource Parent { get { throw null; } }
-
-        public ApplicationModel.IResource TargetResource { get { throw null; } }
-    }
-
     [AspireDto]
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public sealed partial class AzureSandboxEndpointOptions
@@ -63,7 +50,7 @@ namespace Aspire.Hosting.Azure
         public string? Name { get { throw null; } set { } }
     }
 
-    [AspireExport(ExposeProperties = true)]
+    [AspireExport]
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public sealed partial class AzureSandboxGroupResource : AzureProvisioningResource, IAzureComputeEnvironmentResource, ApplicationModel.IComputeEnvironmentResource, ApplicationModel.IResource
     {

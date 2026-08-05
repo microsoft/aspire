@@ -62,6 +62,41 @@ public class AzureSandboxesTests
     }
 
     [Fact]
+    public async Task ExistingAzureSandboxGroupDoesNotAddDeploymentPrincipalRoleAssignment()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes")
+            .PublishAsExisting("existing-sandboxes", "existing-rg");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var (_, bicep) = await AzureManifestUtils.GetManifestWithBicep(model, sandboxGroup.Resource);
+
+        Assert.DoesNotContain("roleAssignments", bicep, StringComparison.Ordinal);
+        Assert.DoesNotContain("Container Apps SandboxGroup Data Owner", bicep, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PublishAsAzureSandboxDoesNotAddDeploymentTargetInRunMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        var container = builder.AddContainer("frontend", "mcr.microsoft.com/dotnet/runtime-deps", "10.0");
+        var configureCalled = false;
+
+        container.PublishAsAzureSandbox(sandboxGroup, options => configureCalled = true);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var computeResource = Assert.Single(model.GetComputeResources(), resource => resource.Name == "frontend");
+
+        Assert.Null(computeResource.GetDeploymentTargetAnnotation(sandboxGroup.Resource));
+        Assert.False(configureCalled);
+    }
+
+    [Fact]
     public void ContainerImageMetadataBuildsSandboxEntrypointFromImageConfig()
     {
         var metadata = AzureSandboxContainerDeployment.ParseContainerImageMetadata(
@@ -365,6 +400,69 @@ public class AzureSandboxesTests
     }
 
     [Fact]
+    public async Task AzureDevComputeClientRetriesTransientNetworkErrors()
+    {
+        var attempts = 0;
+        var handler = new RecordingHandler(_ =>
+        {
+            attempts++;
+            return attempts == 1
+                ? Task.FromException<HttpResponseMessage>(new HttpRequestException("connection reset"))
+                : Task.FromResult(JsonResponse("""{ "id": "disk-1", "labels": {}, "status": { "state": "Ready" } }"""));
+        });
+        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance, TimeSpan.Zero);
+
+        var diskImage = await client.GetDiskImageAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            "disk-1",
+            CancellationToken.None);
+
+        Assert.Equal("disk-1", diskImage.Id);
+        Assert.Equal(2, attempts);
+    }
+
+    [Fact]
+    public async Task AzureDevComputeClientDoesNotRetryAmbiguousCreateNetworkErrors()
+    {
+        var attempts = 0;
+        var handler = new RecordingHandler(_ =>
+        {
+            attempts++;
+            return Task.FromException<HttpResponseMessage>(new HttpRequestException("connection reset"));
+        });
+        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance, TimeSpan.Zero);
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => client.CreateDiskImageAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            new AzureDevComputeCreateDiskImageRequest
+            {
+                Name = "disk-image",
+                Image = new AzureDevComputeDiskImageSpec { Base = "example.azurecr.io/site@sha256:abc123" }
+            },
+            CancellationToken.None));
+
+        Assert.Equal(1, attempts);
+    }
+
+    [Fact]
+    public async Task AzureDevComputeClientTreatsMissingDeletedResourcesAsSuccess()
+    {
+        var handler = new RecordingHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound)));
+        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance);
+        var scope = new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3");
+
+        await client.DeleteSandboxAsync(scope, "sandbox-1", CancellationToken.None);
+        await client.DeleteDiskImageAsync(scope, "disk-1", CancellationToken.None);
+        var ports = await client.RemovePortAsync(
+            scope,
+            "sandbox-1",
+            new AzureDevComputeRemovePortRequest { Port = 8080 },
+            CancellationToken.None);
+
+        Assert.Empty(ports);
+    }
+
+    [Fact]
     public async Task AzureDevComputeClientDoesNotExposeUnrecognizedErrorBodies()
     {
         const string secret = "registry-refresh-token-secret";
@@ -391,6 +489,12 @@ public class AzureSandboxesTests
             "example.azurecr.io/site:latest");
 
         Assert.Equal("example.azurecr.io/site@sha256:abc123", reference);
+
+        var podmanReference = AzureSandboxContainerDeployment.ResolveLinuxAmd64ManifestReference(
+            """{ "digest": "sha256:podman123" }""",
+            "example.azurecr.io/site:latest");
+
+        Assert.Equal("example.azurecr.io/site@sha256:podman123", podmanReference);
 
         var verboseReference = AzureSandboxContainerDeployment.ResolveLinuxAmd64ManifestReference(
             """
