@@ -925,23 +925,38 @@ public partial class ConsoleLogsTests : DashboardTestContext
         var loc = Services.GetRequiredService<IStringLocalizer<Resources.ConsoleLogs>>();
 
         // The UTC option is shown even when it can't be used, so the indent is what tells the user
-        // it belongs to "Show timestamps" rather than being a standalone option.
+        // it belongs to "Show timestamps" rather than being a standalone option. The indent is only
+        // visual, so aria-describedby has to carry the same relationship for assistive technology.
         var utcItem = GetUtcTimestampsMenuItem();
         Assert.True(utcItem.IsDisabled);
-        Assert.Equal(Components.Pages.ConsoleLogs.SubOptionMenuItemClass, utcItem.Class);
+        AssertSubOptionOfShowTimestamps(utcItem);
 
         var showTimestampsItem = Assert.Single(
             instance.LogsMenuItemsForTest,
             i => i.Text == loc[nameof(Resources.ConsoleLogs.ConsoleLogsTimestampShow)].Value);
+        Assert.Equal(Components.Pages.ConsoleLogs.ShowTimestampMenuItemId, showTimestampsItem.Id);
         await cut.InvokeAsync(() => showTimestampsItem.OnClick!());
 
         utcItem = GetUtcTimestampsMenuItem();
         Assert.False(utcItem.IsDisabled);
-        Assert.Equal(Components.Pages.ConsoleLogs.SubOptionMenuItemClass, utcItem.Class);
+        AssertSubOptionOfShowTimestamps(utcItem);
+
+        // The toggle keeps its id after its label flips to "Hide timestamps", so the reference stays valid.
+        var hideTimestampsItem = Assert.Single(
+            instance.LogsMenuItemsForTest,
+            i => i.Text == loc[nameof(Resources.ConsoleLogs.ConsoleLogsTimestampHide)].Value);
+        Assert.Equal(Components.Pages.ConsoleLogs.ShowTimestampMenuItemId, hideTimestampsItem.Id);
 
         MenuButtonItem GetUtcTimestampsMenuItem() => Assert.Single(
             instance.LogsMenuItemsForTest,
             i => i.Text == loc[nameof(Resources.ConsoleLogs.ConsoleLogsTimestampShowUtc)].Value);
+
+        static void AssertSubOptionOfShowTimestamps(MenuButtonItem item)
+        {
+            Assert.Equal(Components.Pages.ConsoleLogs.SubOptionMenuItemClass, item.Class);
+            var describedBy = Assert.Contains("aria-describedby", item.AdditionalAttributes!);
+            Assert.Equal(Components.Pages.ConsoleLogs.ShowTimestampMenuItemId, describedBy);
+        }
     }
 
     private void SetupConsoleLogsServices(TestDashboardClient? dashboardClient = null, TestTimeProvider? timeProvider = null)
