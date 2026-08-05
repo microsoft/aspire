@@ -38,18 +38,19 @@ public class ContainerRuntimeBaseTests
     }
 
     [Fact]
-    public async Task InspectImageCommandsEscapeQuotesInImageName()
+    public async Task InspectImageCommandsPreserveUntrustedImageNameAsSingleArgument()
     {
         var processRunner = new CapturingProcessRunner();
         var runtime = new TestContainerRuntime(processRunner);
+        const string imageName = "registry/image\\\" --help";
 
-        await runtime.InspectImageConfigAsync("registry/image\" --help", TestContext.Current.CancellationToken);
-        await runtime.InspectImageManifestAsync("registry/image\" --help", TestContext.Current.CancellationToken);
+        await runtime.InspectImageConfigAsync(imageName, TestContext.Current.CancellationToken);
+        await runtime.InspectImageManifestAsync(imageName, TestContext.Current.CancellationToken);
 
         Assert.Collection(
-            processRunner.Arguments,
-            arguments => Assert.Equal("image inspect \"registry/image\\\" --help\" --format \"{{json .Config}}\"", arguments),
-            arguments => Assert.Equal("manifest inspect --verbose \"registry/image\\\" --help\"", arguments));
+            processRunner.ArgumentLists,
+            arguments => Assert.Equal(["image", "inspect", imageName, "--format", "{{json .Config}}"], arguments),
+            arguments => Assert.Equal(["manifest", "inspect", "--verbose", imageName], arguments));
     }
 
     [Fact]
@@ -62,9 +63,9 @@ public class ContainerRuntimeBaseTests
         await runtime.InspectImageManifestAsync("docker://registry/image:tag", TestContext.Current.CancellationToken);
 
         Assert.Collection(
-            processRunner.Arguments,
-            arguments => Assert.Equal("manifest inspect \"docker://registry/image\\\" --help\"", arguments),
-            arguments => Assert.Equal("manifest inspect \"docker://registry/image:tag\"", arguments));
+            processRunner.ArgumentLists,
+            arguments => Assert.Equal(["manifest", "inspect", "docker://registry/image\" --help"], arguments),
+            arguments => Assert.Equal(["manifest", "inspect", "docker://registry/image:tag"], arguments));
     }
 
     [Fact]
@@ -93,9 +94,9 @@ public class ContainerRuntimeBaseTests
         Assert.Equal("linux", descriptor.GetProperty("platform").GetProperty("os").GetString());
         Assert.Equal("amd64", descriptor.GetProperty("platform").GetProperty("architecture").GetString());
         Assert.Collection(
-            processRunner.Arguments,
-            arguments => Assert.Equal("manifest inspect \"docker://registry/image\\\" --help:tag\"", arguments),
-            arguments => Assert.Equal("image inspect --format \"{{json .}}\" \"registry/image\\\" --help:tag\"", arguments));
+            processRunner.ArgumentLists,
+            arguments => Assert.Equal(["manifest", "inspect", "docker://registry/image\" --help:tag"], arguments),
+            arguments => Assert.Equal(["image", "inspect", "--format", "{{json .}}", "registry/image\" --help:tag"], arguments));
     }
 
     private sealed class TestContainerRuntime(IProcessRunner? processRunner = null, string? runtimeExecutable = null) : ContainerRuntimeBase<TestContainerRuntime>(NullLogger<TestContainerRuntime>.Instance, processRunner ?? new DefaultProcessRunner())
@@ -142,11 +143,11 @@ public class ContainerRuntimeBaseTests
     {
         private readonly Queue<ProcessResult> _results = new(results ?? []);
 
-        public List<string?> Arguments { get; } = [];
+        public List<IReadOnlyList<string>?> ArgumentLists { get; } = [];
 
         public (Task<ProcessResult>, IAsyncDisposable) Run(ProcessSpec processSpec)
         {
-            Arguments.Add(processSpec.Arguments);
+            ArgumentLists.Add(processSpec.ArgumentList);
             var result = _results.Count > 0 ? _results.Dequeue() : new ProcessResult(0);
             foreach (var output in result.ProcessOutput)
             {

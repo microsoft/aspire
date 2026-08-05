@@ -9,6 +9,7 @@
 
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -612,7 +613,7 @@ public class AzureSandboxesTests
     }
 
     [Fact]
-    public async Task AzureDevComputeClientDoesNotExposeUnrecognizedErrorBodies()
+    public async Task AzureDevComputeClientDoesNotExposeErrorBodies()
     {
         const string secret = "registry-refresh-token-secret";
         var handler = new RecordingHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)
@@ -627,7 +628,30 @@ public class AzureSandboxesTests
             CancellationToken.None));
 
         Assert.DoesNotContain(secret, exception.Message);
-        Assert.Contains("unrecognized error response", exception.Message);
+        Assert.Contains("details were redacted", exception.Message);
+    }
+
+    [Fact]
+    public async Task AzureDevComputeClientRedactsProblemDetailsThatEchoSecrets()
+    {
+        const string secret = "resolved-secret-environment-value";
+        var handler = new RecordingHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)
+        {
+            Content = JsonContent.Create(new
+            {
+                title = $"Invalid value: {secret}",
+                detail = $"The request contained {secret}."
+            })
+        }));
+        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => client.GetDiskImageAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            "disk-1",
+            CancellationToken.None));
+
+        Assert.DoesNotContain(secret, exception.Message);
+        Assert.Contains("details were redacted", exception.Message);
     }
 
     [Fact]
