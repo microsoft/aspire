@@ -547,6 +547,22 @@ internal static class AzureSandboxContainerDeployment
         string sandboxId,
         SandboxEndpoint endpoint)
     {
+        var authorizedConnectorGateways = endpoint.AuthorizedConnectorGateways;
+        var entraId = authorizedConnectorGateways.Count == 0
+            ? null
+            : new AzureDevComputePortEntraIdAuthConfig
+            {
+                Enabled = true,
+                ObjectIds = authorizedConnectorGateways
+                    .Select(gateway => GetRequiredOutput(gateway, "principalId"))
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray(),
+                TenantIds = authorizedConnectorGateways
+                    .Select(gateway => GetRequiredOutput(gateway, "tenantId"))
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray()
+            };
+
         var ports = await client.AddPortAsync(
             scope,
             sandboxId,
@@ -554,7 +570,14 @@ internal static class AzureSandboxContainerDeployment
             {
                 Name = endpoint.Name,
                 Port = endpoint.TargetPort,
-                Auth = endpoint.IsExternal ? new AzureDevComputePortAuthConfig { Anonymous = endpoint.Anonymous ?? false } : null,
+                ActivationMode = entraId is null ? null : "OnDemand",
+                Auth = endpoint.IsExternal
+                    ? new AzureDevComputePortAuthConfig
+                    {
+                        Anonymous = endpoint.Anonymous ?? false,
+                        EntraId = entraId
+                    }
+                    : null,
                 Protocol = endpoint.Protocol
             },
             context.CancellationToken).ConfigureAwait(false);
@@ -989,13 +1012,29 @@ internal static class AzureSandboxContainerDeployment
             AzureSandboxEndpointOptions? resolvedEndpointOptions = null;
             endpointOptions?.TryGetValue(resolvedEndpoint.Endpoint.Name, out resolvedEndpointOptions);
             unmatchedEndpointOptions?.Remove(resolvedEndpoint.Endpoint.Name);
+            var authorizedConnectorGateways = resource.TargetResource.Annotations
+                .OfType<AzureConnectorGatewayEndpointAuthorizationAnnotation>()
+                .Where(annotation => string.Equals(
+                    annotation.EndpointName,
+                    resolvedEndpoint.Endpoint.Name,
+                    StringComparison.Ordinal))
+                .Select(static annotation => annotation.ConnectorGateway)
+                .DistinctBy(static gateway => gateway.Name, StringComparers.ResourceName)
+                .ToArray();
+            if (resolvedEndpointOptions?.Anonymous == true && authorizedConnectorGateways.Length > 0)
+            {
+                throw new InvalidOperationException(
+                    $"Endpoint '{resolvedEndpoint.Endpoint.Name}' on resource '{resource.TargetResource.Name}' is a Connector Namespace trigger callback and cannot allow anonymous access.");
+            }
+
             var endpoint = new SandboxEndpoint(
                 resolvedEndpoint.Endpoint.Name,
                 targetPort,
                 resolvedEndpoint.Endpoint.IsExternal,
                 IsHttp: true,
                 protocol,
-                resolvedEndpointOptions?.Anonymous ?? false);
+                resolvedEndpointOptions?.Anonymous ?? false,
+                authorizedConnectorGateways);
 
             if (endpoints.TryGetValue(targetPort, out var existingEndpoint))
             {
@@ -1008,7 +1047,11 @@ internal static class AzureSandboxContainerDeployment
                 {
                     IsExternal = existingEndpoint.IsExternal || endpoint.IsExternal,
                     IsHttp = existingEndpoint.IsHttp || endpoint.IsHttp,
-                    Anonymous = MergeAnonymousAccess(existingEndpoint.Anonymous, endpoint.Anonymous)
+                    Anonymous = MergeAnonymousAccess(existingEndpoint.Anonymous, endpoint.Anonymous),
+                    AuthorizedConnectorGateways = existingEndpoint.AuthorizedConnectorGateways
+                        .Concat(endpoint.AuthorizedConnectorGateways)
+                        .DistinctBy(static gateway => gateway.Name, StringComparers.ResourceName)
+                        .ToArray()
                 };
             }
             else
@@ -1462,7 +1505,14 @@ internal static class AzureSandboxContainerDeployment
 
     private static string GetDestroyStepName(AzureSandboxContainerResource resource) => $"destroy-{resource.Name}";
 
-    internal readonly record struct SandboxEndpoint(string Name, int TargetPort, bool IsExternal, bool IsHttp, string Protocol, bool? Anonymous);
+    internal readonly record struct SandboxEndpoint(
+        string Name,
+        int TargetPort,
+        bool IsExternal,
+        bool IsHttp,
+        string Protocol,
+        bool? Anonymous,
+        IReadOnlyList<AzureConnectorGatewayResource> AuthorizedConnectorGateways);
 
     internal sealed record ContainerImageMetadata(IReadOnlyList<string> Entrypoint, IReadOnlyList<string> Command, IReadOnlyDictionary<string, string> EnvironmentVariables, string? WorkingDirectory);
 
