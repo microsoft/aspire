@@ -100,7 +100,13 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime, ICont
         ArgumentException.ThrowIfNullOrWhiteSpace(imageName);
 
         return ExecuteContainerCommandForOutputAsync(
-            ["image", "inspect", imageName, "--format", "{{json .Config}}"],
+            [
+                "image",
+                "inspect",
+                imageName,
+                "--format",
+                """{"Entrypoint":{{json .Config.Entrypoint}},"Cmd":{{json .Config.Cmd}},"WorkingDir":{{json .Config.WorkingDir}}}"""
+            ],
             "inspect image config",
             imageName,
             cancellationToken);

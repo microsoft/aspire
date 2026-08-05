@@ -19,6 +19,7 @@ using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Tests.Publishing;
 using Aspire.Hosting.Utils;
 using Azure.Core;
+using Azure.Provisioning.Resources;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -162,6 +163,13 @@ public class AzureSandboxesTests
         var endpoint = Assert.Single(AzureSandboxContainerDeployment.ResolveSandboxEndpoints(sandboxContainer));
         Assert.False(endpoint.Anonymous);
         Assert.Equal(gateway.Resource, Assert.Single(endpoint.AuthorizedConnectorGateways));
+        var authorizedFingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
+            [endpoint],
+            "example/image@sha256:one");
+        var unauthorizedFingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
+            [endpoint with { AuthorizedConnectorGateways = [] }],
+            "example/image@sha256:one");
+        Assert.NotEqual(authorizedFingerprint, unauthorizedFingerprint);
 
         var triggerSteps = await CreateStepsAsync(app, trigger.Resource);
         var triggerStep = Assert.Single(triggerSteps);
@@ -222,8 +230,7 @@ public class AzureSandboxesTests
         var sandboxContainer = new AzureSandboxContainerResource(
             "listener-sandbox-container",
             listener.Resource,
-            sandboxGroup.Resource,
-            autoSuspend: false);
+            sandboxGroup.Resource);
 
         var exception = Assert.Throws<InvalidOperationException>(
             () => AzureSandboxContainerDeployment.ResolveSandboxEndpoints(sandboxContainer));
@@ -383,6 +390,24 @@ public class AzureSandboxesTests
     }
 
     [Fact]
+    public async Task AzureSandboxPublishBindsPrincipalTypeInMainBicep()
+    {
+        using var tempDir = new TemporaryDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            outputPath: tempDir.Path);
+        builder.AddAzureSandboxGroup("sandboxes");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var mainBicep = await File.ReadAllTextAsync(
+            Path.Combine(tempDir.Path, "main.bicep"),
+            TestContext.Current.CancellationToken);
+        await Verify(mainBicep, "bicep");
+    }
+
+    [Fact]
     public async Task AddAzureSandboxGroupSupportsExplicitManagedIdentities()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -399,6 +424,47 @@ public class AzureSandboxesTests
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+    }
+
+    [Fact]
+    public async Task SandboxGroupAggregatesWorkloadManagedIdentities()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var identity = builder.AddAzureUserAssignedIdentity("workload-identity");
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        var otherGroup = builder.AddAzureSandboxGroup("other-sandboxes");
+        builder.AddContainer("worker", "image")
+            .WithAnnotation(new AppIdentityAnnotation(identity.Resource))
+            .PublishAsAzureSandbox(sandboxGroup);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+        Assert.Equal(ManagedServiceIdentityType.UserAssigned, sandboxGroup.Resource.ManagedIdentityType);
+        Assert.Equal(identity.Resource, Assert.Single(sandboxGroup.Resource.UserAssignedIdentities));
+        Assert.Empty(otherGroup.Resource.UserAssignedIdentities);
+        var (_, bicep) = await AzureManifestUtils.GetManifestWithBicep(sandboxGroup.Resource, skipPreparer: true);
+        Assert.Contains("userAssignedIdentities", bicep, StringComparison.Ordinal);
+        Assert.Contains("workload_identity_outputs_id", bicep, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ExistingSandboxGroupRejectsWorkloadIdentityAttachment()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var identity = builder.AddAzureUserAssignedIdentity("workload-identity");
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes")
+            .PublishAsExisting("existing-sandboxes", "existing-rg");
+        builder.AddContainer("worker", "image")
+            .WithAnnotation(new AppIdentityAnnotation(identity.Resource))
+            .PublishAsAzureSandbox(sandboxGroup);
+
+        using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default));
+        Assert.Contains("existing Azure sandbox group", exception.Message);
     }
 
     [Fact]
@@ -428,13 +494,17 @@ public class AzureSandboxesTests
         var buildOptionsCallbackCount = container.Resource.Annotations.OfType<ContainerBuildOptionsCallbackAnnotation>().Count();
 
         container.PublishAsAzureSandbox(sandboxGroup, options => configureCalled = true);
+        Assert.Throws<ArgumentException>(() => container.PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
+        {
+            AutoSuspendMode = (AzureSandboxAutoSuspendMode)(-1)
+        }));
 
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var computeResource = Assert.Single(model.GetComputeResources(), resource => resource.Name == "frontend");
 
         Assert.Null(computeResource.GetDeploymentTargetAnnotation(sandboxGroup.Resource));
-        Assert.False(configureCalled);
+        Assert.True(configureCalled);
         Assert.Equal(buildOptionsCallbackCount, container.Resource.Annotations.OfType<ContainerBuildOptionsCallbackAnnotation>().Count());
     }
 
@@ -458,9 +528,7 @@ public class AzureSandboxesTests
 
         Assert.Equal(["dotnet", "/app/yarp.dll"], metadata.Entrypoint);
         Assert.Empty(metadata.Command);
-        Assert.Equal("/usr/local/bin:/usr/bin:/bin", metadata.EnvironmentVariables["PATH"]);
-        Assert.Equal("http://+:5000", metadata.EnvironmentVariables["ASPNETCORE_URLS"]);
-        Assert.Equal(string.Empty, metadata.EnvironmentVariables["EMPTY"]);
+        Assert.Empty(metadata.EnvironmentVariables);
         Assert.Equal("/app", metadata.WorkingDirectory);
     }
 
@@ -742,6 +810,111 @@ public class AzureSandboxesTests
                 new AzureDevComputeResourceScope("sub-1", "rg-1", "sandboxes-2", "westus3")));
 
         Assert.Contains("aspire destroy", exception.Message);
+    }
+
+    [Fact]
+    public void SandboxStableOwnerSurvivesClearedStateAndPreservesIsolation()
+    {
+        var scope = new AzureDevComputeResourceScope("sub", "rg", "sandboxes", "westus3");
+        var owner = AzureSandboxContainerDeployment.CreateStableOwnerId("AppHost", scope, "frontend-sandbox-container");
+        var freshRunOwner = AzureSandboxContainerDeployment.CreateStableOwnerId("apphost", scope, "frontend-sandbox-container");
+        var otherAppOwner = AzureSandboxContainerDeployment.CreateStableOwnerId("OtherAppHost", scope, "frontend-sandbox-container");
+        var otherScopeOwner = AzureSandboxContainerDeployment.CreateStableOwnerId(
+            "AppHost",
+            new AzureDevComputeResourceScope("sub", "other-rg", "sandboxes", "westus3"),
+            "frontend-sandbox-container");
+
+        Assert.Equal(owner, freshRunOwner);
+        Assert.NotEqual(owner, otherAppOwner);
+        Assert.NotEqual(owner, otherScopeOwner);
+        Assert.True(AzureSandboxContainerDeployment.ShouldDeleteLabeledDeployment(
+            "old-sandbox",
+            new Dictionary<string, string>
+            {
+                ["aspire-owner"] = freshRunOwner,
+                ["aspire-resource"] = "frontend-sandbox-container"
+            },
+            owner,
+            "frontend-sandbox-container",
+            new HashSet<string>(),
+            new HashSet<string>()));
+    }
+
+    [Fact]
+    public void SandboxSecurityChangesDisablePreviousGenerationRetention()
+    {
+        var endpoints = new[]
+        {
+            new AzureSandboxContainerDeployment.SandboxEndpoint(
+                "http",
+                8080,
+                IsExternal: true,
+                IsHttp: true,
+                Protocol: "Http",
+                Anonymous: false,
+                AuthorizedConnectorGateways: [])
+        };
+        var fingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
+            endpoints,
+            "example/image@sha256:first");
+        var previousState = new DeploymentStateSection(
+            "Azure:Sandboxes:frontend-sandbox-container",
+            new JsonObject
+            {
+                ["OwnerId"] = "owner",
+                ["SandboxId"] = "sandbox"
+            },
+            version: 0);
+
+        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint));
+
+        previousState.Data["EndpointSecurityFingerprint"] = fingerprint;
+        Assert.False(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint));
+
+        var anonymousFingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
+        [
+            endpoints[0] with { Anonymous = true }
+        ],
+        "example/image@sha256:first");
+        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, anonymousFingerprint));
+
+        var updatedImageFingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
+            endpoints,
+            "example/image@sha256:second");
+        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, updatedImageFingerprint));
+    }
+
+    [Fact]
+    public async Task SandboxBestEffortPruneSuppressesNetworkFailures()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var app = builder.Build();
+        var pipelineContext = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            CancellationToken.None);
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
+        var stepContext = new PipelineStepContext
+        {
+            PipelineContext = pipelineContext,
+            ReportingStep = reportingStep
+        };
+        var client = new FailingPruneClient();
+
+        await AzureSandboxContainerDeployment.DeleteRemoteDeploymentsByResourceLabelAsync(
+            stepContext,
+            client,
+            new AzureDevComputeResourceScope("sub", "rg", "sandboxes", "westus3"),
+            "owner",
+            "frontend-sandbox-container",
+            new HashSet<string>(),
+            new HashSet<string>(),
+            new HashSet<string>(),
+            throwOnError: false);
+
+        Assert.True(client.DeleteSandboxCalled);
     }
 
     [Fact]
@@ -1391,6 +1564,50 @@ public class AzureSandboxesTests
     }
 
     [Fact]
+    public async Task SandboxAutoSuspendPolicyIsEmittedOnlyWhenExplicitlyConfigured()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        var defaultResource = builder.AddContainer("default", "image")
+            .PublishAsAzureSandbox(sandboxGroup);
+        var disabledResource = builder.AddContainer("disabled", "image")
+            .PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
+            {
+                AutoSuspendEnabled = false
+            });
+        var enabledResource = builder.AddContainer("enabled", "image")
+            .PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
+            {
+                AutoSuspendEnabled = true,
+                AutoSuspendInterval = TimeSpan.FromMinutes(5),
+                AutoSuspendMode = AzureSandboxAutoSuspendMode.Memory
+            });
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var defaultSandbox = Assert.IsType<AzureSandboxContainerResource>(
+            defaultResource.Resource.GetDeploymentTargetAnnotation(sandboxGroup.Resource)?.DeploymentTarget);
+        var disabledSandbox = Assert.IsType<AzureSandboxContainerResource>(
+            disabledResource.Resource.GetDeploymentTargetAnnotation(sandboxGroup.Resource)?.DeploymentTarget);
+        var enabledSandbox = Assert.IsType<AzureSandboxContainerResource>(
+            enabledResource.Resource.GetDeploymentTargetAnnotation(sandboxGroup.Resource)?.DeploymentTarget);
+
+        Assert.Null(AzureSandboxContainerDeployment.CreateLifecyclePolicy(defaultSandbox));
+        var disabledPolicy = Assert.IsType<AzureDevComputeSandboxLifecyclePolicy>(
+            AzureSandboxContainerDeployment.CreateLifecyclePolicy(disabledSandbox));
+        Assert.NotNull(disabledPolicy.AutoSuspendPolicy);
+        Assert.False(disabledPolicy.AutoSuspendPolicy.Enabled);
+        var enabledPolicy = Assert.IsType<AzureDevComputeSandboxLifecyclePolicy>(
+            AzureSandboxContainerDeployment.CreateLifecyclePolicy(enabledSandbox));
+        Assert.NotNull(enabledPolicy.AutoSuspendPolicy);
+        Assert.True(enabledPolicy.AutoSuspendPolicy.Enabled);
+        Assert.Equal(300, enabledPolicy.AutoSuspendPolicy.Interval);
+        Assert.Equal("Memory", enabledPolicy.AutoSuspendPolicy.Mode);
+    }
+
+    [Fact]
     public void SandboxContainerOptionsValidateTypedDurationsAndEnums()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -1641,7 +1858,6 @@ public class AzureSandboxesTests
         var sandboxContainer = Assert.IsType<AzureSandboxContainerResource>(deploymentTarget.DeploymentTarget);
         Assert.Same(computeResource, sandboxContainer.TargetResource);
         Assert.Same(sandboxGroup.Resource, sandboxContainer.Parent);
-        Assert.False(sandboxContainer.AutoSuspend);
 
         var sandboxEndpoint = Assert.Single(AzureSandboxContainerDeployment.ResolveSandboxEndpoints(sandboxContainer));
         Assert.Equal(5000, sandboxEndpoint.TargetPort);
@@ -1669,6 +1885,14 @@ public class AzureSandboxesTests
             Action = _ => Task.CompletedTask
         };
         steps.Add(pushStep);
+        var registryLoginStep = new PipelineStep
+        {
+            Name = "login-to-acr-sandboxes",
+            Resource = sandboxGroup.Resource.ContainerRegistry,
+            Tags = ["acr-login"],
+            Action = _ => Task.CompletedTask
+        };
+        steps.Add(registryLoginStep);
 
         foreach (var annotation in sandboxContainer.Annotations.OfType<PipelineConfigurationAnnotation>())
         {
@@ -1681,6 +1905,7 @@ public class AzureSandboxesTests
         }
 
         Assert.Contains(pushStep.Name, deployStep.DependsOnSteps);
+        Assert.Contains(registryLoginStep.Name, deployStep.DependsOnSteps);
 
         var destroyStep = Assert.Single(steps, step => step.Name == "destroy-frontend-sandbox-container");
         Assert.Contains(WellKnownPipelineSteps.DestroyPrereq, destroyStep.DependsOnSteps);
@@ -1692,13 +1917,22 @@ public class AzureSandboxesTests
         Assert.Contains(WellKnownPipelineSteps.DestroyPrereq, staleCleanupStep.DependsOnSteps);
         Assert.Contains(WellKnownPipelineSteps.Destroy, staleCleanupStep.RequiredBySteps);
 
+        var azureEnvironment = Assert.Single(model.Resources.OfType<AzureEnvironmentResource>());
         var azureDestroyStep = new PipelineStep
         {
-            Name = "destroy-azure-sandboxes",
+            Name = $"destroy-azure-{azureEnvironment.Name}",
+            Resource = azureEnvironment,
+            Action = _ => Task.CompletedTask
+        };
+        var azureNamedSandboxDestroyStep = new PipelineStep
+        {
+            Name = "destroy-azure-api-sandbox-container",
+            Resource = sandboxContainer,
             Action = _ => Task.CompletedTask
         };
         var environmentSteps = cleanupSteps;
         environmentSteps.Add(azureDestroyStep);
+        environmentSteps.Add(azureNamedSandboxDestroyStep);
 
         var configurationContext = new PipelineConfigurationContext
         {
@@ -1715,6 +1949,7 @@ public class AzureSandboxesTests
 
         Assert.Contains(destroyStep.Name, azureDestroyStep.DependsOnSteps);
         Assert.Contains(staleCleanupStep.Name, azureDestroyStep.DependsOnSteps);
+        Assert.Empty(azureNamedSandboxDestroyStep.DependsOnSteps);
     }
 
     [Fact]
@@ -1785,6 +2020,208 @@ public class AzureSandboxesTests
         Assert.Equal(8080, sandboxEndpoint.TargetPort);
     }
 
+    [Fact]
+    public async Task PrebuiltSandboxImageDependsOnManagedRegistryLogin()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        var container = builder.AddContainer("frontend", "example.azurecr.io/frontend", "latest")
+            .PublishAsAzureSandbox(sandboxGroup);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+        var sandboxContainer = Assert.IsType<AzureSandboxContainerResource>(
+            container.Resource.GetDeploymentTargetAnnotation(sandboxGroup.Resource)?.DeploymentTarget);
+        var steps = AzureSandboxContainerDeployment.CreatePipelineSteps(sandboxContainer).ToList();
+        var registry = Assert.IsType<AzureContainerRegistryResource>(sandboxGroup.Resource.ContainerRegistry);
+        var loginStep = new PipelineStep
+        {
+            Name = "login-to-acr-sandboxes",
+            Resource = registry,
+            Tags = ["acr-login"],
+            Action = _ => Task.CompletedTask
+        };
+        steps.Add(loginStep);
+        var context = new PipelineConfigurationContext
+        {
+            Services = app.Services,
+            Steps = steps,
+            Model = app.Services.GetRequiredService<DistributedApplicationModel>()
+        };
+
+        await AzureSandboxContainerDeployment.ConfigureDeployOrderingAsync(context, sandboxContainer);
+
+        var deployStep = Assert.Single(steps, step => step.Name == "deploy-frontend-sandbox-container");
+        Assert.Contains(loginStep.Name, deployStep.DependsOnSteps);
+        Assert.Empty(context.GetSteps(container.Resource, WellKnownPipelineTags.PushContainerImage));
+    }
+
+    [Fact]
+    public async Task SandboxValueResolutionRecursesIntoReferenceExpressions()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        var api = builder.AddContainer("api", "image")
+            .WithHttpEndpoint(name: "http", targetPort: 8080)
+            .WithExternalHttpEndpoints()
+            .PublishAsAzureSandbox(sandboxGroup);
+        var web = builder.AddContainer("web", "image")
+            .PublishAsAzureSandbox(sandboxGroup);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var apiSandbox = Assert.IsType<AzureSandboxContainerResource>(
+            api.Resource.GetDeploymentTargetAnnotation(sandboxGroup.Resource)?.DeploymentTarget);
+        var stateManager = app.Services.GetRequiredService<IDeploymentStateManager>();
+        var state = await stateManager.AcquireSectionAsync(
+            AzureSandboxContainerDeployment.GetStateSectionName(apiSandbox),
+            CancellationToken.None);
+        state.Data["Ports"] = new JsonArray
+        {
+            new JsonObject
+            {
+                ["Name"] = "http",
+                ["Url"] = "https://api.example.test"
+            }
+        };
+        await stateManager.SaveSectionAsync(state, CancellationToken.None);
+
+        var pipelineContext = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            CancellationToken.None);
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
+        var stepContext = new PipelineStepContext
+        {
+            PipelineContext = pipelineContext,
+            ReportingStep = reportingStep
+        };
+        var expression = ReferenceExpression.Create($"{api.GetEndpoint("http")}/v1");
+
+        var value = await AzureSandboxContainerDeployment.ResolveValueAsync(stepContext, web.Resource, expression);
+
+        Assert.Equal("https://api.example.test/v1", value);
+    }
+
+    [Fact]
+    public async Task SandboxDeployStepsFollowReferencedEndpointDependencies()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        var api = builder.AddContainer("api", "image")
+            .WithHttpEndpoint(name: "http", targetPort: 8080)
+            .WithExternalHttpEndpoints()
+            .PublishAsAzureSandbox(sandboxGroup);
+        var web = builder.AddContainer("web", "image")
+            .WithEnvironment("API_URL", ReferenceExpression.Create($"{api.GetEndpoint("http")}/v1"))
+            .PublishAsAzureSandbox(sandboxGroup);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+        var executionContext = app.Services.GetRequiredService<DistributedApplicationExecutionContext>();
+        var dependencies = await web.Resource.GetResourceDependenciesAsync(
+            executionContext,
+            ResourceDependencyDiscoveryMode.DirectOnly);
+        Assert.Contains(api.Resource, dependencies);
+        var steps = await CreateStepsAsync(app, sandboxGroup.Resource);
+        var context = new PipelineConfigurationContext
+        {
+            Services = app.Services,
+            Steps = steps,
+            Model = app.Services.GetRequiredService<DistributedApplicationModel>()
+        };
+        foreach (var annotation in sandboxGroup.Resource.Annotations.OfType<PipelineConfigurationAnnotation>())
+        {
+            await annotation.Callback(context);
+        }
+
+        var apiDeploy = Assert.Single(steps, step => step.Name == "deploy-api-sandbox-container");
+        var webDeploy = Assert.Single(steps, step => step.Name == "deploy-web-sandbox-container");
+        Assert.Contains(apiDeploy.Name, webDeploy.DependsOnSteps);
+    }
+
+    [Fact]
+    public async Task SandboxDeployStepsRejectCircularEndpointDependencies()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        var first = builder.AddContainer("first", "image")
+            .WithHttpEndpoint(name: "http", targetPort: 8080)
+            .WithExternalHttpEndpoints()
+            .PublishAsAzureSandbox(sandboxGroup);
+        var second = builder.AddContainer("second", "image")
+            .WithHttpEndpoint(name: "http", targetPort: 8080)
+            .WithExternalHttpEndpoints()
+            .PublishAsAzureSandbox(sandboxGroup);
+        first.WithEnvironment("SECOND_URL", second.GetEndpoint("http"));
+        second.WithEnvironment("FIRST_URL", first.GetEndpoint("http"));
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+        var executionContext = app.Services.GetRequiredService<DistributedApplicationExecutionContext>();
+        var firstDependencies = await first.Resource.GetResourceDependenciesAsync(
+            executionContext,
+            ResourceDependencyDiscoveryMode.DirectOnly);
+        var secondDependencies = await second.Resource.GetResourceDependenciesAsync(
+            executionContext,
+            ResourceDependencyDiscoveryMode.DirectOnly);
+        Assert.Contains(second.Resource, firstDependencies);
+        Assert.Contains(first.Resource, secondDependencies);
+        var steps = await CreateStepsAsync(app, sandboxGroup.Resource);
+        var context = new PipelineConfigurationContext
+        {
+            Services = app.Services,
+            Steps = steps,
+            Model = app.Services.GetRequiredService<DistributedApplicationModel>()
+        };
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            foreach (var annotation in sandboxGroup.Resource.Annotations.OfType<PipelineConfigurationAnnotation>())
+            {
+                await annotation.Callback(context);
+            }
+        });
+
+        Assert.Contains("circular deployment dependency", exception.Message);
+    }
+
+    [Fact]
+    public async Task SandboxProjectArgumentsArePreserved()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var project = builder.AddProject<TestProject>("worker", launchProfileName: null)
+            .WithArgs("--mode", "worker");
+
+        using var app = builder.Build();
+        var pipelineContext = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            CancellationToken.None);
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
+        var stepContext = new PipelineStepContext
+        {
+            PipelineContext = pipelineContext,
+            ReportingStep = reportingStep
+        };
+
+        var (entrypoint, command) = await AzureSandboxContainerDeployment.ResolveModeledCommandAsync(
+            stepContext,
+            project.Resource);
+
+        Assert.Null(entrypoint);
+        Assert.Equal(["--mode", "worker"], command);
+    }
+
     private static async Task<List<PipelineStep>> CreateStepsAsync(
         DistributedApplication app,
         IResource resource,
@@ -1828,6 +2265,55 @@ public class AzureSandboxesTests
         {
             Directory.Delete(Path, recursive: true);
         }
+    }
+
+    private sealed class FailingPruneClient : IAzureDevComputeClient
+    {
+        public bool DeleteSandboxCalled { get; private set; }
+
+        public Task<List<AzureDevComputeSandbox>> ListSandboxesAsync(
+            AzureDevComputeResourceScope scope,
+            string? labels,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new List<AzureDevComputeSandbox>
+            {
+                new()
+                {
+                    Id = "old-sandbox",
+                    Labels = new Dictionary<string, string>
+                    {
+                        ["aspire-owner"] = "owner",
+                        ["aspire-resource"] = "frontend-sandbox-container"
+                    }
+                }
+            });
+        }
+
+        public Task DeleteSandboxAsync(
+            AzureDevComputeResourceScope scope,
+            string sandboxId,
+            CancellationToken cancellationToken)
+        {
+            DeleteSandboxCalled = true;
+            throw new HttpRequestException("connection reset");
+        }
+
+        public Task<List<AzureDevComputeDiskImage>> ListDiskImagesAsync(
+            AzureDevComputeResourceScope scope,
+            string? labels,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new List<AzureDevComputeDiskImage>());
+        }
+
+        public Task<AzureDevComputeDiskImage> CreateDiskImageAsync(AzureDevComputeResourceScope scope, AzureDevComputeCreateDiskImageRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<AzureDevComputeDiskImage> GetDiskImageAsync(AzureDevComputeResourceScope scope, string diskImageId, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task DeleteDiskImageAsync(AzureDevComputeResourceScope scope, string diskImageId, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<AzureDevComputeSandbox> CreateSandboxAsync(AzureDevComputeResourceScope scope, AzureDevComputeSandboxRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<AzureDevComputeSandbox> SetLifecycleAsync(AzureDevComputeResourceScope scope, string sandboxId, AzureDevComputeSandboxLifecyclePolicy lifecycle, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<List<AzureDevComputeSandboxPort>> AddPortAsync(AzureDevComputeResourceScope scope, string sandboxId, AzureDevComputeAddPortRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<List<AzureDevComputeSandboxPort>> RemovePortAsync(AzureDevComputeResourceScope scope, string sandboxId, AzureDevComputeRemovePortRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 
     private sealed class RecordingHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> handler) : HttpMessageHandler

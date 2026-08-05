@@ -8,6 +8,8 @@
     <Description>Azure Container Apps Sandboxes and Connector Namespace support for Aspire.</Description>
     <!-- In preview while Azure Container Apps Sandboxes and Connector Namespace are in preview. -->
     <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
+    <!-- This package has no previously shipped baseline package. -->
+    <EnablePackageValidation>false</EnablePackageValidation>
   </PropertyGroup>
 
   <ItemGroup>

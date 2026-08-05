@@ -270,6 +270,11 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
         var localImageName = imageName.StartsWith("docker://", StringComparison.OrdinalIgnoreCase)
             ? imageName["docker://".Length..]
             : imageName;
+        await ExecuteContainerCommandForOutputAsync(
+            ["pull", remoteImageName],
+            "pull image for metadata inspection",
+            imageName,
+            cancellationToken).ConfigureAwait(false);
         var imageMetadata = await ExecuteContainerCommandForOutputAsync(
             ["image", "inspect", "--format", "{{json .}}", localImageName],
             "inspect image metadata",

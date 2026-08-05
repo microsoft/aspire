@@ -45,7 +45,7 @@ const api = await builder
     .withHttpEndpoint({ name: "http", targetPort: 8080 })
     .withExternalHttpEndpoints();
 
-await api.publishAsAzureSandbox(sandboxes, {
+const publishedApi = await api.publishAsAzureSandbox(sandboxes, {
     tier: AzureSandboxTier.Large,
     autoSuspendEnabled: true,
     autoSuspendInterval: 9_000_000_000,
@@ -61,6 +61,7 @@ await api.publishAsAzureSandbox(sandboxes, {
         }
     ]
 });
+await publishedApi.withRemoteImageTag("validated-compute-handle");
 
 await outlook.addTriggerConfig(
     "new-email",
