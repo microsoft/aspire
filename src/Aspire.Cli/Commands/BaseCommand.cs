@@ -171,6 +171,10 @@ internal abstract class BaseCommand : Command
         {
             result = CommandResult.Cancelled();
         }
+        catch (PackageMetadataPrefetchingValidationException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             var errorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, ex.Message);

@@ -6,6 +6,7 @@ using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
 #if DEBUG
 using Aspire.Cli.NuGet;
+using Aspire.Cli.Packaging;
 #endif
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -138,6 +139,27 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
         var actualException = await Assert.ThrowsAsync<PackageMetadataPrefetchingValidationException>(() => action.InvokeAsync(result, TestContext.Current.CancellationToken));
 
         Assert.Same(expectedException, actualException);
+    }
+
+    [Fact]
+    public async Task BaseCommand_ExecuteValidationFailureEscapesInDebugBuilds()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.NuGetPackageCacheFactory = _ => new FakeNuGetPackageCache();
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = new TemplateMetadataConsumingCommand(
+            provider.GetRequiredService<CommonCommandServices>(),
+            provider.GetRequiredService<IPackagingService>(),
+            workspace.WorkspaceRoot);
+        var result = command.Parse("test");
+        var action = Assert.IsAssignableFrom<System.CommandLine.Invocation.AsynchronousCommandLineAction>(result.Action);
+
+        var exception = await Assert.ThrowsAsync<PackageMetadataPrefetchingValidationException>(() => action.InvokeAsync(result, TestContext.Current.CancellationToken));
+
+        Assert.Contains(nameof(BaseCommand.PrefetchesTemplatePackageMetadata), exception.Message);
     }
 #endif
 
@@ -697,4 +719,21 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
         var expectedError = string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.UnrecognizedOptionDidYouMeanFormat, "--AppHost", "--apphost");
         Assert.Single(testInteractionService.DisplayedErrors, expectedError);
     }
+
+#if DEBUG
+    private sealed class TemplateMetadataConsumingCommand(
+        CommonCommandServices services,
+        IPackagingService packagingService,
+        DirectoryInfo workingDirectory)
+        : BaseCommand("test", "Test command", services)
+    {
+        protected override async Task<CommandResult> ExecuteAsync(System.CommandLine.ParseResult parseResult, CancellationToken cancellationToken)
+        {
+            var channel = (await packagingService.GetChannelsAsync(cancellationToken)).First();
+            _ = await channel.GetTemplatePackagesAsync(workingDirectory, cancellationToken);
+
+            return CommandResult.Success();
+        }
+    }
+#endif
 }
