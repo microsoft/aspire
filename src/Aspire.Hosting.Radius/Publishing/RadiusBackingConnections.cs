@@ -28,9 +28,10 @@ namespace Aspire.Hosting.Radius.Publishing;
 /// generates for local run mode is not the deployed password. For the legacy
 /// <c>Applications.*</c> types the deployed value is read back with the type's <c>listSecrets()</c>
 /// action. For the <c>Radius.*</c> UDTs there is no <c>listSecrets()</c>; instead username and
-/// password are <em>required recipe inputs</em>, so Aspire passes its own parameter in as a recipe
-/// parameter and both sides then agree by construction (see
-/// <c>RadiusInfrastructureBuilder.ApplyRecipeCredentialParameters</c>).</item>
+/// password are <em>required schema properties</em> on the resource itself (the recipe reads them as
+/// <c>context.resource.properties.&lt;name&gt;</c>), so Aspire writes its own parameter there and
+/// both sides then agree by construction (see
+/// <c>RadiusInfrastructureBuilder.ApplyRecipeInputPropertyCredentialsAsync</c>).</item>
 /// </list>
 /// <para>
 /// Projections are keyed by the <em>emitted</em> Radius type string rather than the Aspire CLR
@@ -61,10 +62,13 @@ internal static class RadiusBackingConnections
         internal sealed record ListSecrets(string PasswordSecretName) : RadiusCredentialMode;
 
         /// <summary>
-        /// <c>username</c>/<c>password</c> are required recipe inputs, so Aspire passes its own
-        /// parameters in and both sides agree by construction.
+        /// <c>username</c>/<c>password</c> are required schema properties on the resource, so Aspire
+        /// writes its own parameters there and both sides agree by construction. They are not
+        /// <c>properties.recipe.parameters</c>: the manifests mark them <c>required</c> and the
+        /// recipes read <c>context.resource.properties.&lt;name&gt;</c>, so a resource carrying them
+        /// only as recipe parameters fails schema validation before any recipe runs.
         /// </summary>
-        internal sealed record RecipeParameters : RadiusCredentialMode;
+        internal sealed record RecipeInputProperties : RadiusCredentialMode;
 
         /// <summary>
         /// The type carries no credential Aspire can project. <paramref name="Reason"/> is written
@@ -109,7 +113,7 @@ internal static class RadiusBackingConnections
     // radius-project/resource-types-contrib (Data/*, Messaging/*).
     //
     // Keyed by the *emitted* type, i.e. what ResourceTypeMapper.MapResource returns. Every backing
-    // type that mapper can emit must appear here; RadiusBackingConnectionsSchemaTests enforces that,
+    // type that mapper can emit must appear here; BackingResourceContractTests enforces that,
     // so dropping a LegacyFallbackType without adding the corresponding UDT row fails at test time
     // rather than silently emitting Aspire's local password at deploy time.
     private static readonly Dictionary<string, RadiusConnectionSchema> s_schemas = new(StringComparer.Ordinal)
@@ -124,13 +128,13 @@ internal static class RadiusBackingConnections
             new("host", "port", "username", new RadiusCredentialMode.ListSecrets("password")),
 
         // UDTs expose readOnly host/port but no listSecrets(); username/password are required
-        // recipe inputs and the password is redacted on read (x-radius-sensitive), so the only
-        // consistent value is the parameter Aspire itself feeds into the recipe. The user name is a
-        // recipe *input* here, not a readable output, so there is no UserNameProperty.
+        // schema properties and the password is redacted on read (x-radius-sensitive), so the only
+        // consistent value is the parameter Aspire itself writes onto the resource. The user name is
+        // an *input* here, not a readable output, so there is no UserNameProperty.
         [RadiusResourceTypes.PostgreSqlDatabases] =
-            new("host", "port", null, new RadiusCredentialMode.RecipeParameters()),
+            new("host", "port", null, new RadiusCredentialMode.RecipeInputProperties()),
         [RadiusResourceTypes.SqlDatabases] =
-            new("host", "port", null, new RadiusCredentialMode.RecipeParameters()),
+            new("host", "port", null, new RadiusCredentialMode.RecipeInputProperties()),
 
         // Dapr types are backing resources by classification but are consumed through the Dapr
         // sidecar's component configuration, not through an address or credential Aspire composes.
@@ -179,7 +183,7 @@ internal static class RadiusBackingConnections
     /// <c>hack/bicep-types-radius/generated/applications/applications.datastores</c>) and is the
     /// documented way to read recipe-generated credentials at deploy time. The <c>Radius.*</c> UDTs
     /// deliberately do not have it, which is why they use
-    /// <see cref="RadiusCredentialMode.RecipeParameters"/> instead.
+    /// <see cref="RadiusCredentialMode.RecipeInputProperties"/> instead.
     /// </remarks>
     public static BicepExpression Secret(string bicepIdentifier, string secretName) =>
         new MemberExpression(
