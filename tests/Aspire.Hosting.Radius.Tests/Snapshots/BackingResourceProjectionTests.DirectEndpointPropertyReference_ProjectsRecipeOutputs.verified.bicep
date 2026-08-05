@@ -1,15 +1,12 @@
 ﻿extension radius
 
-@secure()
-param db_password string
-
 resource recipepack 'Radius.Core/recipePacks@2025-08-01-preview' = {
   name: 'default'
   properties: {
     recipes: {
-      'Radius.Data/postgreSqlDatabases': {
+      'Radius.Compute/containers': {
         recipeKind: 'bicep'
-        recipeLocation: 'ghcr.io/radius-project/recipes/local-dev/postgresqldatabases:latest'
+        recipeLocation: 'ghcr.io/radius-project/kube-recipes/containers:latest'
       }
     }
   }
@@ -69,15 +66,36 @@ resource cache 'Applications.Datastores/redisCaches@2023-10-01-preview' = {
   }
 }
 
-resource db 'Radius.Data/postgreSqlDatabases@2025-08-01-preview' = {
-  name: 'db'
+resource api 'Radius.Compute/containers@2025-08-01-preview' = {
+  name: 'api'
   properties: {
+    containers: {
+      api: {
+        image: 'myapp/api:latest'
+        env: {
+          CUSTOM_HOST: {
+            value: cache.properties.host
+          }
+          CUSTOM_PORT: {
+            value: string(cache.properties.port)
+          }
+          CUSTOM_URL: {
+            value: 'redis://${cache.properties.host}:${cache.properties.port}'
+          }
+        }
+        ports: {
+          http: {
+            containerPort: 8080
+            protocol: 'TCP'
+          }
+        }
+      }
+    }
     application: app.id
     environment: myenv.id
-    recipe: {
-      parameters: {
-        password: db_password
-        username: 'postgres'
+    connections: {
+      cache: {
+        source: cache.id
       }
     }
   }
