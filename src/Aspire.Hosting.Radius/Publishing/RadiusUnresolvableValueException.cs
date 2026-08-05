@@ -26,7 +26,10 @@ namespace Aspire.Hosting.Radius.Publishing;
 /// <item>A reference to an output of a resource whose values are only known after its own
 /// deployment — for example an Azure Bicep output, which throws
 /// <c>"...has no value..."</c> until the deployment that produces it has run. Radius cannot
-/// deploy those resources, so the value is genuinely unavailable at publish time.</item>
+/// deploy those resources, so the value is genuinely unavailable at publish time. The skip is
+/// gated on the value positively declaring deployment-substituted semantics by implementing
+/// <see cref="IManifestExpressionProvider"/>; a plain <see cref="IValueProvider"/> that raises
+/// <see cref="InvalidOperationException"/> for a genuine invalid state fails the publish.</item>
 /// </list>
 /// <para>
 /// Both are detected at their exact call site and re-thrown as this type, so the loop's catch names
