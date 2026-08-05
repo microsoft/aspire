@@ -178,13 +178,19 @@ public sealed record CustomResourceSnapshot
             return true;
         }
 
-        // Every collection compared below is omitted so the generated record equality can cover
-        // everything that is left. Omitting collections than listing the remaining members keeps this
-        // method correct as the record grows: a member added later simply participates in the record
-        // equality instead of being silently ignored. Run this first so common scalar changes such as
-        // State and ExitCode avoid allocating comparison clones for every property.
-        // HealthStatus needs no separate handling because it is derived from HealthReports and State.
-        if (WithoutCollections(this) != WithoutCollections(other))
+        // Version counts publications rather than describing the resource. HealthStatus is derived
+        // from State and HealthReports, so neither property needs an independent comparison.
+        if (ResourceType != other.ResourceType ||
+            CreationTimeStamp != other.CreationTimeStamp ||
+            StartTimeStamp != other.StartTimeStamp ||
+            StopTimeStamp != other.StopTimeStamp ||
+            State != other.State ||
+            ExitCode != other.ExitCode ||
+            ResourceReadyEvent != other.ResourceReadyEvent ||
+            IsHidden != other.IsHidden ||
+            SupportsDetailedTelemetry != other.SupportsDetailedTelemetry ||
+            IconName != other.IconName ||
+            IconVariant != other.IconVariant)
         {
             return false;
         }
@@ -196,19 +202,6 @@ public sealed record CustomResourceSnapshot
             Commands.SequenceEqual(other.Commands) &&
             Relationships.SequenceEqual(other.Relationships) &&
             HealthReports.SequenceEqual(other.HealthReports);
-
-        static CustomResourceSnapshot WithoutCollections(CustomResourceSnapshot snapshot) => snapshot with
-        {
-            // Version counts publications rather than describing the resource, so it is not content.
-            Version = 0,
-            Properties = [],
-            EnvironmentVariables = [],
-            Urls = [],
-            Volumes = [],
-            Commands = [],
-            Relationships = [],
-            HealthReports = []
-        };
     }
 
     private static bool PropertiesContentEqual(ImmutableArray<ResourcePropertySnapshot> x, ImmutableArray<ResourcePropertySnapshot> y)
@@ -220,17 +213,24 @@ public sealed record CustomResourceSnapshot
 
         for (var i = 0; i < x.Length; i++)
         {
-            // ResourcePropertySnapshot.Value is weakly typed, so compare it separately and let the
-            // generated record equality cover the remaining members.
-            if (!ReferenceEquals(x[i], y[i]) &&
-                (!PropertyValueContentEquals(x[i].Value, y[i].Value) ||
-                 (x[i] with { Value = null }) != (y[i] with { Value = null })))
+            if (!ResourcePropertyContentEquals(x[i], y[i]))
             {
                 return false;
             }
         }
 
         return true;
+    }
+
+    private static bool ResourcePropertyContentEquals(ResourcePropertySnapshot x, ResourcePropertySnapshot y)
+    {
+        return ReferenceEquals(x, y) ||
+            (x.Name == y.Name &&
+             x.DisplayName == y.DisplayName &&
+             x.IsSensitive == y.IsSensitive &&
+             x.IsHighlighted == y.IsHighlighted &&
+             x.SortOrder == y.SortOrder &&
+             PropertyValueContentEquals(x.Value, y.Value));
     }
 
     /// <summary>
