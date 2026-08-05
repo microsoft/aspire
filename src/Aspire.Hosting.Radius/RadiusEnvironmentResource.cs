@@ -200,6 +200,14 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
     // ...) rather than Radius.Compute/containers. Its Kubernetes objects and credentials are owned
     // by the recipe, so every endpoint-derived value for it is wrong. Fail loudly instead of
     // emitting an address that silently resolves to nothing.
+    //
+    // This guard intentionally applies to *every* caller, including
+    // ComputeEnvironmentEndpointResolver, which routes here when a Kubernetes/ACA/App Service
+    // consumer references a resource owned by this Radius environment. Suppressing it there would
+    // not avoid a false positive — the resolver only delegates for resources this environment owns,
+    // so the address really is underivable — it would merely replace an accurate failure with a
+    // container-shaped FQDN that resolves to nothing, which is the defect
+    // https://github.com/microsoft/aspire/issues/18935 describes.
     private static void ThrowIfBackingResource(IResource resource)
     {
         // Child resources (a database on a server, say) are represented by their parent in the
@@ -216,9 +224,13 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
 
         throw new RadiusBackingResourceEndpointException(
             resource,
-            $"Endpoints of '{resource.Name}' cannot be resolved for Radius because it is deployed by a Radius recipe " +
-            $"rather than as a container. Its address and credentials are only known to the recipe. Reference it with " +
-            $"WithReference so the publisher can project the recipe's own outputs.");
+            $"Endpoints of '{resource.Name}' cannot be resolved because it is provisioned by a Radius recipe rather " +
+            $"than deployed as a container. The recipe owns its Kubernetes Service and its credentials, so no address " +
+            $"derived from the Aspire endpoint model describes it. Within a Radius deployment the publisher projects " +
+            $"the recipe's own host/port outputs instead. If you are publishing to Kubernetes, Azure Container Apps, " +
+            $"or Azure App Service, a consumer there cannot reach '{resource.Name}' through the Radius environment: " +
+            $"deploy '{resource.Name}' to the same compute environment as its consumer, or supply the address " +
+            $"explicitly with WithEnvironment. Diagnostic: ASPIRERADIUS060.");
     }
 
     // Mirrors the private helpers on IComputeEnvironmentResource so this override reproduces the

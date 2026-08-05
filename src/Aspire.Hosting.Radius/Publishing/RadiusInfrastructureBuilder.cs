@@ -9,6 +9,7 @@ using System.Globalization;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Text;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Radius.Publishing.Constructs;
 using Aspire.Hosting.Radius.ResourceMapping;
@@ -84,8 +85,9 @@ internal sealed class RadiusInfrastructureBuilder
     // `<resource>.listSecrets().password` keeps every composed value (connection string, URI,
     // splatted *_PASSWORD) correct without duplicating any connection-string format here.
     private readonly Dictionary<ParameterResource, ProjectedValue> _recipeSecretSubstitutions = [];
-    private readonly Dictionary<ParameterResource, (IResource Owner, bool IsSecretSubstitution)> _recipeCredentialOwners = [];
+    private readonly Dictionary<ParameterResource, (IResource Owner, bool IsProjectionSubstitution)> _recipeCredentialOwners = [];
     private readonly List<ProjectedEnvValue> _projectedEnvValues = [];
+    private readonly List<ProjectedRecipeParameter> _projectedRecipeParameters = [];
 
     /// <summary>
     /// Default recipe template paths per resource type.
@@ -1045,66 +1047,310 @@ internal sealed class RadiusInfrastructureBuilder
     /// </remarks>
     private async Task ApplyBackingResourceCredentialsAsync(List<IResource> radiusResources)
     {
+        var referencedResourceNames = GetReferencedResourceNames();
+
         foreach (var resource in radiusResources)
         {
             if (!_radiusTypeByResourceName.TryGetValue(resource.Name, out var radiusType) ||
-                RadiusBackingConnections.GetSchema(radiusType) is not { } schema ||
-                resource is not IResourceWithConnectionString withConnectionString ||
+                !ResourceTypeMapper.IsBackingResource(resource))
+            {
+                continue;
+            }
+
+            // A backing resource this environment emits but the schema table does not describe
+            // cannot have its credentials wired at all, so every consumer would silently receive the
+            // password Aspire generated for local run mode instead of the one the recipe creates.
+            // That is exactly https://github.com/microsoft/aspire/issues/18935, so fail here rather
+            // than waiting for a consumer to reference it (ApplyBackingResourceCredentials runs for
+            // every emitted resource; TryProjectBackingEndpoint only runs for referenced ones).
+            if (RadiusBackingConnections.GetSchema(radiusType) is not { } schema)
+            {
+                throw new RadiusBackingResourceEndpointException(
+                    resource,
+                    $"Resource '{resource.Name}' is emitted as Radius type '{radiusType}', for which Aspire has no " +
+                    $"connection schema, so its recipe-generated credentials cannot be projected to consumers. Map the " +
+                    $"resource to a type Aspire describes, or set the connection values explicitly with WithEnvironment. " +
+                    $"Diagnostic: ASPIRERADIUS062.");
+            }
+
+            if (resource is not IResourceWithConnectionString withConnectionString ||
                 !_typeInstancesByResourceName.TryGetValue(resource.Name, out var construct))
             {
                 continue;
             }
 
-            if (schema.PasswordSecret is { } passwordSecret)
+            switch (schema.Credentials)
             {
-                if (TryGetCredentialParameter(withConnectionString, "password") is { } passwordParameter)
-                {
-                    RegisterRecipeCredential(passwordParameter, resource, isSecretSubstitution: true);
-                    _recipeSecretSubstitutions[passwordParameter] =
-                        new ProjectedValue(construct, passwordSecret, IsSecret: true, IsNumeric: false);
-                }
+                case RadiusBackingConnections.RadiusCredentialMode.ListSecrets(var passwordSecret):
+                    ApplyListSecretsCredentials(resource, withConnectionString, construct, schema, passwordSecret);
+                    break;
 
+                case RadiusBackingConnections.RadiusCredentialMode.RecipeParameters:
+                    await ApplyRecipeParameterCredentialsAsync(
+                        resource, withConnectionString, construct, referencedResourceNames).ConfigureAwait(false);
+                    break;
+
+                case RadiusBackingConnections.RadiusCredentialMode.NotProjected:
+                    // Nothing to wire: the type carries no address or credential Aspire composes.
+                    // TryProjectBackingEndpoint still fails loudly if a consumer asks for one.
+                    break;
+            }
+        }
+
+        WarnOnUnrelatedUsesOfSubstitutedParameters();
+    }
+
+    /// <summary>
+    /// Wires a type whose recipe generates its own credentials and exposes them through
+    /// <c>listSecrets()</c>: Aspire's parameters are substituted for the recipe's own values
+    /// wherever they appear, so every composed value carries what is actually deployed.
+    /// </summary>
+    private void ApplyListSecretsCredentials(
+        IResource resource,
+        IResourceWithConnectionString withConnectionString,
+        RadiusResourceTypeConstruct construct,
+        RadiusBackingConnections.RadiusConnectionSchema schema,
+        string passwordSecret)
+    {
+        if (TryGetCredentialParameter(withConnectionString, "password") is { } passwordParameter)
+        {
+            WarnIfUserSuppliedCredentialIsReplaced(resource, passwordParameter, "password");
+            RegisterRecipeCredential(passwordParameter, resource, isProjectionSubstitution: true);
+            _recipeSecretSubstitutions[passwordParameter] =
+                new ProjectedValue(construct, passwordSecret, IsSecret: true, IsNumeric: false);
+        }
+
+        // The user name is a plain top-level property, not a listSecrets() key: the legacy
+        // Applications.Datastores/mongoDatabases and Applications.Messaging/rabbitMQQueues types
+        // return only connectionString and password from listSecrets(), and expose the user the
+        // recipe created at properties.username.
+        //
+        // Known gap: this only works when the AppHost supplied a user-name *parameter*. The default
+        // user names ("admin" for MongoDB, "guest" for RabbitMQ) are appended through
+        // ReferenceExpressionBuilder.AppendFormatted(string?, string?), which formats immediately
+        // and writes the result into the format string, so they arrive here as opaque literal text
+        // with no value provider to substitute. Those connection strings keep the default user name.
+        if (schema.UserNameProperty is { } userNameProperty &&
+            TryGetCredentialParameter(withConnectionString, "username") is { } userNameParameter)
+        {
+            WarnIfUserSuppliedCredentialIsReplaced(resource, userNameParameter, "user name");
+            RegisterRecipeCredential(userNameParameter, resource, isProjectionSubstitution: true);
+            _recipeSecretSubstitutions[userNameParameter] =
+                new ProjectedValue(construct, userNameProperty, IsSecret: false, IsNumeric: false);
+        }
+    }
+
+    /// <summary>
+    /// Wires a type whose <c>username</c>/<c>password</c> are required recipe inputs: Aspire feeds
+    /// its own parameters into the recipe, so the deployed credentials are the ones already composed
+    /// into the connection string.
+    /// </summary>
+    private async Task ApplyRecipeParameterCredentialsAsync(
+        IResource resource,
+        IResourceWithConnectionString withConnectionString,
+        RadiusResourceTypeConstruct construct,
+        HashSet<string> referencedResourceNames)
+    {
+        if (TryGetCredentialParameter(withConnectionString, "password") is { } recipePassword)
+        {
+            RegisterRecipeCredential(recipePassword, resource, isProjectionSubstitution: false);
+            construct.RecipeParameters["password"] = GetOrAddEnvParameter(recipePassword);
+        }
+
+        await SetRecipeParameterAsync(construct, "username", withConnectionString, "username").ConfigureAwait(false);
+
+        // The recipe provisions exactly one database, so it has to be told which one Aspire's
+        // consumers will connect to — otherwise the connection string names a database the recipe
+        // never created. Aspire models databases as child resources, and the database *name* can
+        // differ from the child resource name, so read it from the child's own connection properties
+        // rather than assuming they match.
+        var databaseChildren = FindDatabaseChildren(resource);
+        if (databaseChildren.Count == 0)
+        {
+            // A server with no AddDatabase(...) child is a valid and common model, so this is a
+            // warning rather than a failure. The recipe then falls back to whatever default database
+            // it defines, which may not be the one a consumer's connection string names.
+            _logger.LogWarning(
+                "Radius resource '{ResourceName}' declares no database, so the 'database' recipe parameter is omitted " +
+                "and the recipe's own default is used. Add a database with AddDatabase(...) if consumers expect a " +
+                "specific database name.",
+                resource.Name);
+            return;
+        }
+
+        // Only a database a consumer actually references can produce a wrong connection string, so
+        // scope the failure to those. An unreferenced extra AddDatabase(...) is inert and must not
+        // break a model that published before.
+        var referenced = databaseChildren.Where(d => referencedResourceNames.Contains(d.Name)).ToList();
+
+        if (referenced.Count > 1)
+        {
+            // Emitting one of them would leave every consumer of the others pointed at a database
+            // the recipe never created — a connection failure at run time with nothing in the
+            // generated Bicep to explain it.
+            throw new InvalidOperationException(
+                $"Resource '{resource.Name}' has {referenced.Count} referenced databases " +
+                $"('{string.Join("', '", referenced.Select(d => d.Name))}'), but its Radius recipe provisions a single " +
+                $"database. Reference at most one database per resource, or split them across separate resources. " +
+                $"Diagnostic: ASPIRERADIUS063.");
+        }
+
+        var databaseChild = referenced.Count == 1 ? referenced[0] : databaseChildren[0];
+
+        if (databaseChildren.Count > 1)
+        {
+            _logger.LogWarning(
+                "Radius resource '{ResourceName}' declares {Count} databases but its recipe provisions one; " +
+                "'{Selected}' was passed as the 'database' recipe parameter. The others are not created.",
+                resource.Name,
+                databaseChildren.Count,
+                databaseChild.Name);
+        }
+
+        await SetRecipeParameterAsync(construct, "database", databaseChild, "databasename").ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Resolves a connection property of <paramref name="source"/> and assigns it to a recipe
+    /// parameter, recording the result so a <c>ConfigureRadiusInfrastructure</c> callback that later
+    /// renames or removes a construct the value reads from can be repaired or rejected.
+    /// </summary>
+    private async Task SetRecipeParameterAsync(
+        RadiusResourceTypeConstruct construct,
+        string recipeParameterName,
+        IResourceWithConnectionString source,
+        string connectionPropertyKey)
+    {
+        if (await TryResolveConnectionPropertyAsync(source, connectionPropertyKey).ConfigureAwait(false) is not { } resolved)
+        {
+            return;
+        }
+
+        construct.RecipeParameters[recipeParameterName] = resolved.Value;
+
+        if (resolved.Parts.Any(static p => p.Projection is not null))
+        {
+            _projectedRecipeParameters.Add(new ProjectedRecipeParameter(
+                construct,
+                recipeParameterName,
+                resolved.Parts,
+                RenderBicepValue(resolved.Value),
+                resolved.Parts.Where(static p => p.Projection is not null)
+                    .Select(static p => p.Projection!.Target)
+                    .Distinct()
+                    .Select(static t => (t, t.BicepIdentifier))
+                    .ToList()));
+        }
+    }
+
+    /// <summary>
+    /// The names of every resource referenced by another resource in the model, taken from the
+    /// <see cref="ResourceRelationshipAnnotation"/>s that <c>WithReference</c> and the
+    /// <c>WithEnvironment</c> overloads record.
+    /// </summary>
+    /// <remarks>
+    /// Reference information is needed at step 4b, before container environment values are resolved,
+    /// so it cannot be derived from the resolved values themselves. Annotations are the only signal
+    /// available this early. A reference created through a <c>WithEnvironment</c> callback that
+    /// builds its value inline records no annotation, so such a database is treated as unreferenced;
+    /// that only makes the multi-database check more permissive, never less.
+    /// </remarks>
+    private HashSet<string> GetReferencedResourceNames()
+    {
+        var referenced = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var resource in _model.Resources)
+        {
+            foreach (var relationship in resource.Annotations.OfType<ResourceRelationshipAnnotation>())
+            {
+                if (string.Equals(relationship.Type, KnownRelationshipTypes.Reference, StringComparison.OrdinalIgnoreCase))
+                {
+                    referenced.Add(relationship.Resource.Name);
+                }
+            }
+        }
+
+        return referenced;
+    }
+
+    /// <summary>
+    /// Warns when a credential the AppHost supplied explicitly is discarded in favour of the value
+    /// the Radius recipe generates.
+    /// </summary>
+    /// <remarks>
+    /// A parameter Aspire generated for local run mode is meaningless at deploy time, so replacing
+    /// it is invisible and correct. A parameter the AppHost author supplied is a deliberate choice,
+    /// and silently ignoring it would leave them debugging a credential mismatch against a value
+    /// that never reached the cluster.
+    /// <para>
+    /// <c>Default is GenerateParameterDefault</c> only distinguishes the two in publish mode:
+    /// <c>ParameterResourceBuilderExtensions.CreateGeneratedParameter</c> rewrites <c>Default</c> to
+    /// an internal user-secrets wrapper in run mode. This code only ever runs while publishing.
+    /// </para>
+    /// </remarks>
+    private void WarnIfUserSuppliedCredentialIsReplaced(IResource resource, ParameterResource parameter, string credentialKind)
+    {
+        if (parameter.Default is GenerateParameterDefault)
+        {
+            return;
+        }
+
+        _logger.LogWarning(
+            "The {CredentialKind} parameter '{ParameterName}' supplied for '{ResourceName}' is not used when deploying " +
+            "to Radius. The recipe that provisions that resource generates its own credentials, and consumers are given " +
+            "those instead. Remove the parameter, or provision the resource yourself if the value must be fixed.",
+            credentialKind,
+            parameter.Name,
+            resource.Name);
+    }
+
+    /// <summary>
+    /// Warns when a parameter that was substituted for a recipe-generated value is also referenced
+    /// by a resource that has nothing to do with the backing resource that owns it.
+    /// </summary>
+    /// <remarks>
+    /// The substitution rewrites the parameter <em>everywhere it appears</em>, so an unrelated
+    /// <c>WithEnvironment("ADMIN_PASSWORD", sharedParameter)</c> silently receives another
+    /// resource's recipe secret rather than the parameter's own value. Sharing between two backing
+    /// resources is rejected outright by <see cref="RegisterRecipeCredential"/>; this covers the
+    /// looser case, where the intent is genuinely ambiguous, so it warns instead of failing.
+    /// </remarks>
+    private void WarnOnUnrelatedUsesOfSubstitutedParameters()
+    {
+        if (_recipeSecretSubstitutions.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var resource in _model.Resources)
+        {
+            if (!_recipeCredentialOwners.Values.All(o => !ReferenceEquals(o.Owner, resource)))
+            {
                 continue;
             }
 
-            if (!schema.TakesCredentialRecipeParameters)
+            foreach (var relationship in resource.Annotations.OfType<ResourceRelationshipAnnotation>())
             {
-                continue;
-            }
-
-            if (TryGetCredentialParameter(withConnectionString, "password") is { } recipePassword)
-            {
-                RegisterRecipeCredential(recipePassword, resource, isSecretSubstitution: false);
-                construct.RecipeParameters["password"] = GetOrAddEnvParameter(recipePassword);
-            }
-
-            if (await TryResolveConnectionPropertyAsync(withConnectionString, "username").ConfigureAwait(false) is { } userName)
-            {
-                construct.RecipeParameters["username"] = userName;
-            }
-
-            // The recipe provisions exactly one database, so it has to be told which one Aspire's
-            // consumers will connect to — otherwise the connection string names a database the
-            // recipe never created. Aspire models databases as child resources, and the database
-            // *name* can differ from the child resource name, so read it from the child's own
-            // connection properties rather than assuming they match.
-            if (FindDatabaseChildren(resource) is [var databaseChild, ..] databaseChildren)
-            {
-                if (databaseChildren.Count > 1)
+                // Both dictionaries are keyed by parameter identity, and a relationship annotation
+                // holds the same ParameterResource instance the AppHost passed to the backing
+                // resource, so no name-based lookup is needed — and none is wanted, since two
+                // parameters could in principle share a name.
+                if (relationship.Resource is not ParameterResource parameter ||
+                    !_recipeSecretSubstitutions.ContainsKey(parameter) ||
+                    !_recipeCredentialOwners.TryGetValue(parameter, out var owner) ||
+                    ReferenceEquals(owner.Owner, resource))
                 {
-                    // Emitting one of them would leave every consumer of the others pointed at a
-                    // database the recipe never created — a connection failure at run time with
-                    // nothing in the generated Bicep to explain it.
-                    throw new InvalidOperationException(
-                        $"Resource '{resource.Name}' declares {databaseChildren.Count} databases " +
-                        $"({string.Join("', '", databaseChildren.Select(d => d.Name))}), but its Radius recipe provisions " +
-                        $"a single database. Declare one database per resource.");
+                    continue;
                 }
 
-                if (await TryResolveConnectionPropertyAsync(databaseChild, "databasename").ConfigureAwait(false) is { } databaseName)
-                {
-                    construct.RecipeParameters["database"] = databaseName;
-                }
+                _logger.LogWarning(
+                    "Resource '{ResourceName}' references parameter '{ParameterName}', which is also the credential of " +
+                    "'{OwnerName}'. That resource is provisioned by a Radius recipe which generates its own credential, " +
+                    "so the referencing resource receives the recipe's value rather than the parameter's. Use a separate " +
+                    "parameter if that is not intended.",
+                    resource.Name,
+                    parameter.Name,
+                    owner.Owner.Name);
             }
         }
     }
@@ -1127,8 +1373,19 @@ internal sealed class RadiusInfrastructureBuilder
     /// <remarks>
     /// Goes through the same resolution the container env vars use, so a property that is a plain
     /// literal, a parameter, or a composition of both all produce the value the consumer will see.
+    /// <para>
+    /// Recipe <em>inputs</em> are resolved with parameter substitution disabled. A substitution
+    /// rewrites an Aspire parameter to the value a recipe generates, which is the right answer for a
+    /// value flowing <em>out</em> to a consumer but circular for a value flowing <em>in</em>: it
+    /// would feed a resource's own output back in as its input. Because substitutions are registered
+    /// as the resource loop progresses, leaving it enabled would also make the result depend on
+    /// model order — a parameter shared with an earlier resource would resolve differently than one
+    /// shared with a later resource.
+    /// </para>
     /// </remarks>
-    private async Task<BicepValue<object>?> TryResolveConnectionPropertyAsync(IResourceWithConnectionString resource, string key)
+    private async Task<(BicepValue<object> Value, List<EnvPart> Parts)?> TryResolveConnectionPropertyAsync(
+        IResourceWithConnectionString resource,
+        string key)
     {
         if (FindConnectionProperty(resource, key) is not { } expression)
         {
@@ -1136,9 +1393,9 @@ internal sealed class RadiusInfrastructureBuilder
         }
 
         var parts = new List<EnvPart>();
-        await ResolveEnvPartsAsync(expression, resource, parts).ConfigureAwait(false);
+        await ResolveEnvPartsAsync(expression, resource, parts, allowRecipeSubstitutions: false).ConfigureAwait(false);
 
-        return parts.Count == 0 ? null : new BicepValue<object>(BuildEnvBicepValue(parts).Compile());
+        return parts.Count == 0 ? null : (new BicepValue<object>(BuildEnvBicepValue(parts).Compile()), parts);
     }
 
     /// <summary>
@@ -1203,7 +1460,8 @@ internal sealed class RadiusInfrastructureBuilder
             throw new RadiusBackingResourceEndpointException(
                 resource,
                 $"Resource '{resource.Name}' is deployed by a Radius recipe in a different environment than '{_environment.Name}', " +
-                $"so its address cannot be resolved here. Deploy the consumer and '{resource.Name}' to the same Radius environment.");
+                $"so its address cannot be resolved here. Deploy the consumer and '{resource.Name}' to the same Radius environment. " +
+                $"Diagnostic: ASPIRERADIUS060.");
         }
 
         if (RadiusBackingConnections.GetSchema(radiusType) is not { } schema)
@@ -1211,7 +1469,8 @@ internal sealed class RadiusInfrastructureBuilder
             throw new RadiusBackingResourceEndpointException(
                 resource,
                 $"Resource '{resource.Name}' maps to Radius type '{radiusType}', which does not expose an address Aspire can " +
-                $"project. Remove the reference, or map the resource to a Radius type that publishes host/port outputs.");
+                $"project. Remove the reference, or map the resource to a Radius type that publishes host/port outputs. " +
+                $"Diagnostic: ASPIRERADIUS062.");
         }
 
         var scheme = endpointReference.EndpointAnnotation.UriScheme;
@@ -1244,7 +1503,8 @@ internal sealed class RadiusInfrastructureBuilder
             default:
                 throw new RadiusBackingResourceEndpointException(
                     resource,
-                    $"The endpoint property '{property}' is not supported for Radius backing resource '{resource.Name}'.");
+                    $"The endpoint property '{property}' is not supported for Radius backing resource '{resource.Name}'. " +
+                    $"Diagnostic: ASPIRERADIUS062.");
         }
 
         static ProjectedValue Host(
@@ -1257,7 +1517,7 @@ internal sealed class RadiusInfrastructureBuilder
                 : throw new RadiusBackingResourceEndpointException(
                     resource,
                     $"Radius type '{radiusType}' used for resource '{resource.Name}' does not publish a host output, " +
-                    $"so consumers cannot be given its address.");
+                    $"so consumers cannot be given its address. Diagnostic: ASPIRERADIUS062.");
 
         static ProjectedValue Port(
             RadiusResourceTypeConstruct construct,
@@ -1271,7 +1531,7 @@ internal sealed class RadiusInfrastructureBuilder
                 : throw new RadiusBackingResourceEndpointException(
                     resource,
                     $"Radius type '{radiusType}' used for resource '{resource.Name}' does not publish a port output, " +
-                    $"so consumers cannot be given its address.");
+                    $"so consumers cannot be given its address. Diagnostic: ASPIRERADIUS062.");
     }
 
     private static Dictionary<string, RadiusResourceTypeConstruct> GetConnectionTargets(
@@ -1443,13 +1703,20 @@ internal sealed class RadiusInfrastructureBuilder
             {
                 await ResolveEnvPartsAsync(rawValue, resource, parts).ConfigureAwait(false);
             }
-            catch (InvalidOperationException ex)
+            catch (RadiusUnresolvableValueException ex)
             {
-                // Some endpoint references cannot be resolved at publish time — e.g. a non-HTTP
-                // scheme (redis, tcp, ...) whose port isn't allocated yet. Those backing resources
-                // are surfaced through Radius `connection`s instead of literal container env vars,
-                // so skip the variable rather than failing the whole build.
-                _logger.LogDebug(ex, "Skipping environment variable '{Key}' on resource '{Resource}': value could not be resolved at publish time.", key, resource.Name);
+                // Only the two conditions the publisher explicitly recognises as unavailable at
+                // publish time reach here — see RadiusUnresolvableValueException. This used to be
+                // `catch (InvalidOperationException)`, which also swallowed genuine publish errors:
+                // whether a bug surfaced depended on the exception's type rather than on the
+                // publisher having decided the value was legitimately unavailable.
+                //
+                // Logged at Warning, not Debug: dropping a variable the container asked for is
+                // observable in the deployed app, and the previous Debug level meant it never
+                // appeared in a normal publish.
+                _logger.LogWarning(
+                    "Environment variable '{Key}' on resource '{Resource}' was omitted from the Radius output: {Reason}",
+                    key, resource.Name, ex.Message);
                 continue;
             }
 
@@ -1494,12 +1761,30 @@ internal sealed class RadiusInfrastructureBuilder
     }
 
     /// <summary>
+    /// A recipe parameter whose value reads from a backing resource's Radius construct.
+    /// </summary>
+    /// <remarks>
+    /// Tracked separately from <see cref="ProjectedEnvValue"/> because the two live in different
+    /// places: an env value hangs off a container construct and is a <c>BicepValue&lt;string&gt;</c>,
+    /// while a recipe parameter hangs off a <see cref="RadiusResourceTypeConstruct"/> and is an
+    /// already-compiled <c>BicepValue&lt;object&gt;</c>. Without this record a
+    /// <c>ConfigureRadiusInfrastructure</c> callback that renames a construct would repair the
+    /// container's env vars and silently leave the recipe parameters pointing at the old symbol.
+    /// </remarks>
+    private sealed record ProjectedRecipeParameter(
+        RadiusResourceTypeConstruct Owner,
+        string Key,
+        List<EnvPart> Parts,
+        string? OriginalValue,
+        List<(RadiusResourceTypeConstruct Target, string OriginalIdentifier)> TargetIdentifiers);
+
+    /// <summary>
     /// Renders a Bicep value to a comparable string, so a value a callback overwrote can be told
     /// apart from the one the publisher generated. <c>ContainerEnvVarConstruct.Value</c> assigns
     /// into the existing <see cref="BicepValue{T}"/> rather than replacing it, so reference
     /// equality cannot detect an override.
     /// </summary>
-    private static string? RenderBicepValue(BicepValue<string> value) =>
+    private static string? RenderBicepValue<T>(BicepValue<T> value) =>
         value is IBicepValue bicepValue
             ? bicepValue.Expression?.ToString() ?? bicepValue.LiteralValue?.ToString()
             : null;
@@ -1508,11 +1793,49 @@ internal sealed class RadiusInfrastructureBuilder
     // parameter (used for secret/parameter values so the literal is never emitted), or a value
     // projected out of a backing resource's Radius construct (e.g. `cache.properties.host` or
     // `cache.listSecrets().password`).
-    private readonly record struct EnvPart(string? Literal, ProvisioningParameter? Parameter, ProjectedValue? Projection)
+    private readonly record struct EnvPart(
+        string? Literal,
+        ProvisioningParameter? Parameter,
+        ProjectedValue? Projection,
+        string? StringFormat = null)
     {
         public static EnvPart FromLiteral(string literal) => new(literal, null, null);
         public static EnvPart FromParameter(ProvisioningParameter parameter) => new(null, parameter, null);
         public static EnvPart FromProjection(ProjectedValue projection) => new(null, null, projection);
+
+        /// <summary>
+        /// Applies the format declared on the placeholder this part came from. A literal is escaped
+        /// here and now, because its value is already known; a parameter or projection is only known
+        /// at deploy time, so the escaping has to be emitted as a Bicep call instead.
+        /// </summary>
+        public EnvPart WithStringFormat(string stringFormat) => Literal is { } literal
+            // Mirrors Aspire.Hosting's internal FormattingHelpers.FormatValue, which this assembly
+            // cannot reference. Keep the two in sync if another format is ever added.
+            ? this with
+            {
+                Literal = string.Equals(stringFormat, "uri", StringComparison.OrdinalIgnoreCase)
+                    ? Uri.EscapeDataString(literal)
+                    : throw new NotSupportedException(
+                        $"The string format '{stringFormat}' is not supported by the Radius publisher. " +
+                        $"Diagnostic: ASPIRERADIUS064."),
+            }
+            : this with { StringFormat = stringFormat };
+
+        /// <summary>
+        /// Wraps <paramref name="expression"/> in the Bicep equivalent of this part's format.
+        /// </summary>
+        public BicepExpression ApplyStringFormat(BicepExpression expression) => StringFormat?.ToLowerInvariant() switch
+        {
+            null => expression,
+            // Aspire escapes "uri"-formatted values with Uri.EscapeDataString. Bicep's
+            // uriComponent() is the closest available equivalent and is what ARM documents for
+            // percent-encoding a value for use inside a URI.
+            // https://learn.microsoft.com/azure/azure-resource-manager/bicep/bicep-functions-string#uricomponent
+            "uri" => RadiusBackingConnections.UriComponent(expression),
+            var unsupported => throw new NotSupportedException(
+                $"The string format '{unsupported}' has no Bicep equivalent, so a value using it cannot be emitted " +
+                $"for Radius. Diagnostic: ASPIRERADIUS064."),
+        };
     }
 
     /// <summary>
@@ -1546,7 +1869,7 @@ internal sealed class RadiusInfrastructureBuilder
     /// <c>param</c> references, and composite reference expressions are spliced together so a
     /// mixed literal/secret value is preserved precisely.
     /// </summary>
-    private async Task ResolveEnvPartsAsync(object? value, IResource owner, List<EnvPart> parts)
+    private async Task ResolveEnvPartsAsync(object? value, IResource owner, List<EnvPart> parts, bool allowRecipeSubstitutions = true)
     {
         switch (value)
         {
@@ -1559,18 +1882,20 @@ internal sealed class RadiusInfrastructureBuilder
                 parts.Add(EnvPart.FromLiteral(b ? "true" : "false"));
                 return;
             case ParameterResource param:
-                parts.Add(ResolveParameterPart(param));
+                parts.Add(ResolveParameterPart(param, allowRecipeSubstitutions));
                 return;
             case IResourceBuilder<ParameterResource> paramBuilder:
-                parts.Add(ResolveParameterPart(paramBuilder.Resource));
+                parts.Add(ResolveParameterPart(paramBuilder.Resource, allowRecipeSubstitutions));
                 return;
             case EndpointReference endpointReference:
+                ThrowIfEndpointMissing(endpointReference, owner);
                 if (!TryProjectBackingEndpoint(endpointReference, EndpointProperty.Url, parts))
                 {
                     parts.Add(EnvPart.FromLiteral(ResolveEndpointUrl(endpointReference)));
                 }
                 return;
             case EndpointReferenceExpression endpointReferenceExpression:
+                ThrowIfEndpointMissing(endpointReferenceExpression.Endpoint, owner);
                 if (!TryProjectBackingEndpoint(
                         endpointReferenceExpression.Endpoint,
                         endpointReferenceExpression.Property,
@@ -1580,13 +1905,13 @@ internal sealed class RadiusInfrastructureBuilder
                 }
                 return;
             case ConnectionStringReference connectionStringReference:
-                await ResolveEnvPartsAsync(connectionStringReference.Resource.ConnectionStringExpression, owner, parts).ConfigureAwait(false);
+                await ResolveEnvPartsAsync(connectionStringReference.Resource.ConnectionStringExpression, owner, parts, allowRecipeSubstitutions).ConfigureAwait(false);
                 return;
             case IResourceWithConnectionString resourceWithConnectionString:
-                await ResolveEnvPartsAsync(resourceWithConnectionString.ConnectionStringExpression, owner, parts).ConfigureAwait(false);
+                await ResolveEnvPartsAsync(resourceWithConnectionString.ConnectionStringExpression, owner, parts, allowRecipeSubstitutions).ConfigureAwait(false);
                 return;
             case ReferenceExpression referenceExpression:
-                await ResolveReferenceExpressionPartsAsync(referenceExpression, owner, parts).ConfigureAwait(false);
+                await ResolveReferenceExpressionPartsAsync(referenceExpression, owner, parts, allowRecipeSubstitutions).ConfigureAwait(false);
                 return;
             case IFormattable formattable:
                 parts.Add(EnvPart.FromLiteral(formattable.ToString(null, CultureInfo.InvariantCulture)));
@@ -1597,7 +1922,27 @@ internal sealed class RadiusInfrastructureBuilder
                 if (value is IValueProvider valueProvider)
                 {
                     var context = new ValueProviderContext { ExecutionContext = _executionContext, Caller = owner };
-                    var resolved = await valueProvider.GetValueAsync(context, _cancellationToken).ConfigureAwait(false);
+
+                    string? resolved;
+                    try
+                    {
+                        resolved = await valueProvider.GetValueAsync(context, _cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (InvalidOperationException ex)
+                    {
+                        // Values produced by another deployment — most commonly an Azure Bicep
+                        // output, which throws "...has no value..." until the deployment that
+                        // produces it has run. Radius does not run those deployments, so the value
+                        // genuinely cannot be known while publishing. Re-thrown as the publisher's
+                        // own type so the env-var loop's catch names this condition rather than
+                        // every InvalidOperationException the resolution might raise.
+                        throw new RadiusUnresolvableValueException(
+                            owner,
+                            $"the value provided by '{valueProvider.GetType().Name}' is only known after that resource's " +
+                            $"own deployment, which Radius does not perform ({ex.Message})",
+                            ex);
+                    }
+
                     parts.Add(EnvPart.FromLiteral(resolved ?? string.Empty));
                     return;
                 }
@@ -1608,11 +1953,29 @@ internal sealed class RadiusInfrastructureBuilder
     }
 
     /// <summary>
+    /// Rejects a reference to an endpoint the target resource does not declare, before any code
+    /// touches <see cref="EndpointReference.EndpointAnnotation"/> (which raises a bare
+    /// <see cref="InvalidOperationException"/> that would be indistinguishable from a real error).
+    /// </summary>
+    private static void ThrowIfEndpointMissing(EndpointReference endpointReference, IResource owner)
+    {
+        if (endpointReference.Exists)
+        {
+            return;
+        }
+
+        throw new RadiusUnresolvableValueException(
+            owner,
+            $"the endpoint '{endpointReference.EndpointName}' is not defined on resource " +
+            $"'{endpointReference.Resource.Name}'");
+    }
+
+    /// <summary>
     /// Splices a composite <see cref="ReferenceExpression"/> into ordered parts by interleaving
     /// its literal <see cref="ReferenceExpression.Format"/> chunks with the recursively-resolved
     /// parts of each value provider (matching the <c>{0}</c>, <c>{1}</c>, ... placeholders).
     /// </summary>
-    private async Task ResolveReferenceExpressionPartsAsync(ReferenceExpression expression, IResource owner, List<EnvPart> parts)
+    private async Task ResolveReferenceExpressionPartsAsync(ReferenceExpression expression, IResource owner, List<EnvPart> parts, bool allowRecipeSubstitutions = true)
     {
         // No providers: the format string is already the literal value (after un-escaping braces).
         if (expression.ValueProviders.Count == 0)
@@ -1626,8 +1989,18 @@ internal sealed class RadiusInfrastructureBuilder
         for (var i = 0; i < expression.ValueProviders.Count; i++)
         {
             var inner = new List<EnvPart>();
-            await ResolveEnvPartsAsync(expression.ValueProviders[i], owner, inner).ConfigureAwait(false);
-            providerParts[i] = inner;
+            await ResolveEnvPartsAsync(expression.ValueProviders[i], owner, inner, allowRecipeSubstitutions).ConfigureAwait(false);
+
+            // Apply the placeholder's string format (today only "uri") to every part the provider
+            // produced. Without this the emitted value contains the raw credential: Aspire's own
+            // resolution escapes it via Uri.EscapeDataString, but the publisher writes a Bicep
+            // expression rather than a resolved string, so the escaping has to be carried into the
+            // generated Bicep instead. StringFormats can be shorter than ValueProviders (the
+            // conditional-expression constructor leaves it empty), so index defensively.
+            var stringFormat = i < expression.StringFormats.Count ? expression.StringFormats[i] : null;
+            providerParts[i] = stringFormat is null
+                ? inner
+                : inner.Select(part => part.WithStringFormat(stringFormat)).ToList();
         }
 
         // Walk the format string, emitting literal text and substituting `{i}` placeholders.
@@ -1689,19 +2062,20 @@ internal sealed class RadiusInfrastructureBuilder
     /// specific resource's recipe-generated secret everywhere it appears — the other resources'
     /// consumers would silently be handed the wrong credential.
     /// </remarks>
-    private void RegisterRecipeCredential(ParameterResource parameter, IResource owner, bool isSecretSubstitution)
+    private void RegisterRecipeCredential(ParameterResource parameter, IResource owner, bool isProjectionSubstitution)
     {
         if (_recipeCredentialOwners.TryGetValue(parameter, out var existing) &&
             !ReferenceEquals(existing.Owner, owner) &&
-            (existing.IsSecretSubstitution || isSecretSubstitution))
+            (existing.IsProjectionSubstitution || isProjectionSubstitution))
         {
             throw new InvalidOperationException(
                 $"Parameter '{parameter.Name}' is used as the credential of both '{existing.Owner.Name}' and '{owner.Name}', " +
                 $"and at least one of them is provisioned by a Radius recipe that generates its own credential. The shared " +
-                $"parameter would be rewritten to one resource's secret for both. Give each resource its own parameter.");
+                $"parameter would be rewritten to one resource's secret for both. Give each resource its own parameter. " +
+                $"Diagnostic: ASPIRERADIUS061.");
         }
 
-        _recipeCredentialOwners[parameter] = (owner, isSecretSubstitution);
+        _recipeCredentialOwners[parameter] = (owner, isProjectionSubstitution);
     }
 
     /// <summary>
@@ -1744,7 +2118,7 @@ internal sealed class RadiusInfrastructureBuilder
                         $"Environment variable '{projected.Key}' on container '{projected.ResourceName}' reads connection " +
                         $"information from Radius resource '{target.BicepIdentifier}', but a ConfigureRadiusInfrastructure " +
                         $"callback removed or replaced that resource. Keep the resource, or set '{projected.Key}' explicitly " +
-                        $"in the callback.");
+                        $"in the callback. Diagnostic: ASPIRERADIUS065.");
                 }
 
                 if (!string.Equals(target.BicepIdentifier, originalIdentifier, StringComparison.Ordinal))
@@ -1758,6 +2132,51 @@ internal sealed class RadiusInfrastructureBuilder
                 projected.EnvVar.Value = BuildEnvBicepValue(projected.Parts);
             }
         }
+
+        RebuildProjectedRecipeParameters(liveInstances);
+    }
+
+    /// <summary>
+    /// The <see cref="RebuildProjectedEnvValues"/> counterpart for recipe parameters.
+    /// </summary>
+    private void RebuildProjectedRecipeParameters(HashSet<RadiusResourceTypeConstruct> liveInstances)
+    {
+        foreach (var projected in _projectedRecipeParameters)
+        {
+            // The construct that owns the parameter is gone, or the callback set the parameter
+            // itself — last-write-wins, exactly as for container env values.
+            if (!liveInstances.Contains(projected.Owner) ||
+                !projected.Owner.RecipeParameters.TryGetValue(projected.Key, out var current) ||
+                !string.Equals(RenderBicepValue(current), projected.OriginalValue, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var changed = false;
+
+            foreach (var (target, originalIdentifier) in projected.TargetIdentifiers)
+            {
+                if (!liveInstances.Contains(target))
+                {
+                    throw new InvalidOperationException(
+                        $"Recipe parameter '{projected.Key}' on Radius resource '{projected.Owner.BicepIdentifier}' reads " +
+                        $"connection information from Radius resource '{target.BicepIdentifier}', but a " +
+                        $"ConfigureRadiusInfrastructure callback removed or replaced that resource. Keep the resource, or " +
+                        $"set '{projected.Key}' explicitly in the callback. Diagnostic: ASPIRERADIUS065.");
+                }
+
+                if (!string.Equals(target.BicepIdentifier, originalIdentifier, StringComparison.Ordinal))
+                {
+                    changed = true;
+                }
+            }
+
+            if (changed)
+            {
+                projected.Owner.RecipeParameters[projected.Key] =
+                    new BicepValue<object>(BuildEnvBicepValue(projected.Parts).Compile());
+            }
+        }
     }
 
     private static string UnescapeBraces(string format) =>
@@ -1767,8 +2186,8 @@ internal sealed class RadiusInfrastructureBuilder
     // Aspire parameter is replaced by the recipe's own secret accessor wherever it is referenced.
     // Everything composed from it (connection string, URI, splatted *_PASSWORD) then carries the
     // deployed value. Parameters that are not a recipe credential keep the normal `param` routing.
-    private EnvPart ResolveParameterPart(ParameterResource parameter) =>
-        _recipeSecretSubstitutions.TryGetValue(parameter, out var secretProjection)
+    private EnvPart ResolveParameterPart(ParameterResource parameter, bool allowRecipeSubstitutions) =>
+        allowRecipeSubstitutions && _recipeSecretSubstitutions.TryGetValue(parameter, out var secretProjection)
             ? EnvPart.FromProjection(secretProjection)
             : EnvPart.FromParameter(GetOrAddEnvParameter(parameter));
 
@@ -1822,19 +2241,21 @@ internal sealed class RadiusInfrastructureBuilder
         }
 
         // A single parameter with no surrounding literals maps straight to the `param` reference,
-        // emitting `value: paramName` rather than an interpolated string.
-        if (parts is [{ Literal: null, Parameter: { } soleParameter }])
+        // emitting `value: paramName` rather than an interpolated string. A formatted parameter has
+        // to go through the expression path instead, so the escaping call is emitted around it.
+        if (parts is [{ Literal: null, StringFormat: null, Parameter: { } soleParameter }])
         {
             return soleParameter;
         }
 
         // Likewise a lone Bicep expression is emitted bare (`value: cache.properties.host`) rather
         // than wrapped in a single-placeholder interpolation.
-        if (parts is [{ Literal: null, Parameter: null, Projection: { } soleProjection }])
+        if (parts is [{ Literal: null, Parameter: null, Projection: { } soleProjection } soleProjectionPart])
         {
             var expression = soleProjection.Build();
             return new BicepValue<string>(
-                soleProjection.IsNumeric ? RadiusBackingConnections.ToStringExpression(expression) : expression);
+                soleProjectionPart.ApplyStringFormat(
+                    soleProjection.IsNumeric ? RadiusBackingConnections.ToStringExpression(expression) : expression));
         }
 
         // Mixed literal/parameter value: build an interpolated Bicep string ('...${param}...').
@@ -1847,8 +2268,12 @@ internal sealed class RadiusInfrastructureBuilder
             format.Append('{').Append(i.ToString(CultureInfo.InvariantCulture)).Append('}');
             args[i] = parts[i] switch
             {
+                // A formatted parameter cannot be passed as the ProvisioningParameter itself: the
+                // escaping call has to wrap the identifier, so hand the interpolation an expression.
+                { Parameter: { } parameter, StringFormat: not null } part =>
+                    part.ApplyStringFormat(new IdentifierExpression(parameter.BicepIdentifier)),
                 { Parameter: { } parameter } => parameter,
-                { Projection: { } projection } => projection.Build(),
+                { Projection: { } projection } part => part.ApplyStringFormat(projection.Build()),
                 var part => part.Literal!,
             };
         }
