@@ -83,6 +83,21 @@ public class DefaultUserPrincipalProviderTests
     }
 
     [Fact]
+    public async Task GetUserPrincipalAsync_DoesNotInferServicePrincipalFromAppId()
+    {
+        var expectedOid = Guid.NewGuid();
+        var token = CreateTestDelegatedTokenWithAppId(expectedOid, Guid.NewGuid().ToString());
+        var tokenCredentialProvider = new TestTokenCredentialProviderWithCustomToken(token);
+        var provider = new DefaultUserPrincipalProvider(tokenCredentialProvider);
+
+        var principal = await provider.GetUserPrincipalAsync();
+
+        Assert.Equal(expectedOid, principal.Id);
+        Assert.Equal(string.Empty, principal.Name);
+        Assert.Equal(RoleManagementPrincipalType.User, principal.Type);
+    }
+
+    [Fact]
     public async Task GetUserPrincipalAsync_HandlesCancellation()
     {
         // Arrange
@@ -168,6 +183,29 @@ public class DefaultUserPrincipalProviderTests
             oid = oid.ToString(),
             appid = appId,
             idtyp = "app",
+            exp = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds(),
+            iat = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+        };
+
+        var payloadJson = JsonSerializer.Serialize(payload);
+        var payloadBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(payloadJson))
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
+
+        var signature = Convert.ToBase64String(Encoding.UTF8.GetBytes("test-signature"));
+
+        return $"{header}.{payloadBase64}.{signature}";
+    }
+
+    private static string CreateTestDelegatedTokenWithAppId(Guid oid, string appId)
+    {
+        var header = Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { alg = "RS256", typ = "JWT" })));
+
+        var payload = new
+        {
+            oid = oid.ToString(),
+            appid = appId,
             exp = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds(),
             iat = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
         };

@@ -217,8 +217,8 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
             terminal?.Dispose();
 
             output.WriteLine($"Triggering cleanup of resource group: {resourceGroupName}");
-            await CleanupResourceGroupAsync(resourceGroupName);
-            DeploymentReporter.ReportCleanupStatus(resourceGroupName, success: true, "Cleanup triggered");
+            var (cleanupSucceeded, cleanupMessage) = await CleanupResourceGroupAsync(resourceGroupName);
+            DeploymentReporter.ReportCleanupStatus(resourceGroupName, cleanupSucceeded, cleanupMessage);
         }
     }
 
@@ -313,7 +313,7 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
         await pendingRun;
     }
 
-    private async Task CleanupResourceGroupAsync(string resourceGroupName)
+    private async Task<(bool Success, string Message)> CleanupResourceGroupAsync(string resourceGroupName)
     {
         try
         {
@@ -335,18 +335,34 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
             using var process = Process.Start(startInfo);
             if (process is null)
             {
-                output.WriteLine($"Failed to start cleanup for resource group: {resourceGroupName}");
-                return;
+                var message = $"Failed to start cleanup for resource group: {resourceGroupName}";
+                output.WriteLine(message);
+                return (false, message);
             }
 
+            // Read both streams concurrently so Azure CLI cannot block while waiting for a full pipe buffer.
+            var stdoutTask = process.StandardOutput.ReadToEndAsync();
+            var stderrTask = process.StandardError.ReadToEndAsync();
             await process.WaitForExitAsync();
-            output.WriteLine(process.ExitCode == 0
-                ? $"Resource group deletion initiated: {resourceGroupName}"
-                : $"Resource group deletion may have failed (exit code {process.ExitCode})");
+            _ = await stdoutTask;
+            var stderr = await stderrTask;
+            if (process.ExitCode == 0)
+            {
+                var message = $"Resource group deletion initiated: {resourceGroupName}";
+                output.WriteLine(message);
+                return (true, "Deletion initiated");
+            }
+
+            var failureMessage = string.IsNullOrWhiteSpace(stderr)
+                ? $"Exit code {process.ExitCode}"
+                : $"Exit code {process.ExitCode}: {stderr.Trim()}";
+            output.WriteLine($"Resource group deletion may have failed ({failureMessage})");
+            return (false, failureMessage);
         }
         catch (Exception ex)
         {
             output.WriteLine($"Failed to cleanup resource group: {ex.Message}");
+            return (false, ex.Message);
         }
     }
 

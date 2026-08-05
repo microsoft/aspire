@@ -76,11 +76,11 @@ internal sealed class DefaultUserPrincipalProvider(ITokenCredentialProvider toke
             }
 
             var hasAppId = !string.IsNullOrEmpty(appId);
-            var principalType = isAppPrincipal || (string.IsNullOrEmpty(principalName) && hasAppId)
+            var principalType = isAppPrincipal
                 ? RoleManagementPrincipalType.ServicePrincipal
                 : RoleManagementPrincipalType.User;
 
-            if (string.IsNullOrEmpty(principalName) && hasAppId)
+            if (isAppPrincipal && string.IsNullOrEmpty(principalName) && hasAppId)
             {
                 principalName = appId;
             }
