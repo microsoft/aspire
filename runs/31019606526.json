@@ -1,0 +1,86 @@
+{
+  "run_id": 31019606526,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/31019606526",
+  "analyzed_at": "2026-08-05T16:12:16Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19007,
+    "title": "Graduate year-old experimental Aspire APIs",
+    "author": "sebastienros",
+    "state": "closed",
+    "head_branch": "sebros/graduate-experimental-aspire-apis",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19007"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "id": 92353263390,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31019606526/job/92353263390",
+      "classification": "flaky-test",
+      "reason": "SqlServerContainerFixture failed to start due to Docker port conflict (address already in use on port 1433). This is a transient infrastructure/environmental issue unrelated to PR changes which only touched AzureContainerApps and Pipelines/CompletionState.cs.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationCreatesThePrincipalWithTheIdentityObjectIdAsItsSid",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync\n---- Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connectivity on endpoint suspicious_bardeen (f94a77b2589f126095b5b34311fa1263c3e456a2af74dee19515aad9405c60c7): failed to bind host port for 0.0.0.0::172.17.0.3:1433/tcp: address already in use\"}",
+      "stack_trace": "at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync(...)\nat Docker.DotNet.DockerClient.MakeRequestAsync[T](...)\nat Docker.DotNet.ContainerOperations.StartContainerAsync(...)\nat DotNet.Testcontainers.Clients.TestcontainersClient.StartAsync(...)\nat Aspire.Hosting.Azure.Tests.SqlServerContainerFixture.InitializeAsync() in SqlServerContainerFixture.cs:line 28",
+      "classification": "flaky",
+      "reason": "SqlServerContainerFixture failed to bind port 1433 due to a port conflict on the CI runner. This is a transient Docker networking issue. The PR did not modify SqlServerContainerFixture or AzureSqlPrincipalReconciliationTests."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationHandlesPrincipalNamesRequiringEscaping",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync\n---- Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connectivity on endpoint suspicious_bardeen: failed to bind host port for 0.0.0.0::172.17.0.3:1433/tcp: address already in use\"}",
+      "stack_trace": "at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync(...)\nat Aspire.Hosting.Azure.Tests.SqlServerContainerFixture.InitializeAsync() in SqlServerContainerFixture.cs:line 28",
+      "classification": "flaky",
+      "reason": "Same SqlServerContainerFixture port conflict as other AzureSqlPrincipalReconciliationTests failures."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationIsANoOpWhenTheScriptRunsAgain",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync\n---- Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connectivity on endpoint suspicious_bardeen: failed to bind host port for 0.0.0.0::172.17.0.3:1433/tcp: address already in use\"}",
+      "stack_trace": "at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync(...)\nat Aspire.Hosting.Azure.Tests.SqlServerContainerFixture.InitializeAsync() in SqlServerContainerFixture.cs:line 28",
+      "classification": "flaky",
+      "reason": "Same SqlServerContainerFixture port conflict as other AzureSqlPrincipalReconciliationTests failures."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationReplacesThePrincipalWhenTheIdentityObjectIdChanges",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync\n---- Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connectivity on endpoint suspicious_bardeen: failed to bind host port for 0.0.0.0::172.17.0.3:1433/tcp: address already in use\"}",
+      "stack_trace": "at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync(...)\nat Aspire.Hosting.Azure.Tests.SqlServerContainerFixture.InitializeAsync() in SqlServerContainerFixture.cs:line 28",
+      "classification": "flaky",
+      "reason": "Same SqlServerContainerFixture port conflict as other AzureSqlPrincipalReconciliationTests failures."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationLeavesPrincipalsItDidNotCreateIntact",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync\n---- Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connectivity on endpoint suspicious_bardeen: failed to bind host port for 0.0.0.0::172.17.0.3:1433/tcp: address already in use\"}",
+      "stack_trace": "at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync(...)\nat Aspire.Hosting.Azure.Tests.SqlServerContainerFixture.InitializeAsync() in SqlServerContainerFixture.cs:line 28",
+      "classification": "flaky",
+      "reason": "Same SqlServerContainerFixture port conflict as other AzureSqlPrincipalReconciliationTests failures."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationRollsBackWhenTheUserCannotBeRecreated",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync\n---- Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connectivity on endpoint suspicious_bardeen: failed to bind host port for 0.0.0.0::172.17.0.3:1433/tcp: address already in use\"}",
+      "stack_trace": "at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync(...)\nat Aspire.Hosting.Azure.Tests.SqlServerContainerFixture.InitializeAsync() in SqlServerContainerFixture.cs:line 28",
+      "classification": "flaky",
+      "reason": "Same SqlServerContainerFixture port conflict as other AzureSqlPrincipalReconciliationTests failures."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationFailsWithoutDamageWhenThePrincipalOwnsASchema",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync\n---- Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connectivity on endpoint suspicious_bardeen: failed to bind host port for 0.0.0.0::172.17.0.3:1433/tcp: address already in use\"}",
+      "stack_trace": "at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync(...)\nat Aspire.Hosting.Azure.Tests.SqlServerContainerFixture.InitializeAsync() in SqlServerContainerFixture.cs:line 28",
+      "classification": "flaky",
+      "reason": "Same SqlServerContainerFixture port conflict as other AzureSqlPrincipalReconciliationTests failures."
+    }
+  ],
+  "causes": ["sqlserver-container-fixture-port-in-use"]
+}
