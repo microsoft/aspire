@@ -407,6 +407,24 @@ public class AzureSandboxesTests
     }
 
     [Fact]
+    public async Task SandboxGroupNamesPreserveDigits()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var sandbox1 = builder.AddAzureSandboxGroup("sandbox1");
+        var sandbox2 = builder.AddAzureSandboxGroup("sandbox2");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var (_, sandbox1Bicep) = await AzureManifestUtils.GetManifestWithBicep(model, sandbox1.Resource);
+        var (_, sandbox2Bicep) = await AzureManifestUtils.GetManifestWithBicep(model, sandbox2.Resource);
+
+        Assert.Contains("name: take('sandbox1-${uniqueString(resourceGroup().id)}', 63)", sandbox1Bicep, StringComparison.Ordinal);
+        Assert.Contains("name: take('sandbox2-${uniqueString(resourceGroup().id)}', 63)", sandbox2Bicep, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task AzureSandboxPublishBindsPrincipalTypeInMainBicep()
     {
         using var tempDir = new TemporaryDirectory();

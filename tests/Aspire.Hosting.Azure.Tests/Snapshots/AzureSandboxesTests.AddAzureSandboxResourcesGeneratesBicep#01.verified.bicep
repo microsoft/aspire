@@ -6,7 +6,7 @@ param userPrincipalId string
 param principalType string
 
 resource workergroup 'Microsoft.App/sandboxGroups@2026-02-01-preview' = {
-  name: take('workergroup${uniqueString(resourceGroup().id)}', 24)
+  name: take('workergroup-${uniqueString(resourceGroup().id)}', 63)
   location: resourceGroup().location
   tags: {
     'aspire-resource-name': 'workergroup'
