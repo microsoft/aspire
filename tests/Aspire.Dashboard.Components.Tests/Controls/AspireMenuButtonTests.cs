@@ -13,7 +13,7 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 public class AspireMenuButtonTests : DashboardTestContext
 {
     [Fact]
-    public void Render_OmitsHostAria_AndMarksTriggerForAccessibilityObserver()
+    public void Render_AddsMenuPopupAriaWithoutExpandedState()
     {
         FluentUISetupHelpers.SetupFluentUIComponents(this);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
@@ -30,18 +30,7 @@ public class AspireMenuButtonTests : DashboardTestContext
 
         var button = cut.Find("#view-options-button");
 
-        // Menu-button ARIA is applied by app.js at runtime, not rendered here, so bUnit (which never
-        // executes app.js) asserts the host-element contract the JS observer relies on:
-        //  - The data-* marker is how the single document-level observer in app.js finds every menu
-        //    trigger and then sets aria-haspopup="menu" on the inner shadow-root <button part="control">.
-        Assert.True(button.HasAttribute("data-aspire-menu-trigger"));
-
-        //  - The role-less <fluent-button> host must NOT carry these ARIA attributes: aria-expanded on a
-        //    role-less element is an axe-core aria-allowed-attr violation, and giving the host
-        //    role="button" would trip nested-interactive against its inner <button>. They belong on the
-        //    inner control (verified in a real browser by the Playwright menu-button tests). Asserting
-        //    their absence here guards against regressing back to declarative host ARIA.
-        Assert.False(button.HasAttribute("aria-haspopup"));
+        Assert.Equal("menu", button.GetAttribute("aria-haspopup"));
         Assert.False(button.HasAttribute("aria-expanded"));
     }
 
@@ -74,6 +63,7 @@ public class AspireMenuButtonTests : DashboardTestContext
         Assert.Equal(1, providerInvocationCount);
         var prepareInvocation = Assert.Single(JSInterop.Invocations, invocation => invocation.Identifier == "prepareForFluentMenuInitialization");
         var waitInvocation = Assert.Single(JSInterop.Invocations, invocation => invocation.Identifier == "waitForFluentMenuInitialization");
+        Assert.Equal(100, waitInvocation.Arguments[1]);
         var invocations = JSInterop.Invocations.ToList();
         Assert.True(invocations.IndexOf(prepareInvocation) < invocations.IndexOf(waitInvocation));
         Assert.Single(cut.FindComponents<AspireMenu>());
@@ -138,13 +128,50 @@ public class AspireMenuButtonTests : DashboardTestContext
     }
 
     [Fact]
+    public void ItemsProvider_DoesNotRefreshOpenMenuWhenItemsAreUnchanged()
+    {
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+        FluentUISetupHelpers.SetupFluentButton(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+
+        var providerInvocationCount = 0;
+        var provider = RenderComponent<FluentMenuProvider>();
+        var cut = RenderComponent<AspireMenuButton>(builder =>
+        {
+            builder.Add(p => p.MenuButtonId, "stable-menu-button");
+            builder.Add(p => p.Text, "View options");
+            builder.Add(p => p.ItemsProvider, () =>
+            {
+                providerInvocationCount++;
+                return [new MenuButtonItem { Text = "Item" }];
+            });
+        });
+
+        cut.Find("#stable-menu-button").Click();
+        provider.WaitForAssertion(() => Assert.Single(provider.FindComponents<FluentMenuItem>()));
+        var initialItemId = provider.FindComponent<FluentMenuItem>().Instance.Id;
+        var menu = cut.FindComponent<AspireMenu>();
+        var initialMenuRenderCount = menu.RenderCount;
+
+        for (var i = 0; i < 5; i++)
+        {
+            cut.SetParametersAndRender(builder => builder.Add(p => p.Text, $"View options {i}"));
+        }
+
+        Assert.Equal(6, providerInvocationCount);
+        Assert.Equal(initialItemId, provider.FindComponent<FluentMenuItem>().Instance.Id);
+        Assert.Equal(initialMenuRenderCount + 5, menu.RenderCount);
+    }
+
+    [Fact]
     public async Task DisposeAsync_CancelsPendingMenuInitialization()
     {
         FluentUISetupHelpers.SetupFluentUIComponents(this);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
         FluentUISetupHelpers.SetupFluentButton(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
-        var initialization = JSInterop.SetupVoid("waitForFluentMenuInitialization", "pending-menu-button");
+        var initialization = JSInterop.SetupVoid("waitForFluentMenuInitialization", "pending-menu-button", 100);
         JSInterop.SetupVoid("cancelFluentMenuInitialization", "pending-menu-button").SetVoidResult();
         var cut = RenderComponent<AspireMenuButton>(builder =>
         {

@@ -133,8 +133,84 @@ public partial class AspireMenuButton : FluentComponentBase, IAsyncDisposable
 
     private void RefreshItems()
     {
-        _items = ItemsProvider().ToArray();
+        var items = ItemsProvider().ToArray();
+
+        if (HaveSameRenderState(_items, items))
+        {
+            UpdateCallbacks(_items, items);
+        }
+        else
+        {
+            _items = items;
+        }
+
         _disabled = !_items.Any(i => !i.IsDivider);
+    }
+
+    private static bool HaveSameRenderState(IReadOnlyList<MenuButtonItem> currentItems, IReadOnlyList<MenuButtonItem> newItems)
+    {
+        if (currentItems.Count != newItems.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < currentItems.Count; i++)
+        {
+            var currentItem = currentItems[i];
+            var newItem = newItems[i];
+
+            if (currentItem.IsDivider != newItem.IsDivider ||
+                currentItem.Text != newItem.Text ||
+                currentItem.Tooltip != newItem.Tooltip ||
+                !Equals(currentItem.Icon, newItem.Icon) ||
+                currentItem.Role != newItem.Role ||
+                currentItem.Checked != newItem.Checked ||
+                currentItem.IsDisabled != newItem.IsDisabled ||
+                currentItem.Class != newItem.Class ||
+                !HaveSameAttributes(currentItem.AdditionalAttributes, newItem.AdditionalAttributes) ||
+                !HaveSameRenderState(currentItem.NestedMenuItems ?? [], newItem.NestedMenuItems ?? []))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool HaveSameAttributes(IReadOnlyDictionary<string, object>? currentAttributes, IReadOnlyDictionary<string, object>? newAttributes)
+    {
+        if (currentAttributes is null || currentAttributes.Count == 0)
+        {
+            return newAttributes is null || newAttributes.Count == 0;
+        }
+
+        if (newAttributes is null || currentAttributes.Count != newAttributes.Count)
+        {
+            return false;
+        }
+
+        foreach (var (name, value) in currentAttributes)
+        {
+            if (!newAttributes.TryGetValue(name, out var newValue) || !Equals(value, newValue))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static void UpdateCallbacks(IReadOnlyList<MenuButtonItem> currentItems, IReadOnlyList<MenuButtonItem> newItems)
+    {
+        for (var i = 0; i < currentItems.Count; i++)
+        {
+            currentItems[i].OnClick = newItems[i].OnClick;
+
+            if (currentItems[i].NestedMenuItems is { } currentNestedItems && newItems[i].NestedMenuItems is { } newNestedItems)
+            {
+                UpdateCallbacks(currentNestedItems, newNestedItems);
+            }
+        }
     }
 
     private void OnMenuRenderComplete()
