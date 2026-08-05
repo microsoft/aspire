@@ -1,0 +1,38 @@
+{
+  "run_id": 30987535630,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/30987535630",
+  "analyzed_at": "2026-08-05T08:36:41Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 18989,
+    "title": "Lazily initialize dashboard menus",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "jamesnk/lazy-dashboard-menus",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18989"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.Containers / Hosting.Containers (ubuntu-latest)",
+      "id": 92246203205,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/30987535630/job/92246203205",
+      "classification": "flaky-test",
+      "reason": "AddDockerfileLaunchesContainerSuccessfully timed out with Polly.Timeout.TimeoutRejectedException in DcpResourceWatcher. The PR only changes Aspire.Dashboard components and tests; no Hosting.Containers code was modified.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Containers.Tests.WithDockerfileTests.AddDockerfileLaunchesContainerSuccessfully",
+      "job": "Tests / Hosting.Containers / Hosting.Containers (ubuntu-latest)",
+      "error": "Polly.Timeout.TimeoutRejectedException : The operation didn't complete within the allowed timeout of '00:00:20'.\n---- System.Threading.Tasks.TaskCanceledException : A task was canceled.",
+      "stack_trace": "at Polly.Utils.ExceptionUtilities.TrySetStackTrace[T](T exception)\n   at Polly.Timeout.TimeoutResilienceStrategy.ExecuteCore[TResult,TState](Func`3 callback, ResilienceContext context, TState state)\n   at Aspire.Hosting.Dcp.DcpResourceWatcher.<>c__DisplayClass25_0.<<Start>g__WatchKubernetesResourceAsync|3>d`1.MoveNext() in /_/src/Aspire.Hosting/Dcp/DcpResourceWatcher.cs:line 173",
+      "classification": "flaky",
+      "reason": "Timeout in DcpResourceWatcher during container startup. The PR modifies only Dashboard UI components; no changes to Hosting.Containers or DCP infrastructure. This is an intermittent timing/infrastructure issue."
+    }
+  ],
+  "causes": ["hosting-containers-adddockerfile-timeout"]
+}

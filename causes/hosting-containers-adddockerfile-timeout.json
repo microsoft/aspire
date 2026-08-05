@@ -1,0 +1,17 @@
+{
+  "id": "hosting-containers-adddockerfile-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: WithDockerfileTests.AddDockerfileLaunchesContainerSuccessfully times out in DcpResourceWatcher",
+  "test_name": "Aspire.Hosting.Containers.Tests.WithDockerfileTests.AddDockerfileLaunchesContainerSuccessfully",
+  "error_pattern": "Polly.Timeout.TimeoutRejectedException : The operation didn't complete within the allowed timeout of '00:00:20'.\n---- System.Threading.Tasks.TaskCanceledException : A task was canceled.\n   at Polly.Timeout.TimeoutResilienceStrategy.ExecuteCore\n   at Aspire.Hosting.Dcp.DcpResourceWatcher DcpResourceWatcher.cs:line 173\nHosting failed to start",
+  "occurrences": [
+    {
+      "run_id": 30987535630,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/30987535630",
+      "job": "Tests / Hosting.Containers / Hosting.Containers (ubuntu-latest)",
+      "pr_number": 18989,
+      "observed_at": "2026-08-05T08:36:41Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19011"
+}
