@@ -132,11 +132,11 @@ public static class DotnetProjectHostingExtensions
         //   dotnet run --file <app.cs> --no-cache [--no-build] [--configuration <cfg>] --no-launch-profile
         resource.WithArgs(ctx =>
         {
-            // The active launch configuration supplies the project launch when it is "project" or owns a custom
-            // entrypoint. In those cases adding `dotnet run` would duplicate the tool invocation instead of
+            // The active launch configuration supplies the project launch when it is "project" or performs a custom
+            // tool invocation. In those cases adding `dotnet run` would duplicate the tool invocation instead of
             // contributing the process command.
             if (ctx.Resource.SupportsDebugging(builder.Configuration, out var debugAnnotation)
-                && (debugAnnotation.LaunchConfigurationType is KnownLaunchConfigurationTypes.Project || ctx.Resource.OwnsEntrypointArguments(debugAnnotation)))
+                && (debugAnnotation.LaunchConfigurationType is KnownLaunchConfigurationTypes.Project || ctx.Resource.HasLaunchToolArgsOwnedBy(debugAnnotation)))
             {
                 return;
             }

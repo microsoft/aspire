@@ -1353,9 +1353,9 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             }
         }
 
-        if (resource.TryGetAnnotationsOfType<EntrypointArgsCallbackAnnotation>(out var entrypointArgsCallbacks))
+        if (resource.TryGetAnnotationsOfType<LaunchToolArgsCallbackAnnotation>(out var launchToolArgsCallbacks))
         {
-            foreach (var callback in entrypointArgsCallbacks)
+            foreach (var callback in launchToolArgsCallbacks)
             {
                 ((ICallbackResourceAnnotation<CommandLineArgsCallbackContext, IList<object>>)callback).ForgetCachedResult();
             }

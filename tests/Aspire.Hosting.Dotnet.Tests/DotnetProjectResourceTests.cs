@@ -338,10 +338,10 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AddDotnetProject_InDebugSession_OmitsDotnetRunScaffolding_WhenActiveCustomDebugSupportOwnsEntrypointArgs()
+    public async Task AddDotnetProject_InDebugSession_OmitsDotnetRunScaffolding_WhenActiveCustomDebugSupportOwnsLaunchToolArgs()
     {
-        // A stacked custom debug configuration with entrypoint arguments owns the tool invocation, so no
-        // Process fallback is offered and Spec.Args is composed from that entrypoint plus the program arguments.
+        // A stacked custom debug configuration with launch tool arguments owns the tool invocation, so no
+        // Process fallback is offered and Spec.Args is composed from that prefix plus the program arguments.
         // The `dotnet run …` scaffolding must be omitted; re-emitting it would duplicate the tool invocation.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
@@ -355,24 +355,24 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         var projectPath = Path.Combine(builder.AppHostDirectory, "MyService", "MyService.csproj");
         var app = builder.AddDotnetProject("svc", projectPath, o => o.ExcludeLaunchProfile = true)
                          .WithArgs("--config", "prod.yaml")
-                         .WithEntrypointArgs("custom", ctx => ctx.Args.Add("entrypoint-arg"))
+                         .WithLaunchToolArgs(ctx => ctx.Args.Add("launch-tool-arg"), ownedByLaunchConfigurationType: "custom")
                          .WithDebugSupport(_ => new ExecutableLaunchConfiguration("custom"), "custom");
 
         using var application = builder.Build();
         var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource, application.Services);
 
-        // Only the custom entrypoint plus the user args remain; no `dotnet run …` scaffolding.
+        // Only the custom tool invocation plus the user args remain; no `dotnet run …` scaffolding.
         Assert.Collection(args,
-            arg => Assert.Equal("entrypoint-arg", arg),
+            arg => Assert.Equal("launch-tool-arg", arg),
             arg => Assert.Equal("--config", arg),
             arg => Assert.Equal("prod.yaml", arg));
     }
 
     [Fact]
-    public async Task AddDotnetProject_InDebugSession_OmitsDotnetRunScaffolding_WhenOwnedEntrypointIsEmpty()
+    public async Task AddDotnetProject_InDebugSession_OmitsDotnetRunScaffolding_WhenOwnedLaunchToolArgsAreEmpty()
     {
-        // Entrypoint ownership, rather than the number of values it produces, determines who supplies the project
-        // launch. A no-op custom entrypoint must still suppress `dotnet run`; DCP consequently cannot offer this
+        // Launch tool argument ownership, rather than the number of values produced, determines who supplies the project
+        // launch. A no-op custom tool invocation must still suppress `dotnet run`; DCP consequently cannot offer this
         // IDE-only command line as a Process fallback.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
@@ -386,7 +386,7 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         var projectPath = Path.Combine(builder.AppHostDirectory, "MyService", "MyService.csproj");
         var app = builder.AddDotnetProject("svc", projectPath, o => o.ExcludeLaunchProfile = true)
                          .WithArgs("--config", "prod.yaml")
-                         .WithEntrypointArgs("custom", static _ => { })
+                         .WithLaunchToolArgs(static _ => { }, ownedByLaunchConfigurationType: "custom")
                          .WithDebugSupport(_ => new ExecutableLaunchConfiguration("custom"), "custom");
 
         using var application = builder.Build();

@@ -101,16 +101,25 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
         // The launch configuration is applied before the command line is composed because applying it can switch the
         // execution type to Process, and the composition depends on the final execution type: an IDE-launched
-        // resource does not receive its entrypoint arguments, a process-launched one does.
-        var resolvedEntrypointArgumentCount = configuration.AdditionalConfigurationData.OfType<EntrypointArgumentsData>().FirstOrDefault()?.Count ?? 0;
-        await ApplyLaunchConfigurationAsync(er, exe, resolvedEntrypointArgumentCount, cancellationToken).ConfigureAwait(false);
+        // resource does not receive the launch tool arguments its launch configuration already performs, a
+        // process-launched one does.
+        var launchToolArgumentsData = configuration.AdditionalConfigurationData.OfType<LaunchToolArgumentsData>().FirstOrDefault();
+        var resolvedLaunchToolArgumentCount = launchToolArgumentsData?.Count ?? 0;
+        await ApplyLaunchConfigurationAsync(er, exe, resolvedLaunchToolArgumentCount, cancellationToken).ConfigureAwait(false);
 
-        var omittedEntrypointArgumentCount = OmitEntrypointArguments(er, spec)
-            ? resolvedEntrypointArgumentCount
+        var omittedLaunchToolArgumentCount = OmitLaunchToolArguments(er, spec)
+            ? resolvedLaunchToolArgumentCount
             : 0;
 
         var executableArgumentStartIndex = spec.Args?.Count ?? 0;
-        var launchArgs = BuildLaunchArgs(er, spec, configuration.Arguments, executableArgumentStartIndex, omittedEntrypointArgumentCount);
+        var launchArgs = BuildLaunchArgs(
+            er,
+            spec,
+            configuration.Arguments,
+            executableArgumentStartIndex,
+            resolvedLaunchToolArgumentCount,
+            omittedLaunchToolArgumentCount,
+            launchToolArgumentsData?.ShowInCommandLine ?? true);
         if (!HasProjectLaunchArgsOverride(er.ModelResource))
         {
             AddDotnetRunArgsForExecutableAnnotatedProject(er, launchArgs, executableArgumentStartIndex);
@@ -127,7 +136,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
         // Argument and launch-configuration callbacks can change on restart. Derive fallback availability from the
         // final execution type and resolved command line every time instead of carrying a preparation-time guess.
-        spec.FallbackExecutionTypes = ShouldOfferProcessFallback(er.ModelResource, spec, omittedEntrypointArgumentCount)
+        spec.FallbackExecutionTypes = ShouldOfferProcessFallback(er.ModelResource, spec, omittedLaunchToolArgumentCount)
             ? [ExecutionType.Process]
             : null;
 
@@ -188,7 +197,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
     /// executables, so their "project" launch configuration is applied here for IDE/F5 parity with <c>AddProject</c>.
     /// All other types (plain executables and project subtypes like azure-functions) are also handled here.
     /// </remarks>
-    private async Task ApplyLaunchConfigurationAsync(RenderedModelResource<Executable> er, Executable exe, int resolvedEntrypointArgumentCount, CancellationToken cancellationToken)
+    private async Task ApplyLaunchConfigurationAsync(RenderedModelResource<Executable> er, Executable exe, int resolvedLaunchToolArgumentCount, CancellationToken cancellationToken)
     {
         if (er.ModelResource.HasAnnotationOfType<ForceProcessExecutionAnnotation>()
             || HasProjectLaunchArgsOverride(er.ModelResource)
@@ -232,36 +241,36 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         }
         catch (Exception ex)
         {
-            if (HasIncompleteProcessCommand(er.ModelResource, supportsDebuggingAnnotation, resolvedEntrypointArgumentCount))
+            if (HasIncompleteProcessCommand(er.ModelResource, supportsDebuggingAnnotation, resolvedLaunchToolArgumentCount))
             {
                 // This project-backed executable suppressed its process scaffold because the custom launch
-                // configuration owns the entrypoint. With no resolved entrypoint to replace it, Process execution
-                // would run a bare tool command such as `dotnet <app-args>`.
+                // configuration performs the tool invocation. With no resolved prefix to replace it, Process
+                // execution would run a bare tool command such as `dotnet <app-args>`.
                 throw;
             }
 
-            // The command line is composed after this point, so Process execution receives the full entrypoint.
+            // The command line is composed after this point, so Process execution receives the full tool invocation.
             _logger.LogWarning(ex, "Failed to apply launch configuration for resource '{ResourceName}'. Falling back to process execution.", er.ModelResource.Name);
             exe.Spec.ExecutionType = ExecutionType.Process;
         }
     }
 
     /// <summary>
-    /// Determines whether the resource's entrypoint arguments must be omitted from the DCP executable spec because
-    /// it will be handled by IDE launch configuration.
+    /// Determines whether the resource's launch tool arguments must be omitted from the DCP executable spec because
+    /// the IDE launch configuration performs that tool invocation itself.
     /// </summary>
-    private bool OmitEntrypointArguments(RenderedModelResource<Executable> er, ExecutableSpec spec)
+    private bool OmitLaunchToolArguments(RenderedModelResource<Executable> er, ExecutableSpec spec)
     {
         if (spec.ExecutionType != ExecutionType.IDE)
         {
             return false;
         }
 
-        // Only withhold when the launch configuration that declared the entrypoint is the one actually in use.
-        // A launch configuration of a different type knows nothing about this entrypoint, so in that case the
-        // resource keeps its full command line.
+        // Only withhold when the launch configuration that claimed the tool invocation is the one actually in use.
+        // A launch configuration of a different type knows nothing about it, so in that case the resource keeps its
+        // full command line.
         return er.ModelResource.SupportsDebugging(_configuration, out var activeAnnotation)
-            && er.ModelResource.OwnsEntrypointArguments(activeAnnotation);
+            && er.ModelResource.HasLaunchToolArgsOwnedBy(activeAnnotation);
     }
 
     /// <summary>
@@ -270,12 +279,12 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
     /// <remarks>
     /// A Process fallback runs the DCP Executable spec's command and args "as is", so it is only meaningful when
     /// those args form a runnable command. A DCP Executable spec has a single <c>args</c> field, so it cannot carry
-    /// both the IDE form and the process form of the command line: when the entrypoint prefix is omitted for the
+    /// both the IDE form and the process form of the command line: when the tool-invocation prefix is omitted for the
     /// IDE, no fallback can be offered.
     /// </remarks>
-    private bool ShouldOfferProcessFallback(IResource modelResource, ExecutableSpec spec, int omittedEntrypointArgumentCount)
+    private bool ShouldOfferProcessFallback(IResource modelResource, ExecutableSpec spec, int omittedLaunchToolArgumentCount)
     {
-        if (spec.ExecutionType != ExecutionType.IDE || omittedEntrypointArgumentCount > 0)
+        if (spec.ExecutionType != ExecutionType.IDE || omittedLaunchToolArgumentCount > 0)
         {
             return false;
         }
@@ -292,17 +301,17 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         }
 
         // A project-backed plain executable suppresses its `dotnet run` process scaffold when the active launch
-        // configuration owns the entrypoint. Even when that entrypoint resolves empty, the remaining command line
-        // is IDE-only and cannot be reused as a Process fallback.
-        return !HasIncompleteProcessCommand(modelResource, annotation, omittedEntrypointArgumentCount);
+        // configuration performs the tool invocation. Even when that prefix resolves empty, the remaining command
+        // line is IDE-only and cannot be reused as a Process fallback.
+        return !HasIncompleteProcessCommand(modelResource, annotation, omittedLaunchToolArgumentCount);
     }
 
-    private static bool HasIncompleteProcessCommand(IResource modelResource, SupportsDebuggingAnnotation annotation, int entrypointArgumentCount)
+    private static bool HasIncompleteProcessCommand(IResource modelResource, SupportsDebuggingAnnotation annotation, int launchToolArgumentCount)
     {
-        return entrypointArgumentCount == 0
+        return launchToolArgumentCount == 0
             && modelResource is not ProjectResource
             && modelResource.HasAnnotationOfType<IProjectMetadata>()
-            && modelResource.OwnsEntrypointArguments(annotation);
+            && modelResource.HasLaunchToolArgsOwnedBy(annotation);
     }
 
     private async Task PrepareProjectExecutablesAsync(CancellationToken cancellationToken)
@@ -699,7 +708,9 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         ExecutableSpec spec,
         IEnumerable<(string Value, bool IsSensitive)> appHostArgs,
         int executableArgumentStartIndex,
-        int omittedEntrypointArgumentCount
+        int launchToolArgumentCount,
+        int omittedLaunchToolArgumentCount,
+        bool showLaunchToolArgsInCommandLine
     )
     {
         // Launch args is the final list of args that are displayed in the UI and possibly added to the executable spec.
@@ -760,12 +771,25 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             return launchArgs;
         }
 
-        // In the situation where args are combined (process execution) the app host args are added after the launch profile args.
-        // Entrypoint arguments (the tool-invocation prefix such as `run ./cmd/api`) are always the leading app host
-        // args. When the IDE launch configuration owns them they must not be passed to the launched program, but they
-        // are still shown in the dashboard so the resource's real command line stays visible — the same treatment
-        // project launch-profile args get above.
-        launchArgs.AddRange(appHostArgList.Select((a, i) => CreateLaunchArgument(a.Value, a.IsSensitive, executable: i >= omittedEntrypointArgumentCount, display: true)));
+        // In the situation where args are combined (process execution) the app host args are added after the launch
+        // profile args. Launch tool arguments (the tool-invocation prefix such as `run ./cmd/api`) are always the
+        // leading app host args, and the two decisions about them are independent:
+        //
+        // - Executable: withheld only when the active IDE launch configuration performs the tool invocation itself,
+        //   because passing it on would run it twice.
+        // - Display: withheld only when the declaration asked for it. A prefix that the IDE performs is deliberately
+        //   still shown, because it is absent from the process's effective args and hiding it here too would leave
+        //   the dashboard showing a bare `go` plus the program arguments — the same treatment project launch-profile
+        //   args get above.
+        launchArgs.AddRange(appHostArgList.Select((a, i) =>
+        {
+            var isLaunchToolArg = i < launchToolArgumentCount;
+            return CreateLaunchArgument(
+                a.Value,
+                a.IsSensitive,
+                executable: i >= omittedLaunchToolArgumentCount,
+                display: showLaunchToolArgsInCommandLine || !isLaunchToolArg);
+        }));
 
         return launchArgs;
     }

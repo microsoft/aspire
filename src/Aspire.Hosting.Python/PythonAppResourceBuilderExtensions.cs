@@ -1065,7 +1065,7 @@ public static class PythonAppResourceBuilderExtensions
         },
         ResourceAnnotationMutationBehavior.Replace);
 
-        builder.WithEntrypointArgs("python", static context =>
+        builder.WithLaunchToolArgs(static context =>
         {
             if (!context.Resource.TryGetLastAnnotation<PythonEntrypointAnnotation>(out var existingAnnotation))
             {
@@ -1089,7 +1089,8 @@ public static class PythonAppResourceBuilderExtensions
                     // Executable runs directly, no additional args needed for entrypoint
                     break;
             }
-        });
+        },
+        ownedByLaunchConfigurationType: "python");
 
         return builder;
     }

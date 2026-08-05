@@ -44,8 +44,8 @@ internal class ExecutionConfigurationGathererContext : IExecutionConfigurationGa
         List<(object Unprocessed, string Value, bool IsSensitive)> resolvedArguments = new(Arguments.Count);
         Dictionary<string, (object Unprocessed, string Value)> resolvedEnvironmentVariables = new(EnvironmentVariables.Count);
         List<Exception> exceptions = new();
-        var entrypointArgumentsData = AdditionalConfigurationData.OfType<EntrypointArgumentsData>().FirstOrDefault();
-        var resolvedEntrypointArgumentCount = 0;
+        var launchToolArgumentsData = AdditionalConfigurationData.OfType<LaunchToolArgumentsData>().FirstOrDefault();
+        var resolvedLaunchToolArgumentCount = 0;
 
         for (var argumentIndex = 0; argumentIndex < Arguments.Count; argumentIndex++)
         {
@@ -57,11 +57,11 @@ internal class ExecutionConfigurationGathererContext : IExecutionConfigurationGa
                 if (resolvedValue?.Value != null)
                 {
                     resolvedArguments.Add((argument, resolvedValue.Value, resolvedValue.IsSensitive));
-                    if (entrypointArgumentsData is not null && argumentIndex < entrypointArgumentsData.Count)
+                    if (launchToolArgumentsData is not null && argumentIndex < launchToolArgumentsData.Count)
                     {
-                        // Resolution drops null values. Count only entrypoint values that survived so a missing prefix
-                        // value cannot make consumers treat the first ordinary argument as part of the prefix.
-                        resolvedEntrypointArgumentCount++;
+                        // Resolution drops null values. Count only launch tool values that survived so a missing
+                        // prefix value cannot make consumers treat the first ordinary argument as part of the prefix.
+                        resolvedLaunchToolArgumentCount++;
                     }
 
                     if (argument is IValueProvider or IManifestExpressionProvider)
@@ -99,12 +99,15 @@ internal class ExecutionConfigurationGathererContext : IExecutionConfigurationGa
         }
 
         var resolvedAdditionalConfigurationData = AdditionalConfigurationData;
-        if (entrypointArgumentsData is not null && entrypointArgumentsData.Count != resolvedEntrypointArgumentCount)
+        if (launchToolArgumentsData is not null && launchToolArgumentsData.Count != resolvedLaunchToolArgumentCount)
         {
             resolvedAdditionalConfigurationData = AdditionalConfigurationData
-                .Where(data => data is not EntrypointArgumentsData)
+                .Where(data => data is not LaunchToolArgumentsData)
                 .ToHashSet();
-            resolvedAdditionalConfigurationData.Add(new EntrypointArgumentsData(resolvedEntrypointArgumentCount));
+
+            // Only the count is recomputed here; every other facet of the declaration (such as whether the prefix is
+            // shown in the dashboard command line) is unaffected by value resolution and must be carried over.
+            resolvedAdditionalConfigurationData.Add(launchToolArgumentsData with { Count = resolvedLaunchToolArgumentCount });
         }
 
         return new ExecutionConfigurationResult

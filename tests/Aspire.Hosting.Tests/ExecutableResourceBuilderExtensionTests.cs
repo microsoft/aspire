@@ -165,30 +165,30 @@ public class ExecutableResourceBuilderExtensionTests
     }
 
     [Fact]
-    public async Task WithEntrypointArgsLeadTheCommandLine()
+    public async Task WithLaunchToolArgsLeadTheCommandLine()
     {
-        // The entrypoint arguments are the tool-invocation prefix, so they always come first and the program's own
+        // The launch tool arguments are the tool-invocation prefix, so they always come first and the program's own
         // arguments follow, regardless of the launch configuration in effect.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         var executable = builder.AddExecutable("myexe", "command", "workingdirectory")
             .WithArgs("base-arg")
-            .WithEntrypointArgs("go", ctx => ctx.Args.Add("entrypoint-arg"))
+            .WithLaunchToolArgs(ctx => ctx.Args.Add("launch-tool-arg"), ownedByLaunchConfigurationType: "go")
             .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go");
 
         var args = await ArgumentEvaluator.GetArgumentListAsync(executable.Resource);
 
         Assert.Collection(args,
-            arg => Assert.Equal("entrypoint-arg", arg),
+            arg => Assert.Equal("launch-tool-arg", arg),
             arg => Assert.Equal("base-arg", arg));
     }
 
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task WithEntrypointArgsAreOrderIndependent(bool entrypointArgsFirst)
+    public async Task WithLaunchToolArgsAreOrderIndependent(bool launchToolArgsFirst)
     {
-        // Regression coverage for https://github.com/microsoft/aspire/issues/18929: the entrypoint arguments used to
+        // Regression coverage for https://github.com/microsoft/aspire/issues/18929: the launch tool arguments used to
         // be applied by an ordinary WithArgs callback that *removed* the prefix, which only worked when
         // WithDebugSupport happened to be called after the callback that added it. Declaring the prefix separately
         // instead of subtracting it must produce the same command line either way.
@@ -204,17 +204,17 @@ public class ExecutableResourceBuilderExtensionTests
         var executable = builder.AddExecutable("myexe", "command", "workingdirectory")
             .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go");
 
-        if (entrypointArgsFirst)
+        if (launchToolArgsFirst)
         {
             executable
-                .WithEntrypointArgs("go", ctx => ctx.Args.Add("run"))
+                .WithLaunchToolArgs(ctx => ctx.Args.Add("run"), ownedByLaunchConfigurationType: "go")
                 .WithArgs("base-arg");
         }
         else
         {
             executable
                 .WithArgs("base-arg")
-                .WithEntrypointArgs("go", ctx => ctx.Args.Add("run"));
+                .WithLaunchToolArgs(ctx => ctx.Args.Add("run"), ownedByLaunchConfigurationType: "go");
         }
 
         var args = await ArgumentEvaluator.GetArgumentListAsync(executable.Resource);
@@ -225,14 +225,14 @@ public class ExecutableResourceBuilderExtensionTests
     }
 
     [Fact]
-    public async Task WithEntrypointArgsSurviveAnArgsCallbackThatClearsTheList()
+    public async Task WithLaunchToolArgsSurviveAnArgsCallbackThatClearsTheList()
     {
-        // No WithArgs callback can observe or clear the entrypoint prefix: it is evaluated separately and inserted
+        // No WithArgs callback can observe or clear the tool-invocation prefix: it is evaluated separately and inserted
         // ahead of the arguments those callbacks produce.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         var executable = builder.AddExecutable("myexe", "command", "workingdirectory")
-            .WithEntrypointArgs("go", ctx => ctx.Args.Add("entrypoint-arg"))
+            .WithLaunchToolArgs(ctx => ctx.Args.Add("launch-tool-arg"), ownedByLaunchConfigurationType: "go")
             .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go")
             .WithArgs("discarded")
             .WithArgs(ctx =>
@@ -244,12 +244,12 @@ public class ExecutableResourceBuilderExtensionTests
         var args = await ArgumentEvaluator.GetArgumentListAsync(executable.Resource);
 
         Assert.Collection(args,
-            arg => Assert.Equal("entrypoint-arg", arg),
+            arg => Assert.Equal("launch-tool-arg", arg),
             arg => Assert.Equal("only-arg", arg));
     }
 
     [Fact]
-    public async Task WithEntrypointArgsRemainInTheAppModelDuringADebugSession()
+    public async Task WithLaunchToolArgsRemainInTheAppModelDuringADebugSession()
     {
         // Withholding the prefix is a DCP-level concern. The application model must keep describing the real
         // command line so the dashboard, the manifest and GetArgumentValuesAsync() consumers stay accurate.
@@ -264,7 +264,7 @@ public class ExecutableResourceBuilderExtensionTests
 
         var executable = builder.AddExecutable("myexe", "command", "workingdirectory")
             .WithArgs("base-arg")
-            .WithEntrypointArgs("go", ctx => ctx.Args.Add("run"))
+            .WithLaunchToolArgs(ctx => ctx.Args.Add("run"), ownedByLaunchConfigurationType: "go")
             .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go");
 
         var args = await ArgumentEvaluator.GetArgumentListAsync(executable.Resource);
@@ -275,25 +275,25 @@ public class ExecutableResourceBuilderExtensionTests
     }
 
     [Fact]
-    public void WithEntrypointArgsAreOwnedByMatchingLaunchConfigurationType()
+    public void WithLaunchToolArgsAreOwnedByMatchingLaunchConfigurationType()
     {
-        // The entrypoint is owned by the launch configuration type it was declared with, so a launch configuration
+        // The tool invocation is owned by the launch configuration type it was declared with, so a launch configuration
         // of a different type does not claim it.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         var executable = builder.AddExecutable("myexe", "command", "workingdirectory")
-            .WithEntrypointArgs("go", ctx => ctx.Args.Add("run"))
+            .WithLaunchToolArgs(ctx => ctx.Args.Add("run"), ownedByLaunchConfigurationType: "go")
             .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go")
             .WithDebugSupport(_ => new ExecutableLaunchConfiguration("project"), "project");
 
         var annotations = executable.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().ToList();
         Assert.Collection(annotations,
-            annotation => Assert.True(executable.Resource.OwnsEntrypointArguments(annotation)),
-            annotation => Assert.False(executable.Resource.OwnsEntrypointArguments(annotation)));
+            annotation => Assert.True(executable.Resource.HasLaunchToolArgsOwnedBy(annotation)),
+            annotation => Assert.False(executable.Resource.HasLaunchToolArgsOwnedBy(annotation)));
     }
 
     [Fact]
-    public void WithDebugSupportDoesNotOwnEntrypointArgumentsWithoutWithEntrypointArgs()
+    public void WithDebugSupportDoesNotOwnLaunchToolArgsWithoutWithLaunchToolArgs()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
@@ -301,19 +301,19 @@ public class ExecutableResourceBuilderExtensionTests
             .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go");
 
         var annotation = executable.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Single();
-        Assert.False(executable.Resource.OwnsEntrypointArguments(annotation));
+        Assert.False(executable.Resource.HasLaunchToolArgsOwnedBy(annotation));
     }
 
     [Fact]
-    public async Task WithEntrypointArgsAreRegisteredInPublishMode()
+    public async Task WithLaunchToolArgsAreRegisteredInPublishMode()
     {
-        // Debug support is run-mode only, but the entrypoint describes how the resource is invoked in general and
+        // Debug support is run-mode only, but the launch tool arguments describe how the resource is invoked in general and
         // must survive into the manifest and generated container images.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         var executable = builder.AddExecutable("myexe", "command", "workingdirectory")
             .WithArgs("base-arg")
-            .WithEntrypointArgs("go", ctx => ctx.Args.Add("run"))
+            .WithLaunchToolArgs(ctx => ctx.Args.Add("run"), ownedByLaunchConfigurationType: "go")
             .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go");
 
         Assert.Empty(executable.Resource.Annotations.OfType<SupportsDebuggingAnnotation>());
@@ -326,7 +326,7 @@ public class ExecutableResourceBuilderExtensionTests
     }
 
     [Fact]
-    public async Task WithEntrypointArgsAreNotCarriedIntoAPublishedContainer()
+    public async Task WithLaunchToolArgsAreNotCarriedIntoAPublishedContainer()
     {
         // PublishAsDockerFile reuses the executable's annotations for the generated container resource, but a
         // container invokes the program through the image's ENTRYPOINT, so repeating the tool prefix in the
@@ -335,7 +335,7 @@ public class ExecutableResourceBuilderExtensionTests
 
         builder.AddExecutable("myexe", "command", "workingdirectory")
             .WithArgs("base-arg")
-            .WithEntrypointArgs("go", ctx => ctx.Args.Add("run"))
+            .WithLaunchToolArgs(ctx => ctx.Args.Add("run"), ownedByLaunchConfigurationType: "go")
             .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go")
             .PublishAsDockerFile();
 

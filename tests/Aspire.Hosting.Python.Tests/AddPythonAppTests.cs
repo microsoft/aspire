@@ -1419,9 +1419,9 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
             arg => Assert.Equal("arg1", arg),
             arg => Assert.Equal("arg2", arg));
 
-        // The "python" launch configuration owns the entrypoint, which is what makes DCP withhold it.
+        // The "python" launch configuration owns the launch tool arguments, which is what makes DCP withhold them.
         var debugAnnotation = resource.Annotations.OfType<SupportsDebuggingAnnotation>().Last();
-        Assert.True(resource.OwnsEntrypointArguments(debugAnnotation));
+        Assert.True(resource.HasLaunchToolArgsOwnedBy(debugAnnotation));
     }
 
     [Fact]
@@ -1503,9 +1503,9 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
             arg => Assert.Equal("flask", arg),
             arg => Assert.Equal("run", arg));
 
-        // The "python" launch configuration owns the entrypoint, which is what makes DCP withhold it.
+        // The "python" launch configuration owns the launch tool arguments, which is what makes DCP withhold them.
         var debugAnnotation = resource.Annotations.OfType<SupportsDebuggingAnnotation>().Last();
-        Assert.True(resource.OwnsEntrypointArguments(debugAnnotation));
+        Assert.True(resource.HasLaunchToolArgsOwnedBy(debugAnnotation));
     }
 
     [Fact]
