@@ -109,14 +109,6 @@ public partial class AspireMenuButton : FluentComponentBase, IAsyncDisposable
             return;
         }
 
-        RefreshItems();
-
-        if (_disabled)
-        {
-            _renderMenu = false;
-            return;
-        }
-
         if (!_menuRenderComplete)
         {
             // Keep the menu out of the render tree until observation is ready so a parent render
@@ -124,6 +116,8 @@ public partial class AspireMenuButton : FluentComponentBase, IAsyncDisposable
             _jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Controls/AspireMenuButton.razor.js");
             await _jsModule.InvokeVoidAsync("prepareForFluentMenuInitialization", MenuButtonId);
         }
+
+        RefreshItems();
 
         _renderMenu = true;
 
