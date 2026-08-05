@@ -26,6 +26,17 @@ namespace Aspire.Hosting.Azure.Tests;
 public class AzureSandboxesTests
 {
     [Fact]
+    public void AzureSandboxGroupUsesExplicitOutputReferenceNames()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+
+        Assert.Equal("{sandboxes.outputs.id}", sandboxGroup.Resource.IdOutputReference.ValueExpression);
+        Assert.Equal("{sandboxes.outputs.name}", sandboxGroup.Resource.NameOutputReference.ValueExpression);
+    }
+
+    [Fact]
     public async Task AddAzureSandboxResourcesGeneratesBicep()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -439,6 +450,47 @@ public class AzureSandboxesTests
 
         Assert.Equal("disk-1", diskImage.Id);
         Assert.Equal(2, attempts);
+    }
+
+    [Fact]
+    public async Task AzureDevComputeClientBoundsForbiddenRetriesAndExplainsRequiredRole()
+    {
+        var attempts = 0;
+        var handler = new RecordingHandler(_ =>
+        {
+            attempts++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden));
+        });
+        var client = new AzureDevComputeClient(
+            new HttpClient(handler),
+            new RecordingTokenCredential(),
+            NullLogger.Instance,
+            TimeSpan.Zero);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => client.GetDiskImageAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            "disk-1",
+            CancellationToken.None));
+
+        Assert.Equal(3, attempts);
+        Assert.Contains("Container Apps SandboxGroup Data Owner", exception.Message);
+    }
+
+    [Fact]
+    public void AzureDevComputeClientCapsRetryAfterDelays()
+    {
+        var now = DateTimeOffset.Parse("2026-08-05T20:00:00Z");
+        using var secondsResponse = new HttpResponseMessage(HttpStatusCode.TooManyRequests);
+        secondsResponse.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromHours(1));
+        using var dateResponse = new HttpResponseMessage(HttpStatusCode.TooManyRequests);
+        dateResponse.Headers.RetryAfter = new RetryConditionHeaderValue(now.AddDays(1));
+
+        Assert.Equal(
+            TimeSpan.FromSeconds(30),
+            AzureDevComputeClient.GetRetryDelay(secondsResponse, TimeSpan.FromSeconds(5), now));
+        Assert.Equal(
+            TimeSpan.FromSeconds(30),
+            AzureDevComputeClient.GetRetryDelay(dateResponse, TimeSpan.FromSeconds(5), now));
     }
 
     [Fact]
@@ -878,11 +930,12 @@ public class AzureSandboxesTests
             {
                 Tier = AzureSandboxTier.Large,
                 AutoSuspendEnabled = false,
-                AutoSuspendInterval = 300,
-                AutoSuspendMode = "Disk",
+                AutoSuspendInterval = TimeSpan.FromMinutes(5),
+                AutoSuspendMode = AzureSandboxAutoSuspendMode.Disk,
                 AutoDeleteEnabled = true,
-                AutoDeleteIntervalInSeconds = 3600,
-                AutoDeleteTrigger = "AfterSuspend",
+                AutoDeleteInterval = TimeSpan.FromHours(1),
+                AutoDeleteTrigger = AzureSandboxAutoDeleteTrigger.AfterSuspend,
+                PublicEndpointReadyTimeout = TimeSpan.FromMinutes(2),
                 Endpoints =
                 [
                     new AzureSandboxEndpointOptions
@@ -914,8 +967,10 @@ public class AzureSandboxesTests
         Assert.Equal("Disk", lifecycle.AutoSuspendPolicy.Mode);
         Assert.NotNull(lifecycle.AutoDeletePolicy);
         Assert.True(lifecycle.AutoDeletePolicy.Enabled);
+        Assert.Null(lifecycle.AutoDeletePolicy.DeleteIntervalInDays);
         Assert.Equal(3600, lifecycle.AutoDeletePolicy.DeleteIntervalInSeconds);
         Assert.Equal("AfterSuspend", lifecycle.AutoDeletePolicy.Trigger);
+        Assert.Equal(TimeSpan.FromMinutes(2), AzureSandboxContainerDeployment.GetPublicEndpointReadyTimeout(sandboxContainer));
 
         var egress = AzureSandboxContainerDeployment.CreateEgressPolicy();
         Assert.Equal("Deny", egress.DefaultAction);
@@ -924,6 +979,44 @@ public class AzureSandboxesTests
         var endpoint = Assert.Single(AzureSandboxContainerDeployment.ResolveSandboxEndpoints(sandboxContainer));
         Assert.Equal("Http", endpoint.Protocol);
         Assert.False(endpoint.Anonymous);
+    }
+
+    [Fact]
+    public void SandboxContainerOptionsValidateTypedDurationsAndEnums()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        var container = builder.AddContainer("frontend", "image");
+
+        Assert.Throws<ArgumentException>(() => container.PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
+        {
+            AutoSuspendInterval = TimeSpan.FromMilliseconds(1500)
+        }));
+        Assert.Throws<ArgumentOutOfRangeException>(() => container.PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
+        {
+            AutoSuspendInterval = TimeSpan.FromSeconds((double)int.MaxValue + 1)
+        }));
+        Assert.Throws<ArgumentOutOfRangeException>(() => container.PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
+        {
+            AutoDeleteInterval = TimeSpan.FromSeconds(-1)
+        }));
+        Assert.Throws<ArgumentOutOfRangeException>(() => container.PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
+        {
+            PublicEndpointReadyTimeout = TimeSpan.Zero
+        }));
+        Assert.Throws<ArgumentOutOfRangeException>(() => container.PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
+        {
+            PublicEndpointReadyTimeout = TimeSpan.FromSeconds((double)int.MaxValue + 1)
+        }));
+        Assert.Throws<ArgumentException>(() => container.PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
+        {
+            AutoSuspendMode = (AzureSandboxAutoSuspendMode)(-1)
+        }));
+        Assert.Throws<ArgumentException>(() => container.PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
+        {
+            AutoDeleteTrigger = (AzureSandboxAutoDeleteTrigger)(-1)
+        }));
     }
 
     [Fact]

@@ -246,7 +246,7 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
         }
     }
 
-    public override Task<string> InspectImageManifestAsync(string imageName, CancellationToken cancellationToken)
+    public override async Task<string> InspectImageManifestAsync(string imageName, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(imageName);
         var remoteImageName = imageName.StartsWith("docker://", StringComparison.OrdinalIgnoreCase)
@@ -254,11 +254,87 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
             : $"docker://{imageName}";
         var escapedImageName = EscapeArgument(remoteImageName);
 
-        return ExecuteContainerCommandForOutputAsync(
+        var manifest = await ExecuteContainerCommandForOutputAsync(
             $"manifest inspect \"{escapedImageName}\"",
             "inspect image manifest",
             imageName,
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
+        if (!IsPlainSingleImageManifest(manifest))
+        {
+            return manifest;
+        }
+
+        // Podman returns a plain OCI/Docker manifest for a single-architecture tag:
+        //   { "schemaVersion": 2, "config": { ... }, "layers": [ ... ] }
+        // Unlike its manifest-list output, that shape has no digest. Query the local image
+        // metadata so the sandbox deployer can still pin the tag to an immutable reference.
+        var localImageName = imageName.StartsWith("docker://", StringComparison.OrdinalIgnoreCase)
+            ? imageName["docker://".Length..]
+            : imageName;
+        var escapedLocalImageName = EscapeArgument(localImageName);
+        var imageMetadata = await ExecuteContainerCommandForOutputAsync(
+            $"image inspect --format \"{{{{json .}}}}\" \"{escapedLocalImageName}\"",
+            "inspect image metadata",
+            imageName,
+            cancellationToken).ConfigureAwait(false);
+        string? digest;
+        string? os;
+        string? architecture;
+        try
+        {
+            using var metadataDocument = JsonDocument.Parse(imageMetadata);
+            var metadata = metadataDocument.RootElement;
+            digest = metadata.TryGetProperty("Digest", out var digestProperty) ? digestProperty.GetString() : null;
+            os = metadata.TryGetProperty("Os", out var osProperty) ? osProperty.GetString() : null;
+            architecture = metadata.TryGetProperty("Architecture", out var architectureProperty) ? architectureProperty.GetString() : null;
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException($"Podman returned invalid image metadata for '{imageName}'.", ex);
+        }
+
+        if (string.IsNullOrWhiteSpace(digest) ||
+            !digest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase) ||
+            digest.Length == "sha256:".Length)
+        {
+            throw new InvalidOperationException($"Podman did not return an immutable digest for image '{imageName}'.");
+        }
+
+        if (string.IsNullOrWhiteSpace(os) || string.IsNullOrWhiteSpace(architecture))
+        {
+            throw new InvalidOperationException($"Podman did not return platform metadata for image '{imageName}'.");
+        }
+
+        return JsonSerializer.Serialize(new
+        {
+            Descriptor = new
+            {
+                digest,
+                platform = new
+                {
+                    os,
+                    architecture
+                }
+            }
+        });
+    }
+
+    private static bool IsPlainSingleImageManifest(string manifest)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(manifest);
+            var root = document.RootElement;
+            return root.ValueKind == JsonValueKind.Object &&
+                root.TryGetProperty("schemaVersion", out _) &&
+                root.TryGetProperty("config", out _) &&
+                root.TryGetProperty("layers", out _) &&
+                !root.TryGetProperty("manifests", out _);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 }
 

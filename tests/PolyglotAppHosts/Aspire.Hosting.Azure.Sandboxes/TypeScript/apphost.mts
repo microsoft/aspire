@@ -1,6 +1,11 @@
 // Aspire TypeScript AppHost - Validation for Aspire.Hosting.Azure.Sandboxes
 
-import { AzureSandboxTier, createBuilder } from './.aspire/modules/aspire.mjs';
+import {
+    AzureSandboxAutoDeleteTrigger,
+    AzureSandboxAutoSuspendMode,
+    AzureSandboxTier,
+    createBuilder
+} from './.aspire/modules/aspire.mjs';
 
 const builder = await createBuilder();
 
@@ -16,8 +21,12 @@ const api = await builder
 await api.publishAsAzureSandbox(sandboxes, {
     tier: AzureSandboxTier.Large,
     autoSuspendEnabled: true,
-    autoSuspendInterval: 900,
-    autoSuspendMode: "Disk",
+    autoSuspendInterval: 9_000_000_000,
+    autoSuspendMode: AzureSandboxAutoSuspendMode.Disk,
+    autoDeleteEnabled: true,
+    autoDeleteInterval: 36_000_000_000,
+    autoDeleteTrigger: AzureSandboxAutoDeleteTrigger.AfterSuspend,
+    publicEndpointReadyTimeout: 1_200_000_000,
     endpoints: [
         {
             name: "http",

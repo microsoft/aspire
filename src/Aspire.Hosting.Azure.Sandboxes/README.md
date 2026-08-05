@@ -34,8 +34,8 @@ builder.AddProject<Projects.ApiService>("api")
     {
         Tier = AzureSandboxTier.Medium,
         AutoSuspendEnabled = true,
-        AutoSuspendInterval = 900,
-        AutoSuspendMode = "Disk",
+        AutoSuspendInterval = TimeSpan.FromMinutes(15),
+        AutoSuspendMode = AzureSandboxAutoSuspendMode.Disk,
         Endpoints =
         [
             new AzureSandboxEndpointOptions
@@ -50,6 +50,14 @@ builder.AddProject<Projects.ApiService>("api")
 Endpoints are not exposed unless they are marked external. External endpoints require an explicit `Anonymous = true` opt-in for anonymous access. Sandbox egress is configured with full inspection and deny-by-default behavior.
 
 Images are resolved to immutable Linux/amd64 digests before import. Deployment state stores sandbox, disk-image, and endpoint identifiers, but does not persist registry credentials.
+
+Duration options use `TimeSpan` in C#. Generated TypeScript SDKs represent `TimeSpan` values as .NET ticks, where one second is `10_000_000`.
+
+## Deployment architecture
+
+Sandbox groups are ARM resources, but sandbox instances, disk images, ports, and lifecycle settings are currently exposed only through the regional Azure Dev Compute preview data plane. Aspire therefore performs sandbox deployment in-process rather than through an ARM deployment script. This lets the deployment pipeline inspect local container images, resolve and validate immutable Linux/amd64 digests, report polling progress, persist deployment state, retain a previous endpoint generation during updates, and clean up stale or failed data-plane resources.
+
+This design means Aspire owns retry, polling, state recovery, and cleanup behavior while the preview data-plane contract evolves. The implementation is intentionally isolated in the Sandboxes integration and should be reevaluated when Azure provides a stable ARM resource or deployment primitive for these operations.
 
 ## Preview limitations
 
