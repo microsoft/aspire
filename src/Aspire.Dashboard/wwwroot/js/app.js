@@ -70,11 +70,7 @@ window.prepareForFluentMenuInitialization = function (anchorId) {
     const promise = new Promise(resolve => {
         resolveInitialization = resolve;
     });
-    const observer = new MutationObserver(() => {
-        if (anchor.hasAttribute("aria-expanded")) {
-            completeFluentMenuInitialization(anchorId);
-        }
-    });
+    const observer = new MutationObserver(() => completeFluentMenuInitialization(anchorId));
 
     fluentMenuInitializations.set(anchorId, { promise, observer, resolve: resolveInitialization, timeoutId: null });
     observer.observe(anchor, { attributes: true, attributeFilter: ["aria-expanded"] });
