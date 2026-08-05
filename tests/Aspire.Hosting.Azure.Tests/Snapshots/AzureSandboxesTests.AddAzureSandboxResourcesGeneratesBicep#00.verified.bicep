@@ -34,3 +34,5 @@ resource hostgroup_deploymentPrincipalDataOwner 'Microsoft.Authorization/roleAss
 output id string = hostgroup.id
 
 output name string = hostgroup.name
+
+output location string = hostgroup.location

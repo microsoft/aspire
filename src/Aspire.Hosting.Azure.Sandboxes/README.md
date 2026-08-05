@@ -61,6 +61,13 @@ This design means Aspire owns retry, polling, state recovery, and cleanup behavi
 
 To keep endpoint references usable during an ordinary redeploy of the same immutable image and endpoint policy, Aspire can retain the immediately previous sandbox generation until the next successful deployment. If the image digest, endpoint exposure, protocol, or anonymous-access configuration changes, the previous generation is pruned immediately instead so an older workload or security posture does not remain reachable. Ordinary stale-generation pruning is best-effort after the new deployment state is safely persisted. A failure to prune after a security-relevant change fails the deployment visibly while preserving the new deployment and its state for recovery.
 
+## Publish, deploy, and destroy behavior
+
+* `aspire publish` emits reviewable Bicep for the sandbox group, registry, managed identities, and role assignments. Sandbox instances, disk images, ports, and data-plane URLs are deploy-time resources and are not created by publish.
+* `aspire deploy` provisions the ARM resources, builds or resolves the workload image to an immutable Linux/amd64 digest, creates the ADC disk image and sandbox, configures lifecycle and ports, and records IDs, URLs, ownership, scope, and security metadata in deployment state. Public URLs are shown in the deployment summary.
+* `aspire destroy` removes the current and labeled retained sandbox generations and disk images before Azure resource-group cleanup. Stable ownership labels allow cleanup after deployment state is cleared when the same AppHost and Azure sandbox group scope are still configured.
+* Existing sandbox groups use the subscription, resource group, location, and name from the group's actual Azure outputs rather than the ambient deployment resource group.
+
 ## Preview limitations
 
 The package and service are preview features. The current integration does not support:

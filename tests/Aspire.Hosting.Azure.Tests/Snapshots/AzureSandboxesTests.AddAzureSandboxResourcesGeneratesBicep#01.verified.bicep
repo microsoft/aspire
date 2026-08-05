@@ -26,3 +26,5 @@ resource workergroup_deploymentPrincipalDataOwner 'Microsoft.Authorization/roleA
 output id string = workergroup.id
 
 output name string = workergroup.name
+
+output location string = workergroup.location
