@@ -11,6 +11,7 @@ using Aspire.Cli.Commands;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -633,6 +634,77 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         await result.InvokeAsync().DefaultTimeout();
 
         Assert.False(testNotifier.NotifyWasCalled, "Update notification should not be shown when --detach is used");
+    }
+
+    [Fact]
+    public async Task RunCommand_DetachedChild_DoesNotStartCliMetadataPrefetching()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />", TestContext.Current.CancellationToken);
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var processFactory = new TestProcessExecutionFactory();
+
+        var parentServices = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+        });
+        parentServices.Replace(ServiceDescriptor.Singleton<IProcessExecutionFactory>(processFactory));
+
+        using (var parentProvider = parentServices.BuildServiceProvider())
+        {
+            var parentCommand = parentProvider.GetRequiredService<RootCommand>();
+            var parentResult = parentCommand.Parse($"run --detach --apphost {appHostFile.FullName}");
+
+            await parentResult.InvokeAsync().DefaultTimeout();
+        }
+
+        var childEnvironment = Assert.IsAssignableFrom<IDictionary<string, string>>(processFactory.LastEnvironmentVariables);
+        var childArguments = Assert.IsAssignableFrom<IEnumerable<string>>(processFactory.LastArguments);
+        Assert.Contains("run", childArguments);
+        Assert.DoesNotContain("--detach", childArguments);
+        Assert.Equal("true", childEnvironment[KnownConfigNames.CliRunDetached]);
+
+        var cliPrefetchStarted = false;
+        var testNotifier = new TestCliUpdateNotifier
+        {
+            CheckForCliUpdatesAsyncCallback = (_, _) =>
+            {
+                cliPrefetchStarted = true;
+                return Task.CompletedTask;
+            }
+        };
+
+        var childServices = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new NoProjectFileProjectLocator();
+            options.CliUpdateNotifierFactory = _ => testNotifier;
+            options.ConfigurationCallback += config =>
+            {
+                foreach (var (name, value) in childEnvironment)
+                {
+                    config[name] = value;
+                }
+            };
+        });
+        using var childProvider = childServices.BuildServiceProvider();
+
+        var prefetcher = childProvider.GetRequiredService<NuGetPackagePrefetcher>();
+        await prefetcher.StartAsync(CancellationToken.None).DefaultTimeout();
+
+        var childCommand = childProvider.GetRequiredService<RootCommand>();
+        var childResult = childCommand.Parse("run");
+
+        await childResult.InvokeAsync().DefaultTimeout();
+        await prefetcher.ExecuteTask!.DefaultTimeout();
+        await prefetcher.StopAsync(CancellationToken.None).DefaultTimeout();
+
+        Assert.False(cliPrefetchStarted);
     }
 
     [Fact]

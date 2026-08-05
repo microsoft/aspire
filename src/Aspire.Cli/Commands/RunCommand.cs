@@ -105,7 +105,9 @@ internal sealed class RunCommand : BaseCommand
 
     internal override void PrepareForExecution(ParseResult parseResult)
     {
-        _isDetachMode = parseResult.GetValue(s_detachOption);
+        // The spawned child runs without --detach, so its environment marker preserves detach-only
+        // behavior such as suppressing update notifications and package metadata prefetching.
+        _isDetachMode = parseResult.GetValue(s_detachOption) || IsDetachedStartChild();
     }
 
     private static readonly Option<bool> s_detachOption = new("--detach")

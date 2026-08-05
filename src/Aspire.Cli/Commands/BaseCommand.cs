@@ -23,7 +23,11 @@ internal abstract class BaseCommand : Command
 
     internal virtual bool PrefetchesTemplatePackageMetadata => false;
 
-    internal virtual bool PrefetchesCliPackageMetadata => UpdateNotificationsEnabled;
+    // JSON output cannot display update notifications, so apply this invocation-level gate outside
+    // the overridable command policy to prevent metadata-only consumers from bypassing it.
+    internal bool PrefetchesCliPackageMetadata => PrefetchesCliPackageMetadataCore && !_isJsonFormatRequested;
+
+    internal virtual bool PrefetchesCliPackageMetadataCore => UpdateNotificationsEnabled;
 
     /// <summary>
     /// Gets the help group for this command.
@@ -41,6 +45,7 @@ internal abstract class BaseCommand : Command
     protected virtual TimeSpan GracefulShutdownBudget => TimeSpan.Zero;
 
     private readonly CliExecutionContext _executionContext;
+    private bool _isJsonFormatRequested;
 
     protected CliExecutionContext ExecutionContext => _executionContext;
 
@@ -84,6 +89,7 @@ internal abstract class BaseCommand : Command
 
     internal void SelectForExecution(ParseResult parseResult)
     {
+        _isJsonFormatRequested = IsJsonFormatRequested(parseResult);
         PrepareForExecution(parseResult);
         _executionContext.Command = this;
     }
@@ -213,7 +219,7 @@ internal abstract class BaseCommand : Command
             }
         }
 
-        if (UpdateNotificationsEnabled && !IsJsonFormatRequested(parseResult) && services.Features.IsFeatureEnabled(KnownFeatures.UpdateNotificationsEnabled, true))
+        if (UpdateNotificationsEnabled && !_isJsonFormatRequested && services.Features.IsFeatureEnabled(KnownFeatures.UpdateNotificationsEnabled, true))
         {
             try
             {

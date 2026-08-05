@@ -266,6 +266,20 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
         await AssertPrefetchingAsync(provider, command, "run --detach", expectedTemplatePrefetch: false, expectedCliPrefetch: false);
     }
 
+    [Theory]
+    [InlineData(typeof(StartCommand), "start --format json")]
+    [InlineData(typeof(RunCommand), "run --detach --format json")]
+    public async Task JsonOutputStartsNoCliPackageMetadataPrefetching(Type commandType, string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = Assert.IsAssignableFrom<BaseCommand>(provider.GetRequiredService(commandType));
+
+        await AssertPrefetchingAsync(provider, command, commandLine, expectedTemplatePrefetch: false, expectedCliPrefetch: false);
+    }
+
     // Command selection happens in BaseCommand's action, which the host reaches only after the first-run
     // banner has played. The banner spends 1660ms in fixed delays, so a prefetcher that gave up waiting
     // after a second would fall back to the null default and prefetch for `ls`/`ps` anyway. Advance the
@@ -470,7 +484,7 @@ internal sealed class TestCommand : BaseCommand
     private readonly bool _prefetchesCliPackages;
 
     internal override bool PrefetchesTemplatePackageMetadata => _prefetchesTemplatePackages;
-    internal override bool PrefetchesCliPackageMetadata => _prefetchesCliPackages;
+    internal override bool PrefetchesCliPackageMetadataCore => _prefetchesCliPackages;
 
     public TestCommand(bool prefetchesTemplatePackages = false, bool prefetchesCliPackages = false)
         : base("test", "Test command", new CommonCommandServices(null!, null!, null!, null!, null!, null!, null!, null!))
