@@ -77,6 +77,8 @@ namespace Aspire.Hosting.Azure
 
         public BicepOutputReference IdOutputReference { get { throw null; } }
 
+        public BicepOutputReference LocationOutputReference { get { throw null; } }
+
         public BicepOutputReference NameOutputReference { get { throw null; } }
 
         public override global::Azure.Provisioning.Primitives.ProvisionableResource AddAsExistingResource(AzureResourceInfrastructure infra) { throw null; }
