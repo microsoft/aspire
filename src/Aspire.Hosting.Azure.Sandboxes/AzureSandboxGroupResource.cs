@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIREAZURE001
 #pragma warning disable ASPIRECOMPUTE002
 
@@ -9,6 +10,7 @@ using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Sandboxes.Provisioning;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Publishing;
 using Azure.Provisioning.Primitives;
 using Azure.Provisioning.Resources;
 
@@ -171,6 +173,16 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
             {
                 continue;
             }
+
+            resource.Annotations.Add(new ContainerBuildOptionsCallbackAnnotation(static buildOptions =>
+            {
+                // ADC requires a single Docker-format linux/amd64 manifest. Buildx's default OCI
+                // index with provenance attestations can produce a disk image with no bootable root filesystem.
+                buildOptions.Destination = ContainerImageDestination.Registry;
+                buildOptions.OutputPath = null;
+                buildOptions.ImageFormat = ContainerImageFormat.Docker;
+                buildOptions.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
+            }));
 
             var sandboxContainer = new AzureSandboxContainerResource(
                 $"{resource.Name}-sandbox-container",

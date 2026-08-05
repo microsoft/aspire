@@ -3,13 +3,11 @@
 
 #pragma warning disable ASPIRECOMPUTE002
 #pragma warning disable ASPIREAZURE001
-#pragma warning disable ASPIREPIPELINES003 // Container build options are required by the sandbox deployment target.
 
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.Sandboxes.Provisioning;
-using Aspire.Hosting.Publishing;
 using Azure.Provisioning;
 using Azure.Provisioning.Authorization;
 using Azure.Provisioning.Expressions;
@@ -119,16 +117,6 @@ public static class AzureSandboxesExtensions
 
         return builder
             .WithComputeEnvironment(sandboxGroup)
-            .WithContainerBuildOptions(static context =>
-            {
-                // ADC creates disk images from registry images. Buildx's default output can push an
-                // OCI image index with provenance attestations, which ADC currently treats as a
-                // ready disk image but boots without a usable root filesystem. Force a single
-                // Docker-format linux/amd64 image for resources published to sandboxes.
-                context.Destination = ContainerImageDestination.Registry;
-                context.ImageFormat = ContainerImageFormat.Docker;
-                context.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
-            })
             .WithAnnotation(new AzureSandboxContainerOptionsAnnotation(copiedOptions), ResourceAnnotationMutationBehavior.Replace);
     }
 
