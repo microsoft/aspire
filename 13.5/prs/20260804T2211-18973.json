@@ -1,0 +1,9 @@
+{
+  "author": "mturac",
+  "comment": "Community contribution: VS Code extension improvement for unhealthy resource display",
+  "mergedAt": "2026-08-04T22:11:02Z",
+  "number": 18973,
+  "runDate": "2026-08-05T06:50:52Z",
+  "status": "included",
+  "title": "Show runtime unhealthy resources as warnings in VS Code"
+}

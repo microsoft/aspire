@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Validation improvement for TerminalOptions, grouped with #18991",
+  "mergedAt": "2026-08-04T23:05:28Z",
+  "number": 18992,
+  "runDate": "2026-08-05T06:50:52Z",
+  "status": "included",
+  "title": "Validate TerminalOptions columns and rows are positive"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Clicking the Path row under an AppHost in the VS Code Aspire AppHosts tree now copies the AppHost file path to the clipboard, matching the expected behavior when clicking a path.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udccb",
+  "firstMergedAt": "2026-08-04T20:06:02Z",
+  "lastMergedAt": "2026-08-04T20:06:02Z",
+  "name": "Copy AppHost path to clipboard in VS Code",
+  "owner": "adamint",
+  "prs": [
+    18621
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [
+    "@mturac"
+  ],
+  "description": "Resources in RuntimeUnhealthy or FailedToStart states are now displayed as warnings in the VS Code resource tree, CodeLens, and editor gutter, matching the severity levels shown in the Aspire Dashboard.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\u26a0\ufe0f",
+  "firstMergedAt": "2026-08-04T22:11:02Z",
+  "lastMergedAt": "2026-08-04T22:11:02Z",
+  "name": "Show unhealthy resources as warnings in VS Code",
+  "owner": "adamint",
+  "prs": [
+    18973
+  ]
+}

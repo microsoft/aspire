@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Grouped with existing Aspire CLI available via npm entry",
+  "mergedAt": "2026-08-04T22:18:47Z",
+  "number": 18606,
+  "runDate": "2026-08-05T06:50:52Z",
+  "status": "included",
+  "title": "Surface CLI release notes in npm package README"
+}

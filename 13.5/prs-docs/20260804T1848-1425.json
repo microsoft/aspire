@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Security fix for docs website frontend dependencies, not an Aspire product documentation PR",
+  "mergedAt": "2026-08-04T18:48:41Z",
+  "number": 1425,
+  "runDate": "2026-08-05T06:50:52Z",
+  "status": "excluded",
+  "title": "Pin compromised Keyv ecosystem releases"
+}

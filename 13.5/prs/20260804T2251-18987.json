@@ -1,0 +1,9 @@
+{
+  "author": "vivekjm",
+  "comment": "Community contribution: VS Code extension UX improvement for launch wording",
+  "mergedAt": "2026-08-04T22:51:10Z",
+  "number": 18987,
+  "runDate": "2026-08-05T06:50:52Z",
+  "status": "included",
+  "title": "Use run wording for no-debug AppHost launches"
+}

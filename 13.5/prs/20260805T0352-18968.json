@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "CLI improvement: opt-in prefetching reduces unnecessary network requests",
+  "mergedAt": "2026-08-05T03:52:39Z",
+  "number": 18968,
+  "runDate": "2026-08-05T06:50:52Z",
+  "status": "included",
+  "title": "Make CLI package metadata prefetching opt-in"
+}

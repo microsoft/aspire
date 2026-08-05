@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Automated security dependency update, not user-facing",
+  "mergedAt": "2026-08-04T23:40:00Z",
+  "number": 18995,
+  "runDate": "2026-08-05T06:50:52Z",
+  "status": "excluded",
+  "title": "[auto-sec] Consolidate aspire low-risk dependency security remediations (npm/pip/yarn)"
+}

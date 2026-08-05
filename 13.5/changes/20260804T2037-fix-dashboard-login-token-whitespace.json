@@ -1,0 +1,21 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@heintz06"
+  ],
+  "description": "Fixed a bug where leading or trailing whitespace in a login token prevented successful authentication in the Dashboard. The token is now trimmed before validation.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd11",
+  "firstMergedAt": "2026-08-04T20:37:17Z",
+  "lastMergedAt": "2026-08-04T20:37:17Z",
+  "name": "Fix Dashboard login token whitespace handling",
+  "owner": "adamint",
+  "prs": [
+    18998
+  ]
+}

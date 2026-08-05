@@ -1,0 +1,9 @@
+{
+  "author": "heintz06",
+  "comment": "Community contribution: bug fix for login token whitespace in Dashboard",
+  "mergedAt": "2026-08-04T20:37:17Z",
+  "number": 18998,
+  "runDate": "2026-08-05T06:50:52Z",
+  "status": "included",
+  "title": "Trim whitespace from token in SubmitAsync method"
+}

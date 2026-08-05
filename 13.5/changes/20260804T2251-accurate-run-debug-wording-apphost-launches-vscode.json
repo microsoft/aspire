@@ -1,0 +1,21 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [
+    "@vivekjm"
+  ],
+  "description": "When launching an AppHost without debugging in VS Code, the Debug Console now shows a \"run\" message instead of a \"debug\" message, accurately reflecting the launch mode and avoiding confusion about whether a debug session is active.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83c\udfc3",
+  "firstMergedAt": "2026-08-04T22:51:10Z",
+  "lastMergedAt": "2026-08-04T22:51:10Z",
+  "name": "Accurate run/debug wording for AppHost launches in VS Code",
+  "owner": "adamint",
+  "prs": [
+    18987
+  ]
+}

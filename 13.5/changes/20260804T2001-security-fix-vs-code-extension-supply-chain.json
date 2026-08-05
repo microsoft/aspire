@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Pinned the cacheable-request npm dependency in the VS Code extension after an active supply-chain compromise published a malicious version. This protects extension users from potential malicious code execution during install.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd12",
+  "firstMergedAt": "2026-08-04T20:01:48Z",
+  "lastMergedAt": "2026-08-04T20:01:48Z",
+  "name": "Security fix: pin VS Code extension supply-chain dependency",
+  "owner": "adamint",
+  "prs": [
+    18997
+  ]
+}

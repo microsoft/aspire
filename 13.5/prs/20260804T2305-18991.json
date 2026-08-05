@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Breaking change: removed Shell property from TerminalOptions, grouped with #18992",
+  "mergedAt": "2026-08-04T23:05:13Z",
+  "number": 18991,
+  "runDate": "2026-08-05T06:50:52Z",
+  "status": "included",
+  "title": "Remove misleading TerminalOptions.Shell no-op"
+}

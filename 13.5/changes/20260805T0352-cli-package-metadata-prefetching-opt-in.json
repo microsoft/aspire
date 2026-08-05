@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "CLI commands no longer prefetch NuGet package metadata by default. Prefetching is now opt-in for commands that actually need it, reducing unnecessary network requests and improving startup time for commands that do not consume package metadata.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\u26a1",
+  "firstMergedAt": "2026-08-05T03:52:39Z",
+  "lastMergedAt": "2026-08-05T03:52:39Z",
+  "name": "CLI package metadata prefetching made opt-in",
+  "owner": "JamesNK",
+  "prs": [
+    18968
+  ]
+}

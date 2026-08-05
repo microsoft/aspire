@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "VS Code extension UX improvement - copy AppHost path",
+  "mergedAt": "2026-08-04T20:06:02Z",
+  "number": 18621,
+  "runDate": "2026-08-05T06:50:52Z",
+  "status": "included",
+  "title": "Copy AppHost path to clipboard when clicking the Path tree item (#18578)"
+}
