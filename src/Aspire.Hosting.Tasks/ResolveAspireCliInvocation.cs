@@ -72,18 +72,21 @@ public sealed class ResolveAspireCliInvocation : Microsoft.Build.Utilities.Task
             if (ResolvedAspireCliPath is not null)
             {
                 ResolvedInvocationMode = "Aspire";
-                return true;
             }
         }
 
-        ResolvedDnxPath = CommandPathResolver.ResolveFromPath("dnx", PathEnvironmentVariable);
-        if (ResolvedDnxPath is not null && !TryResolveDnxHost(ResolvedDnxPath))
+        foreach (var dnxPath in CommandPathResolver.EnumerateFromPath("dnx", PathEnvironmentVariable))
         {
-            Log.LogMessage(MessageImportance.Low, "DNX command '{0}' could not be mapped to an executable host.", ResolvedDnxPath);
-            ResolvedDnxPath = null;
+            if (TryResolveDnxHost(dnxPath))
+            {
+                ResolvedDnxPath = dnxPath;
+                break;
+            }
+
+            Log.LogMessage(MessageImportance.Low, "DNX command '{0}' could not be mapped to an executable host.", dnxPath);
         }
 
-        if (forceDnx || ResolvedDnxPath is not null)
+        if (forceDnx || (ResolvedInvocationMode is null && ResolvedDnxPath is not null))
         {
             // Keep DNX selected when it was explicitly requested but unavailable. The run
             // preflight emits the actionable diagnostic, while ordinary builds remain valid.

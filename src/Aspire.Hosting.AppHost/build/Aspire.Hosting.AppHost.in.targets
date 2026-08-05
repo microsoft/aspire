@@ -218,9 +218,10 @@ namespace Projects%3B
     </ResolveAspireCliInvocation>
 
     <PropertyGroup>
-      <!-- DNX/local-tool launches get DCP/Dashboard paths from the launching CLI's runtime environment.
-           Explicit paths still require build-time validation so configuration mistakes fail with ASPIRE009. -->
-      <_AspireCliBundleResolutionOptional Condition="'$(_AspireResolvedCliInvocationMode)' == 'Dnx' and '$(AspireCliPath)' == '' and '$(AspireCliBundlePath)' == ''">true</_AspireCliBundleResolutionOptional>
+      <!-- A usable DNX host can supply DCP/Dashboard paths at runtime when a PATH Aspire candidate
+           later fails its version probe. Explicit paths still require build-time validation so
+           configuration mistakes fail with ASPIRE009. -->
+      <_AspireCliBundleResolutionOptional Condition="'$(AspireCliPath)' == '' and '$(AspireCliBundlePath)' == '' and ('$(_AspireResolvedCliInvocationMode)' == 'Dnx' or '$(_AspireResolvedDnxHostPath)' != '')">true</_AspireCliBundleResolutionOptional>
       <_AspireResolvedDnxHostArgumentsPrefix Condition="'$(_AspireResolvedDnxHostArguments)' != ''">$(_AspireResolvedDnxHostArguments) </_AspireResolvedDnxHostArgumentsPrefix>
     </PropertyGroup>
 
@@ -286,9 +287,10 @@ namespace Projects%3B
     </PropertyGroup>
 
     <!-- Capture probe failures without stopping Exec so mode-specific behavior can be applied below.
-         A PATH Aspire probe has a 5-second budget; failures disable delegation and preserve plain
-         "dotnet run". DNX may restore for up to 120 seconds, and its failures are reported below
-         because a direct launch would be missing CLI-supplied runtime metadata. -->
+         A PATH Aspire probe has a 5-second budget; an unusable PATH candidate retries through DNX
+         when available, otherwise preserving plain "dotnet run". DNX may restore for up to 120
+         seconds, and its failures are reported below because a direct launch would be missing
+         CLI-supplied runtime metadata. -->
     <Exec Command="$(_AspireCliVersionCommand)"
           Condition="'$(_AspireCliVersionCommand)' != ''"
           ConsoleToMSBuild="true"
@@ -326,6 +328,54 @@ namespace Projects%3B
     </PropertyGroup>
 
     <PropertyGroup>
+      <_AspireCliVersionSupportsRunHook Condition="'$(_AspireResolvedCliVersion)' != '' and $([MSBuild]::VersionGreaterThanOrEquals('$(_AspireResolvedCliVersion)', '$(_AspireMinimumCliVersion)'))">true</_AspireCliVersionSupportsRunHook>
+    </PropertyGroup>
+
+    <ResolveAspireCliInvocation Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Aspire' and '$(_AspireCliVersionSupportsRunHook)' != 'true'"
+                                AspireCliInvocationMode="Dnx"
+                                PathEnvironmentVariable="$(Path)">
+      <Output TaskParameter="ResolvedDnxPath" PropertyName="_AspireFallbackDnxPath" />
+      <Output TaskParameter="ResolvedDnxHostPath" PropertyName="_AspireFallbackDnxHostPath" />
+      <Output TaskParameter="ResolvedDnxHostArguments" PropertyName="_AspireFallbackDnxHostArguments" />
+    </ResolveAspireCliInvocation>
+
+    <PropertyGroup>
+      <_AspireFallbackDnxHostArgumentsPrefix Condition="'$(_AspireFallbackDnxHostArguments)' != ''">$(_AspireFallbackDnxHostArguments) </_AspireFallbackDnxHostArgumentsPrefix>
+      <_AspireShouldFallbackToDnx Condition="'$(_AspireFallbackDnxHostPath)' != ''">true</_AspireShouldFallbackToDnx>
+      <_AspireDnxCliVersionCommand Condition="'$(_AspireShouldFallbackToDnx)' == 'true'">"$(_AspireFallbackDnxHostPath)" $(_AspireFallbackDnxHostArgumentsPrefix)--yes $(_AspireCliDnxPackageReference) -- --version</_AspireDnxCliVersionCommand>
+    </PropertyGroup>
+
+    <!-- A PATH Aspire candidate that cannot run this AppHost does not block the paired CLI package
+         from being restored through an available DNX host. Explicit AspireCliPath remains authoritative. -->
+    <Exec Command="$(_AspireDnxCliVersionCommand)"
+          Condition="'$(_AspireShouldFallbackToDnx)' == 'true'"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true"
+          StandardOutputImportance="Low"
+          StandardErrorImportance="Low"
+          Timeout="120000"
+          ContinueOnError="true">
+      <Output TaskParameter="ConsoleOutput" ItemName="_AspireDnxCliVersionOutput" />
+      <Output TaskParameter="ExitCode" PropertyName="_AspireDnxCliVersionExitCode" />
+    </Exec>
+
+    <ItemGroup Condition="'$(_AspireShouldFallbackToDnx)' == 'true' and '$(_AspireDnxCliVersionExitCode)' == '0'">
+      <_AspireDnxCliVersionCandidate Include="@(_AspireDnxCliVersionOutput)"
+                                    Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(Identity)', '^\s*\d+\.\d+\.\d+([-+][0-9A-Za-z.+-]*)?\s*$'))" />
+    </ItemGroup>
+
+    <PropertyGroup Condition="'$(_AspireShouldFallbackToDnx)' == 'true'">
+      <_AspireResolvedCliInvocationMode>Dnx</_AspireResolvedCliInvocationMode>
+      <_AspireResolvedDnxPath>$(_AspireFallbackDnxPath)</_AspireResolvedDnxPath>
+      <_AspireResolvedDnxHostPath>$(_AspireFallbackDnxHostPath)</_AspireResolvedDnxHostPath>
+      <_AspireResolvedDnxHostArguments>$(_AspireFallbackDnxHostArguments)</_AspireResolvedDnxHostArguments>
+      <_AspireResolvedDnxHostArgumentsPrefix>$(_AspireFallbackDnxHostArgumentsPrefix)</_AspireResolvedDnxHostArgumentsPrefix>
+      <_AspireCliVersionCommand>$(_AspireDnxCliVersionCommand)</_AspireCliVersionCommand>
+      <_AspireCliVersionExitCode>$(_AspireDnxCliVersionExitCode)</_AspireCliVersionExitCode>
+      <_AspireResolvedCliVersion>@(_AspireDnxCliVersionCandidate)</_AspireResolvedCliVersion>
+      <_AspireResolvedCliVersion>$([System.Text.RegularExpressions.Regex]::Replace('$(_AspireResolvedCliVersion)', ';.*$', ''))</_AspireResolvedCliVersion>
+      <_AspireResolvedCliVersion>$([System.Text.RegularExpressions.Regex]::Replace('$(_AspireResolvedCliVersion.Trim())', '[-+].*$', ''))</_AspireResolvedCliVersion>
+      <_AspireCliVersionSupportsRunHook>false</_AspireCliVersionSupportsRunHook>
       <_AspireCliVersionSupportsRunHook Condition="'$(_AspireResolvedCliVersion)' != '' and $([MSBuild]::VersionGreaterThanOrEquals('$(_AspireResolvedCliVersion)', '$(_AspireMinimumCliVersion)'))">true</_AspireCliVersionSupportsRunHook>
     </PropertyGroup>
 
