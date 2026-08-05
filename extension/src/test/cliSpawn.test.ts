@@ -1,10 +1,11 @@
 import * as assert from 'assert';
 import nodeChildProcess = require('child_process');
+import { spawnSync } from 'child_process';
 import { EventEmitter } from 'events';
-import { PassThrough } from 'stream';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { PassThrough } from 'stream';
 import * as sinon from 'sinon';
 import { getCliSpawnCommand, getCliSpawnDiagnostics, mergeCliSpawnEnvironment, spawnCliProcess, terminateCliProcess } from '../debugger/languages/cli';
 import { terminalCommandArgumentControlCharacters } from '../loc/strings';
@@ -278,7 +279,7 @@ suite('spawnCliProcess tests', () => {
                 wrapperPath,
                 ['echo-argument', 'mcp-started'],
             );
-            const result = nodeChildProcess.spawnSync(command, args, { encoding: 'utf8' });
+            const result = spawnSync(command, args, { encoding: 'utf8' });
 
             assert.strictEqual(result.status, 0, result.stderr);
             assert.strictEqual(result.stdout.trim(), 'mcp-started');
