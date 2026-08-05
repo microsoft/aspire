@@ -98,6 +98,7 @@ namespace Aspire.Hosting.Azure
         public AzureSandboxTier Tier { get { throw null; } set { } }
     }
 
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public enum AzureSandboxTier
     {
         ExtraSmall = 0,

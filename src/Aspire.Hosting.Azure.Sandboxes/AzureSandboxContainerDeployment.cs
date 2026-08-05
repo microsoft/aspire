@@ -584,13 +584,22 @@ internal static class AzureSandboxContainerDeployment
 
     private static async Task<string> ResolveContainerImageReferenceForDiskImageAsync(PipelineStepContext context, string imageReference)
     {
-        if (imageReference.Contains('@', StringComparison.Ordinal))
-        {
-            return imageReference;
-        }
-
         var inspector = await ResolveContainerImageInspectorAsync(context).ConfigureAwait(false);
-        var manifest = await inspector.InspectImageManifestAsync(imageReference, context.CancellationToken).ConfigureAwait(false);
+        return await ResolveContainerImageReferenceForDiskImageAsync(
+            inspector,
+            imageReference,
+            context.CancellationToken).ConfigureAwait(false);
+    }
+
+    internal static async Task<string> ResolveContainerImageReferenceForDiskImageAsync(
+        IContainerImageInspector inspector,
+        string imageReference,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(inspector);
+        ArgumentException.ThrowIfNullOrWhiteSpace(imageReference);
+
+        var manifest = await inspector.InspectImageManifestAsync(imageReference, cancellationToken).ConfigureAwait(false);
         return ResolveLinuxAmd64ManifestReference(manifest, imageReference);
     }
 
@@ -634,6 +643,20 @@ internal static class AzureSandboxContainerDeployment
 
         if (manifestObject["manifests"] is not JsonArray manifests)
         {
+            var descriptor = manifestObject["Descriptor"] as JsonObject ??
+                manifestObject["descriptor"] as JsonObject;
+            var platform = descriptor?["platform"] as JsonObject ??
+                manifestObject["platform"] as JsonObject;
+            if (platform is not null)
+            {
+                ValidateLinuxAmd64Platform(platform, imageReference);
+            }
+            else if (imageReference.Contains('@', StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"Container image '{imageReference}' is digest-pinned, but its linux/amd64 platform could not be verified.");
+            }
+
             var digest = manifestObject["Descriptor"]?["digest"]?.GetValue<string>() ??
                 manifestObject["descriptor"]?["digest"]?.GetValue<string>() ??
                 manifestObject["digest"]?.GetValue<string>();
@@ -677,9 +700,10 @@ internal static class AzureSandboxContainerDeployment
 
     private static string CreateDigestImageReference(string imageReference, string digest)
     {
-        if (imageReference.Contains('@', StringComparison.Ordinal))
+        var digestSeparator = imageReference.IndexOf('@');
+        if (digestSeparator >= 0)
         {
-            return imageReference;
+            return $"{imageReference[..digestSeparator]}@{digest}";
         }
 
         var lastSlash = imageReference.LastIndexOf('/');
@@ -687,6 +711,18 @@ internal static class AzureSandboxContainerDeployment
         var repository = lastColon > lastSlash ? imageReference[..lastColon] : imageReference;
 
         return $"{repository}@{digest}";
+    }
+
+    private static void ValidateLinuxAmd64Platform(JsonObject platform, string imageReference)
+    {
+        var os = platform["os"]?.GetValue<string>();
+        var architecture = platform["architecture"]?.GetValue<string>();
+        if (!string.Equals(os, "linux", StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(architecture, "amd64", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Container image '{imageReference}' targets '{os ?? "unknown"}/{architecture ?? "unknown"}', but Azure sandbox disk images require linux/amd64.");
+        }
     }
 
     private static async Task<ContainerImageMetadata> ResolveContainerImageMetadataAsync(PipelineStepContext context, IResource resource, string imageReference)
