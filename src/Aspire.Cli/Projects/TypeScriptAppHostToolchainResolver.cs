@@ -188,17 +188,13 @@ internal static class TypeScriptAppHostToolchainResolver
 
     private static CommandSpec CreateExecuteCommand(TypeScriptAppHostToolchain toolchain, string tsConfigFileName)
     {
-        if (toolchain == TypeScriptAppHostToolchain.Bun)
+        return toolchain switch
         {
-            return new CommandSpec
+            TypeScriptAppHostToolchain.Bun => new CommandSpec
             {
                 Command = "bun",
                 Args = ["run", "{appHostFile}"]
-            };
-        }
-
-        return toolchain switch
-        {
+            },
             TypeScriptAppHostToolchain.Yarn => new CommandSpec
             {
                 Command = "yarn",
