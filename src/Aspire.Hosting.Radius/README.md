@@ -229,6 +229,24 @@ radius.WithSecretStore("db-creds", RadiusSecretStoreType.BasicAuthentication, s 
 
 Other Aspire resource types are not emitted; only the resources listed above appear in the generated Bicep.
 
+### Backing resources and connection information
+
+A *backing* resource (Redis, PostgreSQL, MongoDB, SQL Server, RabbitMQ) is provisioned by a Radius **recipe**, not as a `Radius.Compute/containers` workload. The recipe — not Aspire — decides the Kubernetes `Service` name and the credentials, so nothing about a backing resource's address can be derived from its Aspire endpoint.
+
+Every value a consumer sees for a backing resource is therefore projected from that resource's own Radius resource:
+
+| Value | Projected from |
+|-------|----------------|
+| Host / port (and anything composed from them: `ConnectionStrings__*`, `*_HOST`, `*_PORT`, `*_URI`, service discovery) | `<resource>.properties.host` / `<resource>.properties.port` |
+| Password, for resources emitted as legacy `Applications.*` types (Redis, MongoDB, RabbitMQ) | `<resource>.listSecrets().password` — the recipe generates the credential |
+| Password and user name, for resources emitted as `Radius.*` types (PostgreSQL, SQL Server) | Passed *into* the recipe as `recipe.parameters`, using the same secure Bicep parameter Aspire composes into the connection string, so both sides agree by construction |
+
+Because the substitution happens on the underlying values rather than on formatted strings, connection strings, URIs, and the individual connection properties emitted by `WithReference` all resolve consistently.
+
+Radius additionally injects its own `CONNECTION_<NAME>_<PROPERTY>` environment variables for every entry in a container's `connections` block. Those are separate from — and not a replacement for — the `ConnectionStrings__*` variables Aspire's client integrations read.
+
+Referencing a backing resource that is deployed to a *different* Radius environment fails the publish: another environment's recipe outputs are not reachable from the generated Bicep. Deploy the consumer and the backing resource to the same environment.
+
 ### Diagnostics
 
 The package uses the `ASPIRERADIUS` diagnostic prefix for two mechanisms: compile-time
@@ -256,6 +274,7 @@ Runtime validation codes:
 * For `ASPIRERADIUS011`, AWS access-key credential conflicts are compared by the Aspire parameter name that supplies the access-key ID, not by the resolved access-key value. Two environments that use different parameter names for the same key can be flagged as a false conflict, while the same parameter name with different values is not flagged.
 * Application-scoped sealed secret stores are applied by every Radius environment. A benign concurrent re-apply of the same manifest (for example, two environments sharing one store) is tolerated: the wait syncs against the latest live `SealedSecret` generation and verifies the declared keys materialize. It does not, however, compare the live `SealedSecret`'s encrypted values against the manifest this deployment applied, so a concurrent writer that replaces the encrypted values while preserving the same key names (only possible if a distinct manifest collides on the same namespace/name) would not be detected.
 * Recipe customization (per-instance recipes via `PublishAsRadiusResource`), multiple Radius resource groups, and cloud-managed resources are not part of this release; they are planned for follow-up releases.
+* A backing resource's recipe provisions a single database, so declaring more than one database on a server resource (for example two `AddDatabase(...)` calls on one `AddPostgres(...)`) fails the publish. Declare one database per resource.
 
 ## Additional documentation
 
