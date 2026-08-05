@@ -9,7 +9,7 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 
 /// <summary>
 /// End-to-end tests for deploying Aspire applications to Azure Container Apps
-/// using a pre-existing Azure Container Registry referenced via AsExisting.
+/// using a pre-existing Azure Container Registry in a separate resource group.
 /// </summary>
 public sealed class AcaExistingRegistryDeploymentTests(ITestOutputHelper output)
 {
@@ -17,17 +17,17 @@ public sealed class AcaExistingRegistryDeploymentTests(ITestOutputHelper output)
     private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(45);
 
     [Fact]
-    public async Task DeployStarterTemplateWithExistingRegistry()
+    public async Task DeployStarterTemplateWithCrossResourceGroupExistingRegistry()
     {
         using var cts = new CancellationTokenSource(s_testTimeout);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
             cts.Token, TestContext.Current.CancellationToken);
         var cancellationToken = linkedCts.Token;
 
-        await DeployStarterTemplateWithExistingRegistryCore(cancellationToken);
+        await DeployStarterTemplateWithCrossResourceGroupExistingRegistryCore(cancellationToken);
     }
 
-    private async Task DeployStarterTemplateWithExistingRegistryCore(CancellationToken cancellationToken)
+    private async Task DeployStarterTemplateWithCrossResourceGroupExistingRegistryCore(CancellationToken cancellationToken)
     {
         // Validate prerequisites
         var subscriptionId = AzureAuthenticationHelpers.TryGetSubscriptionId();
@@ -52,6 +52,7 @@ public sealed class AcaExistingRegistryDeploymentTests(ITestOutputHelper output)
         var startTime = DateTime.UtcNow;
         var deploymentUrls = new Dictionary<string, string>();
         var resourceGroupName = DeploymentE2ETestHelpers.GenerateResourceGroupName("aca-existing-acr");
+        var registryResourceGroupName = DeploymentE2ETestHelpers.GenerateResourceGroupName("aca-existing-acr-registry");
         var projectName = "AcaExistingAcr";
 
         // ACR names must be alphanumeric only, 5-50 chars, globally unique
@@ -64,9 +65,10 @@ public sealed class AcaExistingRegistryDeploymentTests(ITestOutputHelper output)
             acrName = acrName[..50];
         }
 
-        output.WriteLine($"Test: {nameof(DeployStarterTemplateWithExistingRegistry)}");
+        output.WriteLine($"Test: {nameof(DeployStarterTemplateWithCrossResourceGroupExistingRegistry)}");
         output.WriteLine($"Project Name: {projectName}");
-        output.WriteLine($"Resource Group: {resourceGroupName}");
+        output.WriteLine($"Deployment Resource Group: {resourceGroupName}");
+        output.WriteLine($"Registry Resource Group: {registryResourceGroupName}");
         output.WriteLine($"Pre-created ACR Name: {acrName}");
         output.WriteLine($"Subscription: {subscriptionId[..8]}...");
         output.WriteLine($"Workspace: {workspace.WorkspaceRoot.FullName}");
@@ -86,17 +88,21 @@ public sealed class AcaExistingRegistryDeploymentTests(ITestOutputHelper output)
             // Step 2: Set up CLI environment
             await auto.InstallCurrentBuildAspireCliAsync(counter, output);
 
-            // Step 3: Pre-create resource group and ACR via az CLI
-            output.WriteLine("Step 3: Pre-creating resource group and ACR...");
+            // Step 3: Pre-create separate deployment and registry resource groups, then create the ACR
+            output.WriteLine("Step 3: Pre-creating deployment and registry resource groups and ACR...");
             await auto.TypeAsync($"az group create --name {resourceGroupName} --location westus3 -o none");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
-            await auto.TypeAsync($"az acr create --name {acrName} --resource-group {resourceGroupName} --sku Basic --admin-enabled false -o none");
+            await auto.TypeAsync($"az group create --name {registryResourceGroupName} --location westus3 -o none");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
+
+            await auto.TypeAsync($"az acr create --name {acrName} --resource-group {registryResourceGroupName} --sku Basic --admin-enabled false -o none");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(3));
 
-            output.WriteLine($"Pre-created ACR: {acrName} in resource group: {resourceGroupName}");
+            output.WriteLine($"Pre-created ACR: {acrName} in resource group: {registryResourceGroupName}");
 
             // Step 4: Create starter project using aspire new with interactive prompts
             output.WriteLine("Step 4: Creating starter project...");
@@ -135,7 +141,8 @@ public sealed class AcaExistingRegistryDeploymentTests(ITestOutputHelper output)
             var replacement = """
 // Reference existing Azure Container Registry via parameter
 var acrName = builder.AddParameter("acrName");
-var acr = builder.AddAzureContainerRegistry("existingacr").AsExisting(acrName, null);
+var acrResourceGroupName = builder.AddParameter("acrResourceGroupName");
+var acr = builder.AddAzureContainerRegistry("existingacr").AsExisting(acrName, acrResourceGroupName);
 builder.AddAzureContainerAppEnvironment("infra").WithAzureContainerRegistry(acr);
 
 builder.Build().Run();
@@ -157,7 +164,8 @@ builder.Build().Run();
                 $"unset ASPIRE_PLAYGROUND && " +
                 $"export AZURE__LOCATION=westus3 && " +
                 $"export AZURE__RESOURCEGROUP={resourceGroupName} && " +
-                $"export Parameters__acrName={acrName}");
+                $"export Parameters__acrName={acrName} && " +
+                $"export Parameters__acrResourceGroupName={registryResourceGroupName}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 
@@ -217,7 +225,7 @@ builder.Build().Run();
             output.WriteLine($"Deployment completed in {duration}");
 
             DeploymentReporter.ReportDeploymentSuccess(
-                nameof(DeployStarterTemplateWithExistingRegistry),
+                nameof(DeployStarterTemplateWithCrossResourceGroupExistingRegistry),
                 resourceGroupName,
                 deploymentUrls,
                 duration);
@@ -230,7 +238,7 @@ builder.Build().Run();
             output.WriteLine($"❌ Test failed after {duration}: {ex.Message}");
 
             DeploymentReporter.ReportDeploymentFailure(
-                nameof(DeployStarterTemplateWithExistingRegistry),
+                nameof(DeployStarterTemplateWithCrossResourceGroupExistingRegistry),
                 resourceGroupName,
                 ex.Message,
                 ex.StackTrace);
@@ -242,6 +250,10 @@ builder.Build().Run();
             output.WriteLine($"Triggering cleanup of resource group: {resourceGroupName}");
             TriggerCleanupResourceGroup(resourceGroupName, output);
             DeploymentReporter.ReportCleanupStatus(resourceGroupName, success: true, "Cleanup triggered (fire-and-forget)");
+
+            output.WriteLine($"Triggering cleanup of registry resource group: {registryResourceGroupName}");
+            TriggerCleanupResourceGroup(registryResourceGroupName, output);
+            DeploymentReporter.ReportCleanupStatus(registryResourceGroupName, success: true, "Cleanup triggered (fire-and-forget)");
         }
     }
 

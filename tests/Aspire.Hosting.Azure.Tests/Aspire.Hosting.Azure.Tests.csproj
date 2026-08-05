@@ -63,6 +63,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
     <PackageReference Include="Microsoft.Azure.SignalR.Management" />
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="Testcontainers.MsSql" />
     <PackageReference Include="Verify.XunitV3" />
   </ItemGroup>
 

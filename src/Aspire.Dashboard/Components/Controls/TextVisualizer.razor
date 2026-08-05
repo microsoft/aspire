@@ -3,7 +3,10 @@
 
 @if (Virtualize)
 {
-    <div class="log-overflow">
+    @* Focusable scroll region: the virtualized text/code overflows and scrolls, so it must be
+       reachable and operable by keyboard (WCAG 2.1.1 scrollable-region-focusable). Mirrors the
+       console log scroll region in LogViewer.razor. *@
+    <div class="log-overflow @(IsUnformatted ? "text-visualizer-unformatted" : null)" tabindex="0" role="region" aria-label="@Loc[nameof(ControlsStrings.TextVisualizerContentLabel)]">
         <div class="log-container" @ref="_containerElement">
             <Virtualize @ref="VirtualizeRef" Items="@(!DisplayUnformatted ? ViewModel.FormattedLines : ViewModel.Lines)" ItemSize="20" OverscanCount="200" ItemContent="@RenderLogLine">
             </Virtualize>
@@ -12,7 +15,7 @@
 }
 else
 {
-    <div class="log-container" @ref="_containerElement">
+    <div class="log-container @(IsUnformatted ? "text-visualizer-unformatted" : null)" @ref="_containerElement">
         @foreach (var item in !DisplayUnformatted ? ViewModel.FormattedLines : ViewModel.Lines)
         {
             @RenderLogLine(item)

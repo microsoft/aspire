@@ -111,6 +111,76 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
         // environment: the single-environment and AKS-wrap cases share this environment's
         // namespace, so the fallback is correct there.
         var targetNamespace = (resource.GetComputeEnvironment() as RadiusEnvironmentResource)?.Namespace ?? Namespace;
-        return ReferenceExpression.Create($"{resource.Name}.{targetNamespace}.svc.cluster.local");
+
+        // The Radius Kubernetes container recipe names the ClusterIP Service `{name}-{name}` (see
+        // RadiusServiceDiscovery), not the bare resource name, so service discovery must address
+        // that Service — otherwise the FQDN never resolves and cross-container calls fail.
+        var serviceName = RadiusServiceDiscovery.GetServiceName(resource);
+        return ReferenceExpression.Create($"{serviceName}.{targetNamespace}.svc.cluster.local");
     }
+
+    // Explicit interface implementation: this override customizes only the *port source* for Radius
+    // peers (Service/container port instead of the proxy/host port) and is reached solely through
+    // IComputeEnvironmentResource. Keeping it off the public RadiusEnvironmentResource surface
+    // matches the other publishers (Kubernetes/Docker), which don't expose this member at all.
+    ReferenceExpression IComputeEnvironmentResource.GetEndpointPropertyExpression(EndpointReferenceExpression endpointReferenceExpression)
+    {
+        ArgumentNullException.ThrowIfNull(endpointReferenceExpression);
+
+        var endpointReference = endpointReferenceExpression.Endpoint;
+        var property = endpointReferenceExpression.Property;
+        var endpoint = endpointReference.EndpointAnnotation;
+        var scheme = endpoint.UriScheme;
+
+        // Unlike the default IComputeEnvironmentResource implementation (which uses the proxy/host
+        // port), a Radius peer is reachable on the recipe Service's port, which equals the container
+        // port (port == targetPort == containerPort). Resolve the service port from the same helper
+        // the Bicep container-port emission uses so the emitted URL and the generated Service agree.
+        var resolvedServicePort = RadiusServiceDiscovery.ResolveServicePort(endpointReference.Resource, endpoint.Name);
+        var port = resolvedServicePort ?? GetDefaultPort(scheme, endpoint);
+        var host = new Lazy<ReferenceExpression>(() => GetHostAddressExpression(endpointReference));
+
+        return property switch
+        {
+            EndpointProperty.Url => IsDefaultPort(scheme, port)
+                ? ReferenceExpression.Create($"{scheme}://{host.Value}")
+                : ReferenceExpression.Create($"{scheme}://{host.Value}:{RadiusServiceDiscovery.ToInvariantString(port)}"),
+            EndpointProperty.Host or EndpointProperty.IPV4Host => host.Value,
+            EndpointProperty.Port => ReferenceExpression.Create($"{RadiusServiceDiscovery.ToInvariantString(port)}"),
+            // The Radius recipe Service targets the container port, which equals the Service port
+            // (port == targetPort == containerPort). Use the same resolved value as Port/Url so the
+            // TargetPort property can't disagree with the container port ResolvePorts emits. Fall back
+            // to the container's port reference only when no Service port is resolved (e.g. an
+            // unallocated HTTPS endpoint that is dropped from service discovery anyway).
+            EndpointProperty.TargetPort => resolvedServicePort is int targetPort
+                ? ReferenceExpression.Create($"{RadiusServiceDiscovery.ToInvariantString(targetPort)}")
+                : ReferenceExpression.Create($"{new ContainerPortReference(endpointReference.Resource)}"),
+            EndpointProperty.Scheme => ReferenceExpression.Create($"{scheme}"),
+            EndpointProperty.HostAndPort => ReferenceExpression.Create($"{host.Value}:{RadiusServiceDiscovery.ToInvariantString(port)}"),
+            EndpointProperty.TlsEnabled => ReferenceExpression.Create($"{(endpoint.TlsEnabled ? bool.TrueString : bool.FalseString)}"),
+            _ => throw new InvalidOperationException($"The property '{property}' is not supported for the endpoint '{endpoint.Name}'.")
+        };
+    }
+
+    // Mirrors the private helpers on IComputeEnvironmentResource so this override reproduces the
+    // default port semantics (only the port *source* differs — Radius uses the Service/container
+    // port instead of the proxy/host port).
+    private static int GetDefaultPort(string scheme, EndpointAnnotation endpoint)
+    {
+        if (string.Equals(scheme, "http", StringComparison.OrdinalIgnoreCase))
+        {
+            return 80;
+        }
+
+        if (string.Equals(scheme, "https", StringComparison.OrdinalIgnoreCase))
+        {
+            return 443;
+        }
+
+        throw new InvalidOperationException($"Endpoint '{endpoint.Name}' must specify a port for scheme '{scheme}'.");
+    }
+
+    private static bool IsDefaultPort(string scheme, int port) =>
+        string.Equals(scheme, "http", StringComparison.OrdinalIgnoreCase) && port == 80 ||
+        string.Equals(scheme, "https", StringComparison.OrdinalIgnoreCase) && port == 443;
 }

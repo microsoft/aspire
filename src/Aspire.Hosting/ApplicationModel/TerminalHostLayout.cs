@@ -7,60 +7,10 @@ using System.Globalization;
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
-/// Describes the Unix domain socket layout used by a single <see cref="TerminalHostResource"/>
-/// to bridge one parent-resource replica's PTY traffic between DCP and viewers (Dashboard,
-/// CLI).
+/// Describes the Unix domain socket and metadata paths for one terminal host.
 /// </summary>
-/// <remarks>
-/// <para>
-/// Each <see cref="TerminalHostResource"/> serves exactly one parent replica and owns four
-/// stable paths flat under <c>~/.aspire/trmnl/</c>, all sharing a per-replica
-/// <see cref="ReplicaId"/> prefix:
-/// </para>
-/// <list type="bullet">
-///   <item>
-///     <description>
-///       <c>~/.aspire/trmnl/{ReplicaId}.dcp.sock</c> (<see cref="ProducerUdsPath"/>) — the producer socket.
-///       The terminal host LISTENS on this path; DCP DIALS it to stream PTY traffic into the
-///       host.
-///     </description>
-///   </item>
-///   <item>
-///     <description>
-///       <c>~/.aspire/trmnl/{ReplicaId}.host.sock</c> (<see cref="ConsumerUdsPath"/>) — the consumer socket.
-///       The terminal host LISTENS on this path; viewers (Dashboard, CLI) DIAL it to attach.
-///     </description>
-///   </item>
-///   <item>
-///     <description>
-///       <c>~/.aspire/trmnl/{ReplicaId}.ctrl.sock</c> (<see cref="ControlUdsPath"/>) — the control socket.
-///       The terminal host LISTENS on this path; the AppHost DIALS it for status/shutdown
-///       RPC. (See <see cref="Aspire.Shared.TerminalHost.TerminalHostControlProtocol"/>.)
-///     </description>
-///   </item>
-///   <item>
-///     <description>
-///       <c>~/.aspire/trmnl/{ReplicaId}.metadata.json</c> (<see cref="MetadataPath"/>) — the descriptor sidecar
-///       written by the AppHost. Lets external tools enumerate terminals without an active
-///       backchannel.
-///     </description>
-///   </item>
-/// </list>
-/// <para>
-/// Connection direction (consistent across all three sockets): the terminal host is the
-/// LISTENER everywhere; DCP, viewers, and the AppHost are the DIALERS. This is also true
-/// of <c>TerminalSpec.UdsPath</c> in the DCP API.
-/// </para>
-/// <para>
-/// <see cref="ReplicaId"/> is an 11-character base64url hash of
-/// <c>(normalized AppHost path, parent resource name, parent replica index)</c> computed
-/// by <c>Aspire.Shared.TerminalHost.TerminalHostPaths.ComputeReplicaId</c>. The hash
-/// excludes PID and any random suffix so paths are stable across AppHost restarts —
-/// callers MUST therefore pre-delete any stale socket at the same path before binding.
-/// </para>
-/// </remarks>
 [DebuggerDisplay("Type = {GetType().Name,nq}, ParentReplicaIndex = {ParentReplicaIndex}, ReplicaId = {ReplicaId}")]
-public sealed class TerminalHostLayout
+internal sealed class TerminalHostLayout
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="TerminalHostLayout"/> class for a

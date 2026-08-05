@@ -3,6 +3,7 @@
   "name": "Aspire Tek Dosya Uygulama Ana İşlemi",
   "description": "Tek dosya senaryoları için minimal Aspire Uygulama Ana İşlemi (.NET 10+).",
   "symbols/Framework/choices/net10.0/description": "Hedef net10.0",
+  "symbols/Framework/choices/net11.0/description": "Target net11.0",
   "symbols/appHostHttpPort/description": "AppHost projesinin HTTP uç noktası launchSettings.json bağlantı noktası numarası.",
   "symbols/appHostOtlpHttpPort/description": "AppHost projesinin OTLP HTTP uç noktası launchSettings.json bağlantı noktası numarası.",
   "symbols/appHostResourceHttpPort/description": "AppHost projesinin kaynak hizmeti HTTP uç noktası launchSettings.json bağlantı noktası numarası.",

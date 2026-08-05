@@ -15,11 +15,11 @@ namespace Aspire.Cli.Npm;
 internal sealed class NpmRunner(IEnvironment environment, ILogger<NpmRunner> logger, ProfilingTelemetry profilingTelemetry) : INpmRunner
 {
     /// <summary>
-    /// The public npm registry URL. Commands that resolve packages from the registry
-    /// pass this explicitly via <c>--registry</c> to avoid inheriting a project-level
-    /// <c>.npmrc</c> that may redirect to a private feed (e.g. Azure DevOps).
+    /// The internal npm registry URL. Commands that resolve packages from the registry
+    /// pass this explicitly via <c>--registry</c> to avoid inheriting project-level
+    /// npm configuration.
     /// </summary>
-    private const string PublicRegistry = "https://registry.npmjs.org/";
+    private const string InternalRegistry = "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/";
 
     private readonly Lazy<string?> _npmPath = new(() => PathLookupHelper.FindFullPathFromPath("npm"));
 
@@ -46,7 +46,7 @@ internal sealed class NpmRunner(IEnvironment environment, ILogger<NpmRunner> log
             // Resolve version: npm view <package>@<range> version
             var versionOutput = await RunNpmCommandInDirectoryAsync(
                 npmPath,
-                ["view", NpmPackageInfo.FormatPackageSpecifier(packageName, versionRange), "version", "--registry", PublicRegistry],
+                ["view", NpmPackageInfo.FormatPackageSpecifier(packageName, versionRange), "version", "--registry", InternalRegistry],
                 tempDir,
                 cancellationToken);
 
@@ -68,25 +68,11 @@ internal sealed class NpmRunner(IEnvironment environment, ILogger<NpmRunner> log
                 return null;
             }
 
-            // Resolve integrity hash: npm view <package>@<version> dist.integrity
-            var integrityOutput = await RunNpmCommandInDirectoryAsync(
-                npmPath,
-                ["view", NpmPackageInfo.FormatPackageSpecifier(packageName, version), "dist.integrity", "--registry", PublicRegistry],
-                tempDir,
-                cancellationToken);
-
-            if (string.IsNullOrWhiteSpace(integrityOutput))
-            {
-                logger.LogDebug("Could not resolve integrity hash for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
-                return null;
-            }
-
-            logger.LogDebug("Resolved {PackageSpecifier} with integrity {Integrity}", NpmPackageInfo.FormatPackageSpecifier(packageName, version), integrityOutput.Trim());
+            logger.LogDebug("Resolved {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
 
             return new NpmPackageInfo
             {
-                Version = version,
-                Integrity = integrityOutput.Trim()
+                Version = version
             };
         }
         finally
@@ -108,7 +94,7 @@ internal sealed class NpmRunner(IEnvironment environment, ILogger<NpmRunner> log
 
         var output = await RunNpmCommandInDirectoryAsync(
             npmPath,
-            ["pack", NpmPackageInfo.FormatPackageSpecifier(packageName, version), "--pack-destination", outputDirectory, "--registry", PublicRegistry],
+            ["pack", NpmPackageInfo.FormatPackageSpecifier(packageName, version), "--pack-destination", outputDirectory, "--registry", InternalRegistry],
             outputDirectory,
             cancellationToken);
 
@@ -139,67 +125,6 @@ internal sealed class NpmRunner(IEnvironment environment, ILogger<NpmRunner> log
     }
 
     /// <inheritdoc />
-    public async Task<bool> AuditSignaturesAsync(string packageName, string version, CancellationToken cancellationToken)
-    {
-        var npmPath = FindNpmPath();
-        if (npmPath is null)
-        {
-            return false;
-        }
-
-        logger.LogDebug("Auditing npm signatures for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
-
-        // npm audit signatures requires a project context (node_modules + package-lock.json).
-        // For global tool installs there is no project, so we create a temporary one.
-        // The package must be installed from the registry (not a local tarball) because
-        // npm audit signatures skips packages with "resolved: file:..." in the lockfile.
-        var tempDir = CreateIsolatedTempDirectory();
-
-        try
-        {
-            // Create minimal package.json
-            var packageJson = Path.Combine(tempDir, "package.json");
-            await File.WriteAllTextAsync(
-                packageJson,
-                """{"name":"aspire-verify","version":"1.0.0","private":true}""",
-                cancellationToken).ConfigureAwait(false);
-
-            // Install the package from the registry to get proper attestation metadata
-            var installOutput = await RunNpmCommandInDirectoryAsync(
-                npmPath,
-                ["install", NpmPackageInfo.FormatPackageSpecifier(packageName, version), "--ignore-scripts", "--registry", PublicRegistry],
-                tempDir,
-                cancellationToken);
-
-            if (installOutput is null)
-            {
-                logger.LogDebug("Failed to install {PackageSpecifier} into temporary project for audit", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
-                return false;
-            }
-
-            // Run npm audit signatures in the temporary project directory
-            var auditOutput = await RunNpmCommandInDirectoryAsync(
-                npmPath,
-                ["audit", "signatures"],
-                tempDir,
-                cancellationToken);
-
-            if (auditOutput is null)
-            {
-                logger.LogDebug("Signature audit failed for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
-                return false;
-            }
-
-            logger.LogDebug("Signature audit passed for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
-            return true;
-        }
-        finally
-        {
-            CleanupTempDirectory(tempDir);
-        }
-    }
-
-    /// <inheritdoc />
     public async Task<bool> InstallGlobalAsync(string tarballPath, CancellationToken cancellationToken)
     {
         var npmPath = FindNpmPath();
@@ -216,9 +141,11 @@ internal sealed class NpmRunner(IEnvironment environment, ILogger<NpmRunner> log
 
         try
         {
+            // The root tarball is provenance-verified, but its transitive dependencies are not.
+            // Prevent dependency lifecycle scripts from executing during installation.
             var output = await RunNpmCommandInDirectoryAsync(
                 npmPath,
-                ["install", "-g", tarballPath],
+                ["install", "-g", tarballPath, "--ignore-scripts", "--registry", InternalRegistry],
                 tempDir,
                 cancellationToken);
 

@@ -1239,7 +1239,7 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
     public void DisplaySuccess(string message, bool allowMarkup = false) { }
     public void DisplaySubtleMessage(string message, bool allowMarkup = false) { }
     public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines) { }
-    public void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null) { }
+    public void DisplayCancellationMessage(string? message = null, ConsoleOutput? consoleOverride = null) { }
     public void DisplayEmptyLine() { }
     public void DisplayPlainText(string text) { }
     public void DisplayRawText(string text, ConsoleOutput? consoleOverride = null) { }

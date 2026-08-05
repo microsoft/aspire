@@ -25,6 +25,12 @@ aspire --help
 
 The npm package installs a small JavaScript `aspire` launcher. The native platform packages are installed through npm optional dependencies. The launcher selects the package that matches your OS, CPU, and Linux libc. Do not install this package with optional dependencies disabled, or installation fails because the launcher cannot find the native CLI binary.
 
+## Release notes
+
+This package contains Aspire CLI version `__VERSION__`.
+
+See [Aspire releases](https://github.com/microsoft/aspire/releases) for the features, fixes, and breaking changes in each release. Find the release matching this package version; some release tags include a suffix and do not map directly to the npm version.
+
 ## Quick start
 
 - New app: run `aspire new` to create an Aspire app from a template.

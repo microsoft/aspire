@@ -11,7 +11,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { DEFAULT_REPOS, CURRENT_RELEASE } from "./github.mjs";
+import { DEFAULT_REPOS, DEFAULT_EMU_REPOS, CURRENT_RELEASE } from "./github.mjs";
+import { isEmuAccountId } from "./accounts.mjs";
 
 const COPILOT_HOME = process.env.COPILOT_HOME || join(homedir(), ".copilot");
 const ARTIFACT_DIR = join(COPILOT_HOME, "extensions", "aspire-team-app", "artifacts");
@@ -39,7 +40,7 @@ function normalizeAccounts(raw) {
   const out = {};
   if (!raw || typeof raw !== "object") return out;
   for (const [id, cfg] of Object.entries(raw)) {
-    const repos = Array.isArray(cfg?.repos) && cfg.repos.length ? cfg.repos : [...DEFAULT_REPOS];
+    const repos = Array.isArray(cfg?.repos) && cfg.repos.length ? cfg.repos : [...defaultReposForId(id)];
     out[id] = { repos: [...new Set(repos)], active: !!cfg?.active };
   }
   return out;
@@ -62,7 +63,7 @@ function migrate(parsed) {
   };
   // Upgrade the legacy single-account shape ({ repos, account }) to the per-account map.
   if (Object.keys(prefs.accounts).length === 0 && parsed.account) {
-    const repos = Array.isArray(parsed.repos) && parsed.repos.length ? parsed.repos : [...DEFAULT_REPOS];
+    const repos = Array.isArray(parsed.repos) && parsed.repos.length ? parsed.repos : [...defaultReposForId(parsed.account)];
     prefs.accounts[parsed.account] = { repos: [...new Set(repos)], active: true };
   }
   delete prefs.repos;
@@ -94,10 +95,18 @@ export async function savePrefs(prefs) {
 // Per-account helpers
 // ---------------------------------------------------------------------------
 
+// The default repo watch set for an account that the user has not configured. EMU
+// accounts default to the private first-party repos; everyone else gets the public
+// Aspire repos. This only fills in the fallback — it never overrides repos a user
+// has explicitly configured (see accountConfig/setAccountRepos below).
+function defaultReposForId(id) {
+  return isEmuAccountId(id) ? DEFAULT_EMU_REPOS : DEFAULT_REPOS;
+}
+
 export function accountConfig(prefs, id, legacyId = legacyIdFor(id)) {
   const cfg = prefs.accounts?.[id] ?? (legacyId ? prefs.accounts?.[legacyId] : undefined);
   return {
-    repos: Array.isArray(cfg?.repos) && cfg.repos.length ? cfg.repos : [...DEFAULT_REPOS],
+    repos: Array.isArray(cfg?.repos) && cfg.repos.length ? cfg.repos : [...defaultReposForId(id)],
     active: !!cfg?.active,
     // Whether the user has ever explicitly configured this account.
     configured: !!cfg,
@@ -109,7 +118,7 @@ export function setAccountRepos(prefs, id, repos) {
   const legacyId = legacyIdFor(id);
   const cfg = accountConfig(prefs, id, legacyId);
   const clean = [...new Set((Array.isArray(repos) ? repos : []).map((r) => String(r).trim()).filter(Boolean))];
-  prefs.accounts[id] = { repos: clean.length ? clean : [...DEFAULT_REPOS], active: cfg.active };
+  prefs.accounts[id] = { repos: clean.length ? clean : [...defaultReposForId(id)], active: cfg.active };
   if (legacyId) delete prefs.accounts[legacyId];
   return prefs;
 }

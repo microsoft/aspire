@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIREDOTNETPROJECT001
 
-using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Dotnet.Tests;

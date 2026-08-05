@@ -1,0 +1,268 @@
+/*
+    Aspire Dashboard design tokens
+    ==============================
+
+    This file is the single source of truth for the dashboard's design
+    "primitives": fonts, spacing, corner radii, and semantic status hues. It is
+    loaded *before* app.css (see App.razor) so every other stylesheet can build on
+    these knobs, and so tweaking one value here cascades everywhere.
+
+    Layering model:
+      1. tokens.css (this file) - primitives:  --aspire-*
+      2. app.css `:root`        - app semantic colors + layout tokens
+      3. Fluent design tokens   - --design-unit, --type-ramp-*, --neutral-*,
+                                  --accent-*, --control-corner-radius, etc.
+                                  (emitted at runtime by the Fluent web
+                                  components via app-theme.js)
+
+    Some Fluent-owned tokens (--body-font, --control-corner-radius,
+    --layer-corner-radius) are applied through Fluent's DesignToken system,
+    which writes to a constructable stylesheet in document.adoptedStyleSheets.
+    Adopted stylesheets win the cascade against normal <link>ed rules, so a
+    plain `:root { --body-font: ... }` here would NOT reliably override them.
+    Instead app-theme.js points those Fluent tokens at the --aspire-* variables
+    below (e.g. bodyFont.withDefault("var(--aspire-font-sans)")), which keeps
+    the actual values here in CSS while guaranteeing they take effect.
+*/
+
+/*
+    Geist (sans) and Geist Mono (mono) by Vercel, licensed under the SIL Open
+    Font License 1.1 (see wwwroot/fonts/geist/LICENSE.txt). Both are variable
+    fonts, so a single woff2 covers the whole 100-900 weight range.
+    font-display: swap renders immediately with the fallback and swaps in Geist
+    when it loads, avoiding invisible text during the (small) font download.
+*/
+@font-face {
+    font-family: "Geist";
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url("../fonts/geist/Geist-Variable.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "Geist Mono";
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url("../fonts/geist/GeistMono-Variable.woff2") format("woff2");
+}
+
+/*
+    Poppins (display) by the Poppins Project / Indian Type Foundry, licensed under the
+    SIL Open Font License 1.1 (see wwwroot/fonts/poppins/LICENSE.txt). Poppins is a
+    geometric sans used ONLY for headings, the brand/app name and section titles - it
+    gives those a friendlier, higher-personality voice while dense body/data text stays
+    on the neutral Geist grotesque. Google ships Poppins as static instances (no variable
+    axis), so we self-host just the three display weights we use (500/600/700), each split
+    into the latin and latin-ext subsets with a matching unicode-range so the browser only
+    downloads the bytes a given glyph actually needs. Scripts outside these subsets (e.g.
+    CJK, Cyrillic) fall back to --aspire-font-sans, which is intended.
+    Unicode ranges match Google Fonts' current Poppins subsetting.
+*/
+@font-face {
+    font-family: "Poppins";
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url("../fonts/poppins/latin-500-normal.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: "Poppins";
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url("../fonts/poppins/latin-ext-500-normal.woff2") format("woff2");
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+    font-family: "Poppins";
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url("../fonts/poppins/latin-600-normal.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: "Poppins";
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url("../fonts/poppins/latin-ext-600-normal.woff2") format("woff2");
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+    font-family: "Poppins";
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url("../fonts/poppins/latin-700-normal.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: "Poppins";
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url("../fonts/poppins/latin-ext-700-normal.woff2") format("woff2");
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+:root {
+    /*
+        Font families. Geist leads for sans-serif text. Cascadia Mono leads for
+        code when installed, with bundled Geist Mono providing a consistent
+        fallback when it is unavailable.
+    */
+    --aspire-font-sans: "Geist", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    --aspire-font-mono: "Cascadia Mono", "Geist Mono", Consolas, ui-monospace, "Courier New", monospace;
+
+    /*
+        Display/heading family. Poppins leads for headings, the brand/app name and
+        section/dialog titles; it falls back to the Geist sans stack for any glyph or
+        weight Poppins doesn't provide. Body and data text stay on --aspire-font-sans.
+    */
+    --aspire-font-display: "Poppins", var(--aspire-font-sans);
+
+    /*
+        Fluent emits a default --font-monospace (a Bootstrap-style Consolas
+        stack) from its adopted stylesheet, which outranks a normal linked rule
+        here, so !important is required to route bare <code>/<pre>/<kbd>/<samp>
+        through the Aspire monospace stack. Unlike --body-font, Fluent does not export this token,
+        so it cannot be wired through app-theme.js (see header note above).
+    */
+    --font-monospace: var(--aspire-font-mono) !important;
+
+    /*
+        Spacing scale on a 4px grid (matches Fluent's --design-unit of 4). Use
+        these instead of ad-hoc pixel values so vertical/horizontal rhythm stays
+        consistent and can be re-scaled from one place.
+    */
+    --aspire-space-none: 0;
+    --aspire-space-2xs: 2px;
+    --aspire-space-xs: 4px;
+    --aspire-space-sm: 8px;
+    --aspire-space-md: 12px;
+    --aspire-space-lg: 16px;
+    --aspire-space-xl: 20px;
+    --aspire-space-2xl: 24px;
+    --aspire-space-3xl: 32px;
+
+    /*
+        Corner radii. The two *-unitless values feed Fluent's numeric corner
+        tokens, which are consumed internally as `calc(var(--control-corner-radius) * 1px)`;
+        keeping them unitless lets app-theme.js assign them via
+        controlCornerRadius.withDefault("var(--aspire-radius-control)"). The px
+        values are for direct use in app.css/scoped CSS.
+
+        Nudged up from Fluent's defaults (control 4 -> 6, layer 8 -> 10) for a
+        slightly softer, more modern feel that pairs well with Geist.
+    */
+    --aspire-radius-control: 6;
+    --aspire-radius-layer: 10;
+    --aspire-radius-sm: 4px;
+    --aspire-radius-md: 6px;
+    --aspire-radius-lg: 10px;
+    --aspire-radius-pill: 9999px;
+
+    /*
+        Control density. Fluent sizes every control from
+        `calc((var(--base-height-multiplier) + var(--density)) * var(--design-unit) * 1px)`
+        (defaults: multiplier 8, density 0, design-unit 4 => 32px). Fluent emits
+        --density: 0 onto :root through its adopted stylesheet, which outranks a
+        normal linked :root rule, so !important is required here (same cascade
+        reason as --font-monospace above). -1 yields 28px controls for a more
+        compact, information-dense layout that still stays comfortably clickable.
+    */
+    --density: -1 !important;
+
+    /*
+        Typography ramp
+        ---------------
+        Fluent's type ramp steps are INDEPENDENT design tokens (each an absolute px
+        font-size + line-height), not derived from a single base, so there is no
+        built-in "scale everything" knob. We mirror the full ramp here and wire every
+        step to its Fluent DesignToken in app-theme.js (typeRamp*FontSize /
+        typeRamp*LineHeight) using the same var()-indirection pattern as the fonts and
+        radii above (Fluent's adopted stylesheet otherwise outranks linked CSS).
+
+        Each value is multiplied by the single --aspire-type-scale knob, so setting
+        e.g. --aspire-type-scale: 1.1 enlarges ALL text ~10% while preserving the
+        vertical rhythm (line-heights scale in lockstep); override an individual step
+        instead to retune just one size. Defaults reproduce Fluent 4.14's ramp exactly
+        at scale 1 (base 14/20 .. plus-6 40/52), so the default render is unchanged.
+    */
+    --aspire-type-scale: 1;
+
+    --aspire-type-minus-2-size: calc(10px * var(--aspire-type-scale));
+    --aspire-type-minus-2-line-height: calc(14px * var(--aspire-type-scale));
+    --aspire-type-minus-1-size: calc(12px * var(--aspire-type-scale));
+    --aspire-type-minus-1-line-height: calc(16px * var(--aspire-type-scale));
+    --aspire-type-base-size: calc(14px * var(--aspire-type-scale));
+    --aspire-type-base-line-height: calc(20px * var(--aspire-type-scale));
+    --aspire-type-plus-1-size: calc(16px * var(--aspire-type-scale));
+    --aspire-type-plus-1-line-height: calc(22px * var(--aspire-type-scale));
+    --aspire-type-plus-2-size: calc(20px * var(--aspire-type-scale));
+    --aspire-type-plus-2-line-height: calc(26px * var(--aspire-type-scale));
+    --aspire-type-plus-3-size: calc(24px * var(--aspire-type-scale));
+    --aspire-type-plus-3-line-height: calc(32px * var(--aspire-type-scale));
+    --aspire-type-plus-4-size: calc(28px * var(--aspire-type-scale));
+    --aspire-type-plus-4-line-height: calc(36px * var(--aspire-type-scale));
+    --aspire-type-plus-5-size: calc(32px * var(--aspire-type-scale));
+    --aspire-type-plus-5-line-height: calc(40px * var(--aspire-type-scale));
+    --aspire-type-plus-6-size: calc(40px * var(--aspire-type-scale));
+    --aspire-type-plus-6-line-height: calc(52px * var(--aspire-type-scale));
+
+    /*
+        Sizing / stroke primitives
+        --------------------------
+        The remaining knobs behind Fluent's control-geometry recipes, wired to the
+        matching Fluent DesignTokens in app-theme.js so the whole system can be tuned
+        from one place. Fluent consumes these purely as CSS custom properties (there is
+        no JS height-number recipe in Fluent Blazor 4.14), so the var() indirection is
+        safe. All default to Fluent 4.14's values, so the default render is unchanged:
+
+          - height-multiplier + density + design-unit set control height:
+            (8 + -1) * 4 = 28px (density is set above).
+          - horizontal-spacing-multiplier sets control horizontal padding.
+          - stroke-width / focus-stroke-width set control border + focus-ring width.
+          - disabled-opacity is the GLOBAL faded-control opacity; note some surfaces
+            (e.g. fluent-select.resource-list in app.css) intentionally raise it for
+            legibility, and those element-scoped overrides still win locally.
+    */
+    --aspire-design-unit: 4;
+    --aspire-height-multiplier: 8;
+    --aspire-horizontal-spacing-multiplier: 3;
+    --aspire-stroke-width: 1;
+    --aspire-focus-stroke-width: 2;
+    --aspire-disabled-opacity: 0.3;
+
+    /*
+        Status / intent seed colors
+        ---------------------------
+        The canonical semantic hues for the three *meaningful* states - success,
+        error and warning - shared by message bars, block warnings, and any future
+        status surface. These define the ACCENT / border / icon hue only; each theme
+        derives its own subtle surface *tint* from these seeds via color-mix() in
+        app.css, so changing a hue here flows to both light and dark automatically.
+
+        Chosen to read clearly on both a near-white and a dark violet surface:
+          - success: a vivid mid green (the old #107C10 was too dark on dark)
+          - error:   Fluent's signature red
+          - warning: a true amber, deliberately separated from the error red so the
+                     two most urgent intents don't blur together (the old #DA3B01
+                     sat almost on top of the error hue)
+        "Info" / confirmation bars intentionally stay neutral (driven by the
+        --neutral-* ramp in app.css) so routine notifications read quietly rather
+        than competing with the semantic states.
+    */
+    --aspire-status-success: #2DA44E;
+    --aspire-status-error: #D13438;
+    --aspire-status-warning: #E8890C;
+}

@@ -66,7 +66,7 @@
             {
                 <div slot="end">
                     <FluentCounterBadge HorizontalPosition="70" Count="@(TracesViewModel.Filters.GetEnabledFilters().Count())" Appearance="Appearance.Accent">
-                        <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" Items="@GetFilterMenuItems()" />
+                        <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" ItemsProvider="GetFilterMenuItems" />
                     </FluentCounterBadge>
                 </div>
             }

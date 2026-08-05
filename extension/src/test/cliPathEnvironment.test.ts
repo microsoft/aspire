@@ -7,9 +7,15 @@ import {
     CliPathEnvironmentDependencies,
     createAspireCliPathProcessEnvironment,
     getForwardableAspireCliPath,
+    initializeCliPathEnvironmentSync,
     registerCliPathEnvironmentSync,
     syncAspireCliPathEnvironment,
 } from '../utils/cliPathEnvironment';
+import {
+    isConfiguredCliPathRejectedForForwarding,
+    resetRejectedConfiguredCliPathForForwarding,
+    resolveCliPath,
+} from '../utils/cliPath';
 
 function createFakeCollection(): CliPathEnvironmentCollection & { entries: Map<string, string> } {
     const entries = new Map<string, string>();
@@ -28,9 +34,11 @@ function createFakeCollection(): CliPathEnvironmentCollection & { entries: Map<s
 function makeDeps(overrides: Partial<CliPathEnvironmentDependencies> = {}): CliPathEnvironmentDependencies {
     return {
         getConfiguredPath: () => '',
+        getResolvedPath: () => undefined,
         isAbsolute: (cliPath: string) => cliPath.startsWith('/') || /^[A-Za-z]:[\\/]/.test(cliPath),
         fileExists: (cliPath: string) => cliPath.endsWith('/aspire') || cliPath.endsWith('\\aspire.exe') || cliPath.endsWith('/aspire.exe'),
         realpath: (cliPath: string) => cliPath,
+        isRejectedForForwarding: () => false,
         log: () => { },
         ...overrides,
     };
@@ -109,6 +117,44 @@ suite('cliPathEnvironment.getForwardableAspireCliPath tests', () => {
                     || normalized === '/work/aspire/bin/dcp/dcp'
                     || normalized === '/work/aspire/bin/managed/aspire-managed';
             },
+        })), '/work/aspire/bin/aspire');
+    });
+
+    test('returns undefined when CLI resolution rejected the configured path and fell back elsewhere', () => {
+        // resolveCliPath executes a different CLI in this state, so forwarding the configured
+        // path would make ResolveAspireCliBundle stamp bundle paths from a CLI that never ran.
+        assert.strictEqual(getForwardableAspireCliPath(makeDeps({
+            getConfiguredPath: () => '/work/aspire/bin/aspire',
+            fileExists: (candidate) => {
+                const normalized = normalizeCandidate(candidate);
+                return normalized === '/work/aspire/bin/aspire'
+                    || normalized === '/work/aspire/bin/.aspire-install.json';
+            },
+            isRejectedForForwarding: (candidate) => candidate === '/work/aspire/bin/aspire',
+        })), undefined);
+    });
+
+    test('returns the effective fallback when the configured path was rejected', () => {
+        const deps = {
+            ...makeDeps({
+                getConfiguredPath: () => '/invalid/aspire',
+                isRejectedForForwarding: candidate => candidate === '/invalid/aspire',
+            }),
+            getResolvedPath: () => '/redirected/aspire',
+        };
+
+        assert.strictEqual(getForwardableAspireCliPath(deps), '/redirected/aspire');
+    });
+
+    test('keeps forwarding a configured path that resolution did not reject', () => {
+        assert.strictEqual(getForwardableAspireCliPath(makeDeps({
+            getConfiguredPath: () => '/work/aspire/bin/aspire',
+            fileExists: (candidate) => {
+                const normalized = normalizeCandidate(candidate);
+                return normalized === '/work/aspire/bin/aspire'
+                    || normalized === '/work/aspire/bin/.aspire-install.json';
+            },
+            isRejectedForForwarding: (candidate) => candidate === '/some/other/aspire',
         })), '/work/aspire/bin/aspire');
     });
 });
@@ -231,6 +277,7 @@ suite('cliPathEnvironment.registerCliPathEnvironmentSync tests', () => {
     teardown(() => {
         onDidChangeConfigurationStub.restore();
         subscriptions.forEach(s => s.dispose());
+        resetRejectedConfiguredCliPathForForwarding();
     });
 
     test('applies current setting on registration and re-applies when aspireCliExecutablePath changes', () => {
@@ -276,6 +323,46 @@ suite('cliPathEnvironment.registerCliPathEnvironmentSync tests', () => {
         assert.strictEqual(onForwardedPathChanged.callCount, 0);
     });
 
+    test('re-applies the contributed path when CLI resolution rejects and later accepts the setting', async () => {
+        const collection = createFakeCollection();
+        const configuredPath = '/abs/aspire';
+        const onForwardedPathChanged = sinon.stub();
+        let configuredPathWorks = false;
+
+        registerCliPathEnvironmentSync(collection, subscriptions, makeDeps({
+            getConfiguredPath: () => configuredPath,
+            isRejectedForForwarding: isConfiguredCliPathRejectedForForwarding,
+        }), onForwardedPathChanged);
+
+        assert.strictEqual(collection.entries.get(ASPIRE_CLI_PATH_ENV_VAR), configuredPath);
+
+        const resolutionDeps = {
+            getConfiguredPath: () => configuredPath,
+            getDefaultPaths: () => [],
+            isConfiguredPathAutoConfigured: () => false,
+            findOnPath: async () => 'aspire',
+            findAtDefaultPath: async () => undefined,
+            tryExecute: async () => configuredPathWorks,
+            setConfiguredPath: async () => { },
+            updateResolvedPathForForwarding: () => { },
+        };
+
+        await resolveCliPath(resolutionDeps);
+
+        assert.strictEqual(collection.entries.has(ASPIRE_CLI_PATH_ENV_VAR), false);
+        assert.deepStrictEqual(
+            onForwardedPathChanged.firstCall.args,
+            [configuredPath, undefined]);
+
+        configuredPathWorks = true;
+        await resolveCliPath(resolutionDeps);
+
+        assert.strictEqual(collection.entries.get(ASPIRE_CLI_PATH_ENV_VAR), configuredPath);
+        assert.deepStrictEqual(
+            onForwardedPathChanged.secondCall.args,
+            [undefined, configuredPath]);
+    });
+
     test('ignores configuration changes that do not touch aspireCliExecutablePath', () => {
         const collection = createFakeCollection();
         let configured = '/abs/aspire';
@@ -306,5 +393,25 @@ suite('cliPathEnvironment.registerCliPathEnvironmentSync tests', () => {
 
         assert.strictEqual(subscriptions.length, 1, 'registration should push a disposable onto subscriptions');
         assert.strictEqual(typeof disposable.dispose, 'function');
+    });
+
+    test('initialization waits for the first CLI path resolution', async () => {
+        let completeResolution: (() => void) | undefined;
+        const resolution = new Promise<void>(resolve => completeResolution = resolve);
+        let initializationCompleted = false;
+        const initialization = initializeCliPathEnvironmentSync(
+            createFakeCollection(),
+            subscriptions,
+            makeDeps(),
+            undefined,
+            () => resolution);
+        void initialization.then(() => initializationCompleted = true);
+
+        await Promise.resolve();
+        assert.strictEqual(initializationCompleted, false);
+
+        completeResolution!();
+        await initialization;
+        assert.strictEqual(initializationCompleted, true);
     });
 });

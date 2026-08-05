@@ -11,6 +11,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.ApplicationModel.Docker;
 using Aspire.Hosting.JavaScript;
@@ -27,16 +28,18 @@ namespace Aspire.Hosting;
 /// <summary>
 /// Provides extension methods for adding JavaScript applications to an <see cref="IDistributedApplicationBuilder"/>.
 /// </summary>
-public static class JavaScriptHostingExtensions
+public static partial class JavaScriptHostingExtensions
 {
     private const string BrowserCapability = "browser";
     private const string DefaultNodeVersion = "22";
+    private const string DefaultNpmRegistry = "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/";
+    private const string DefaultPnpmVersion = "10.30.1";
     private const string DefaultJavaScriptRunScriptName = "dev";
     private const string DefaultYarpImage = Yarp.YarpContainerImageTags.Registry + "/" + Yarp.YarpContainerImageTags.Image + ":" + Yarp.YarpContainerImageTags.Tag;
 
     // Help links surfaced when a required command is missing, mapped to a command by ResolveHelpLink.
     private const string NodeHelpLink = "https://nodejs.org/en/download/";
-    private const string NpmHelpLink = "https://docs.npmjs.com/downloading-and-installing-node-js-and-npm";
+    private const string NpmHelpLink = "https://nodejs.org/en/download";
     private const string BunHelpLink = "https://bun.sh/docs/installation";
     private const string YarnHelpLink = "https://yarnpkg.com/getting-started/install";
     private const string PnpmHelpLink = "https://pnpm.io/installation";
@@ -1980,6 +1983,7 @@ public static class JavaScriptHostingExtensions
     /// <param name="install">When true (default), automatically installs packages before the application starts. When false, only sets the package manager annotation without creating an installer resource.</param>
     /// <param name="installArgs">The command-line arguments passed to "pnpm install".</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when <c>package.json</c> declares an invalid pnpm package manager version or integrity.</exception>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<TResource> WithPnpm<TResource>(this IResourceBuilder<TResource> resource, bool install = true, string[]? installArgs = null) where TResource : JavaScriptAppResource
@@ -1989,6 +1993,19 @@ public static class JavaScriptHostingExtensions
         var workingDirectory = resource.Resource.WorkingDirectory;
         var hasPnpmLock = File.Exists(Path.Combine(workingDirectory, "pnpm-lock.yaml"));
         var hasPnpmWorkspace = File.Exists(Path.Combine(workingDirectory, "pnpm-workspace.yaml"));
+        var pnpmPackageManager = GetPnpmPackageManager(workingDirectory);
+        var initializeDockerStage = new Action<DockerfileStage>(stage =>
+        {
+            stage.Arg("NPM_REGISTRY", DefaultNpmRegistry);
+            if (pnpmPackageManager.Integrity is { } integrity)
+            {
+                stage.Run($"archive=\"$(npm pack --json pnpm@{pnpmPackageManager.Version} --registry \"$NPM_REGISTRY\" | node -e 'const result = JSON.parse(require(\"fs\").readFileSync(0, \"utf8\")); process.stdout.write(result[0].filename)')\" && node -e 'const [algorithm, expected, file] = process.argv.slice(1); const actual = require(\"crypto\").createHash(algorithm).update(require(\"fs\").readFileSync(file)).digest(\"hex\"); if (actual !== expected) {{ console.error(\"Integrity check failed for \" + file); process.exit(1); }}' \"{integrity.Algorithm}\" \"{integrity.Hash}\" \"$archive\" && npm install --global --registry \"$NPM_REGISTRY\" \"./$archive\" && rm \"$archive\"");
+            }
+            else
+            {
+                stage.Run($"npm install --global --registry \"$NPM_REGISTRY\" pnpm@{pnpmPackageManager.Version}");
+            }
+        });
 
         installArgs ??= GetDefaultPnpmInstallArgs(resource, hasPnpmLock);
 
@@ -2009,14 +2026,9 @@ public static class JavaScriptHostingExtensions
                 PackageFilesPatterns = { new CopyFilePattern(packageFilesSourcePattern, "./") },
                 // pnpm does not strip the -- separator and passes it to the script, causing Vite to ignore subsequent arguments.
                 CommandSeparator = null,
-                // pnpm is not included in the Node.js Docker image by default, so we need to enable it via corepack
-                InitializeDockerBuildStage = stage => stage.Run("corepack enable pnpm"),
-                InitializeDockerRuntimeStage = stage =>
-                {
-                    // Corepack's shim is not enough by itself: without invoking pnpm during the image build,
-                    // the first container start can try to download pnpm before running the app.
-                    stage.Run("corepack enable pnpm && pnpm --version");
-                },
+                // pnpm is not included in the Node.js Docker image by default.
+                InitializeDockerBuildStage = initializeDockerStage,
+                InitializeDockerRuntimeStage = initializeDockerStage,
             })
             .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs])
             {
@@ -2031,6 +2043,75 @@ public static class JavaScriptHostingExtensions
         resource.ApplicationBuilder.ExecutionContext.IsPublishMode && hasPnpmLock
             ? ["--frozen-lockfile"]
             : [];
+
+    private static (string Version, (string Algorithm, string Hash)? Integrity) GetPnpmPackageManager(string workingDirectory)
+    {
+        var packageJsonPath = Path.Combine(workingDirectory, "package.json");
+        if (!File.Exists(packageJsonPath))
+        {
+            return (DefaultPnpmVersion, null);
+        }
+
+        try
+        {
+            using var packageJson = JsonDocument.Parse(File.ReadAllText(packageJsonPath));
+            if (packageJson.RootElement.TryGetProperty("packageManager", out var packageManagerElement) &&
+                packageManagerElement.ValueKind == JsonValueKind.String &&
+                packageManagerElement.GetString() is { } packageManager &&
+                packageManager.StartsWith("pnpm@", StringComparison.Ordinal))
+            {
+                var version = packageManager.AsSpan("pnpm@".Length);
+                ReadOnlySpan<char> integrity = default;
+                var hashSeparator = version.IndexOf('+');
+                var hasIntegrity = hashSeparator >= 0;
+                if (hasIntegrity)
+                {
+                    integrity = version[(hashSeparator + 1)..];
+                    version = version[..hashSeparator];
+                }
+
+                if (PnpmVersionRegex().IsMatch(version))
+                {
+                    var integritySeparator = integrity.IndexOf('.');
+                    if (integritySeparator > 0 &&
+                        integrity[(integritySeparator + 1)..] is { IsEmpty: false } hash &&
+                        hash.IndexOfAnyExcept("0123456789abcdefABCDEF") < 0 &&
+                        integrity[..integritySeparator] is "sha224" or "sha256" or "sha384" or "sha512")
+                    {
+                        return (version.ToString(), (integrity[..integritySeparator].ToString(), hash.ToString().ToLowerInvariant()));
+                    }
+
+                    if (!hasIntegrity)
+                    {
+                        return (version.ToString(), null);
+                    }
+                }
+
+                // A declared pnpm specification controls the binary installed in the published image.
+                // Fail closed instead of silently discarding the requested version and integrity.
+                throw new InvalidOperationException(
+                    $"The packageManager value '{packageManager}' in '{packageJsonPath}' is invalid. Expected 'pnpm@<version>' or 'pnpm@<version>+<sha224|sha256|sha384|sha512>.<hex hash>'.");
+            }
+        }
+        catch (JsonException)
+        {
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+
+        return (DefaultPnpmVersion, null);
+    }
+
+    // Corepack requires packageManager values to use an exact semantic version. node-semver
+    // also accepts the ecosystem's conventional leading "v"; integrity metadata is parsed
+    // separately after the version's '+' delimiter.
+    // See https://github.com/nodejs/corepack/blob/436b358a19f6d2592cff740078db1b06953c3578/sources/specUtils.ts
+    [GeneratedRegex("""^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-((?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*))?$""", RegexOptions.CultureInvariant | RegexOptions.NonBacktracking)]
+    private static partial Regex PnpmVersionRegex();
 
     /// <summary>
     /// Adds a build script annotation to the resource builder using the specified command-line arguments.

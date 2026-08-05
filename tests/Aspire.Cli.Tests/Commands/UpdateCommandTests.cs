@@ -3352,10 +3352,10 @@ internal sealed class CancellationTrackingInteractionService : IInteractionServi
     public void DisplaySuccess(string message, bool allowMarkup = false) => _innerService.DisplaySuccess(message, allowMarkup);
     public void DisplaySubtleMessage(string message, bool allowMarkup = false) => _innerService.DisplaySubtleMessage(message, allowMarkup);
     public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines) => _innerService.DisplayLines(lines);
-    public void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null) 
+    public void DisplayCancellationMessage(string? message = null, ConsoleOutput? consoleOverride = null)
     {
         OnCancellationMessageDisplayed?.Invoke();
-        _innerService.DisplayCancellationMessage(consoleOverride);
+        _innerService.DisplayCancellationMessage(message, consoleOverride);
     }
     public void DisplayEmptyLine() => _innerService.DisplayEmptyLine();
     public void DisplayVersionUpdateNotification(string newerVersion, string? updateCommand = null) 

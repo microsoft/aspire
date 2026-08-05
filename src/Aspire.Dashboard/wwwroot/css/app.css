@@ -1,5 +1,52 @@
-* {
-    scrollbar-color: var(--scrollbar-color) transparent;
+/* Custom scrollbars. Two engines, two models:
+   - Firefox (and any engine WITHOUT ::-webkit-scrollbar) uses the standard properties.
+   - Chromium / Edge / WebKit honor ::-webkit-scrollbar for pixel-level control (exact width, a pill
+     thumb, and a hover emphasis), but ONLY when scrollbar-width / scrollbar-color are NOT set on the
+     element. Chromium 121+ made the standard and legacy scrollbar models mutually exclusive, so a
+     global `* { scrollbar-color }` (what the dashboard used to ship) silently disables every
+     ::-webkit-scrollbar rule below. We therefore scope the standard properties to non-webkit engines
+     via @supports so Chromium falls through to the tokenized rules.
+     See https://developer.mozilla.org/en-US/docs/Web/CSS/scrollbar-color (Interop note). */
+@supports not selector(::-webkit-scrollbar) {
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: var(--scrollbar-thumb-color) var(--scrollbar-track-color);
+    }
+}
+
+::-webkit-scrollbar {
+    width: var(--scrollbar-size);
+    height: var(--scrollbar-size);
+}
+
+::-webkit-scrollbar-track {
+    background: var(--scrollbar-track-color);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb-color);
+    border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover-color);
+}
+
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+/* Fluent web components render their scrollable areas (e.g. the <fluent-select> / <fluent-combobox>
+   dropdown listbox) INSIDE a shadow root. The document-level ::-webkit-scrollbar rules above cannot
+   cross the shadow boundary, so those dropdowns fell back to the browser's default (grey, wide)
+   scrollbar while everything in the light DOM used the tokenized neutral one. ::part() DOES pierce the
+   boundary, but `::part(x)::-webkit-scrollbar` is NOT honored in Chromium (verified: an exaggerated
+   width rule left the layout gutter unchanged) -- only the STANDARD scrollbar-color / scrollbar-width
+   properties apply to a part. Set those on the exposed `listbox` part so shadow-DOM scrollbars match
+   the app. Custom properties inherit into the shadow tree, so the tokens resolve to the active theme. */
+::part(listbox) {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb-color) var(--scrollbar-track-color);
 }
 
 .dialog-title-grid {
@@ -11,6 +58,11 @@
 
 fluent-toolbar fluent-divider {
     border: 0;
+}
+
+fluent-toolbar strong,
+.main-toolbar strong {
+    font-weight: 600;
 }
 
 fluent-toolbar fluent-switch,
@@ -49,8 +101,115 @@ fluent-toolbar::part(end) {
     margin-right: 3px;
 }
 
+/*
+    Text input focus treatment
+    ==========================
+    Fluent/FAST text inputs draw their focus affordance as an animated accent
+    bar on the host's ::after pseudo-element (not on a ::part, so it cannot be
+    targeted directly from here), e.g.:
+
+        :host(:not([disabled]):focus-within)::after {
+            content: "";
+            height: calc(var(--focus-stroke-width) * 1px);
+            border-bottom: calc(var(--focus-stroke-width) * 1px) solid var(--accent-fill-rest);
+        }
+
+    That underline bar is the ONLY focus indicator (the inner .control sets
+    outline: none), so hiding it outright would regress keyboard accessibility.
+    Instead we swap it for a modern, box-consistent focus ring:
+
+      1. --focus-stroke-width is set to 0 on the input hosts. Custom properties
+         inherit through the shadow boundary, so the ::after bar - which sizes
+         itself from that token - collapses to nothing in both the :focus-within
+         and :active states, removing the underline without changing the global
+         focus-stroke width used elsewhere.
+      2. A 2px accent outline (--dash-focus-ring-color) is drawn on ::part(root) on
+         :focus-visible - i.e. keyboard focus only - so a mouse click no longer paints
+         a heavy full-perimeter ring. On dark the ring is a tamed mid-violet rather than
+         the near-white --accent-fill-rest, so it stays a calm accent edge while keeping
+         >=3:1 non-text contrast (WCAG 2.4.11). Text inputs always match :focus-visible
+         while focused, so their ring still shows on click where you want it; non-editable
+         selects only ring on keyboard nav. The outline follows the control's corner radius
+         and stays visible in forced-colors mode.
+*/
+fluent-text-field,
+fluent-search,
+fluent-number-field,
+fluent-text-area {
+    --focus-stroke-width: 0;
+}
+
+fluent-text-field:focus-visible::part(root),
+fluent-search:focus-visible::part(root),
+fluent-number-field:focus-visible::part(root),
+fluent-text-area:focus-visible::part(root) {
+    outline: 2px solid var(--dash-focus-ring-color);
+    outline-offset: 1px;
+}
+
+/*
+    Remove the resting "input underline"
+    ====================================
+    FAST paints the text input's resting border as a two-layer background-image on ::part(root):
+    a flat fill layer, plus a vertical gradient whose top/side 1px uses the near-invisible fill color
+    but whose bottom 1px is a bright --neutral-stroke, e.g.:
+
+        background-image:
+            linear-gradient(#333333, #333333),                                  <- interior fill
+            linear-gradient(#373737 calc(100% - 1px), #8D8D8D calc(100% - 1px)); <- bottom line only
+
+    Because only the bottom edge is drawn in a contrasting color, the field reads as if it has a
+    heavy asymmetric bottom border. It is not a real border/box-shadow/::after, which is why it can
+    only be removed by overriding the background itself. Replace it with a flat fill plus a uniform,
+    subtle 1px border so the field is evenly outlined on all four sides in every state.
+*/
+fluent-text-field::part(root),
+fluent-search::part(root),
+fluent-number-field::part(root),
+fluent-text-area::part(root) {
+    background: var(--neutral-layer-1) !important;
+    border: 1px solid var(--neutral-stroke-rest) !important;
+}
+
+/*
+    fluent-select / fluent-combobox were left out of the input treatment above, so they kept FAST's
+    resting "underline": their ::part(control) background is the same two-layer image trick
+    (linear-gradient(fill, fill), linear-gradient(... bright --neutral-stroke bottom 1px ...)), which
+    reads as a heavy bottom-only border and gives the closed dropdown almost no definition against the
+    surface. Give them the same flat fill + uniform 1px border as text fields, and swap the underline
+    focus bar (sized from --focus-stroke-width) for a box-consistent accent outline drawn on
+    :focus-visible only. Using :focus-visible (not :focus-within) means a mouse click on the closed
+    dropdown no longer paints a heavy near-white perimeter ring; the ring is reserved for keyboard
+    navigation, where a visible focus indicator is required. Scoped to ::part(control) so the open
+    listbox popup is untouched. */
+fluent-select::part(control),
+fluent-combobox::part(control) {
+    background: var(--neutral-layer-1) !important;
+    border: 1px solid var(--neutral-stroke-rest) !important;
+}
+
+fluent-select,
+fluent-combobox {
+    --focus-stroke-width: 0;
+}
+
+fluent-select:focus-visible::part(control),
+fluent-combobox:focus-visible::part(control) {
+    outline: 2px solid var(--dash-focus-ring-color);
+    outline-offset: 1px;
+}
+
 :root {
     --scrollbar-color: #8B8B8B;
+    /* Scrollbar tokens. --scrollbar-size drives the ::-webkit-scrollbar thickness — thinner than the
+       stock ~17px classic / overlay width. Thumb + hover colors are an intentionally quiet, tint-free
+       neutral (semi-transparent black on light, semi-transparent white on dark) so the scrollbars recede
+       into the surface instead of reading as a bright on-brand element; overridden per-theme below. The
+       track is transparent so scrollbars float over the surface. See the scrollbar rules at the top. */
+    --scrollbar-size: 8px;
+    --scrollbar-thumb-color: rgba(0, 0, 0, 0.22);
+    --scrollbar-thumb-hover-color: rgba(0, 0, 0, 0.38);
+    --scrollbar-track-color: transparent;
     --log-critical: #F8ECEB;
     --log-error: #F8ECEB;
     --log-warning: #FBF3DD;
@@ -70,20 +229,45 @@ fluent-toolbar::part(end) {
     --kbd-background-color: var(--neutral-layer-4);
     --dialog-background-color: #ffffff;
     --dialog-border-color: #e5e5e5;
-    --messagebar-success-background-color: #f1faf1;
-    --messagebar-success-border-color: #9fd89f;
-    --messagebar-error-background-color: #FDF3F4;
-    --messagebar-error-border-color: #f1bbbc;
-    --messagebar-warning-background-color: #FDF6F3;
-    --messagebar-warning-border-color: #f4bfab;
-    --messagebar-info-background-color: #f5f5f5;
-    --messagebar-info-border-color: #d1d1d1;
-    --codeblock-background-color: var(--neutral-fill-hover);
+    /* Keyboard focus ring color. Single knob for the 2px :focus-visible outline shared by text inputs,
+       selects/comboboxes and scroll buttons. Defaults to the accent fill (a dark violet on light theme,
+       which reads fine on white); dark theme overrides it to a tamed violet because the dark accent fill
+       (--accent-fill-rest #e5bfff) is a near-white lavender that paints a loud halo on the violet panels. */
+    --dash-focus-ring-color: var(--accent-fill-rest);
+    /* Message bar surfaces derive from the shared --aspire-status-* seeds (tokens.css)
+       so each intent hue is defined once and every theme mixes its own surface from it.
+       Light theme: a faint wash of the seed over the near-white neutral layer plus a
+       soft, desaturated border. Info stays neutral (a barely-there grey lift) so
+       routine/confirmation bars read quietly. */
+    --messagebar-success-background-color: color-mix(in srgb, var(--aspire-status-success) 8%, var(--neutral-layer-1));
+    --messagebar-success-border-color: color-mix(in srgb, var(--aspire-status-success) 40%, var(--neutral-layer-1));
+    --messagebar-error-background-color: color-mix(in srgb, var(--aspire-status-error) 8%, var(--neutral-layer-1));
+    --messagebar-error-border-color: color-mix(in srgb, var(--aspire-status-error) 40%, var(--neutral-layer-1));
+    --messagebar-warning-background-color: color-mix(in srgb, var(--aspire-status-warning) 9%, var(--neutral-layer-1));
+    --messagebar-warning-border-color: color-mix(in srgb, var(--aspire-status-warning) 42%, var(--neutral-layer-1));
+    --messagebar-info-background-color: color-mix(in srgb, var(--neutral-foreground-rest) 4%, var(--neutral-layer-1));
+    --messagebar-info-border-color: var(--neutral-stroke-rest);
+    /* FluentUI renders message bars inside a design-system-provider whose neutral ramp is
+       INVERTED relative to the page (in light theme the bar inherits the dark-theme ink, and
+       vice-versa). The bar text - and its slotted `color: inherit` hypertext link - therefore
+       resolve `--neutral-foreground-rest` to the opposite theme and fail WCAG contrast against
+       our retinted surfaces (measured ~1.02-1.2:1). Pin an explicit page-theme ink that the
+       provider does not redefine, so it inherits down to the message/title/link correctly.
+       Light theme: near-black ink reads AA+ on the faint near-white intent washes. */
+    --messagebar-foreground-color: #242424;
     --table-header-border-color: var(--neutral-stroke-rest);
     --table-body-border-color: #f2f2f2;
+    --trace-tick-background-color: #d8d8d8;
     --layout-toolbar-padding: calc(var(--design-unit) * 1.5px);
-    --layout-left-padding: calc(var(--design-unit) * 4.5px);
-    --layout-right-padding: calc(var(--design-unit) * 2px);
+    /* Compact pass: tighten the outer gutters so content starts closer to the nav rail
+       and reaches nearer the right edge, fitting more on screen. (was 4.5/2 -> 3/1.5) */
+    --layout-left-padding: calc(var(--design-unit) * 3px);
+    --layout-right-padding: calc(var(--design-unit) * 3px);
+    /* Vertical breathing room above each page's toolbar / tabs+filter row so the controls
+       don't collide with the app header bar directly above them. Kept as a token so the gap
+       stays consistent across pages (Resources tabs row + the shared main-toolbar) and is easy
+       to tweak in one place. */
+    --layout-top-padding: calc(var(--design-unit) * 3px);
     --inline-icon-margin: 5px;
     /*
         --neutral-layer-2 is the background for the body of most of the site so
@@ -93,7 +277,14 @@ fluent-toolbar::part(end) {
     --datagrid-hover-color: var(--neutral-layer-2-hover);
     --property-grid-background-color: #fbfbfb;
     --property-grid-genai-dialog-background-color: #fbfbfb;
-    /* highlight JS theme variables */
+    /* Code blocks use a quiet inset surface rather than the heavy near-black container from the first
+       iteration. These Fluent-derived tokens adapt to both themes while preserving enough background
+       and border contrast to group the language label, copy action, and code as one control. */
+    --codeblock-background-color: var(--neutral-layer-2);
+    --codeblock-header-background-color: color-mix(in srgb, var(--neutral-foreground-rest) 4%, var(--neutral-layer-2));
+    --codeblock-border-color: var(--neutral-stroke-rest);
+    /* Highlight.js palette. */
+    --code-language-foreground-color: #6d587d;
     --hljs-default: #545454;
     --hljs-comment: #696969;
     --hljs-variable: #d91e18;
@@ -145,36 +336,59 @@ fluent-toolbar::part(end) {
 
 [data-theme="dark"] {
     --scrollbar-color: #9F9F9F;
+    /* Quiet, tint-free neutral thumb on dark: a semi-transparent white so the scrollbar reads as a
+       subtle overlay that recedes into the surface rather than a bright element competing with the
+       content (mirrors the light-theme neutral thumb). */
+    --scrollbar-thumb-color: rgba(255, 255, 255, 0.20);
+    --scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.34);
     --log-critical: #493634;
     --log-error: #493634;
     --log-warning: #3F3A2B;
-    --foreground-subtext-rest: #8D8D8D;
+    /* Subtext is lifted from Fluent's stock #8D8D8D so dimmed labels retain WCAG AA contrast across
+       both the page base and elevated dark surfaces. */
+    --foreground-subtext-rest: #9E9E9E;
     --foreground-subtext-hover: #A1A1A1;
     --foreground-settings-text: #A8A8A8;
     --error-ui-foreground-color: #000000;
     --error-ui-accent-foreground-color: #512bd4;
     --reconnection-ui-bg: #D6D6D6;
     --error-counter-badge-foreground-color: #ffffff;
-    --kbd-background-color: var(--fill-color);
-    --dialog-background-color: #272727;
-    --dialog-border-color: #3d3d3d;
-    --messagebar-success-background-color: #052505;
-    --messagebar-success-border-color: #107C10;
-    --messagebar-error-background-color: #3F1011;
-    --messagebar-error-border-color: #D13438;
-    --messagebar-warning-background-color: #411200;
-    --messagebar-warning-border-color: #DA3B01;
-    --messagebar-info-background-color: #141414;
-    --messagebar-info-border-color: #666;
-    --codeblock-background-color: var(--neutral-layer-4);
+    --kbd-background-color: var(--neutral-fill-secondary-rest);
+    /* Keep the blue-violet undertone from the generated ramp while setting dialogs one step darker.
+       Their nested neutral-layer-1 surfaces then regain the hierarchy visible in light mode. */
+    --dialog-background-color: color-mix(in srgb, var(--neutral-layer-1) 82%, #000000);
+    --dialog-border-color: var(--neutral-stroke-rest);
+    /* A mid periwinkle-violet keeps the focus ring above the WCAG 2.4.11 3:1 non-text contrast
+       minimum on the generated dark surfaces without becoming a near-white halo. */
+    --dash-focus-ring-color: #a98eff;
+    /* Message bar surfaces derive from the shared --aspire-status-* seeds (tokens.css).
+       Dark theme: a restrained tint of the seed over the neutral layer replaces the old
+       near-black / over-saturated floods (#3F1011, #411200, #052505), while the border stays
+       the full vivid seed for a crisp intent edge. Info is a gentle neutral lift over the same
+       layer - the old flat #141414 read as a black hole against the elevated neutral ramp. */
+    --messagebar-success-background-color: color-mix(in srgb, var(--aspire-status-success) 18%, var(--neutral-layer-1));
+    --messagebar-success-border-color: var(--aspire-status-success);
+    --messagebar-error-background-color: color-mix(in srgb, var(--aspire-status-error) 18%, var(--neutral-layer-1));
+    --messagebar-error-border-color: var(--aspire-status-error);
+    --messagebar-warning-background-color: color-mix(in srgb, var(--aspire-status-warning) 18%, var(--neutral-layer-1));
+    --messagebar-warning-border-color: var(--aspire-status-warning);
+    --messagebar-info-background-color: var(--neutral-layer-1);
+    --messagebar-info-border-color: var(--neutral-stroke-rest);
+    /* See the light-theme note above: pin the page-theme ink so bar text/title/link inherit a
+       readable foreground instead of the provider's inverted (here: dark) neutral-foreground.
+       Dark theme: a neutral off-white reads AA+ on the restrained dark intent tints. */
+    --messagebar-foreground-color: #e5e5e5;
     --table-header-border-color: var(--neutral-stroke-rest);
     --table-body-border-color: #474747;
+    --trace-tick-background-color: #717171;
     /* overrides of default fluentui-blazor styling */
     --error: #E10B11 !important;
     color-scheme: dark;
-    --property-grid-background-color: #333333;
-    --property-grid-genai-dialog-background-color: #383838;
-    /* highlight JS theme variables */
+    /* Resource details use the first elevation; the GenAI sub-panel uses the matching secondary fill. */
+    --property-grid-background-color: var(--neutral-layer-1);
+    --property-grid-genai-dialog-background-color: var(--neutral-fill-secondary-rest);
+    /* Highlight.js palette. */
+    --code-language-foreground-color: #a98fbe;
     --hljs-default: #f8f8f2;
     --hljs-comment: #d4d0ab;
     --hljs-variable: #ffa07a;
@@ -184,8 +398,8 @@ fluent-toolbar::part(end) {
     --hljs-section: #00e0e0;
     --hljs-keyword: #dcc6e0;
     /* geni visualizer */
-    --main-container-background-color: #333333;
-    --main-sidebar-background-color: #272727;
+    --main-container-background-color: var(--neutral-layer-1);
+    --main-sidebar-background-color: var(--neutral-layer-2);
     --events-background-color: var(--neutral-fill-layer-rest);
     --llm-background-color: #00666d;
     --llm-color: #a6e9ed;
@@ -222,12 +436,38 @@ fluent-toolbar::part(end) {
     --accent-olive-text: #000;
 }
 
+/* Use the same generated layer token for the page base and transparent surfaces. This avoids a
+   one-step drift between Fluent's fill-color recipe and the cards/panels layered above it.
+   !important is required to beat Fluent's later base sheet and inline body binding. */
+body {
+    background-color: var(--neutral-layer-2) !important;
+}
+
 .fluent-data-grid-row.hover:not([row-type='header'],[row-type='sticky-header']):hover td {
     cursor: auto !important;
 }
 
 .enable-row-click .fluent-data-grid-row.hover:not([row-type='header'],[row-type='sticky-header'], .empty-content-row, .loading-content-row):hover td {
     cursor: pointer !important;
+}
+
+/* Compact: tighten data grid row vertical padding (Fluent default is 6px top/bottom)
+   so more rows are visible at once. Applies to header and body cells. !important is
+   required because Fluent's data-grid CSS loads after app.css at equal specificity.
+   The empty-/loading-content cells are excluded so their own centered empty-state padding
+   (a generous block that reads as a message, see .empty-content-cell) isn't crushed to 4px. */
+.fluent-data-grid-row td:not(.empty-content-cell):not(.loading-content-cell),
+.fluent-data-grid-row th {
+    padding-top: var(--aspire-space-xs) !important;
+    padding-bottom: var(--aspire-space-xs) !important;
+}
+
+/* Subtle row separators improve scannability of the dense data grids for a more modern table feel.
+   Grid rows use display:contents, so the divider goes on the cells (td). Header, sticky-header and
+   placeholder rows are excluded. Uses the shared neutral divider token so it adapts to light/dark.
+   !important for the same reason as the padding above: Fluent's grid CSS loads later at equal specificity. */
+.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header'],.empty-content-row,.loading-content-row) td {
+    border-bottom: 1px solid var(--neutral-stroke-divider-rest) !important;
 }
 
 [data-theme="light"] {
@@ -244,9 +484,61 @@ fluent-select.resource-list {
     --disabled-opacity: 0.85;
 }
 
+/* Headings, the brand/app name and section/dialog titles use the Poppins display family
+   (defined in tokens.css) for a friendlier, higher-personality voice, while dense body and
+   data text stay on Geist. Scoped to titles/headings so tables and inputs stay neutral. */
+h1, h2, h3, h4, h5, h6,
+.layout > .header > .header-gutters .logo,
+.details-header-title,
+.section-title,
+.pane-details-title,
+.dialog-title-grid {
+    font-family: var(--aspire-font-display);
+}
+
+/* Fluent dialog/flyout header titles render as <h4 class="fluent-typography">. Fluent's own scoped rule
+   for .fluent-typography lives in the generated Aspire.Dashboard.styles.css bundle, which the host loads
+   AFTER app.css. Our selector here (.fluent-dialog-header .fluent-typography) ties Fluent's scoped
+   selector on specificity (both 0,2,0), so source order decides and Fluent's later-loaded rule wins,
+   leaving the title on Geist. !important is the minimal, contained way to re-assert the display font on
+   dialog/flyout headers (Settings/Help/AI and the text/JSON visualizer titles) without an escalating
+   specificity hack that would also have to out-specify future Fluent updates. */
+.fluent-dialog-header .fluent-typography {
+    font-family: var(--aspire-font-display) !important;
+}
+
+/* Fluent wraps the dialog/flyout header title (<h4 class="fluent-typography">) in a
+   <div tabindex="0"> that it auto-focuses when the dialog opens, to seat initial focus for
+   assistive tech. On keyboard-triggered opens that static wrapper matches :focus-visible and the
+   browser paints a full-width 3px focus ring around the title - it appears on every dialog (Help,
+   Settings, the text/JSON/GenAI visualizers...). It's a non-interactive heading anchor, not an
+   actionable control, so suppress its focus ring; the real interactive controls inside the dialog
+   keep theirs, so keyboard accessibility is unaffected. */
+.fluent-dialog-header > div[tabindex="0"]:focus,
+.fluent-dialog-header > div[tabindex="0"]:focus-visible {
+    outline: none;
+}
+
+/* Right-align the dismiss (X) button with the dialog body/footer content edge. Fluent renders the
+   header as a flex row that ends with a zero-width <fluent-tooltip> for the X button, e.g.
+   [title][X button][tooltip]. The header's uniform 10px column-gap therefore reserves 10px to the
+   RIGHT of the X (between it and the phantom tooltip), pushing the X's right edge ~10px inside the
+   dialog's content edge - the body and footer buttons align to the full width, so the X looked
+   inset. Cancel that trailing gap on the tooltip so the X sits flush with the footer's buttons.
+   The -10px matches Fluent's fixed `.stack-horizontal` column-gap (not one of our --aspire-space
+   tokens), so it's a literal here rather than a token reference. */
+.fluent-dialog-header > fluent-tooltip:last-child {
+    margin-left: -10px;
+}
+
 h1 {
-    font-size: var(--type-ramp-plus-4-font-size);
-    line-height: var(--type-ramp-plus-4-line-height);
+    /* IA hierarchy: the page title stays smaller than the app/brand name in the header
+       ("Stress" is 20px) and leans on weight for emphasis. It was previously plus-4 (28px),
+       which dwarfed the brand and made the page title the loudest thing on screen. Now
+       type-ramp-plus-1 (16px) so it reads as a compact section title, not a banner. */
+    font-size: var(--type-ramp-plus-1-font-size);
+    line-height: var(--type-ramp-plus-1-line-height);
+    font-weight: 600;
     margin-top: 0.25rem;
     margin-bottom: 0.5rem;
 }
@@ -284,12 +576,144 @@ h1 {
     fluent-toolbar[orientation=horizontal].main-toolbar {
         padding-left: var(--layout-left-padding);
         padding-right: var(--layout-right-padding);
+        padding-top: var(--layout-top-padding);
     }
 
     .page-header {
         padding: calc(var(--design-unit) * 1.5px) var(--layout-left-padding);
     }
  }
+
+/* Page toolbars (Traces / Structured logs / Metrics / Console) wrap their controls when the
+   viewport narrows. The Fluent toolbar's flex region only sets a 6px gap, so wrapped rows sit
+   cramped against each other. Give wrapped rows real vertical breathing room and vertically centre
+   the controls. `positioning-region` is a documented Fluent part, so this survives shadow DOM. */
+.main-toolbar::part(positioning-region) {
+    row-gap: 0.5rem;
+    align-items: center;
+}
+
+/* The Fluent toolbar's end slot (search + the view-options / settings menu on the log / trace / metric
+   pages) only receives a row-gap from the base `fluent-toolbar::part(end)` rule above; its column-gap
+   defaults to `normal` (= 0), so horizontally-adjacent end controls - notably the search field and the
+   settings menu button - sit flush against each other with no separation (the "missing gap" between
+   them). Give the end group the same 8px inter-control gap the left group and the Resources tabs
+   toolbar already use, so control spacing is uniform across every page toolbar. */
+.main-toolbar::part(end) {
+    column-gap: calc(var(--design-unit) * 2px);
+}
+
+/* Page toolbars separate their end-slot controls with <DesktopToolbarDivider> elements, but those
+   dividers are rendered borderless (see `fluent-toolbar fluent-divider { border: 0 }` near the top of
+   this sheet), so they show as *invisible* elements that nonetheless still occupy ~8px of layout each.
+   That injected uneven dead space between controls - Resources' search->filter gap was visibly wider
+   than filter->options, and Structured logs / Traces spread their level + filter controls ~24px apart -
+   while Console logs, which has no dividers, sat at a tight 8px. Drop the invisible dividers from layout
+   entirely so every page toolbar relies on the single uniform 8px column-gap above, giving one
+   consistent inter-control rhythm across all pages (the markup stays for now; it simply lays out to
+   nothing). Scoped to the page toolbars so any other fluent-toolbar dividers keep the border-only reset. */
+.main-toolbar fluent-divider,
+.resource-tabs-toolbar fluent-divider {
+    display: none;
+}
+
+/* Let the filter/search field shrink gracefully as space tightens instead of forcing an early,
+   awkward wrap. It keeps its natural width on wide screens (flex-basis auto) but can compress down
+   to a still-usable 10rem before the toolbar wraps. */
+.main-toolbar fluent-search {
+    flex: 0 1 auto;
+    min-width: 10rem;
+}
+
+/* Establish the toolbar header as an inline-size container so the toolbar can respond to the space it
+   actually has (viewport minus the nav rail and page padding) rather than the raw viewport width.
+   Consumed by the wrap rule below. inline-size containment is safe here because content-header is a
+   grid row that already stretches to the available width regardless of its contents. */
+.content-header {
+    container-type: inline-size;
+    container-name: page-toolbar;
+}
+
+/* On wide toolbars the end-slot controls (search / level / filters) pin to the right while the left
+   selector stays left - the intended two-sided desktop layout. Fluent pushes that whole end group
+   right with `margin-inline-start:auto`, and the auto margin PERSISTS after the group wraps, so once
+   the toolbar is too narrow to keep the end controls on the first row they get stranded as a
+   right-aligned island with a large dead gap on their left (the ragged multi-row toolbar). Below the
+   wrap-onset width, drop the auto push so every control flows and stacks LEFT-aligned, matching the
+   left-hand controls, so multiple rows read as a clean left-aligned stack instead of ragged islands.
+   The threshold tracks the widest page toolbar's single-row width; container queries survive shadow
+   DOM because the styled ::part resolves its nearest container ancestor through the flat tree. */
+@container page-toolbar (max-width: 1150px) {
+    .main-toolbar::part(end) {
+        margin-inline-start: 0;
+    }
+}
+
+/* Icon-only toolbar buttons (pause, clear, add-filter, and the view-options / settings menu triggers)
+   use Fluent's stealth / neutral / lightweight appearance, which paints a 1px *transparent* border -
+   so at rest they read as bare floating icons with no button affordance. Keep them icon-only, but give
+   them a real button silhouette by coloring that existing border slot with the neutral control stroke,
+   matching the adjacent fluent-search `outline` field and the fluent-selects on the same toolbar. This
+   is intentionally scoped to the page toolbars (`.main-toolbar` on the log/trace/metric subpages and
+   `.resource-tabs-toolbar` on Resources) plus the detail-flyout filter toolbar
+   (`.details-container fluent-toolbar`, the span/log details search + options row) so its options icon
+   reads as a button against its own search field, the same way the page-toolbar options icon does. The
+   flyout *header* buttons (panel-resize / Close) are deliberately excluded - they live in the header,
+   not a fluent-toolbar - so that dialog chrome stays borderless. The appbar / top-nav icons also stay
+   borderless as requested. Accent-filled buttons (the active filter state) already read as buttons via
+   their fill, so they are excluded here to avoid an outline-on-fill clash. */
+.main-toolbar fluent-button:not([appearance="accent"])::part(control),
+.resource-tabs-toolbar fluent-button:not([appearance="accent"])::part(control),
+.details-container fluent-toolbar fluent-button:not([appearance="accent"])::part(control) {
+    border-color: var(--neutral-stroke-rest);
+}
+
+/* Unify the height of every interactive control on the page toolbars - the filter/search field and
+   all action buttons - to 32px, the same height as the page tabs (Resources / Parameters / Graph)
+   and the header icon buttons. Fluent renders the search field and the stealth/lightweight icon
+   buttons at 28px while the tabs sit at 32px, so the action row read as short and slightly
+   misaligned against the tabs above it. A single 32px control height lines the whole row up.
+
+   The height MUST be set on the host elements: Fluent fixes fluent-button / fluent-search at 28px on
+   the host box, and ::part(control) is height:100% of that host, so overriding only the part can grow
+   the width but never exceed the host's height. The wider neutral buttons (pause / remove) keep their
+   intrinsic auto width and only adopt the shared height. */
+.main-toolbar fluent-button,
+.resource-tabs-toolbar fluent-button,
+.main-toolbar fluent-search,
+.resource-tabs-toolbar fluent-search,
+.main-toolbar fluent-select,
+.resource-tabs-toolbar fluent-select {
+    height: 32px;
+}
+
+/* The bordered "field" box lives in a different shadow part per control: fluent-search paints its
+   border on ::part(root) while fluent-select paints it on ::part(control). Grow whichever part holds
+   the border so the visible field - not just the host box - lines up at 32px with the buttons. */
+.main-toolbar fluent-search::part(root),
+.resource-tabs-toolbar fluent-search::part(root),
+.main-toolbar fluent-select::part(control),
+.resource-tabs-toolbar fluent-select::part(control) {
+    height: 32px;
+}
+
+/* The icon-only toolbar buttons (add-filter, view-options, column-options) hold a 20px glyph in a
+   28px box with zero control padding, so the icon crowds the 1px silhouette we colour above (~4px of
+   room, minus the border). Square them to 32px so the glyph gets ~6px of breathing room on every side
+   and the buttons match the header icon buttons. These use the icon-only appearances - stealth /
+   lightweight, plus accent when the add-filter toggle is active - so a button keeps the same 32px
+   square whether or not a filter is applied. The neutral text-padded buttons (pause / remove) are
+   intentionally excluded so their wider label/padding geometry is preserved. */
+.main-toolbar fluent-button[appearance="stealth"]::part(control),
+.main-toolbar fluent-button[appearance="lightweight"]::part(control),
+.main-toolbar fluent-button[appearance="accent"]::part(control),
+.resource-tabs-toolbar fluent-button[appearance="stealth"]::part(control),
+.resource-tabs-toolbar fluent-button[appearance="lightweight"]::part(control),
+.resource-tabs-toolbar fluent-button[appearance="accent"]::part(control) {
+    width: 32px;
+    min-width: 32px;
+    padding: 0;
+}
 
 .datagrid-overflow-area,
 .parent-details-container {
@@ -320,39 +744,64 @@ h1 {
     column-gap: calc(var(--design-unit) * 2px) !important;
 }
 
-.custom-body-content {
-    margin-right: 10px;
-}
-
 .top-messagebar {
-    padding: calc(var(--design-unit) * 4px);
-    padding-top: calc(var(--design-unit) * 2px);
-    padding-bottom: 0 !important;
+    /* Align the notification band's gutters with the page content (tabs + data grid) using the same
+       layout paddings, and give it breathing room below the header and above the tabs/toolbar so the
+       message bars don't visually collide with either. !important mirrors the provider's own padding,
+       which is otherwise more specific and would win the cascade. */
+    padding-left: var(--layout-left-padding) !important;
+    padding-right: var(--layout-right-padding) !important;
+    padding-top: calc(var(--design-unit) * 3px) !important;
+    padding-bottom: calc(var(--design-unit) * 3px) !important;
     width: 100%;
 }
 
+/* Retint the message bars to the tokenized intent surfaces (see --messagebar-*-background-color).
+   The host `color` here is only a fallback: FluentMessageBar's own component-scoped styles set
+   `color` directly on the inner `.title` span and the slotted hypertext link, and an inherited
+   color from the host can never beat a value declared on the element itself - so the explicit
+   text overrides below (which DO target those elements) are what actually fix contrast. */
 .fluent-messagebar.intent-success {
     background-color: var(--messagebar-success-background-color) !important;
     border: 1px solid var(--messagebar-success-border-color) !important;
+    color: var(--messagebar-foreground-color) !important;
 }
 
 .fluent-messagebar.intent-error {
     background-color: var(--messagebar-error-background-color) !important;
     border: 1px solid var(--messagebar-error-border-color) !important;
+    color: var(--messagebar-foreground-color) !important;
 }
 
 .fluent-messagebar.intent-warning {
     background-color: var(--messagebar-warning-background-color) !important;
     border: 1px solid var(--messagebar-warning-border-color) !important;
+    color: var(--messagebar-foreground-color) !important;
 }
 
 .fluent-messagebar.intent-info {
     background-color: var(--messagebar-info-background-color) !important;
     border: 1px solid var(--messagebar-info-border-color) !important;
+    color: var(--messagebar-foreground-color) !important;
 }
 
-/* The fluent dialog's default fill color is too dark in our current dark theme.
-   Setting it to the floating layer allows it to stand out more and doesn't impact light theme. */
+/* Pin the page-theme ink on the bar's actual text nodes. FluentMessageBar renders as an
+   accent-filled bar with light "on-accent" text, so its component-scoped rules set a light
+   `color` on `.fluent-messagebar-message`/`.title` (light DOM) and on the hypertext link's
+   shadow `content` part. Against our light subtle-tint backgrounds that light text measures
+   ~1.1:1 (WCAG AA needs 4.5:1). `!important` here beats the component's own non-important
+   color declarations regardless of nesting, and `::part(content)` reaches the anchor's shadow text. */
+.fluent-messagebar .fluent-messagebar-message,
+.fluent-messagebar .title {
+    color: var(--messagebar-foreground-color) !important;
+}
+
+.fluent-messagebar .hypertext::part(content) {
+    color: var(--messagebar-foreground-color) !important;
+}
+
+/* Pin dialogs to dashboard surface tokens instead of Fluent's independent fill palette.
+   Dark mode uses a restrained floating surface so nested cards remain visually distinct. */
 fluent-dialog::part(control) {
     background: var(--dialog-background-color);
     border: 1px solid var(--dialog-border-color);
@@ -381,6 +830,76 @@ fluent-dialog fluent-anchor[appearance=lightweight]:not(:hover)::part(control) {
    now have the wrong background. So change that back */
 fluent-dialog td[cell-type=columnheader] fluent-button[appearance=stealth]:not(:hover)::part(control) {
     background: var(--fill-layer);
+}
+
+/* =========================================================================================
+   Flyout panel / dialog polish (Settings, Notifications, Add filter, ...)
+   -----------------------------------------------------------------------------------------
+   The right-hand flyout panels render as fluent-dialog on the first elevated neutral layer, which
+   is lighter than the page body. That inverts the usual page
+   relationship (where inputs sit a step lighter than the body), so the default control fills blend
+   into the panel and the primary action falls back to FAST's pale-lavender accent. The rules below
+   restore clear surface separation and a strong primary action, scoped to the panels.
+   ========================================================================================= */
+
+/* Inputs on the panel surface: sink the well to the darker --neutral-layer-2 so each field
+   reads as a distinct inset against the lighter panel instead of melting into it. Dark theme only -
+   the light-theme panel is white and already separates a light-grey field. */
+[data-theme="dark"] fluent-dialog fluent-text-field::part(root),
+[data-theme="dark"] fluent-dialog fluent-search::part(root),
+[data-theme="dark"] fluent-dialog fluent-number-field::part(root),
+[data-theme="dark"] fluent-dialog fluent-text-area::part(root),
+[data-theme="dark"] fluent-dialog fluent-select::part(control),
+[data-theme="dark"] fluent-dialog fluent-combobox::part(control) {
+    background: var(--neutral-layer-2) !important;
+    border-color: var(--neutral-stroke-rest) !important;
+}
+
+/* Primary action buttons on DARK theme: a soft LIGHT-purple fill with a dark-violet label, so the
+   primary action reads as a bright, inviting chip against the dark chrome. FAST's stock dark
+   accent recipe is a near-white lavender (looks washed-out/disabled) and the brand-violet + white
+   treatment we used before read heavy; a light-purple fill + dark text is the requested look. The fill
+   and label are mixed from the brand seed (--accent-base-color #512bd4) so they track the theme: ~30%
+   over white is a legible light purple and ~85% over black is a deep-violet label that clears AA
+   (~5.5:1) on that fill. Applies to every accent button/anchor - dialogs AND page toolbars.
+   IMPORTANT: LIGHT theme is intentionally NOT touched here (stays on the stock saturated violet + white
+   recipe), per the design ask. --foreground-on-accent is pinned to the dark label so FluentUI's own
+   slotted label/icon colour follows it instead of painting white. */
+[data-theme="dark"] fluent-button[appearance='accent'],
+[data-theme="dark"] fluent-anchor[appearance='accent'] {
+    --foreground-on-accent-rest: color-mix(in srgb, var(--accent-base-color) 85%, #000000);
+    --foreground-on-accent-hover: color-mix(in srgb, var(--accent-base-color) 85%, #000000);
+    --foreground-on-accent-active: color-mix(in srgb, var(--accent-base-color) 85%, #000000);
+}
+
+[data-theme="dark"] fluent-button[appearance='accent']:not(:hover):not(:active)::part(control),
+[data-theme="dark"] fluent-anchor[appearance='accent']:not(:hover):not(:active)::part(control) {
+    background: color-mix(in srgb, var(--accent-base-color) 30%, #ffffff);
+    color: color-mix(in srgb, var(--accent-base-color) 85%, #000000);
+    border-color: color-mix(in srgb, var(--accent-base-color) 45%, #ffffff);
+}
+
+[data-theme="dark"] fluent-button[appearance='accent']:hover::part(control),
+[data-theme="dark"] fluent-anchor[appearance='accent']:hover::part(control) {
+    background: color-mix(in srgb, var(--accent-base-color) 42%, #ffffff);
+    color: color-mix(in srgb, var(--accent-base-color) 88%, #000000);
+}
+
+/* Secondary buttons (Cancel / Manage, neutral or default appearance): FAST's neutral fill is nearly the
+   panel color, so they read as borderless text. Sink them to the SAME inset well + soft border the panel
+   inputs use (--neutral-layer-2 / --neutral-stroke-rest) so a secondary button and an adjacent dropdown
+   share one consistent recessed-control treatment; only the accent primary action stays raised in violet. */
+[data-theme="dark"] fluent-dialog fluent-button[appearance='neutral']:not(:hover)::part(control),
+[data-theme="dark"] fluent-dialog fluent-button:not([appearance]):not(:hover)::part(control) {
+    background: var(--neutral-layer-2);
+    border: 1px solid var(--neutral-stroke-rest);
+}
+
+/* Right-align the panel footer's primary action. FluentUI lays the footer out with
+   justify-content: start, which parks the lone Close button in the bottom-left; a trailing primary
+   action is the expected placement. Scoped to the right-aligned flyout panels. */
+fluent-dialog[class~="right"] .fluent-dialog-footer {
+    justify-content: flex-end;
 }
 
 .pane-details-subtext {
@@ -487,27 +1006,408 @@ split-panels::part(handle) {
     display: none;
 }
 
+split-panels::part(median) {
+    z-index: 1;
+}
+
+/* Keep the splitter's 5px pointer target easy to grab while drawing only a 1px divider.
+   The negative trailing margin lets the adjacent pane occupy the remaining 4 transparent pixels. */
+split-panels[direction="row"]::part(median) {
+    margin-right: -4px;
+    background: linear-gradient(to right,
+        var(--neutral-stroke-rest) 0 1px,
+        transparent 1px);
+}
+
+split-panels[direction="column"]::part(median) {
+    margin-bottom: -4px;
+    background: linear-gradient(to bottom,
+        var(--neutral-stroke-rest) 0 1px,
+        transparent 1px);
+}
+
 div.error-counter-badge {
     padding: 3px 3px;
     color: var(--error-counter-badge-foreground-color) !important; /* color is applied directly to div style, so !important to override since we can't use a more specific selector */
 }
 
 .layout >.header > .header-gutters {
-    margin: 0 1.5rem 0 0;
+    /* Compact but not cramped: a small, even gap between the header children. The stock buttons are
+       full-height 50px filled cells; we restyle them below as compact icon buttons instead. 6px gives
+       the top-right icon cluster (GitHub / help / AI / notifications / settings) clear breathing room
+       between the 32px targets without letting them drift apart. */
+    column-gap: 6px;
+    align-items: center;
+    /* Align the right edge of the icon cluster with the page content's right gutter (roughly the
+       table's right edge) rather than letting it run flush to the window edge. !important is needed
+       to beat the higher-specificity scoped header rule in MainLayout.razor.css. */
+    padding-right: calc(var(--design-unit) * 3px) !important;
 }
 
-layout > .header {
+/* Top-right header icons: restyle the full-height 50px filled cells (see MainLayout.razor.css)
+   as compact, rounded, stealth icon buttons that stay transparent until hovered, so the icon
+   row reads as a tidy, dense cluster instead of a strip of square chips. */
+.layout > .header > .header-gutters .header-button {
+    height: auto;
+}
+
+.layout > .header > .header-gutters .header-button::part(control) {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    /* !important overrides the higher-specificity scoped stealth-button rule in
+       MainLayout.razor.css that paints a neutral-layer-4 fill on the resting control. */
+    background: transparent !important;
+}
+
+.layout > .header > .header-gutters .header-button:hover::part(control) {
+    background: var(--neutral-fill-stealth-hover) !important;
+}
+
+/* FluentIcon Size24 emits an inline `width:24px` on the <svg> (but no inline height), so a plain
+   stylesheet width is ignored and only the height below actually constrains the glyph. Force both
+   axes with !important so every top-nav icon is a uniform, undistorted square. 22px reads a touch
+   larger than the prior 20px while still leaving comfortable padding inside the 32px button. */
+.layout > .header > .header-gutters .header-button svg {
+    width: 22px !important;
+    height: 22px !important;
+}
+
+/* Density -1 (see tokens.css) gives Fluent buttons a nicely compact height, but it also collapses
+   their horizontal padding to ~2px, which makes text buttons look cramped. Restore comfortable
+   left/right padding on text buttons (accent / neutral / default) while keeping the short height.
+   Icon-only buttons use stealth/lightweight appearances and are intentionally left compact. */
+fluent-button[appearance='accent']::part(control),
+fluent-button[appearance='neutral']::part(control),
+fluent-button:not([appearance])::part(control),
+fluent-anchor[appearance='accent']::part(control),
+fluent-anchor[appearance='neutral']::part(control) {
+    padding-left: 14px;
+    padding-right: 14px;
+}
+
+/* FluentIcon renders its glyph with an inline `fill: var(--accent-fill-rest)` (Fluent's default icon
+   colour). Inside an accent-appearance button the control background is ALSO --accent-fill-rest, so a
+   slotted glyph paints the same colour as the button and appears to be missing. This affects the
+   Copy-to-clipboard / Checkmark icons in the text- and GenAI-visualizer dialogs, which live in an
+   Appearance.Accent button. Follow the button's on-accent foreground (currentColor, which Fluent
+   already computes to contrast with the accent fill) so the glyph stays legible in both themes and at
+   any accent shade. !important is required to beat FluentIcon's inline fill. Scoped to accent buttons
+   so the neutral-surface copy icons in markdown code blocks keep their neutral tint. */
+fluent-button[appearance='accent'] .copy-icon,
+fluent-button[appearance='accent'] .checkmark-icon {
+    fill: currentColor !important;
+}
+
+/* ===== Collapsible desktop navigation rail =====
+   The nav rail (DesktopNavMenu -> FluentAppBar) toggles between two layouts via the header
+   nav-toggle button; the chosen mode is persisted in local storage (see MainLayout). The mode
+   class lives on .layout so the rail and the logo cell above it (which share the same grid
+   column) respond together.
+     - .nav-collapsed (default): icon-only rail. Labels are hidden but stay discoverable through
+       each item's existing tooltip. Maximizes horizontal space for page content.
+     - .nav-expanded: a wider rail laid out as icon-on-the-left, label-on-the-right rows. */
+
+/* ===== Sidebar collapse/expand toggle, pinned to the bottom of the nav rail =====
+   Relocated out of the top header into the foot of the rail so it reads like a standard sidebar
+   footer control. It mirrors the nav items' geometry (48px row height, 24px icon, 20px left inset
+   when expanded, centered icon when collapsed) so the icon lines up cleanly with the tabs above.
+   flex-shrink:0 keeps it visible while the tab list scrolls. */
+.desktop-nav-rail .nav-toggle-bottom {
+    display: block;
+    width: 100%;
+    /* Match the nav items' 48px row height. Fluent sizes the <fluent-button> host to its default
+       control height (28px) via a shadow :host rule; our ::part(control) height only grew the inner
+       control, leaving the host a 28px box that the 48px control overflowed. Pin the host height too
+       (!important because Fluent's component CSS loads after app.css and ties on specificity) so the
+       host and control agree at 48px and the toggle reads as a full nav row. */
+    height: 48px !important;
+    box-sizing: border-box;
+    flex-shrink: 0;
+    margin: 0;
+    border-radius: 0;
+}
+
+/* Stealth FluentButton paints its own fill and centers content; flatten it to a transparent,
+   full-width, square, left-aligned row so it behaves like a nav row rather than a pill button.
+   Fluent's component CSS loads after app.css, so these need !important to win. */
+.desktop-nav-rail .nav-toggle-bottom::part(control) {
+    width: 100%;
+    /* Fill the host's content box (height:100%) rather than a hard 48px so the control always tracks
+       the 48px host exactly, with no sub-pixel overflow that could add a page scrollbar. */
+    height: 100%;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    justify-content: flex-start !important;
+}
+
+.desktop-nav-rail .nav-toggle-bottom:hover::part(control) {
+    background: var(--neutral-fill-stealth-hover) !important;
+}
+
+/* Match the nav items' hover treatment on the icon. FluentAppBarItem renders TWO icon variants —
+   an outline (white, shown at rest) and a filled one tinted --accent-fill-rest (#d6aeff, the violet
+   accent) that it swaps in on hover/active. The toggle uses a single FluentIcon, so rather than a
+   variant swap we recolor its fill to that same accent violet on hover for visual parity. The base
+   rule carries the transition so the tint eases in AND out; !important overrides FluentIcon's own
+   inline fill (from Color="Color.Neutral"). Applies in both collapsed and expanded rails. */
+.desktop-nav-rail .nav-toggle-bottom .nav-toggle-content svg {
+    transition: fill 120ms ease;
+}
+
+.desktop-nav-rail .nav-toggle-bottom:hover .nav-toggle-content svg,
+.desktop-nav-rail .nav-toggle-bottom:hover .nav-toggle-content svg path {
+    fill: var(--accent-fill-rest) !important;
+}
+
+.desktop-nav-rail .nav-toggle-content {
+    display: flex;
+    align-items: center;
+    column-gap: var(--aspire-space-md);
+    width: 100%;
+    /* Expanded default: 22px inset matches the expanded nav items' icon gutter. */
+    padding-left: 22px;
+    padding-right: var(--aspire-space-sm);
+}
+
+/* Collapsed rail: center the icon in the icon-only rail. The button keeps
+   an explicit aria-label, so the accessible name survives even with the text hidden (unlike the nav
+   links, which have no aria-label and must keep an sr-only label). */
+.layout.nav-collapsed .desktop-nav-rail .nav-toggle-content {
+    padding-left: 0;
+    /* Zero the right inset too so the icon-only content box is symmetric and lands dead-center
+       in the rail (matching the nav icons); leaving the base right padding shifts it ~4px left. */
+    padding-right: 0;
+    justify-content: center;
+}
+
+/* Collapsed: also center the button's internal control. The base rule pins the control to
+   justify-content:flex-start (so the expanded icon+label row hugs the left like the nav items),
+   which leaves Fluent's shrink-wrapped content box — and the icon inside it — against the left
+   edge (~x12). Re-centering the control here drops the icon at the rail center (~x34) so it lines
+   up with the centered nav icons above. */
+.layout.nav-collapsed .desktop-nav-rail .nav-toggle-bottom::part(control) {
+    justify-content: center !important;
+}
+
+/* Collapsed: visually remove the labels so only the icons remain, but keep them in the accessibility
+   tree. Using display:none here would strip each nav link's accessible name, tripping WCAG 2.4.4 /
+   4.1.2 (link-name) because the icon-only <a> would have no discernible text. The visually-hidden
+   ("sr-only") pattern below removes the label from the visual layout while leaving it readable by
+   assistive tech, so "Console", "Traces", etc. remain the links' accessible names. */
+.layout.nav-collapsed .desktop-nav-menu .fluent-appbar-item [part='label'] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Expanded: give the rail (and the logo cell that shares its grid column) a snug width. Keep it
+   just wide enough for the longest label ("Resources"/"Structured" ~78px) plus the icon and
+   padding, so short labels don't leave a large empty gutter to their right. Applies to the rail
+   wrapper (which now owns the grid column) so both the tab list and the bottom toggle widen together. */
+.layout.nav-expanded > .desktop-nav-rail {
+    min-width: 176px;
+}
+
+/* Expanded: FluentAppBar hard-codes each item (and its inner anchor/stack) to a fixed ~68px
+   icon-rail width, which clips the row label. Stretch the whole item chain to fill the rail so
+   the icon + label row has room and nothing is cut off. */
+.layout.nav-expanded .desktop-nav-menu .fluent-appbar-item,
+.layout.nav-expanded .desktop-nav-menu .fluent-appbar-item > .fluentui-counterbadge-container,
+.layout.nav-expanded .desktop-nav-menu .fluent-appbar-item > .fluentui-counterbadge-container > a {
+    width: 100% !important;
+}
+
+/* Expanded: lay each item out horizontally (icon left, label right). The FluentStack wrapping the
+   icon + label sets align-items/justify-content/column-gap inline AND Fluent's component CSS (which
+   loads after app.css) forces padding:0, so EVERY property here needs !important - without it the
+   padding collapses and the icon jams flush against the rail's left edge. The 20px left inset gives
+   a comfortable gutter and stays close to the collapsed rail's icon position so toggling modes
+   doesn't visibly shift the icon. */
+.layout.nav-expanded .desktop-nav-menu .fluent-appbar-item .stack-vertical {
+    flex-direction: row !important;
+    justify-content: flex-start !important;
+    align-items: center !important;
+    column-gap: var(--aspire-space-md) !important;
+    padding-left: 20px !important;
+    padding-right: var(--aspire-space-sm) !important;
+}
+
+/* Expanded: promote the label from the tiny 10px stacked caption to a readable inline row label. */
+.layout.nav-expanded .desktop-nav-menu .fluent-appbar-item [part='label'] {
+    text-align: left;
+    white-space: nowrap;
+    font-size: var(--type-ramp-base-font-size, 13px);
+    line-height: 1;
+}
+
+/* Selection + hover affordance that works in BOTH collapsed and expanded modes. The stock Fluent
+   active state is a faint fill that's easy to miss, so make the current page obvious with an accent
+   left-bar plus a subtle accent-tinted fill, and give every item a hover background so the rail
+   reads as interactive. The anchor (a.active / a:hover) is the element FluentAppBar toggles. */
+.desktop-nav-menu .fluent-appbar-item > .fluentui-counterbadge-container > a {
+    transition: background-color 120ms ease;
+}
+
+.desktop-nav-menu .fluent-appbar-item > .fluentui-counterbadge-container > a:hover {
+    background-color: var(--neutral-fill-stealth-hover);
+}
+
+.desktop-nav-menu .fluent-appbar-item > .fluentui-counterbadge-container > a.active {
+    /* --neutral-fill-stealth-selected isn't defined in this theme, so tint the accent instead;
+       it ties the fill to the left-bar and reads clearly on the near-black rail. */
+    background-color: color-mix(in srgb, var(--accent-fill-rest) 14%, transparent);
+    box-shadow: inset 3px 0 0 0 var(--accent-fill-rest);
+}
+
+.desktop-nav-menu .fluent-appbar-item > .fluentui-counterbadge-container > a.active [part='label'] {
+    font-weight: 600;
+}
+
+.layout > .header {
     font-size: var(--type-ramp-base-font-size);
+}
+
+/* Two-zone header alignment: the Aspire logo stays pinned far-left as a brand mark above the
+   collapsed nav rail, while the "App name | Page title" text lockup is shifted right so its left edge
+   lines up with the left edge of the content panel below it. When the rail is collapsed that panel
+   (the data grid / message-bar box) starts at ~69px, so we shift the lockup to land its left edge on
+   that same gutter - one clean vertical edge with the page content, not the inset toolbar controls
+   (~81px). The inset is fixed (it does NOT track the rail width) so the lockup stays put when the rail
+   expands, matching the pinned-brand behaviour established for this header. Desktop only; the mobile
+   header puts the logo in a separate cell and must not inherit this shift. */
+@media (min-width: 768px) {
+    .layout > .header > .header-gutters fluent-anchor.logo:not(.brand-logo) {
+        margin-inline-start: 7px;
+        min-width: auto;
+    }
+}
+
+/* Page title in the header. Each page's <h1 class="page-header"> is teleported here (via a Blazor
+   SectionOutlet, see MainLayout/AspirePageContentLayout) so it reads as a breadcrumb-style suffix
+   after the brand name ("Stress / Resources") instead of a large banner above the page toolbar.
+   The slot sits between the brand and the flex-filler; it stays empty (no separator) on pages
+   that don't provide a title. */
+.layout > .header > .header-gutters .page-title-slot {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    margin-left: var(--aspire-space-sm);
+    /* Symmetric space on both sides of the divider rule (::before) so the brand and page
+       title read as two balanced segments rather than a path with a leading slash. */
+    gap: var(--aspire-space-md, 12px);
+    overflow: hidden;
+}
+
+/* Segment divider, drawn only when a page actually supplies a title (:has guards the empty slot).
+   A thin vertical rule (the "brand | context" chrome used by modern app headers) instead of a "/"
+   glyph, which read like a breadcrumb path. It is the slot's first flex child so the container gap
+   provides equal spacing on either side, and a fixed, non-shrinking box so only the title text (not
+   the divider) truncates when space is tight. */
+.layout > .header > .header-gutters .page-title-slot:has(.page-header)::before {
+    content: "";
+    flex: 0 0 auto;
+    width: 1px;
+    height: 1.15em;
+    align-self: center;
+    /* Derive from the hint foreground (the same family the old "/" used, so it reads in both
+       themes) but soften it so a full-height 1px rule stays quiet rather than heavy. */
+    background-color: color-mix(in srgb, var(--neutral-foreground-hint) 60%, transparent);
+}
+
+.layout > .header > .header-gutters .page-title-slot .page-header {
+    /* A plain block (not flex) so text-overflow:ellipsis actually applies: a long page title (e.g. a full
+       trace name) must truncate here instead of overflowing the header into the top-right icon cluster. A
+       flex box would make the text an anonymous flex item that never truncates. min-width:0 lets it shrink
+       below its intrinsic width so the flex slot can compress it; the sibling .flex-filler absorbs slack
+       when the title is short. */
+    display: block;
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+    /* Quieter than the 20px brand: a compact, lighter-weight suffix so the brand stays dominant. */
+    font-size: var(--type-ramp-base-font-size);
+    line-height: var(--type-ramp-base-line-height);
+    font-weight: 500;
+    color: var(--neutral-foreground-rest);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .flex-filler {
     flex-grow: 1;
 }
 
+/* Tab selection clarity: the default Fluent active-tab affordance is a short accent bar plus
+   a subtle weight change, which is hard to spot when active and inactive tabs share the same
+   text color. Instead of an underline, give the selected tab a filled pill, mute the inactive
+   tabs, and give them a hover background so it's obvious they're selectable. */
+fluent-tabs::part(activeIndicator) {
+    /* Hide the default sliding underline; selection is shown with the filled pill below. */
+    background: transparent;
+    height: 0;
+}
 
+/* Enclose every tab group in a bordered, rounded "well" so the tabs read as one segmented
+   control rather than loose pills. The small inner padding keeps the selected pill off the
+   group border. Applied to all tab lists (Resources landing, metric Graph/Table, the
+   GenAI/text visualizer dialogs) for a consistent segmented-control affordance. */
+fluent-tabs::part(tablist) {
+    gap: var(--aspire-space-xs);
+    border: 1px solid var(--neutral-stroke-rest);
+    border-radius: var(--aspire-radius-md, 6px);
+    padding: 3px;
+}
+
+fluent-tab {
+    border-radius: var(--aspire-radius-md, 6px);
+    padding: 0 12px;
+    height: 32px;
+    /* Transparent border reserves the 1px so the selected border below doesn't shift layout. */
+    border: 1px solid transparent;
+}
+
+fluent-tab[aria-selected="true"] {
+    /* Selected tab reads as a contained pill that "owns" its label: filled AND bordered.
+       The border is what visually separates the active pill from a merely-hovered tab,
+       because in the dark theme neutral-fill-secondary == neutral-fill-stealth-hover. */
+    background: var(--neutral-fill-secondary-rest);
+    border-color: var(--neutral-stroke-rest);
+    color: var(--neutral-foreground-rest);
+    font-weight: 600;
+}
+
+fluent-tab[aria-selected="false"] {
+    color: var(--neutral-foreground-hint);
+}
+
+fluent-tab[aria-selected="false"]:hover {
+    /* Hover uses a distinct, flatter fill (fixed layer color, no border) so hovering an
+       inactive tab never looks identical to the selected pill. */
+    background: var(--neutral-layer-2);
+    color: var(--neutral-foreground-rest);
+}
+
+
+/* Shortcut keycaps (Help dialog "Keyboard Shortcuts", markdown content). A tinted fill alone can
+   blend into a same-hue dialog surface, so add a border and a subtle bottom bevel: each cap reads as
+   a distinct raised key on any dark surface, not just a barely-there rectangle. */
 kbd {
     color: unset;
     background-color: var(--kbd-background-color);
+    border: 1px solid var(--neutral-stroke-rest);
+    border-radius: 4px;
+    box-shadow: inset 0 -1px 0 0 rgba(0, 0, 0, 0.25);
 }
 
 fluent-switch.table-switch::part(label) {
@@ -541,6 +1441,10 @@ fluent-switch.table-switch::part(label) {
     padding-top: 0;
 }
 
+:is(.resource-details-layout, .structured-log-details-layout, .span-details-layout) .property-grid-container {
+    padding: calc(var(--design-unit) * 2px);
+}
+
 .property-grid-container fluent-accordion {
     gap: calc(var(--design-unit) * 2px);
     margin-bottom: calc(var(--design-unit) * 1px);
@@ -548,7 +1452,18 @@ fluent-switch.table-switch::part(label) {
 }
 
 .property-grid-container > fluent-accordion > fluent-accordion-item::part(heading) {
-    padding-left: calc(var(--design-unit) * 2px);
+    /* Align the section heading text (e.g. "Resource") with the property grid's
+       "Name" column and row content below it. Fluent's ::part(button) adds its own
+       inline padding, so we zero both the heading padding and the button's inline
+       start padding to land the heading on the same left edge as the grid cells. */
+    padding-left: 0;
+}
+
+.property-grid-container > fluent-accordion > fluent-accordion-item::part(button) {
+    /* Inset the section heading text (and the trailing count badge + chevron) from the accordion
+       bar's rounded edges so the label isn't hugging the corner. The matching inline padding on
+       ::part(region) below keeps the heading aligned with the Name/Value grid columns. */
+    padding-inline: calc(var(--design-unit) * 3px);
 }
 
 .property-grid-container fluent-accordion .fluent-data-grid {
@@ -569,14 +1484,16 @@ fluent-switch.table-switch::part(label) {
 }
 
 .property-grid-container fluent-accordion-item::part(region) {
-    padding: 0;
+    /* Match the heading text inset (::part(button) padding-inline) so the Name/Value grid columns
+       line up under the section heading and the whole card has consistent internal padding. */
+    padding: 0 calc(var(--design-unit) * 3px);
     /* overflow hidden masks content in the item's rounded borders */
     overflow: hidden;
 }
 
 .property-grid-container fluent-accordion-item::part(heading-content) {
+    font-family: var(--aspire-font-display);
     font-weight: 600;
-    font-size: var(--type-ramp-plus-1-font-size);
 }
 
 .property-grid-container fluent-accordion .fluent-data-grid-row:last-of-type {
@@ -599,8 +1516,23 @@ fluent-switch.table-switch::part(label) {
 }
 
 .property-grid-container tr:last-child td {
-    /* bottom of the table is at the bottom of an accordion item so hide the bottom row's bottom border */
-    border-bottom: none;
+    /* The table ends at the accordion edge, so override the shared important row separator on its last row. */
+    border-bottom: none !important;
+}
+
+/* Align the section heading, the Name/Value column headers, and the row values on a single left edge
+   per column (matching the trace "Span" details layout). The Name/Value headers aren't sortable, so
+   Fluent renders their <th> labels flush while still insetting body <td> content by 16px - that left
+   the headers drifting ~16px left of their own values, reading as a 2-3 step stair-case (review
+   feedback). Zero the cell inline-start padding so each header sits directly above its values, and
+   both land under the section heading (which sits at the region's inline content inset). */
+.property-grid-container .fluent-data-grid thead th,
+.property-grid-container .fluent-data-grid tbody td {
+    padding-inline-start: 0 !important;
+}
+
+.property-grid-container .column-header {
+    text-align: start !important;
 }
 
 .items-footer {
@@ -665,6 +1597,86 @@ fluent-switch.table-switch::part(label) {
     overflow: auto;
 }
 
+/* Floating scroll-to-bottom button for large scroll regions (wired in app.js).
+   Positioned by JS via `position: fixed`; styling is fully tokenized so it tracks the active theme.
+   This only targets live console, structured-log, and trace views. */
+.scroll-buttons {
+    position: fixed;
+    z-index: 9000;
+    display: flex;
+    flex-direction: column;
+    /* JS spans the visible height of the scroll region and centers the group over its content.
+       Pin the single affordance to the visible bottom edge. */
+    justify-content: flex-end;
+    align-items: center;
+    transform: translateX(-50%);
+    /* The group spans the region; let clicks fall through everywhere except the buttons themselves. */
+    pointer-events: none;
+}
+
+.scroll-buttons:not(.is-active) {
+    display: none;
+}
+
+.scroll-button {
+    pointer-events: auto;
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    border: 1px solid var(--neutral-stroke-divider-rest, rgba(255, 255, 255, 0.12));
+    background-color: var(--neutral-layer-1);
+    color: var(--neutral-foreground-rest);
+    box-shadow: 0 0.125rem 0.5rem rgba(0, 0, 0, 0.35);
+    cursor: pointer;
+    /* Hidden by default; JS toggles .is-visible per edge so each button appears only when useful. */
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(0.25rem);
+    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease, background-color 0.15s ease;
+}
+
+/* JS adds .is-visible whenever the region can still scroll down. Keep that single affordance visible
+   without requiring pointer proximity so its availability is predictable on mouse, touch, and pen. */
+.scroll-button.is-visible {
+    opacity: 0.85;
+    visibility: visible;
+    transform: none;
+}
+
+.scroll-button:hover {
+    opacity: 1;
+    background-color: var(--neutral-layer-2);
+}
+
+.scroll-button:focus-visible {
+    outline: 2px solid var(--dash-focus-ring-color);
+    outline-offset: 2px;
+    opacity: 1;
+    visibility: visible;
+}
+
+.scroll-button svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    fill: currentColor;
+}
+
+.scroll-button.scroll-to-bottom svg {
+    transform: translateY(1px);
+}
+
+.text-visualizer-container .log-overflow {
+    color: var(--hljs-default);
+}
+
+.text-visualizer-container .log-overflow.text-visualizer-unformatted,
+.log-container.text-visualizer-unformatted {
+    color: var(--neutral-foreground-rest);
+}
+
 .log-overflow {
     --console-theme-black: #0C0C0C;
     --console-theme-blue: #0037DA;
@@ -702,7 +1714,7 @@ fluent-switch.table-switch::part(label) {
 }
 
 .log-container {
-    font-family: 'Cascadia Mono', Consolas, monospace;
+    font-family: var(--aspire-font-mono);
     font-size: 13px;
     line-height: 20px;
     overflow: visible;
@@ -769,7 +1781,7 @@ fluent-switch.table-switch::part(label) {
 }
 
 .filter-input-container {
-    width: 85%;
+    width: 100%;
 }
 
 .filter-button-container {
@@ -800,8 +1812,27 @@ fluent-switch.table-switch::part(label) {
     content: "-"
 }
 
+/* The masked character is very large in the default font. This makes it appear smaller */
+.masked-content {
+    font-size: 0.8em;
+    letter-spacing: 0.1em;
+}
+
 .fluent-data-grid {
     height: auto !important; /* override height in table style attribute */
+}
+
+/* Animate the double-click column auto-fit (driven by autoFitGridColumn in app.js). The class is
+   only present for the duration of the animation so ordinary drag-resizing stays instant and does
+   not lag behind the pointer. */
+table.fluent-data-grid.autofit-animating {
+    transition: grid-template-columns 220ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    table.fluent-data-grid.autofit-animating {
+        transition: none;
+    }
 }
 
 .main-grid-expand-container {
@@ -838,12 +1869,51 @@ fluent-switch.table-switch::part(label) {
     padding-left: calc(((var(--design-unit)* 3) + var(--focus-stroke-width) - var(--stroke-width) + 5)* 1px);
 }
 
-/* Line up the first column header with the content. TODO: A bit of a mess. See if it can be improved */
-.main-grid .column-header:not(.select-all):first-of-type {
-    padding-inline-start: calc(var(--design-unit)* 2px) !important;
+/* Align each main-grid column header label with the data beneath it. FluentDataGrid wraps every
+   header label in a stealth sort-button that adds a fixed ~8px inset, while body cells indent their
+   content by 16px (the expand/Name column is the exception - it is flush-left, so its text sits after
+   the leading resource icon). Set each header's inline-start padding so that padding + the button's
+   ~8px inset lands the label directly above its column's values, instead of letting the labels drift
+   left of the data (which read as "awkward", misaligned columns). */
+.main-grid .column-header.expand-col:not(.select-all) {
+    /* 16px pad + 8px button inset = 24px, lining "Name" up with the resource name text. */
+    padding-inline-start: 16px !important;
 }
+.main-grid .column-header:not(.select-all):not(.expand-col) {
+    /* 8px pad + 8px button inset = 16px, matching the 16px content indent of the body cells. */
+    padding-inline-start: 8px !important;
+}
+
+/* Use one understated header treatment for every FluentDataGrid, including main-page grids,
+   detail property grids, metric tables, trace waterfalls and dialog grids. */
+.fluent-data-grid .column-header {
+    color: var(--neutral-foreground-hint);
+    font-weight: 400 !important;
+}
+
+.fluent-data-grid .column-header .col-sort-button {
+    color: var(--neutral-foreground-hint);
+}
+
+.fluent-data-grid .column-header .col-title-text {
+    font-weight: 400 !important;
+}
+
 .column-header:not(.select-all):first-of-type, .trace-view-grid .column-header:not(.select-all):first-of-type {
     padding-inline-start: 0px !important;
+}
+
+/* FluentDataGrid renders a column-resize affordance (.resize-handle) as a permanent 1px accent
+   (violet, #D6AEFF) border on the inline-end edge of every header cell. Always-on vertical rules
+   between columns read as a dated spreadsheet grid and were called out as "not modern / awkward".
+   Hide the rule at rest and reveal a subtle neutral divider only when the header cell is hovered,
+   so the resize affordance stays discoverable without the permanent visual clutter. The interactive
+   hit target (.actual-resize-handle) is unaffected, so drag-to-resize keeps working either way. */
+.column-header .resize-handle {
+    border-inline-end-color: transparent !important;
+}
+.column-header:hover .resize-handle {
+    border-inline-end-color: var(--neutral-stroke-rest) !important;
 }
 
 .toolbar-left {
@@ -857,6 +1927,9 @@ fluent-switch.table-switch::part(label) {
 }
 
 .setting-title {
+    font-family: var(--aspire-font-sans);
+    font-size: 13.5px;
+    font-weight: 500;
     margin-bottom: 4px;
     display: inline-block;
 }

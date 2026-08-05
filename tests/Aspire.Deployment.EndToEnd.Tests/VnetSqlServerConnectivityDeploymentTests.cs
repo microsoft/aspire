@@ -9,11 +9,16 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 
 /// <summary>
 /// L2+L3 connectivity verification test for Azure SQL Server with VNet and Private Endpoint.
-/// Deploys a starter app with VNet + PE + Aspire SQL client, then curls the app to prove PE connectivity.
+/// Deploys a starter app with VNet + PE + Aspire SQL client, then curls a probe endpoint that opens a
+/// real connection to the database over the private endpoint. That proves three things at once: the
+/// private endpoint and DNS resolve, the deployment script created a contained user matching the app's
+/// managed identity, and that user was granted db_owner.
 /// </summary>
 public sealed class VnetSqlServerConnectivityDeploymentTests(ITestOutputHelper output)
 {
-    private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(40);
+    // The inner step waits (deploy alone allows 30 minutes) sum to more than 40 minutes under CI
+    // contention, and the SQL probe below adds another 8, so the outer budget has to exceed their sum.
+    private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(50);
 
     [Fact]
     public async Task DeployStarterTemplateWithSqlServerPrivateEndpoint()
@@ -151,7 +156,7 @@ peSubnet.AddPrivateEndpoint(sql);
                 output.WriteLine($"New content:\n{content}");
             }
 
-            // Step 8: Modify Web project Program.cs to register SQL client
+            // Step 8: Modify Web project Program.cs to register the SQL client and expose a probe endpoint
             {
                 var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
                 var webProgramPath = Path.Combine(projectDir, $"{projectName}.Web", "Program.cs");
@@ -167,9 +172,49 @@ builder.AddServiceDefaults();
 builder.AddSqlServerClient("db");
 """);
 
+                // The starter template's home page never touches SQL, so serving it only proves the container
+                // started. This probe endpoint opens a real connection instead. Aspire's Azure SQL connection
+                // string uses Authentication="Active Directory Default", so merely opening it exercises the
+                // Entra token login path - if the provisioning deployment script had not created a contained
+                // user whose SID matches this app's managed identity, the login would be rejected outright.
+                // IS_ROLEMEMBER then confirms the ALTER ROLE in that same script took effect.
+                content = content.Replace(
+                    "app.MapDefaultEndpoints();",
+                    """
+app.MapGet("/sqlcheck", async (HttpContext http) =>
+{
+    try
+    {
+        var connection = http.RequestServices.GetRequiredService<Microsoft.Data.SqlClient.SqlConnection>();
+        await connection.OpenAsync();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT USER_NAME(), IS_ROLEMEMBER('db_owner')";
+
+        using var reader = await command.ExecuteReaderAsync();
+        if (!await reader.ReadAsync())
+        {
+            return Results.Text("SQLCHECK-FAIL no rows returned", statusCode: 500);
+        }
+
+        var userName = reader.GetString(0);
+        var isDbOwner = reader.IsDBNull(1) ? "null" : reader.GetInt32(1).ToString();
+        return Results.Text($"SQLCHECK-OK user={userName} dbowner={isDbOwner}");
+    }
+    catch (Exception ex)
+    {
+        // Returned as the response body (rather than thrown) so the failure reason reaches the CI log.
+        // UseExceptionHandler would otherwise replace it with a generic error page outside Development.
+        return Results.Text($"SQLCHECK-FAIL {ex.GetType().Name}: {ex.Message}", statusCode: 500);
+    }
+});
+
+app.MapDefaultEndpoints();
+""");
+
                 File.WriteAllText(webProgramPath, content);
 
-                output.WriteLine($"Modified Web Program.cs to add SQL client registration");
+                output.WriteLine("Modified Web Program.cs to add SQL client registration and /sqlcheck probe");
             }
 
             // Step 9: Navigate to AppHost project directory
@@ -216,7 +261,28 @@ builder.AddSqlServerClient("db");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
 
-            // Step 14: Exit terminal
+            // Step 14: Prove the managed identity can actually use the database. This is the assertion that
+            // covers the provisioning deployment script end to end - a successful deployment only proves the
+            // script exited zero, not that the user it created can log in or that the role grant took effect.
+            output.WriteLine("Step 14: Verifying managed identity SQL access...");
+            await auto.TypeAsync($"RG_NAME=\"{resourceGroupName}\"; " +
+                      "url=$(az containerapp list -g \"$RG_NAME\" --query \"[].properties.configuration.ingress.fqdn\" -o tsv 2>/dev/null | grep -v '\\.internal\\.' | head -1); " +
+                      "ok=0; " +
+                      "if [ -z \"$url\" ]; then echo \"❌ No external container app endpoint found\"; else " +
+                      "echo \"Probing https://$url/sqlcheck...\"; " +
+                      // Retries cover the short window after startup where the app's managed identity token
+                      // is not yet available and the freshly created SQL principal has not fully propagated.
+                      "for i in $(seq 1 12); do " +
+                      "body=$(curl -s \"https://$url/sqlcheck\" --max-time 20 2>/dev/null); " +
+                      "echo \"  Attempt $i: $body\"; " +
+                      "if echo \"$body\" | grep -q \"SQLCHECK-OK\" && echo \"$body\" | grep -q \"dbowner=1\"; then ok=1; break; fi; " +
+                      "sleep 10; " +
+                      "done; fi; " +
+                      "if [ \"$ok\" -eq 1 ]; then echo \"✅ Managed identity connected over the private endpoint and holds db_owner\"; else echo \"❌ Managed identity SQL check failed\"; false; fi");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(8));
+
+            // Step 15: Exit terminal
             await auto.TypeAsync("exit");
             await auto.EnterAsync();
 
