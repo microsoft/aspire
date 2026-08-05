@@ -157,7 +157,7 @@ resource api 'Radius.Compute/containers@2025-08-01-preview' = {
             value: cache.listSecrets().password
           }
           CACHE_URI: {
-            value: 'redis://:${cache.listSecrets().password}@${cache.properties.host}:${cache.properties.port}'
+            value: 'redis://:${uriComponent(cache.listSecrets().password)}@${cache.properties.host}:${cache.properties.port}'
           }
           ConnectionStrings__pgdb: {
             value: 'Host=${pg.properties.host};Port=${pg.properties.port};Username=postgres;Password=${pg_password};Database=pgdb'
@@ -175,7 +175,7 @@ resource api 'Radius.Compute/containers@2025-08-01-preview' = {
             value: pg_password
           }
           PGDB_URI: {
-            value: 'postgresql://postgres:${pg_password}@${pg.properties.host}:${pg.properties.port}/pgdb'
+            value: 'postgresql://postgres:${uriComponent(pg_password)}@${pg.properties.host}:${pg.properties.port}/pgdb'
           }
           PGDB_JDBCCONNECTIONSTRING: {
             value: 'jdbc:postgresql://${pg.properties.host}:${pg.properties.port}/pgdb'
@@ -184,7 +184,7 @@ resource api 'Radius.Compute/containers@2025-08-01-preview' = {
             value: 'pgdb'
           }
           ConnectionStrings__mongo: {
-            value: 'mongodb://admin:${mongo.listSecrets().password}@${mongo.properties.host}:${mongo.properties.port}/?authSource=admin&authMechanism=SCRAM-SHA-256'
+            value: 'mongodb://admin:${uriComponent(mongo.listSecrets().password)}@${mongo.properties.host}:${mongo.properties.port}/?authSource=admin&authMechanism=SCRAM-SHA-256'
           }
           MONGO_HOST: {
             value: mongo.properties.host
@@ -205,10 +205,10 @@ resource api 'Radius.Compute/containers@2025-08-01-preview' = {
             value: 'SCRAM-SHA-256'
           }
           MONGO_URI: {
-            value: 'mongodb://admin:${mongo.listSecrets().password}@${mongo.properties.host}:${mongo.properties.port}/?authSource=admin&authMechanism=SCRAM-SHA-256'
+            value: 'mongodb://admin:${uriComponent(mongo.listSecrets().password)}@${mongo.properties.host}:${mongo.properties.port}/?authSource=admin&authMechanism=SCRAM-SHA-256'
           }
           ConnectionStrings__rabbit: {
-            value: 'amqp://guest:${rabbit.listSecrets().password}@${rabbit.properties.host}:${rabbit.properties.port}'
+            value: 'amqp://guest:${uriComponent(rabbit.listSecrets().password)}@${rabbit.properties.host}:${rabbit.properties.port}'
           }
           RABBIT_HOST: {
             value: rabbit.properties.host
@@ -223,7 +223,7 @@ resource api 'Radius.Compute/containers@2025-08-01-preview' = {
             value: rabbit.listSecrets().password
           }
           RABBIT_URI: {
-            value: 'amqp://guest:${rabbit.listSecrets().password}@${rabbit.properties.host}:${rabbit.properties.port}'
+            value: 'amqp://guest:${uriComponent(rabbit.listSecrets().password)}@${rabbit.properties.host}:${rabbit.properties.port}'
           }
           ConnectionStrings__sqlserver: {
             value: 'Server=${sqlserver.properties.host},${sqlserver.properties.port};User ID=sa;Password=${sqlserver_password};TrustServerCertificate=true'
@@ -241,7 +241,7 @@ resource api 'Radius.Compute/containers@2025-08-01-preview' = {
             value: sqlserver_password
           }
           SQLSERVER_URI: {
-            value: 'mssql://sa:${sqlserver_password}@${sqlserver.properties.host}:${sqlserver.properties.port}'
+            value: 'mssql://sa:${uriComponent(sqlserver_password)}@${sqlserver.properties.host}:${sqlserver.properties.port}'
           }
           SQLSERVER_JDBCCONNECTIONSTRING: {
             value: 'jdbc:sqlserver://${sqlserver.properties.host}:${sqlserver.properties.port};trustServerCertificate=true'
