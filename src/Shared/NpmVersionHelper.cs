@@ -35,14 +35,22 @@ internal static class NpmVersionHelper
 
         if (!TryParseNpmAlias(existingVersion, out var existingPackageName, out var existingPackageVersion))
         {
-            // Preserve workspace, file, link, union, and other custom references just as a normal
-            // semver merge does. A registry semver can be safely replaced when the scaffold needs
-            // a different package identity under the same dependency name.
-            return TryParseNpmVersion(existingVersion, out _);
+            // Local references intentionally keep the dependency wired to the workspace or file.
+            // Other values are registry specs (including tags, wildcards, and union ranges), so
+            // replace them when the scaffold needs a different package identity under the same name.
+            return !IsLocalNpmReference(existingVersion);
         }
 
         return !existingPackageName.Equals(desiredPackageName, StringComparison.OrdinalIgnoreCase)
             || ShouldUpgrade(existingPackageVersion, desiredPackageVersion);
+    }
+
+    private static bool IsLocalNpmReference(string value)
+    {
+        var normalizedValue = value.Trim();
+        return normalizedValue.StartsWith("workspace:", StringComparison.OrdinalIgnoreCase)
+            || normalizedValue.StartsWith("file:", StringComparison.OrdinalIgnoreCase)
+            || normalizedValue.StartsWith("link:", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

@@ -806,13 +806,16 @@ public class PackageJsonMergerTests
         Assert.Equal("npm:@typescript/typescript6@^6.0.2", GetDep(result, "devDependencies", "typescript"));
     }
 
-    [Fact]
-    public void Dependencies_WorkspaceReferenceIsPreservedWhenScaffoldUsesAlias()
+    [Theory]
+    [InlineData("workspace:*")]
+    [InlineData("file:../typescript")]
+    [InlineData("link:../typescript")]
+    public void Dependencies_LocalReferenceIsPreservedWhenScaffoldUsesAlias(string existingVersion)
     {
-        var existing = """
+        var existing = $$"""
             {
               "devDependencies": {
-                "typescript": "workspace:*"
+                "typescript": "{{existingVersion}}"
               }
             }
             """;
@@ -827,7 +830,33 @@ public class PackageJsonMergerTests
 
         var result = MergeJson(existing, scaffold);
 
-        Assert.Equal("workspace:*", GetDep(result, "devDependencies", "typescript"));
+        Assert.Equal(existingVersion, GetDep(result, "devDependencies", "typescript"));
+    }
+
+    [Theory]
+    [InlineData("^6.0.0 || ^7.0.0")]
+    [InlineData("*")]
+    public void Dependencies_RegistryRangeIsReplacedWhenScaffoldUsesAlias(string existingVersion)
+    {
+        var existing = $$"""
+            {
+              "devDependencies": {
+                "typescript": "{{existingVersion}}"
+              }
+            }
+            """;
+
+        var scaffold = """
+            {
+              "devDependencies": {
+                "typescript": "npm:@typescript/typescript6@^6.0.2"
+              }
+            }
+            """;
+
+        var result = MergeJson(existing, scaffold);
+
+        Assert.Equal("npm:@typescript/typescript6@^6.0.2", GetDep(result, "devDependencies", "typescript"));
     }
 
     [Fact]
