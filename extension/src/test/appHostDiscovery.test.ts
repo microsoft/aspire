@@ -24,13 +24,23 @@ interface RecordedEvent {
 class FakeTelemetryReporter {
     public events: RecordedEvent[] = [];
 
+    public telemetryLevel: 'all' | 'error' | 'crash' | 'off' = 'all';
+
     sendTelemetryEvent(name: string, properties?: Record<string, string>, measurements?: Record<string, number>): void {
-        this.events.push({ name, properties, measurements });
+        // Extension code now bypasses this path; recording here would only
+        // see a regression to the prefixed channel. Kept as a typed no-op
+        // so the fake still satisfies the TelemetryReporter shape.
     }
 
     sendTelemetryErrorEvent(): void { /* not used here */ }
-    sendDangerousTelemetryEvent(): void { /* not used here */ }
-    sendDangerousTelemetryErrorEvent(): void { /* not used here */ }
+
+    sendDangerousTelemetryEvent(name: string, properties?: Record<string, string>, measurements?: Record<string, number>): void {
+        this.events.push({ name, properties, measurements });
+    }
+
+    sendDangerousTelemetryErrorEvent(name: string, properties?: Record<string, string>, measurements?: Record<string, number>): void {
+        this.events.push({ name, properties, measurements });
+    }
     sendRawTelemetryEvent(): void { /* not used here */ }
     dispose(): Promise<void> { return Promise.resolve(); }
 }
@@ -186,7 +196,7 @@ suite('AppHost discovery', () => {
 
                 assert.strictEqual(fake.events.length, 1);
                 const event = fake.events[0];
-                assert.strictEqual(event.name, 'apphost/discovery/result');
+                assert.strictEqual(event.name, 'aspire/vscode/apphost/discovery/result');
                 assert.deepStrictEqual(event.properties, {
                     outcome: 'success',
                     source: 'ls',
@@ -219,7 +229,7 @@ suite('AppHost discovery', () => {
 
                 assert.strictEqual(fake.events.length, 1);
                 const event = fake.events[0];
-                assert.strictEqual(event.name, 'apphost/discovery/result');
+                assert.strictEqual(event.name, 'aspire/vscode/apphost/discovery/result');
                 assert.deepStrictEqual(event.properties, {
                     outcome: 'error',
                     source: 'all',
@@ -759,7 +769,7 @@ suite('AppHost discovery', () => {
             }
         });
 
-        test('new callers bypass stale active discovery without cancelling existing subscribers', async () => {
+        test('new callers wait for one fresh discovery after stale active discovery completes', async () => {
             const watcherCallbacks = stubFileSystemWatchers(sandbox);
             const clock = sandbox.useFakeTimers();
             const discoveryOptions: cliModule.SpawnProcessOptions[] = [];
@@ -796,16 +806,29 @@ suite('AppHost discovery', () => {
 
                 const secondDiscovery = service.discover(workspaceFolder);
                 await waitForMicrotasks();
+                assert.strictEqual(spawnStub.callCount, 1);
+                assert.deepStrictEqual(discoveryKills.map(kill => kill.callCount), [0]);
+
+                watcherCallbacks[0]();
+                await clock.tickAsync(250);
+                const thirdDiscovery = service.discover(workspaceFolder);
+                await waitForMicrotasks();
+                assert.strictEqual(spawnStub.callCount, 1);
+
+                discoveryOptions[0].lineCallback?.(JSON.stringify(staleCandidate));
+                discoveryOptions[0].exitCallback?.(0);
+                assert.deepStrictEqual(await firstDiscovery, [staleCandidate]);
+                await waitForMicrotasks();
+
                 assert.strictEqual(spawnStub.callCount, 2);
                 assert.deepStrictEqual(discoveryKills.map(kill => kill.callCount), [0, 0]);
 
                 discoveryOptions[1].lineCallback?.(JSON.stringify(freshCandidate));
                 discoveryOptions[1].exitCallback?.(0);
-                assert.deepStrictEqual(await secondDiscovery, [freshCandidate]);
-
-                discoveryOptions[0].lineCallback?.(JSON.stringify(staleCandidate));
-                discoveryOptions[0].exitCallback?.(0);
-                assert.deepStrictEqual(await firstDiscovery, [staleCandidate]);
+                assert.deepStrictEqual(await Promise.all([secondDiscovery, thirdDiscovery]), [
+                    [freshCandidate],
+                    [freshCandidate],
+                ]);
 
                 assert.deepStrictEqual(await service.discover(workspaceFolder), [freshCandidate]);
                 assert.strictEqual(spawnStub.callCount, 2);

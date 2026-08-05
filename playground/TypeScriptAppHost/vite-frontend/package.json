@@ -23,7 +23,7 @@
     "vite": "^8.0.16"
   },
   "overrides": {
-    "postcss": "8.5.10",
+    "postcss": "8.5.23",
     "esbuild": "0.28.1"
   }
 }

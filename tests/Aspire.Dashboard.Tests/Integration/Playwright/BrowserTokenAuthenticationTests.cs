@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.TestUtilities;
@@ -64,6 +64,35 @@ public class BrowserTokenAuthenticationTests : PlaywrightTestsBase<BrowserTokenA
 
             // Wait for navigation to complete after successful login.
             // The page redirects from /login to / (resources page).
+            await page.WaitForURLAsync(url => new Uri(url).AbsolutePath == "/").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+
+            // Assert
+            await Assertions
+                .Expect(page.GetByText(MockDashboardClient.TestResource1.DisplayName))
+                .ToBeVisibleAsync()
+                .DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task BrowserToken_LoginPage_SuccessWithWhitespaceToken_RedirectToResources()
+    {
+        // Arrange
+        await RunTestAsync(async page =>
+        {
+            // Act
+            var response = await page.GotoAsync("/").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+            var uri = new Uri(response!.Url);
+
+            Assert.Equal("/login?returnUrl=%2F", uri.PathAndQuery);
+
+            var tokenTextBox = page.GetByRole(AriaRole.Textbox);
+            await tokenTextBox.FillAsync(" VALID_TOKEN ").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+
+            var submitButton = page.GetByRole(AriaRole.Button);
+            await submitButton.ClickAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+
             await page.WaitForURLAsync(url => new Uri(url).AbsolutePath == "/").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
             // Assert

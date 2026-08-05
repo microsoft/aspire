@@ -3,11 +3,12 @@
 @inherits FluentComponentBase
 
 @{
+    // Do not add aria-expanded here. Its presence signals that FluentMenu has finished initializing and so can't be added before then.
+    // We'll have to live with aria-expanded missing before the menu is clicked, and then being set to true while the menu is open.
     var additionalButtonAttributes = new Dictionary<string, object>(AdditionalAttributes ?? ImmutableDictionary<string, object>.Empty)
     {
-        { "aria-haspopup", "true" },
-        { "aria-expanded", _visible ? "true" : "false" },
-        { "onkeydown", (KeyboardEventArgs args) => OnKeyDown(args) }
+        { "onkeydown", (KeyboardEventArgs args) => OnKeyDown(args) },
+        { "aria-haspopup", "menu" }
     };
 }
 
@@ -27,4 +28,8 @@
     }
 </FluentButton>
 
-<AspireMenu Anchor="@MenuButtonId" @bind-Open="@_visible" Items="_items" RestoreFocusOnItemClick="@RestoreFocusOnItemClick" />
+@* Render lazily because FluentMenu is expensive: building menu items and initializing its JavaScript interop add significant overhead when many menu buttons are displayed. *@
+@if (_renderMenu)
+{
+    <AspireMenu Anchor="@MenuButtonId" Open="@_visible" OpenChanged="OnMenuOpenChanged" OnRenderComplete="OnMenuRenderComplete" Items="_items" RestoreFocusOnItemClick="@RestoreFocusOnItemClick" />
+}

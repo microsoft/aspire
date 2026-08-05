@@ -188,7 +188,10 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'getExtensionPackageJson' }
     | { name: 'getExtensionFileStatus'; relativePaths: readonly string[] }
     | { name: 'getDiagnostics'; filePath: string }
-    | { name: 'readClipboard' }
+    | { name: 'snapshotClipboard' }
+    | { name: 'restoreClipboardSnapshot' }
+    | { name: 'captureWorkspaceAppHostPathClipboardExpectation' }
+    | { name: 'assertClipboardMatchesLastExpectation' }
     | { name: 'openFile'; filePath: string }
     | { name: 'openWorkspaceFolder'; folderPath: string }
     | { name: 'getWorkspaceFolders' }

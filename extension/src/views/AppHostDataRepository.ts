@@ -252,6 +252,7 @@ export class AppHostDataRepository {
     private _workspaceAppHostDiscoveryVersion = 0;
     private _workspaceAppHostDiscoveryInProgress = false;
     private _workspaceAppHostDiscoveryRefreshQueued = false;
+    private _workspaceAppHostDiscoveryForceRefreshQueued = false;
     private _workspaceAppHostDiscoveryProgressResolve: (() => void) | undefined;
     private _workspaceAppHostDiscoveryCancellationSource: vscode.CancellationTokenSource | undefined;
     private readonly _appHostDiscoveryChangeDisposable: vscode.Disposable;
@@ -707,6 +708,7 @@ export class AppHostDataRepository {
 
         if (this._workspaceAppHostDiscoveryInProgress) {
             this._workspaceAppHostDiscoveryRefreshQueued = true;
+            this._workspaceAppHostDiscoveryForceRefreshQueued ||= options?.forceRefresh === true;
             // Let the current discovery finish so we don't start overlapping CLI work, but
             // prevent its now-stale result from briefly restoring old AppHost candidates.
             this._workspaceAppHostDiscoveryVersion++;
@@ -808,14 +810,17 @@ export class AppHostDataRepository {
             this._workspaceAppHostDiscoveryInProgress = false;
             this._hideWorkspaceAppHostDiscoveryProgress();
             if (this._workspaceAppHostDiscoveryRefreshQueued && !this._disposed) {
+                const forceRefresh = this._workspaceAppHostDiscoveryForceRefreshQueued;
                 this._workspaceAppHostDiscoveryRefreshQueued = false;
-                this._fetchWorkspaceAppHost({ forceRefresh: true });
+                this._workspaceAppHostDiscoveryForceRefreshQueued = false;
+                this._fetchWorkspaceAppHost({ forceRefresh });
             }
         });
     }
 
     private _cancelWorkspaceAppHostDiscovery(): void {
         this._workspaceAppHostDiscoveryRefreshQueued = false;
+        this._workspaceAppHostDiscoveryForceRefreshQueued = false;
         this._runtimeSnapshotAfterWorkspaceDiscovery = false;
         this._workspaceAppHostDiscoveryCancellationSource?.cancel();
         this._workspaceAppHostDiscoveryCancellationSource?.dispose();
@@ -1506,7 +1511,11 @@ export class AppHostDataRepository {
     // ── ps polling ──
 
     private _startPsPolling(): void {
-        this._stopPolling();
+        // Restarting `ps` polling is routine while the workspace AppHost discovery result settles, the
+        // polling interval changes, or the view resumes. Keep explicit post-stop refreshes alive across
+        // those restarts; otherwise a debug-session stop can lose the authoritative `aspire ps` snapshot
+        // that clears a stale global AppHost row.
+        this._stopPolling({ clearPostStopRefreshTimers: false });
         if (this._supportsPsFollow) {
             this._startPsFollow();
             return;
@@ -1532,7 +1541,9 @@ export class AppHostDataRepository {
         }, intervalMs);
     }
 
-    private _stopPolling(): void {
+    // Most callers are leaving the polling lifecycle and should cancel post-stop refreshes. Internal
+    // restarts keep those timers so a pending AppHost-stop reconciliation is not lost.
+    private _stopPolling(options?: { clearPostStopRefreshTimers?: boolean }): void {
         this._psPollingGeneration++;
         this._psFetchVersion++;
         this._fetchInProgress = false;
@@ -1541,7 +1552,9 @@ export class AppHostDataRepository {
         this._authoritativeSnapshotPending = false;
         this._authoritativeSnapshotPendingForce = false;
         this._activeAuthoritativeSnapshotRequestId = undefined;
-        this._clearPostStopRefreshTimers();
+        if (options?.clearPostStopRefreshTimers ?? true) {
+            this._clearPostStopRefreshTimers();
+        }
         if (this._pollingInterval) {
             clearInterval(this._pollingInterval);
             this._pollingInterval = undefined;

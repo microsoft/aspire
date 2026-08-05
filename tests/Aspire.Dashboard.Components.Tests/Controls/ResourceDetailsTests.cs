@@ -29,6 +29,7 @@ public class ResourceDetailsTests : DashboardTestContext
     {
         // Arrange
         ResourceSetupHelpers.SetupResourceDetails(this);
+        var menuProvider = RenderComponent<FluentMenuProvider>();
 
         var resource1 = ModelTestHelpers.CreateResource(
             "app1",
@@ -64,7 +65,7 @@ public class ResourceDetailsTests : DashboardTestContext
         var actionsButton = cut.Find(".resource-details-actions");
         await actionsButton.ClickAsync(new MouseEventArgs());
 
-        var maskAllSwitch = cut.Find(".mask-all-switch");
+        var maskAllSwitch = menuProvider.WaitForElement(".mask-all-switch");
 
         // HACK. Calling OnClick on the element isn't triggering the event correctly. Instead, call OnClick on the menu item model.
         var item = cut.FindComponents<AspireMenu>().SelectMany(m => m.Instance.Items).Single(s => s.Class == maskAllSwitch.Attributes["class"]!.Value);
@@ -121,6 +122,7 @@ public class ResourceDetailsTests : DashboardTestContext
     {
         // Arrange
         ResourceSetupHelpers.SetupResourceDetails(this);
+        var menuProvider = RenderComponent<FluentMenuProvider>();
 
         var resource1 = ModelTestHelpers.CreateResource(
             "app1",
@@ -156,7 +158,7 @@ public class ResourceDetailsTests : DashboardTestContext
         var actionsButton = cut.Find(".resource-details-actions");
         await actionsButton.ClickAsync(new MouseEventArgs());
 
-        var maskAllSwitch = cut.Find(".mask-all-switch");
+        var maskAllSwitch = menuProvider.WaitForElement(".mask-all-switch");
 
         // HACK. Calling OnClick on the element isn't triggering the event correctly. Instead, call OnClick on the menu item model.
         var item = cut.FindComponents<AspireMenu>().SelectMany(m => m.Instance.Items).Single(s => s.Class == maskAllSwitch.Attributes["class"]!.Value);
@@ -459,8 +461,8 @@ public class ResourceDetailsTests : DashboardTestContext
     [Fact]
     public void Render_NullState_ShowsUnknownStateInResourceDetails()
     {
-        ResourceSetupHelpers.SetupResourceDetails(this);
         Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isEnabled: true));
+        ResourceSetupHelpers.SetupResourceDetails(this);
 
         var properties = new Dictionary<string, ResourcePropertyViewModel>
         {

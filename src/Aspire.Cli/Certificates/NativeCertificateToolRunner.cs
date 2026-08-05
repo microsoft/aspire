@@ -13,7 +13,7 @@ namespace Aspire.Cli.Certificates;
 internal sealed class NativeCertificateToolRunner(CertificateManager certificateManager, IEnvironment environment) : ICertificateToolRunner
 {
 
-    public CertificateTrustResult CheckHttpCertificate()
+    public CertificateTrustResult CheckHttpCertificate(CancellationToken cancellationToken = default)
     {
         var availableCertificates = certificateManager.ListCertificates(
             StoreName.My, StoreLocation.CurrentUser, isValid: true);
@@ -23,10 +23,21 @@ internal sealed class NativeCertificateToolRunner(CertificateManager certificate
             var now = DateTimeOffset.Now;
             var certInfos = availableCertificates.Select(cert =>
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var status = certificateManager.CheckCertificateState(cert);
-                var trustLevel = status.Success
-                    ? certificateManager.GetTrustLevel(cert)
-                    : CertificateManager.TrustLevel.None;
+                CertificateManager.TrustLevel trustLevel;
+                if (!status.Success)
+                {
+                    trustLevel = CertificateManager.TrustLevel.None;
+                }
+                else if (certificateManager is UnixCertificateManager unixCertificateManager)
+                {
+                    trustLevel = unixCertificateManager.GetTrustLevel(cert, cancellationToken);
+                }
+                else
+                {
+                    trustLevel = certificateManager.GetTrustLevel(cert);
+                }
 
                 return new DevCertInfo
                 {

@@ -320,37 +320,117 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
             scriptResource.EnvironmentVariables.Add(new ScriptEnvironmentVariable() { Name = "PRINCIPALNAME", Value = roleAssignmentContext.PrincipalName });
             scriptResource.EnvironmentVariables.Add(new ScriptEnvironmentVariable() { Name = "ID", Value = userId });
 
-            scriptResource.ScriptContent = $$"""
+            scriptResource.ScriptContent = PrincipalReconciliationScript;
+
+            foreach (var d in dependsOn)
+            {
+                scriptResource.DependsOn.Add(d);
+            }
+
+            infra.Add(scriptResource);
+        }
+    }
+
+    // The PowerShell that the deployment script runs to provision the managed identity's database
+    // principal. Held as a constant so tests can pull the T-SQL out of it and execute it against a
+    // real SQL Server, rather than only asserting that the expected text reaches the generated bicep.
+    internal const string PrincipalReconciliationScript = """
                 $sqlServerFqdn = "$env:DBSERVER"
                 $sqlDatabaseName = "$env:DBNAME"
                 $principalName = "$env:PRINCIPALNAME"
                 $id = "$env:ID"
 
-                # Install SqlServer module - using specific version to avoid breaking changes in 22.4.5.1 (see https://github.com/microsoft/aspire/issues/9926)
-                Install-Module -Name SqlServer -RequiredVersion 22.3.0 -Force -AllowClobber -Scope CurrentUser
-                Import-Module SqlServer
+                # The principal name is interpolated into a T-SQL string literal below. For a user principal
+                # it is a UPN, which can legitimately contain an apostrophe (for example o'brien@contoso.com),
+                # so double it up to keep the literal well formed.
+                $escapedPrincipalName = $principalName.Replace("'", "''")
 
                 $sqlCmd = @"
-                DECLARE @name SYSNAME = '$principalName';
+                DECLARE @name SYSNAME = '$escapedPrincipalName';
                 DECLARE @id UNIQUEIDENTIFIER = '$id';
                 
-                -- Convert the guid to the right type
-                DECLARE @castId NVARCHAR(MAX) = CONVERT(VARCHAR(MAX), CONVERT (VARBINARY(16), @id), 1);
+                -- The SID of an Entra principal is the raw bytes of its object id. @castId is that same
+                -- value rendered as the 0x... literal that CREATE USER ... WITH SID requires.
+                DECLARE @sid VARBINARY(16) = CONVERT(VARBINARY(16), @id);
+                DECLARE @castId NVARCHAR(MAX) = CONVERT(VARCHAR(MAX), @sid, 1);
                 
-                -- Construct command: CREATE USER [@name] WITH SID = @castId, TYPE = E;
-                DECLARE @cmd NVARCHAR(MAX) = N'CREATE USER [' + @name + '] WITH SID = ' + @castId + ', TYPE = E;'
-                EXEC (@cmd);
+                -- Reconciliation below can drop and recreate the principal, so run the whole sequence as a
+                -- single unit. XACT_ABORT rolls the transaction back on any error, so a failure between
+                -- DROP USER and CREATE USER cannot leave the database with no user for this identity.
+                SET XACT_ABORT ON;
+                BEGIN TRANSACTION;
                 
-                -- Assign roles to the new user
-                DECLARE @role1 NVARCHAR(MAX) = N'ALTER ROLE db_owner ADD MEMBER [' + @name + ']';
+                -- Only external (Entra) users are considered, because that is the only kind this script
+                -- creates. sys.database_principals also holds SQL users, Windows users, roles and dbo, and
+                -- any of those sharing this name would have a different sid and so look stale - dropping a
+                -- principal we do not own, along with its permissions. Ignoring them leaves @existingSid
+                -- null, so CREATE USER below fails with 'Msg 15023: User already exists in current
+                -- database', which is a visible failure rather than a destructive one.
+                DECLARE @existingSid VARBINARY(85) = (SELECT sid FROM sys.database_principals WHERE name = @name AND type = 'E');
+                
+                -- A user left over from an earlier deployment can carry a stale SID, because deleting and
+                -- recreating a managed identity keeps the name but changes the object id. Granting a role to
+                -- that principal would report success while the application still failed to log in, so drop
+                -- it and let it be recreated against the identity we were actually given.
+                IF @existingSid IS NOT NULL AND @existingSid <> @sid
+                BEGIN
+                    -- QUOTENAME escapes any ']' in the identifier, which a raw '[' + @name + ']' would not.
+                    DECLARE @dropCmd NVARCHAR(MAX) = N'DROP USER ' + QUOTENAME(@name);
+                    EXEC (@dropCmd);
+                    SET @existingSid = NULL;
+                END
+                
+                -- Only create the user when it is missing. This script is re-executed on redeploys, and the
+                -- retry loop below can also re-run this batch after a transient failure that occurred *after*
+                -- the user was already created. An unguarded CREATE USER would then fail with
+                -- 'Msg 15023: User already exists in current database', turning a transient error into a
+                -- permanent deployment failure.
+                IF @existingSid IS NULL
+                BEGIN
+                    -- Construct command: CREATE USER [@name] WITH SID = @castId, TYPE = E;
+                    DECLARE @cmd NVARCHAR(MAX) = N'CREATE USER ' + QUOTENAME(@name) + N' WITH SID = ' + @castId + N', TYPE = E;'
+                    EXEC (@cmd);
+                END
+                
+                -- Assign roles to the user. ALTER ROLE ... ADD MEMBER is a no-op when the principal is already a member.
+                DECLARE @role1 NVARCHAR(MAX) = N'ALTER ROLE db_owner ADD MEMBER ' + QUOTENAME(@name);
                 EXEC (@role1);
+                
+                COMMIT TRANSACTION;
                 
                 "@
                 # Note: the string terminator must not have whitespace before it, therefore it is not indented.
 
                 Write-Host $sqlCmd
 
-                $connectionString = "Server=tcp:${sqlServerFqdn},1433;Initial Catalog=${sqlDatabaseName};Authentication=Active Directory Default;"
+                # This script deliberately avoids the SqlServer PowerShell module (Invoke-Sqlcmd). The Azure
+                # deployment script host imports the Az modules before running user scripts, and Az.Resources
+                # ships Microsoft.Extensions.Caching.Memory 2.2.0. Importing SqlServer afterwards makes its
+                # Always Encrypted Azure Key Vault provider - which is registered unconditionally on the first
+                # Invoke-Sqlcmd call, even though nothing here uses Always Encrypted - bind against that older
+                # assembly and fail with:
+                #   System.MissingMethodException: Method not found: 'Void Microsoft.Extensions.Caching.Memory.MemoryCache..ctor(
+                #     Microsoft.Extensions.Options.IOptions`1<Microsoft.Extensions.Caching.Memory.MemoryCacheOptions>)'.
+                # Both published SqlServer module versions have hit this class of conflict at some point, and
+                # upstream tracks the real fix - proper assembly load context isolation - in
+                # https://github.com/microsoft/SQLServerPSModule/issues/31, which is still open. Pinning a module
+                # version only works against one combination of Az module and .NET runtime versions in the image:
+                # 22.3.0 worked until this image bumped its Az modules, and 22.4.5.1 could not load on the older
+                # .NET 6 based images (https://github.com/microsoft/aspire/issues/9926). Rather than track that
+                # matrix, use System.Data.SqlClient, which ships in-box with PowerShell in the
+                # azuredeploymentscripts-powershell images, together with a managed identity access token.
+                # Nothing here needs Always Encrypted. See https://github.com/microsoft/aspire/issues/18892.
+                # The token audience is cloud specific - US Gov uses database.usgovcloudapi.net and China uses
+                # database.chinacloudapi.cn - so derive it from the deployment script's Az context rather than
+                # assuming public cloud. The previous Invoke-Sqlcmd implementation used
+                # 'Authentication=Active Directory Default', which let the driver resolve this automatically.
+                $sqlDnsSuffix = (Get-AzContext).Environment.SqlDatabaseDnsSuffix
+                if ([string]::IsNullOrWhiteSpace($sqlDnsSuffix)) {
+                    $sqlDnsSuffix = ".database.windows.net"
+                }
+                $sqlAudience = "https://" + $sqlDnsSuffix.TrimStart('.') + "/"
+
+                $connectionString = "Server=tcp:${sqlServerFqdn},1433;Initial Catalog=${sqlDatabaseName};Encrypt=True;TrustServerCertificate=False;"
 
                 $maxRetries = 5
                 $retryDelay = 60
@@ -360,8 +440,28 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
                 while (-not $success -and $attempt -lt $maxRetries) {
                     $attempt++
                     Write-Host "Attempt $attempt of $maxRetries..."
+                    $connection = $null
                     try {
-                        Invoke-Sqlcmd -ConnectionString $connectionString -Query $sqlCmd
+                        # Acquired inside the loop so a transient token failure is retried like any other
+                        # failure, rather than aborting the script before the first attempt.
+                        $tokenResponse = Get-AzAccessToken -ResourceUrl $sqlAudience
+
+                        # Az.Accounts 5.x returns the token as a SecureString, earlier majors return a plain string.
+                        $accessToken = if ($tokenResponse.Token -is [System.Security.SecureString]) {
+                            [System.Net.NetworkCredential]::new("", $tokenResponse.Token).Password
+                        } else {
+                            $tokenResponse.Token
+                        }
+
+                        $connection = New-Object System.Data.SqlClient.SqlConnection
+                        $connection.ConnectionString = $connectionString
+                        $connection.AccessToken = $accessToken
+                        $connection.Open()
+
+                        $command = $connection.CreateCommand()
+                        $command.CommandText = $sqlCmd
+                        [void]$command.ExecuteNonQuery()
+
                         $success = $true
                         Write-Host "SQL command succeeded on attempt $attempt."
                     } catch {
@@ -372,18 +472,13 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
                         } else {
                             throw
                         }
+                    } finally {
+                        if ($null -ne $connection) {
+                            $connection.Dispose()
+                        }
                     }
                 }
                 """;
-
-            foreach (var d in dependsOn)
-            {
-                scriptResource.DependsOn.Add(d);
-            }
-
-            infra.Add(scriptResource);
-        }
-    }
 
     internal ReferenceExpression BuildJdbcConnectionString(string? databaseName = null)
     {

@@ -1,14 +1,15 @@
 import * as assert from 'assert';
 import { findRunningAppHost, getCommandInvocationCount, getResources, getTerminalCommandCount, getTreeAppHostLabel, isSamePath, waitForCommandOutcome, waitForDashboardUrl, waitForExtensionState, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
-import { executeE2eControlCommand, getCliWrapperInvocationCount, getCliWrapperInvocations, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, touchPrimaryAppHostProject, writeDelayedPsCliWrapper, writeStreamingDiscoveryCliWrapper, writeTrackedDelayedPsCliWrapper, writeTrackedStreamingDiscoveryCliWrapper } from './helpers/fixtures';
+import { assertClipboardMatchesLastExpectationForE2E, captureWorkspaceAppHostPathClipboardExpectationForE2E, executeE2eControlCommand, getCliWrapperInvocationCount, getCliWrapperInvocations, restoreClipboardSnapshotForE2E, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, snapshotClipboardForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, touchPrimaryAppHostProject, writeDelayedPsCliWrapper, writeStreamingDiscoveryCliWrapper, writeTrackedDelayedPsCliWrapper, writeTrackedStreamingDiscoveryCliWrapper } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
-import { cancelActiveInput, clickTreeItem, executeCommandFromPalette, openAspireView, waitForTreeItem, waitForWorkbenchText } from './helpers/vscode';
+import { cancelActiveInput, clickTreeItem, executeCommandFromPalette, openAspireView, waitForChildTreeItem, waitForNotificationMessage, waitForTreeItem, waitForWorkbenchText } from './helpers/vscode';
 
 suite('Aspire AppHost tree E2E', function () {
     this.timeout(240000);
 
     teardown(async () => {
         await runE2eTeardown([
+            () => restoreClipboardSnapshotForE2E(),
             () => setCliUnavailableForE2E(false),
             () => setTerminalCommandExecutionSuppressedForE2E(false),
             () => restoreE2eCliPathForE2E(),
@@ -216,6 +217,32 @@ suite('Aspire AppHost tree E2E', function () {
 
         await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 30000, invocationCountBefore);
         await waitForRepositoryIdle();
+    });
+
+    test('clicking the Path tree item copies the AppHost path and shows a confirmation notification', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+        await snapshotClipboardForE2E();
+        const discovered = await waitForWorkspaceAppHost();
+        const appHostLabel = getTreeAppHostLabel(discovered.state);
+        const section = await openAspireView();
+
+        // The Path row only appears under an idle (non-running) workspace AppHost item, so exercise
+        // it before starting the AppHost. See https://github.com/microsoft/aspire/issues/18578.
+        const idleItem = await waitForTreeItem(section, appHostLabel);
+        await idleItem.expand();
+
+        // Labels below match loc/strings.ts (appHostPathLabel / appHostPathCopiedToClipboard); the
+        // E2E host runs in English so the literals are stable, mirroring other tree-item labels
+        // asserted in this suite (e.g. 'Run AppHost').
+        const pathItem = await waitForChildTreeItem(idleItem, 'Path');
+        await captureWorkspaceAppHostPathClipboardExpectationForE2E();
+        await pathItem.click();
+
+        // The notification only fires after a successful copy, so its appearance proves the click
+        // routed through aspire-vscode.copyAppHostPath rather than reading a stale clipboard value.
+        await waitForNotificationMessage('AppHost path copied to clipboard.');
+        await assertClipboardMatchesLastExpectationForE2E();
     });
 
     test('runs, shows resources and dashboard state, routes resource commands, and stops from the tree', async () => {

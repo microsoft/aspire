@@ -60,6 +60,7 @@ interface CachedAppHostDiscovery {
     candidateProgressCallbacks: Set<IncrementalCandidateCallback>;
     cancellationSource: vscode.CancellationTokenSource;
     completed: boolean;
+    started: boolean;
     stale: boolean;
 }
 
@@ -103,73 +104,12 @@ export class AppHostDiscoveryService implements vscode.Disposable {
 
         let cachedDiscovery = this._cache.get(key);
         if (cachedDiscovery?.stale) {
-            // A watcher can invalidate shared work without cancelling its existing subscribers.
-            // New callers must start against the current workspace instead of joining that stale work.
-            this._cache.delete(key);
-            cachedDiscovery = undefined;
+            // Keep existing subscribers on their original snapshot, but put one replacement in the
+            // cache immediately so every new caller joins the same scan after stale work finishes.
+            cachedDiscovery = this._createCachedDiscovery(workspaceFolder, key, false, cachedDiscovery.promise);
         }
         if (!cachedDiscovery) {
-            const startTime = Date.now();
-            const cancellationSource = new vscode.CancellationTokenSource();
-            const candidateProgressCallbacks = new Set<IncrementalCandidateCallback>();
-            const reportedCandidates: CandidateAppHostDisplayInfo[] = [];
-            const reportCandidateProgress = (candidate: CandidateAppHostDisplayInfo) => {
-                if (isExcludedDiscoveryCandidate(workspaceFolder, vscode.Uri.file(candidate.path))) {
-                    return;
-                }
-
-                reportedCandidates.push(candidate);
-                for (const callback of candidateProgressCallbacks) {
-                    notifyCandidateProgressCallback(callback, candidate);
-                }
-            };
-            // The cached discovery promise is shared across extension features. Keep caller
-            // cancellation outside the cached operation so one cancelled refresh doesn't reject
-            // unrelated callers that are awaiting the same workspace discovery.
-            const discoveryPromise = this._discoverCore(workspaceFolder, reportCandidateProgress, cancellationSource.token, forceRefresh)
-                .then(async discovery => {
-                    let candidates = discovery.candidates;
-                    try {
-                        candidates = await this._includeConfiguredAppHostCandidate(workspaceFolder, candidates);
-                        candidates = sortCandidatesByPath(this._filterExcludedCandidates(workspaceFolder, candidates));
-                        emitAppHostDiscoveryTelemetry(discovery.source, 'success', candidates, startTime);
-                    }
-                    catch (error) {
-                        emitAppHostDiscoveryTelemetry(discovery.source, 'error', candidates, startTime);
-                        throw error;
-                    }
-                    return candidates;
-                }, error => {
-                    emitAppHostDiscoveryTelemetry('all', 'error', [], startTime);
-                    throw error;
-                });
-            let cachedPromise: Promise<CandidateAppHostDisplayInfo[]>;
-            let cachedDiscoveryForCleanup: CachedAppHostDiscovery;
-            cachedPromise = discoveryPromise.catch(error => {
-                if (this._cache.get(key) === cachedDiscoveryForCleanup) {
-                    this._cache.delete(key);
-                }
-                throw error;
-            }).finally(() => {
-                this._activeDiscoveries.delete(cachedDiscoveryForCleanup);
-                cachedDiscoveryForCleanup.completed = true;
-                cachedDiscoveryForCleanup.candidateProgressCallbacks.clear();
-                cachedDiscoveryForCleanup.cancellationSource.dispose();
-                if (cachedDiscoveryForCleanup.stale && this._cache.get(key) === cachedDiscoveryForCleanup) {
-                    this._cache.delete(key);
-                }
-            });
-            cachedDiscovery = {
-                promise: cachedPromise,
-                reportedCandidates,
-                candidateProgressCallbacks,
-                cancellationSource,
-                completed: false,
-                stale: false,
-            };
-            cachedDiscoveryForCleanup = cachedDiscovery;
-            this._activeDiscoveries.add(cachedDiscovery);
-            this._cache.set(key, cachedDiscovery);
+            cachedDiscovery = this._createCachedDiscovery(workspaceFolder, key, forceRefresh);
         }
 
         const candidateProgressCallback = (candidate: CandidateAppHostDisplayInfo): void => {
@@ -192,6 +132,81 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         finally {
             cachedDiscovery.candidateProgressCallbacks.delete(candidateProgressCallback);
         }
+    }
+
+    private _createCachedDiscovery(
+        workspaceFolder: vscode.WorkspaceFolder,
+        key: string,
+        forceRefresh: boolean,
+        startAfter?: Promise<CandidateAppHostDisplayInfo[]>): CachedAppHostDiscovery {
+        const cancellationSource = new vscode.CancellationTokenSource();
+        const candidateProgressCallbacks = new Set<IncrementalCandidateCallback>();
+        const reportedCandidates: CandidateAppHostDisplayInfo[] = [];
+        const cachedDiscovery: CachedAppHostDiscovery = {
+            promise: Promise.resolve([]),
+            reportedCandidates,
+            candidateProgressCallbacks,
+            cancellationSource,
+            completed: false,
+            started: false,
+            stale: false,
+        };
+        const reportCandidateProgress = (candidate: CandidateAppHostDisplayInfo) => {
+            if (isExcludedDiscoveryCandidate(workspaceFolder, vscode.Uri.file(candidate.path))) {
+                return;
+            }
+
+            reportedCandidates.push(candidate);
+            for (const callback of candidateProgressCallbacks) {
+                notifyCandidateProgressCallback(callback, candidate);
+            }
+        };
+        const startDiscovery = () => {
+            cachedDiscovery.started = true;
+            const startTime = Date.now();
+            return this._discoverCore(workspaceFolder, reportCandidateProgress, cancellationSource.token, forceRefresh)
+                .then(async discovery => {
+                    let candidates = discovery.candidates;
+                    try {
+                        candidates = await this._includeConfiguredAppHostCandidate(workspaceFolder, candidates);
+                        candidates = sortCandidatesByPath(this._filterExcludedCandidates(workspaceFolder, candidates));
+                        emitAppHostDiscoveryTelemetry(discovery.source, 'success', candidates, startTime);
+                    }
+                    catch (error) {
+                        emitAppHostDiscoveryTelemetry(discovery.source, 'error', candidates, startTime);
+                        throw error;
+                    }
+                    return candidates;
+                }, error => {
+                    emitAppHostDiscoveryTelemetry('all', 'error', [], startTime);
+                    throw error;
+                });
+        };
+
+        // The cached discovery promise is shared across extension features. Keep caller
+        // cancellation outside the cached operation so one cancelled refresh doesn't reject
+        // unrelated callers that are awaiting the same workspace discovery.
+        const discoveryPromise = startAfter
+            ? startAfter.then(() => startDiscovery(), () => startDiscovery())
+            : startDiscovery();
+        cachedDiscovery.promise = discoveryPromise.catch(error => {
+            if (this._cache.get(key) === cachedDiscovery) {
+                this._cache.delete(key);
+            }
+            throw error;
+        }).finally(() => {
+            this._activeDiscoveries.delete(cachedDiscovery);
+            cachedDiscovery.completed = true;
+            cachedDiscovery.candidateProgressCallbacks.clear();
+            cachedDiscovery.cancellationSource.dispose();
+            if (cachedDiscovery.stale && this._cache.get(key) === cachedDiscovery) {
+                this._cache.delete(key);
+            }
+        });
+        this._activeDiscoveries.add(cachedDiscovery);
+        this._cache.set(key, cachedDiscovery);
+
+        return cachedDiscovery;
     }
 
     async resolveDebugTarget(filePath: string, workspaceFolder?: vscode.WorkspaceFolder): Promise<string> {
@@ -437,9 +452,12 @@ export class AppHostDiscoveryService implements vscode.Disposable {
 
                 const cachedDiscovery = this._cache.get(key);
                 if (cachedDiscovery?.completed === false) {
-                    // Let the current shared stream finish. Cancelling here would only
-                    // turn repeated file notifications into a cancel-and-restart loop.
-                    cachedDiscovery.stale = true;
+                    if (cachedDiscovery.started) {
+                        // Let the current shared stream finish. Cancelling here would only turn
+                        // repeated file notifications into a cancel-and-restart loop. A queued
+                        // replacement has not observed workspace state yet, so it remains fresh.
+                        cachedDiscovery.stale = true;
+                    }
                 } else {
                     this._invalidateCachedDiscovery(key);
                 }
@@ -727,7 +745,7 @@ function emitAppHostDiscoveryTelemetry(
     candidates: readonly CandidateAppHostDisplayInfo[],
     startTime: number,
 ): void {
-    sendTelemetryEvent('apphost/discovery/result', {
+    sendTelemetryEvent('aspire/vscode/apphost/discovery/result', {
         outcome,
         source,
         apphost_languages: summarizeAppHostLanguages(candidates),

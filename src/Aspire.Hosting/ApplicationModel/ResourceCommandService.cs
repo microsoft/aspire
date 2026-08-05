@@ -590,12 +590,12 @@ public class ResourceCommandService
 
             if (argument.Disabled)
             {
-                // Dynamic loading can leave a dependent input disabled after it has normalized a
-                // harmless default/sentinel value, such as Browser Logs using the default profile
-                // while Shared mode is off. Only report submitted values for dynamic inputs that
-                // never loaded because their dependencies were incomplete, for example
-                // priority=express without a selected item.
-                if (!string.IsNullOrEmpty(value) && argument.DynamicLoading is not null && loadedDynamicArgumentNames?.Contains(argument.Name) != true)
+                // Interactive prompts own disabled-input handling, so loadedDynamicArgumentNames is
+                // null for arguments they accept. For non-interactive requests, reject a value only
+                // when the dynamic callback could not run because its dependencies were incomplete.
+                // A callback that ran may intentionally retain a harmless default while leaving the
+                // input disabled, such as Browser Logs keeping the default profile when Shared mode is off.
+                if (loadedDynamicArgumentNames is not null && !string.IsNullOrEmpty(value) && argument.DynamicLoading is not null && !loadedDynamicArgumentNames.Contains(argument.Name))
                 {
                     context.AddValidationError(argument, "Argument is disabled.");
                 }

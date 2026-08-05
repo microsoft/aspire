@@ -164,7 +164,7 @@ export class AppHostLaunchService implements vscode.Disposable {
         });
         if (executionSuppressed) {
             this.clearLaunching(appHostPath);
-            sendTelemetryEvent('apphost/launch/result', {
+            sendTelemetryEvent('aspire/vscode/apphost/launch/result', {
                 ...telemetryProperties,
                 outcome: 'suppressed',
             }, {
@@ -198,7 +198,7 @@ export class AppHostLaunchService implements vscode.Disposable {
                 error.name = 'StartDebuggingDeclined';
                 throw error;
             }
-            sendTelemetryEvent('apphost/launch/result', {
+            sendTelemetryEvent('aspire/vscode/apphost/launch/result', {
                 ...telemetryProperties,
                 outcome: 'success',
             }, {
@@ -207,14 +207,14 @@ export class AppHostLaunchService implements vscode.Disposable {
         } catch (err) {
             this.clearLaunching(appHostPath);
             const canceled = isCommandCancellation(err);
-            const properties: EventProperties<'apphost/launch/result'> = {
+            const properties: EventProperties<'aspire/vscode/apphost/launch/result'> = {
                 ...telemetryProperties,
                 outcome: canceled ? 'canceled' : 'error',
             };
             if (!canceled) {
                 properties.error_kind = classifyError(err);
             }
-            sendTelemetryEvent('apphost/launch/result', properties, {
+            sendTelemetryEvent('aspire/vscode/apphost/launch/result', properties, {
                 duration_ms: Date.now() - startTime,
             });
             throw err;

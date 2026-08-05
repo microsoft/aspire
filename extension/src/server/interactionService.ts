@@ -411,7 +411,7 @@ export class InteractionService implements IInteractionService {
 
         const aspireConfig = vscode.workspace.getConfiguration('aspire');
         const dashboardLaunchBehavior = this.getDashboardLaunchBehavior(aspireConfig);
-        sendTelemetryEvent('dashboard/launch/resolved', {
+        sendTelemetryEvent('aspire/vscode/dashboard/launch/resolved', {
             behavior: dashboardLaunchBehavior.behavior,
             source: dashboardLaunchBehavior.source,
         });
@@ -519,18 +519,18 @@ export class InteractionService implements IInteractionService {
         }
 
         await this._globalState.update(dashboardDefaultChangedNotificationKey, true);
-        sendTelemetryEvent('dashboard/launch/migration', { action: 'shown' });
+        sendTelemetryEvent('aspire/vscode/dashboard/launch/migration', { action: 'shown' });
         vscode.window.showInformationMessage(dashboardLaunchBehaviorChanged, settingsLabel, changelogLabel).then(selected => {
             if (selected === settingsLabel) {
-                sendTelemetryEvent('dashboard/launch/migration', { action: 'settings' });
+                sendTelemetryEvent('aspire/vscode/dashboard/launch/migration', { action: 'settings' });
                 this.openDashboardLaunchBehaviorSettings(source);
             }
             else if (selected === changelogLabel) {
-                sendTelemetryEvent('dashboard/launch/migration', { action: 'changelog' });
+                sendTelemetryEvent('aspire/vscode/dashboard/launch/migration', { action: 'changelog' });
                 vscode.env.openExternal(vscode.Uri.parse('https://github.com/microsoft/aspire/blob/main/extension/CHANGELOG.md'));
             }
             else {
-                sendTelemetryEvent('dashboard/launch/migration', { action: 'dismissed' });
+                sendTelemetryEvent('aspire/vscode/dashboard/launch/migration', { action: 'dismissed' });
             }
         });
     }

@@ -39,6 +39,8 @@ internal static class ResourceSetupHelpers
 
         context.JSInterop.SetupVoid("scrollToTop", _ => true);
         context.JSInterop.SetupVoid("focusElement", _ => true);
+
+        FluentUISetupHelpers.SetupFluentUIComponents(context);
     }
 
     public static void SetupResourcesPage(TestContext context, ViewportInformation viewport, IDashboardClient? dashboardClient = null, ILocalStorage? localStorage = null)

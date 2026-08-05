@@ -1,9 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Globalization;
 using System.Security;
 using Aspire.Cli.Acquisition;
+using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Resources;
@@ -142,18 +144,18 @@ internal class PackagingService : IPackagingService
         WarnIfStagingDiagnosticOverridesActive();
 
         var nugetOrg = NuGetOrgUrl;
-        var defaultChannel = PackageChannel.CreateImplicitChannel(_nuGetPackageCache, _features, _logger, currentCliVersion: _executionContext.IdentitySdkVersion);
+        var defaultChannel = PackageChannel.CreateImplicitChannel(_nuGetPackageCache, _features, _logger, currentCliVersion: _executionContext.IdentitySdkVersion, validateTemplatePackageMetadataPrefetching: TemplatePackageMetadataPrefetchingValidation);
 
         var stableChannel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Stable, new[]
         {
             new PackageMapping(PackageMapping.AllPackages, nugetOrg)
-        }, _nuGetPackageCache, _features, _logger, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily", currentCliVersion: _executionContext.IdentitySdkVersion);
+        }, _nuGetPackageCache, _features, _logger, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily", currentCliVersion: _executionContext.IdentitySdkVersion, validateTemplatePackageMetadataPrefetching: TemplatePackageMetadataPrefetchingValidation);
 
         var dailyChannel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Daily, PackageChannelQuality.Prerelease, new[]
         {
             new PackageMapping("Aspire*", "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json"),
             new PackageMapping(PackageMapping.AllPackages, nugetOrg)
-        }, _nuGetPackageCache, _features, _logger, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/daily", currentCliVersion: _executionContext.IdentitySdkVersion);
+        }, _nuGetPackageCache, _features, _logger, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/daily", currentCliVersion: _executionContext.IdentitySdkVersion, validateTemplatePackageMetadataPrefetching: TemplatePackageMetadataPrefetchingValidation);
 
         var prPackageChannels = new List<PackageChannel>();
 
@@ -264,6 +266,17 @@ internal class PackagingService : IPackagingService
         return Task.FromResult<IEnumerable<PackageChannel>>(channels);
     }
 
+    private Action TemplatePackageMetadataPrefetchingValidation => () => ValidateTemplatePackageMetadataPrefetching();
+
+    [Conditional("DEBUG")]
+    private void ValidateTemplatePackageMetadataPrefetching()
+    {
+        if (_executionContext.Command is BaseCommand { PrefetchesTemplatePackageMetadata: false } command)
+        {
+            throw new PackageMetadataPrefetchingValidationException($"Command '{command.Name}' consumes template package metadata but does not enable {nameof(BaseCommand.PrefetchesTemplatePackageMetadata)}.");
+        }
+    }
+
     private string? TryGetProcessPathForPrInstallDiscovery()
     {
         try
@@ -287,7 +300,7 @@ internal class PackagingService : IPackagingService
         {
             new PackageMapping("Aspire*", packagesPath),
             new PackageMapping(PackageMapping.AllPackages, NuGetOrgUrl)
-        }, _nuGetPackageCache, _features, _logger, pinnedVersion: pinnedVersion, currentCliVersion: _executionContext.IdentitySdkVersion);
+        }, _nuGetPackageCache, _features, _logger, pinnedVersion: pinnedVersion, currentCliVersion: _executionContext.IdentitySdkVersion, validateTemplatePackageMetadataPrefetching: TemplatePackageMetadataPrefetchingValidation);
     }
 
     internal static DirectoryInfo? TryResolvePrInstallPackagesDirectory(string? processPath, string identityChannel)
@@ -482,7 +495,7 @@ internal class PackagingService : IPackagingService
         {
             new PackageMapping("Aspire*", stagingFeedUrl),
             new PackageMapping(PackageMapping.AllPackages, NuGetOrgUrl)
-        }, _nuGetPackageCache, _features, _logger, configureGlobalPackagesFolder: !useSharedFeed, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/rc/daily", pinnedVersion: pinnedVersion, currentCliVersion: _executionContext.IdentitySdkVersion);
+        }, _nuGetPackageCache, _features, _logger, configureGlobalPackagesFolder: !useSharedFeed, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/rc/daily", pinnedVersion: pinnedVersion, currentCliVersion: _executionContext.IdentitySdkVersion, validateTemplatePackageMetadataPrefetching: TemplatePackageMetadataPrefetchingValidation);
 
         // Surface the resolved staging routing so users can see what `--channel staging` actually
         // picked (the "show what was resolved" suggestion from the issue RCA). Pinned version is
