@@ -4761,50 +4761,75 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Declares the resource's <em>entrypoint arguments</em>: the tool-invocation prefix that hosts the program,
-    /// for example <c>run ./cmd/api</c> for <c>go</c> or <c>-m flask</c> for <c>python</c>.
+    /// Declares the resource's <em>launch tool arguments</em>: the tool-invocation prefix that hosts the program,
+    /// for example <c>run ./cmd/api</c> for <c>go</c>, <c>-m flask</c> for <c>python</c>, or
+    /// <c>tool exec &lt;package&gt; --yes --</c> for <c>dotnet</c>.
     /// </summary>
     /// <param name="builder">The resource builder.</param>
-    /// <param name="launchConfigurationType">
-    /// The debug launch configuration type that owns this entrypoint, for example "go" or "python". This is the same
-    /// value passed to <c>WithDebugSupport</c>.
-    /// </param>
     /// <param name="callback">
-    /// Callback that produces the entrypoint arguments. It is invoked with an <em>empty</em>
+    /// Callback that produces the launch tool arguments. It is invoked with an <em>empty</em>
     /// <see cref="CommandLineArgsCallbackContext.Args"/> list; everything it adds becomes the leading arguments.
+    /// </param>
+    /// <param name="ownedByLaunchConfigurationType">
+    /// The debug launch configuration type that performs this tool invocation itself, for example "go" or "python"
+    /// — the same value passed to <c>WithDebugSupport</c>. Leave this <see langword="null"/> (the default) when the
+    /// prefix is not a debugging concern and must always be passed to the launched program.
+    /// </param>
+    /// <param name="showInCommandLine">
+    /// Whether these arguments are part of the command line shown for the resource in the dashboard. Pass
+    /// <see langword="false"/> for a prefix that is pure invocation plumbing the user did not write and cannot act on.
     /// </param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// <para>
-    /// Entrypoint arguments are always placed ahead of every argument contributed by <c>WithArgs</c>, no matter when
+    /// Launch tool arguments are always placed ahead of every argument contributed by <c>WithArgs</c>, no matter when
     /// this method is called, and no <c>WithArgs</c> callback can observe or modify them. Declaring the tool
     /// invocation this way therefore avoids any dependency on the order in which resource builder methods are called.
     /// </para>
     /// <para>
-    /// When the resource is launched by an IDE using a launch configuration of
-    /// <paramref name="launchConfigurationType"/> (see <c>WithDebugSupport</c>), the launch configuration
-    /// already carries the tool invocation, so these arguments are not passed to the launched program. In every other
-    /// case — process execution, publish, or when a launch configuration of a different type is active — they are
-    /// part of the resource's command line.
+    /// When <paramref name="ownedByLaunchConfigurationType"/> is supplied and the resource is launched by an IDE
+    /// using a launch configuration of that type (see <c>WithDebugSupport</c>), the launch configuration already
+    /// carries the tool invocation, so these arguments are not passed to the launched program. In every other case
+    /// — process execution, publish, or when a launch configuration of a different type is active — they are part of
+    /// the resource's command line.
     /// </para>
     /// <para>
-    /// Calling this method more than once is allowed; the most recent declaration wins.
+    /// This has no effect on a container resource, which invokes its program through the image's <c>ENTRYPOINT</c>
+    /// rather than through a local tool. That matters for executables published as a Dockerfile, because
+    /// <see cref="ExecutableResourceBuilderExtensions.PublishAsDockerFile{T}(IResourceBuilder{T})"/> carries the
+    /// executable's annotations over to the generated container resource.
+    /// </para>
+    /// <para>
+    /// Calling this method more than once is allowed; the most recent declaration wins. It therefore declares a
+    /// single tool invocation rather than accumulating one, which is why it is the integration's own description of
+    /// how it launches the program, not a place for callers to append flags.
     /// </para>
     /// </remarks>
     [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "Generic debug launch configuration support is not part of the ATS surface.")]
-    public static IResourceBuilder<T> WithEntrypointArgs<T>(this IResourceBuilder<T> builder, string launchConfigurationType, Action<CommandLineArgsCallbackContext> callback)
+    [AspireExportIgnore(Reason = "Generic launch tool argument support is not part of the ATS surface.")]
+    public static IResourceBuilder<T> WithLaunchToolArgs<T>(
+        this IResourceBuilder<T> builder,
+        Action<CommandLineArgsCallbackContext> callback,
+        string? ownedByLaunchConfigurationType = null,
+        bool showInCommandLine = true)
         where T : IResourceWithArgs
     {
         ArgumentNullException.ThrowIfNull(builder);
-        ArgumentException.ThrowIfNullOrEmpty(launchConfigurationType);
         ArgumentNullException.ThrowIfNull(callback);
 
-        return builder.WithAnnotation(new EntrypointArgsCallbackAnnotation(launchConfigurationType, ctx =>
+        if (ownedByLaunchConfigurationType is not null)
         {
-            callback(ctx);
-            return Task.CompletedTask;
-        }));
+            ArgumentException.ThrowIfNullOrEmpty(ownedByLaunchConfigurationType);
+        }
+
+        return builder.WithAnnotation(new LaunchToolArgsCallbackAnnotation(
+            ctx =>
+            {
+                callback(ctx);
+                return Task.CompletedTask;
+            },
+            ownedByLaunchConfigurationType,
+            showInCommandLine));
     }
 
     /// <summary>

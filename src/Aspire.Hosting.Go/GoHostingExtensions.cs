@@ -764,12 +764,12 @@ public static class GoHostingExtensions
                 };
             },
             "go")
-            .WithEntrypointArgs("go", static ctx =>
+            .WithLaunchToolArgs(static ctx =>
             {
                 // The executable resource normally starts as:
                 //   go run [-race] [-tags=...] [-ldflags=...] [-gcflags=...] <pkg> [app args]
-                // Everything up to and including <pkg> is the entrypoint: in IDE mode VS Code's Go debugger owns it
-                // via program/buildFlags, so it is not passed to the launched program.
+                // Everything up to and including <pkg> is the tool invocation: in IDE mode VS Code's Go debugger
+                // performs it via program/buildFlags, so it is not passed to the launched program.
                 if (ctx.Resource.HasAnnotationOfType<GoDelveServerAnnotation>())
                 {
                     // WithDelveServer replaces the whole command line with a headless `dlv debug ...` invocation and
@@ -802,7 +802,8 @@ public static class GoHostingExtensions
                 ctx.Args.Add(ctx.Resource.TryGetLastAnnotation<GoPackagePathAnnotation>(out var pkgAnnotation)
                     ? pkgAnnotation.PackagePath
                     : ".");
-            });
+            },
+            ownedByLaunchConfigurationType: "go");
     }
 
     /// <summary>

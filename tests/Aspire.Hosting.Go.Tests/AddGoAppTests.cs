@@ -540,7 +540,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WithVSCodeDebugging_KeepsGoToolArgumentsInTheAppModel()
     {
-        // The `go run [build flags] <pkg>` prefix is declared as entrypoint arguments, so it stays part of the
+        // The `go run [build flags] <pkg>` prefix is declared as launch tool arguments, so it stays part of the
         // resource's command line even during a debug session. Withholding it from the launched program is a
         // DCP-level concern (see DcpExecutorTests), which keeps the app model and the dashboard accurate.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
@@ -580,7 +580,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
 
         // The "go" launch configuration owns that prefix, which is what makes DCP withhold it from the debugger.
         var debugAnnotation = app.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Last();
-        Assert.True(app.Resource.OwnsEntrypointArguments(debugAnnotation));
+        Assert.True(app.Resource.HasLaunchToolArgsOwnedBy(debugAnnotation));
     }
 
     [Fact]

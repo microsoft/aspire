@@ -74,19 +74,25 @@ public static class DebugSupportExtensions
     }
 
     /// <summary>
-    /// Determines whether the launch configuration owns the resource's entrypoint arguments.
+    /// Determines whether the launch configuration performs the resource's tool invocation itself, meaning the
+    /// resource's launch tool arguments must not also be passed to the launched program.
     /// </summary>
     /// <param name="resource">The resource to inspect.</param>
     /// <param name="supportsDebuggingAnnotation">The launch configuration annotation to compare.</param>
-    /// <returns><see langword="true"/> when the launch configuration supplies the entrypoint; otherwise, <see langword="false"/>.</returns>
+    /// <returns><see langword="true"/> when the launch configuration supplies the tool invocation; otherwise, <see langword="false"/>.</returns>
+    /// <remarks>
+    /// This is <see langword="false"/> for a resource whose launch tool arguments declare no owning launch
+    /// configuration type, because such a prefix is always passed to the program.
+    /// </remarks>
     [AspireExportIgnore(Reason = "Debug support inspection is a local .NET helper and is not part of the ATS surface.")]
-    public static bool OwnsEntrypointArguments(this IResource resource, SupportsDebuggingAnnotation supportsDebuggingAnnotation)
+    public static bool HasLaunchToolArgsOwnedBy(this IResource resource, SupportsDebuggingAnnotation supportsDebuggingAnnotation)
     {
         ArgumentNullException.ThrowIfNull(resource);
         ArgumentNullException.ThrowIfNull(supportsDebuggingAnnotation);
 
-        return resource.TryGetLastAnnotation<EntrypointArgsCallbackAnnotation>(out var entrypointAnnotation)
-            && string.Equals(entrypointAnnotation.LaunchConfigurationType, supportsDebuggingAnnotation.LaunchConfigurationType, StringComparison.Ordinal);
+        return resource.TryGetLastAnnotation<LaunchToolArgsCallbackAnnotation>(out var launchToolAnnotation)
+            && launchToolAnnotation.OwningLaunchConfigurationType is string owner
+            && string.Equals(owner, supportsDebuggingAnnotation.LaunchConfigurationType, StringComparison.Ordinal);
     }
 
     /// <summary>

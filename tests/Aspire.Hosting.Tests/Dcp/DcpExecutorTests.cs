@@ -3672,16 +3672,16 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ProjectResource_WithEntrypointArgumentsDebugSupport_DoesNotOfferProcessFallback_InDebugSession()
+    public async Task ProjectResource_WithLaunchToolArgsDebugSupport_DoesNotOfferProcessFallback_InDebugSession()
     {
-        // A ProjectResource can, via the generic WithEntrypointArgs API, declare a tool
+        // A ProjectResource can, via the generic WithLaunchToolArgs API, declare a tool
         // invocation prefix (ProjectResource implements IResourceWithArgs). That prefix is withheld from Spec.Args
         // for the IDE, so DCP must NOT advertise a Process fallback that would later run a broken command. This
         // mirrors the guard already applied to plain executables in PreparePlainExecutables.
         var builder = DistributedApplication.CreateBuilder();
         var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
 
-        // Replace the default "project" debug support with a custom launch type that also owns entrypoint arguments.
+        // Replace the default "project" debug support with a custom launch type that also owns the launch tool arguments.
         var defaultAnnotation = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
         if (defaultAnnotation is not null)
         {
@@ -3689,7 +3689,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         }
 
         projectBuilder
-            .WithEntrypointArgs("test", ctx => ctx.Args.Add("run"))
+            .WithLaunchToolArgs(ctx => ctx.Args.Add("run"), ownedByLaunchConfigurationType: "test")
             .WithDebugSupport(
                 mode => new ExecutableLaunchConfiguration("test") { Mode = mode },
                 "test");
@@ -3716,11 +3716,11 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ProjectResource_WithoutEntrypointArguments_OffersProcessFallback_InDebugSession()
+    public async Task ProjectResource_WithoutLaunchToolArgs_OffersProcessFallback_InDebugSession()
     {
-        // The common case: a default AddProject ("project" launch type, no entrypoint arguments) keeps the
+        // The common case: a default AddProject ("project" launch type, no launch tool arguments) keeps the
         // Process fallback so an IDE launch rejection can still start the project. Guards against the
-        // entrypoint-argument guard accidentally dropping the fallback for ordinary projects.
+        // launch-tool-argument guard accidentally dropping the fallback for ordinary projects.
         var builder = DistributedApplication.CreateBuilder();
         builder.AddProject<Projects.ServiceA>("proj", launchProfileName: null);
 
@@ -4445,7 +4445,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var resource = builder.AddProject<Projects.ServiceA>("ServiceA").WithTerminal();
         resource
-            .WithEntrypointArgs("project", ctx => ctx.Args.Add("entrypoint-arg"))
+            .WithLaunchToolArgs(ctx => ctx.Args.Add("launch-tool-arg"), ownedByLaunchConfigurationType: "project")
             .WithDebugSupport(
                 mode => new ProjectLaunchConfiguration { ProjectPath = "/test/path", Mode = mode },
                 "project");
@@ -4473,9 +4473,9 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var exe = GetCreatedExecutableForResource(kubernetesService, "ServiceA");
         Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
-        // Process execution keeps the full command line, so the entrypoint prefix is passed through.
+        // Process execution keeps the full command line, so the tool-invocation prefix is passed through.
         Assert.NotNull(exe.Spec.Args);
-        Assert.Contains("entrypoint-arg", exe.Spec.Args);
+        Assert.Contains("launch-tool-arg", exe.Spec.Args);
         Assert.NotNull(exe.Spec.Terminal);
     }
 
@@ -5901,9 +5901,9 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PlainExecutable_ExtensionMode_EntrypointArgsDebugSupport_WithholdsPrefixAndOmitsProcessFallback()
+    public async Task PlainExecutable_ExtensionMode_LaunchToolArgsDebugSupport_WithholdsPrefixAndOmitsProcessFallback()
     {
-        // A non-"project" debuggable executable that declares entrypoint arguments (e.g. Go/Python, where the IDE
+        // A non-"project" debuggable executable that declares launch tool arguments (e.g. Go/Python, where the IDE
         // debugger owns the `go run <pkg>` / `python -m <mod>` tool invocation) must not pass the prefix to the
         // launched program. Because the DCP Executable spec has a single args field, the resulting Spec.Args cannot
         // also serve a Process fallback, so no fallback is advertised even though the launch type is not "project".
@@ -5912,7 +5912,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var debuggableExecutable = new TestExecutableResource("test-working-directory");
         builder.AddResource(debuggableExecutable)
             .WithArgs("app-arg")
-            .WithEntrypointArgs("test", static ctx => ctx.Args.Add("run"))
+            .WithLaunchToolArgs(static ctx => ctx.Args.Add("run"), ownedByLaunchConfigurationType: "test")
             .WithDebugSupport(
                 mode => new ExecutableLaunchConfiguration("test") { Mode = mode },
                 "test");
@@ -5955,9 +5955,9 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PlainExecutable_ExtensionMode_EmptyEntrypointArgs_OffersProcessFallback()
+    public async Task PlainExecutable_ExtensionMode_EmptyLaunchToolArgs_OffersProcessFallback()
     {
-        // Declaring entrypoint arguments does not always produce a prefix — a Python "Executable" entrypoint
+        // Declaring launch tool arguments does not always produce a prefix — a Python "Executable" entrypoint
         // contributes nothing, for example. Nothing is withheld from Spec.Args in that case, so the Process
         // fallback remains usable and must be advertised.
         var builder = DistributedApplication.CreateBuilder();
@@ -5965,7 +5965,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var debuggableExecutable = new TestExecutableResource("test-working-directory");
         builder.AddResource(debuggableExecutable)
             .WithArgs("app-arg")
-            .WithEntrypointArgs("test", static _ => { })
+            .WithLaunchToolArgs(static _ => { }, ownedByLaunchConfigurationType: "test")
             .WithDebugSupport(
                 mode => new ExecutableLaunchConfiguration("test") { Mode = mode },
                 "test");
@@ -5994,16 +5994,94 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PlainExecutable_ExtensionMode_EntrypointArgsDebugSupport_LaunchConfigFailure_FallsBackWithFullCommandLine()
+    public async Task PlainExecutable_UnownedLaunchToolArgs_AreExecutedButCanBeHiddenFromTheCommandLine()
     {
-        // When the launch configuration producer throws, the resource switches to Process execution before its
-        // command line is composed, so the entrypoint prefix is emitted and the fallback runs the real command.
+        // Forward-compatibility coverage for https://github.com/microsoft/aspire/issues/18904: a tool-invocation
+        // prefix that is not a debugging concern at all (the `dotnet tool exec <pkg> --yes --` shape) declares no
+        // owning launch configuration type, so it is always executed, and opts out of the displayed command line
+        // because it is plumbing the user neither wrote nor can act on.
         var builder = DistributedApplication.CreateBuilder();
 
         var resource = new TestExecutableResource("test-working-directory");
         builder.AddResource(resource)
             .WithArgs("app-arg")
-            .WithEntrypointArgs("test", static ctx => ctx.Args.Add("run"))
+            .WithLaunchToolArgs(
+                static ctx =>
+                {
+                    ctx.Args.Add("tool");
+                    ctx.Args.Add("exec");
+                },
+                showInCommandLine: false);
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "TestExecutable");
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+        Assert.Equal(["tool", "exec", "app-arg"], exe.Spec.Args);
+
+        // The prefix runs but is absent from the dashboard command line. It stays visible in the resource details
+        // pane regardless, because that pane reports the process's effective arguments.
+        Assert.True(exe.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var displayArgs));
+        var displayArg = Assert.Single(displayArgs);
+        Assert.Equal("app-arg", displayArg.Argument);
+        Assert.Equal(2, displayArg.EffectiveArgumentIndex);
+    }
+
+    [Fact]
+    public async Task PlainExecutable_ExtensionMode_UnownedLaunchToolArgs_AreNotWithheldFromTheLaunchedProgram()
+    {
+        // Launch tool arguments that name no owning launch configuration type are not a debugging concern, so an
+        // active launch configuration must not withhold them — otherwise the launched program would lose a prefix
+        // no debugger ever performs. The Process fallback stays available for the same reason.
+        var builder = DistributedApplication.CreateBuilder();
+
+        var resource = new TestExecutableResource("test-working-directory");
+        builder.AddResource(resource)
+            .WithArgs("app-arg")
+            .WithLaunchToolArgs(static ctx => ctx.Args.Add("run"))
+            .WithDebugSupport(
+                mode => new ExecutableLaunchConfiguration("test") { Mode = mode },
+                "test");
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo { ProtocolsSupported = ["test"], SupportedLaunchConfigurations = ["test"] }),
+            [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234",
+            [KnownConfigNames.DebugSessionRunMode] = "Debug"
+        };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "TestExecutable");
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        Assert.Equal(["run", "app-arg"], exe.Spec.Args);
+        Assert.NotNull(exe.Spec.FallbackExecutionTypes);
+        Assert.Equal(ExecutionType.Process, Assert.Single(exe.Spec.FallbackExecutionTypes));
+    }
+
+    [Fact]
+    public async Task PlainExecutable_ExtensionMode_LaunchToolArgsDebugSupport_LaunchConfigFailure_FallsBackWithFullCommandLine()
+    {
+        // When the launch configuration producer throws, the resource switches to Process execution before its
+        // command line is composed, so the tool-invocation prefix is emitted and the fallback runs the real command.
+        var builder = DistributedApplication.CreateBuilder();
+
+        var resource = new TestExecutableResource("test-working-directory");
+        builder.AddResource(resource)
+            .WithArgs("app-arg")
+            .WithLaunchToolArgs(static ctx => ctx.Args.Add("run"), ownedByLaunchConfigurationType: "test")
             .WithDebugSupport(
                 ThrowingLaunchConfiguration,
                 "test");
@@ -6045,16 +6123,16 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PlainExecutable_ExtensionMode_NullEntrypointArgument_DoesNotOmitApplicationArgument()
+    public async Task PlainExecutable_ExtensionMode_NullLaunchToolArgument_DoesNotOmitApplicationArgument()
     {
-        // Entrypoint values can resolve to null and disappear from the final argument list. The resolved prefix
+        // Launch tool argument values can resolve to null and disappear from the final argument list. The resolved prefix
         // boundary must shrink with them so the first ordinary argument remains executable.
         var builder = DistributedApplication.CreateBuilder();
 
         var resource = new TestExecutableResource("test-working-directory");
         builder.AddResource(resource)
             .WithArgs("app-arg")
-            .WithEntrypointArgs("test", static ctx => ctx.Args.Add(NullValueProvider.Instance))
+            .WithLaunchToolArgs(static ctx => ctx.Args.Add(NullValueProvider.Instance), ownedByLaunchConfigurationType: "test")
             .WithDebugSupport(
                 mode => new ExecutableLaunchConfiguration("test") { Mode = mode },
                 "test");
@@ -6081,10 +6159,10 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task DotnetProjectExecutable_EmptyOwnedEntrypoint_DoesNotOfferBrokenProcessFallback()
+    public async Task DotnetProjectExecutable_EmptyOwnedLaunchToolArgs_DoesNotOfferBrokenProcessFallback()
     {
         // DotnetProjectResource suppresses its `dotnet run` scaffold when a custom launch configuration owns the
-        // entrypoint. An empty entrypoint therefore leaves an IDE-only `dotnet <app-args>` command, not a runnable
+        // tool invocation. An empty prefix therefore leaves an IDE-only `dotnet <app-args>` command, not a runnable
         // Process fallback.
         var builder = DistributedApplication.CreateBuilder();
 
@@ -6092,7 +6170,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         builder.AddResource(resource)
             .WithAnnotation(new TestProjectWithLaunchSettings())
             .WithArgs("app-arg")
-            .WithEntrypointArgs("custom", static _ => { })
+            .WithLaunchToolArgs(static _ => { }, ownedByLaunchConfigurationType: "custom")
             .WithDebugSupport(
                 mode => new ExecutableLaunchConfiguration("custom") { Mode = mode },
                 "custom");
@@ -6119,7 +6197,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task DotnetProjectExecutable_EmptyOwnedEntrypoint_LaunchConfigFailureDoesNotRunBrokenProcessCommand()
+    public async Task DotnetProjectExecutable_EmptyOwnedLaunchToolArgs_LaunchConfigFailureDoesNotRunBrokenProcessCommand()
     {
         var builder = DistributedApplication.CreateBuilder();
 
@@ -6127,7 +6205,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         builder.AddResource(resource)
             .WithAnnotation(new TestProjectWithLaunchSettings())
             .WithArgs("app-arg")
-            .WithEntrypointArgs("custom", static _ => { })
+            .WithLaunchToolArgs(static _ => { }, ownedByLaunchConfigurationType: "custom")
             .WithDebugSupport(
                 ThrowingLaunchConfiguration,
                 "custom");
@@ -6171,7 +6249,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PlainExecutable_ExtensionMode_ProcessFallbackIsRecomputedOnRestart()
     {
-        // Restart invalidates entrypoint callback caches without rerunning preparation. Vary the prefix across
+        // Restart invalidates launch tool callback caches without rerunning preparation. Vary the prefix across
         // creations to prove fallback metadata follows the newly resolved command rather than stale prepared state.
         var builder = DistributedApplication.CreateBuilder();
         var callbackCount = 0;
@@ -6179,15 +6257,15 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var resource = new TestExecutableResource("test-working-directory");
         builder.AddResource(resource)
             .WithArgs("app-arg")
-            .WithEntrypointArgs(
-                "test",
+            .WithLaunchToolArgs(
                 ctx =>
                 {
                     if (Interlocked.Increment(ref callbackCount) == 2)
                     {
                         ctx.Args.Add("run");
                     }
-                })
+                },
+                ownedByLaunchConfigurationType: "test")
             .WithDebugSupport(
                 mode => new ExecutableLaunchConfiguration("test") { Mode = mode },
                 "test");
