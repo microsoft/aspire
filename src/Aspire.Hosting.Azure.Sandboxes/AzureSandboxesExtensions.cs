@@ -68,7 +68,10 @@ public static class AzureSandboxesExtensions
             infrastructure.Add(new ProvisioningOutput("id", typeof(string)) { Value = sandboxGroup.Id.ToBicepExpression() });
             infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = sandboxGroup.Name.ToBicepExpression() });
 
-            AddSandboxGroupDeploymentPrincipalRoleAssignment(infrastructure, sandboxGroup);
+            if (!sandboxResource.IsExisting())
+            {
+                AddSandboxGroupDeploymentPrincipalRoleAssignment(infrastructure, sandboxGroup);
+            }
         }
 
         var resource = new AzureSandboxGroupResource(name, ConfigureInfrastructure)
@@ -104,6 +107,11 @@ public static class AzureSandboxesExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(sandboxGroup);
+
+        if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            return builder;
+        }
 
         var sandboxOptions = options ?? new AzureSandboxOptions();
         ValidateSandboxOptions(sandboxOptions);
@@ -142,7 +150,14 @@ public static class AzureSandboxesExtensions
         Action<AzureSandboxOptions> configure)
         where T : IResource, IComputeResource
     {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(sandboxGroup);
         ArgumentNullException.ThrowIfNull(configure);
+
+        if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            return builder;
+        }
 
         var options = new AzureSandboxOptions();
         configure(options);

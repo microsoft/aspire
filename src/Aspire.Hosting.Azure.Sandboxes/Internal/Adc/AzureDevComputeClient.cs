@@ -37,7 +37,7 @@ internal interface IAzureDevComputeClient
     Task DeleteSandboxAsync(AzureDevComputeResourceScope scope, string sandboxId, CancellationToken cancellationToken);
 }
 
-internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredential credential, ILogger logger, TimeSpan? forbiddenRetryDelay = null) : IAzureDevComputeClient
+internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredential credential, ILogger logger, TimeSpan? retryDelay = null) : IAzureDevComputeClient
 {
     internal const string AuthorizationScope = "https://management.azuredevcompute.io/.default";
 
@@ -84,7 +84,8 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
             HttpMethod.Delete,
             $"{GetSandboxGroupPath(scope)}/diskimages/{Escape(diskImageId)}",
             content: null,
-            cancellationToken);
+            cancellationToken,
+            allowNotFound: true);
     }
 
     public Task<List<AzureDevComputeSandbox>> ListSandboxesAsync(AzureDevComputeResourceScope scope, string? labels, CancellationToken cancellationToken)
@@ -131,7 +132,8 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
             HttpMethod.Post,
             $"{GetSandboxGroupPath(scope)}/sandboxes/{Escape(sandboxId)}/ports/remove",
             request,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken,
+            notFoundFactory: static () => new AzureDevComputePortsList()).ConfigureAwait(false);
 
         return response.Ports;
     }
@@ -143,7 +145,8 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
             HttpMethod.Delete,
             $"{GetSandboxGroupPath(scope)}/sandboxes/{Escape(sandboxId)}",
             content: null,
-            cancellationToken);
+            cancellationToken,
+            allowNotFound: true);
     }
 
     private async Task<List<T>> ListAllPagesAsync<T>(AzureDevComputeResourceScope scope, string resourceType, string? labels, CancellationToken cancellationToken)
@@ -172,26 +175,60 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
         }
     }
 
-    private async Task SendAsync(AzureDevComputeResourceScope scope, HttpMethod method, string path, object? content, CancellationToken cancellationToken)
+    private async Task SendAsync(
+        AzureDevComputeResourceScope scope,
+        HttpMethod method,
+        string path,
+        object? content,
+        CancellationToken cancellationToken,
+        bool allowNotFound = false)
     {
-        using var response = await SendWithForbiddenRetryAsync(scope, method, path, content, cancellationToken).ConfigureAwait(false);
+        using var response = await SendWithRetryAsync(scope, method, path, content, cancellationToken).ConfigureAwait(false);
+        if (allowNotFound && response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return;
+        }
+
         await EnsureSuccessAsync(response, method, path, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<T> SendAsync<T>(AzureDevComputeResourceScope scope, HttpMethod method, string path, object? content, CancellationToken cancellationToken)
+    private async Task<T> SendAsync<T>(
+        AzureDevComputeResourceScope scope,
+        HttpMethod method,
+        string path,
+        object? content,
+        CancellationToken cancellationToken,
+        Func<T>? notFoundFactory = null)
     {
-        using var response = await SendWithForbiddenRetryAsync(scope, method, path, content, cancellationToken).ConfigureAwait(false);
+        using var response = await SendWithRetryAsync(scope, method, path, content, cancellationToken).ConfigureAwait(false);
+        if (response.StatusCode == HttpStatusCode.NotFound && notFoundFactory is not null)
+        {
+            return notFoundFactory();
+        }
+
         await EnsureSuccessAsync(response, method, path, cancellationToken).ConfigureAwait(false);
 
         var result = await response.Content.ReadFromJsonAsync<T>(s_jsonSerializerOptions, cancellationToken).ConfigureAwait(false);
         return result ?? throw new InvalidOperationException($"ADC request '{method} {path}' returned an empty response.");
     }
 
-    private async Task<HttpResponseMessage> SendWithForbiddenRetryAsync(AzureDevComputeResourceScope scope, HttpMethod method, string path, object? content, CancellationToken cancellationToken)
+    private async Task<HttpResponseMessage> SendWithRetryAsync(AzureDevComputeResourceScope scope, HttpMethod method, string path, object? content, CancellationToken cancellationToken)
     {
         for (var attempt = 0; ; attempt++)
         {
-            var response = await SendCoreAsync(scope, method, path, content, cancellationToken).ConfigureAwait(false);
+            HttpResponseMessage response;
+            try
+            {
+                response = await SendCoreAsync(scope, method, path, content, cancellationToken).ConfigureAwait(false);
+            }
+            catch (HttpRequestException ex) when (attempt < MaxRetryCount && CanRetryAfterNetworkFailure(method))
+            {
+                var networkRetryDelay = retryDelay ?? TimeSpan.FromSeconds(5);
+                logger.LogInformation(ex, "ADC request {Method} {Path} failed with a transient network error. Retrying after {Delay}.", method.Method, path, networkRetryDelay);
+                await Task.Delay(networkRetryDelay, cancellationToken).ConfigureAwait(false);
+                continue;
+            }
+
             if (!ShouldRetry(response.StatusCode) || attempt >= MaxRetryCount)
             {
                 return response;
@@ -209,6 +246,10 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
         statusCode == HttpStatusCode.TooManyRequests ||
         (int)statusCode >= 500;
 
+    private static bool CanRetryAfterNetworkFailure(HttpMethod method) =>
+        method == HttpMethod.Get ||
+        method == HttpMethod.Delete;
+
     private TimeSpan GetRetryDelay(HttpResponseMessage response)
     {
         if (response.Headers.RetryAfter?.Delta is { } delta)
@@ -221,7 +262,7 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
             return retryDate > DateTimeOffset.UtcNow ? retryDate - DateTimeOffset.UtcNow : TimeSpan.Zero;
         }
 
-        return forbiddenRetryDelay ?? TimeSpan.FromSeconds(5);
+        return retryDelay ?? TimeSpan.FromSeconds(5);
     }
 
     private async Task<HttpResponseMessage> SendCoreAsync(AzureDevComputeResourceScope scope, HttpMethod method, string path, object? content, CancellationToken cancellationToken)

@@ -249,9 +249,11 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
     public override Task<string> InspectImageManifestAsync(string imageName, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(imageName);
-        var escapedImageName = EscapeArgument(imageName);
+        var remoteImageName = imageName.StartsWith("docker://", StringComparison.OrdinalIgnoreCase)
+            ? imageName
+            : $"docker://{imageName}";
+        var escapedImageName = EscapeArgument(remoteImageName);
 
-        // Podman does not support Docker's --verbose manifest inspection option.
         return ExecuteContainerCommandForOutputAsync(
             $"manifest inspect \"{escapedImageName}\"",
             "inspect image manifest",
