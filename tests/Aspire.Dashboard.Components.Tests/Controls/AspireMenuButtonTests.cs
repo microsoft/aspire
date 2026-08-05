@@ -37,10 +37,14 @@ public class AspireMenuButtonTests : DashboardTestContext
     [Fact]
     public async Task ItemsProvider_AddsMenuWhenButtonIsClicked()
     {
-        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this, setupAspireMenuButtonModule: false);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
         FluentUISetupHelpers.SetupFluentButton(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
+        var menuButtonModule = JSInterop.SetupModule("./Components/Controls/AspireMenuButton.razor.js");
+        menuButtonModule.SetupVoid("prepareForFluentMenuInitialization", _ => true).SetVoidResult();
+        menuButtonModule.SetupVoid("waitForFluentMenuInitialization", _ => true).SetVoidResult();
+        menuButtonModule.SetupVoid("cancelFluentMenuInitialization", _ => true).SetVoidResult();
 
         var providerInvocationCount = 0;
         var provider = RenderComponent<FluentMenuProvider>();
@@ -57,14 +61,16 @@ public class AspireMenuButtonTests : DashboardTestContext
 
         Assert.Equal(0, providerInvocationCount);
         Assert.Empty(cut.FindComponents<AspireMenu>());
+        Assert.Equal(0, JSInterop.Invocations.Count(invocation => invocation.Identifier == "import" && invocation.Arguments.Contains("./Components/Controls/AspireMenuButton.razor.js")));
 
         cut.Find("#lazy-menu-button").Click();
 
         Assert.Equal(1, providerInvocationCount);
-        var prepareInvocation = Assert.Single(JSInterop.Invocations, invocation => invocation.Identifier == "prepareForFluentMenuInitialization");
-        var waitInvocation = Assert.Single(JSInterop.Invocations, invocation => invocation.Identifier == "waitForFluentMenuInitialization");
+        Assert.Single(JSInterop.Invocations, invocation => invocation.Identifier == "import" && invocation.Arguments.Contains("./Components/Controls/AspireMenuButton.razor.js"));
+        var prepareInvocation = Assert.Single(menuButtonModule.Invocations, invocation => invocation.Identifier == "prepareForFluentMenuInitialization");
+        var waitInvocation = Assert.Single(menuButtonModule.Invocations, invocation => invocation.Identifier == "waitForFluentMenuInitialization");
         Assert.Equal(100, waitInvocation.Arguments[1]);
-        var invocations = JSInterop.Invocations.ToList();
+        var invocations = menuButtonModule.Invocations.ToList();
         Assert.True(invocations.IndexOf(prepareInvocation) < invocations.IndexOf(waitInvocation));
         Assert.Single(cut.FindComponents<AspireMenu>());
         Assert.Single(cut.FindComponents<FluentMenu>());
@@ -130,12 +136,14 @@ public class AspireMenuButtonTests : DashboardTestContext
     [Fact]
     public async Task DisposeAsync_CancelsPendingMenuInitialization()
     {
-        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this, setupAspireMenuButtonModule: false);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
         FluentUISetupHelpers.SetupFluentButton(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
-        var initialization = JSInterop.SetupVoid("waitForFluentMenuInitialization", "pending-menu-button", 100);
-        JSInterop.SetupVoid("cancelFluentMenuInitialization", "pending-menu-button").SetVoidResult();
+        var menuButtonModule = JSInterop.SetupModule("./Components/Controls/AspireMenuButton.razor.js");
+        menuButtonModule.SetupVoid("prepareForFluentMenuInitialization", "pending-menu-button").SetVoidResult();
+        var initialization = menuButtonModule.SetupVoid("waitForFluentMenuInitialization", "pending-menu-button", 100);
+        menuButtonModule.SetupVoid("cancelFluentMenuInitialization", "pending-menu-button").SetVoidResult();
         var cut = RenderComponent<AspireMenuButton>(builder =>
         {
             builder.Add(p => p.MenuButtonId, "pending-menu-button");
@@ -145,7 +153,7 @@ public class AspireMenuButtonTests : DashboardTestContext
         cut.Find("#pending-menu-button").Click();
         await cut.Instance.DisposeAsync();
 
-        var cancellationInvocation = Assert.Single(JSInterop.Invocations, invocation => invocation.Identifier == "cancelFluentMenuInitialization");
+        var cancellationInvocation = Assert.Single(menuButtonModule.Invocations, invocation => invocation.Identifier == "cancelFluentMenuInitialization");
         Assert.Equal("pending-menu-button", cancellationInvocation.Arguments[0]);
         initialization.SetVoidResult();
     }

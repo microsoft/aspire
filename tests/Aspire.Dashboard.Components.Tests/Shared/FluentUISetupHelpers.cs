@@ -180,11 +180,17 @@ internal static class FluentUISetupHelpers
         context.Services.AddSingleton<IOptions<DashboardOptions>>(Options.Create(new DashboardOptions()));
     }
 
-    public static void SetupFluentUIComponents(TestContext context)
+    public static void SetupFluentUIComponents(TestContext context, bool setupAspireMenuButtonModule = true)
     {
         context.Services.AddFluentUIComponents();
-        context.JSInterop.SetupVoid("prepareForFluentMenuInitialization", _ => true).SetVoidResult();
-        context.JSInterop.SetupVoid("waitForFluentMenuInitialization", _ => true).SetVoidResult();
+
+        if (setupAspireMenuButtonModule)
+        {
+            var menuButtonModule = context.JSInterop.SetupModule("./Components/Controls/AspireMenuButton.razor.js");
+            menuButtonModule.SetupVoid("prepareForFluentMenuInitialization", _ => true).SetVoidResult();
+            menuButtonModule.SetupVoid("waitForFluentMenuInitialization", _ => true).SetVoidResult();
+            menuButtonModule.SetupVoid("cancelFluentMenuInitialization", _ => true).SetVoidResult();
+        }
 
         // Setting a provider ID on menu service is required to simulate <FluentMenuProvider> on the page.
         // This makes FluentMenu render without error.

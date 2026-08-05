@@ -58,8 +58,6 @@ public partial class AspireMenu : FluentComponentBase
     // Each menu item is approximately 32px tall, plus 16px padding for the menu container.
     private const int EstimatedItemHeight = 32;
     private const int MenuVerticalPadding = 16;
-    private const int InitializationWaitMilliseconds = 100;
-
     private int CalculatedVerticalThreshold => VerticalThreshold ?? (Items.Count * EstimatedItemHeight + MenuVerticalPadding);
 
     protected override void OnParametersSet()
@@ -75,9 +73,6 @@ public partial class AspireMenu : FluentComponentBase
     {
         if (firstRender && OnRenderComplete.HasDelegate)
         {
-            // FluentMenu writes aria-expanded after its JavaScript modules are initialized.
-            // Wait for that signal before allowing the owner to open the menu.
-            await JS.InvokeVoidAsync("waitForFluentMenuInitialization", Anchor, InitializationWaitMilliseconds);
             await OnRenderComplete.InvokeAsync();
         }
 
