@@ -65,6 +65,8 @@ export interface JavaScriptRuntimeLaunchConfiguration extends ExecutableLaunchCo
     // all, leaving it undefined. Undefined is the legitimate legacy signal that tells the extension to
     // fall back to positional/runtime inference. Do not make it required.
     launch_method?: "direct" | "package-manager";
+    // The emitted file to execute when script_path identifies the authored source file.
+    program_path?: string;
 }
 
 export function isJavaScriptRuntimeLaunchConfiguration(obj: any): obj is JavaScriptRuntimeLaunchConfiguration {

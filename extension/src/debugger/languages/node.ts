@@ -35,6 +35,10 @@ export const nodeDebuggerExtension: ResourceDebuggerExtension = {
             debugConfiguration.runtimeExecutable = config.runtime_executable;
         }
 
+        if (config.program_path) {
+            debugConfiguration.program = config.program_path;
+        }
+
         // For package manager script execution (e.g., npm run dev), use args directly as runtimeArgs.
         // The args from DCP already contain the full command (e.g., ["run", "dev", "--port", "5173"]).
         const launchMethod = resolveJavaScriptLaunchMethod(config, () => config.runtime_executable && config.runtime_executable !== 'node' ? launchMethodPackageManager : launchMethodDirect);

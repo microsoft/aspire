@@ -1,4 +1,6 @@
 import * as assert from 'assert';
+import * as sinon from 'sinon';
+import * as vscode from 'vscode';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
 import { nodeDebuggerExtension } from '../debugger/languages/node';
 import { launchMethodDirect, launchMethodPackageManager } from '../debugger/languages/javascriptRuntime';
@@ -73,6 +75,50 @@ suite('Node Debugger Tests', () => {
         assert.strictEqual(debugConfig.runtimeArgs, undefined);
         assert.strictEqual(debugConfig.program, '/workspace/app/server.js');
         assert.deepStrictEqual(debugConfig.args, []);
+    });
+});
+
+suite('AspireDebugSession.startAppHost (node) Tests', () => {
+    teardown(() => sinon.restore());
+
+    function createSession(): AspireDebugSession {
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/app/apphost.mts'
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub()
+        } as unknown as vscode.DebugSession;
+
+        return new AspireDebugSession(parentDebugSession, {} as any, {} as any, {} as any, () => { });
+    }
+
+    test('launches the compiled AppHost output as program while keeping the source file as identity', async () => {
+        const aspireDebugSession = createSession();
+        sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore');
+        const startAndGetDebugSessionStub = sinon.stub(aspireDebugSession, 'startAndGetDebugSession').resolves(undefined);
+
+        await aspireDebugSession.startAppHost(
+            '/workspace/app/apphost.mts',
+            ['node', '/workspace/app/node_modules/.tmp/aspire-apphost/apphost.mjs'],
+            [],
+            true,
+            { forceBuild: false });
+
+        assert.ok(startAndGetDebugSessionStub.calledOnce);
+        const debugConfig = startAndGetDebugSessionStub.firstCall.args[0] as AspireResourceExtendedDebugConfiguration;
+
+        assert.strictEqual(debugConfig.program, '/workspace/app/node_modules/.tmp/aspire-apphost/apphost.mjs');
+        assert.strictEqual(debugConfig.runtimeExecutable, 'node');
+        assert.deepStrictEqual(debugConfig.args, []);
+        assert.strictEqual(debugConfig.cwd, '/workspace/app');
     });
 });
 
