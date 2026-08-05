@@ -1,5 +1,8 @@
 ﻿extension radius
 
+@secure()
+param db_password string
+
 resource recipepack 'Radius.Core/recipePacks@2025-08-01-preview' = {
   name: 'default'
   properties: {
@@ -42,6 +45,12 @@ resource db 'Radius.Data/postgreSqlDatabases@2025-08-01-preview' = {
   properties: {
     application: app.id
     environment: myenv.id
+    recipe: {
+      parameters: {
+        password: db_password
+        username: 'postgres'
+      }
+    }
   }
 }
 
