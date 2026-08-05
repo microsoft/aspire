@@ -2042,6 +2042,15 @@ fluent-tooltip[anchor="dialog_close"] > div {
     max-width: var(--aspire-menu-max-width);
 }
 
+/* Indents a menu item so it reads as a sub-option of the item above it, e.g. the console logs
+   "UTC timestamps" option under "Show timestamps". fluent-menu-item lays its icon and label out
+   in a grid on the host element, so padding on the host shifts both together. The host's own
+   `padding: 0` comes from a :host rule in the component's shadow root, which document styles
+   such as this one override. */
+.aspire-menu-container fluent-menu-item.sub-option-menu-item {
+    padding-inline-start: 16px;
+}
+
 .overflow-fluent-menu-item::part(content) {
     width: 100%;
     text-overflow: ellipsis;

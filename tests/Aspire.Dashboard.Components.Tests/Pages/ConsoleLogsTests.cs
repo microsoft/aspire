@@ -904,6 +904,46 @@ public partial class ConsoleLogsTests : DashboardTestContext
         }
     }
 
+    [Fact]
+    public async Task LogsMenu_UtcTimestampsOption_IsIndentedAndFollowsShowTimestamps()
+    {
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var testResource = ModelTestHelpers.CreateResource(resourceName: "test-resource", state: KnownResourceState.Running);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [testResource]);
+
+        SetupConsoleLogsServices(dashboardClient);
+
+        var cut = RenderConsoleLogsPage(CreateViewport(isDesktop: true), resourceName: "test-resource");
+        var instance = cut.Instance;
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == testResource.Name);
+
+        var loc = Services.GetRequiredService<IStringLocalizer<Resources.ConsoleLogs>>();
+
+        // The UTC option is shown even when it can't be used, so the indent is what tells the user
+        // it belongs to "Show timestamps" rather than being a standalone option.
+        var utcItem = GetUtcTimestampsMenuItem();
+        Assert.True(utcItem.IsDisabled);
+        Assert.Equal(Components.Pages.ConsoleLogs.SubOptionMenuItemClass, utcItem.Class);
+
+        var showTimestampsItem = Assert.Single(
+            instance.LogsMenuItemsForTest,
+            i => i.Text == loc[nameof(Resources.ConsoleLogs.ConsoleLogsTimestampShow)].Value);
+        await cut.InvokeAsync(() => showTimestampsItem.OnClick!());
+
+        utcItem = GetUtcTimestampsMenuItem();
+        Assert.False(utcItem.IsDisabled);
+        Assert.Equal(Components.Pages.ConsoleLogs.SubOptionMenuItemClass, utcItem.Class);
+
+        MenuButtonItem GetUtcTimestampsMenuItem() => Assert.Single(
+            instance.LogsMenuItemsForTest,
+            i => i.Text == loc[nameof(Resources.ConsoleLogs.ConsoleLogsTimestampShowUtc)].Value);
+    }
+
     private void SetupConsoleLogsServices(TestDashboardClient? dashboardClient = null, TestTimeProvider? timeProvider = null)
     {
         FluentUISetupHelpers.SetupFluentDialogProvider(this);
