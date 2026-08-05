@@ -221,6 +221,7 @@ namespace Projects%3B
       <!-- DNX/local-tool launches get DCP/Dashboard paths from the launching CLI's runtime environment.
            Explicit paths still require build-time validation so configuration mistakes fail with ASPIRE009. -->
       <_AspireCliBundleResolutionOptional Condition="'$(_AspireResolvedCliInvocationMode)' == 'Dnx' and '$(AspireCliPath)' == '' and '$(AspireCliBundlePath)' == ''">true</_AspireCliBundleResolutionOptional>
+      <_AspireResolvedDnxHostArgumentsPrefix Condition="'$(_AspireResolvedDnxHostArguments)' != ''">$(_AspireResolvedDnxHostArguments) </_AspireResolvedDnxHostArgumentsPrefix>
     </PropertyGroup>
 
     <Message Text="Aspire CLI invocation selection: $(_AspireResolvedCliInvocationMode) (aspire: $(_AspireResolvedCliPath), dnx: $(_AspireResolvedDnxPath))" Importance="Low" />
@@ -278,7 +279,7 @@ namespace Projects%3B
            and concurrent stream draining. -->
       <_AspireCliVersionCommand Condition="'$(AspireCliPath)' != ''">"$(AspireCliPath)" --version</_AspireCliVersionCommand>
       <_AspireCliVersionCommand Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Aspire'">"$(_AspireResolvedCliPath)" --version</_AspireCliVersionCommand>
-      <_AspireCliVersionCommand Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx'">"$(_AspireResolvedDnxHostPath)" $(_AspireResolvedDnxHostArguments) --yes $(_AspireCliDnxPackageReference) -- --version</_AspireCliVersionCommand>
+      <_AspireCliVersionCommand Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx'">"$(_AspireResolvedDnxHostPath)" $(_AspireResolvedDnxHostArgumentsPrefix)--yes $(_AspireCliDnxPackageReference) -- --version</_AspireCliVersionCommand>
       <!-- A first-time DNX invocation may need to restore Aspire.Cli before reporting its version. -->
       <_AspireCliVersionTimeout>5000</_AspireCliVersionTimeout>
       <_AspireCliVersionTimeout Condition="'$(_AspireResolvedCliInvocationMode)' == 'Dnx'">120000</_AspireCliVersionTimeout>
@@ -374,7 +375,7 @@ namespace Projects%3B
       <!-- Bundle opt-in authorizes DNX to restore the Aspire CLI version paired with this AppHost SDK
            from the user's configured NuGet sources. dotnet run is noninteractive, so DNX cannot ask
            for confirmation during the launch. -->
-      <RunArguments Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx'">$(_AspireResolvedDnxHostArguments) --yes $(_AspireCliDnxPackageReference) -- run --project "$(_AspireRunProject)" --no-build --</RunArguments>
+      <RunArguments Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx'">$(_AspireResolvedDnxHostArgumentsPrefix)--yes $(_AspireCliDnxPackageReference) -- run --project "$(_AspireRunProject)" --no-build --</RunArguments>
       <!-- The explicit-shim command line is emitted as:
              cmd /D /V:OFF /C C:\path^ with^ spaces\aspire.cmd run [separator] user-arg
            Keep the caret-escaped shim path unquoted because a leading quote makes cmd.exe strip
