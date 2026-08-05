@@ -9,6 +9,7 @@ using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Radius.Publishing;
+using Aspire.Hosting.Radius.ResourceMapping;
 
 namespace Aspire.Hosting.Radius;
 
@@ -113,6 +114,15 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
     public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference)
     {
         var resource = endpointReference.Resource;
+
+        // A backing resource (cache/database/queue) is provisioned by a Radius recipe, not emitted
+        // as a Radius.Compute/containers workload, so the container Service naming rule below does
+        // not describe it and no Aspire endpoint can address it. The publisher projects those
+        // values from the recipe's own outputs instead (RadiusBackingConnections); reaching here
+        // means some other caller is about to emit an address that resolves to nothing.
+        // See https://github.com/microsoft/aspire/issues/18935.
+        ThrowIfBackingResource(resource);
+
         // Kubernetes service DNS for a resource deployed to a namespace is
         // `<service>.<namespace>.svc.cluster.local`. The namespace segment is required: without
         // it the name only resolves for callers already inside the same namespace, so cross-
@@ -150,6 +160,12 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
         var endpoint = endpointReference.EndpointAnnotation;
         var scheme = endpoint.UriScheme;
 
+        // Guard here as well as in GetHostAddressExpression: Port, TargetPort, Scheme and
+        // TlsEnabled never evaluate the lazy host below, so a backing resource would otherwise slip
+        // through this method with a container-derived port that has nothing to do with the port
+        // its recipe actually exposes.
+        ThrowIfBackingResource(endpointReference.Resource);
+
         // Unlike the default IComputeEnvironmentResource implementation (which uses the proxy/host
         // port), a Radius peer is reachable on the recipe Service's port, which equals the container
         // port (port == targetPort == containerPort). Resolve the service port from the same helper
@@ -178,6 +194,31 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
             EndpointProperty.TlsEnabled => ReferenceExpression.Create($"{(endpoint.TlsEnabled ? bool.TrueString : bool.FalseString)}"),
             _ => throw new InvalidOperationException($"The property '{property}' is not supported for the endpoint '{endpoint.Name}'.")
         };
+    }
+
+    // A backing resource maps to a Radius recipe type (Applications.Datastores/*, Radius.Data/*,
+    // ...) rather than Radius.Compute/containers. Its Kubernetes objects and credentials are owned
+    // by the recipe, so every endpoint-derived value for it is wrong. Fail loudly instead of
+    // emitting an address that silently resolves to nothing.
+    private static void ThrowIfBackingResource(IResource resource)
+    {
+        // Child resources (a database on a server, say) are represented by their parent in the
+        // Radius model, so classify against the resource Radius actually emits.
+        if (resource is IResourceWithParent child)
+        {
+            resource = child.Parent;
+        }
+
+        if (!ResourceTypeMapper.IsBackingResource(resource))
+        {
+            return;
+        }
+
+        throw new RadiusBackingResourceEndpointException(
+            resource,
+            $"Endpoints of '{resource.Name}' cannot be resolved for Radius because it is deployed by a Radius recipe " +
+            $"rather than as a container. Its address and credentials are only known to the recipe. Reference it with " +
+            $"WithReference so the publisher can project the recipe's own outputs.");
     }
 
     // Mirrors the private helpers on IComputeEnvironmentResource so this override reproduces the
