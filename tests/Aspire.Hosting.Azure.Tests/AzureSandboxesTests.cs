@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREPIPELINES002
 #pragma warning disable ASPIREAZURE001
 #pragma warning disable ASPIREAZURE003
 
@@ -9,6 +10,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
@@ -280,9 +282,11 @@ public class AzureSandboxesTests
             "current-id",
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
+                ["aspire-owner"] = "owner-1",
                 ["aspire-resource"] = "frontend-sandbox-container",
                 ["aspire-deploy"] = "current-deploy"
             },
+            "owner-1",
             "frontend-sandbox-container",
             excludedDeployIds,
             excludedResourceIds));
@@ -290,9 +294,11 @@ public class AzureSandboxesTests
             "previous-id",
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
+                ["aspire-owner"] = "owner-1",
                 ["aspire-resource"] = "frontend-sandbox-container",
                 ["aspire-deploy"] = "previous-deploy"
             },
+            "owner-1",
             "frontend-sandbox-container",
             excludedDeployIds,
             excludedResourceIds));
@@ -300,9 +306,23 @@ public class AzureSandboxesTests
             "unrelated-id",
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
+                ["aspire-owner"] = "owner-1",
                 ["aspire-resource"] = "backend-sandbox-container",
                 ["aspire-deploy"] = "old-deploy"
             },
+            "owner-1",
+            "frontend-sandbox-container",
+            excludedDeployIds,
+            excludedResourceIds));
+        Assert.False(AzureSandboxContainerDeployment.ShouldDeleteLabeledDeployment(
+            "other-owner-id",
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["aspire-owner"] = "owner-2",
+                ["aspire-resource"] = "frontend-sandbox-container",
+                ["aspire-deploy"] = "old-deploy"
+            },
+            "owner-1",
             "frontend-sandbox-container",
             excludedDeployIds,
             excludedResourceIds));
@@ -310,12 +330,18 @@ public class AzureSandboxesTests
             "old-id",
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
+                ["aspire-owner"] = "owner-1",
                 ["aspire-resource"] = "frontend-sandbox-container",
                 ["aspire-deploy"] = "old-deploy"
             },
+            "owner-1",
             "frontend-sandbox-container",
             excludedDeployIds,
             excludedResourceIds));
+
+        Assert.Equal(
+            "aspire-owner=owner-1,aspire-resource=frontend-sandbox-container",
+            AzureSandboxContainerDeployment.CreateLabelSelector("owner-1", "frontend-sandbox-container"));
     }
 
     [Fact]
@@ -333,6 +359,49 @@ public class AzureSandboxesTests
         Assert.Equal(
             $"[{currentUrl}]({currentUrl})",
             AzureSandboxContainerDeployment.CreateSandboxUrlSummary(currentUrl, retainedUrl: null));
+    }
+
+    [Fact]
+    public void SandboxDeploymentStateTracksOwnerOnlyRecoveryState()
+    {
+        var ownerOnlyState = new DeploymentStateSection(
+            "AzureSandboxes:frontend",
+            new JsonObject { ["OwnerId"] = "owner-1" },
+            version: 0);
+        var emptyState = new DeploymentStateSection(
+            "AzureSandboxes:backend",
+            new JsonObject(),
+            version: 0);
+
+        Assert.True(AzureSandboxContainerDeployment.HasRemoteDeploymentState(ownerOnlyState));
+        Assert.False(AzureSandboxContainerDeployment.HasRemoteDeploymentState(emptyState));
+    }
+
+    [Fact]
+    public void SandboxDeploymentRejectsScopeChangesWhileStateExists()
+    {
+        var state = new DeploymentStateSection(
+            "AzureSandboxes:frontend",
+            new JsonObject
+            {
+                ["OwnerId"] = "owner-1",
+                ["SubscriptionId"] = "sub-1",
+                ["ResourceGroup"] = "rg-1",
+                ["Location"] = "westus3",
+                ["SandboxGroup"] = "sandboxes-1"
+            },
+            version: 0);
+
+        AzureSandboxContainerDeployment.ValidateDeploymentScope(
+            state,
+            new AzureDevComputeResourceScope("SUB-1", "RG-1", "SANDBOXES-1", "WESTUS3"));
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            AzureSandboxContainerDeployment.ValidateDeploymentScope(
+                state,
+                new AzureDevComputeResourceScope("sub-1", "rg-1", "sandboxes-2", "westus3")));
+
+        Assert.Contains("aspire destroy", exception.Message);
     }
 
     [Fact]
@@ -433,6 +502,29 @@ public class AzureSandboxesTests
         var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance, TimeSpan.Zero);
 
         await Assert.ThrowsAsync<HttpRequestException>(() => client.CreateDiskImageAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            new AzureDevComputeCreateDiskImageRequest
+            {
+                Name = "disk-image",
+                Image = new AzureDevComputeDiskImageSpec { Base = "example.azurecr.io/site@sha256:abc123" }
+            },
+            CancellationToken.None));
+
+        Assert.Equal(1, attempts);
+    }
+
+    [Fact]
+    public async Task AzureDevComputeClientDoesNotRetryAmbiguousCreateServerErrors()
+    {
+        var attempts = 0;
+        var handler = new RecordingHandler(_ =>
+        {
+            attempts++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        });
+        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance, TimeSpan.Zero);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => client.CreateDiskImageAsync(
             new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
             new AzureDevComputeCreateDiskImageRequest
             {

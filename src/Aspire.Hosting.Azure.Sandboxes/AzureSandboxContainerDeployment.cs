@@ -133,6 +133,10 @@ internal static class AzureSandboxContainerDeployment
         var client = CreateAzureDevComputeClient(context);
 
         var stateSection = await deploymentStateManager.AcquireSectionAsync(GetStateSectionName(resource), context.CancellationToken).ConfigureAwait(false);
+        ValidateDeploymentScope(stateSection, dataPlaneScope);
+        var ownerId = GetOrCreateOwnerId(stateSection);
+        SetRecoveryStateIfMissing(stateSection, dataPlaneScope, resource);
+        await deploymentStateManager.SaveSectionAsync(stateSection, context.CancellationToken).ConfigureAwait(false);
         var previousStateSection = CloneStateSection(stateSection);
 
         var deployId = Guid.NewGuid().ToString("N");
@@ -150,7 +154,7 @@ internal static class AzureSandboxContainerDeployment
             var diskTask = await context.ReportingStep.CreateTaskAsync($"Creating sandbox disk image for {targetResource.Name}", context.CancellationToken).ConfigureAwait(false);
             await using (diskTask.ConfigureAwait(false))
             {
-                var diskImage = await CreateDiskImageAsync(context, client, dataPlaneScope, resource, diskImageReference, diskImageName, deployId).ConfigureAwait(false);
+                var diskImage = await CreateDiskImageAsync(context, client, dataPlaneScope, resource, diskImageReference, diskImageName, ownerId, deployId).ConfigureAwait(false);
                 diskImageId = diskImage.Id;
                 diskImage = await WaitForDiskImageReadyAsync(context, client, dataPlaneScope, diskImage).ConfigureAwait(false);
                 await diskTask.CompleteAsync($"Created sandbox disk image {diskImageId}", CompletionState.Completed, context.CancellationToken).ConfigureAwait(false);
@@ -166,7 +170,7 @@ internal static class AzureSandboxContainerDeployment
             var createTask = await context.ReportingStep.CreateTaskAsync($"Creating sandbox for {targetResource.Name}", context.CancellationToken).ConfigureAwait(false);
             await using (createTask.ConfigureAwait(false))
             {
-                var sandbox = await CreateSandboxAsync(context, client, dataPlaneScope, resource, diskImageId, environmentVariables, imageMetadata, deployId).ConfigureAwait(false);
+                var sandbox = await CreateSandboxAsync(context, client, dataPlaneScope, resource, diskImageId, environmentVariables, imageMetadata, ownerId, deployId).ConfigureAwait(false);
                 sandboxId = sandbox.Id;
                 await createTask.CompleteAsync($"Created sandbox {sandboxId}", CompletionState.Completed, context.CancellationToken).ConfigureAwait(false);
             }
@@ -214,6 +218,7 @@ internal static class AzureSandboxContainerDeployment
             }
 
             stateSection.Data.Clear();
+            stateSection.Data["OwnerId"] = ownerId;
             stateSection.Data["SandboxId"] = sandboxId;
             stateSection.Data["DiskImageId"] = diskImageId;
             stateSection.Data["SubscriptionId"] = dataPlaneScope.SubscriptionId;
@@ -234,6 +239,7 @@ internal static class AzureSandboxContainerDeployment
                 context,
                 client,
                 dataPlaneScope,
+                ownerId,
                 resource.Name,
                 excludedDeployIds: GetExcludedDeployIds(deployId, previousStateSection),
                 excludedSandboxIds: GetExcludedResourceIds(sandboxId, previousStateSection, "SandboxId"),
@@ -301,10 +307,11 @@ internal static class AzureSandboxContainerDeployment
         return new AzureDevComputeClient(httpClientFactory.CreateClient(), tokenCredentialProvider.TokenCredential, context.Logger);
     }
 
-    private static Dictionary<string, string> CreateLabels(AzureSandboxContainerResource resource, string deployId)
+    private static Dictionary<string, string> CreateLabels(AzureSandboxContainerResource resource, string ownerId, string deployId)
     {
         return new Dictionary<string, string>(StringComparer.Ordinal)
         {
+            ["aspire-owner"] = ownerId,
             ["aspire-resource"] = resource.Name,
             ["aspire-source"] = resource.TargetResource.Name,
             ["aspire-deploy"] = deployId
@@ -347,6 +354,7 @@ internal static class AzureSandboxContainerDeployment
         AzureSandboxContainerResource resource,
         string imageReference,
         string diskImageName,
+        string ownerId,
         string deployId)
     {
         AzureDevComputeRegistryCredentials? registryCredentials = null;
@@ -371,7 +379,7 @@ internal static class AzureSandboxContainerDeployment
             new AzureDevComputeCreateDiskImageRequest
             {
                 Name = diskImageName,
-                Labels = CreateLabels(resource, deployId),
+                Labels = CreateLabels(resource, ownerId, deployId),
                 Image = new AzureDevComputeDiskImageSpec
                 {
                     Base = imageReference
@@ -440,6 +448,7 @@ internal static class AzureSandboxContainerDeployment
         string diskImageId,
         IReadOnlyDictionary<string, string> environmentVariables,
         ContainerImageMetadata imageMetadata,
+        string ownerId,
         string deployId)
     {
         ValidateSandboxVolumes(resource.TargetResource);
@@ -448,7 +457,7 @@ internal static class AzureSandboxContainerDeployment
             scope,
             new AzureDevComputeSandboxRequest
             {
-                Labels = CreateLabels(resource, deployId),
+                Labels = CreateLabels(resource, ownerId, deployId),
                 Environment = environmentVariables.Count > 0 ? environmentVariables : null,
                 IdentitySettings = ResolveIdentitySettings(resource.TargetResource),
                 SkipEgressProxy = false,
@@ -889,8 +898,8 @@ internal static class AzureSandboxContainerDeployment
         var deploymentStateManager = context.Services.GetRequiredService<IDeploymentStateManager>();
         var stateSection = await deploymentStateManager.AcquireSectionAsync(GetStateSectionName(resource), context.CancellationToken).ConfigureAwait(false);
 
-        if (string.IsNullOrWhiteSpace(stateSection.Data["SandboxId"]?.GetValue<string>()) &&
-            string.IsNullOrWhiteSpace(stateSection.Data["DiskImageId"]?.GetValue<string>()))
+        var ownerId = stateSection.Data["OwnerId"]?.GetValue<string>();
+        if (!HasRemoteDeploymentState(stateSection))
         {
             await context.ReportingStep.CompleteAsync("No sandbox deployment state found.", CompletionState.Completed, context.CancellationToken).ConfigureAwait(false);
             return;
@@ -904,7 +913,11 @@ internal static class AzureSandboxContainerDeployment
             GetRequiredStateValue(stateSection, "Location"));
 
         await DeleteExistingDeploymentAsync(context, client, scope, stateSection, throwOnError: true).ConfigureAwait(false);
-        await DeleteRemoteDeploymentsByResourceLabelAsync(context, client, scope, resource.Name, s_noExcludedIds, s_noExcludedIds, s_noExcludedIds, throwOnError: true).ConfigureAwait(false);
+        if (!string.IsNullOrWhiteSpace(ownerId))
+        {
+            await DeleteRemoteDeploymentsByResourceLabelAsync(context, client, scope, ownerId, resource.Name, s_noExcludedIds, s_noExcludedIds, s_noExcludedIds, throwOnError: true).ConfigureAwait(false);
+        }
+
         await deploymentStateManager.DeleteSectionAsync(stateSection, context.CancellationToken).ConfigureAwait(false);
     }
 
@@ -922,9 +935,7 @@ internal static class AzureSandboxContainerDeployment
         foreach (var sectionName in staleResourceNames)
         {
             var stateSection = await deploymentStateManager.AcquireSectionAsync(sectionName, context.CancellationToken).ConfigureAwait(false);
-            var sandboxId = stateSection.Data["SandboxId"]?.GetValue<string>();
-            var diskImageId = stateSection.Data["DiskImageId"]?.GetValue<string>();
-            if (string.IsNullOrWhiteSpace(sandboxId) && string.IsNullOrWhiteSpace(diskImageId))
+            if (!HasRemoteDeploymentState(stateSection))
             {
                 await deploymentStateManager.DeleteSectionAsync(stateSection, context.CancellationToken).ConfigureAwait(false);
                 continue;
@@ -941,7 +952,11 @@ internal static class AzureSandboxContainerDeployment
             await using (cleanupTask.ConfigureAwait(false))
             {
                 await DeleteExistingDeploymentAsync(context, client, scope, stateSection, throwOnError: true).ConfigureAwait(false);
-                await DeleteRemoteDeploymentsByResourceLabelAsync(context, client, scope, GetStateResourceName(stateSection, sectionName), s_noExcludedIds, s_noExcludedIds, s_noExcludedIds, throwOnError: true).ConfigureAwait(false);
+                if (stateSection.Data["OwnerId"]?.GetValue<string>() is { Length: > 0 } ownerId)
+                {
+                    await DeleteRemoteDeploymentsByResourceLabelAsync(context, client, scope, ownerId, GetStateResourceName(stateSection, sectionName), s_noExcludedIds, s_noExcludedIds, s_noExcludedIds, throwOnError: true).ConfigureAwait(false);
+                }
+
                 await deploymentStateManager.DeleteSectionAsync(stateSection, context.CancellationToken).ConfigureAwait(false);
                 await cleanupTask.CompleteAsync($"Deleted stale sandbox deployment {sectionName}", CompletionState.Completed, context.CancellationToken).ConfigureAwait(false);
             }
@@ -1062,13 +1077,14 @@ internal static class AzureSandboxContainerDeployment
         PipelineStepContext context,
         IAzureDevComputeClient client,
         AzureDevComputeResourceScope scope,
+        string ownerId,
         string resourceName,
         IReadOnlySet<string> excludedDeployIds,
         IReadOnlySet<string> excludedSandboxIds,
         IReadOnlySet<string> excludedDiskImageIds,
         bool throwOnError)
     {
-        var labelSelector = $"aspire-resource={resourceName}";
+        var labelSelector = CreateLabelSelector(ownerId, resourceName);
 
         List<AzureDevComputeSandbox> sandboxes;
         try
@@ -1081,7 +1097,7 @@ internal static class AzureSandboxContainerDeployment
             sandboxes = [];
         }
 
-        foreach (var sandbox in sandboxes.Where(sandbox => ShouldDeleteLabeledDeployment(sandbox.Id, sandbox.Labels, resourceName, excludedDeployIds, excludedSandboxIds)))
+        foreach (var sandbox in sandboxes.Where(sandbox => ShouldDeleteLabeledDeployment(sandbox.Id, sandbox.Labels, ownerId, resourceName, excludedDeployIds, excludedSandboxIds)))
         {
             await DeleteSandboxAsync(
                 context,
@@ -1103,7 +1119,7 @@ internal static class AzureSandboxContainerDeployment
             diskImages = [];
         }
 
-        foreach (var diskImage in diskImages.Where(diskImage => ShouldDeleteLabeledDeployment(diskImage.Id, diskImage.Labels, resourceName, excludedDeployIds, excludedDiskImageIds)))
+        foreach (var diskImage in diskImages.Where(diskImage => ShouldDeleteLabeledDeployment(diskImage.Id, diskImage.Labels, ownerId, resourceName, excludedDeployIds, excludedDiskImageIds)))
         {
             await DeleteDiskImageAsync(context, client, scope, diskImage.Id, throwOnError).ConfigureAwait(false);
         }
@@ -1112,11 +1128,13 @@ internal static class AzureSandboxContainerDeployment
     internal static bool ShouldDeleteLabeledDeployment(
         string id,
         IReadOnlyDictionary<string, string> labels,
+        string ownerId,
         string resourceName,
         IReadOnlySet<string> excludedDeployIds,
         IReadOnlySet<string> excludedResourceIds)
     {
-        if (!HasLabel(labels, "aspire-resource", resourceName))
+        if (!HasLabel(labels, "aspire-owner", ownerId) ||
+            !HasLabel(labels, "aspire-resource", resourceName))
         {
             return false;
         }
@@ -1129,6 +1147,9 @@ internal static class AzureSandboxContainerDeployment
         return !labels.TryGetValue("aspire-deploy", out var deployId) ||
             !excludedDeployIds.Contains(deployId);
     }
+
+    internal static string CreateLabelSelector(string ownerId, string resourceName) =>
+        $"aspire-owner={ownerId},aspire-resource={resourceName}";
 
     private static bool HasLabel(IReadOnlyDictionary<string, string> labels, string name, string value)
     {
@@ -1147,6 +1168,66 @@ internal static class AzureSandboxContainerDeployment
             ? sectionName[SandboxStateSectionPrefix.Length..]
             : sectionName;
     }
+
+    private static string GetOrCreateOwnerId(DeploymentStateSection stateSection)
+    {
+        if (stateSection.Data["OwnerId"]?.GetValue<string>() is { Length: > 0 } ownerId)
+        {
+            return ownerId;
+        }
+
+        ownerId = Guid.NewGuid().ToString("N");
+        stateSection.Data["OwnerId"] = ownerId;
+        return ownerId;
+    }
+
+    private static void SetRecoveryStateIfMissing(
+        DeploymentStateSection stateSection,
+        AzureDevComputeResourceScope scope,
+        AzureSandboxContainerResource resource)
+    {
+        stateSection.Data["SubscriptionId"] ??= scope.SubscriptionId;
+        stateSection.Data["ResourceGroup"] ??= scope.ResourceGroupName;
+        stateSection.Data["Location"] ??= scope.Region;
+        stateSection.Data["SandboxGroup"] ??= scope.SandboxGroupName;
+        stateSection.Data["ResourceName"] ??= resource.Name;
+        stateSection.Data["SourceResourceName"] ??= resource.TargetResource.Name;
+    }
+
+    internal static void ValidateDeploymentScope(DeploymentStateSection stateSection, AzureDevComputeResourceScope scope)
+    {
+        if (!HasRemoteDeploymentState(stateSection))
+        {
+            return;
+        }
+
+        var subscriptionId = stateSection.Data["SubscriptionId"]?.GetValue<string>();
+        var resourceGroup = stateSection.Data["ResourceGroup"]?.GetValue<string>();
+        var location = stateSection.Data["Location"]?.GetValue<string>();
+        var sandboxGroup = stateSection.Data["SandboxGroup"]?.GetValue<string>();
+        if (string.IsNullOrWhiteSpace(subscriptionId) ||
+            string.IsNullOrWhiteSpace(resourceGroup) ||
+            string.IsNullOrWhiteSpace(location) ||
+            string.IsNullOrWhiteSpace(sandboxGroup))
+        {
+            return;
+        }
+
+        if (!string.Equals(subscriptionId, scope.SubscriptionId, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(resourceGroup, scope.ResourceGroupName, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(location, scope.Region, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(sandboxGroup, scope.SandboxGroupName, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "The Azure sandbox group deployment scope changed while sandbox deployment state still exists. " +
+                "Run 'aspire destroy' with the previous sandbox group configuration before deploying to the new scope.");
+        }
+    }
+
+    internal static bool HasRemoteDeploymentState(DeploymentStateSection stateSection) =>
+        !string.IsNullOrWhiteSpace(stateSection.Data["OwnerId"]?.GetValue<string>()) ||
+        !string.IsNullOrWhiteSpace(stateSection.Data["SandboxId"]?.GetValue<string>()) ||
+        !string.IsNullOrWhiteSpace(stateSection.Data["DiskImageId"]?.GetValue<string>());
 
     internal static string CreateSandboxUrlSummary(string currentUrl, string? retainedUrl)
     {
