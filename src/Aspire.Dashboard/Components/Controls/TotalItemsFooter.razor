@@ -1,12 +1,15 @@
 ﻿@namespace Aspire.Dashboard.Components
 
+@* The pause warning leads the footer so it sits to the left of the result count. Placing it
+   after the count left the warning floating in the middle of an otherwise empty footer, which
+   read as misaligned rather than as part of the footer. *@
 <div class="items-footer">
-    <span class="result-count" aria-live="polite" aria-atomic="true">
-        @((MarkupString)string.Format(TotalItemCount == 1 ? SingularText : PluralText, TotalItemCount))
-    </span>
-
     @if (PauseText is not null)
     {
         <PauseWarning PauseText="@PauseText" />
     }
+
+    <span class="result-count" aria-live="polite" aria-atomic="true">
+        @((MarkupString)string.Format(TotalItemCount == 1 ? SingularText : PluralText, TotalItemCount))
+    </span>
 </div>
