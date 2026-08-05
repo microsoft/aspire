@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "UX improvement: shows Preparing dashboard bits... status during slow bundle extraction",
+  "mergedAt": "2026-08-05T17:02:22Z",
+  "number": 18985,
+  "runDate": "2026-08-05T18:30:52Z",
+  "status": "included",
+  "title": "Show status while preparing dashboard bundle"
+}

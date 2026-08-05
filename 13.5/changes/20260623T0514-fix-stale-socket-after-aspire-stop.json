@@ -6,7 +6,9 @@
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "The Aspire CLI now deletes the backchannel socket file when `aspire stop` terminates an AppHost, preventing subsequent commands like `aspire add` from failing with connection timeouts when trying to reconnect to the stopped process.",
-  "docsPrs": [],
+  "docsPrs": [
+    1283
+  ],
   "docsRequired": false,
   "emoji": "🧹",
   "firstMergedAt": "2026-06-23T05:14:12Z",

@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The VS Code Aspire panel now renders AppHosts incrementally as they are discovered via streaming, rather than waiting for all discovery to complete. This eliminates the empty-workspace flash on refresh and provides a more responsive experience in repositories with many AppHosts.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "⚡",
+  "firstMergedAt": "2026-08-05T17:09:24Z",
+  "lastMergedAt": "2026-08-05T17:09:24Z",
+  "name": "Incremental AppHost discovery in VS Code panel",
+  "owner": "ellahathaway",
+  "prs": [
+    18443
+  ]
+}

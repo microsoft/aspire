@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Language packages decoupled from Aspire.Hosting internals, enables third-party language support",
+  "mergedAt": "2026-08-05T18:06:56Z",
+  "number": 18918,
+  "runDate": "2026-08-05T18:30:52Z",
+  "status": "included",
+  "title": "Decouple Aspire.Hosting.Dotnet from Aspire.Hosting internals"
+}

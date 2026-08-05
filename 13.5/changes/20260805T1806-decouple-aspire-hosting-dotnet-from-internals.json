@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Language packages (Dotnet, Go, Python, JavaScript) are now fully decoupled from Aspire.Hosting internals, with InternalsVisibleTo dependencies removed. This enables independent evolution of language packages and opens the door for third-party language support in Aspire.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔓",
+  "firstMergedAt": "2026-08-05T18:06:56Z",
+  "lastMergedAt": "2026-08-05T18:06:56Z",
+  "name": "Language hosting packages decoupled from Aspire.Hosting internals",
+  "owner": "karolz-ms",
+  "prs": [
+    18918
+  ]
+}

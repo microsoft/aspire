@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Matched to fix-stale-socket-after-aspire-stop (PR #18296)",
+  "mergedAt": "2026-08-05T16:15:33Z",
+  "number": 1283,
+  "runDate": "2026-08-05T18:30:52Z",
+  "status": "included",
+  "title": "[docs] Document aspire stop socket cleanup for detached AppHosts"
+}

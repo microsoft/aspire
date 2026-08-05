@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "VS Code panel now renders AppHosts incrementally as discovered via streaming",
+  "mergedAt": "2026-08-05T17:09:24Z",
+  "number": 18443,
+  "runDate": "2026-08-05T18:30:52Z",
+  "status": "included",
+  "title": "Use incremental AppHost discovery in the extension"
+}

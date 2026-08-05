@@ -1,14 +1,16 @@
 {
   "area": "AppHost",
-  "areaEmoji": "🏠",
+  "areaEmoji": "\ud83c\udfe0",
   "backport": false,
   "breaking": false,
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "Session-scoped resources marked with WithExplicitStart() no longer run their execution configuration callbacks (arguments, environment variables, certificates) until the user manually starts them. Previously these callbacks ran at AppHost startup, which could prompt for user input prematurely.",
-  "docsPrs": [],
+  "docsPrs": [
+    1194
+  ],
   "docsRequired": false,
-  "emoji": "⏸️",
+  "emoji": "\u23f8\ufe0f",
   "firstMergedAt": "2026-06-02T18:59:23Z",
   "lastMergedAt": "2026-06-02T18:59:23Z",
   "name": "Defer explicit-start resource configuration",
