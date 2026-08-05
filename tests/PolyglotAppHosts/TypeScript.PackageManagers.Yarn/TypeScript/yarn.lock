@@ -2,7 +2,7 @@
 # Manual changes might be lost - proceed with caution!
 
 __metadata:
-  version: 9
+  version: 10
   cacheKey: 10c0
 
 "@esbuild/aix-ppc64@npm:0.28.1":
@@ -551,7 +551,7 @@ __metadata:
     undici: "npm:^6.25.0"
     which: "npm:^6.0.0"
   bin:
-    node-gyp: bin/node-gyp.js
+    node-gyp: ./bin/node-gyp.js
   checksum: 10c0/9d9032b405cbe42f72a105259d9eb679376470c102df4a2dbaa51e07d59bf741dcffb85897087ea9d8318b9cabb824a8978af51508ae142f0239ae1e6a3c2329
   languageName: node
   linkType: hard
@@ -571,7 +571,7 @@ __metadata:
     touch: "npm:^3.1.0"
     undefsafe: "npm:^2.0.5"
   bin:
-    nodemon: bin/nodemon.js
+    nodemon: ./bin/nodemon.js
   checksum: 10c0/074f2056051a148ad11cda0d6c3f905bdef93a878792385f16e1dff0c63dcf07f23ebe1ab3763dca7314d0266e12129f066070545d817a205ee050a22eff50b0
   languageName: node
   linkType: hard
@@ -706,7 +706,7 @@ __metadata:
   version: 3.1.1
   resolution: "touch@npm:3.1.1"
   bin:
-    nodetouch: bin/nodetouch.js
+    nodetouch: ./bin/nodetouch.js
   checksum: 10c0/d2e4d269a42c846a22a29065b9af0b263de58effc85a1764bb7a2e8fc4b47700e9e2fcbd7eb1f5bffbb7c73d860f93600cef282b93ddac8f0b62321cb498b36e
   languageName: node
   linkType: hard
@@ -730,8 +730,8 @@ __metadata:
   version: 5.9.3
   resolution: "typescript@npm:5.9.3"
   bin:
-    tsc: bin/tsc
-    tsserver: bin/tsserver
+    tsc: ./bin/tsc
+    tsserver: ./bin/tsserver
   checksum: 10c0/6bd7552ce39f97e711db5aa048f6f9995b53f1c52f7d8667c1abdc1700c68a76a308f579cd309ce6b53646deb4e9a1be7c813a93baaf0a28ccd536a30270e1c5
   languageName: node
   linkType: hard
@@ -740,8 +740,8 @@ __metadata:
   version: 5.9.3
   resolution: "typescript@patch:typescript@npm%3A5.9.3#optional!builtin<compat/typescript>::version=5.9.3&hash=5786d5"
   bin:
-    tsc: bin/tsc
-    tsserver: bin/tsserver
+    tsc: ./bin/tsc
+    tsserver: ./bin/tsserver
   checksum: 10c0/ad09fdf7a756814dce65bc60c1657b40d44451346858eea230e10f2e95a289d9183b6e32e5c11e95acc0ccc214b4f36289dcad4bf1886b0adb84d711d336a430
   languageName: node
   linkType: hard
@@ -780,7 +780,7 @@ __metadata:
   dependencies:
     isexe: "npm:^4.0.0"
   bin:
-    node-which: bin/which.js
+    node-which: ./bin/which.js
   checksum: 10c0/7e710e54ea36d2d6183bee2f9caa27a3b47b9baf8dee55a199b736fcf85eab3b9df7556fca3d02b50af7f3dfba5ea3a45644189836df06267df457e354da66d5
   languageName: node
   linkType: hard

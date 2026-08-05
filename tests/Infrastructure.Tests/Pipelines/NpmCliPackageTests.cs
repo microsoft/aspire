@@ -413,7 +413,7 @@ public sealed class NpmCliPackageTests : IDisposable
         Assert.Contains("ARG NPM_REGISTRY=https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/", dockerfile);
         Assert.Contains("npm install --global --force --registry \"${NPM_REGISTRY}\"", dockerfile);
         Assert.Contains("pnpm@10.0.0", dockerfile);
-        Assert.Contains("@yarnpkg/cli-dist@4.14.1", dockerfile);
+        Assert.Contains("@yarnpkg/cli-dist@4.18.0", dockerfile);
         Assert.DoesNotContain("corepack prepare", dockerfile);
     }
 

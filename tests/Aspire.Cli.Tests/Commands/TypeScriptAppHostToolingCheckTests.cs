@@ -23,7 +23,7 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
     [Theory]
     [InlineData("npm@10.5.0", nameof(TypeScriptAppHostToolchain.Npm))]
     [InlineData("bun@1.2.0", nameof(TypeScriptAppHostToolchain.Bun))]
-    [InlineData("yarn@4.14.1", nameof(TypeScriptAppHostToolchain.Yarn))]
+    [InlineData("yarn@4.18.0", nameof(TypeScriptAppHostToolchain.Yarn))]
     [InlineData("pnpm@10.12.1", nameof(TypeScriptAppHostToolchain.Pnpm))]
     public async Task CheckAsync_ReturnsPass_WhenConfiguredToolchainIsAvailable(string packageManagerSpec, string toolchainName)
     {
@@ -52,7 +52,7 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
     [Theory]
     [InlineData("npm@10.5.0", nameof(TypeScriptAppHostToolchain.Npm), "Node.js", "https://nodejs.org/en/download")]
     [InlineData("bun@1.2.0", nameof(TypeScriptAppHostToolchain.Bun), "Bun", "https://bun.sh/docs/installation")]
-    [InlineData("yarn@4.14.1", nameof(TypeScriptAppHostToolchain.Yarn), "Yarn", "https://yarnpkg.com/getting-started/install")]
+    [InlineData("yarn@4.18.0", nameof(TypeScriptAppHostToolchain.Yarn), "Yarn", "https://yarnpkg.com/getting-started/install")]
     [InlineData("pnpm@10.12.1", nameof(TypeScriptAppHostToolchain.Pnpm), "pnpm", "https://pnpm.io/installation")]
     public async Task CheckAsync_ReturnsFail_WhenConfiguredToolchainIsMissing(
         string packageManagerSpec,
@@ -138,13 +138,33 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
 
         var result = Assert.Single(results);
         Assert.Equal(EnvironmentCheckStatus.Fail, result.Status);
-        Assert.Equal(TypeScriptAppHostToolingCheck.YarnClassicCheckName, result.Name);
+        Assert.Equal(TypeScriptAppHostToolingCheck.YarnVersionCheckName, result.Name);
         Assert.Equal(EnvironmentCheckCategories.Environment, result.Category);
         Assert.Equal("https://yarnpkg.com/getting-started/install", result.Link);
-        Assert.Equal("TypeScript AppHost does not support Yarn Classic.", result.Message);
-        Assert.Contains("Yarn Classic is not supported", result.Details ?? string.Empty);
+        Assert.Equal("TypeScript AppHost requires Yarn 4.18 or later.", result.Message);
+        Assert.Contains("Yarn 4.18.0 or later is required", result.Details ?? string.Empty);
         Assert.Contains("yarn@1.22.22", result.Details ?? string.Empty);
-        Assert.Contains("Yarn 4", result.Fix ?? string.Empty);
+        Assert.Contains("Yarn 4.18", result.Fix ?? string.Empty);
+    }
+
+    [Fact]
+    public async Task CheckAsync_ReturnsFail_WhenNativeTypeScriptUsesUnsupportedYarn()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateTypeScriptAppHost(
+            workspace,
+            """{ "packageManager": "yarn@4.17.1", "devDependencies": { "@typescript/native": "npm:typescript@^7.0.2" } }""");
+
+        var check = CreateCheck(workspace, appHostFile, commandResolver: command => $"/usr/bin/{command}");
+
+        var results = await check.CheckAsync().DefaultTimeout();
+
+        var result = Assert.Single(results);
+        Assert.Equal(EnvironmentCheckStatus.Fail, result.Status);
+        Assert.Equal(TypeScriptAppHostToolingCheck.YarnVersionCheckName, result.Name);
+        Assert.Equal("TypeScript AppHost requires Yarn 4.18 or later.", result.Message);
+        Assert.Contains("yarn@4.17.1", result.Details ?? string.Empty);
+        Assert.Contains("Yarn 4.18", result.Fix ?? string.Empty);
     }
 
     [Fact]
@@ -162,7 +182,7 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
 
         var result = Assert.Single(results);
         Assert.Equal(EnvironmentCheckStatus.Fail, result.Status);
-        Assert.Equal(TypeScriptAppHostToolingCheck.YarnClassicCheckName, result.Name);
+        Assert.Equal(TypeScriptAppHostToolingCheck.YarnVersionCheckName, result.Name);
         Assert.Equal(EnvironmentCheckCategories.Environment, result.Category);
         Assert.Equal("https://yarnpkg.com/getting-started/install", result.Link);
         Assert.Contains("yarn.lock", result.Details ?? string.Empty);

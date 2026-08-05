@@ -113,7 +113,7 @@ internal static class TypeScriptAppHostToolchainTestHelpers
         NormalizeToolchain(toolchain) switch
         {
             "bun" => "bun@1.2.0",
-            "yarn" => "yarn@4.14.1",
+            "yarn" => "yarn@4.18.0",
             "pnpm" => "pnpm@10.0.0",
             "npm" => "npm@10.0.0",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, "Unsupported TypeScript AppHost toolchain.")

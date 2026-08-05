@@ -5,6 +5,7 @@ using System.Security;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Utils;
+using Aspire.Shared;
 using Aspire.TypeSystem;
 using Microsoft.Extensions.Logging;
 
@@ -28,8 +29,13 @@ internal static class TypeScriptAppHostToolchainResolver
     private const string YarnConfigFileName = ".yarnrc.yml";
     private const string PackageLockFileName = "package-lock.json";
     private const string PnpmLockFileName = "pnpm-lock.yaml";
+    private const string MinimumSupportedYarnVersion = "4.18.0";
+    private const string NativeTypeScriptPackageName = "@typescript/native";
+    private const string TypeScriptPackageName = "typescript";
+    private const string TypeScript6AliasPrefix = "npm:@typescript/typescript6@";
     // Disposable incremental compiler state used to speed up subsequent type checks.
     private const string TypeCheckTsBuildInfoFileName = "./node_modules/.tmp/tsconfig.apphost.typecheck.tsbuildinfo";
+    private static readonly string[] s_dependencySectionNames = ["dependencies", "devDependencies"];
 
     public static bool IsTypeScriptLanguage(LanguageInfo? language)
     {
@@ -78,14 +84,25 @@ internal static class TypeScriptAppHostToolchainResolver
             {
                 if (IsYarnClassicLockFile(yarnLockFilePath))
                 {
-                    throw CreateYarnClassicNotSupportedException($"the Yarn lockfile at {yarnLockFilePath}");
+                    throw CreateYarnVersionNotSupportedException($"the Yarn lockfile at {yarnLockFilePath}");
+                }
+
+                if (RequiresYarnTypeScriptAliasFixes(candidateDirectory))
+                {
+                    throw CreateYarnVersionMetadataRequiredException(yarnLockFilePath, candidateDirectory);
                 }
 
                 return CreateLockFileResolution(TypeScriptAppHostToolchain.Yarn, YarnLockFileName, candidateDirectory);
             }
 
-            if (File.Exists(Path.Combine(candidateDirectory.FullName, YarnConfigFileName)))
+            var yarnConfigFilePath = Path.Combine(candidateDirectory.FullName, YarnConfigFileName);
+            if (File.Exists(yarnConfigFilePath))
             {
+                if (RequiresYarnTypeScriptAliasFixes(candidateDirectory))
+                {
+                    throw CreateYarnVersionMetadataRequiredException(yarnConfigFilePath, candidateDirectory);
+                }
+
                 return CreateLockFileResolution(TypeScriptAppHostToolchain.Yarn, YarnConfigFileName, candidateDirectory);
             }
 
@@ -350,9 +367,11 @@ internal static class TypeScriptAppHostToolchainResolver
             var packageManagerName = packageManager.Split('@', 2)[0];
             if (TryParseToolchain(packageManagerName, out toolchain))
             {
-                if (toolchain == TypeScriptAppHostToolchain.Yarn && IsYarnClassicPackageManager(packageManager))
+                if (toolchain == TypeScriptAppHostToolchain.Yarn &&
+                    (IsYarnClassicPackageManager(packageManager) ||
+                     RequiresYarnTypeScriptAliasFixes(packageJson) && IsUnsupportedYarnPackageManager(packageManager)))
                 {
-                    throw CreateYarnClassicNotSupportedException($"'{packageManager}' in {packageJsonPath}");
+                    throw CreateYarnVersionNotSupportedException($"'{packageManager}' in {packageJsonPath}");
                 }
 
                 reason = $"packageManager '{packageManager}' found in {packageJsonPath}";
@@ -384,7 +403,7 @@ internal static class TypeScriptAppHostToolchainResolver
         return result.HasValue;
     }
 
-    private static bool IsYarnClassicPackageManager(string packageManager)
+    private static bool IsUnsupportedYarnPackageManager(string packageManager)
     {
         const string yarnPackageManagerPrefix = "yarn@";
 
@@ -394,15 +413,79 @@ internal static class TypeScriptAppHostToolchainResolver
         }
 
         var version = packageManager[yarnPackageManagerPrefix.Length..];
-        return version.Length > 0 &&
-            version[0] == '1' &&
-            (version.Length == 1 || !char.IsAsciiDigit(version[1]));
+        return !NpmVersionHelper.TryParseNpmVersion(version, out var yarnVersion)
+            || !NpmVersionHelper.TryParseNpmVersion(MinimumSupportedYarnVersion, out var minimumVersion)
+            || Semver.SemVersion.ComparePrecedence(yarnVersion, minimumVersion) < 0;
     }
 
-    private static YarnClassicNotSupportedException CreateYarnClassicNotSupportedException(string upgradeTarget)
+    private static bool IsYarnClassicPackageManager(string packageManager)
     {
-        return new YarnClassicNotSupportedException(
-            $"Yarn Classic is not supported for TypeScript AppHosts. Upgrade {upgradeTarget} to Yarn 4 or later, or use npm, pnpm, or Bun.");
+        const string yarnPackageManagerPrefix = "yarn@";
+
+        return packageManager.StartsWith(yarnPackageManagerPrefix, StringComparison.OrdinalIgnoreCase)
+            && NpmVersionHelper.TryParseNpmVersion(packageManager[yarnPackageManagerPrefix.Length..], out var yarnVersion)
+            && yarnVersion.Major == 1;
+    }
+
+    private static bool RequiresYarnTypeScriptAliasFixes(DirectoryInfo directory)
+    {
+        var packageJsonPath = Path.Combine(directory.FullName, PackageJsonFileName);
+        if (!File.Exists(packageJsonPath))
+        {
+            return false;
+        }
+
+        try
+        {
+            var packageJson = JsonNode.Parse(File.ReadAllText(packageJsonPath), documentOptions: ConfigurationHelper.ParseOptions) as JsonObject;
+            return packageJson is not null && RequiresYarnTypeScriptAliasFixes(packageJson);
+        }
+        catch (Exception ex) when (ex is JsonException or IOException
+            or UnauthorizedAccessException or SecurityException
+            or NotSupportedException)
+        {
+            return false;
+        }
+    }
+
+    private static bool RequiresYarnTypeScriptAliasFixes(JsonObject packageJson)
+    {
+        // Yarn 4.18 fixed both the optional TypeScript compatibility patch and direct-dependency binary
+        // selection for the recommended side-by-side TypeScript 6/7 aliases. Older AppHosts that only
+        // reference the JavaScript TypeScript package do not need those fixes and remain compatible.
+        return HasDependency(packageJson, NativeTypeScriptPackageName)
+            || GetDependencyVersion(packageJson, TypeScriptPackageName)?.StartsWith(TypeScript6AliasPrefix, StringComparison.OrdinalIgnoreCase) is true;
+    }
+
+    private static bool HasDependency(JsonObject packageJson, string packageName)
+        => GetDependencyVersion(packageJson, packageName) is not null;
+
+    private static string? GetDependencyVersion(JsonObject packageJson, string packageName)
+    {
+        foreach (var sectionName in s_dependencySectionNames)
+        {
+            if (packageJson[sectionName]?[packageName] is JsonValue value &&
+                value.TryGetValue<string>(out var version))
+            {
+                return version;
+            }
+        }
+
+        return null;
+    }
+
+    private static YarnVersionNotSupportedException CreateYarnVersionNotSupportedException(string upgradeTarget)
+    {
+        return new YarnVersionNotSupportedException(
+            $"Yarn {MinimumSupportedYarnVersion} or later is required for TypeScript AppHosts. Upgrade {upgradeTarget}, or use npm, pnpm, or Bun.");
+    }
+
+    private static YarnVersionNotSupportedException CreateYarnVersionMetadataRequiredException(string markerPath, DirectoryInfo candidateDirectory)
+    {
+        var packageJsonPath = Path.Combine(candidateDirectory.FullName, PackageJsonFileName);
+        return new YarnVersionNotSupportedException(
+            $"Yarn {MinimumSupportedYarnVersion} or later is required for TypeScript AppHosts. " +
+            $"Set \"packageManager\": \"yarn@{MinimumSupportedYarnVersion}\" in {packageJsonPath} so Aspire can verify the Yarn version selected for {markerPath}, or use npm, pnpm, or Bun.");
     }
 
     private static bool IsYarnClassicLockFile(string yarnLockFilePath)

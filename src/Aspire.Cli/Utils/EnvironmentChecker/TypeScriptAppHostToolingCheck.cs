@@ -9,7 +9,7 @@ namespace Aspire.Cli.Utils.EnvironmentChecker;
 
 internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
 {
-    internal const string YarnClassicCheckName = "typescript-apphost-yarn-classic";
+    internal const string YarnVersionCheckName = "typescript-apphost-yarn-version";
     internal const string ToolsCheckName = "typescript-apphost-tools";
 
     private readonly IProjectLocator _projectLocator;
@@ -60,18 +60,18 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
         {
             toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, _environment, _logger);
         }
-        catch (YarnClassicNotSupportedException ex)
+        catch (YarnVersionNotSupportedException ex)
         {
             return
             [
                 new EnvironmentCheckResult
                 {
                     Category = EnvironmentCheckCategories.Environment,
-                    Name = YarnClassicCheckName,
+                    Name = YarnVersionCheckName,
                     Status = EnvironmentCheckStatus.Fail,
-                    Message = "TypeScript AppHost does not support Yarn Classic.",
+                    Message = "TypeScript AppHost requires Yarn 4.18 or later.",
                     Details = ex.Message,
-                    Fix = "Upgrade to Yarn 4 or later, or switch to npm, pnpm, or Bun, then rerun 'aspire doctor'.",
+                    Fix = "Upgrade to Yarn 4.18 or later, or switch to npm, pnpm, or Bun, then rerun 'aspire doctor'.",
                     Link = "https://yarnpkg.com/getting-started/install",
                     Metadata = new JsonObject
                     {
