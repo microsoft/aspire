@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES002
+#pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIREAZURE001
 #pragma warning disable ASPIREAZURE003
 
@@ -13,6 +14,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Utils;
 using Azure.Core;
 using Microsoft.Extensions.DependencyInjection;
@@ -87,6 +89,7 @@ public class AzureSandboxesTests
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         var container = builder.AddContainer("frontend", "mcr.microsoft.com/dotnet/runtime-deps", "10.0");
         var configureCalled = false;
+        var buildOptionsCallbackCount = container.Resource.Annotations.OfType<ContainerBuildOptionsCallbackAnnotation>().Count();
 
         container.PublishAsAzureSandbox(sandboxGroup, options => configureCalled = true);
 
@@ -96,6 +99,7 @@ public class AzureSandboxesTests
 
         Assert.Null(computeResource.GetDeploymentTargetAnnotation(sandboxGroup.Resource));
         Assert.False(configureCalled);
+        Assert.Equal(buildOptionsCallbackCount, container.Resource.Annotations.OfType<ContainerBuildOptionsCallbackAnnotation>().Count());
     }
 
     [Fact]
@@ -970,15 +974,33 @@ public class AzureSandboxesTests
     }
 
     [Fact]
-    public async Task SandboxGroupAddsDeploymentTargetForProject()
+    public async Task SandboxGroupAddsDeploymentTargetsAndBuildOptionsForProjects()
     {
         using var tempDir = new TemporaryDirectory();
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
-        builder.AddProject<TestProject>("frontend", launchProfileName: null)
+        var frontend = builder.AddProject<TestProject>("frontend", launchProfileName: null)
             .WithHttpEndpoint(targetPort: 5000)
-            .WithExternalHttpEndpoints();
+            .WithExternalHttpEndpoints()
+            .WithContainerBuildOptions(options =>
+            {
+                options.Destination = ContainerImageDestination.Archive;
+                options.OutputPath = "frontend.tar";
+                options.ImageFormat = ContainerImageFormat.Oci;
+                options.TargetPlatform = ContainerTargetPlatform.LinuxArm64;
+            });
+        var backend = builder.AddProject<TestProject>("backend", launchProfileName: null)
+            .WithContainerBuildOptions(options =>
+            {
+                options.Destination = ContainerImageDestination.Archive;
+                options.OutputPath = "backend.tar";
+                options.ImageFormat = ContainerImageFormat.Oci;
+                options.TargetPlatform = ContainerTargetPlatform.LinuxArm64;
+            })
+            .PublishAsAzureSandbox(sandboxGroup);
+        var frontendCallbackCount = frontend.Resource.Annotations.OfType<ContainerBuildOptionsCallbackAnnotation>().Count();
+        var backendCallbackCount = backend.Resource.Annotations.OfType<ContainerBuildOptionsCallbackAnnotation>().Count();
 
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -987,7 +1009,47 @@ public class AzureSandboxesTests
         Assert.Empty(model.Resources.OfType<AzureSandboxContainerResource>());
 
         var computeResource = Assert.Single(model.GetComputeResources(), resource => resource.Name == "frontend");
+        var explicitComputeResource = Assert.Single(model.GetComputeResources(), resource => resource.Name == "backend");
         Assert.Same(sandboxGroup.Resource, computeResource.GetComputeEnvironment());
+        Assert.Same(sandboxGroup.Resource, explicitComputeResource.GetComputeEnvironment());
+        Assert.Equal(frontendCallbackCount + 1, computeResource.Annotations.OfType<ContainerBuildOptionsCallbackAnnotation>().Count());
+        Assert.Equal(backendCallbackCount + 1, explicitComputeResource.Annotations.OfType<ContainerBuildOptionsCallbackAnnotation>().Count());
+
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+        Assert.Equal(frontendCallbackCount + 1, computeResource.Annotations.OfType<ContainerBuildOptionsCallbackAnnotation>().Count());
+        Assert.Equal(backendCallbackCount + 1, explicitComputeResource.Annotations.OfType<ContainerBuildOptionsCallbackAnnotation>().Count());
+
+        var buildOptions = new ContainerBuildOptionsCallbackContext(
+            computeResource,
+            app.Services,
+            NullLogger.Instance,
+            TestContext.Current.CancellationToken,
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish));
+        foreach (var annotation in computeResource.Annotations.OfType<ContainerBuildOptionsCallbackAnnotation>())
+        {
+            await annotation.Callback(buildOptions);
+        }
+
+        Assert.Equal(ContainerImageDestination.Registry, buildOptions.Destination);
+        Assert.Null(buildOptions.OutputPath);
+        Assert.Equal(ContainerImageFormat.Docker, buildOptions.ImageFormat);
+        Assert.Equal(ContainerTargetPlatform.LinuxAmd64, buildOptions.TargetPlatform);
+
+        var explicitBuildOptions = new ContainerBuildOptionsCallbackContext(
+            explicitComputeResource,
+            app.Services,
+            NullLogger.Instance,
+            TestContext.Current.CancellationToken,
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish));
+        foreach (var annotation in explicitComputeResource.Annotations.OfType<ContainerBuildOptionsCallbackAnnotation>())
+        {
+            await annotation.Callback(explicitBuildOptions);
+        }
+
+        Assert.Equal(ContainerImageDestination.Registry, explicitBuildOptions.Destination);
+        Assert.Null(explicitBuildOptions.OutputPath);
+        Assert.Equal(ContainerImageFormat.Docker, explicitBuildOptions.ImageFormat);
+        Assert.Equal(ContainerTargetPlatform.LinuxAmd64, explicitBuildOptions.TargetPlatform);
 
         var deploymentTarget = computeResource.GetDeploymentTargetAnnotation(sandboxGroup.Resource);
         Assert.NotNull(deploymentTarget);
