@@ -49,7 +49,18 @@ public class ContainerRuntimeBaseTests
 
         Assert.Collection(
             processRunner.ArgumentLists,
-            arguments => Assert.Equal(["image", "inspect", imageName, "--format", "{{json .Config}}"], arguments),
+            arguments =>
+            {
+                Assert.Equal(
+                    [
+                        "image",
+                        "inspect",
+                        imageName,
+                        "--format",
+                        """{"Entrypoint":{{json .Config.Entrypoint}},"Cmd":{{json .Config.Cmd}},"WorkingDir":{{json .Config.WorkingDir}}}"""
+                    ],
+                    arguments);
+            },
             arguments => Assert.Equal(["manifest", "inspect", "--verbose", imageName], arguments));
     }
 
@@ -78,6 +89,7 @@ public class ContainerRuntimeBaseTests
             [
                 """{ "schemaVersion": 2, "config": { "digest": "sha256:config" }, "layers": [] }"""
             ]),
+            new ProcessResult(0),
             new ProcessResult(0,
             [
                 """{ "Digest": "sha256:linux-amd64", "Os": "linux", "Architecture": "amd64" }"""
@@ -98,6 +110,7 @@ public class ContainerRuntimeBaseTests
         Assert.Collection(
             processRunner.ArgumentLists,
             arguments => Assert.Equal(["manifest", "inspect", $"docker://{maliciousImageName}"], arguments),
+            arguments => Assert.Equal(["pull", $"docker://{maliciousImageName}"], arguments),
             arguments => Assert.Equal(["image", "inspect", "--format", "{{json .}}", maliciousImageName], arguments));
     }
 

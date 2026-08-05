@@ -101,18 +101,19 @@ public static class AzureSandboxesExtensions
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureSandboxGroupResource> sandboxGroup,
         AzureSandboxOptions? options = null)
-        where T : IResource, IComputeResource
+        where T : IComputeResource
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(sandboxGroup);
+
+        var sandboxOptions = options ?? new AzureSandboxOptions();
+        ValidateSandboxOptions(sandboxOptions);
 
         if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
         {
             return builder;
         }
 
-        var sandboxOptions = options ?? new AzureSandboxOptions();
-        ValidateSandboxOptions(sandboxOptions);
         var copiedOptions = CopyAzureSandboxOptions(sandboxOptions);
 
         return builder
@@ -136,16 +137,11 @@ public static class AzureSandboxesExtensions
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureSandboxGroupResource> sandboxGroup,
         Action<AzureSandboxOptions> configure)
-        where T : IResource, IComputeResource
+        where T : IComputeResource
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(sandboxGroup);
         ArgumentNullException.ThrowIfNull(configure);
-
-        if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
-        {
-            return builder;
-        }
 
         var options = new AzureSandboxOptions();
         configure(options);
@@ -204,7 +200,10 @@ public static class AzureSandboxesExtensions
         ArgumentNullException.ThrowIfNull(identity);
 
         builder.Resource.ManagedIdentityType = ManagedServiceIdentityType.UserAssigned;
-        builder.Resource.UserAssignedIdentities.Add(identity.Resource);
+        if (!builder.Resource.UserAssignedIdentities.Contains(identity.Resource))
+        {
+            builder.Resource.UserAssignedIdentities.Add(identity.Resource);
+        }
         return builder;
     }
 
@@ -274,6 +273,22 @@ public static class AzureSandboxesExtensions
             options.PublicEndpointReadyTimeout,
             nameof(AzureSandboxOptions.PublicEndpointReadyTimeout),
             TimeSpan.FromSeconds(int.MaxValue));
+
+        if (options.AutoSuspendEnabled is null &&
+            (options.AutoSuspendInterval is not null || options.AutoSuspendMode is not null))
+        {
+            throw new ArgumentException(
+                $"{nameof(AzureSandboxOptions.AutoSuspendEnabled)} must be set when configuring auto-suspend interval or mode.",
+                nameof(options));
+        }
+
+        if (options.AutoDeleteEnabled is null &&
+            (options.AutoDeleteInterval is not null || options.AutoDeleteTrigger is not null))
+        {
+            throw new ArgumentException(
+                $"{nameof(AzureSandboxOptions.AutoDeleteEnabled)} must be set when configuring auto-delete interval or trigger.",
+                nameof(options));
+        }
 
         if (options.Endpoints is null)
         {
