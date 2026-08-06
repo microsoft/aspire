@@ -226,11 +226,27 @@ If any condition fails, the controller rejects the apply before activation. Diag
 - multiple relevant paths cannot be covered atomically; or
 - the selected DCP version does not advertise the required capability.
 
-`list-resources` reports eligible faults and actionable ineligibility reasons. It does not expose proxy topology as authoring choices. A developer should never need to understand listeners, directed references, or address allocation to apply a fault.
+`list-resources` reports eligible faults and actionable ineligibility reasons so a developer does not need to guess resource names or understand listeners, directed references, or address allocation. Each row shows:
+
+| Column | Purpose |
+| --- | --- |
+| Resource name | The exact identifier to use in `resource` (and, once shipped, `from`) |
+| Resource type | For example project, container, or `AzureCosmosDBContainerResource` |
+| Parent hierarchy | The account -> database -> container chain, when the resource has one |
+| Supported faults | Faults DCP can enforce unambiguously for this resource today |
+| Eligibility reason | Why the resource is eligible, or the specific actionable reason it is not |
+
+For example:
+
+| Resource name | Resource type | Parent hierarchy | Supported faults | Eligibility reason |
+| --- | --- | --- | --- | --- |
+| `inventory` | Project | — | latency, httpStatus | Eligible |
+| `carts` | `AzureCosmosDBContainerResource` | `cosmos` -> `shop-db` -> `carts` | (Cosmos profile, deferred) | Modeled with `AddContainer`; Gateway HTTPS emulator |
+| `legacy-orders` | Container | — | — | Ineligible: some container traffic bypasses DCP |
 
 Phase 0 must census representative and playground resources and record eligibility reasons. Low coverage should become explicit roadmap evidence, not an excuse to expose proxy topology in the v1 contract.
 
-For a future Cosmos profile, the existing `resource` field may name an `AzureCosmosDBResource`, `AzureCosmosDBDatabaseResource`, or `AzureCosmosDBContainerResource`. No duplicate database or container string fields are added. `"resource": "carts"` selects the modeled container resource named `carts`, including its public parent and logical container identity.
+For a future Cosmos profile, the same `resource` field may instead name an `AzureCosmosDBResource`, `AzureCosmosDBDatabaseResource`, or `AzureCosmosDBContainerResource` — see [How resource selection works](#how-resource-selection-works) for the account/database/container scoping table. No duplicate database or container string fields are added; `"resource": "carts"` selects the modeled container resource named `carts`, including its public parent and logical container identity.
 
 The first credible target is a modeled Cosmos emulator resource in Gateway HTTPS mode. Direct/TCP (RNTBD) bypasses that gateway; real accounts, Direct clients, and consumers whose connection mode cannot be proven are ineligible and must fail loudly rather than no-op. EF Core may use containers that are not modeled as `AzureCosmosDBContainerResource`. `list-resources` must warn about that gap, and container-scoped selection requires the AppHost to model the container with `AddContainer`.
 
@@ -316,6 +332,19 @@ Every request to `inventory` receives two seconds of added latency until the pol
 
 Every request to `orders` receives the protocol-correct synthetic response until the policy is removed.
 
+### How resource selection works
+
+Every identifier that can appear in a policy — the Phase 1 `resource` field and the deferred `from` field — is an Aspire app-model resource name: the name assigned when the resource was added in the AppHost, for example via `AddProject`, `AddContainer`, or `AddAzureCosmosDB(...).AddDatabase(...).AddContainer(...)`. The controller resolves that name by resource type and by the parent/child relationships already recorded in the Aspire application model. It is never a DNS name, an Azure physical resource name, a proxy listener or endpoint address, or an arbitrary string the policy author invents.
+
+| Resource type named by `resource` | Fault scope |
+| --- | --- |
+| Ordinary project or container resource | Faults all inbound traffic to that one downstream resource |
+| `AzureCosmosDBResource` (account) | Future Cosmos profile scope: every modeled database and container under that account |
+| `AzureCosmosDBDatabaseResource` | Every modeled container under that database |
+| `AzureCosmosDBContainerResource` | That one modeled container |
+
+Physical Azure database and container names are derived from the resource's model properties and its account -> database -> container parent chain at execution time. Authors name the Aspire resource once; they never duplicate the physical database or container name in policy.
+
 ### Cosmos container write throttling (deferred)
 
 Assume the AppHost models a Cosmos container with `AddContainer("carts", ...)`. The policy's `resource` field selects that `AzureCosmosDBContainerResource`:
@@ -331,11 +360,36 @@ Assume the AppHost models a Cosmos container with `AddContainer("carts", ...)`. 
 }
 ```
 
-This schema is illustrative and invalid in Phase 1. `from` optionally selects the caller side of an existing AppHost reference; omitted `from` retains resource-wide behavior. The field is named `from`, not `source`, because Aspire uses source for the referenced or producing resource. `operations` is provisional and Cosmos-profile-specific, initially limited to `read`, `write`, and `query`; omitted `operations` means all operations. It ships only if Gateway capture proves that classification from URI, method, and headers without request-body parsing. If body parsing is required, drop `operations` and retain container-scope-only policy. Point-operation verbs may be added only after evidence justifies them. `from` and `operations` remain orthogonal.
+This schema is illustrative and invalid in Phase 1. The table below labels each field:
 
-In this example, `carts` specifically names the modeled Cosmos container—not the Cosmos account or database. More generally, `resource` may name an existing Aspire Cosmos account, database, or container resource to select that scope. Authors do not repeat raw Cosmos database or container names in policy. The Aspire-side Cosmos profile compiles the typed resource and operation selectors to an internal method/path/header matcher and a protocol-correct response template. Raw HTTP paths, methods, headers, and response details remain internal to the profile/data-plane contract; DCP stays generic.
+| Field | Phase 1 or deferred | Meaning |
+| --- | --- | --- |
+| `resource` | Phase 1 | Required downstream Aspire resource name; see [How resource selection works](#how-resource-selection-works) |
+| `fault` | Phase 1 | Required single fault |
+| `from` | Deferred | Optional calling Aspire resource. Resolves an existing declared reference (`WithReference`) to `resource`; omitted means all callers. Phase 1 rejects this field with a directed-edge-capability-not-supported diagnostic |
+| `operations` | Deferred | Optional Cosmos-profile operation categories: `read`, `write`, `query`. Omitted means all operations within the selected resource's scope |
+
+`from` names the calling side of a reference the AppHost already declares — it does not let an author invent a caller/destination pair or select proxy topology. The field is named `from`, not `source`, because Aspire uses source for the referenced or producing resource.
+
+`operations` describes what kind of Cosmos activity the fault applies to, in plain terms: `read` for point/item reads, `write` for creates/updates/deletes, and `query` for SQL queries. It stays provisional until Gateway traffic capture proves that classification from the URI, method, and headers alone, without parsing the request body. If body parsing turns out to be required, `operations` is dropped and the policy remains container-scope-only. Point-operation verbs may be added only after evidence justifies them, and `from` and `operations` remain orthogonal — either can be present or omitted independently.
+
+In this example, `carts` specifically names the modeled Cosmos container—not the Cosmos account or database. More generally, `resource` may name an existing Aspire Cosmos account, database, or container resource to select that scope, per the table in [How resource selection works](#how-resource-selection-works). Authors do not repeat raw Cosmos database or container names in policy. The Aspire-side Cosmos profile compiles the typed resource and operation selectors to an internal method/path/header matcher and a protocol-correct response template. Raw HTTP paths, methods, headers, and response details remain internal to the profile/data-plane contract; DCP stays generic.
 
 The first profile target is modeled Cosmos emulator resources in Gateway HTTPS mode. Aspire's emulator integration forces Gateway and `LimitToEndpoint`, but interception must establish Aspire-managed trust on both TLS legs across supported hosts and containers. Direct/TCP (RNTBD), real accounts, and unprovable connection modes remain unsupported. EF Core container usage not represented by an `AzureCosmosDBContainerResource` is ineligible for container scope until the AppHost uses `AddContainer`.
+
+### Invalid selectors and diagnostics
+
+The controller rejects a policy before activation whenever its identifiers do not resolve cleanly. The most important cases:
+
+| Invalid case | Result |
+| --- | --- |
+| `resource` names something that does not exist in the current AppHost model | Rejected with an unknown-resource diagnostic |
+| `resource` names a Cosmos container that is only reached through EF Core and was never modeled with `AddContainer` | Rejected for container scope; `list-resources` also warns about the unmodeled container |
+| `operations` is supplied for a resource outside the Cosmos profile | Rejected; `operations` only has meaning for a Cosmos account, database, or container resource |
+| The Cosmos client uses Direct/TCP (RNTBD), or targets a real (non-emulator) account whose connection mode cannot be proven | Rejected as ineligible; the controller fails loudly rather than silently no-op |
+| `from` names a resource with no existing declared reference to `resource` | Rejected; the directed-edge capability only faults a reference the AppHost already declares, not an arbitrary caller/destination pair |
+
+Today, Phase 1 rejects `from` and `operations` outright as unsupported fields (see [Phase 1 policy model](#phase-1-policy-model)); the `from`/`operations`-specific rows above describe behavior once the deferred selectors ship. The unknown-resource and Cosmos-eligibility rows already govern today's resource-wide Phase 1 policies.
 
 ### One policy per resource
 
