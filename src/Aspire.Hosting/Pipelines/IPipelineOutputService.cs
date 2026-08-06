@@ -20,8 +20,10 @@ public interface IPipelineOutputService
     /// When the Aspire CLI discovers a Git repository containing the selected AppHost, this is the repository root.
     /// Otherwise, this defaults to the AppHost directory and then the current directory. Unlike
     /// <see cref="GetOutputDirectory()"/>, this value is not affected by <c>--output-path</c>.
+    /// Implementations compiled against an earlier version of this interface use
+    /// <see cref="GetOutputDirectory()"/> as a binary-compatible fallback.
     /// </remarks>
-    string GetPublicationRoot();
+    string GetPublicationRoot() => GetOutputDirectory();
 
     /// <summary>
     /// Gets the output directory for deployment artifacts.

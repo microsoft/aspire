@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using Aspire.Cli.Telemetry;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Git;
@@ -75,6 +76,13 @@ internal sealed class GitRepository(CliExecutionContext executionContext, IEnvir
             }
 
             var rootPath = output.Trim();
+
+            // Git canonicalizes macOS firmlinked working directories to /private/* paths.
+            // Preserve the user-facing path shape used by the selected AppHost.
+            if (environment.IsMacOS())
+            {
+                rootPath = CliPathHelper.StripMacOSFirmlinkPrefix(rootPath);
+            }
 
             if (string.IsNullOrEmpty(rootPath))
             {
