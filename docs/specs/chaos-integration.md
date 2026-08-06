@@ -26,6 +26,7 @@ This document proposes bringing the piloted `Aspire.Hosting.Chaos` experience in
 - Phase 1 includes a Cosmos emulator Gateway HTTPS profile. `resource` names an existing modeled account, database, or container resource, and optional `operations` selects `read`, `write`, or `query`; omitted means all operations in that resource scope.
 - Cosmos operation selection is a hard release gate, not an optimistic contract. If Gateway traffic cannot be classified from URI, method, and headers without request-body parsing, Phase 1 falls back to modeled container-level all-operations support and rejects `operations`.
 - `fromResource` ships only when DCP provides stable eager per-reference listener and address identity. That topology and its pooled-connection isolation proof are Phase 1 gates; headers and baggage are never used as caller identity.
+- Phase 1 includes a persistent, non-health Dashboard indicator on every affected main Resources row. The destination row distinguishes all-callers from caller-specific scope, a caller-specific policy also marks the `fromResource` row, and modeled Cosmos descendants identify inherited account or database scope.
 
 ### Recommendation
 
@@ -42,7 +43,7 @@ This proposal intentionally applies chaos to DCP. DCP does not support fault inj
 - Whether a YARP-compatible adapter is useful as a temporary conformance harness while the DCP contract is implemented.
 - Which HTTP/2 behaviors pass the required correctness spikes.
 - Whether Aspire-managed double-leg TLS interception can establish trusted identity across Windows, Linux, macOS, and supported containers without disabling validation.
-- Whether a richer dashboard experience is warranted after resource commands and telemetry prove sufficient.
+- Whether Dashboard owners approve the proposed general `ResourceRowIndicatorSnapshot` contract and its compact name-column rendering.
 - Whether the semantic and performance budgets agreed with DCP owners support default-on availability or require process/run opt-in.
 - Whether Gateway traffic proves database/container and `read|write|query` classification without request-body parsing; failure narrows Phase 1 to modeled container-level all-operations support.
 - Whether DCP can add stable per-reference listener identity without changing service-discovery values or breaking pooled connections.
@@ -65,7 +66,7 @@ The Aspire discussion identified the existing service proxy as the right archite
 6. Make every successful mutation reflect acknowledged DCP state, including forward compensation after partial application.
 7. Keep tests simple and honest about resource-wide, caller-specific, and typed Cosmos operation effects.
 8. Keep publish output deterministic and free of run-only chaos topology or state.
-9. Make active faults visible in the dashboard and telemetry.
+9. Make active faults visible directly on every affected row in the Dashboard main Resources view, with deeper policy detail and commands on the control resource.
 10. Reject unsupported resources, faults, and protocols with actionable diagnostics.
 
 ## Non-goals
@@ -167,6 +168,10 @@ The integration must not use obsolete `IDistributedApplicationLifecycleHook`. A 
 
 `CustomResourceSnapshot` and `ResourceNotificationService` describe dashboard state. They are not a policy database or data-plane contract (`src/Aspire.Hosting/ApplicationModel/CustomResourceSnapshot.cs` and `src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs`).
 
+Today the main Resources grid renders the resource icon and name, lifecycle state and health-derived state icon, URLs, and actions. Highlighted properties and relationships appear only after opening resource details. Resource commands appear in the Actions column, and notifications can link to an action, but there is no general contract for a controller resource to place a compact indicator on another resource's main-grid row (`src/Aspire.Dashboard/Components/Pages/Resources.razor`, `ResourceNameDisplay.razor`, `StateColumnDisplay.razor`, and `ResourceDetails.razor`).
+
+Phase 1 therefore requires the small general-purpose `ResourceRowIndicatorSnapshot` contract described in [Dashboard visualization and MCP](#dashboard-visualization-and-mcp). Reusing lifecycle state or health would report false semantics, while a property or relationship alone would remain invisible in the main view.
+
 ## Proposed architecture
 
 ```mermaid
@@ -196,7 +201,7 @@ All control-plane clients use the controller. No client writes directly to proxy
 
 ### Implicit control resource
 
-Aspire Hosting automatically adds one visible run-only `ChaosEnvironmentResource` when the selected DCP version advertises fault-control capability. This synthetic resource exposes commands and aggregate status; it does not carry traffic or add a network hop.
+Aspire Hosting automatically adds one visible run-only `ChaosEnvironmentResource` when the selected DCP version advertises fault-control capability. This synthetic resource exposes commands, aggregate status, policy details, and the replace-all row-indicator projection; it does not carry traffic or add a network hop.
 
 `chaos` is the preferred resource name, not a reserved name. If user code already uses it, Aspire chooses the first deterministic fallback (`aspire-chaos`, then a numeric suffix). The resolved name appears in startup logs, the dashboard, and `aspire resource list`.
 
@@ -678,26 +683,148 @@ Fixture teardown and AppHost disposal provide final cleanup boundaries. They do 
 
 ## Dashboard visualization and MCP
 
-The dashboard must make active fault injection obvious. A developer should not need to inspect logs or remember that a test installed a policy to understand why a resource is delayed or failing.
+The dashboard must make active fault injection obvious in the main Resources view. A developer should not need to open the synthetic chaos resource, inspect details or logs, or remember that a test installed a policy to understand why a resource is delayed or failing.
 
-### Initial dashboard experience
+### Main-view answer
 
-The Resources page shows one run-only chaos control resource. Its state and properties are projections from `ChaosPolicyController`, never authoritative storage.
+The immediate answer to "how would we see quickly in the main view that fault behavior was enabled?" is: **a persistent `Chaos: ...` indicator appears beside the name of every affected resource row**.
 
-The control resource remains `Running` while available and uses warning styling whenever a policy is active. Reconciliation failure and revision drift appear as health reports rather than invented lifecycle states. The resource never gates workload startup or readiness.
+- A resource-wide policy shows `Chaos: all callers` on the selected downstream row.
+- One caller-specific policy shows `Chaos: orders` on the downstream row and `Chaos -> inventory` on the `orders` caller row.
+- Multiple concurrent caller-specific policies show `Chaos: 3 callers` on the downstream row. Each affected caller row shows `Chaos -> inventory`, or `Chaos -> 2 targets` when that caller has active policies against multiple destinations.
+- A Cosmos account or database policy also marks every modeled descendant row that inherits the scope, for example `Chaos via cosmos: all callers` on a database or container beneath the selected `cosmos` account.
 
-The Phase 1 policy table shows caller scope, inferred logical profile, and operation scope when applicable:
+The indicator is adjacent to the resource name, after the existing resource icon and persistent-container pin. It does not replace or append to the State column. The resource continues to show its actual lifecycle and health, for example `Running` with the existing healthy icon, even while the adjacent indicator warns that requests may be intentionally faulted.
+
+Concrete main-view examples:
+
+| Scenario | Main Resources row name cell | State and health cell |
+| --- | --- | --- |
+| Normal | `inventory` | `Running` with its real health |
+| Resource-wide active policy | `inventory  [warning icon] Chaos: all callers` | `Running` with its real health |
+| One caller-specific active policy, destination | `inventory  [warning icon] Chaos: orders` | `Running` with its real health |
+| Same caller-specific policy, caller | `orders  [branch icon] Chaos -> inventory` | `Running` with its real health |
+| Three caller-specific policies, destination | `inventory  [warning icon] Chaos: 3 callers` | `Running` with its real health |
+| Account-scoped Cosmos policy, selected account | `cosmos  [warning icon] Chaos: all callers` | `Running` with its real health |
+| Same account policy, affected descendant | `carts  [warning icon] Chaos via cosmos: all callers` | `Running` with its real health |
+| Controller loss after pass-through is confirmed | `inventory  [info icon] Chaos: pass-through` | `Running` with its real health |
+
+The textual label is always present; color alone never communicates scope or state. Active indicators use the existing warning visual intent and a warning icon because behavior is intentionally disruptive, not because the resource is unhealthy. Applying and removing use an existing progress treatment plus text. Uncertain or stale status uses an error or information icon plus explicit text. All indicators are keyboard focusable and expose the full accessible label through `aria-label`.
+
+### Required Dashboard contract
+
+The current Dashboard has no supported way to render a property or relationship on the main resource row. Putting `Chaos` into `CustomResourceSnapshot.State` would corrupt lifecycle semantics and could affect `WaitForResourceAsync`. Adding a chaos health report to the affected workload would incorrectly make intentional behavior look unhealthy and could affect `WaitForHealthy`. A highlighted property or relationship is feasible today but visible only in the details panel, so it does not answer the main-view requirement.
+
+Phase 1 therefore requires one small general Dashboard contract, working name **`ResourceRowIndicatorSnapshot`**:
+
+| Field | Purpose |
+| --- | --- |
+| `Id` | Stable indicator identity within the publisher snapshot |
+| `TargetResourceName` | Existing resource row to decorate |
+| `Text` | Concise visible text such as `Chaos: all callers` |
+| `AccessibleText` | Complete non-color-only description |
+| `IconName` and `Intent` | Existing Fluent icon and visual intent; no custom image pipeline |
+| `Tooltip` | Expanded policy and state summary |
+| `NavigationResourceName` | Resource whose details should open, normally the resolved chaos control resource |
+| `TargetItemId` | Optional policy ID or deterministic policy-group ID to focus after navigation |
+
+`CustomResourceSnapshot` gains a collection of these indicators. The publishing resource owns the collection, and each new snapshot completely replaces that publisher's previous collection. The chaos control resource publishes indicators that target itself, selected downstream resources, inherited Cosmos descendants, and optional callers. Dashboard service serialization carries the contract into `ResourceViewModel`, and `ResourceNameDisplay` renders the indicators beside the target row's name using existing Fluent icons, badges, tooltips, and navigation.
+
+This is deliberately not a chaos-specific dashboard framework. It is a bounded presentation primitive for a trusted AppHost resource to surface concise, actionable state on related rows. The Dashboard ignores an indicator whose target resource is absent, logs the invalid target, and never creates a phantom row. Indicator content is display-only and cannot alter lifecycle state, health, readiness, relationships, or commands.
+
+The control resource publishes the complete cross-resource indicator set in one snapshot. Dashboard swaps that set atomically by publisher resource UID and the existing monotonically increasing resource snapshot version. This avoids a removal updating the destination row while leaving a stale caller badge. A new control-resource UID after AppHost restart provides the clean epoch boundary.
+
+### Indicator hierarchy and interaction
+
+The visual hierarchy is:
+
+1. The selected downstream scope receives the primary filled warning indicator.
+2. A modeled Cosmos descendant affected through an account or database receives a secondary outlined indicator naming the ancestor with `via`.
+3. A `fromResource` caller receives a secondary outlined relationship indicator using `->`.
+4. The chaos control resource receives the aggregate indicator `Chaos: N active`; it does not receive warning lifecycle state merely because a policy is active.
+
+Compact text follows deterministic aggregation rules:
+
+- one exact caller: `Chaos: orders`;
+- multiple exact callers: `Chaos: N callers`;
+- all callers: `Chaos: all callers`;
+- one inherited scope: `Chaos via <scope>: <caller scope>`;
+- multiple inherited policies from different Cosmos ancestors: `Chaos: N caller policies`;
+- one caller destination: `Chaos -> inventory`; and
+- multiple destinations from one caller: `Chaos -> N targets`.
+
+Resource-wide and caller-specific policies cannot overlap on the same destination scope, so `all callers` never hides a concurrent caller count. Multiple distinct caller policies are sorted by caller, then selected Cosmos scope, then generated policy ID in the tooltip. The tooltip and accessible text expand every compact indicator to:
+
+- policy state;
+- exact destination Aspire resource and whether the row is the selected or inherited scope;
+- `From resource: All callers` or each named caller;
+- inferred logical profile/version;
+- Cosmos account/database/container scope and selected operations when applicable;
+- fault summary;
+- activation count; and
+- last acknowledgement or failure detail without credentials, request content, connection strings, or internal proxy addresses.
+
+Clicking or keyboard-activating an indicator uses the existing Resources-page details navigation to open the resolved chaos control resource. A single-policy indicator focuses that policy in the policy table. An aggregate indicator applies a destination, caller, or Cosmos-scope filter and focuses the matching policy group. The row's normal click target still opens that workload resource's details; the indicator stops row-click propagation just as existing nested links and actions do.
+
+The affected resource's ordinary details remain useful secondary context. The controller may project a non-sensitive `Chaos fault` highlighted property and a `Chaos target` or `Chaos caller` relationship to the control resource using existing properties and relationships. Those details complement the main-row indicator; they are never the only signal.
+
+### Policy state shown on rows
+
+The row projection is driven only by acknowledged controller presentation state:
+
+| Controller state | Row behavior |
+| --- | --- |
+| Applying | Prospective destination, inherited Cosmos, and caller rows show `Chaos applying: <scope>` with progress treatment after validation has succeeded and the desired revision is issued |
+| Active | Rows show the active labels above only after every selected DCP path acknowledges the revision |
+| Removing | Existing rows remain marked as `Chaos removing: <scope>` until every selected path acknowledges removal |
+| Apply rejected or failed with successful compensation | No affected workload indicator remains; the control resource records the failed operation and a notification links to it |
+| Apply or remove failed with unresolved paths | Every potentially affected row shows `Chaos uncertain: <scope>` with error intent until reconciliation or liveness pass-through resolves uncertainty |
+| Controller liveness lost, pass-through not yet confirmed | Formerly affected rows immediately change to `Chaos status unknown`; they never continue to claim `Active` from a stale snapshot |
+| Liveness safety interval elapsed and pass-through is confirmed | Rows show `Chaos: pass-through` with information intent while the desired policy remains unavailable; the tooltip says fault behavior is not currently enabled |
+| Proxy restart with a live controller | Affected rows show applying/reconciling until the proxy acknowledges the current revision, then return to Active |
+| AppHost restart | A new controller instance starts with an empty indicator collection; no prior policy or indicator is replayed |
+
+Removal acknowledgement atomically deletes destination, inherited Cosmos, caller, and aggregate indicators for that policy. Retained activation observations remain available on the chaos control resource but never keep a main-row indicator alive.
+
+The Dashboard treats a disconnected resource stream or a missing current publisher snapshot as stale. It invalidates active styling immediately and displays `Chaos status unknown` only while the affected rows and prior publisher identity remain known. When the chaos control resource disappears or a new control-resource UID is observed, Dashboard discards the old publisher's complete indicator set. Older resource snapshot versions are ignored. Page refresh reconstructs indicators only from the latest current snapshot, never browser storage.
+
+### Cosmos hierarchy behavior
+
+The selected modeled Cosmos resource receives the primary indicator:
+
+- account selection marks the account plus every modeled database and container descendant;
+- database selection marks the database plus every modeled container descendant;
+- container selection marks only that container.
+
+Descendants name the selected ancestor, for example `Chaos via cosmos: orders` or `Chaos via shop-db: all callers`. A caller-specific Cosmos policy also marks the caller row with the selected modeled resource, for example `Chaos -> carts`. If distinct callers have concurrent policies at overlapping Cosmos hierarchy levels, each row aggregates the active caller policies according to the rules above and the tooltip lists the exact caller, selected account/database/container resource, inherited row, operations, and fault. Sibling resources outside the selected hierarchy receive no indicator.
+
+### Chaos control resource
+
+The visible run-only `ChaosEnvironmentResource` complements rather than substitutes for main-view visibility. Its role is control, aggregate status, recovery, and detail:
+
+- its main row shows `Chaos: N active`, `Chaos: applying`, `Chaos: removing`, `Chaos: uncertain`, or no indicator;
+- its lifecycle state remains `Running` while the controller is available;
+- its actual health reports revision drift, authentication failure, or reconciliation failure;
+- its details show the policy table and bounded observations;
+- its commands add, remove, list, and describe policies and eligible resources; and
+- it never gates workload startup or readiness.
+
+The Phase 1 policy table shows:
 
 | Resource | From resource | Logical profile | Operations | Fault | State | Activation count |
 | --- | --- | --- | --- | --- | --- | ---: |
 | `inventory` | `orders` | `http/v1` | All | Latency 2s | Active | 3 |
 | `carts` | All callers | `cosmos-gateway/v1` | Write | Throttle (429, retry after 1s) | Active | 7 |
 
-The control resource exposes commands for add, remove, list policies, list resources, and describe resource. After resource selection, the dashboard renders an optional caller selector populated only with declared, eligible `fromResource` values, then dynamically renders only controls projected from the shipping MVP matrix. Operations use the same canonical payload, validation, and acknowledgement path as CLI and tests. The dashboard never calls DCP directly.
+After resource selection, the dashboard renders an optional caller selector populated only with declared, eligible `fromResource` values, then dynamically renders only controls projected from the shipping MVP matrix. Operations use the same canonical payload, validation, and acknowledgement path as CLI and tests. The dashboard never calls DCP directly.
 
-Selected workload resources may show a derived `Chaos fault` property and a relationship to the control resource. Intentional fault activation must not make the workload resource unhealthy.
+### Notifications and Dashboard telemetry
 
-First activation in a Run session emits a one-time message-bar notification linking to the control resource. A persistent global active-chaos indicator is potential future Dashboard core work.
+The first activation in a Run session emits a one-time message-bar notification such as `Chaos enabled: orders -> inventory (latency 2s)` with a primary action that opens the focused control-resource policy. Later successful applies update persistent row indicators without notification spam. Applying, removing, uncertain, stale, and pass-through transitions are visible on the rows.
+
+Unresolved partial application, controller-liveness loss, and confirmed safety pass-through each emit a notification with the affected resource/caller scope and a link to recovery details. A cleanly compensated rejected apply emits an error notification but no workload indicator.
+
+Dashboard usage telemetry records indicator render counts by state, indicator activation, navigation target, and whether scope is all-callers, caller-specific, or inherited Cosmos. It does not include authored parameter values, policy bodies, resource connection data, or internal proxy identity. A persistent application-wide active-chaos banner remains optional Phase 2 work; it is not needed to satisfy Phase 1 because the affected main rows are always marked.
 
 ### MCP
 
@@ -721,9 +848,12 @@ Suggested non-sensitive control-resource properties are:
 
 - active policy count;
 - desired and acknowledged revision;
+- controller instance ID and current resource snapshot version;
 - last successful reconciliation time;
 - active operation name and state; and
 - bounded apply, remove, activation, and reconciliation-failure counts.
+
+The `ResourceRowIndicatorSnapshot` collection is a replace-all presentation projection from those values. It is not an additional source of policy state.
 
 ### Metrics, traces, and logs
 
@@ -736,6 +866,7 @@ Suggested telemetry:
 | `aspire.chaos.fault.activated` | Count by generated policy ID, destination resource, optional `fromResource`, inferred logical profile/version, operation scope, and fault type |
 | `aspire.chaos.proxy.revision_lag` | Desired minus acknowledged revision |
 | `aspire.chaos.controller.liveness_loss` | Forced pass-through events |
+| `aspire.chaos.presentation.transition` | Indicator transition by applying, active, removing, uncertain, stale, or pass-through state and by all-caller, caller-specific, or inherited Cosmos scope |
 
 Fault spans should link to the proxied request span where possible and include generated policy ID, destination Aspire resource, optional `fromResource`, inferred logical profile/version, operation scope when applicable, fault type, and activation index. Structured logs record lifecycle and reconciliation without serializing credentials or policy bodies.
 
@@ -768,7 +899,7 @@ Do not retain request bodies, authorization data, cookies, connection strings, r
 - Request and response bodies are not captured by default.
 - Cosmos operation classification never parses request bodies.
 - Proxies force pass-through after controller-liveness loss.
-- Snapshot, command, log, trace, and observation serializers use explicit allowlists.
+- Snapshot, row-indicator, command, log, trace, and observation serializers use explicit allowlists.
 - The pilot's accept-any certificate behavior cannot become a general default.
 
 This is a development integration, but "development only" is not an exemption from control-plane authentication or secret hygiene.
@@ -784,7 +915,7 @@ Expose separate checks:
 | Control-plane health | Controller authentication succeeds and desired revision is acknowledged |
 | Upstream observation | Original resource destination is resolvable; this does not mutate resource state |
 
-The proxy should wait for the workload to start, not necessarily become healthy, to avoid readiness cycles. Reconciliation health attaches to the chaos control resource and never participates in another resource's `WaitForHealthy`.
+The proxy should wait for the workload to start, not necessarily become healthy, to avoid readiness cycles. Reconciliation health attaches to the chaos control resource and never participates in another resource's `WaitForHealthy`. Main-row chaos indicators are presentation state and never modify the workload's lifecycle state or health reports.
 
 An empty policy set is healthy pass-through. Revision drift emits a health report while the control resource remains `Running`. The controller independently rejects new applies when reconciliation is unhealthy, while remove and list remain available for recovery.
 
@@ -798,6 +929,7 @@ Chaos is run-only.
 - Keep normal DCP-proxied addresses under workload resource names.
 - Eagerly retain stable internal per-reference listener and address identity without changing service-discovery values.
 - Start the controller with an empty pass-through revision.
+- Publish one replace-all row-indicator projection from the chaos control resource for the current controller instance and presentation revision.
 - Keep supported DCP paths protocol-aware and semantically pass-through when no policy is active.
 
 ### Publish
@@ -920,6 +1052,10 @@ This could provide polished syntax early, but it would make correctness depend o
 - Census representative resources with `list-resources` and actionable eligibility reasons.
 - Prove complete resource-wide and declared-caller fault coverage across relevant host and container proxy paths without user topology selection.
 - Prove authenticated revision application, forward compensation, restart reconciliation, and controller-liveness pass-through.
+- Review the general `ResourceRowIndicatorSnapshot` contract with Dashboard owners and prove main-grid rendering beside resource names without changing lifecycle state, health, readiness, or row-click behavior.
+- Prove the replace-all indicator projection handles active, applying, removing, compensated failure, unresolved failure, stream staleness, controller loss, confirmed pass-through, proxy restart, AppHost restart, and out-of-order resource snapshot versions without stale active styling.
+- Prove keyboard access, screen-reader labels, non-color-only state and scope, tooltip content, and navigation to a focused policy or policy group.
+- Prove resource-wide, concurrent caller-specific, and Cosmos account/database/container projections mark exactly the selected destination, inherited modeled descendants, and optional caller rows described by this design.
 - Run HTTP/1.1 and HTTP/2 semantic conformance tests for initial faults.
 - Add stable eager per-reference listener and address identity without changing service-discovery values.
 - Warm pools from `orders` and `frontend`; prove acknowledged caller-specific apply and remove isolate `orders -> inventory` without reconnecting either caller.
@@ -952,7 +1088,7 @@ This could provide polished syntax early, but it would make correctness depend o
 - Modeled Cosmos emulator Gateway HTTPS account/database/container selection with protocol-correct throttling.
 - Optional typed Cosmos `operations` (`read`, `write`, `query`; omitted means all) if classification is proven without body parsing; otherwise container-level all-operations support with `operations` rejected.
 - Publish bypass validation.
-- Dashboard visibility using existing resource, command, property, relationship, health, and telemetry surfaces.
+- Main Resources view visibility through the approved `ResourceRowIndicatorSnapshot` contract, reusing existing icons, badges, tooltips, details navigation, properties, relationships, commands, notifications, health, and telemetry surfaces.
 
 ### Phase 2: evidence-driven diagnostics
 
@@ -980,7 +1116,7 @@ This could provide polished syntax early, but it would make correctness depend o
 | Initial HTTP/2 behavior | Ship only proven faults | Multiplexing, cancellation, flow-control, headers, trailers, and connection reuse |
 | Runtime persistence | None | Revisit only if restart use cases outweigh stale-fault risk |
 | Controller loss | Force pass-through after a fixed platform interval | Crash, disconnect, and recovery tests |
-| Dashboard extension | Existing resource surfaces first | User evidence that commands and telemetry are insufficient |
+| Dashboard row indicators | Add the bounded general `ResourceRowIndicatorSnapshot` contract in Phase 1; keep an application-wide banner deferred | Dashboard-owner API/UX review plus accessibility, virtualization, replacement, stale-state, and navigation tests |
 | Logical fault catalogs | Infer stable versioned identifiers from the AppHost model; never author them | Compatibility review of profile-specific discriminated unions plus deterministic list/describe/canonical output and invalid-combination diagnostics |
 | General HTTPS | Deferred outside the Cosmos profile | Separate cross-platform certificate identity, trust, and protocol proof |
 | Cosmos profile | Phase 1 modeled emulator Gateway HTTPS only; keep typed profile in Aspire and DCP generic | Resource hierarchy census, double-leg TLS trust, protocol-correct 429, warmed-client isolation, and loud rejection of bypass modes |
@@ -1009,11 +1145,11 @@ Phase 1 must not release until the following are demonstrated:
 13. AppHost restart clears all policies, and proxy restart reconciles from the live controller.
 14. A publish snapshot emits normal references with no chaos control resource, state, or metadata.
 15. HTTP/1.1 and every claimed HTTP/2 behavior pass semantic conformance for pass-through, apply, and remove on warmed pooled connections, with stable eager per-reference addresses isolating at least two callers.
-16. Dashboard policy presentation contains Resource, From resource (or All callers), inferred logical profile/version, operation scope when applicable, Fault, State, and activation count.
+16. Dashboard policy details contain Resource, From resource (or All callers), inferred logical profile/version, operation scope when applicable, Fault, State, and activation count, while the main Resources view marks every affected row without opening those details.
 17. Snapshots and observations contain no credentials, bodies, connection strings, or raw sensitive headers.
 18. A pre-existing resource named `chaos` does not break model construction or silently disable the feature; the resolved fallback is discoverable.
 19. Random campaigns do not appear in the Phase 1 policy schema or command set.
-20. The visible control resource remains `Running`, uses warning styling for active faults, reports reconciliation problems through health, and never gates workload readiness.
+20. The visible control resource remains `Running`, shows `Chaos: N active` through the row-indicator contract, reports reconciliation problems through its real health, and never gates workload readiness.
 21. If Phase 0 budgets fail, the feature ships default-off with process/run opt-in rather than weakening pass-through guarantees.
 22. Phase 1 JSON, dashboard, MCP, testing APIs, canonical output, and diagnostics consistently use `fromResource`; no alternate authored caller field or caller-specific CLI option exists.
 23. A Phase 1 Cosmos policy names an existing modeled account, database, or container resource; no duplicate physical names appear in authored policy, and unmodeled EF Core containers produce a `list-resources` warning that directs the user to `AddContainer`.
@@ -1027,6 +1163,13 @@ Phase 1 must not release until the following are demonstrated:
 31. Each matrix row specifies its closed fault types, JSON parameter types and constraints, required/optional status, and selectors, and discovery, validation, CLI, Dashboard, MCP, and typed testing APIs agree with it.
 32. CLI automation accepts exactly one canonical typed JSON policy through `--file <path>` or `--file -`; no per-fault flag family or inline JSON argument exists in the MVP.
 33. Interactive CLI authoring produces the same canonical payload, malformed and invalid documents receive source-grounded structured diagnostics, and apply/list output contains a normalized `policy` object that round-trips without output-only metadata.
+34. A resource-wide active policy shows `Chaos: all callers` beside the selected downstream resource name while that resource's State and health remain truthful.
+35. A caller-specific active policy marks both sides in the main view: the downstream row shows the caller name or caller count, and each `fromResource` row shows its destination or destination count. Concurrent distinct caller policies aggregate deterministically and remain fully expanded in tooltip and accessible text.
+36. A Cosmos account policy marks the account and every modeled database/container descendant, a database policy marks the database and modeled container descendants, and a container policy marks only that container. Inherited indicators name the selected ancestor, and sibling resources outside the selected hierarchy remain unmarked.
+37. Applying, active, removing, unresolved failure, stale/unknown, and confirmed pass-through have distinct text plus icon treatment; successful compensation removes workload indicators, removal clears every related row atomically, proxy restart reconciles, and AppHost restart cannot replay an old indicator.
+38. Active styling is invalidated on resource-stream disconnect or missing current publisher snapshot, out-of-order resource snapshot versions are ignored, and page refresh reconstructs indicators only from the latest snapshot.
+39. Every indicator is keyboard focusable, understandable without color, has a sanitized expanded tooltip, and navigates to the control resource with the matching policy or aggregate group focused.
+40. The synthetic chaos resource provides aggregate health, policy details, observations, commands, and recovery; it is not the only place a user can discover that fault behavior affects a workload.
 
 ## Source map
 
@@ -1047,6 +1190,12 @@ Phase 1 must not release until the following are demonstrated:
 | Stable endpoint behavior | `src/Aspire.Hosting/ResourceBuilderExtensions.cs` |
 | Presentation snapshots | `src/Aspire.Hosting/ApplicationModel/CustomResourceSnapshot.cs` |
 | Notification publication | `src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs` |
+| Main Resources grid | `src/Aspire.Dashboard/Components/Pages/Resources.razor` |
+| Resource-name row affordances | `src/Aspire.Dashboard/Components/ResourcesGridColumns/ResourceNameDisplay.razor` |
+| Lifecycle and health state rendering | `src/Aspire.Dashboard/Components/ResourcesGridColumns/StateColumnDisplay.razor`, `src/Aspire.Dashboard/Model/ResourceStateViewModel.cs` |
+| Resource properties and relationships detail | `src/Aspire.Dashboard/Components/Controls/ResourceDetails.razor` |
+| Resource actions and commands | `src/Aspire.Dashboard/Model/ResourceMenuBuilder.cs` |
+| Dashboard notifications | `src/Aspire.Dashboard/Components/Dialogs/NotificationEntryComponent.razor` |
 | Resource command model | `src/Aspire.Hosting/ApplicationModel/ResourceCommandAnnotation.cs` |
 | Resource command dispatch | `src/Aspire.Hosting/ApplicationModel/ResourceCommandService.cs` |
 | CLI resource command | `src/Aspire.Cli/Commands/ResourceCommand.cs` |
