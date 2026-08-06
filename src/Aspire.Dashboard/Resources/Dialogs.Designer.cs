@@ -61,12 +61,14 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Aspire makes agentic development more powerful. It gives AI coding agents deep observability into your app using the information visible in the dashboard. Agents can use telemetry to diagnose issues faster and verify fixes with confidence. 🚀
+        ///   Looks up a localized string similar to Aspire gives AI coding agents deep observability into your app using the same information visible in the dashboard. Agents use telemetry to diagnose issues faster and verify fixes with confidence. 🚀
         ///
         ///- 📦 Resource state, health checks, and relationships
         ///- 🖥️ Console logs
         ///- 📊 Distributed traces
         ///- 🪵 Structured logs
+        ///
+        ///## Getting started
         ///
         ///AI agents access dashboard telemetry through the Aspire CLI. If you haven’t installed it yet, [install the Aspire CLI]({1}).
         ///
@@ -85,7 +87,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Aspire makes agentic development more powerful. It gives AI coding agents deep observability into your app using the information visible in the dashboard. Agents can use telemetry to diagnose issues faster and verify fixes with confidence. 🚀
+        ///   Looks up a localized string similar to Aspire gives AI coding agents deep observability into your app using the same information visible in the dashboard. Agents use telemetry to diagnose issues faster and verify fixes with confidence. 🚀
         ///
         ///- 📊 Distributed traces
         ///- 🔗 Trace spans
