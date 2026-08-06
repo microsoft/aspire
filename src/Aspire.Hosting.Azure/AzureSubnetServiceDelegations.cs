@@ -26,20 +26,24 @@ public static class AzureSubnetServiceDelegations
     /// <summary>
     /// Delegation for Azure Container Instances (ACI), which allows container groups to be deployed into the subnet.
     /// </summary>
+    [AspireValue("AzureSubnetServiceDelegations")]
     public const string ContainerInstances = "Microsoft.ContainerInstance/containerGroups";
 
     /// <summary>
     /// Delegation for Azure Container Apps environments.
     /// </summary>
+    [AspireValue("AzureSubnetServiceDelegations")]
     public const string ContainerAppEnvironments = "Microsoft.App/environments";
 
     /// <summary>
     /// Delegation for Azure App Service environments.
     /// </summary>
+    [AspireValue("AzureSubnetServiceDelegations")]
     public const string AppServiceEnvironments = "Microsoft.Web/serverFarms";
 
     /// <summary>
     /// Delegation for Azure Application Gateway for Containers.
     /// </summary>
+    [AspireValue("AzureSubnetServiceDelegations")]
     public const string ApplicationGatewayForContainers = "Microsoft.ServiceNetworking/trafficControllers";
 }

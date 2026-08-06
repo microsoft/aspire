@@ -12,6 +12,12 @@ Aspire.Hosting.Azure/Aspire.Hosting.Azure.BicepOutputReference [ExposeProperties
 Aspire.Hosting.Azure/Aspire.Hosting.Azure.IAzureKeyVaultResource [interface]
 Aspire.Hosting.Azure/Aspire.Hosting.Azure.IAzureKeyVaultSecretReference [interface]
 
+# Exported Values
+AzureSubnetServiceDelegations.AppServiceEnvironments: string = "Microsoft.Web/serverFarms" # Delegation for Azure App Service environments.
+AzureSubnetServiceDelegations.ApplicationGatewayForContainers: string = "Microsoft.ServiceNetworking/trafficControllers" # Delegation for Azure Application Gateway for Containers.
+AzureSubnetServiceDelegations.ContainerAppEnvironments: string = "Microsoft.App/environments" # Delegation for Azure Container Apps environments.
+AzureSubnetServiceDelegations.ContainerInstances: string = "Microsoft.ContainerInstance/containerGroups" # Delegation for Azure Container Instances (ACI), which allows container groups to be deployed into the subnet.
+
 # Capabilities
 Aspire.Hosting.Azure/addAzureEnvironment() -> Aspire.Hosting.Azure/Aspire.Hosting.Azure.AzureEnvironmentResource
 Aspire.Hosting.Azure/addAzureInfrastructure(name: string, configureInfrastructure: callback) -> Aspire.Hosting.Azure/Aspire.Hosting.Azure.AzureProvisioningResource
