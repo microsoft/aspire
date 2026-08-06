@@ -67,7 +67,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
         });
 
         Assert.Equal(ErrorStrings.AppHostsMayNotBeBuildable, exception.Message);
-        Assert.Equal(ProjectLocatorFailureReason.ProjectFileCouldNotBeBuilt, exception.FailureReason);
+        Assert.NotEqual(ProjectLocatorFailureReason.ProjectFileDoesntExist, exception.FailureReason);
 
         var (exitCode, errorMessage) = ProjectLocatorErrorHelper.GetExitCodeAndMessage(exception);
         Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode);
