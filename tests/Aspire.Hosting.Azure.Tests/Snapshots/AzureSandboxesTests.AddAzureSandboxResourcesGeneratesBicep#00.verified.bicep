@@ -16,6 +16,7 @@ resource hostgroup 'Microsoft.App/sandboxGroups@2026-02-01-preview' = {
       '${hostmi_outputs_id}': { }
     }
   }
+  properties: { }
   tags: {
     'aspire-resource-name': 'hostgroup'
   }

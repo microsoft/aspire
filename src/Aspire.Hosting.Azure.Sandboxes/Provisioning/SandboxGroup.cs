@@ -44,6 +44,13 @@ internal sealed class SandboxGroup(string bicepIdentifier, string? resourceVersi
     }
     private ManagedServiceIdentity? _identity;
 
+    public BicepDictionary<string> Properties
+    {
+        get { Initialize(); return _properties!; }
+        set { Initialize(); _properties!.Assign(value); }
+    }
+    private BicepDictionary<string>? _properties;
+
     public BicepDictionary<string> Tags
     {
         get { Initialize(); return _tags!; }
@@ -68,6 +75,7 @@ internal sealed class SandboxGroup(string bicepIdentifier, string? resourceVersi
         _name = DefineProperty<string>(nameof(Name), ["name"], isRequired: true);
         _location = DefineProperty<AzureLocation>(nameof(Location), ["location"], isRequired: true);
         _identity = DefineModelProperty<ManagedServiceIdentity>(nameof(Identity), ["identity"]);
+        _properties = DefineDictionaryProperty<string>(nameof(Properties), ["properties"]);
         _tags = DefineDictionaryProperty<string>(nameof(Tags), ["tags"]);
     }
 
