@@ -58,6 +58,8 @@ namespace Aspire.Hosting.DevTunnels
         public string? Description { get { throw null; } set { } }
 
         public System.Collections.Generic.List<string>? Labels { get { throw null; } set { } }
+
+        public DevTunnelRegion? Region { get { throw null; } set { } }
     }
 
     public sealed partial class DevTunnelPortOptions
@@ -78,6 +80,23 @@ namespace Aspire.Hosting.DevTunnels
         public DevTunnelResource DevTunnel { get { throw null; } }
 
         public DevTunnelPortOptions Options { get { throw null; } }
+    }
+
+    public enum DevTunnelRegion : byte
+    {
+        WestEurope = 0,
+        UkSouth = 1,
+        NorthEurope = 2,
+        EastUs = 3,
+        EastUs2 = 4,
+        CentralIndia = 5,
+        WestUs3 = 6,
+        WestUs2 = 7,
+        SouthEastAsia = 8,
+        BrazilSouth = 9,
+        AustraliaCentral = 10,
+        AustraliaEast = 11,
+        JapanEast = 12
     }
 
     [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, TunnelId = {TunnelId}")]

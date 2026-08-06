@@ -180,6 +180,42 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> WithTls(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> builder) { throw null; }
     }
 
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public static partial class KubernetesPersistentVolumeExtensions
+    {
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> AddPersistentVolume(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> builder, string name) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> WithAccessMode(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> builder, Kubernetes.PersistentVolumeAccessMode accessMode) { throw null; }
+
+        [AspireExport("withPvCapacityParam")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> WithCapacity(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> capacity) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> WithCapacity(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> builder, string capacity) { throw null; }
+
+        [AspireExport("withKubernetesPersistentVolumeMount")]
+        public static ApplicationModel.IResourceBuilder<T> WithPersistentVolume<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> volume, string mountPath, bool isReadOnly = false)
+            where T : ApplicationModel.IComputeResource { throw null; }
+
+        [AspireExport("withKubernetesPersistentVolume")]
+        public static ApplicationModel.IResourceBuilder<T> WithPersistentVolume<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> volume)
+            where T : ApplicationModel.IComputeResource { throw null; }
+
+        [AspireExport("withPvStorageClassParam")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> WithStorageClass(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> storageClassName) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> WithStorageClass(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> builder, string storageClassName) { throw null; }
+
+        [AspireExport("withVolumeAnnotationParam")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> WithVolumeAnnotation(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> builder, string key, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> value) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> WithVolumeAnnotation(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> builder, string key, string value) { throw null; }
+    }
+
     public static partial class KubernetesServiceExtensions
     {
         [AspireExport]
@@ -380,6 +416,14 @@ namespace Aspire.Hosting.Kubernetes
         public KubernetesEnvironmentResource Parent { get { throw null; } }
     }
 
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class KubernetesPersistentVolumeResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<KubernetesEnvironmentResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource
+    {
+        public KubernetesPersistentVolumeResource(string name, KubernetesEnvironmentResource environment) : base(default!) { }
+
+        public KubernetesEnvironmentResource Parent { get { throw null; } }
+    }
+
     [AspireExport(ExposeProperties = true)]
     public partial class KubernetesResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<KubernetesEnvironmentResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource
     {
@@ -404,6 +448,15 @@ namespace Aspire.Hosting.Kubernetes
         public KubernetesServiceCustomizationAnnotation(System.Action<KubernetesResource> configure) { }
 
         public System.Action<KubernetesResource> Configure { get { throw null; } }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public enum PersistentVolumeAccessMode
+    {
+        ReadWriteOnce = 0,
+        ReadOnlyMany = 1,
+        ReadWriteMany = 2,
+        ReadWriteOncePod = 3
     }
 }
 
@@ -541,6 +594,19 @@ namespace Aspire.Hosting.Kubernetes.Resources
     {
         [YamlDotNet.Serialization.YamlMember(Alias = "key")]
         public string Key { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "name")]
+        public string Name { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "optional")]
+        public bool? Optional { get { throw null; } set { } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class ConfigMapProjectionV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "items")]
+        public System.Collections.Generic.List<KeyToPathV1> Items { get { throw null; } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "name")]
         public string Name { get { throw null; } set { } }
@@ -748,6 +814,29 @@ namespace Aspire.Hosting.Kubernetes.Resources
 
         [YamlDotNet.Serialization.YamlMember(Alias = "type")]
         public string Type { get { throw null; } set { } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class DownwardApiProjectionV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "items")]
+        public System.Collections.Generic.List<DownwardApiVolumeFileV1> Items { get { throw null; } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class DownwardApiVolumeFileV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "fieldRef")]
+        public ObjectFieldSelectorV1? FieldRef { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "mode")]
+        public int? Mode { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "path")]
+        public string Path { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "resourceFieldRef")]
+        public ResourceFieldSelectorV1? ResourceFieldRef { get { throw null; } set { } }
     }
 
     [YamlDotNet.Serialization.YamlSerializable]
@@ -1836,16 +1925,16 @@ namespace Aspire.Hosting.Kubernetes.Resources
         public System.Collections.Generic.List<string> AccessModes { get { throw null; } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "dataSource")]
-        public TypedLocalObjectReferenceV1 DataSource { get { throw null; } set { } }
+        public TypedLocalObjectReferenceV1? DataSource { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "dataSourceRef")]
-        public TypedObjectReferenceV1 DataSourceRef { get { throw null; } set { } }
+        public TypedObjectReferenceV1? DataSourceRef { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "resources")]
         public VolumeResourceRequirementsV1 Resources { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "selector")]
-        public LabelSelectorV1 Selector { get { throw null; } set { } }
+        public LabelSelectorV1? Selector { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "storageClassName")]
         public string StorageClassName { get { throw null; } set { } }
@@ -1890,19 +1979,19 @@ namespace Aspire.Hosting.Kubernetes.Resources
         public System.Collections.Generic.Dictionary<string, string> Capacity { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "claimRef")]
-        public ObjectReferenceV1 ClaimRef { get { throw null; } set { } }
+        public ObjectReferenceV1? ClaimRef { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "hostPath")]
-        public HostPathVolumeSourceV1 HostPath { get { throw null; } set { } }
+        public HostPathVolumeSourceV1? HostPath { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "local")]
-        public LocalVolumeSourceV1 Local { get { throw null; } set { } }
+        public LocalVolumeSourceV1? Local { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "mountOptions")]
         public System.Collections.Generic.List<string> MountOptions { get { throw null; } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "nodeAffinity")]
-        public VolumeNodeAffinityV1 NodeAffinity { get { throw null; } set { } }
+        public VolumeNodeAffinityV1? NodeAffinity { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "persistentVolumeReclaimPolicy")]
         public string PersistentVolumeReclaimPolicy { get { throw null; } set { } }
@@ -2279,6 +2368,16 @@ namespace Aspire.Hosting.Kubernetes.Resources
     }
 
     [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class ProjectedVolumeSourceV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "defaultMode")]
+        public int? DefaultMode { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "sources")]
+        public System.Collections.Generic.List<VolumeProjectionV1> Sources { get { throw null; } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
     public sealed partial class ReplicaSet : BaseKubernetesResource
     {
         public ReplicaSet() : base(default!, default!) { }
@@ -2486,6 +2585,19 @@ namespace Aspire.Hosting.Kubernetes.Resources
     }
 
     [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class SecretProjectionV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "items")]
+        public System.Collections.Generic.List<KeyToPathV1> Items { get { throw null; } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "name")]
+        public string Name { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "optional")]
+        public bool? Optional { get { throw null; } set { } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
     public sealed partial class SecretVolumeSourceV1
     {
         [YamlDotNet.Serialization.YamlMember(Alias = "defaultMode")]
@@ -2564,6 +2676,19 @@ namespace Aspire.Hosting.Kubernetes.Resources
 
         [YamlDotNet.Serialization.YamlMember(Alias = "spec")]
         public ServiceSpecV1 Spec { get { throw null; } set { } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class ServiceAccountTokenProjectionV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "audience")]
+        public string? Audience { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "expirationSeconds")]
+        public long? ExpirationSeconds { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "path")]
+        public string Path { get { throw null; } set { } }
     }
 
     [YamlDotNet.Serialization.YamlSerializable]
@@ -2720,7 +2845,7 @@ namespace Aspire.Hosting.Kubernetes.Resources
         public StatefulSetOrdinalsV1? Ordinals { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "persistentVolumeClaimRetentionPolicy")]
-        public StatefulSetPersistentVolumeClaimRetentionPolicyV1 PersistentVolumeClaimRetentionPolicy { get { throw null; } set { } }
+        public StatefulSetPersistentVolumeClaimRetentionPolicyV1? PersistentVolumeClaimRetentionPolicy { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "podManagementPolicy")]
         public string? PodManagementPolicy { get { throw null; } set { } }
@@ -2741,7 +2866,7 @@ namespace Aspire.Hosting.Kubernetes.Resources
         public PodTemplateSpecV1 Template { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "updateStrategy")]
-        public StatefulSetUpdateStrategyV1 UpdateStrategy { get { throw null; } set { } }
+        public StatefulSetUpdateStrategyV1? UpdateStrategy { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "volumeClaimTemplates")]
         public System.Collections.Generic.List<PersistentVolumeClaim> VolumeClaimTemplates { get { throw null; } }
@@ -2751,7 +2876,7 @@ namespace Aspire.Hosting.Kubernetes.Resources
     public sealed partial class StatefulSetUpdateStrategyV1
     {
         [YamlDotNet.Serialization.YamlMember(Alias = "rollingUpdate")]
-        public RollingUpdateStatefulSetStrategyV1 RollingUpdate { get { throw null; } set { } }
+        public RollingUpdateStatefulSetStrategyV1? RollingUpdate { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "type")]
         public string Type { get { throw null; } set { } }
@@ -2908,7 +3033,23 @@ namespace Aspire.Hosting.Kubernetes.Resources
     public sealed partial class VolumeNodeAffinityV1
     {
         [YamlDotNet.Serialization.YamlMember(Alias = "required")]
-        public NodeSelectorV1 Required { get { throw null; } set { } }
+        public NodeSelectorV1? Required { get { throw null; } set { } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class VolumeProjectionV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "configMap")]
+        public ConfigMapProjectionV1? ConfigMap { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "downwardAPI")]
+        public DownwardApiProjectionV1? DownwardApi { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "secret")]
+        public SecretProjectionV1? Secret { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "serviceAccountToken")]
+        public ServiceAccountTokenProjectionV1? ServiceAccountToken { get { throw null; } set { } }
     }
 
     [YamlDotNet.Serialization.YamlSerializable]
@@ -2944,6 +3085,9 @@ namespace Aspire.Hosting.Kubernetes.Resources
 
         [YamlDotNet.Serialization.YamlMember(Alias = "persistentVolumeClaim")]
         public PersistentVolumeClaimVolumeSourceV1? PersistentVolumeClaim { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "projected")]
+        public ProjectedVolumeSourceV1? Projected { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "secret")]
         public SecretVolumeSourceV1? Secret { get { throw null; } set { } }
