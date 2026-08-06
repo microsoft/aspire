@@ -5,8 +5,10 @@
 #pragma warning disable ASPIREPIPELINES003
 
 using Aspire.Hosting.Publishing;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Tests.Publishing;
 
@@ -144,4 +146,129 @@ public class PodmanSaveArgumentsTests
 
         Assert.Contains($"--output \"{Path.Combine("out", "container-abc123.tar")}\"", arguments, StringComparison.Ordinal);
     }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task BuildImageAsync_OciFormatWithoutOutputPath_ThrowsBeforeBuild(string? outputPath)
+    {
+        var processRunner = new TestProcessRunner();
+        var runtime = CreateRuntime(processRunner);
+        var options = new ContainerImageBuildOptions
+        {
+            ImageName = "myapp",
+            Tag = "latest",
+            OutputPath = outputPath,
+            ImageFormat = ContainerImageFormat.Oci
+        };
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => BuildImageAsync(runtime, options));
+
+        Assert.Equal("options", exception.ParamName);
+        Assert.Empty(processRunner.ProcessSpecs);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task BuildImageAsync_WithoutOutputPath_DoesNotSave(string? outputPath)
+    {
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult();
+        var runtime = CreateRuntime(processRunner);
+        var options = new ContainerImageBuildOptions
+        {
+            ImageName = "myapp",
+            Tag = "latest",
+            OutputPath = outputPath,
+            ImageFormat = ContainerImageFormat.Docker
+        };
+
+        await BuildImageAsync(runtime, options);
+
+        var buildSpec = Assert.Single(processRunner.ProcessSpecs);
+        Assert.StartsWith("build ", Assert.IsType<string>(buildSpec.Arguments), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task BuildImageAsync_WithOutputPath_BuildsThenSaves()
+    {
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult();
+        processRunner.EnqueueResult();
+        var runtime = CreateRuntime(processRunner);
+        var options = new ContainerImageBuildOptions
+        {
+            ImageName = "myapp",
+            Tag = "latest",
+            OutputPath = "out",
+            ImageFormat = ContainerImageFormat.Oci
+        };
+
+        await BuildImageAsync(runtime, options);
+
+        Assert.Collection(
+            processRunner.ProcessSpecs,
+            buildSpec => Assert.StartsWith("build ", Assert.IsType<string>(buildSpec.Arguments), StringComparison.Ordinal),
+            saveSpec => Assert.Equal(PodmanContainerRuntime.BuildSaveArguments("myapp:latest", options), saveSpec.Arguments));
+    }
+
+    [Fact]
+    public async Task BuildImageAsync_WhenBuildFails_DoesNotSave()
+    {
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult(exitCode: 17, output: ["build failed"]);
+        var runtime = CreateRuntime(processRunner);
+        var options = new ContainerImageBuildOptions
+        {
+            ImageName = "myapp",
+            Tag = "latest",
+            OutputPath = "out",
+            ImageFormat = ContainerImageFormat.Oci
+        };
+
+        var exception = await Assert.ThrowsAsync<ProcessFailedException>(() => BuildImageAsync(runtime, options));
+
+        Assert.Equal(17, exception.ExitCode);
+        Assert.Contains("build failed", exception.Message);
+        Assert.Single(processRunner.ProcessSpecs);
+    }
+
+    [Fact]
+    public async Task BuildImageAsync_WhenSaveFails_ThrowsProcessFailedException()
+    {
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult();
+        processRunner.EnqueueResult(exitCode: 23, output: ["save failed"]);
+        var runtime = CreateRuntime(processRunner);
+        var options = new ContainerImageBuildOptions
+        {
+            ImageName = "myapp",
+            Tag = "latest",
+            OutputPath = "out",
+            ImageFormat = ContainerImageFormat.Oci
+        };
+
+        var exception = await Assert.ThrowsAsync<ProcessFailedException>(() => BuildImageAsync(runtime, options));
+
+        Assert.Equal(23, exception.ExitCode);
+        Assert.Contains("save failed", exception.Message);
+        Assert.Collection(
+            processRunner.ProcessSpecs,
+            buildSpec => Assert.StartsWith("build ", Assert.IsType<string>(buildSpec.Arguments), StringComparison.Ordinal),
+            saveSpec => Assert.StartsWith("save ", Assert.IsType<string>(saveSpec.Arguments), StringComparison.Ordinal));
+    }
+
+    private static PodmanContainerRuntime CreateRuntime(TestProcessRunner processRunner)
+        => new(NullLogger<PodmanContainerRuntime>.Instance, processRunner);
+
+    private static Task BuildImageAsync(PodmanContainerRuntime runtime, ContainerImageBuildOptions options)
+        => runtime.BuildImageAsync(
+            contextPath: "context",
+            dockerfilePath: "Dockerfile",
+            options: options,
+            buildArguments: [],
+            buildSecrets: [],
+            stage: null,
+            cancellationToken: CancellationToken.None);
 }

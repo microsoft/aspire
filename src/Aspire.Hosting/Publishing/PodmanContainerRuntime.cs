@@ -15,7 +15,7 @@ namespace Aspire.Hosting.Publishing;
 
 internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContainerRuntime>
 {
-    public PodmanContainerRuntime(ILogger<PodmanContainerRuntime> logger) : base(logger)
+    public PodmanContainerRuntime(ILogger<PodmanContainerRuntime> logger, IProcessRunner processRunner) : base(logger, processRunner)
     {
     }
 
@@ -56,7 +56,7 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
             }
         };
 
-        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
+        var (pendingProcessResult, processDisposable) = ProcessRunner.Run(spec);
 
         await using (processDisposable)
         {
@@ -147,6 +147,11 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
         var imageName = !string.IsNullOrEmpty(options?.Tag)
             ? $"{options.ImageName}:{options.Tag}"
             : options?.ImageName ?? throw new ArgumentException("ImageName must be provided in options.", nameof(options));
+
+        if (options.ImageFormat == ContainerImageFormat.Oci && string.IsNullOrEmpty(options.OutputPath))
+        {
+            throw new ArgumentException("OutputPath must be provided when ImageFormat is Oci.", nameof(options));
+        }
 
         var arguments = $"build --file \"{dockerfilePath}\" --tag \"{imageName}\"";
 
@@ -298,7 +303,7 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
                 "Podman is running and healthy.",
                 cancellationToken,
                 Array.Empty<object>()).ConfigureAwait(false);
-            
+
             return exitCode == 0;
         }
         catch

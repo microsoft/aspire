@@ -19,16 +19,23 @@ namespace Aspire.Hosting.Publishing;
 internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where TLogger : class
 {
     private readonly ILogger<TLogger> _logger;
+    private readonly IProcessRunner _processRunner;
 
-    protected ContainerRuntimeBase(ILogger<TLogger> logger)
+    protected ContainerRuntimeBase(ILogger<TLogger> logger, IProcessRunner processRunner)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _processRunner = processRunner ?? throw new ArgumentNullException(nameof(processRunner));
     }
 
     /// <summary>
     /// Gets the logger instance for use in derived classes.
     /// </summary>
     protected ILogger<TLogger> Logger => _logger;
+
+    /// <summary>
+    /// Gets the process runner used for container runtime commands.
+    /// </summary>
+    protected IProcessRunner ProcessRunner => _processRunner;
 
     /// <summary>
     /// Gets the name of the container runtime executable (e.g., "docker", "podman").
@@ -114,7 +121,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
 
         _logger.LogDebug("Running {RuntimeName} with arguments: {Arguments}", RuntimeExecutable, arguments);
         _logger.LogDebug("Password length being passed to stdin: {PasswordLength}", password?.Length ?? 0);
-        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
+        var (pendingProcessResult, processDisposable) = _processRunner.Run(spec);
 
         await using (processDisposable)
         {
@@ -159,7 +166,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
         var spec = CreateProcessSpec(arguments, retainOutput: true);
 
         _logger.LogDebug("Running {RuntimeName} with arguments: {ArgumentList}", Name, spec.Arguments);
-        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
+        var (pendingProcessResult, processDisposable) = _processRunner.Run(spec);
 
         await using (processDisposable)
         {
@@ -291,7 +298,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
         }
 
         _logger.LogDebug("Running {RuntimeName} with arguments: {ArgumentList}", Name, spec.Arguments);
-        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
+        var (pendingProcessResult, processDisposable) = _processRunner.Run(spec);
 
         await using (processDisposable)
         {
@@ -359,7 +366,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
             },
         };
 
-        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
+        var (pendingProcessResult, processDisposable) = _processRunner.Run(spec);
 
         await using (processDisposable)
         {
@@ -418,7 +425,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
             },
         };
 
-        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
+        var (pendingProcessResult, processDisposable) = _processRunner.Run(spec);
 
         await using (processDisposable)
         {
@@ -469,7 +476,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
             }
         };
 
-        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
+        var (pendingProcessResult, processDisposable) = _processRunner.Run(spec);
 
         await using (processDisposable)
         {
@@ -601,7 +608,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
                 InheritEnv = true
             };
 
-            var (pendingResult, processDisposable) = ProcessUtil.Run(spec);
+            var (pendingResult, processDisposable) = _processRunner.Run(spec);
             await using (processDisposable)
             {
                 var result = await pendingResult.ConfigureAwait(false);

@@ -14,7 +14,7 @@ public sealed class DockerUtils
 
     // `volume rm` / `volume inspect` are spelled identically by Docker and Podman, so the only thing that
     // varies is the executable. Resolved once because every functional test that uses a volume calls this.
-    private static readonly Lazy<string?> s_runtimeExecutable = new(ResolveRuntimeExecutable);
+    private static readonly Lazy<RuntimeResolution> s_runtimeResolution = new(ResolveRuntimeExecutable);
 
     /// <summary>
     /// Resolves the container runtime the app host itself would have used, so volumes are removed with the
@@ -30,31 +30,48 @@ public sealed class DockerUtils
     /// <c>DcpPublisher:ContainerRuntime</c> key is deliberately not honoured — this is a static helper with
     /// no <c>IConfiguration</c>, and no test that sets that key creates volumes.
     /// </remarks>
-    private static string? ResolveRuntimeExecutable()
-    {
-        var configuredRuntime = GetConfiguredRuntime();
+    private static RuntimeResolution ResolveRuntimeExecutable()
+        => ResolveRuntimeExecutable(static (configuredRuntime, cancellationToken) =>
+            ContainerRuntimeDetector.FindAvailableRuntimeAsync(configuredRuntime, cancellationToken: cancellationToken));
 
-        // Detection is async and spawns processes. Task.Run keeps the blocking wait off any ambient
-        // synchronization context, since callers are synchronous test teardown paths.
-        using var cts = new CancellationTokenSource(s_runtimeDetectionTimeout);
-        ContainerRuntimeInfo? detected;
+    internal static RuntimeResolution ResolveRuntimeExecutable(
+        Func<string?, CancellationToken, Task<ContainerRuntimeInfo?>> runtimeDetector)
+    {
+        ArgumentNullException.ThrowIfNull(runtimeDetector);
+
+        string? configuredRuntime = null;
         try
         {
-            detected = Task.Run(
-                () => ContainerRuntimeDetector.FindAvailableRuntimeAsync(configuredRuntime, cancellationToken: cts.Token),
+            configuredRuntime = GetConfiguredRuntime();
+
+            // Detection is async and spawns processes. Task.Run keeps the blocking wait off any ambient
+            // synchronization context, since callers are synchronous test teardown paths.
+            using var cts = new CancellationTokenSource(s_runtimeDetectionTimeout);
+            var detected = Task.Run(
+                () => runtimeDetector(configuredRuntime, cts.Token),
                 cts.Token).GetAwaiter().GetResult();
-        }
-        catch (OperationCanceledException)
-        {
-            return null;
-        }
 
-        if (detected is not { IsInstalled: true })
-        {
-            return null;
-        }
+            if (detected is not { IsInstalled: true })
+            {
+                return RuntimeResolution.Failed(DescribeMissingRuntime(configuredRuntime));
+            }
 
-        return PathLookupHelper.FindFullPathFromPath(detected.Executable);
+            return PathLookupHelper.FindFullPathFromPath(detected.Executable) is { } executable
+                ? RuntimeResolution.Succeeded(executable)
+                : RuntimeResolution.Failed(DescribeMissingRuntime(configuredRuntime));
+        }
+        catch (OperationCanceledException exception)
+        {
+            return RuntimeResolution.Failed("container runtime detection timed out.", exception);
+        }
+        catch (Exception exception)
+        {
+            // This is a best-effort cleanup boundary. Preserve unexpected probe failures as data so the
+            // Lazy does not cache a thrown exception that can later replace the test's original failure.
+            return RuntimeResolution.Failed(
+                $"container runtime detection failed with {exception.GetType().Name}: {exception.Message}",
+                exception);
+        }
     }
 
     /// <summary>
@@ -72,20 +89,23 @@ public sealed class DockerUtils
     /// Explains why no runtime could be used, so a failing cleanup does not look like a missing install
     /// when the runtime was actually pinned by configuration.
     /// </summary>
-    private static string DescribeMissingRuntime()
-        => GetConfiguredRuntime() is { } configuredRuntime
+    private static string DescribeMissingRuntime(string? configuredRuntime)
+        => configuredRuntime is not null
             ? $"the container runtime configured by {KnownConfigNames.ContainerRuntime} ('{configuredRuntime}') is not available."
             : "no container runtime was found on PATH.";
 
     public static void AttemptDeleteDockerVolume(string volumeName, bool throwOnFailure = false)
     {
-        if (s_runtimeExecutable.Value is not string runtime)
+        var runtimeResolution = s_runtimeResolution.Value;
+        if (runtimeResolution.Executable is not string runtime)
         {
+            var message = $"Failed to delete the volume named '{volumeName}': {runtimeResolution.FailureReason}";
             if (throwOnFailure)
             {
-                throw new InvalidOperationException($"Failed to delete the volume named '{volumeName}': {DescribeMissingRuntime()}");
+                throw new InvalidOperationException(message, runtimeResolution.DetectionException);
             }
 
+            Console.WriteLine(message);
             return;
         }
 
@@ -132,5 +152,17 @@ public sealed class DockerUtils
                 throw new InvalidOperationException($"Failed to inspect the deleted volume named '{volumeName}', the inspect process did not start.");
             }
         }
+    }
+
+    internal readonly record struct RuntimeResolution(
+        string? Executable,
+        string? FailureReason,
+        Exception? DetectionException)
+    {
+        public static RuntimeResolution Succeeded(string executable)
+            => new(executable, FailureReason: null, DetectionException: null);
+
+        public static RuntimeResolution Failed(string failureReason, Exception? detectionException = null)
+            => new(Executable: null, FailureReason: failureReason, DetectionException: detectionException);
     }
 }
