@@ -7,7 +7,6 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Net.Http.Headers;
 using System.Reflection;
-using System.Text;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.DevTunnels;
@@ -793,45 +792,29 @@ public static partial class DevTunnelsResourceBuilderExtensions
 
         var publicUrl = NormalizeUrl(portUri);
         var localUrl = portResource.TargetEndpoint.EndpointAnnotation.AllocatedEndpoint?.UriString;
-        var markdown = new StringBuilder()
-            .Append("## ")
-            .AppendLine(MessageStrings.ShowTunnelUrlsCommandResultHeading)
-            .AppendLine()
-            .Append("- **")
-            .Append(MessageStrings.ShowTunnelUrlsCommandTunnelUrlLabel)
-            .Append(":** ")
-            .AppendMarkdownLink(publicUrl)
-            .AppendLine();
+        List<string> markdownLines =
+        [
+            $"## {MessageStrings.ShowTunnelUrlsCommandResultHeading}",
+            "",
+            $"- **{MessageStrings.ShowTunnelUrlsCommandTunnelUrlLabel}:** <{publicUrl}>"
+        ];
 
         var inspectUrl = GetInspectUrl(portUri);
         if (inspectUrl is not null)
         {
-            markdown
-                .Append("- **")
-                .Append(MessageStrings.ShowTunnelUrlsCommandInspectUrlLabel)
-                .Append(":** ")
-                .AppendMarkdownLink(inspectUrl)
-                .AppendLine();
+            markdownLines.Add($"- **{MessageStrings.ShowTunnelUrlsCommandInspectUrlLabel}:** <{inspectUrl}>");
         }
 
         if (!string.IsNullOrWhiteSpace(localUrl))
         {
-            markdown
-                .Append("- **")
-                .Append(MessageStrings.ShowTunnelUrlsCommandLocalEndpointUrlLabel)
-                .Append(":** ")
-                .AppendMarkdownLink(localUrl)
-                .AppendLine();
+            markdownLines.Add($"- **{MessageStrings.ShowTunnelUrlsCommandLocalEndpointUrlLabel}:** <{localUrl}>");
         }
 
         return Task.FromResult(CommandResults.Success(
             MessageStrings.ShowTunnelUrlsCommandSuccess,
-            new CommandResultData
-            {
-                Value = markdown.ToString(),
-                Format = CommandResultFormat.Markdown,
-                DisplayImmediately = true
-            }));
+            string.Join(Environment.NewLine, markdownLines),
+            CommandResultFormat.Markdown,
+            displayImmediately: true));
     }
 
     private static string NormalizeUrl(Uri url) => new UriBuilder(url).Uri.ToString().TrimEnd('/');
@@ -847,16 +830,6 @@ public static partial class DevTunnelsResourceBuilderExtensions
         var hostPrefix = portUri.Host[..hostPrefixLength];
         var hostSuffix = portUri.Host[hostPrefixLength..];
         return new UriBuilder(portUri) { Host = $"{hostPrefix}-inspect{hostSuffix}" }.Uri.ToString();
-    }
-
-    private static StringBuilder AppendMarkdownLink(this StringBuilder builder, string url)
-    {
-        builder
-            .Append('<')
-            .Append(url)
-            .Append('>');
-
-        return builder;
     }
 
     private static string GetUserAgent()

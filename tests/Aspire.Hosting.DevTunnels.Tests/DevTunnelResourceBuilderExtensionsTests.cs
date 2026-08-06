@@ -498,7 +498,7 @@ public class DevTunnelResourceBuilderExtensionsTests
         Assert.Equal(
             $"## Dev tunnel URLs{Environment.NewLine}{Environment.NewLine}" +
             $"- **Tunnel URL:** <https://n4skq32k-3000.use.devtunnels.ms>{Environment.NewLine}" +
-            $"- **Inspect URL:** <https://n4skq32k-3000-inspect.use.devtunnels.ms/>{Environment.NewLine}",
+            "- **Inspect URL:** <https://n4skq32k-3000-inspect.use.devtunnels.ms/>",
             result.Data.Value);
     }
 
