@@ -25,6 +25,8 @@ aspire add Aspire.Hosting.Azure.Sandboxes
 Then, in the _AppHost.cs_ file of `AppHost`, add an Azure sandbox group and publish a compute resource to it using the following methods:
 
 ```csharp
+#pragma warning disable ASPIREAZURE001 // Azure Container Apps Sandboxes APIs are experimental.
+
 var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
 
 builder.AddProject<Projects.ApiService>("api")
@@ -51,7 +53,7 @@ Endpoints are not exposed unless they are marked external. External endpoints re
 
 Images are resolved to immutable Linux/amd64 digests before import. Deployment state stores sandbox, disk-image, endpoint, and endpoint-security metadata, but does not persist registry credentials. Stable ownership labels are derived from the AppHost and Azure deployment scope so a later deploy or destroy can find resources after `--clear-cache`; the scope and application identity remain part of the label to prevent resource-name-only sweeping across apps.
 
-Duration options use `TimeSpan` in C#. Generated TypeScript SDKs represent `TimeSpan` values as .NET ticks, where one second is `10_000_000`.
+Duration options use `TimeSpan` in C#. Generated TypeScript SDKs represent `TimeSpan` values as milliseconds, where one second is `1_000`.
 
 ## Deployment architecture
 

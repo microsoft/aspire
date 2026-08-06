@@ -21,12 +21,12 @@ const api = await builder
 const publishedApi = await api.publishAsAzureSandbox(sandboxes, {
     tier: AzureSandboxTier.Large,
     autoSuspendEnabled: true,
-    autoSuspendInterval: 9_000_000_000,
+    autoSuspendInterval: 900_000,
     autoSuspendMode: AzureSandboxAutoSuspendMode.Disk,
     autoDeleteEnabled: true,
-    autoDeleteInterval: 36_000_000_000,
+    autoDeleteInterval: 3_600_000,
     autoDeleteTrigger: AzureSandboxAutoDeleteTrigger.AfterSuspend,
-    publicEndpointReadyTimeout: 1_200_000_000,
+    publicEndpointReadyTimeout: 120_000,
     endpoints: [
         {
             name: "http",
