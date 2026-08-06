@@ -584,7 +584,9 @@ internal sealed class RunCommand : BaseCommand
         }
         catch (ProjectLocatorException ex)
         {
-            runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "project_not_found");
+            runActivity?.SetTag(
+                TelemetryConstants.Tags.ErrorType,
+                ex.FailureReason is ProjectLocatorFailureReason.ProjectFileCouldNotBeBuilt ? "build_failed" : "project_not_found");
             return HandleProjectLocatorException(ex, InteractionService, Telemetry);
         }
         catch (AppHostIncompatibleException ex)

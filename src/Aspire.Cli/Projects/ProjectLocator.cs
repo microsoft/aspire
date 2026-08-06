@@ -930,6 +930,12 @@ internal sealed class ProjectLocator(
 
                         return new AppHostProjectSearchResult(projectFile, [projectFile]);
                     }
+
+                    if (validationResult.IsPossiblyUnbuildable)
+                    {
+                        logger.LogError("Project file {ProjectFile} could not be analyzed because it failed to build.", projectFile.FullName);
+                        throw new ProjectLocatorException(ErrorStrings.AppHostsMayNotBeBuildable, ProjectLocatorFailureReason.ProjectFileCouldNotBeBuilt);
+                    }
                 }
 
                 // If no handler matched, for .cs files check if we should search the parent directory
@@ -1230,6 +1236,8 @@ internal static class ProjectLocatorErrorHelper
                 => (CliExitCodes.SdkNotInstalled, InteractionServiceStrings.NoSupportedAppHostsFound),
             ProjectLocatorFailureReason.ProjectFileNotAppHostProject
                 => (CliExitCodes.FailedToFindProject, InteractionServiceStrings.SpecifiedProjectFileNotAppHostProject),
+            ProjectLocatorFailureReason.ProjectFileCouldNotBeBuilt
+                => (CliExitCodes.FailedToBuildArtifacts, InteractionServiceStrings.ProjectCouldNotBeBuilt),
             ProjectLocatorFailureReason.ProjectFileDoesntExist
                 => (CliExitCodes.FailedToFindProject, InteractionServiceStrings.ProjectOptionDoesntExist),
             ProjectLocatorFailureReason.MultipleProjectFilesFound
@@ -1247,6 +1255,7 @@ internal enum ProjectLocatorFailureReason
 {
     ProjectFileDoesntExist,
     ProjectFileNotAppHostProject,
+    ProjectFileCouldNotBeBuilt,
     MultipleProjectFilesFound,
     NoProjectFileFound,
     AppHostsMayNotBeBuildable,

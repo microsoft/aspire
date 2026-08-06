@@ -47,6 +47,34 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task UseOrFindAppHostProjectFileReportsBuildFailureIfExplicitProjectCannotBeAnalyzed()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, "<Project Sdk=\"Aspire.AppHost.Sdk\"></Project>");
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostCallback = _ => new AppHostValidationResult(IsValid: false, IsPossiblyUnbuildable: true)
+        };
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
+
+        var exception = await Assert.ThrowsAsync<ProjectLocatorException>(async () =>
+        {
+            await projectLocator.UseOrFindAppHostProjectFileAsync(projectFile, createSettingsFile: true).DefaultTimeout();
+        });
+
+        Assert.Equal(ErrorStrings.AppHostsMayNotBeBuildable, exception.Message);
+        Assert.Equal(ProjectLocatorFailureReason.ProjectFileCouldNotBeBuilt, exception.FailureReason);
+
+        var (exitCode, errorMessage) = ProjectLocatorErrorHelper.GetExitCodeAndMessage(exception);
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode);
+        Assert.Equal(InteractionServiceStrings.ProjectCouldNotBeBuilt, errorMessage);
+    }
+
+    [Fact]
     public async Task UseOrFindAppHostProjectFileUsesCachedSettingsWhenStillValidAmongMultipleAppHosts()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
