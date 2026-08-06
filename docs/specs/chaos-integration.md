@@ -186,7 +186,9 @@ Default-on availability in Run mode is conditional on Phase 0 proving semantic a
 
 ### Resource eligibility
 
-The user names only an Aspire resource. The controller asks DCP whether the requested fault can be enforced unambiguously and completely across every relevant proxied path for that resource.
+The `resource` field names the downstream Aspire resource receiving the traffic. For example, `"resource": "inventory"` applies the fault on requests entering `inventory` from `orders`, a frontend, tests, or any other caller. It does not fault requests originating from `inventory`.
+
+Phase 1 does not select one caller-to-destination edge. If only `orders -> inventory` should be faulted while `frontend -> inventory` remains unaffected, that requires a future directed-edge capability. The controller instead asks DCP whether the requested fault can be enforced unambiguously and completely across every relevant inbound proxied path to the destination.
 
 A resource is eligible for a fault only when:
 
@@ -252,7 +254,7 @@ The complete authored policy schema is:
 
 | Field | Meaning |
 | --- | --- |
-| `resource` | Required Aspire resource name |
+| `resource` | Required downstream Aspire resource name; the fault applies on requests entering this resource from every caller |
 | `fault` | Required single fault |
 
 That is the whole v1 schema. Unknown fields are rejected.
