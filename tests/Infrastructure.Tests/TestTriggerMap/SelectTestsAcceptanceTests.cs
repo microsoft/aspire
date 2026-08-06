@@ -899,6 +899,23 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
         Assert.Contains("job:polyglot", r.Jobs);
     }
 
+    [Fact]
+    public void RealMapBlazorRuntimeAssetChangeRunsPackageAndPolyglotRegressions()
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories());
+
+        var r = selector.Select(
+            ["src/Aspire.Hosting.Blazor/targets/GenerateScripts.targets"],
+            [],
+            new SelectorOptions());
+
+        Assert.False(r.SelectsAll);
+        Assert.Contains("Aspire.Hosting.Tests", r.TestProjects);
+        Assert.Contains("Aspire.Cli.EndToEnd.Tests", r.TestProjects);
+        Assert.Contains("job:polyglot", r.Jobs);
+    }
+
     // A real src/Aspire.Hosting*/api/<name>.ats.txt baseline for a genuine INTEGRATION (not the
     // codegen engine itself) whose integration also has a tests/PolyglotAppHosts/<name> fixture, so the
     // change exercises the polyglot playground for that integration's exported surface. Computed from the
