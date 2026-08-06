@@ -26,6 +26,8 @@ aspire add Aspire.Hosting.Azure.Sandboxes
 Then, in the _AppHost.cs_ file of `AppHost`, add an Azure sandbox group and publish a compute resource to it using the following methods:
 
 ```csharp
+#pragma warning disable ASPIREAZURE001 // Azure Container Apps Sandboxes APIs are experimental.
+
 var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
 
 builder.AddProject<Projects.ApiService>("api")
@@ -176,7 +178,7 @@ After deployment, open `https://connectors.azure.com/<subscription-id>/<resource
 
 Existing Connector Namespace resources can be referenced with the standard Azure `PublishAsExisting`/`AsExisting` APIs. Existing connection and MCP server configuration children can be marked with `AsExisting()`. Existing resources are emitted as read-only Bicep references; adding an access policy or a new sibling child remains an explicit provisioning operation. `AddTriggerConfig` rejects an existing connection because trigger creation requires a new Connector Namespace identity access policy; manage that access policy and trigger outside Aspire when the connection must remain existing.
 
-Duration options use `TimeSpan` in C#. Generated TypeScript SDKs represent `TimeSpan` values as .NET ticks, where one second is `10_000_000`.
+Duration options use `TimeSpan` in C#. Generated TypeScript SDKs represent `TimeSpan` values as milliseconds, where one second is `1_000`.
 
 ## Deployment architecture
 
