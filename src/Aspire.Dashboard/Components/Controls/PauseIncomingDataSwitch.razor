@@ -2,6 +2,7 @@
 @inject IStringLocalizer<ControlsStrings> Loc
 
 <FluentButton Appearance="Appearance.Neutral"
+              Disabled="@Disabled"
               Title="@(IsPaused ? Loc[nameof(ControlsStrings.ResumeButtonTitle)] : Loc[nameof(ControlsStrings.PauseButtonTitle)])"
               OnClick="@OnTogglePauseCoreAsync">
     @if (IsPaused)

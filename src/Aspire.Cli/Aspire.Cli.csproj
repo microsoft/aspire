@@ -135,7 +135,10 @@
     <Compile Include="$(SharedDir)ChannelExtensions.cs" Link="Utils\ChannelExtensions.cs" />
     <Compile Include="$(SharedDir)CommandLineArgsParser.cs" Link="Utils\CommandLineArgsParser.cs" />
     <Compile Include="$(SharedDir)EnumerableExtensions.cs" Link="Utils\EnumerableExtensions.cs" />
+    <Compile Include="$(SharedDir)FileLock.cs" Link="Utils\FileLock.cs" />
     <Compile Include="$(SharedDir)FileUploadHelpers.cs" Link="Utils\FileUploadHelpers.cs" />
+    <Compile Include="$(SharedDir)AspireHomeDirectory.cs" Link="Utils\AspireHomeDirectory.cs" />
+    <Compile Include="$(SharedDir)DirectoryHelper.cs" Link="Utils\DirectoryHelper.cs" />
     <Compile Include="$(SharedDir)KnownAspNetCoreConfigNames.cs" Link="Utils\KnownAspNetCoreConfigNames.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
     <Compile Include="$(SharedDir)IntegrationPackageProbeManifest.cs" Link="Utils\IntegrationPackageProbeManifest.cs" />

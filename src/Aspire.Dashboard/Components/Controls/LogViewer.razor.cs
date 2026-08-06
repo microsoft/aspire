@@ -59,6 +59,9 @@ public sealed partial class LogViewer
     public bool ShowNoLogsMessage { get; set; }
 
     [Parameter]
+    public string? NoLogsMessage { get; set; }
+
+    [Parameter]
     public string? FilterText { get; set; }
 
     private Virtualize<LogEntry>? VirtualizeRef

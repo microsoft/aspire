@@ -44,12 +44,15 @@
     <Protobuf Include="..\Aspire.Hosting\Dashboard\proto\dashboard_service.proto">
       <Link>ServiceClient\dashboard_service.proto</Link>
     </Protobuf>
+
+    <EmbeddedResource Include="ServiceClient\DatabaseSchema\*.sql" />
   </ItemGroup>
 
   <!-- Used by publishing infrastructure to get the version to use for blob publishing -->
   <Target Name="ReturnPackageVersion" Returns="$(PackageVersion)" />
 
   <ItemGroup>
+    <PackageReference Include="Dapper" />
     <PackageReference Include="Grpc.AspNetCore" />
     <PackageReference Include="Hex1b" />
     <PackageReference Include="Humanizer.Core" />
@@ -57,8 +60,14 @@
     <PackageReference Include="Semver" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Certificate" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
+    <PackageReference Include="Microsoft.Data.Sqlite.Core" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
     <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" />
     <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components.Icons" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
+    <PackageReference Include="System.IO.Hashing" />
   </ItemGroup>
 
   <ItemGroup>
@@ -262,9 +271,12 @@
 
   <ItemGroup>
     <Compile Include="$(SharedDir)AssemblyVersionHelper.cs" Link="Utils\AssemblyVersionHelper.cs" />
+    <Compile Include="$(SharedDir)AspireHomeDirectory.cs" Link="Utils\AspireHomeDirectory.cs" />
     <Compile Include="$(SharedDir)ChannelExtensions.cs" Link="Extensions\ChannelExtensions.cs" />
     <Compile Include="$(SharedDir)ColorGenerator.cs" Link="Utils\ColorGenerator.cs" />
+    <Compile Include="$(SharedDir)DirectoryHelper.cs" Link="Utils\DirectoryHelper.cs" />
     <Compile Include="$(SharedDir)EnumerableExtensions.cs" Link="Utils\EnumerableExtensions.cs" />
+    <Compile Include="$(SharedDir)FileLock.cs" Link="Utils\FileLock.cs" />
     <Compile Include="$(SharedDir)FormatHelpers.cs" Link="Utils\FormatHelpers.cs" />
     <Compile Include="$(SharedDir)DateFormatStringsHelpers.cs" Link="Utils\DateFormatStringsHelpers.cs" />
     <Compile Include="$(SharedDir)TimeProviderExtensions.cs" Link="Extensions\TimeProviderExtensions.cs" />
