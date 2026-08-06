@@ -469,8 +469,9 @@ public class AzureVirtualMachineScaleSetEnvironmentTests
             "1.2.3");
 
         Assert.Equal("application/gzip", options.HttpHeaders.ContentType);
-        Assert.Equal("0123456789abcdef", options.Metadata["aspire-fingerprint"]);
-        Assert.Equal("1.2.3", options.Metadata["aspire-version"]);
+        Assert.Equal("0123456789abcdef", options.Metadata["aspire_fingerprint"]);
+        Assert.Equal("1.2.3", options.Metadata["aspire_version"]);
+        Assert.All(options.Metadata.Keys, key => Assert.Matches("^[A-Za-z_][A-Za-z0-9_]*$", key));
     }
 
     [Fact]

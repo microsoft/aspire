@@ -314,8 +314,10 @@ public sealed class AzureVirtualMachineScaleSetEnvironmentResource : AzureBicepR
             },
             Metadata = new Dictionary<string, string>
             {
-                ["aspire-fingerprint"] = fingerprint,
-                ["aspire-version"] = applicationVersion
+                // Azure Blob metadata names must be valid C# identifiers.
+                // See https://learn.microsoft.com/rest/api/storageservices/naming-and-referencing-containers--blobs--and-metadata#metadata-key-and-value-names.
+                ["aspire_fingerprint"] = fingerprint,
+                ["aspire_version"] = applicationVersion
             }
         };
     }
