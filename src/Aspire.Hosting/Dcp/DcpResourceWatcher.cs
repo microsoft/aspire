@@ -37,8 +37,9 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
     private readonly DcpResourceState _resourceState;
     private readonly ResourceSnapshotBuilder _snapshotBuilder;
 
-    private readonly ConcurrentDictionary<string, (CancellationTokenSource Cancellation, Task Task)> _logStreams = new();
-    private readonly ConcurrentDictionary<string, PendingFollowLogDeduplication> _pendingFollowLogDeduplications = new();
+    private readonly ConcurrentDictionary<string, LogStreamState> _logStreams = new();
+    private readonly Dictionary<string, PendingFollowLogDeduplication> _pendingFollowLogDeduplications = [];
+    private readonly object _pendingFollowLogDeduplicationsLock = new();
 
     // Last identity and resource version seen for each DCP object, keyed by (object kind, object name).
     // The stable key avoids retaining stale entries when a delete is missed, while the UID distinguishes
@@ -60,6 +61,18 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
     internal ResiliencePipeline WatchResourceRetryPipeline { get; set; }
 
     internal ResourceSnapshotBuilder SnapshotBuilder => _snapshotBuilder;
+
+    // Internal for testing.
+    internal Task? GetLogStreamTask(string resourceName)
+    {
+        return _logStreams.TryGetValue(resourceName, out var logStream) ? logStream.Task : null;
+    }
+
+    // Internal for testing.
+    internal bool IsLogStreamDisposed(string resourceName)
+    {
+        return _logStreams.TryGetValue(resourceName, out var logStream) && logStream.IsDisposed;
+    }
 
     public DcpResourceWatcher(
         ILogger logger,
@@ -165,7 +178,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                     {
                         if (_logStreams.TryRemove(entry.ResourceName, out var logStream))
                         {
-                            logStream.Cancellation.Cancel();
+                            logStream.Cancel();
                         }
                     }
                 }
@@ -222,10 +235,10 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
             tasks.Add(resourceTask);
         }
 
-        foreach (var (_, (cancellation, logTask)) in _logStreams)
+        foreach (var (_, logStream) in _logStreams)
         {
-            cancellation.Cancel();
-            tasks.Add(logTask);
+            logStream.Cancel();
+            tasks.Add(logStream.Task);
         }
 
         try
@@ -369,10 +382,14 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
     {
         if (_logStreams.TryRemove(resourceName, out var logStream))
         {
-            logStream.Cancellation.Cancel();
+            logStream.Cancel();
         }
 
-        _pendingFollowLogDeduplications.TryRemove(resourceName, out _);
+        lock (_pendingFollowLogDeduplicationsLock)
+        {
+            _pendingFollowLogDeduplications.Remove(resourceName);
+        }
+
         _allLogsFlushed.TryRemove(resourceName, out _);
     }
 
@@ -565,8 +582,10 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         // creating multiple log streams.
         _logStreams.GetOrAdd(resource.Metadata.Name, resourceName =>
         {
-            var cancellation = new CancellationTokenSource();
             var resourceUid = resource.Metadata.Uid;
+            var logStream = new LogStreamState(resourceUid);
+            var cancellationToken = logStream.CancellationToken;
+            ObservePendingFollowLogDeduplication(resourceName, logStream);
 
             var task = Task.Run(async () =>
             {
@@ -577,10 +596,10 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                         _logger.LogDebug("Starting log streaming for {ResourceName}.", resourceName);
                     }
 
-                    await foreach (var batch in enumerable.WithCancellation(cancellation.Token).ConfigureAwait(false))
+                    await foreach (var batch in enumerable.WithCancellation(cancellationToken).ConfigureAwait(false))
                     {
                         var logEntries = CreateLogEntries(batch).ToList();
-                        logEntries = DeduplicateFollowBatch(resourceName, resourceUid, logEntries);
+                        logEntries = DeduplicateFollowBatch(resourceName, logStream, logEntries);
                         _loggerService.AddLogEntries(resourceName, logEntries, inMemorySource: false, skipExisting: false);
                     }
                 }
@@ -600,16 +619,19 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                 }
                 finally
                 {
-                    if (_pendingFollowLogDeduplications.TryGetValue(resourceName, out var pendingDeduplication) &&
-                        HasSameResourceIdentity(pendingDeduplication.ResourceUid, resourceUid))
+                    try
                     {
-                        RemovePendingFollowLogDeduplication(resourceName, pendingDeduplication);
+                        RemovePendingFollowLogDeduplication(resourceName, logStream);
+                    }
+                    finally
+                    {
+                        logStream.Dispose();
                     }
                 }
-            },
-            cancellation.Token);
+            });
 
-            return (cancellation, task);
+            logStream.SetTask(task);
+            return logStream;
         });
     }
 
@@ -617,10 +639,13 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
     {
         if (flushedLogEntries.Count == 0)
         {
-            if (_pendingFollowLogDeduplications.TryGetValue(resourceName, out var pendingDeduplication) &&
-                HasSameResourceIdentity(pendingDeduplication.ResourceUid, resourceUid))
+            lock (_pendingFollowLogDeduplicationsLock)
             {
-                RemovePendingFollowLogDeduplication(resourceName, pendingDeduplication);
+                if (_pendingFollowLogDeduplications.TryGetValue(resourceName, out var pendingDeduplication) &&
+                    HasSameResourceIdentity(pendingDeduplication.ResourceUid, resourceUid))
+                {
+                    RemovePendingFollowLogDeduplication(resourceName, pendingDeduplication);
+                }
             }
 
             return;
@@ -648,58 +673,100 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
             }
         }
 
-        _pendingFollowLogDeduplications[resourceName] = new(resourceUid, counts, latestTimestamp, remainingCount);
+        var newPendingDeduplication = new PendingFollowLogDeduplication(resourceUid, counts, latestTimestamp, remainingCount);
+        lock (_pendingFollowLogDeduplicationsLock)
+        {
+            _pendingFollowLogDeduplications[resourceName] = newPendingDeduplication;
+            if (_logStreams.TryGetValue(resourceName, out var logStream) &&
+                HasSameResourceIdentity(logStream.ResourceUid, resourceUid))
+            {
+                logStream.PendingDeduplication = newPendingDeduplication;
+            }
+        }
     }
 
-    private List<LogEntry> DeduplicateFollowBatch(string resourceName, string? resourceUid, List<LogEntry> logEntries)
+    private void ObservePendingFollowLogDeduplication(string resourceName, LogStreamState logStream)
     {
-        if (!_pendingFollowLogDeduplications.TryGetValue(resourceName, out var pendingDeduplication) ||
-            !HasSameResourceIdentity(pendingDeduplication.ResourceUid, resourceUid))
+        lock (_pendingFollowLogDeduplicationsLock)
         {
-            return logEntries;
-        }
-
-        List<LogEntry>? addedEntries = null;
-        foreach (var logEntry in logEntries)
-        {
-            // Consume at most one pending occurrence per matching entry. If a flushed snapshot
-            // contained the same line twice, the follow stream must replay it twice before both
-            // copies are treated as overlap.
-            var key = LogEntryKey.Create(logEntry);
-            if (pendingDeduplication.Counts.TryGetValue(key, out var count) && count > 0)
+            if (_pendingFollowLogDeduplications.TryGetValue(resourceName, out var pendingDeduplication) &&
+                HasSameResourceIdentity(pendingDeduplication.ResourceUid, logStream.ResourceUid))
             {
-                pendingDeduplication.Counts[key] = count - 1;
-                pendingDeduplication.RemainingCount--;
-                continue;
+                logStream.PendingDeduplication = pendingDeduplication;
+            }
+        }
+    }
+
+    private List<LogEntry> DeduplicateFollowBatch(string resourceName, LogStreamState logStream, List<LogEntry> logEntries)
+    {
+        lock (_pendingFollowLogDeduplicationsLock)
+        {
+            if (!_pendingFollowLogDeduplications.TryGetValue(resourceName, out var pendingDeduplication) ||
+                !HasSameResourceIdentity(pendingDeduplication.ResourceUid, logStream.ResourceUid))
+            {
+                return logEntries;
             }
 
-            addedEntries ??= [];
-            addedEntries.Add(logEntry);
-        }
+            logStream.PendingDeduplication = pendingDeduplication;
 
-        // Terminal-state snapshots can overlap with the follow stream, but only around the flush.
-        // Deduplicate against the flushed snapshot itself instead of rebuilding the full backlog
-        // for every follow batch for the lifetime of a chatty resource. DCP log timestamps are
-        // monotonic enough for this boundary: once the follow stream yields a newer timestamp, it
-        // has moved past the overlap window. Timestamp-less entries cannot establish that boundary,
-        // so drop the pending state after the first such batch to avoid suppressing future repeated
-        // messages that happen to have the same content.
-        if (pendingDeduplication.LatestTimestamp is null ||
-            pendingDeduplication.RemainingCount == 0 ||
-            logEntries.Any(entry => entry.Timestamp is null || entry.Timestamp > pendingDeduplication.LatestTimestamp.Value))
+            List<LogEntry>? addedEntries = null;
+            foreach (var logEntry in logEntries)
+            {
+                // Consume at most one pending occurrence per matching entry. If a flushed snapshot
+                // contained the same line twice, the follow stream must replay it twice before both
+                // copies are treated as overlap.
+                var key = LogEntryKey.Create(logEntry);
+                if (pendingDeduplication.Counts.TryGetValue(key, out var count) && count > 0)
+                {
+                    pendingDeduplication.Counts[key] = count - 1;
+                    pendingDeduplication.RemainingCount--;
+                    continue;
+                }
+
+                addedEntries ??= [];
+                addedEntries.Add(logEntry);
+            }
+
+            // Terminal-state snapshots can overlap with the follow stream, but only around the flush.
+            // Deduplicate against the flushed snapshot itself instead of rebuilding the full backlog
+            // for every follow batch for the lifetime of a chatty resource. DCP log timestamps are
+            // monotonic enough for this boundary: once the follow stream yields a newer timestamp, it
+            // has moved past the overlap window. Timestamp-less entries cannot establish that boundary,
+            // so drop the pending state after the first such batch to avoid suppressing future repeated
+            // messages that happen to have the same content.
+            if (pendingDeduplication.LatestTimestamp is null ||
+                pendingDeduplication.RemainingCount == 0 ||
+                logEntries.Any(entry => entry.Timestamp is null || entry.Timestamp > pendingDeduplication.LatestTimestamp.Value))
+            {
+                RemovePendingFollowLogDeduplication(resourceName, pendingDeduplication);
+            }
+
+            return addedEntries ?? [];
+        }
+    }
+
+    private void RemovePendingFollowLogDeduplication(string resourceName, LogStreamState logStream)
+    {
+        lock (_pendingFollowLogDeduplicationsLock)
         {
-            RemovePendingFollowLogDeduplication(resourceName, pendingDeduplication);
+            if (logStream.PendingDeduplication is { } pendingDeduplication)
+            {
+                RemovePendingFollowLogDeduplication(resourceName, pendingDeduplication);
+            }
         }
-
-        return addedEntries ?? [];
     }
 
     private void RemovePendingFollowLogDeduplication(string resourceName, PendingFollowLogDeduplication pendingDeduplication)
     {
-        // Remove only the state observed by this stream. A canceled stream from a previous object
+        Debug.Assert(Monitor.IsEntered(_pendingFollowLogDeduplicationsLock));
+
+        // Remove only the exact state observed by this stream. A canceled stream from a previous object
         // incarnation can finish after its replacement has already installed new deduplication state.
-        ((ICollection<KeyValuePair<string, PendingFollowLogDeduplication>>)_pendingFollowLogDeduplications)
-            .Remove(new(resourceName, pendingDeduplication));
+        if (_pendingFollowLogDeduplications.TryGetValue(resourceName, out var currentDeduplication) &&
+            ReferenceEquals(currentDeduplication, pendingDeduplication))
+        {
+            _pendingFollowLogDeduplications.Remove(resourceName);
+        }
     }
 
     private async Task ProcessEndpointChange(WatchEventType watchEventType, Endpoint endpoint)
@@ -861,6 +928,71 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         Updated,
         Replaced,
         Deleted
+    }
+
+    private sealed class LogStreamState(string? resourceUid) : IDisposable
+    {
+        private readonly object _lock = new();
+        private readonly CancellationTokenSource _cancellation = new();
+        private bool _disposed;
+
+        public CancellationToken CancellationToken
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    ObjectDisposedException.ThrowIf(_disposed, this);
+                    return _cancellation.Token;
+                }
+            }
+        }
+
+        public Task Task { get; private set; } = Task.CompletedTask;
+
+        public string? ResourceUid { get; } = resourceUid;
+
+        // Access is guarded by the owning DcpResourceWatcher's pending-deduplication lock.
+        public PendingFollowLogDeduplication? PendingDeduplication { get; set; }
+
+        public bool IsDisposed
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _disposed;
+                }
+            }
+        }
+
+        public void SetTask(Task task)
+        {
+            Task = task;
+        }
+
+        public void Cancel()
+        {
+            lock (_lock)
+            {
+                if (!_disposed)
+                {
+                    _cancellation.Cancel();
+                }
+            }
+        }
+
+        public void Dispose()
+        {
+            lock (_lock)
+            {
+                if (!_disposed)
+                {
+                    _cancellation.Dispose();
+                    _disposed = true;
+                }
+            }
+        }
     }
 
     private sealed class PendingFollowLogDeduplication(
