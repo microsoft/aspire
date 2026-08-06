@@ -14,31 +14,59 @@ namespace Aspire.Hosting.Publishing;
 /// <summary>
 /// Contextual information used for manifest publishing during this execution of the AppHost.
 /// </summary>
-/// <param name="executionContext">Global contextual information for this invocation of the AppHost.</param>
-/// <param name="manifestPath">Manifest path passed in for this invocation of the AppHost.</param>
-/// <param name="writer">JSON writer used to writing the manifest.</param>
-/// <param name="cancellationToken">Cancellation token for this operation.</param>
-public sealed class ManifestPublishingContext(DistributedApplicationExecutionContext executionContext, string manifestPath, Utf8JsonWriter writer, CancellationToken cancellationToken = default)
+public sealed class ManifestPublishingContext
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ManifestPublishingContext"/> class.
+    /// </summary>
+    /// <param name="executionContext">Global contextual information for this invocation of the AppHost.</param>
+    /// <param name="manifestPath">Manifest path passed in for this invocation of the AppHost.</param>
+    /// <param name="writer">JSON writer used to writing the manifest.</param>
+    /// <param name="cancellationToken">Cancellation token for this operation.</param>
+    public ManifestPublishingContext(
+        DistributedApplicationExecutionContext executionContext,
+        string manifestPath,
+        Utf8JsonWriter writer,
+        CancellationToken cancellationToken = default)
+        : this(executionContext, manifestPath, manifestPath, writer, cancellationToken)
+    {
+    }
+
+    internal ManifestPublishingContext(
+        DistributedApplicationExecutionContext executionContext,
+        string manifestPath,
+        string manifestPathForRelativePaths,
+        Utf8JsonWriter writer,
+        CancellationToken cancellationToken)
+    {
+        ExecutionContext = executionContext;
+        ManifestPath = manifestPath;
+        Writer = writer;
+        CancellationToken = cancellationToken;
+        _manifestPathForRelativePaths = manifestPathForRelativePaths;
+    }
+
     /// <summary>
     /// Gets execution context for this invocation of the AppHost.
     /// </summary>
-    public DistributedApplicationExecutionContext ExecutionContext { get; } = executionContext;
+    public DistributedApplicationExecutionContext ExecutionContext { get; }
 
     /// <summary>
     /// Gets manifest path specified for this invocation of the AppHost.
     /// </summary>
-    public string ManifestPath { get; } = manifestPath;
+    public string ManifestPath { get; }
 
     /// <summary>
     /// Gets JSON writer for writing manifest entries.
     /// </summary>
-    public Utf8JsonWriter Writer { get; } = writer;
+    public Utf8JsonWriter Writer { get; }
 
     /// <summary>
     /// Gets cancellation token for this operation.
     /// </summary>
-    public CancellationToken CancellationToken { get; } = cancellationToken;
+    public CancellationToken CancellationToken { get; }
+
+    private readonly string _manifestPathForRelativePaths;
 
     private readonly Dictionary<string, IResource> _referencedResources = [];
 
@@ -66,13 +94,41 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
             return null;
         }
 
-        var fullyQualifiedManifestPath = Path.GetFullPath(ManifestPath);
-        var manifestDirectory = Path.GetDirectoryName(fullyQualifiedManifestPath) ?? throw new DistributedApplicationException("Could not get directory name of output path");
-
         var normalizedPath = path.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
-        var relativePath = Path.GetRelativePath(manifestDirectory, normalizedPath);
+        var fullyQualifiedPath = Path.GetFullPath(normalizedPath);
+        var manifestDirectory = GetManifestDirectory(ManifestPath);
+        var relativePathFromPhysicalManifest = Path.GetRelativePath(manifestDirectory, fullyQualifiedPath);
+        string relativePath;
+
+        if (IsWithinDirectory(relativePathFromPhysicalManifest))
+        {
+            // Generated companions such as Dockerfiles and Bicep modules are written beside the
+            // physical manifest. Their relative paths are identical beside the logical target.
+            relativePath = relativePathFromPhysicalManifest;
+        }
+        else
+        {
+            // Source paths must remain relative to the checked-in target rather than the isolated
+            // staging directory used by relocated publishing.
+            relativePath = Path.GetRelativePath(GetManifestDirectory(_manifestPathForRelativePaths), fullyQualifiedPath);
+        }
 
         return relativePath.Replace('\\', '/');
+    }
+
+    private static string GetManifestDirectory(string manifestPath)
+    {
+        var fullyQualifiedManifestPath = Path.GetFullPath(manifestPath);
+        return Path.GetDirectoryName(fullyQualifiedManifestPath)
+            ?? throw new DistributedApplicationException("Could not get directory name of output path");
+    }
+
+    private static bool IsWithinDirectory(string relativePath)
+    {
+        return !Path.IsPathFullyQualified(relativePath) &&
+            relativePath != ".." &&
+            !relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal) &&
+            !relativePath.StartsWith($"..{Path.AltDirectorySeparatorChar}", StringComparison.Ordinal);
     }
 
     internal async Task WriteModel(DistributedApplicationModel model, CancellationToken cancellationToken)

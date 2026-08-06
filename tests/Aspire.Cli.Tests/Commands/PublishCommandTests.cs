@@ -432,7 +432,7 @@ public class PublishCommandTests(ITestOutputHelper outputHelper)
     [InlineData(null)]
     [InlineData("invalid")]
     [InlineData("13.4.6")]
-    public async Task PublishVerification_OldOrUnknownHosting_FailsBeforeGitOrLaunch(string? hostingVersion)
+    public async Task PublishVerification_OldOrUnknownHosting_FailsBeforeVerificationGitOrLaunch(string? hostingVersion)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
@@ -449,12 +449,12 @@ public class PublishCommandTests(ITestOutputHelper outputHelper)
             GetAspireHostingVersionAsyncCallback = (_, _) =>
                 Task.FromResult(hostingVersion)
         };
-        var gitCalled = false;
+        var gitCalls = 0;
         var git = new TestGitRepository
         {
             GetRootFromDirectoryAsyncCallback = (_, _) =>
             {
-                gitCalled = true;
+                gitCalls++;
                 return Task.FromResult<DirectoryInfo?>(workspace.WorkspaceRoot);
             }
         };
@@ -472,7 +472,7 @@ public class PublishCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode);
-        Assert.False(gitCalled);
+        Assert.Equal(1, gitCalls);
         Assert.False(Directory.Exists(targetDirectory));
     }
 }

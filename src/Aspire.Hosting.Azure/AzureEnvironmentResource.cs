@@ -94,6 +94,7 @@ public sealed class AzureEnvironmentResource : Resource
             {
                 Name = $"publish-{Name}",
                 Description = $"Publishes the Azure environment configuration for {Name}.",
+                SupportsOutputPathRelocation = true,
                 Action = ctx => PublishAsync(ctx),
                 RequiredBySteps = [WellKnownPipelineSteps.Publish],
                 DependsOnSteps = [WellKnownPipelineSteps.PublishPrereq]
@@ -184,9 +185,8 @@ public sealed class AzureEnvironmentResource : Resource
     private Task PublishAsync(PipelineStepContext context)
     {
         var azureProvisioningOptions = context.Services.GetRequiredService<IOptions<AzureProvisioningOptions>>();
-        var outputService = context.Services.GetRequiredService<IPipelineOutputService>();
         var publishingContext = new AzurePublishingContext(
-            outputService.GetOutputDirectory(),
+            context.Outputs.PrimaryOutput.OutputPath,
             azureProvisioningOptions.Value,
             context.Services,
             context.Logger,

@@ -23,6 +23,7 @@ internal sealed class PipelineExecutor(
     IPipelineActivityReporter activityReporter,
     IDistributedApplicationEventing eventing,
     BackchannelService backchannelService,
+    DistributedApplicationPipeline pipeline,
     IPipelineActivityReporter pipelineActivityReporter) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -45,22 +46,32 @@ internal sealed class PipelineExecutor(
             // Set the current step in the logger provider so that logs are associated with the correct pipeline step
             PipelineLoggerProvider.CurrentStep = step;
 
+            PipelineOutputRegistry? outputRegistry = null;
             try
             {
+                outputRegistry = serviceProvider.GetRequiredService<PipelineOutputRegistry>();
+                var pipelineContext = CreatePipelineContext(model, stoppingToken);
+                var executionPlan = await pipeline.PrepareAsync(pipelineContext).ConfigureAwait(false);
+
+                // Relocated executions are paused here so the CLI can inspect and validate the
+                // frozen plan before BeforePublishEvent or any pipeline action can mutate outputs.
+                await outputRegistry.WaitForExecutionAuthorizationAsync(stoppingToken).ConfigureAwait(false);
+
                 await eventing.PublishAsync<BeforePublishEvent>(
                     new BeforePublishEvent(serviceProvider, model), stoppingToken
                     ).ConfigureAwait(false);
 
                 // Execute the pipeline and get the summary from the context
-                var pipelineSummary = await ExecutePipelineAsync(model, stoppingToken).ConfigureAwait(false);
+                await DistributedApplicationPipeline.ExecuteAsync(executionPlan, pipelineContext).ConfigureAwait(false);
 
                 await eventing.PublishAsync<AfterPublishEvent>(
                     new AfterPublishEvent(serviceProvider, model), stoppingToken
                     ).ConfigureAwait(false);
 
                 // Get the pipeline summary items (preserves insertion order)
-                var summaryItems = pipelineSummary.Items.Count > 0 ? pipelineSummary.Items : null;
+                var summaryItems = pipelineContext.Summary.Items.Count > 0 ? pipelineContext.Summary.Items : null;
 
+                outputRegistry.MarkExecutionSucceeded();
                 await step.SucceedAsync(cancellationToken: stoppingToken).ConfigureAwait(false);
                 await activityReporter.CompletePublishAsync(new PublishCompletionOptions { PipelineSummary = summaryItems }, stoppingToken).ConfigureAwait(false);
 
@@ -76,6 +87,7 @@ internal sealed class PipelineExecutor(
             }
             catch (Exception ex)
             {
+                outputRegistry?.MarkExecutionFailed(ex);
                 logger.LogError(ex, ex.Message);
 
                 await step.FailAsync(cancellationToken: stoppingToken).ConfigureAwait(false);
@@ -100,11 +112,15 @@ internal sealed class PipelineExecutor(
     /// </summary>
     public async Task<PipelineSummary> ExecutePipelineAsync(DistributedApplicationModel model, CancellationToken cancellationToken)
     {
-        var pipelineContext = new PipelineContext(model, executionContext, serviceProvider, logger, cancellationToken);
+        var pipelineContext = CreatePipelineContext(model, cancellationToken);
 
-        var pipeline = serviceProvider.GetRequiredService<IDistributedApplicationPipeline>();
         await pipeline.ExecuteAsync(pipelineContext).ConfigureAwait(false);
 
         return pipelineContext.Summary;
+    }
+
+    private PipelineContext CreatePipelineContext(DistributedApplicationModel model, CancellationToken cancellationToken)
+    {
+        return new PipelineContext(model, executionContext, serviceProvider, logger, cancellationToken);
     }
 }

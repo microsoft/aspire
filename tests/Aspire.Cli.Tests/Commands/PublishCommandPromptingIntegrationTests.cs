@@ -1116,6 +1116,17 @@ internal sealed class TestPromptBackchannel : IAppHostCliBackchannel
     public Task<GetPipelineStepsResponse> GetPipelineStepsAsync(string? step, CancellationToken cancellationToken) =>
         Task.FromResult(new GetPipelineStepsResponse { Steps = [] });
 
+    public Task<GetPipelineOutputsResponse> GetPipelineOutputsAsync(CancellationToken cancellationToken) =>
+        Task.FromResult(new GetPipelineOutputsResponse
+        {
+            AppHostDirectory = Environment.CurrentDirectory,
+            State = "Prepared",
+            Steps = [],
+            Outputs = []
+        });
+
+    public Task AuthorizePipelineExecutionAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
     public Task<UploadFileResponse> UploadFileAsync(string filePath, string fileName, CancellationToken cancellationToken)
     {
         UploadedFiles.Add((filePath, fileName));
