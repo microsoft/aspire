@@ -12,7 +12,7 @@ This document proposes bringing the piloted `Aspire.Hosting.Chaos` experience in
 - Use one authoritative controller and policy state model for resource commands, the CLI, dashboard, MCP, and tests.
 - Make the CLI a client of resource commands, not a second policy engine.
 - Make both required mutation paths first-class:
-  - `aspire resource orders-to-inventory-chaos add-policy|remove-policy|list-policies`, where `orders-to-inventory-chaos` is the generated control resource for that service edge
+  - `aspire resource chaos add-policy|remove-policy|list-policies`, where `chaos` is the single run-only control resource and each policy names its validated scope
   - typed test-scoped policy application and removal through `ApplyChaosPolicyAsync(...)`
 - Keep the integration run-only. Chaos control resources and metadata must not appear in publish output; publish emits normal references or fails.
 - Keep policy cleanup explicit. TTL is a safety net rather than the primary lifecycle.
@@ -76,7 +76,7 @@ The pilot proves the end-to-end experience and provides useful invariants, but s
 
 | Area | Pilot behavior | Native design treatment |
 | --- | --- | --- |
-| Resource | `ChaosProxyResource` is a thin `ContainerResource` with service discovery | Replace it with an inert per-edge control resource; DCP carries traffic |
+| Resource | `ChaosProxyResource` is a thin `ContainerResource` with service discovery | Replace it with one inert `ChaosEnvironmentResource`; DCP carries traffic |
 | Topology | One proxy per selected existing edge; topology is fixed for the run | Preserve static policy scope; decide DCP endpoint-versus-reference granularity in Phase 0 |
 | Policies | Bootstrap and declared policies load at startup; runtime policies use HTTP CRUD | Preserve the static/dynamic split; replace direct clients with the shared controller |
 | State | In-memory immutable-list reads and locked writes | Preserve in-memory state; replace install-order precedence |
@@ -215,17 +215,16 @@ Prepare, commit, and rollback are idempotent by revision. If prepare fails, no p
 
 ## Resource and topology model
 
-### Edge control resource
+### Control resource and allowed scopes
 
-Each selected directed edge is represented in the AppHost model by a run-only `ChaosEdgeResource`. This is a synthetic command and status resource; it does not carry traffic or add another network hop. Traffic continues through the DCP proxy already allocated for the referenced endpoint. The resource has:
+The AppHost contains one run-only `ChaosEnvironmentResource`, named `chaos` by convention. This is a synthetic command and aggregate-status resource; it does not carry traffic or add another network hop. Traffic continues through DCP proxies. The resource has:
 
 - a stable Aspire resource name;
-- structured identities for the source resource, target resource, and target endpoint;
-- a relationship to the target for dashboard grouping;
-- DCP capability and acknowledged-revision state;
+- the allowlist of chaos-enabled target endpoints and, where DCP supports it, directed references;
+- DCP capability and acknowledged-revision state by policy scope;
 - resource commands attached during final-model preparation.
 
-One control resource per selected edge keeps policy scope obvious, limits blast radius, and gives the existing resource-command path a concrete target. Only declared references become chaos-enabled edges.
+The policy carries its scope. The controller validates that scope against the AppHost-declared allowlist before mutation, so a CLI payload cannot redirect faults to an arbitrary host. A single control resource avoids generating one dashboard and CLI resource per edge while preserving fail-closed topology.
 
 The following is **proposed pseudocode**; these APIs do not exist:
 
@@ -234,24 +233,25 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 var inventory = builder.AddProject<Projects.Inventory>("inventory");
 var orders = builder.AddProject<Projects.Orders>("orders");
+var chaos = builder.AddChaos("chaos");
 
 var inventoryChaos = orders.WithChaosReferenceTo(
     inventory,
-    resourceName: "orders-to-inventory-chaos",
+    chaos,
     endpointName: "http");
 ```
 
-`WithChaosReferenceTo` creates the normal DCP-backed service reference and adds run-only chaos metadata for that directed edge. It must not add a second endpoint under the target service name. The consumer continues to resolve the same DCP-allocated endpoint it would use without chaos.
+`WithChaosReferenceTo` creates the normal DCP-backed service reference and registers its structured scope with `chaos`. It must not add a second endpoint under the target service name. The consumer continues to resolve the same DCP-allocated endpoint it would use without chaos.
 
 ```csharp
 // Proposed conceptual result in run mode:
 // services__inventory__http__0 remains the DCP-proxied inventory endpoint.
-// The edge control resource identifies that proxy as fault-capable.
+// The chaos control resource allowlists the orders -> inventory:http scope.
 //
 // Publish emits the normal inventory reference without chaos metadata.
 ```
 
-The `ChaosEdgeResource` appears in the dashboard and CLI, while the DCP service remains the traffic endpoint. A proof spike must validate an atomic reference API that projects cleanly to TypeScript, does not depend on call order, and omits all chaos metadata in publish mode.
+The `ChaosEnvironmentResource` appears in the dashboard and CLI, while DCP services remain the traffic endpoints. A proof spike must validate an atomic reference API that projects cleanly to TypeScript, does not depend on call order, and omits all chaos metadata in publish mode.
 
 Final-model validation rejects duplicate direct and chaos-enabled references for the same target endpoint, regardless of fluent-call order, with guidance to keep only `WithChaosReferenceTo`. Phase 1 also rejects HTTPS/TLS edges unless DCP can preserve the target identity and trust contract while injecting the requested effect.
 
@@ -342,6 +342,10 @@ var policy = new ChaosPolicy
     SchemaVersion = "v1alpha1",
     Id = "inventory-timeout",
     Priority = 100,
+    Scope = ChaosPolicyScope.ForReference(
+        sourceResource: "orders",
+        targetResource: "inventory",
+        endpointName: "http"),
     Match = new HttpChaosMatch
     {
         Methods = ["GET"],
@@ -366,6 +370,7 @@ The canonical schema should include:
 | `schemaVersion` | Required for wire payloads |
 | `id` | Stable caller-supplied ID or controller-generated ID |
 | `priority` | Required signed integer with no implicit default; higher values win |
+| `scope` | Required structured target endpoint or directed reference; validated against the AppHost allowlist |
 | `match` | Protocol-specific, fail-closed selector |
 | `effects` | Ordered effects within one policy |
 | `probability` | Bounded from 0 through 1 |
@@ -374,7 +379,7 @@ The canonical schema should include:
 | `ttl` | Required/defaulted for runtime mutation; resolved to an expiry time |
 | `metadata` | Bounded labels for diagnostics; never executable behavior |
 
-The resource identifies the target edge, so callers cannot redirect a policy to an arbitrary host.
+The policy identifies its scope using Aspire resource and endpoint identities, never a raw destination URI. The controller rejects scopes that were not allowlisted by the AppHost model.
 
 ### Composition and precedence
 
@@ -458,14 +463,14 @@ No policy persistence store is proposed for the initial integration.
 The immediate CLI uses existing resource commands. The following command lines and flags are **proposed syntax**; command argument projection must follow the final resource-command conventions.
 
 ```console
-aspire resource orders-to-inventory-chaos add-policy --policy-json '{"schemaVersion":"v1alpha1","id":"inventory-timeout","priority":100,"match":{"methods":["GET"],"path":"/api/inventory/*"},"effects":[{"kind":"delay","milliseconds":2000}],"ttl":"00:02:00"}'
-aspire resource orders-to-inventory-chaos remove-policy --policy-id inventory-timeout
-aspire resource orders-to-inventory-chaos list-policies
-aspire resource orders-to-inventory-chaos pause
-aspire resource orders-to-inventory-chaos resume
+aspire resource chaos add-policy --policy-json '{"schemaVersion":"v1alpha1","id":"inventory-timeout","priority":100,"scope":{"sourceResource":"orders","targetResource":"inventory","endpointName":"http"},"match":{"methods":["GET"],"path":"/api/inventory/*"},"effects":[{"kind":"delay","milliseconds":2000}],"ttl":"00:02:00"}'
+aspire resource chaos remove-policy --policy-id inventory-timeout
+aspire resource chaos list-policies --target-resource inventory --endpoint http
+aspire resource chaos pause --target-resource inventory --endpoint http
+aspire resource chaos resume --target-resource inventory --endpoint http
 ```
 
-`orders-to-inventory-chaos` is the proposed `ChaosEdgeResource` name for traffic from the `orders` resource to the `inventory` resource. It is a control-plane handle for the DCP-proxied edge, not another application endpoint.
+`chaos` is the proposed singleton `ChaosEnvironmentResource`. Policy and filter arguments identify the allowlisted DCP scope; the CLI resource name is not part of that scope.
 
 Mutations go through `ResourceCommandService` to `ChaosPolicyController`. The CLI does not call the proxy management endpoint and does not parse or own policy semantics.
 
@@ -475,8 +480,13 @@ Commands return one structured JSON document. Illustrative `add-policy` output:
 
 ```json
 {
-  "resource": "orders-to-inventory-chaos",
+  "resource": "chaos",
   "policyId": "inventory-timeout",
+  "scope": {
+    "sourceResource": "orders",
+    "targetResource": "inventory",
+    "endpointName": "http"
+  },
   "revision": 12,
   "expiresAt": "2026-08-06T05:03:00Z",
   "acknowledgedProxies": 1,
@@ -488,7 +498,7 @@ Illustrative `list-policies` output:
 
 ```json
 {
-  "resource": "orders-to-inventory-chaos",
+  "resource": "chaos",
   "paused": false,
   "revision": 12,
   "policies": [
@@ -516,7 +526,6 @@ The recommended API is:
 // Proposed pseudocode. These APIs do not exist.
 await using ChaosPolicyLease lease =
     await app.ApplyChaosPolicyAsync(
-        chaosResourceName: "orders-to-inventory-chaos",
         policy,
         cancellationToken);
 ```
@@ -525,7 +534,7 @@ await using ChaosPolicyLease lease =
 
 The lease contract is:
 
-- `PolicyId`, chaos resource name, canonical policy, and expiry are inspectable.
+- `PolicyId`, canonical scope, canonical policy, and expiry are inspectable.
 - Creation completes only after the apply revision is acknowledged.
 - `DisposeAsync` removes only the lease's policy ID.
 - `DisposeAsync` waits for removal acknowledgement within a bounded cleanup deadline.
@@ -548,11 +557,11 @@ var scope = ChaosTestScope.Create();
 scope.ApplyToCurrentDistributedContext();
 
 await using var lease = await app.ApplyChaosPolicyAsync(
-    "orders-to-inventory-chaos",
     new ChaosPolicy
     {
         Id = $"inventory-timeout-{scope.Id}",
         Priority = 100,
+        Scope = ChaosPolicyScope.ForReference("orders", "inventory", "http"),
         Match = HttpChaosMatch.Get("/api/inventory/*", scope),
         Effects = [ChaosEffect.Delay(TimeSpan.FromSeconds(2))],
         TimeToLive = TimeSpan.FromMinutes(2)
@@ -579,7 +588,6 @@ public Task<ChaosPolicyLease> ApplyPolicyAsync(
     ChaosPolicy policy,
     CancellationToken cancellationToken) =>
     App.ApplyChaosPolicyAsync(
-        "orders-to-inventory-chaos",
         policy,
         cancellationToken);
 ```
@@ -699,7 +707,7 @@ Chaos is run-only.
 
 ### Run
 
-- Materialize the synthetic edge control resource.
+- Materialize the singleton chaos control resource.
 - Keep the existing DCP-proxied endpoint under the target's service name.
 - Start the controller and reconcile the initial declared policy revision.
 - Keep the DCP proxy pass-through when no policy is active.
@@ -815,7 +823,7 @@ This could provide polished syntax early, but it would make correctness depend o
 
 ### Phase 1: minimal native loop
 
-- Synthetic edge control resource over the existing DCP proxy topology.
+- Singleton chaos control resource with an allowlist of DCP policy scopes.
 - Singleton controller and engine-neutral revision contract.
 - DCP adapter implementing prepare, commit, rollback, capability discovery, and observations.
 - Add, remove, list, pause, and resume resource commands with JSON results.
@@ -846,7 +854,7 @@ This could provide polished syntax early, but it would make correctness depend o
 | Repository placement | Continue contribution review without assuming ownership | Jose, Aspire maintainers, and owning engineering team decision |
 | First data plane | DCP proxy extension | Reviewed DCP schema/control proposal and Phase 0 conformance results |
 | Conformance fallback | Explicit YARP-compatible adapter, not product topology | Evidence that DCP sequencing blocks policy validation |
-| Topology API | Synthetic edge control resource over a normal DCP reference | C# and TypeScript API sketches plus run/publish prototype |
+| Topology API | Singleton control resource plus allowlisted scopes on normal DCP references | C# and TypeScript API sketches plus run/publish prototype |
 | HTTP/2 scope | Ship only proven effects | Multiplexing, cancellation, flow-control, and trailer conformance |
 | Unary gRPC | Defer by default | Status/trailer/deadline/retry test matrix |
 | Policy overlap | Explicit priority; equal-priority conflict fails closed | Parallel apply and runtime overlap tests |
