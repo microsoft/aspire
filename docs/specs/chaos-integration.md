@@ -39,14 +39,7 @@ This proposal intentionally applies chaos to DCP. DCP does not support fault inj
 
 The pilot targets a practical inner-loop gap: applications often behave differently across developer hosts, Linux containers, and shared authenticated environments. Local fault injection can expose retry, timeout, idempotency, and partial-failure bugs before a developer needs a scarce shared environment.
 
-The architectural direction has support, but not a shipping commitment:
-
-- In the original Aspire and Chaos Studio discussion, the existing service proxy layer was identified as a plausible place to influence traffic between known resources. It was explicitly described as a theory, not an existing capability or committed plan (`Azure Chaos Studio + Aspire.vtt`, approximately 00:20:28-00:21:16).
-- The same discussion treated a dashboard extension as exploratory, confirmed that the pilot was local-only rather than running in CI, and described polyglot Hosting.Testing as a separate area that still needed design (`Azure Chaos Studio + Aspire.vtt`, approximately 00:19:03-00:19:52, 00:21:27-00:21:37, and 00:27:26-00:28:33).
-- On August 4, Brent proposed extending Aspire's proxy direction with CLI policy handling. Maddy responded enthusiastically and connected the scenario to broader CLI extensibility work, while asking whether an integration could contribute additional CLI experiences. She first said she would discuss the idea with Jose. No message committed Aspire-repository ownership or a ship plan.
-- On July 27, Maddy left placement open between a direct Aspire contribution and continued incubation in an Azure GitHub repository with a later namespace move.
-
-The appropriate status is therefore **contribution-oriented incubation with supportive product direction, pending maintainer and engineering decisions**.
+The Aspire discussion identified the existing service proxy as the right architectural direction, and subsequent product conversations supported exploring proxy-based fault handling and CLI extensibility. This remains **contribution-oriented incubation pending maintainer and engineering decisions**, not a shipping or repository-ownership commitment.
 
 ## Goals
 
@@ -458,6 +451,71 @@ Pause is useful for diagnosis and recovery, but tests should prefer lease dispos
 
 No policy persistence store is proposed for the initial integration.
 
+## Random chaos campaigns
+
+Aspire should provide a bounded, reproducible campaign primitive. An agent may choose and launch a campaign through the CLI, but it should not implement randomness by repeatedly calling `add-policy` and `remove-policy` in its own loop.
+
+Keeping campaign execution in Aspire provides:
+
+- one owner for TTL, cancellation, cleanup, pause, and controller-liveness safety;
+- deterministic replay from a recorded seed and canonical campaign plan;
+- validation against AppHost-declared scopes and supported effects;
+- atomic limits on duration, concurrent policies, activation count, and fault rate;
+- dashboard visibility and a single receipt describing what was selected and when;
+- consistent behavior whether the caller is a human, agent, dashboard, MCP client, or test.
+
+The campaign definition is declarative and bounded:
+
+```json
+{
+  "schemaVersion": "v1alpha1",
+  "id": "checkout-shakeout",
+  "seed": 72491,
+  "duration": "00:05:00",
+  "selectionInterval": "00:00:20",
+  "maxConcurrentPolicies": 1,
+  "maxActivations": 25,
+  "scopes": [
+    {
+      "sourceResource": "orders",
+      "targetResource": "inventory",
+      "endpointName": "http"
+    }
+  ],
+  "effectCatalog": [
+    {
+      "kind": "delay",
+      "minMilliseconds": 100,
+      "maxMilliseconds": 1500,
+      "weight": 4
+    },
+    {
+      "kind": "abort",
+      "weight": 1
+    }
+  ]
+}
+```
+
+The controller validates the complete campaign, expands the seed into a deterministic selection schedule, and records that schedule before activation. Only allowlisted scopes and supported, bounded effect templates participate. Unknown effects, an empty scope set, unbounded duration, or limits above configured maxima reject the campaign.
+
+At each interval the controller installs or removes ordinary policies through the same revision and acknowledgement protocol. Campaign-generated policies are not a second policy type and do not bypass precedence or conflict rules. Stopping or disposing a campaign removes only policies owned by that campaign and awaits acknowledgement. Campaign TTL is enforced by both the controller and DCP data plane.
+
+Proposed commands:
+
+```console
+aspire resource chaos start-campaign --campaign-json @checkout-shakeout.json
+aspire resource chaos campaign-status --campaign-id checkout-shakeout
+aspire resource chaos stop-campaign --campaign-id checkout-shakeout
+aspire resource chaos replay-campaign --receipt ./checkout-shakeout.receipt.json
+```
+
+The existing resource-command path may require generic file-input support before the `@file` syntax is available. Inline JSON remains the compatibility path.
+
+An agent's role is orchestration: select a goal, ask Aspire to preview the canonical plan, start it, observe telemetry, stop it early when appropriate, and use the recorded seed or receipt to replay a finding. Aspire owns random selection and enforcement so an agent crash cannot strand faults or make the run irreproducible.
+
+Tests may use the same lifecycle through a proposed `StartChaosCampaignAsync(...) -> ChaosCampaignLease : IAsyncDisposable`. Random campaigns should not be the default for correctness tests; fixed seeds and retained receipts are required when a campaign failure must be reproducible.
+
 ## CLI UX
 
 The immediate CLI uses existing resource commands. The following command lines and flags are **proposed syntax**; command argument projection must follow the final resource-command conventions.
@@ -468,6 +526,8 @@ aspire resource chaos remove-policy --policy-id inventory-timeout
 aspire resource chaos list-policies --target-resource inventory --endpoint http
 aspire resource chaos pause --target-resource inventory --endpoint http
 aspire resource chaos resume --target-resource inventory --endpoint http
+aspire resource chaos start-campaign --campaign-json '{"schemaVersion":"v1alpha1","id":"checkout-shakeout","seed":72491,"duration":"00:05:00","selectionInterval":"00:00:20","maxConcurrentPolicies":1,"maxActivations":25,"scopes":[{"sourceResource":"orders","targetResource":"inventory","endpointName":"http"}],"effectCatalog":[{"kind":"delay","minMilliseconds":100,"maxMilliseconds":1500,"weight":4},{"kind":"abort","weight":1}]}'
+aspire resource chaos stop-campaign --campaign-id checkout-shakeout
 ```
 
 `chaos` is the proposed singleton `ChaosEnvironmentResource`. Policy and filter arguments identify the allowlisted DCP scope; the CLI resource name is not part of that scope.
@@ -628,6 +688,7 @@ The Resources page shows one run-only `chaos` resource. Its state and properties
 The resource properties show:
 
 - active policy count and nearest expiry;
+- active campaign, seed, elapsed time, and remaining safety budgets;
 - affected target endpoints and directed references when DCP can distinguish them;
 - desired and acknowledged revision;
 - paused scope, if any;
@@ -651,6 +712,7 @@ This initial experience does not require a custom dashboard extension. It uses t
 The original meeting raised a custom dashboard tab as an exploratory direction. After the resource-based experience is validated, a richer view may add:
 
 - a filterable policy table grouped by target resource and endpoint;
+- campaign plan, current selection, seed, budget consumption, stop, and replay controls;
 - a topology overlay highlighting scopes with active policies;
 - remaining TTL and live activation counts;
 - conflict and reconciliation diagnostics;
@@ -874,6 +936,7 @@ This could provide polished syntax early, but it would make correctness depend o
 ### Phase 2: authoring and diagnostics
 
 - AppHost-declared startup policies.
+- Bounded random campaigns with preview, stop, deterministic replay, receipts, and test leases.
 - Preview/canonicalize and match-diagnostics commands.
 - Fire-once and counter-reset operations.
 - Opt-in mesh convenience with fail-closed edge selection.
@@ -897,6 +960,7 @@ This could provide polished syntax early, but it would make correctness depend o
 | HTTP/2 scope | Ship only proven effects | Multiplexing, cancellation, flow-control, and trailer conformance |
 | Unary gRPC | Defer by default | Status/trailer/deadline/retry test matrix |
 | Policy overlap | Explicit priority; equal-priority conflict fails closed | Parallel apply and runtime overlap tests |
+| Random campaigns | Aspire owns bounded seeded execution; agents orchestrate through commands | Crash cleanup, deterministic replay, budget enforcement, and receipt conformance |
 | Test isolation | Reserved W3C baggage member preserved across workload hops and scrubbed from diagnostics | End-to-end proof across two mediated edges and an intermediate service over HTTP/1.1 and HTTP/2 |
 | Runtime persistence | None | Revisit only if restart use cases outweigh stale-fault risk |
 | Dashboard extension | Standard resource commands first | User evidence that commands and telemetry are insufficient |
