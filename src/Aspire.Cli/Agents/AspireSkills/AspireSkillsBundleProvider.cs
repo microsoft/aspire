@@ -178,6 +178,11 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         List<ValidatedAspireSkill> validatedSkills = [];
         foreach (var skill in skills)
         {
+            if (skill is null)
+            {
+                throw new InvalidOperationException("Aspire skills bundle manifest contains an empty skill entry.");
+            }
+
             var skillName = skill.Name;
             if (string.IsNullOrWhiteSpace(skillName))
             {
@@ -195,7 +200,8 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
                 throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle skill '{0}' must specify a description.", skillName));
             }
 
-            if (skill.Files is not { Length: > 0 })
+            var skillFiles = skill.Files;
+            if (skillFiles is not { Length: > 0 })
             {
                 throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle skill '{0}' does not contain any files.", skillName));
             }
@@ -217,8 +223,13 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
             var filePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var hasSkillFile = false;
             List<SkillAssetFile> files = [];
-            foreach (var file in skill.Files)
+            foreach (var file in skillFiles)
             {
+                if (file is null)
+                {
+                    throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle skill '{0}' contains an empty file entry.", skillName));
+                }
+
                 var validatedFile = ValidateFile(bundleDirectory, skillName, file);
                 if (!filePaths.Add(validatedFile.RelativePath))
                 {

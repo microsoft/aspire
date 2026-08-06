@@ -157,6 +157,64 @@ public class AspireSkillsBundleTests
     }
 
     [Fact]
+    public async Task LoadAsync_ThrowsWhenManifestContainsNullSkill()
+    {
+        var bundleDirectory = CreateTempDirectory();
+
+        try
+        {
+            await WriteManifestAsync(bundleDirectory, new SkillBundleManifest
+            {
+                Version = AspireSkillsInstaller.Version,
+                Supports = CreateSupports(),
+                Skills = [null]
+            });
+
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => s_bundleProvider.LoadAsync(new DirectoryInfo(bundleDirectory), CancellationToken.None));
+
+            Assert.Equal("Aspire skills bundle manifest contains an empty skill entry.", exception.Message);
+        }
+        finally
+        {
+            Directory.Delete(bundleDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task LoadAsync_ThrowsWhenManifestContainsNullFile()
+    {
+        var bundleDirectory = CreateTempDirectory();
+
+        try
+        {
+            await WriteManifestAsync(bundleDirectory, new SkillBundleManifest
+            {
+                Version = AspireSkillsInstaller.Version,
+                Supports = CreateSupports(),
+                Skills =
+                [
+                    new SkillBundleSkill
+                    {
+                        Name = CommonAgentApplicators.AspireSkillName,
+                        Description = AspireSkillDescription,
+                        Files = [null]
+                    }
+                ]
+            });
+
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => s_bundleProvider.LoadAsync(new DirectoryInfo(bundleDirectory), CancellationToken.None));
+
+            Assert.Equal("Aspire skills bundle skill 'aspire' contains an empty file entry.", exception.Message);
+        }
+        finally
+        {
+            Directory.Delete(bundleDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task LoadAsync_ThrowsWhenSkillDescriptionExceedsAgentHostLimit()
     {
         var bundleDirectory = CreateTempDirectory();

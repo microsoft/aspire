@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Security.Cryptography;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
 using Xunit;
@@ -215,7 +216,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         // Verify skill files were created (skills are now installed at .agents/skills/ by StandardLocationAgentEnvironmentScanner)
         var skillFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md");
         var fileContent = File.ReadAllText(skillFilePath);
-        Assert.Contains("aspire start", fileContent);
+        Assert.Contains("Seeded cache fixture.", fileContent);
         var deploymentSkillFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire-deployment", "SKILL.md");
         var deploymentFileContent = File.ReadAllText(deploymentSkillFilePath);
         Assert.Contains("Aspire Deployment", deploymentFileContent);
@@ -270,6 +271,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         {
             var skillFile = Path.Combine(skillsRoot, skillName, "SKILL.md");
             Assert.True(File.Exists(skillFile), $"Expected {skillName} SKILL.md at {skillFile}");
+            Assert.Contains("Seeded cache fixture.", File.ReadAllText(skillFile));
         }
 
         await auto.TypeAsync("exit");
@@ -281,6 +283,19 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
     private static async Task SeedAspireSkillsBundleCacheAsync(Hex1bTerminalAutomator auto, TemporaryWorkspace workspace, SequenceCounter counter)
     {
         const string aspireSkillsVersion = "0.0.1";
+        var embeddedArchivePath = Path.Combine(
+            CliE2ETestHelpers.GetRepoRoot(),
+            "src",
+            "Aspire.Cli",
+            "Agents",
+            "AspireSkills",
+            "Embedded",
+            $"aspire-skills-v{aspireSkillsVersion}.tgz");
+        // The cache retains the source archive digest, not the archive itself. Seed that identity
+        // from the embedded archive while keeping distinct fixture content so the assertions prove
+        // the cache was reused instead of silently replaced.
+        var embeddedArchiveSha256 = Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(embeddedArchivePath)))
+            .ToLowerInvariant();
         var scriptPath = Path.Combine(workspace.WorkspaceRoot.FullName, "seed-aspire-skills-cache.sh");
         var script =
             $$"""
@@ -297,6 +312,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
               "$cache/skills/aspire-init" \
               "$cache/skills/aspire-monitoring" \
               "$cache/skills/aspire-orchestration"
+            printf '%s\n' '{{embeddedArchiveSha256}}' > "$cache/.archive-sha256"
 
             cat > "$cache/skills/aspire/SKILL.md" <<'SKILL'
             ---
@@ -307,6 +323,8 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             # Aspire Skill
 
             Use `aspire start` to start an Aspire app.
+
+            Seeded cache fixture.
             SKILL
             printf '%s\n' '# App commands' > "$cache/skills/aspire/references/app-commands.md"
             printf '%s\n' '{}' > "$cache/skills/aspire/evals/evals.json"
@@ -337,6 +355,8 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             ---
 
             # Aspire Init
+
+            Seeded cache fixture.
             SKILL
 
             cat > "$cache/skills/aspire-monitoring/SKILL.md" <<'SKILL'
@@ -346,6 +366,8 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             ---
 
             # Aspire Monitoring
+
+            Seeded cache fixture.
             SKILL
 
             cat > "$cache/skills/aspire-orchestration/SKILL.md" <<'SKILL'
@@ -355,6 +377,8 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             ---
 
             # Aspire Orchestration
+
+            Seeded cache fixture.
             SKILL
 
             aspire_skill_hash="$(sha256sum "$cache/skills/aspire/SKILL.md" | awk '{print $1}')"

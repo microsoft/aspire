@@ -15,7 +15,7 @@ internal sealed class SkillBundleManifest
 
     public SkillBundleSupports? Supports { get; init; }
 
-    public SkillBundleSkill[] Skills { get; init; } = [];
+    public SkillBundleSkill?[] Skills { get; init; } = [];
 }
 
 /// <summary>
@@ -41,7 +41,7 @@ internal sealed class SkillBundleSkill
 
     public string[] InstallExcludedRelativePaths { get; init; } = [];
 
-    public SkillBundleFile[] Files { get; init; } = [];
+    public SkillBundleFile?[] Files { get; init; } = [];
 }
 
 /// <summary>

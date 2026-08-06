@@ -101,14 +101,14 @@ internal sealed class AspireSkillsInstaller(
             }
             else
             {
-                // GitHub is unavailable, so the current archive digest cannot be discovered.
-                // Prefer the last bundle verified by the expected GitHub workflow over the
-                // older embedded snapshot. Validation failures take the branch above and do
-                // not reuse cached GitHub content.
+                // Preserve any digest discovered from release metadata so a cache already
+                // proven stale is not reconsidered as a generic offline fallback. If release
+                // metadata itself was unavailable, prefer the last bundle verified by the
+                // expected GitHub workflow over the older embedded snapshot.
                 var offlineCachedBundle = await TryLoadCachedBundleAsync(
                     cacheRoot,
                     effectiveVersion,
-                    expectedArchiveSha256: null,
+                    githubResult.KnownArchiveSha256,
                     requireVerifiedGitHubSource: true,
                     activity,
                     cancellationToken).ConfigureAwait(false);
@@ -150,6 +150,7 @@ internal sealed class AspireSkillsInstaller(
         CancellationToken cancellationToken)
     {
         using var tempDirectory = CreateTemporaryCacheDirectory(cacheRoot, "github");
+        string? knownArchiveSha256 = null;
 
         try
         {
@@ -168,13 +169,13 @@ internal sealed class AspireSkillsInstaller(
                 return AcquisitionResult.Unavailable();
             }
 
-            var expectedArchiveSha256 = TryNormalizeArchiveSha256(asset.Digest);
-            if (expectedArchiveSha256 is not null)
+            knownArchiveSha256 = TryNormalizeArchiveSha256(asset.Digest);
+            if (knownArchiveSha256 is not null)
             {
                 var cachedBundle = await TryLoadCachedBundleAsync(
                     cacheRoot,
                     version,
-                    expectedArchiveSha256,
+                    knownArchiveSha256,
                     requireVerifiedGitHubSource: !validationDisabled,
                     activity,
                     cancellationToken).ConfigureAwait(false);
@@ -188,7 +189,7 @@ internal sealed class AspireSkillsInstaller(
             if (!await TryDownloadGitHubAssetAsync(httpClient, asset.DownloadUrl, archivePath, cancellationToken).ConfigureAwait(false))
             {
                 logger.LogDebug("Aspire skills GitHub release asset {AssetName} was unavailable for version {Version}.", asset.Name, version);
-                return AcquisitionResult.Unavailable();
+                return AcquisitionResult.Unavailable(knownArchiveSha256);
             }
 
             if (!validationDisabled)
@@ -214,9 +215,9 @@ internal sealed class AspireSkillsInstaller(
 
             try
             {
-                var archiveSha256 = expectedArchiveSha256 is null
+                var archiveSha256 = knownArchiveSha256 is null
                     ? ComputeArchiveSha256(archivePath)
-                    : AspireSkillsBundleProvider.NormalizeSha256(expectedArchiveSha256);
+                    : AspireSkillsBundleProvider.NormalizeSha256(knownArchiveSha256);
                 var bundle = await CacheArchiveAsync(
                     cacheRoot,
                     archivePath,
@@ -238,7 +239,7 @@ internal sealed class AspireSkillsInstaller(
         catch (Exception ex) when (ex is HttpRequestException or JsonException)
         {
             logger.LogDebug(ex, "Aspire skills GitHub release acquisition failed for version {Version}.", version);
-            return AcquisitionResult.Unavailable();
+            return AcquisitionResult.Unavailable(knownArchiveSha256);
         }
     }
 
@@ -918,21 +919,25 @@ internal sealed class AspireSkillsInstaller(
         Failed
     }
 
-    private sealed record AcquisitionResult(AcquisitionStatus Status, AspireSkillsBundle? Bundle, string? Message)
+    private sealed record AcquisitionResult(
+        AcquisitionStatus Status,
+        AspireSkillsBundle? Bundle,
+        string? Message,
+        string? KnownArchiveSha256)
     {
         public static AcquisitionResult Installed(AspireSkillsBundle bundle)
         {
-            return new AcquisitionResult(AcquisitionStatus.Installed, bundle, null);
+            return new AcquisitionResult(AcquisitionStatus.Installed, bundle, null, null);
         }
 
-        public static AcquisitionResult Unavailable()
+        public static AcquisitionResult Unavailable(string? knownArchiveSha256 = null)
         {
-            return new AcquisitionResult(AcquisitionStatus.Unavailable, null, null);
+            return new AcquisitionResult(AcquisitionStatus.Unavailable, null, null, knownArchiveSha256);
         }
 
         public static AcquisitionResult Failed(string message)
         {
-            return new AcquisitionResult(AcquisitionStatus.Failed, null, message);
+            return new AcquisitionResult(AcquisitionStatus.Failed, null, message, null);
         }
     }
 

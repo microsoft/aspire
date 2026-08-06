@@ -221,13 +221,15 @@ public class AspireSkillsInstallerTests
 
         try
         {
-            var archiveBytes = await CreateBundleArchiveBytesAsync();
+            var archiveBytes = await CreateBundleArchiveBytesAsync(skillBody: "# Downloaded GitHub");
             var archiveSha256 = ComputeSha256(archiveBytes);
             var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
             var cachedBundleDirectory = Path.Combine(executionContext.CacheDirectory.FullName, "aspire-skills", AspireSkillsInstaller.Version);
             await CreateCachedBundleAsync(
                 cachedBundleDirectory,
-                archiveSha256: "0000000000000000000000000000000000000000000000000000000000000000");
+                archiveSha256: "0000000000000000000000000000000000000000000000000000000000000000",
+                githubAttestationVerified: true,
+                skillBody: "# Stale GitHub");
             var assetDownloadRequested = false;
             var handler = new MockHttpMessageHandler(request =>
             {
@@ -257,6 +259,9 @@ public class AspireSkillsInstallerTests
                 await File.ReadAllTextAsync(Path.Combine(
                     GetVersionCacheDirectory(executionContext),
                     AspireSkillsInstaller.ArchiveSha256FileName)));
+            var skill = Assert.Single(result.Bundle.GetSkillDefinitions());
+            var skillFile = Assert.Single(await result.Bundle.GetSkillFilesAsync(skill, CancellationToken.None));
+            Assert.Contains("# Downloaded GitHub", skillFile.Content, StringComparison.Ordinal);
         }
         finally
         {
@@ -728,15 +733,15 @@ public class AspireSkillsInstallerTests
 
         try
         {
-        var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
-        var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
-        var verifiedGitHubCacheDirectory = GetVersionCacheDirectory(executionContext);
-        await CreateCachedBundleAsync(
-            verifiedGitHubCacheDirectory,
-            archiveSha256: new string('a', 64),
-            githubAttestationVerified: true,
-            skillBody: "# Verified GitHub");
-        var installer = CreateInstaller(executionContext, embeddedBundleProvider: embeddedBundleProvider);
+            var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
+            var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
+            var verifiedGitHubCacheDirectory = GetVersionCacheDirectory(executionContext);
+            await CreateCachedBundleAsync(
+                verifiedGitHubCacheDirectory,
+                archiveSha256: new string('a', 64),
+                githubAttestationVerified: true,
+                skillBody: "# Verified GitHub");
+            var installer = CreateInstaller(executionContext, embeddedBundleProvider: embeddedBundleProvider);
 
             var result = await installer.InstallAsync(CancellationToken.None);
 
@@ -746,6 +751,58 @@ public class AspireSkillsInstallerTests
             var skill = Assert.Single(result.Bundle.GetSkillDefinitions());
             var skillFile = Assert.Single(await result.Bundle.GetSkillFilesAsync(skill, CancellationToken.None));
             Assert.Contains("# Verified GitHub", skillFile.Content, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(rootDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task InstallAsync_WhenGitHubDigestIdentifiesStaleCacheAndAssetIsUnavailable_UsesEmbeddedBundle()
+    {
+        var rootDirectory = CreateTempDirectory();
+
+        try
+        {
+            var currentArchiveBytes = await CreateBundleArchiveBytesAsync(skillBody: "# Current GitHub");
+            var currentArchiveSha256 = ComputeSha256(currentArchiveBytes);
+            var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
+            var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
+            var verifiedGitHubCacheDirectory = GetVersionCacheDirectory(executionContext);
+            await CreateCachedBundleAsync(
+                verifiedGitHubCacheDirectory,
+                archiveSha256: new string('a', 64),
+                githubAttestationVerified: true,
+                skillBody: "# Stale GitHub");
+            var assetDownloadRequested = false;
+            var handler = new MockHttpMessageHandler(request =>
+            {
+                if (request.RequestUri!.AbsolutePath.EndsWith("/releases/tags/v0.0.1", StringComparison.Ordinal))
+                {
+                    return CreateJsonResponse(CreateGitHubReleaseJson(
+                        "aspire-skills-v0.0.1.tgz",
+                        "https://downloads.example.test/aspire-skills-v0.0.1.tgz",
+                        $"sha256:{currentArchiveSha256}"));
+                }
+
+                assetDownloadRequested = true;
+                return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+            });
+            var installer = CreateInstaller(
+                executionContext,
+                httpMessageHandler: handler,
+                embeddedBundleProvider: embeddedBundleProvider);
+
+            var result = await installer.InstallAsync(CancellationToken.None);
+
+            Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
+            Assert.NotNull(result.Bundle);
+            Assert.True(assetDownloadRequested);
+            Assert.True(embeddedBundleProvider.CreateBundleCalled);
+            var skill = Assert.Single(result.Bundle.GetSkillDefinitions());
+            var skillFile = Assert.Single(await result.Bundle.GetSkillFilesAsync(skill, CancellationToken.None));
+            Assert.Contains("# Aspire", skillFile.Content, StringComparison.Ordinal);
         }
         finally
         {
