@@ -75,6 +75,44 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task UseOrFindAppHostProjectFileReportsBuildFailureIfConfiguredProjectCannotBeAnalyzed()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var projectDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var projectFile = new FileInfo(Path.Combine(projectDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, "<Project Sdk=\"Aspire.AppHost.Sdk\"></Project>");
+
+        var configFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName));
+        await File.WriteAllTextAsync(configFile.FullName, JsonSerializer.Serialize(new
+        {
+            appHost = new
+            {
+                path = Path.GetRelativePath(workspace.WorkspaceRoot.FullName, projectFile.FullName)
+            }
+        }));
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostCallback = _ => new AppHostValidationResult(IsValid: false, IsPossiblyUnbuildable: true)
+        };
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
+
+        var exception = await Assert.ThrowsAsync<ProjectLocatorException>(async () =>
+        {
+            await projectLocator.UseOrFindAppHostProjectFileAsync(projectFile: null, createSettingsFile: false).DefaultTimeout();
+        });
+
+        Assert.Equal(ErrorStrings.AppHostsMayNotBeBuildable, exception.Message);
+        Assert.Equal(ProjectLocatorFailureReason.AppHostsMayNotBeBuildable, exception.FailureReason);
+
+        var (exitCode, errorMessage) = ProjectLocatorErrorHelper.GetExitCodeAndMessage(exception);
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode);
+        Assert.Equal(InteractionServiceStrings.ProjectCouldNotBeBuilt, errorMessage);
+    }
+
+    [Fact]
     public async Task UseOrFindAppHostProjectFileUsesCachedSettingsWhenStillValidAmongMultipleAppHosts()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

@@ -586,7 +586,7 @@ internal sealed class RunCommand : BaseCommand
         {
             runActivity?.SetTag(
                 TelemetryConstants.Tags.ErrorType,
-                ex.FailureReason is ProjectLocatorFailureReason.ProjectFileCouldNotBeBuilt ? "build_failed" : "project_not_found");
+                ex.FailureReason is ProjectLocatorFailureReason.AppHostsMayNotBeBuildable ? "build_failed" : "project_not_found");
             return HandleProjectLocatorException(ex, InteractionService, Telemetry);
         }
         catch (AppHostIncompatibleException ex)

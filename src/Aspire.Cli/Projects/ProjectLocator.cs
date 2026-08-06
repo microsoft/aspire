@@ -934,7 +934,7 @@ internal sealed class ProjectLocator(
                     if (validationResult.IsPossiblyUnbuildable)
                     {
                         logger.LogError("Project file {ProjectFile} could not be analyzed because it failed to build.", projectFile.FullName);
-                        throw new ProjectLocatorException(ErrorStrings.AppHostsMayNotBeBuildable, ProjectLocatorFailureReason.ProjectFileCouldNotBeBuilt);
+                        throw new ProjectLocatorException(ErrorStrings.AppHostsMayNotBeBuildable, ProjectLocatorFailureReason.AppHostsMayNotBeBuildable);
                     }
                 }
 
@@ -1236,8 +1236,6 @@ internal static class ProjectLocatorErrorHelper
                 => (CliExitCodes.SdkNotInstalled, InteractionServiceStrings.NoSupportedAppHostsFound),
             ProjectLocatorFailureReason.ProjectFileNotAppHostProject
                 => (CliExitCodes.FailedToFindProject, InteractionServiceStrings.SpecifiedProjectFileNotAppHostProject),
-            ProjectLocatorFailureReason.ProjectFileCouldNotBeBuilt
-                => (CliExitCodes.FailedToBuildArtifacts, InteractionServiceStrings.ProjectCouldNotBeBuilt),
             ProjectLocatorFailureReason.ProjectFileDoesntExist
                 => (CliExitCodes.FailedToFindProject, InteractionServiceStrings.ProjectOptionDoesntExist),
             ProjectLocatorFailureReason.MultipleProjectFilesFound
@@ -1245,7 +1243,7 @@ internal static class ProjectLocatorErrorHelper
             ProjectLocatorFailureReason.NoProjectFileFound
                 => (CliExitCodes.FailedToFindProject, InteractionServiceStrings.ProjectOptionNotSpecifiedNoCsprojFound),
             ProjectLocatorFailureReason.AppHostsMayNotBeBuildable
-                => (CliExitCodes.FailedToFindProject, InteractionServiceStrings.UnbuildableAppHostsDetected),
+                => (CliExitCodes.FailedToBuildArtifacts, InteractionServiceStrings.ProjectCouldNotBeBuilt),
             _ => (CliExitCodes.FailedToFindProject, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, ex.Message))
         };
     }
@@ -1255,7 +1253,6 @@ internal enum ProjectLocatorFailureReason
 {
     ProjectFileDoesntExist,
     ProjectFileNotAppHostProject,
-    ProjectFileCouldNotBeBuilt,
     MultipleProjectFilesFound,
     NoProjectFileFound,
     AppHostsMayNotBeBuildable,
