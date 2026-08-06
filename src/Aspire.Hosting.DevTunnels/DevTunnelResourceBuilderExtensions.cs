@@ -607,7 +607,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
             .WithCommand(
                 DevTunnelPortResource.ShowTunnelUrlsCommandName,
                 MessageStrings.ShowTunnelUrlsCommandDisplayName,
-                context => ShowTunnelUrlsAsync(portResource, context),
+                _ => ShowTunnelUrlsAsync(portResource),
                 new CommandOptions
                 {
                     Description = MessageStrings.ShowTunnelUrlsCommandDescription,
@@ -784,15 +784,15 @@ public static partial class DevTunnelsResourceBuilderExtensions
             });
     }
 
-    private static async Task<ExecuteCommandResult> ShowTunnelUrlsAsync(DevTunnelPortResource portResource, ExecuteCommandContext context)
+    private static Task<ExecuteCommandResult> ShowTunnelUrlsAsync(DevTunnelPortResource portResource)
     {
         if (portResource.LastKnownStatus?.PortUri is not { } portUri)
         {
-            return CommandResults.Failure(MessageStrings.ShowTunnelUrlsCommandUnavailable);
+            return Task.FromResult(CommandResults.Failure(MessageStrings.ShowTunnelUrlsCommandUnavailable));
         }
 
         var publicUrl = NormalizeUrl(portUri);
-        var localUrl = await portResource.TargetEndpoint.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
+        var localUrl = portResource.TargetEndpoint.EndpointAnnotation.AllocatedEndpoint?.UriString;
         var markdown = new StringBuilder()
             .Append("## ")
             .AppendLine(MessageStrings.ShowTunnelUrlsCommandResultHeading)
@@ -824,14 +824,14 @@ public static partial class DevTunnelsResourceBuilderExtensions
                 .AppendLine();
         }
 
-        return CommandResults.Success(
+        return Task.FromResult(CommandResults.Success(
             MessageStrings.ShowTunnelUrlsCommandSuccess,
             new CommandResultData
             {
                 Value = markdown.ToString(),
                 Format = CommandResultFormat.Markdown,
                 DisplayImmediately = true
-            });
+            }));
     }
 
     private static string NormalizeUrl(Uri url) => new UriBuilder(url).Uri.ToString().TrimEnd('/');
