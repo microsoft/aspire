@@ -21,7 +21,7 @@ This document proposes bringing the piloted `Aspire.Hosting.Chaos` experience in
 - Start with HTTP/1.1 and only the HTTP/2 request/response behavior proven by conformance testing. Unsupported protocols and resources fail explicitly.
 - Random campaigns are a future direction. Phase 1 agents use the same explicit add and remove operations as humans.
 - Future directed-edge support faults a reference already declared in the AppHost model through an additive `from` field. It does not ask users to select proxy topology, and Phase 1 rejects `from` with a specific capability-not-supported diagnostic.
-- A future Cosmos profile may use the existing account, database, or container Aspire resource named by `resource`, plus typed `operations`. Generic request matching does not become authored policy.
+- A future Cosmos profile may use the existing account, database, or container Aspire resource named by `resource`. Typed `operations` remains provisional until traffic capture proves classification without body parsing; generic request matching does not become authored policy.
 - If the Cosmos profile and directed-edge work compete, explore Cosmos first: its resource hierarchy is already modeled, while caller isolation requires new DCP listener topology. Neither capability is Phase 1.
 
 ### Recommendation
@@ -132,7 +132,8 @@ Adding faults to DCP is new product work across Hosting and DCP, not use of an e
 ### Reference and Cosmos resource identity
 
 - `EndpointReferenceAnnotation` records a reference from one resource to another resource's endpoints, and `ValueProviderContext.Caller` identifies the resource requesting a resolved value (`src/Aspire.Hosting/ApplicationModel/EndpointReferenceAnnotation.cs` and `src/Aspire.Hosting/ApplicationModel/IValueProvider.cs`).
-- `AzureCosmosDBResource`, `AzureCosmosDBDatabaseResource`, and `AzureCosmosDBContainerResource` already model the account/database/container hierarchy as Aspire resources (`src/Aspire.Hosting.Azure.CosmosDB/AzureCosmosDBResource.cs`, `AzureCosmosDBDatabaseResource.cs`, and `AzureCosmosDBContainerResource.cs`).
+- `AzureCosmosDBResource`, `AzureCosmosDBDatabaseResource`, and `AzureCosmosDBContainerResource` are public top-level Aspire resources with public parent and logical-name identity (`src/Aspire.Hosting.Azure.CosmosDB/AzureCosmosDBResource.cs`, `AzureCosmosDBDatabaseResource.cs`, and `AzureCosmosDBContainerResource.cs`).
+- `WithReference(container)` preserves a directed `ResourceRelationshipAnnotation` to that container and emits inherited `DatabaseName` plus `ContainerName` connection properties (`src/Aspire.Hosting/ResourceBuilderExtensions.cs` and `src/Aspire.Hosting.Azure.CosmosDB/AzureCosmosDBContainerResource.cs`).
 - The Cosmos emulator client integration forces Gateway mode and `LimitToEndpoint`, providing a bounded first target for protocol proof (`src/Aspire.Hosting.Azure.CosmosDB/AzureCosmosDBExtensions.cs`).
 
 These identities are sufficient for future authoring, but not enforcement. Current DCP `Service` and proxy contracts have no caller dimension, and the Cosmos profile still needs a proven data-plane classifier and trusted TLS interception.
@@ -229,7 +230,9 @@ If any condition fails, the controller rejects the apply before activation. Diag
 
 Phase 0 must census representative and playground resources and record eligibility reasons. Low coverage should become explicit roadmap evidence, not an excuse to expose proxy topology in the v1 contract.
 
-For a future Cosmos profile, the existing `resource` field may name an `AzureCosmosDBResource`, `AzureCosmosDBDatabaseResource`, or `AzureCosmosDBContainerResource`. No duplicate database or container string fields are added. The first credible target is a modeled Cosmos emulator resource in Gateway HTTPS mode. Direct/TCP (RNTBD), real accounts, and consumers whose connection mode cannot be proven are ineligible and must fail loudly. EF Core may use containers that are not modeled as `AzureCosmosDBContainerResource`; eligibility must report that gap rather than silently claiming container-level coverage.
+For a future Cosmos profile, the existing `resource` field may name an `AzureCosmosDBResource`, `AzureCosmosDBDatabaseResource`, or `AzureCosmosDBContainerResource`. No duplicate database or container string fields are added. `"resource": "carts"` selects the modeled container resource named `carts`, including its public parent and logical container identity.
+
+The first credible target is a modeled Cosmos emulator resource in Gateway HTTPS mode. Direct/TCP (RNTBD) bypasses that gateway; real accounts, Direct clients, and consumers whose connection mode cannot be proven are ineligible and must fail loudly rather than no-op. EF Core may use containers that are not modeled as `AzureCosmosDBContainerResource`. `list-resources` must warn about that gap, and container-scoped selection requires the AppHost to model the container with `AddContainer`.
 
 ### Stable startup and connection semantics
 
@@ -326,11 +329,11 @@ Every request to `orders` receives the protocol-correct synthetic response until
 }
 ```
 
-This schema is illustrative and invalid in Phase 1. `from` optionally selects the caller side of an existing AppHost reference; omitted `from` retains resource-wide behavior. The field is named `from`, not `source`, because Aspire uses source for the referenced or producing resource. `operations` is optional and Cosmos-profile-specific, initially limited to `read`, `write`, and `query`; omitted `operations` means all operations. Point-operation verbs may be added only after evidence justifies them. The fields are orthogonal: either capability can be supported without the other.
+This schema is illustrative and invalid in Phase 1. `from` optionally selects the caller side of an existing AppHost reference; omitted `from` retains resource-wide behavior. The field is named `from`, not `source`, because Aspire uses source for the referenced or producing resource. `operations` is provisional and Cosmos-profile-specific, initially limited to `read`, `write`, and `query`; omitted `operations` means all operations. It ships only if Gateway capture proves that classification from URI, method, and headers without request-body parsing. If body parsing is required, drop `operations` and retain container-scope-only policy. Point-operation verbs may be added only after evidence justifies them. `from` and `operations` remain orthogonal.
 
 Here, `carts` is the name of an existing Aspire Cosmos account, database, or container resource. Authors do not repeat Cosmos database or container names in policy. The Aspire-side Cosmos profile compiles the typed resource and operation selectors to an internal method/path/header matcher and a protocol-correct response template. Raw HTTP paths, methods, headers, and response details remain internal to the profile/data-plane contract; DCP stays generic.
 
-The first profile target is modeled Cosmos emulator resources in Gateway HTTPS mode. Aspire's emulator integration forces Gateway and `LimitToEndpoint`, but interception must establish Aspire-managed trust on both TLS legs across supported hosts and containers. Direct/TCP (RNTBD), real accounts, and unprovable connection modes remain unsupported. EF Core container usage that is not represented by an `AzureCosmosDBContainerResource` is an explicit eligibility risk.
+The first profile target is modeled Cosmos emulator resources in Gateway HTTPS mode. Aspire's emulator integration forces Gateway and `LimitToEndpoint`, but interception must establish Aspire-managed trust on both TLS legs across supported hosts and containers. Direct/TCP (RNTBD), real accounts, and unprovable connection modes remain unsupported. EF Core container usage not represented by an `AzureCosmosDBContainerResource` is ineligible for container scope until the AppHost uses `AddContainer`.
 
 ### One policy per resource
 
@@ -760,7 +763,7 @@ This could provide polished syntax early, but it would make correctness depend o
 - Use an explicit YARP-compatible engine only as a conformance harness if DCP is not available.
 - Review the `resource + fault` policy with CLI, dashboard, MCP, and testing consumers.
 - Census modeled Cosmos account/database/container resources through public APIs and report EF Core or otherwise unmodeled container gaps.
-- Capture Cosmos Gateway traffic and prove database/container plus `read|write|query` classification from URI, method, and headers without request-body parsing.
+- Capture Cosmos Gateway traffic and prove database/container plus `read|write|query` classification from URI, method, and headers without request-body parsing; if operation classification needs bodies, drop `operations` and retain container scope only.
 - Prove Aspire-managed double-leg TLS trust across Windows, Linux, and macOS without disabling certificate validation.
 - Prove selected-container write throttling leaves reads and sibling containers unaffected and triggers normal Cosmos SDK retries.
 - Prove eager per-reference listeners keep service discovery stable and isolate `orders -> inventory` from `frontend -> inventory`, including warmed pooled connections.
@@ -784,7 +787,7 @@ This could provide polished syntax early, but it would make correctness depend o
 - Richer activation observations and links from policies to traces.
 - Additional fault profiles that preserve the `resource + fault` authoring model.
 - Explore the capability-gated Cosmos profile before directed-edge support if they compete, because account/database/container identity already exists in the AppHost model.
-- Add typed Cosmos `operations` only after the Gateway classification and TLS proofs pass.
+- Add typed Cosmos `operations` only after the Gateway classification and TLS proofs pass; otherwise ship only the modeled account/database/container selector.
 - Add optional directed-edge `from` only after DCP proves stable eager per-reference listener identity.
 - A persistent global active-chaos indicator if Dashboard owners approve the core work.
 - A dedicated `aspire chaos` alias if general CLI-extensibility work supports it.
@@ -811,8 +814,9 @@ This could provide polished syntax early, but it would make correctness depend o
 | Dashboard extension | Existing resource surfaces first | User evidence that commands and telemetry are insufficient |
 | HTTPS | Deferred | Cross-platform certificate identity and trust proof |
 | Cosmos profile | Emulator Gateway HTTPS first; keep typed profile in Aspire and DCP generic | Resource hierarchy census, traffic classification without body parsing, double-leg TLS trust, isolation, and SDK retry proofs |
+| Cosmos operations | Provisional `read|write|query`; omit means all | Prove URI/method/header classification; if bodies are required, drop the field and retain container scope only |
 | Directed edges | Optional `from` over an existing AppHost reference | Stable eager per-reference listeners and pooled-connection isolation proof |
-| EF Core Cosmos containers | Reject container scope unless the container is modeled and identifiable | Public API census and representative EF Core eligibility results |
+| EF Core Cosmos containers | Warn in `list-resources`; reject container scope unless modeled with `AddContainer` | Public API census and representative EF Core eligibility results |
 | Testing package shape | Keep the convenience API with the integration if dependency-safe | Project-reference and public API review |
 | Campaigns | Aspire may eventually own safe reproducible execution | Separate design with crash cleanup and reproducibility evidence |
 
@@ -842,9 +846,9 @@ An implementation should not begin until the following are demonstrated:
 20. The visible control resource remains `Running`, uses warning styling for active faults, reports reconciliation problems through health, and never gates workload readiness.
 21. If Phase 0 budgets fail, the feature ships default-off with process/run opt-in rather than weakening pass-through guarantees.
 22. Phase 1 rejects `from` with a directed-edge-capability-not-supported diagnostic, while omitted `from` remains resource-wide in the future schema.
-23. A future Cosmos container policy names an existing `AzureCosmosDBContainerResource`; no duplicate database or container strings appear in authored policy.
-24. Cosmos `operations` accepts only profile-defined typed categories, defaults to all, and never exposes raw request matching.
-25. Cosmos Gateway proofs demonstrate selected-container write throttling without affecting reads or sibling containers, with SDK retries and cross-platform TLS validation intact.
+23. A future Cosmos container policy names an existing `AzureCosmosDBContainerResource`; no duplicate database or container strings appear in authored policy, and unmodeled EF Core containers produce a `list-resources` warning that directs the user to `AddContainer`.
+24. Cosmos `operations` ships only if Gateway traffic proves profile-defined typed classification without body parsing; otherwise the field is dropped and container scope remains.
+25. Cosmos Gateway proofs demonstrate selected-container write throttling without affecting reads or sibling containers, with SDK retries and cross-platform TLS validation intact; Direct/RNTBD attempts fail eligibility rather than no-op.
 26. Directed-edge proofs isolate `orders -> inventory` from `frontend -> inventory` without changing service-discovery values or reconnecting warmed clients.
 
 ## Source map
@@ -860,7 +864,8 @@ An implementation should not begin until the following are demonstrated:
 | Cosmos account resource | `src/Aspire.Hosting.Azure.CosmosDB/AzureCosmosDBResource.cs` |
 | Cosmos database resource | `src/Aspire.Hosting.Azure.CosmosDB/AzureCosmosDBDatabaseResource.cs` |
 | Cosmos container resource | `src/Aspire.Hosting.Azure.CosmosDB/AzureCosmosDBContainerResource.cs` |
-| Cosmos emulator Gateway client configuration | `src/Aspire.Hosting.Azure.CosmosDB/AzureCosmosDBExtensions.cs` |
+| Cosmos `AddContainer` and emulator Gateway client configuration | `src/Aspire.Hosting.Azure.CosmosDB/AzureCosmosDBExtensions.cs` |
+| Reference relationship and connection-property injection | `src/Aspire.Hosting/ResourceBuilderExtensions.cs` |
 | Explicit L7 proxy resource | `src/Aspire.Hosting.Yarp/YarpResource.cs` |
 | Stable endpoint behavior | `src/Aspire.Hosting/ResourceBuilderExtensions.cs` |
 | Presentation snapshots | `src/Aspire.Hosting/ApplicationModel/CustomResourceSnapshot.cs` |
