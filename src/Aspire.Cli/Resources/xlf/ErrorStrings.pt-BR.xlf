@@ -197,6 +197,11 @@
         <target state="new">The legacy AppHost path key 'appHostPath' cannot be set with 'aspire config set'. Use 'appHost.path' in a local aspire.config.json file instead.</target>
         <note />
       </trans-unit>
+      <trans-unit id="LegacyTypeScriptAppHostWarning">
+        <source>This project uses the legacy 'apphost.ts' layout. Run 'aspire update --migrate' to upgrade to the recommended 'apphost.mts' format. The legacy layout continues to work — this is a non-blocking warning.</source>
+        <target state="new">This project uses the legacy 'apphost.ts' layout. Run 'aspire update --migrate' to upgrade to the recommended 'apphost.mts' format. The legacy layout continues to work — this is a non-blocking warning.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MinimumSdkVersionNotMet">
         <source>C# AppHost requires .NET SDK version {0} or later. Detected: {1}.</source>
         <target state="needs-review-translation">A CLI do Aspire requer a versão do SDK do .NET {0} ou posterior. Detectado: {1}.</target>

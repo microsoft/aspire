@@ -64,7 +64,10 @@ internal sealed class ResourceLoggerForwarderService(
         {
             var applicationName = hostEnvironment.ApplicationName;
             var logger = loggerFactory.CreateLogger($"{applicationName}.Resources.{resource.Name}");
-            await foreach (var logEvent in resourceLoggerService.WatchAsync(resourceId).WithCancellation(cancellationToken).ConfigureAwait(false))
+
+            // Use the synchronous subscription path so terminal-state log flushes from DCP reach
+            // ILogger before ResourceNotificationService publishes the terminal state to tests.
+            using var subscription = resourceLoggerService.Subscribe(resourceId, logEvent =>
             {
                 foreach (var line in logEvent)
                 {
@@ -77,9 +80,12 @@ internal sealed class ResourceLoggerForwarderService(
                         OnResourceLog?.Invoke(resourceId);
                     }
                 }
-            }
+            });
+
+            // Keep the subscription alive until the resource log stream completes or the app stops.
+            await resourceLoggerService.WaitForCompletionAsync(resourceId, cancellationToken).ConfigureAwait(false);
         }
-        catch (TaskCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // this was expected as the token was canceled
         }

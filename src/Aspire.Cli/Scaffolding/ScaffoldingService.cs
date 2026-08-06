@@ -42,6 +42,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
     private readonly IAppHostServerSessionFactory _serverSessionFactory;
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly IInteractionService _interactionService;
+    private readonly IEnvironment _environment;
     private readonly ILogger<ScaffoldingService> _logger;
     private readonly CliExecutionContext _executionContext;
     private readonly ProfilingTelemetry _profilingTelemetry;
@@ -51,6 +52,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
         IAppHostServerSessionFactory serverSessionFactory,
         ILanguageDiscovery languageDiscovery,
         IInteractionService interactionService,
+        IEnvironment environment,
         ILogger<ScaffoldingService> logger,
         CliExecutionContext executionContext,
         ProfilingTelemetry profilingTelemetry)
@@ -59,6 +61,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
         _serverSessionFactory = serverSessionFactory;
         _languageDiscovery = languageDiscovery;
         _interactionService = interactionService;
+        _environment = environment;
         _logger = logger;
         _executionContext = executionContext;
         _profilingTelemetry = profilingTelemetry;
@@ -299,7 +302,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
 
         var scripts = EnsureJsonObject(packageJson, "scripts");
         var relativeAppHostDirectory = PathNormalizer.NormalizePathForStorage(Path.GetRelativePath(rootDirectory.FullName, appHostDirectory.FullName));
-        var preservedScriptNames = AddRootTypeScriptAppHostDelegateScripts(scripts, appHostDirectory, relativeAppHostDirectory, _logger);
+        var preservedScriptNames = AddRootTypeScriptAppHostDelegateScripts(scripts, appHostDirectory, relativeAppHostDirectory, _environment, _logger);
 
         if (preservedScriptNames.Count > 0)
         {
@@ -323,9 +326,9 @@ internal sealed class ScaffoldingService : IScaffoldingService
         return preservedScriptNames ?? [];
     }
 
-    internal static IReadOnlyList<string> AddRootTypeScriptAppHostDelegateScripts(JsonObject scripts, DirectoryInfo appHostDirectory, string relativeAppHostDirectory, ILogger? logger)
+    internal static IReadOnlyList<string> AddRootTypeScriptAppHostDelegateScripts(JsonObject scripts, DirectoryInfo appHostDirectory, string relativeAppHostDirectory, IEnvironment environment, ILogger? logger)
     {
-        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, logger);
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, environment, logger);
         return AddRootTypeScriptAppHostDelegateScripts(scripts, toolchain, relativeAppHostDirectory);
     }
 
@@ -412,11 +415,11 @@ internal sealed class ScaffoldingService : IScaffoldingService
         var runtimeSpec = await rpcClient.GetRuntimeSpecAsync(language.LanguageId.Value, cancellationToken);
         if (TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(language))
         {
-            var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory, _logger);
+            var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory, _environment, _logger);
             runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, toolchain);
         }
 
-        var runtime = new GuestRuntime(runtimeSpec, _logger, PathLookupHelper.FindFullPathFromPath, _profilingTelemetry);
+        var runtime = new GuestRuntime(runtimeSpec, _logger, PathLookupHelper.FindFullPathFromPath, _environment, _profilingTelemetry);
 
         var (initResult, initOutput) = await runtime.InitializeAsync(directory, cancellationToken);
         if (initResult != 0)
@@ -446,7 +449,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
 
                 _interactionService.DisplayMessage(
                     KnownEmojis.Warning,
-                    MissingJavaScriptToolWarning.GetMessage(directory, language));
+                    MissingJavaScriptToolWarning.GetMessage(directory, language, _environment));
                 return 0;
             }
 
@@ -518,7 +521,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
             return "npm";
         }
 
-        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory, _logger);
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory, _environment, _logger);
         return TypeScriptAppHostToolchainResolver.GetCommandName(toolchain);
     }
 

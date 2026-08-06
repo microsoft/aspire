@@ -22,7 +22,7 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryCommand_WithoutSubcommand_ReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -175,6 +175,65 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
         Assert.Empty(TelemetryCommandHelpers.ToOtlpResources([]));
     }
 
+    [Fact]
+    public void ResolveResourceNameMatches_WithResourceNameMatchingCompositeResourceName_ReturnsNoMatches()
+    {
+        var resources = new SimpleOtlpResource[]
+        {
+            new("api-1", "standalone"),
+            new("api", "1"),
+        };
+
+        var matches = OtlpHelpers.ResolveResourceNameMatches("API-1", resources);
+
+        Assert.Empty(matches);
+    }
+
+    [Fact]
+    public void TryResolveResourceNames_WithAmbiguousCompositeResourceName_ReturnsFalse()
+    {
+        var resources = new ResourceInfoJson[]
+        {
+            new() { Name = "api-a", InstanceId = "1" },
+            new() { Name = "api", InstanceId = "a-1" },
+        };
+
+        var result = TelemetryCommandHelpers.TryResolveResourceNames("api-a-1", resources, out var resolvedResources);
+
+        Assert.False(result);
+        Assert.Null(resolvedResources);
+    }
+
+    [Fact]
+    public void TryResolveResourceNames_WithBaseResourceName_ResolvesAllReplicas()
+    {
+        var resources = new ResourceInfoJson[]
+        {
+            new() { Name = "api", InstanceId = "1" },
+            new() { Name = "api", InstanceId = "2" },
+        };
+
+        var result = TelemetryCommandHelpers.TryResolveResourceNames("API", resources, out var resolvedResources);
+
+        Assert.True(result);
+        Assert.Equal(["api-1", "api-2"], resolvedResources);
+    }
+
+    [Fact]
+    public void TryResolveResourceNames_WithBaseResourceNameAndMixedInstanceIds_ResolvesAllResources()
+    {
+        var resources = new ResourceInfoJson[]
+        {
+            new() { Name = "api", InstanceId = null },
+            new() { Name = "api", InstanceId = "1" },
+        };
+
+        var result = TelemetryCommandHelpers.TryResolveResourceNames("api", resources, out var resolvedResources);
+
+        Assert.True(result);
+        Assert.Equal(["api", "api-1"], resolvedResources);
+    }
+
     [Theory]
     [MemberData(nameof(ResolveResourceNameTestData))]
     internal void ResolveResourceName_ResolvesExpectedName(
@@ -211,7 +270,7 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
     public async Task TelemetryCommand_WithDashboardUrl_InvalidTelemetryApiResponse_DisplaysErrorMessage(
         string otelCommand, HttpStatusCode? statusCode, string? contentType, string? body, HttpStatusCode? baseProbeStatusCode, string expectedMessageKey)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var testInteractionService = new TestInteractionService();
 

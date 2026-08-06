@@ -11,6 +11,8 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
+#pragma warning disable ASPIREINTERACTION001 // PromptProgressAsync and related types are experimental.
+
 internal class InteractionService : IInteractionService
 {
     // Tracks whether the current async flow is executing in a non-interactive context,
@@ -272,6 +274,102 @@ internal class InteractionService : IInteractionService
         }
     }
 
+    public async Task<InteractionResult<bool>> PromptProgressAsync(string message, string? title = null, ProgressInteractionOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        EnsureServiceAvailable();
+
+        cancellationToken.ThrowIfCancellationRequested();
+        using var interactionCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        try
+        {
+            options ??= ProgressInteractionOptions.CreateDefault();
+
+            var newState = new Interaction(title ?? string.Empty, message, options, new Interaction.ProgressInteractionInfo(), interactionCts.Token);
+            AddInteractionUpdate(newState);
+
+            using var ctRegistration = cancellationToken.Register(OnInteractionCancellation, state: newState);
+
+            if (options.Work is { } work)
+            {
+                // When the button is clicked, CompletionTcs fires. Cancel the work's CT so it can stop.
+                // Don't dispose the continuation task — it may not have completed when scope exits
+                // because CompletionTcs uses RunContinuationsAsynchronously.
+                _ = newState.CompletionTcs.Task.ContinueWith(
+                    _ =>
+                    {
+                        try
+                        {
+                            interactionCts.Cancel();
+                        }
+                        catch (ObjectDisposedException)
+                        {
+                            // interactionCts may already be disposed if work completed before this
+                            // continuation ran (RunContinuationsAsynchronously schedules it to the
+                            // thread pool, so it can race with the using-dispose).
+                        }
+                    },
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
+
+                try
+                {
+                    await work(new ProgressContext { CancellationToken = interactionCts.Token }).ConfigureAwait(false);
+
+                    // Work completed successfully. Complete the interaction.
+                    newState.State = Interaction.InteractionState.Complete;
+                    newState.CompletionTcs.TrySetResult(new InteractionCompletionState { Complete = true, State = true });
+                    AddInteractionUpdate(newState);
+
+                    return InteractionResult.Ok(true);
+                }
+                catch (OperationCanceledException) when (interactionCts.IsCancellationRequested)
+                {
+                    // The work was canceled. Complete the interaction if not already done.
+                    newState.State = Interaction.InteractionState.Complete;
+                    newState.CompletionTcs.TrySetResult(new InteractionCompletionState { Complete = true });
+                    AddInteractionUpdate(newState);
+
+                    return InteractionResult.Cancel<bool>();
+                }
+                catch
+                {
+                    // If work throws a non-cancellation exception, ensure the interaction is
+                    // completed and removed so the progress dialog doesn't stay open indefinitely.
+                    newState.State = Interaction.InteractionState.Complete;
+                    newState.CompletionTcs.TrySetResult(new InteractionCompletionState { Complete = true });
+                    AddInteractionUpdate(newState);
+
+                    throw;
+                }
+            }
+            else
+            {
+                // No work callback. Wait for the dialog to be completed by either:
+                // - The user clicking the button (sends response from dashboard)
+                // - External cancellation via cancellationToken (handled by OnInteractionCancellation registration)
+                var completion = await newState.CompletionTcs.Task.ConfigureAwait(false);
+                var promptState = completion.State as bool?;
+
+                // When the cancel button is clicked, the dashboard sends State = false.
+                // Treat this as a canceled result to be consistent with the work path.
+                if (promptState == false)
+                {
+                    return InteractionResult.Cancel<bool>();
+                }
+
+                return promptState == null
+                    ? InteractionResult.Cancel<bool>()
+                    : InteractionResult.Ok(promptState.Value);
+            }
+        }
+        finally
+        {
+            interactionCts.Cancel();
+        }
+    }
+
     // For testing.
     internal List<Interaction> GetCurrentInteractions()
     {
@@ -452,6 +550,16 @@ internal class InteractionService : IInteractionService
                                     context.AddValidationError(input, "Value must be a valid number.");
                                 }
                                 break;
+                            case InputType.File:
+                                // File input values contain serialized JSON file references (id + name).
+                                // The consumer reads files via InteractionFile.OpenRead() / ReadAllBytesAsync() on the Files collection.
+                                // Validate that required file inputs actually have resolved files, not just
+                                // a non-empty JSON string like "[]".
+                                if (input.Required && (input.Files is null || input.Files.Count == 0))
+                                {
+                                    context.AddValidationError(input, "Value is required.");
+                                }
+                                break;
                             default:
                                 break;
                         }
@@ -602,5 +710,9 @@ internal class Interaction
         }
 
         public InteractionInputCollection Inputs { get; }
+    }
+
+    internal sealed class ProgressInteractionInfo : InteractionInfoBase
+    {
     }
 }

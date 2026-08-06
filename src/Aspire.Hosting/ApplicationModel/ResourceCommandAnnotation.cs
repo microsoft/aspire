@@ -64,7 +64,8 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
         IconVariant? iconVariant,
         bool isHighlighted,
         ResourceCommandVisibility visibility = ResourceCommandVisibility.UI | ResourceCommandVisibility.Api,
-        Func<InputsDialogValidationContext, Task>? validateArguments = null)
+        Func<InputsDialogValidationContext, Task>? validateArguments = null,
+        CommandProgressOptions? progress = null)
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(displayName);
@@ -86,6 +87,7 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
         IconVariant = iconVariant;
         IsHighlighted = isHighlighted;
         Visibility = visibility;
+        Progress = progress;
     }
 
     /// <summary>
@@ -165,6 +167,12 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
     /// Gets where the command is visible to users and clients.
     /// </summary>
     public ResourceCommandVisibility Visibility { get; }
+
+    /// <summary>
+    /// Gets the progress dialog options for the command.
+    /// When <see langword="null"/>, no progress dialog is shown.
+    /// </summary>
+    public CommandProgressOptions? Progress { get; }
 }
 
 /// <summary>

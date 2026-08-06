@@ -39,6 +39,7 @@ public static class YarpResourceExtensions
                       .WithImage(YarpContainerImageTags.Image)
                       .WithImageRegistry(YarpContainerImageTags.Registry)
                       .WithImageTag(YarpContainerImageTags.Tag)
+                      .WithIconName("GlobeArrowForward")
                       .WithEnvironment("ASPNETCORE_ENVIRONMENT", builder.Environment.EnvironmentName)
                       .WithEntrypoint("dotnet")
                       .WithArgs("/app/yarp.dll")

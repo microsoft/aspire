@@ -17,6 +17,13 @@ using Microsoft.DotNet.RemoteExecutor;
 
 namespace Aspire.Components.ConformanceTests;
 
+/// <summary>
+/// Describes a logger category that must appear during a conformance test.
+/// When <see cref="AllowPrefixMatch"/> is <see langword="true"/>, any logged
+/// category that starts with <see cref="Name"/> satisfies the requirement.
+/// </summary>
+public readonly record struct RequiredLogCategory(string Name, bool AllowPrefixMatch = false);
+
 public abstract class ConformanceTests<TService, TOptions>
     where TService : class
     where TOptions : class, new()
@@ -52,7 +59,7 @@ public abstract class ConformanceTests<TService, TOptions>
 
     protected virtual (string json, string error)[] InvalidJsonToErrorMessage => Array.Empty<(string json, string error)>();
 
-    protected abstract string[] RequiredLogCategories { get; }
+    protected abstract RequiredLogCategory[] RequiredLogCategories { get; }
 
     protected virtual string[] NotAcceptableLogCategories => Array.Empty<string>();
 
@@ -334,10 +341,13 @@ public abstract class ConformanceTests<TService, TOptions>
             }
             Output.WriteLine("");
             Output.WriteLine("=== Required Categories ===");
-            foreach (var category in RequiredLogCategories.OrderBy(c => c))
+            foreach (var req in RequiredLogCategories.OrderBy(c => c.Name))
             {
-                var found = loggerFactory.Categories.Contains(category);
-                Output.WriteLine($"  {(found ? "✓" : "✗")} {category}");
+                var found = req.AllowPrefixMatch
+                    ? loggerFactory.Categories.Any(c => c.StartsWith(req.Name, StringComparison.Ordinal))
+                    : loggerFactory.Categories.Contains(req.Name);
+                var suffix = req.AllowPrefixMatch ? " (prefix)" : "";
+                Output.WriteLine($"  {(found ? "✓" : "✗")} {req.Name}{suffix}");
             }
             if (NotAcceptableLogCategories.Length > 0)
             {
@@ -352,9 +362,16 @@ public abstract class ConformanceTests<TService, TOptions>
             Output.WriteLine("");
         }
 
-        foreach (string logCategory in RequiredLogCategories)
+        foreach (var req in RequiredLogCategories)
         {
-            Assert.Contains(logCategory, loggerFactory.Categories);
+            if (req.AllowPrefixMatch)
+            {
+                Assert.Contains(loggerFactory.Categories, c => c.StartsWith(req.Name, StringComparison.Ordinal));
+            }
+            else
+            {
+                Assert.Contains(req.Name, loggerFactory.Categories);
+            }
         }
 
         foreach (string logCategory in NotAcceptableLogCategories)

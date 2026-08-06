@@ -43,6 +43,14 @@ public partial class AspirePageContentLayout : ComponentBase
     [Parameter]
     public bool IsSummaryDetailsViewOpen { get; set; }
 
+    /// <summary>
+    /// When <see langword="true"/>, the desktop toolbar header row is not rendered. Pages set this when they
+    /// relocate their toolbar controls elsewhere (for example, Resources shares the tabs row with the filter
+    /// controls) so an empty toolbar row doesn't waste vertical space. The page title teleport is unaffected.
+    /// </summary>
+    [Parameter]
+    public bool HideDesktopToolbar { get; set; }
+
     [Inject]
     public required DashboardDialogService DialogService { get; init; }
 

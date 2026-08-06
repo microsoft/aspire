@@ -22,18 +22,18 @@ public class ConformanceTests : ConformanceTests<TestDbContext, MongoDBEntityFra
     protected override string ActivitySourceName => "MongoDB.Driver.Core.Extensions.DiagnosticSources";
     protected override bool CanConnectToServer => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker);
 
-    protected override string[] RequiredLogCategories => new string[]
-    {
-        "Microsoft.EntityFrameworkCore.Infrastructure",
-        "Microsoft.EntityFrameworkCore.ChangeTracking",
-        "Microsoft.EntityFrameworkCore.Infrastructure",
-        "Microsoft.EntityFrameworkCore.Database.Command",
-        "Microsoft.EntityFrameworkCore.Query",
-        "Microsoft.EntityFrameworkCore.Database.Transaction",
-        "Microsoft.EntityFrameworkCore.Model",
-        "Microsoft.EntityFrameworkCore.Model.Validation",
-        "Microsoft.EntityFrameworkCore.Update"
-    };
+    protected override RequiredLogCategory[] RequiredLogCategories =>
+    [
+        new("Microsoft.EntityFrameworkCore.Infrastructure"),
+        new("Microsoft.EntityFrameworkCore.ChangeTracking"),
+        new("Microsoft.EntityFrameworkCore.Infrastructure"),
+        new("Microsoft.EntityFrameworkCore.Database.Command"),
+        new("Microsoft.EntityFrameworkCore.Query"),
+        new("Microsoft.EntityFrameworkCore.Database.Transaction"),
+        new("Microsoft.EntityFrameworkCore.Model"),
+        new("Microsoft.EntityFrameworkCore.Model.Validation"),
+        new("Microsoft.EntityFrameworkCore.Update"),
+    ];
 
     // we don't want to have both EF and MongoDB loggers to be enabled
     protected override string[] NotAcceptableLogCategories => new string[]

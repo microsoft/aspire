@@ -141,7 +141,7 @@ public class GoPublicApiTests
 
         var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
 
-        Assert.Equal(["--headless=true", "--listen=127.0.0.1:2345", "--api-version=2", "debug", "./cmd/server"], args);
+        Assert.Equal(["--headless=true", "--listen=127.0.0.1:2345", "--api-version=2", "--accept-multiclient", "debug", "./cmd/server"], args);
     }
 
     [Fact]
@@ -444,7 +444,7 @@ public class GoPublicApiTests
 
         var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
 
-        Assert.Equal(["--headless=true", "--listen=127.0.0.1:2345", "--api-version=2", "debug", "."], args);
+        Assert.Equal(["--headless=true", "--listen=127.0.0.1:2345", "--api-version=2", "--accept-multiclient", "debug", "."], args);
     }
 
     [Fact]
@@ -459,7 +459,7 @@ public class GoPublicApiTests
         var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
 
         // All user-influenced values are shell-quoted so the Delve parser keeps them as single tokens.
-        Assert.Equal(["--headless=true", "--listen=127.0.0.1:2345", "--api-version=2", "debug", "--build-flags=-tags='netgo' -ldflags='-s -w'", "."], args);
+        Assert.Equal(["--headless=true", "--listen=127.0.0.1:2345", "--api-version=2", "--accept-multiclient", "debug", "--build-flags=-tags='netgo' -ldflags='-s -w'", "."], args);
     }
 
     [Fact]
@@ -472,6 +472,6 @@ public class GoPublicApiTests
 
         var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
 
-        Assert.Equal(["--headless=true", "--listen=127.0.0.1:2345", "--api-version=2", "debug", ".", "--", "--config", "dev.yaml"], args);
+        Assert.Equal(["--headless=true", "--listen=127.0.0.1:2345", "--api-version=2", "--accept-multiclient", "debug", ".", "--", "--config", "dev.yaml"], args);
     }
 }

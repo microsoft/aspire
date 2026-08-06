@@ -188,6 +188,204 @@ suite('Debug Adapter Tracker Tests', () => {
         disposable.dispose();
     });
 
+    test('exited event exit code takes precedence over adapter onExit code', async () => {
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'coreclr');
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker(debugSession);
+
+        // Debuggee reports non-zero exit via the DAP `exited` event...
+        tracker.onDidSendMessage({
+            type: 'event',
+            event: 'exited',
+            body: { exitCode: 1 }
+        });
+
+        // ...but the debug adapter itself exits cleanly with 0.
+        tracker.onExit(0);
+
+        assert.strictEqual(dcpServer.sendNotification.calledOnce, true);
+        const notification = dcpServer.sendNotification.firstCall.args[0] as SessionTerminatedNotification;
+        assert.strictEqual(notification.notification_type, 'sessionTerminated');
+        assert.strictEqual(notification.exit_code, 1, 'The debuggee exit code from the exited event should be reported');
+
+        disposable.dispose();
+    });
+
+    test('falls back to adapter onExit code when no exited event is observed', async () => {
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'coreclr');
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker(debugSession);
+
+        // No `exited` event; only the adapter exit code is available.
+        tracker.onExit(3);
+
+        assert.strictEqual(dcpServer.sendNotification.calledOnce, true);
+        const notification = dcpServer.sendNotification.firstCall.args[0] as SessionTerminatedNotification;
+        assert.strictEqual(notification.exit_code, 3);
+
+        disposable.dispose();
+    });
+
+    test('falls back to adapter onExit code when exited event has a non-number exit code', async () => {
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'coreclr');
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker(debugSession);
+
+        // Malformed `exited` event without a numeric exitCode; the guard should
+        // ignore it and leave the adapter exit code to be used.
+        tracker.onDidSendMessage({
+            type: 'event',
+            event: 'exited',
+            body: {}
+        });
+        tracker.onExit(2);
+
+        assert.strictEqual(dcpServer.sendNotification.calledOnce, true);
+        const notification = dcpServer.sendNotification.firstCall.args[0] as SessionTerminatedNotification;
+        assert.strictEqual(notification.exit_code, 2);
+
+        disposable.dispose();
+    });
+
+    test('exited event exit code of 0 is used even when adapter exit code differs', async () => {
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'coreclr');
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker(debugSession);
+
+        tracker.onDidSendMessage({
+            type: 'event',
+            event: 'exited',
+            body: { exitCode: 0 }
+        });
+        tracker.onExit(1);
+
+        assert.strictEqual(dcpServer.sendNotification.calledOnce, true);
+        const notification = dcpServer.sendNotification.firstCall.args[0] as SessionTerminatedNotification;
+        assert.strictEqual(notification.exit_code, 0, 'A zero exited-event code must not be overridden by the adapter code');
+
+        disposable.dispose();
+    });
+
+    test('process event resets a captured exit code so a clean restart reports 0', async () => {
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'coreclr');
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker(debugSession);
+
+        // A prior run exited non-zero, then the debuggee restarts (process event with a
+        // valid PID) and exits cleanly. The stale 1 must not leak into the new run.
+        tracker.onDidSendMessage({
+            type: 'event',
+            event: 'exited',
+            body: { exitCode: 1 }
+        });
+        tracker.onDidSendMessage({
+            type: 'event',
+            event: 'process',
+            body: { systemProcessId: 4242 }
+        });
+        tracker.onExit(0);
+
+        const terminated = findSessionTerminated(dcpServer);
+        assert.strictEqual(terminated.exit_code, 0, 'The process event should clear the captured exit code from the prior run');
+
+        disposable.dispose();
+    });
+
+    test('process event without a system process ID still resets a captured exit code', async () => {
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'coreclr');
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker(debugSession);
+
+        // `systemProcessId` is optional in DAP. Even when the restart is reported without
+        // it, the captured exit code must still be cleared for the new run.
+        tracker.onDidSendMessage({
+            type: 'event',
+            event: 'exited',
+            body: { exitCode: 1 }
+        });
+        tracker.onDidSendMessage({
+            type: 'event',
+            event: 'process',
+            body: {}
+        });
+        tracker.onExit(0);
+
+        const terminated = findSessionTerminated(dcpServer);
+        assert.strictEqual(terminated.exit_code, 0, 'A PID-less process event must still clear the captured exit code');
+
+        disposable.dispose();
+    });
+
+    test('exited event exit code 143 on Linux is converted to 0', async () => {
+        const originalPlatform = process.platform;
+        Object.defineProperty(process, 'platform', {
+            value: 'linux',
+            configurable: true
+        });
+
+        try {
+            const disposable = createDebugAdapterTracker(dcpServer as any, 'coreclr');
+            const factory = registerFactoryStub.lastCall.args[1];
+            const tracker = factory.createDebugAdapterTracker(debugSession);
+
+            // SIGTERM-terminated debuggee reports 143 via the exited event.
+            // The adapter code is a distinct sentinel so the asserted 0 can only
+            // come from converting the exited-event 143, not the adapter code.
+            tracker.onDidSendMessage({
+                type: 'event',
+                event: 'exited',
+                body: { exitCode: 143 }
+            });
+            tracker.onExit(7);
+
+            assert.strictEqual(dcpServer.sendNotification.calledOnce, true);
+            const notification = dcpServer.sendNotification.firstCall.args[0] as SessionTerminatedNotification;
+            assert.strictEqual(notification.exit_code, 0, 'Exit code 143 from the exited event should be converted to 0 on Linux');
+
+            disposable.dispose();
+        } finally {
+            Object.defineProperty(process, 'platform', {
+                value: originalPlatform,
+                configurable: true
+            });
+        }
+    });
+
+    test('exited event exit code 143 on Windows is NOT converted', async () => {
+        const originalPlatform = process.platform;
+        Object.defineProperty(process, 'platform', {
+            value: 'win32',
+            configurable: true
+        });
+
+        try {
+            const disposable = createDebugAdapterTracker(dcpServer as any, 'coreclr');
+            const factory = registerFactoryStub.lastCall.args[1];
+            const tracker = factory.createDebugAdapterTracker(debugSession);
+
+            // Windows never converts 143, so the exited-event code must survive as-is.
+            // The adapter code is a distinct sentinel so the asserted 143 can only
+            // come from the exited event, not the adapter code.
+            tracker.onDidSendMessage({
+                type: 'event',
+                event: 'exited',
+                body: { exitCode: 143 }
+            });
+            tracker.onExit(7);
+
+            assert.strictEqual(dcpServer.sendNotification.calledOnce, true);
+            const notification = dcpServer.sendNotification.firstCall.args[0] as SessionTerminatedNotification;
+            assert.strictEqual(notification.exit_code, 143, 'Exit code 143 from the exited event should NOT be converted to 0 on Windows');
+
+            disposable.dispose();
+        } finally {
+            Object.defineProperty(process, 'platform', {
+                value: originalPlatform,
+                configurable: true
+            });
+        }
+    });
+
     test('non-telemetry output events are sent as service logs', async () => {
         const disposable = createDebugAdapterTracker(dcpServer as any, 'node');
         const factory = registerFactoryStub.lastCall.args[1];
@@ -339,3 +537,14 @@ suite('Debug Adapter Tracker Tests', () => {
         disposable.dispose();
     });
 });
+
+// Returns the single sessionTerminated notification sent during a test. A restart
+// sequence also emits a processRestarted notification, so we can't rely on firstCall.
+function findSessionTerminated(dcpServer: sinon.SinonStubbedInstance<AspireDcpServer>): SessionTerminatedNotification {
+    const terminated = dcpServer.sendNotification.getCalls()
+        .map(call => call.args[0])
+        .find((notification): notification is SessionTerminatedNotification => notification.notification_type === 'sessionTerminated');
+
+    assert.ok(terminated, 'Expected a sessionTerminated notification to be sent');
+    return terminated;
+}

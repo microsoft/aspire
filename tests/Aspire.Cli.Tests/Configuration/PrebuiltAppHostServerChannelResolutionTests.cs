@@ -22,7 +22,7 @@ public class PrebuiltAppHostServerChannelResolutionTests(ITestOutputHelper outpu
     [Fact]
     public void PrebuiltAppHostServer_ResolveRequestedChannel_ReturnsNullWhenNoAspireConfigJson()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostDirectory = workspace.CreateDirectory("apphost");
 
         var server = CreateServer(appHostDirectory.FullName);
@@ -33,7 +33,7 @@ public class PrebuiltAppHostServerChannelResolutionTests(ITestOutputHelper outpu
     [Fact]
     public void PrebuiltAppHostServer_ResolveRequestedChannel_HonorsAspireConfigJson()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostDirectory = workspace.CreateDirectory("apphost");
 
         var config = AspireConfigFile.LoadOrCreate(appHostDirectory.FullName);
@@ -53,7 +53,7 @@ public class PrebuiltAppHostServerChannelResolutionTests(ITestOutputHelper outpu
         // PrebuiltAppHostServer must still resolve that legacy file so existing on-disk
         // projects keep working until they're migrated. The new file is preferred when
         // both exist (asserted by the next test).
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostDirectory = workspace.CreateDirectory("apphost");
 
         var legacy = new AspireJsonConfiguration { Channel = "daily", SdkVersion = "13.3.0" };
@@ -74,7 +74,7 @@ public class PrebuiltAppHostServerChannelResolutionTests(ITestOutputHelper outpu
         // When both files exist (e.g. during/after migration), the new format wins. This
         // anchors the precedence and prevents an accidental swap of the `??` operands in
         // PrebuiltAppHostServer.ResolveRequestedChannel from going unnoticed.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostDirectory = workspace.CreateDirectory("apphost");
 
         var legacy = new AspireJsonConfiguration { Channel = "daily", SdkVersion = "13.3.0" };
@@ -108,6 +108,7 @@ public class PrebuiltAppHostServerChannelResolutionTests(ITestOutputHelper outpu
             MockPackagingServiceFactory.Create(),
             TestExecutionContextFactory.CreateTestContext(),
             new TestProcessExecutionFactory(),
+            new TestEnvironment(),
             NullLogger.Instance);
     }
 }

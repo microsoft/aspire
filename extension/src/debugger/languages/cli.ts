@@ -2,9 +2,13 @@ import { ChildProcessWithoutNullStreams, spawn } from "child_process";
 import { EnvVar } from "../../dcp/types";
 import { extensionLogOutputChannel } from "../../utils/logging";
 import { AspireTerminalProvider } from "../../utils/AspireTerminalProvider";
+import { CmdShimSpawnCommand, getCmdShimSpawnCommand, shouldWrapWithCmd } from "../../utils/cmdShim";
 import * as readline from 'readline';
 import * as vscode from 'vscode';
 import { EnvironmentVariables } from "../../utils/environment";
+
+const processShutdownGracePeriodMs = 5_000;
+const managedPosixProcessGroups = new WeakSet<ChildProcessWithoutNullStreams>();
 
 export interface SpawnProcessOptions {
     stdoutCallback?: (data: string) => void;
@@ -17,14 +21,14 @@ export interface SpawnProcessOptions {
     debugSessionId?: string,
     noDebug?: boolean;
     noExtensionVariables?: boolean;
+    createProcessGroup?: boolean;
 }
 
-export function getCliSpawnCommand(command: string, args?: string[]): { command: string; args: string[] } {
-    if (process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(command)) {
-        return {
-            command: process.env.ComSpec ?? 'cmd.exe',
-            args: ['/d', '/c', 'call', command, ...args ?? []],
-        };
+export type CliSpawnCommand = CmdShimSpawnCommand;
+
+export function getCliSpawnCommand(command: string, args?: string[]): CliSpawnCommand {
+    if (shouldWrapWithCmd(command)) {
+        return getCmdShimSpawnCommand(command, args ?? []);
     }
 
     return { command, args: args ?? [] };
@@ -61,13 +65,19 @@ export function spawnCliProcess(terminalProvider: AspireTerminalProvider, comman
     Object.assign(env, terminalProvider.createEnvironment(options?.debugSessionId, options?.noDebug, options?.noExtensionVariables));
     mergeCliSpawnEnvironment(env, options?.env);
 
-    extensionLogOutputChannel.info(getCliSpawnDiagnostics(spawnCommand.command, spawnCommand.args, workingDirectory, options?.noDebug, options?.debugSessionId, env));
+    extensionLogOutputChannel.info(getCliSpawnDiagnostics(spawnCommand.command, spawnCommand.diagnosticArgs ?? spawnCommand.args, workingDirectory, options?.noDebug, options?.debugSessionId, env));
 
+    const createProcessGroup = process.platform !== 'win32' && options?.createProcessGroup === true;
     const child = spawn(spawnCommand.command, spawnCommand.args, {
         cwd: workingDirectory,
         env: env,
-        shell: false
+        shell: false,
+        detached: createProcessGroup,
+        windowsVerbatimArguments: spawnCommand.windowsVerbatimArguments,
     });
+    if (createProcessGroup) {
+        managedPosixProcessGroups.add(child);
+    }
 
     // Set UTF-8 encoding so Node reassembles multi-byte characters across chunk boundaries instead of yielding broken bytes.
     child.stdout.setEncoding('utf8');
@@ -97,6 +107,147 @@ export function spawnCliProcess(terminalProvider: AspireTerminalProvider, comman
     });
 
     return child;
+}
+
+export function terminateCliProcess(childProcess: ChildProcessWithoutNullStreams, description: string, options?: { suppressTimeoutWarning?: boolean }): void {
+    const processGroupPid = process.platform !== 'win32' && managedPosixProcessGroups.has(childProcess)
+        ? childProcess.pid
+        : undefined;
+    let exited = childProcess.exitCode !== null || childProcess.signalCode !== null;
+    let forceKillTimer: ReturnType<typeof setTimeout> | undefined;
+    let forceSignalSent = false;
+    const hasLiveProcessGroup = () => processGroupPid !== undefined && isPosixProcessGroupAlive(processGroupPid);
+    const forceTermination = (): boolean => {
+        if (forceSignalSent) {
+            return true;
+        }
+
+        try {
+            forceSignalSent = terminateCliProcessTree(childProcess, true);
+            if (!forceSignalSent) {
+                extensionLogOutputChannel.warn(`Failed to forcefully terminate ${description}.`);
+            }
+        } catch (error) {
+            extensionLogOutputChannel.error(`Failed to forcefully terminate ${description}: ${String(error)}`);
+        }
+
+        return forceSignalSent;
+    };
+    const stopTracking = () => {
+        exited = true;
+        childProcess.off('close', onExit);
+        childProcess.off('exit', onExit);
+        if (forceKillTimer) {
+            clearTimeout(forceKillTimer);
+            forceKillTimer = undefined;
+        }
+    };
+    const onExit = () => {
+        stopTracking();
+        if (processGroupPid !== undefined && !forceSignalSent && hasLiveProcessGroup()) {
+            // Once the leader exits, force any remaining descendants immediately. Delaying another
+            // negative-PID signal would allow the operating system to recycle the process-group ID.
+            forceTermination();
+        }
+        managedPosixProcessGroups.delete(childProcess);
+    };
+
+    if (!exited) {
+        childProcess.once('close', onExit);
+        childProcess.once('exit', onExit);
+    } else {
+        if (processGroupPid !== undefined) {
+            if (hasLiveProcessGroup()) {
+                forceTermination();
+            }
+            managedPosixProcessGroups.delete(childProcess);
+        }
+        return;
+    }
+
+    try {
+        if (!childProcess.killed) {
+            const signalSent = terminateCliProcessTree(childProcess, false);
+            if (!signalSent) {
+                extensionLogOutputChannel.warn(`Failed to terminate ${description}.`);
+                onExit();
+                return;
+            }
+        }
+    } catch (error) {
+        extensionLogOutputChannel.error(`Failed to terminate ${description}: ${String(error)}`);
+        onExit();
+        return;
+    }
+
+    if (!exited) {
+        forceKillTimer = setTimeout(() => {
+            forceKillTimer = undefined;
+            if (exited) {
+                return;
+            }
+
+            if (childProcess.exitCode !== null || childProcess.signalCode !== null) {
+                onExit();
+                return;
+            }
+
+            if (!options?.suppressTimeoutWarning) {
+                extensionLogOutputChannel.warn(`${description} did not exit within ${processShutdownGracePeriodMs}ms; forcing termination.`);
+            }
+
+            if (!forceTermination()) {
+                stopTracking();
+            }
+        }, processShutdownGracePeriodMs);
+        forceKillTimer.unref();
+    }
+}
+
+function terminateCliProcessTree(childProcess: ChildProcessWithoutNullStreams, force: boolean): boolean {
+    if (process.platform !== 'win32') {
+        if (managedPosixProcessGroups.has(childProcess) && childProcess.pid !== undefined) {
+            try {
+                // A detached POSIX child is a process-group leader. Signaling its negative PID
+                // terminates Aspire and its descendants together.
+                // https://nodejs.org/api/child_process.html#optionsdetached
+                return process.kill(-childProcess.pid, force ? 'SIGKILL' : 'SIGTERM');
+            } catch {
+                // The group may have exited between the liveness check and signal delivery.
+            }
+        }
+
+        return childProcess.kill(force ? 'SIGKILL' : undefined);
+    }
+
+    if (childProcess.pid === undefined) {
+        return childProcess.kill(force ? 'SIGKILL' : undefined);
+    }
+
+    const args = ['/pid', String(childProcess.pid), '/t'];
+    if (force) {
+        args.push('/f');
+    }
+
+    const taskkill = spawn('taskkill.exe', args, {
+        stdio: 'ignore',
+        windowsHide: true,
+    });
+    taskkill.on('error', error => {
+        extensionLogOutputChannel.warn(`Failed to stop process tree for PID ${childProcess.pid}: ${error}`);
+        childProcess.kill();
+    });
+    taskkill.unref();
+
+    return true;
+}
+
+function isPosixProcessGroupAlive(pid: number): boolean {
+    try {
+        return process.kill(-pid, 0);
+    } catch (error) {
+        return error instanceof Error && 'code' in error && error.code === 'EPERM';
+    }
 }
 
 function redactCliSpawnArgs(args: string[] | undefined): string[] {

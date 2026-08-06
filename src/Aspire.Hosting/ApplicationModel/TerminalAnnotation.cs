@@ -2,40 +2,20 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Aspire.Hosting.ApplicationModel;
 
+#pragma warning disable ASPIRETERMINAL001 // Internal annotation backing the experimental terminal configuration API.
+
 /// <summary>
-/// Marks a resource as having an interactive terminal session.
+/// Tracks terminal configuration and per-replica terminal hosts for a resource.
 /// </summary>
-/// <remarks>
-/// <para>
-/// When this annotation is present on a resource, the orchestrator (DCP) allocates a
-/// pseudo-terminal (PTY) per replica and a hidden <see cref="TerminalHostResource"/> per
-/// replica bridges that replica's PTY traffic over Hex1b's HMP v1 protocol so that the
-/// Aspire Dashboard and the <c>aspire terminal</c> CLI command can attach to live sessions.
-/// </para>
-/// <para>
-/// The per-replica <see cref="TerminalHostResource"/>s are NOT created at
-/// <see cref="TerminalResourceBuilderExtensions.WithTerminal{T}(IResourceBuilder{T}, Action{TerminalOptions}?)"/>
-/// time. They are created during <see cref="BeforeStartEvent"/> by reading the parent
-/// resource's final <see cref="ReplicaAnnotation"/>. This deferral is what makes
-/// <c>WithReplicas(N)</c> work correctly even when it is called <strong>after</strong>
-/// <c>WithTerminal()</c>: the model is fully built by the time the per-replica hosts are
-/// materialized, so the final replica count is always honoured. Until that initialization
-/// runs, <see cref="TerminalHosts"/> is an empty collection and <see cref="IsInitialized"/>
-/// is <c>false</c>.
-/// </para>
-/// <para>
-/// Connection direction across all UDS endpoints: the terminal host LISTENS; DCP, viewers,
-/// and the AppHost DIAL. See <see cref="TerminalHostLayout"/> for the per-host path layout.
-/// </para>
-/// </remarks>
 [DebuggerDisplay("Type = {GetType().Name,nq}, IsInitialized = {IsInitialized}, ReplicaCount = {TerminalHosts.Count}")]
-public sealed class TerminalAnnotation : IResourceAnnotation
+internal sealed class TerminalAnnotation : IResourceAnnotation
 {
     // Starts as Array.Empty<TerminalHostResource>() (the default for [] in C#) so the
-    // public TerminalHosts surface is always non-null and safely enumerable, even before
+    // TerminalHosts collection is always non-null and safely enumerable, even before
     // BeforeStartEvent has had a chance to materialize the per-replica hosts. Consumers
     // (DCP creators, dashboard data, backchannel) must guard with a Count check or an
     // index-bounds check; all of them already do.
@@ -108,29 +88,44 @@ public sealed class TerminalAnnotation : IResourceAnnotation
     }
 }
 
+#pragma warning restore ASPIRETERMINAL001
+
 /// <summary>
 /// Options for configuring a terminal session.
 /// </summary>
+[Experimental("ASPIRETERMINAL001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class TerminalOptions
 {
-    /// <summary>
-    /// Gets or sets the initial number of columns for the terminal. Defaults to 120.
-    /// </summary>
-    public int Columns { get; set; } = 120;
+    private int _columns = 120;
+    private int _rows = 30;
 
     /// <summary>
-    /// Gets or sets the initial number of rows for the terminal. Defaults to 30.
+    /// Gets or sets the initial number of columns for the terminal. The value must be greater than zero. Defaults to 120.
     /// </summary>
-    public int Rows { get; set; } = 30;
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when set to zero or a negative value.</exception>
+    public int Columns
+    {
+        get => _columns;
+        set
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(value);
+            _columns = value;
+        }
+    }
 
     /// <summary>
-    /// Gets or sets the shell to use for the terminal session.
+    /// Gets or sets the initial number of rows for the terminal. The value must be greater than zero. Defaults to 30.
     /// </summary>
-    /// <remarks>
-    /// When <c>null</c>, the default shell for the resource is used.
-    /// For containers, this is typically <c>/bin/sh</c>. For executables, the process itself serves as the terminal program.
-    /// </remarks>
-    public string? Shell { get; set; }
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when set to zero or a negative value.</exception>
+    public int Rows
+    {
+        get => _rows;
+        set
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(value);
+            _rows = value;
+        }
+    }
 
     /// <summary>
     /// Gets or sets a value indicating whether the per-replica terminal host resources

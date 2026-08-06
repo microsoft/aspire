@@ -23,7 +23,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExportCommand_WritesZipWithExpectedData()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "export.zip");
 
         var resources = new[]
@@ -111,7 +111,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExportCommand_OutputOption_ConfiguresArchiveOutputLocation()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var customDir = Path.Combine(workspace.WorkspaceRoot.FullName, "custom", "nested");
         var outputPath = Path.Combine(customDir, "my-export.zip");
 
@@ -144,7 +144,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
         // When --apphost is specified, AppHostConnectionResolver uses a fast path
         // that looks for matching socket files on disk. Since no real socket exists
         // in tests, the command gracefully reports that no running AppHost was found.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "export.zip");
 
@@ -177,7 +177,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
     {
         // When --apphost is NOT specified and only one in-scope connection exists,
         // the resolver automatically selects it and exports data from that connection.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "export.zip");
 
@@ -297,7 +297,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExportCommand_ReplicaResources_GroupsDataByResolvedResourceName()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "export.zip");
 
         // 3 telemetry resources: redis (singleton) + apiservice with 2 replicas
@@ -423,7 +423,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExportCommand_ResourceFilter_ExportsOnlyFilteredResource()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "export.zip");
 
         var resources = new[]
@@ -481,7 +481,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExportCommand_ResourceFilter_NoTelemetryData_SkipsStructuredLogsAndTraces()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "export.zip");
 
         // Telemetry resources do NOT include "webfrontend" - it hasn't sent any telemetry yet
@@ -535,7 +535,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExportCommand_ResourceFilter_ReplicasByDisplayName_ExportsAllReplicas()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "export.zip");
 
         var resources = new[]
@@ -600,7 +600,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExportCommand_HiddenResources_AreExcludedByDefault()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "export.zip");
 
         using var provider = CreateExportTestServices(workspace,
@@ -644,7 +644,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExportCommand_IncludeHidden_ShowsHiddenResources()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "export.zip");
 
         using var provider = CreateExportTestServices(workspace,
@@ -688,7 +688,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExportCommand_SpecificHiddenResource_WorksWithoutFlag()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "export.zip");
 
         using var provider = CreateExportTestServices(workspace,
@@ -730,7 +730,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExportCommand_ResourceFilter_NonExistentResource_ReturnsError()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "export.zip");
 
         using var provider = CreateExportTestServices(workspace,
@@ -758,7 +758,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExportCommand_DashboardUrl_ExportsTelemetryData()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "export.zip");
 
         var resources = new[]
@@ -811,7 +811,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExportCommand_DashboardUnavailable_ExportsResourcesAndConsoleLogs()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "export.zip");
 
         var testInteractionService = new TestInteractionService();

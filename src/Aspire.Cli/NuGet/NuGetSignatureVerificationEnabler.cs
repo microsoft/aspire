@@ -21,7 +21,7 @@ internal static class NuGetSignatureVerificationEnabler
     /// </summary>
     public static void Apply(Dictionary<string, string> environmentVariables, IFeatures features, IEnvironment environment)
     {
-        if (!OperatingSystem.IsLinux() ||
+        if (!environment.IsLinux() ||
             !features.IsFeatureEnabled(
                 KnownFeatures.NuGetSignatureVerificationEnabled,
                 KnownFeatures.GetFeatureMetadata(KnownFeatures.NuGetSignatureVerificationEnabled)!.DefaultValue))

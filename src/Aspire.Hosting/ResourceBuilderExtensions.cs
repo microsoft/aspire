@@ -1265,11 +1265,6 @@ public static class ResourceBuilderExtensions
             throw new InvalidOperationException($"The URI for service reference '{name}' is invalid while configuring target resource '{builder.Resource.Name}': it must be absolute.");
         }
 
-        if (!uri.AbsolutePath.EndsWith('/'))
-        {
-            throw new InvalidOperationException($"The URI for service reference '{name}' is invalid while configuring target resource '{builder.Resource.Name}': the absolute path must end with '/'.");
-        }
-
         if (!string.IsNullOrEmpty(uri.Fragment))
         {
             throw new InvalidOperationException($"The URI for service reference '{name}' is invalid while configuring target resource '{builder.Resource.Name}': it cannot contain a fragment.");
@@ -2937,7 +2932,7 @@ public static class ResourceBuilderExtensions
         }
 
 #pragma warning disable CS0618 // Parameter is obsolete but still flowed for compatibility.
-        return builder.WithAnnotation(new ResourceCommandAnnotation(name, displayName, commandOptions.UpdateState ?? (c => ResourceCommandState.Enabled), executeCommand, commandOptions.Description, commandOptions.Parameter, commandOptions.Arguments, commandOptions.ConfirmationMessage, commandOptions.IconName, commandOptions.IconVariant, commandOptions.IsHighlighted, commandOptions.Visibility, commandOptions.ValidateArguments));
+        return builder.WithAnnotation(new ResourceCommandAnnotation(name, displayName, commandOptions.UpdateState ?? (c => ResourceCommandState.Enabled), executeCommand, commandOptions.Description, commandOptions.Parameter, commandOptions.Arguments, commandOptions.ConfirmationMessage, commandOptions.IconName, commandOptions.IconVariant, commandOptions.IsHighlighted, commandOptions.Visibility, commandOptions.ValidateArguments, commandOptions.Progress));
 #pragma warning restore CS0618
     }
 
@@ -3024,10 +3019,11 @@ public static class ResourceBuilderExtensions
         target.IconVariant = source.IconVariant;
         target.IsHighlighted = source.IsHighlighted;
         target.UpdateState = source.UpdateState;
+        target.Progress = source.Progress;
 #pragma warning restore CS0618
     }
 
-    #pragma warning disable ASPIREPROCESSCOMMAND001 // Process command APIs are experimental.
+#pragma warning disable ASPIREPROCESSCOMMAND001 // Process command APIs are experimental.
 
     /// <summary>
     /// Adds a command to the resource that starts a local process when invoked.
@@ -3517,7 +3513,7 @@ public static class ResourceBuilderExtensions
             : CommandResults.Failure(message, resultData);
     }
 
-    #pragma warning restore ASPIREPROCESSCOMMAND001
+#pragma warning restore ASPIREPROCESSCOMMAND001
 
     /// <summary>
     /// Adds a command to the resource that when invoked sends an HTTP request to the specified endpoint and path.
@@ -3551,8 +3547,9 @@ public static class ResourceBuilderExtensions
     /// </para>
     /// <para>
     /// Specifying <see cref="HttpCommandOptions.HttpClientName"/> will use that named <see cref="HttpClient"/> when sending the request. This allows you to configure the <see cref="HttpClient"/>
-    /// instance with a specific handler or other options using <see cref="HttpClientFactoryServiceCollectionExtensions.AddHttpClient(IServiceCollection, string)"/>.
-    /// If <see cref="HttpCommandOptions.HttpClientName"/> is not specified, the default <see cref="HttpClient"/> will be used.
+    /// instance with a specific handler, timeout, or other options using <see cref="HttpClientFactoryServiceCollectionExtensions.AddHttpClient(IServiceCollection, string)"/>.
+    /// If <see cref="HttpCommandOptions.HttpClientName"/> is not specified, the default <see cref="HttpClient"/> will be used and its
+    /// <see cref="HttpClient.Timeout"/> will be set to <see cref="Timeout.InfiniteTimeSpan"/>. Specify a named client to preserve its configured timeout.
     /// </para>
     /// <para>
     /// The <see cref="HttpCommandOptions.PrepareRequest"/> callback will be invoked to configure the request before it is sent. This can be used to add headers or a request payload
@@ -3644,8 +3641,9 @@ public static class ResourceBuilderExtensions
     /// </para>
     /// <para>
     /// Specifying a <see cref="HttpCommandOptions.HttpClientName"/> will use that named <see cref="HttpClient"/> when sending the request. This allows you to configure the <see cref="HttpClient"/>
-    /// instance with a specific handler or other options using <see cref="HttpClientFactoryServiceCollectionExtensions.AddHttpClient(IServiceCollection, string)"/>.
-    /// If no <see cref="HttpCommandOptions.HttpClientName"/> is specified, the default <see cref="HttpClient"/> will be used.
+    /// instance with a specific handler, timeout, or other options using <see cref="HttpClientFactoryServiceCollectionExtensions.AddHttpClient(IServiceCollection, string)"/>.
+    /// If <see cref="HttpCommandOptions.HttpClientName"/> is not specified, the default <see cref="HttpClient"/> will be used and its
+    /// <see cref="HttpClient.Timeout"/> will be set to <see cref="Timeout.InfiniteTimeSpan"/>. Specify a named client to preserve its configured timeout.
     /// </para>
     /// <para>
     /// The <see cref="HttpCommandOptions.PrepareRequest"/> callback will be invoked to configure the request before it is sent. This can be used to add headers or a request payload
@@ -3716,6 +3714,13 @@ public static class ResourceBuilderExtensions
                 }
                 var uri = new UriBuilder(endpoint.Url) { Path = path }.Uri;
                 var httpClient = context.Services.GetRequiredService<IHttpClientFactory>().CreateClient(commandOptions.HttpClientName ?? Options.DefaultName);
+                if (commandOptions.HttpClientName is null)
+                {
+                    // HTTP commands are user-cancelable and may legitimately run longer than HttpClient's 100-second default.
+                    // The unnamed default client therefore has no timeout. A named client selects custom configuration,
+                    // including its configured timeout.
+                    httpClient.Timeout = Timeout.InfiniteTimeSpan;
+                }
                 var request = new HttpRequestMessage(commandOptions.Method, uri);
                 if (commandOptions.PrepareRequest is not null)
                 {
@@ -4727,7 +4732,7 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrWhiteSpace(iconName);
 
-        return builder.WithAnnotation(new ResourceIconAnnotation(iconName, iconVariant));
+        return builder.WithAnnotation(new ResourceIconAnnotation(iconName, iconVariant), ResourceAnnotationMutationBehavior.Replace);
     }
 
     /// <summary>
@@ -4754,13 +4759,69 @@ public static class ResourceBuilderExtensions
     /// <summary>
     /// Adds support for debugging the resource in VS Code when running in an extension host.
     /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <typeparam name="TLaunchConfiguration">The launch configuration type produced for the resource, typically derived from <see cref="ExecutableLaunchConfiguration"/>.</typeparam>
     /// <param name="builder">The resource builder.</param>
-    /// <param name="launchConfigurationProducer">Launch configuration producer for the resource.</param>
-    /// <param name="launchConfigurationType">The type of the resource.</param>
+    /// <param name="launchConfigurationProducer">Launch configuration producer for the resource. It is passed the launch mode (one of the values on <see cref="ExecutableLaunchMode"/>) and produces the configuration that is handed to the IDE.</param>
+    /// <param name="launchConfigurationType">The type tag of the launch configuration (as sent to the IDE).</param>
     /// <param name="argsCallback">Optional callback to add or modify command line arguments when running in an extension host. Useful if the entrypoint is usually provided as an argument to the resource executable.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <exception cref="ArgumentException">
+    /// <typeparamref name="TLaunchConfiguration"/> is a <see cref="Task"/> or <see cref="ValueTask"/>, which means an
+    /// asynchronous producer was written without the <see cref="CancellationToken"/> parameter and bound to this
+    /// overload. Use <see cref="WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, CancellationToken, Task{TLaunchConfiguration}}, string, Action{CommandLineArgsCallbackContext})"/> instead.
+    /// </exception>
+    /// <remarks>
+    /// Aspire invokes the launch configuration producer while preparing and creating the underlying orchestrator objects, and may invoke it
+    /// several times for the same resource. Use
+    /// <see cref="WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, CancellationToken, Task{TLaunchConfiguration}}, string, Action{CommandLineArgsCallbackContext})"/>
+    /// when the configuration has to be resolved from work that is itself asynchronous, for example in the presence of 
+    /// build-argument callbacks contributed by other annotations.
+    /// </remarks>
     [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Generic debug launch configuration support is not part of the ATS surface.")]
     public static IResourceBuilder<T> WithDebugSupport<T, TLaunchConfiguration>(this IResourceBuilder<T> builder, Func<string, TLaunchConfiguration> launchConfigurationProducer, string launchConfigurationType, Action<CommandLineArgsCallbackContext>? argsCallback = null)
+        where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(launchConfigurationProducer);
+
+        if (typeof(Task).IsAssignableFrom(typeof(TLaunchConfiguration)) || IsValueTask(typeof(TLaunchConfiguration)))
+        {
+            throw new ArgumentException(
+                $"The launch configuration producer returns '{typeof(TLaunchConfiguration)}'. An asynchronous producer must take a {nameof(CancellationToken)} " +
+                $"parameter so that it binds to the asynchronous {nameof(WithDebugSupport)} overload; otherwise the task itself is used as the launch configuration.",
+                nameof(launchConfigurationProducer));
+        }
+
+        return builder.WithDebugSupport((mode, _) => Task.FromResult(launchConfigurationProducer(mode)), launchConfigurationType, argsCallback);
+
+        static bool IsValueTask(Type type)
+            => type == typeof(ValueTask) || (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ValueTask<>));
+    }
+
+    /// <summary>
+    /// Adds support for debugging the resource in VS Code when running in an extension host, 
+    /// using a launch configuration that is produced asynchronously.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <typeparam name="TLaunchConfiguration">The launch configuration type produced for the resource, typically derived from <see cref="ExecutableLaunchConfiguration"/>.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="launchConfigurationProducer">Launch configuration producer for the resource. It is passed the launch mode (one of the values on <see cref="ExecutableLaunchMode"/>) and produces the configuration that is handed to the IDE.</param>
+    /// <param name="launchConfigurationType">The type of the resource.</param>
+    /// <param name="argsCallback">Optional callback to add or modify command line arguments when running in an extension host. Useful if the entrypoint is usually provided as an argument to the resource executable.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// Use this overload when the launch configuration has to be resolved from work that is itself asynchronous, for
+    /// example in the presence of build-argument callbacks contributed by other annotations. Aspire invokes the producer while preparing
+    /// and creating the underlying orchestrator objects, and may invoke it several times for the same resource. 
+    /// A producer that computes everything synchronously should use
+    /// <see cref="WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, TLaunchConfiguration}, string, Action{CommandLineArgsCallbackContext})"/>
+    /// instead.
+    /// </remarks>
+    [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Generic debug launch configuration support is not part of the ATS surface.")]
+    public static IResourceBuilder<T> WithDebugSupport<T, TLaunchConfiguration>(this IResourceBuilder<T> builder, Func<string, CancellationToken, Task<TLaunchConfiguration>> launchConfigurationProducer, string launchConfigurationType, Action<CommandLineArgsCallbackContext>? argsCallback = null)
         where T : IResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -4771,18 +4832,28 @@ public static class ResourceBuilderExtensions
             return builder;
         }
 
-        if (builder is IResourceBuilder<IResourceWithArgs> resourceWithArgs)
+        var supportsDebuggingAnnotation = SupportsDebuggingAnnotation.Create(
+            builder.Resource.Name,
+            launchConfigurationType,
+            launchConfigurationProducer,
+            rewritesArgumentsForDebugging: argsCallback is not null && builder is IResourceBuilder<IResourceWithArgs>
+        );
+
+        if (argsCallback is not null && builder is IResourceBuilder<IResourceWithArgs> resourceWithArgs)
         {
-            resourceWithArgs.WithArgs(async ctx =>
+            resourceWithArgs.WithArgs(ctx =>
             {
-                if (resourceWithArgs.Resource.SupportsDebugging(builder.ApplicationBuilder.Configuration, out _) && argsCallback is not null)
+                // Make sure that we do not call the callback if we aren't the active (last) SupportsDebuggingAnnotation, 
+                // because the callback may be specific to the launch configuration type.
+                if (resourceWithArgs.Resource.SupportsDebugging(builder.ApplicationBuilder.Configuration, out var activeAnnotation)
+                    && ReferenceEquals(activeAnnotation, supportsDebuggingAnnotation))
                 {
                     argsCallback(ctx);
                 }
             });
         }
 
-        return builder.WithAnnotation(SupportsDebuggingAnnotation.Create(launchConfigurationType, launchConfigurationProducer));
+        return builder.WithAnnotation(supportsDebuggingAnnotation);
     }
 
     /// <summary>
@@ -5095,7 +5166,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
-[AspireExport]
+    [AspireExport]
     public static IResourceBuilder<T> WithImagePushOptions<T>(
         this IResourceBuilder<T> builder,
         Func<ContainerImagePushOptionsCallbackContext, Task> callback)

@@ -36,9 +36,9 @@ internal static class TypeScriptAppHostToolchainResolver
              language.LanguageId.Value.Equals(KnownLanguageId.TypeScriptAlias, StringComparison.OrdinalIgnoreCase));
     }
 
-    public static TypeScriptAppHostToolchain Resolve(DirectoryInfo appHostDirectory, ILogger? logger)
+    public static TypeScriptAppHostToolchain Resolve(DirectoryInfo appHostDirectory, IEnvironment environment, ILogger? logger)
     {
-        var resolution = ResolveWithReason(appHostDirectory);
+        var resolution = ResolveWithReason(appHostDirectory, environment);
         logger?.LogDebug(
             "Selected TypeScript AppHost package manager '{PackageManager}' because {Reason}.",
             GetCommandName(resolution.Toolchain),
@@ -47,9 +47,9 @@ internal static class TypeScriptAppHostToolchainResolver
         return resolution.Toolchain;
     }
 
-    internal static TypeScriptAppHostToolchainResolution ResolveWithReason(DirectoryInfo appHostDirectory)
+    internal static TypeScriptAppHostToolchainResolution ResolveWithReason(DirectoryInfo appHostDirectory, IEnvironment environment)
     {
-        foreach (var candidateDirectory in EnumerateCandidateDirectories(appHostDirectory))
+        foreach (var candidateDirectory in EnumerateCandidateDirectories(appHostDirectory, environment))
         {
             if (TryGetToolchainFromPackageJson(candidateDirectory, out var configuredToolchain, out var reason))
             {
@@ -400,22 +400,24 @@ internal static class TypeScriptAppHostToolchainResolver
         return false;
     }
 
-    private static IEnumerable<DirectoryInfo> EnumerateCandidateDirectories(DirectoryInfo appHostDirectory)
+    private static IEnumerable<DirectoryInfo> EnumerateCandidateDirectories(DirectoryInfo appHostDirectory, IEnvironment environment)
     {
         yield return appHostDirectory;
 
         // Only use the immediate parent as a fallback so a project folder can provide
         // workspace-level hints without inheriting unrelated markers from higher directories.
         var parentDirectory = appHostDirectory.Parent;
-        if (parentDirectory is not null && ShouldSearchParentDirectory(parentDirectory))
+        if (parentDirectory is not null && ShouldSearchParentDirectory(parentDirectory, environment))
         {
             yield return parentDirectory;
         }
     }
 
-    internal static bool ShouldSearchParentDirectory(DirectoryInfo parentDirectory, string? homeDirectory = null)
+    internal static bool ShouldSearchParentDirectory(DirectoryInfo parentDirectory, IEnvironment environment, string? homeDirectory = null)
     {
-        var pathComparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+        var isWindows = environment.IsWindows();
+        var isMacOS = environment.IsMacOS();
+        var pathComparison = isWindows || isMacOS
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal;
 

@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Runtime.Versioning;
+
 namespace Aspire.Cli;
 
 /// <summary>
@@ -18,9 +20,12 @@ public sealed class HostEnvironment : IEnvironment
             .Select(e => (Name: e.Key?.ToString() ?? string.Empty, Value: e.Value?.ToString()));
     }
 
-    public bool IsWindows => OperatingSystem.IsWindows();
+    [SupportedOSPlatformGuard("windows")]
+    public bool IsWindows() => OperatingSystem.IsWindows();
 
-    public bool IsLinux => OperatingSystem.IsLinux();
+    [SupportedOSPlatformGuard("linux")]
+    public bool IsLinux() => OperatingSystem.IsLinux();
 
-    public bool IsMacOS => OperatingSystem.IsMacOS();
+    [SupportedOSPlatformGuard("macos")]
+    public bool IsMacOS() => OperatingSystem.IsMacOS();
 }

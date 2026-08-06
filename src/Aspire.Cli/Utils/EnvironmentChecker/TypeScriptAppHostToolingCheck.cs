@@ -15,6 +15,7 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
     private readonly IProjectLocator _projectLocator;
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly CliExecutionContext _executionContext;
+    private readonly IEnvironment _environment;
     private readonly ILogger<TypeScriptAppHostToolingCheck> _logger;
     private readonly Func<string, string?> _commandResolver;
 
@@ -22,8 +23,9 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
         IProjectLocator projectLocator,
         ILanguageDiscovery languageDiscovery,
         CliExecutionContext executionContext,
+        IEnvironment environment,
         ILogger<TypeScriptAppHostToolingCheck> logger)
-        : this(projectLocator, languageDiscovery, executionContext, logger, PathLookupHelper.FindFullPathFromPath)
+        : this(projectLocator, languageDiscovery, executionContext, environment, logger, PathLookupHelper.FindFullPathFromPath)
     {
     }
 
@@ -31,12 +33,14 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
         IProjectLocator projectLocator,
         ILanguageDiscovery languageDiscovery,
         CliExecutionContext executionContext,
+        IEnvironment environment,
         ILogger<TypeScriptAppHostToolingCheck> logger,
         Func<string, string?> commandResolver)
     {
         _projectLocator = projectLocator;
         _languageDiscovery = languageDiscovery;
         _executionContext = executionContext;
+        _environment = environment;
         _logger = logger;
         _commandResolver = commandResolver;
     }
@@ -54,7 +58,7 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
         TypeScriptAppHostToolchain toolchain;
         try
         {
-            toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, _logger);
+            toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, _environment, _logger);
         }
         catch (YarnClassicNotSupportedException ex)
         {
@@ -128,42 +132,15 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
         ];
     }
 
-    private async Task<FileInfo?> ResolveTypeScriptAppHostAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            var configuredAppHost = await _projectLocator.GetAppHostFromSettingsAsync(cancellationToken);
-            if (configuredAppHost is not null &&
-                TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(_languageDiscovery.GetLanguageByFile(configuredAppHost)))
-            {
-                return configuredAppHost;
-            }
-
-            var detectedLanguageId = await _languageDiscovery.DetectLanguageRecursiveAsync(_executionContext.WorkingDirectory, cancellationToken);
-            if (detectedLanguageId is null)
-            {
-                return null;
-            }
-
-            var detectedLanguage = _languageDiscovery.GetLanguageById(detectedLanguageId.Value);
-            if (!TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(detectedLanguage))
-            {
-                return null;
-            }
-
-            var discoveredPath = detectedLanguage?.FindInDirectory(_executionContext.WorkingDirectory.FullName);
-            return discoveredPath is not null ? new FileInfo(discoveredPath) : null;
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "Failed to resolve TypeScript AppHost for environment check");
-            return null;
-        }
-    }
+    // Delegates to the shared resolver so the doctor tooling check and `aspire update --migrate` stay in
+    // lockstep on how the TypeScript AppHost entry point is located.
+    private Task<FileInfo?> ResolveTypeScriptAppHostAsync(CancellationToken cancellationToken)
+        => LegacyTypeScriptAppHost.ResolveTypeScriptAppHostAsync(
+            _projectLocator,
+            _languageDiscovery,
+            _executionContext.WorkingDirectory,
+            _logger,
+            cancellationToken);
 
     internal static string GetMissingCommandCheckName(string command) => $"typescript-apphost-{command}";
 }

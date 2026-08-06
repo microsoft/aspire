@@ -7,6 +7,8 @@ import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { AspireDebugConfigurationProvider } from '../debugger/AspireDebugConfigurationProvider';
+import type { AspireExtendedDebugConfiguration } from '../dcp/types';
+import * as cliPathModule from '../utils/cliPath';
 import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
 
 suite('AspireDebugConfigurationProvider', () => {
@@ -92,6 +94,22 @@ suite('AspireDebugConfigurationProvider', () => {
         assert.strictEqual(config?.program, programPath);
     });
 
+    test('leaves workspace folder launch target unchanged and records AppHost telemetry target', async () => {
+        const folder = createWorkspaceFolder(tempDir);
+        const appHostPath = path.join(tempDir, 'NestedAppHost', 'apphost.ts');
+        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService(appHostPath));
+
+        const config = await provider.resolveDebugConfigurationWithSubstitutedVariables(folder, {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: folder.uri.fsPath
+        });
+
+        assert.strictEqual(config?.program, folder.uri.fsPath);
+        assert.strictEqual(config?.__aspireAppHostTelemetryTargetPath, appHostPath);
+    });
+
     test('provides dynamic launch config when active file resolves to AppHost candidate', async () => {
         const folder = createWorkspaceFolder(tempDir);
         const programPath = path.join(tempDir, 'AppHost', 'Program.cs');
@@ -154,6 +172,46 @@ suite('AspireDebugConfigurationProvider', () => {
         assert.strictEqual(config?.program, programPath);
     });
 
+    test('resolveDebugConfiguration keeps skip flag through repeated resolver calls after launch service already checked CLI', async () => {
+        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService('/repo/AppHost.csproj'));
+        const resolveCliPathStub = sandbox.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: 'aspire', available: false, source: 'not-found' });
+        const showErrorMessageStub = sandbox.stub(vscode.window, 'showErrorMessage').resolves(undefined);
+
+        const initialConfig = {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: '/repo/AppHost.csproj',
+            skipCliAvailabilityCheck: true,
+        } as AspireExtendedDebugConfiguration;
+
+        const firstConfig = await provider.resolveDebugConfiguration(undefined, initialConfig) as AspireExtendedDebugConfiguration | undefined;
+        const config = firstConfig
+            ? await provider.resolveDebugConfiguration(undefined, firstConfig) as AspireExtendedDebugConfiguration | undefined
+            : undefined;
+
+        assert.ok(config);
+        assert.strictEqual(config.program, '/repo/AppHost.csproj');
+        assert.strictEqual(config.skipCliAvailabilityCheck, true);
+        assert.strictEqual(resolveCliPathStub.called, false);
+        assert.strictEqual(showErrorMessageStub.called, false);
+    });
+
+    test('resolveDebugConfigurationWithSubstitutedVariables removes internal skip flag before launch', async () => {
+        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService('/repo/AppHost.csproj'));
+
+        const config = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: '/repo/AppHost.csproj',
+            skipCliAvailabilityCheck: true,
+        } as AspireExtendedDebugConfiguration) as AspireExtendedDebugConfiguration | undefined;
+
+        assert.ok(config);
+        assert.strictEqual(config.skipCliAvailabilityCheck, undefined);
+    });
+
     function setActiveEditor(filePath: string, folder: vscode.WorkspaceFolder): void {
         sandbox.stub(vscode.window, 'activeTextEditor').value({
             document: {
@@ -173,13 +231,16 @@ function createWorkspaceFolder(folderPath: string): vscode.WorkspaceFolder {
 }
 
 function createAppHostDiscoveryService(resolvedPath: string, candidatePath: string | null = resolvedPath, language = 'csharp'): AppHostDiscoveryService {
+    const createCandidate = () => candidatePath ? {
+        path: candidatePath,
+        language: language,
+        status: 'buildable',
+    } : undefined;
+
     return {
-        resolveDebugTarget: async () => resolvedPath,
-        tryFindCandidateForEditorFile: async () => candidatePath ? {
-            path: candidatePath,
-            language: language,
-            status: 'buildable',
-        } : undefined,
+        resolveDebugTarget: async (filePath: string, folder?: vscode.WorkspaceFolder) => folder && path.resolve(filePath) === path.resolve(folder.uri.fsPath) ? filePath : resolvedPath,
+        tryFindWorkspaceDefaultCandidate: async (filePath: string, folder?: vscode.WorkspaceFolder) => folder && path.resolve(filePath) === path.resolve(folder.uri.fsPath) ? createCandidate() : undefined,
+        tryFindCandidateForEditorFile: async () => createCandidate(),
     } as unknown as AppHostDiscoveryService;
 }
 

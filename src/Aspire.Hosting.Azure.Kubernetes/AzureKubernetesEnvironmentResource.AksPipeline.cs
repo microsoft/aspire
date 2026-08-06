@@ -161,6 +161,7 @@ public partial class AzureKubernetesEnvironmentResource
 
         var defaultPool = new AksNodePoolResource("workload", defaultConfig, environment);
         defaultPool.Annotations.Add(ManifestPublishingCallbackAnnotation.Ignore);
+        defaultPool.Annotations.Add(new ResourceIconAnnotation("Cpu"));
         appModel.Resources.Add(defaultPool);
         return defaultPool;
     }
@@ -188,6 +189,7 @@ public partial class AzureKubernetesEnvironmentResource
         var config = environment.NodePools.First(p => p.Name == poolName);
         var pool = new AksNodePoolResource(poolName, config, environment);
         pool.Annotations.Add(ManifestPublishingCallbackAnnotation.Ignore);
+        pool.Annotations.Add(new ResourceIconAnnotation("Cpu"));
         appModel.Resources.Add(pool);
         return pool;
     }

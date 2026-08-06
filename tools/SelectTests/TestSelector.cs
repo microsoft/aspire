@@ -10,7 +10,13 @@ namespace Aspire.SelectTests;
 /// The kill switch: the <c>run-full-ci</c> PR label (or a non-PR build with no diff base) forces the
 /// whole matrix to run regardless of which files changed.
 /// </param>
-public sealed record SelectorOptions(bool ForceAll = false);
+/// <param name="ForceAllReason">
+/// When <see cref="ForceAll"/> is set, the human-readable reason it fired, surfaced as
+/// <see cref="SelectionResult.EscalationReason"/> so the PR comment and JSON artifact agree with the
+/// step summary. Null falls back to the kill-switch wording; a merge-base fail-safe fallback passes the
+/// specific reason here instead.
+/// </param>
+public sealed record SelectorOptions(bool ForceAll = false, string? ForceAllReason = null);
 
 /// <summary>
 /// Why a single test project or job was selected — the trigger that pulled it in, so the PR comment
@@ -162,10 +168,12 @@ public sealed class TestSelector
         string? reason = null;
 
         // Kill switch: the run-full-ci label forces the whole matrix regardless of which files changed.
+        // A caller-supplied ForceAllReason (e.g. the merge-base fail-safe fallback) overrides the default
+        // kill-switch wording so every output surface — summary, PR comment, JSON — names the same cause.
         if (options.ForceAll)
         {
             selectsAll = true;
-            reason = "kill switch: the run-full-ci label forces the full matrix";
+            reason = options.ForceAllReason ?? "kill switch: the run-full-ci label forces the full matrix";
         }
 
         foreach (var file in changedFiles)

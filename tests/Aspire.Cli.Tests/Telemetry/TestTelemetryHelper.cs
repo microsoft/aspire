@@ -20,6 +20,7 @@ internal static class TestTelemetryHelper
         var ciDetector = new TestCIEnvironmentDetector();
         var codingAgentDetector = new TestCodingAgentDetector();
         var internalMicrosoftDetector = new TestInternalMicrosoftDetector();
+        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
         var telemetry = new AspireCliTelemetry(
             NullLogger<AspireCliTelemetry>.Instance,
             provider,
@@ -29,8 +30,10 @@ internal static class TestTelemetryHelper
             new TelemetryConfiguration { ReportedTelemetryEnabled = true },
             AspireCliTelemetry.ReportedActivitySourceName,
             AspireCliTelemetry.DiagnosticsActivitySourceName,
-            CreateExecutionContext());
-        telemetry.InitializeAsync().GetAwaiter().GetResult();
+            CreateExecutionContext(),
+            tagsSource);
+        telemetry.Initialize();
+        tagsSource.TagsTask.GetAwaiter().GetResult();
         return telemetry;
     }
 
@@ -43,8 +46,10 @@ internal static class TestTelemetryHelper
         var ciDetector = new TestCIEnvironmentDetector();
         var codingAgentDetector = new TestCodingAgentDetector();
         var internalMicrosoftDetector = new TestInternalMicrosoftDetector();
-        var telemetry = new AspireCliTelemetry(NullLogger<AspireCliTelemetry>.Instance, provider, ciDetector, codingAgentDetector, internalMicrosoftDetector, reportedSourceName, diagnosticsSourceName, CreateExecutionContext());
-        telemetry.InitializeAsync().GetAwaiter().GetResult();
+        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
+        var telemetry = new AspireCliTelemetry(NullLogger<AspireCliTelemetry>.Instance, provider, ciDetector, codingAgentDetector, internalMicrosoftDetector, reportedSourceName, diagnosticsSourceName, CreateExecutionContext(), tagsSource);
+        telemetry.Initialize();
+        tagsSource.TagsTask.GetAwaiter().GetResult();
         return telemetry;
     }
 

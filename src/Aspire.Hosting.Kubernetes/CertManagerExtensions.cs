@@ -125,7 +125,7 @@ public static class CertManagerExtensions
             return builder.ApplicationBuilder.CreateResourceBuilder(resource);
         }
 
-        var resourceBuilder = builder.ApplicationBuilder.AddResource(resource).ExcludeFromManifest();
+        var resourceBuilder = builder.ApplicationBuilder.AddResource(resource).WithIconName("Certificate").ExcludeFromManifest();
 
         // Emit one kubectl-apply step per ClusterIssuer at deploy time, plus one kubectl-delete
         // step per ClusterIssuer at destroy time. The annotation factory closures capture the
@@ -167,7 +167,7 @@ public static class CertManagerExtensions
             return builder.ApplicationBuilder.CreateResourceBuilder(issuer);
         }
 
-        return builder.ApplicationBuilder.AddResource(issuer).ExcludeFromManifest();
+        return builder.ApplicationBuilder.AddResource(issuer).WithIconName("ContactCard").ExcludeFromManifest();
     }
 
     /// <summary>

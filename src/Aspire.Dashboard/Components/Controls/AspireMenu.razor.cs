@@ -5,12 +5,15 @@ using Aspire.Dashboard.Model;
 using Microsoft.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components.Utilities;
+using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components;
 
 public partial class AspireMenu : FluentComponentBase
 {
     private FluentMenu? _menu;
+    private IReadOnlyList<MenuButtonItem>? _renderedItems;
+    private bool _refreshMenuAfterRender;
 
     [Parameter]
     public string? Anchor { get; set; }
@@ -31,20 +34,62 @@ public partial class AspireMenu : FluentComponentBase
     public EventCallback<bool> OpenChanged { get; set; }
 
     [Parameter]
+    public EventCallback OnRenderComplete { get; set; }
+
+    [Parameter]
     public required IReadOnlyList<MenuButtonItem> Items { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether focus should return to <see cref="Anchor"/> after a menu item is clicked.
+    /// </summary>
+    /// <remarks>
+    /// Use this only for button-anchored menus where <see cref="Anchor"/> identifies the element that opened the menu.
+    /// Do not enable it for cursor-positioned or context menus where <see cref="Anchor"/> is only used for positioning.
+    /// </remarks>
+    [Parameter]
+    public bool RestoreFocusOnItemClick { get; set; }
+
+    [Inject]
+    public required IJSRuntime JS { get; init; }
+
+    [Inject]
+    public required IMenuService MenuService { get; init; }
 
     // Each menu item is approximately 32px tall, plus 16px padding for the menu container.
     private const int EstimatedItemHeight = 32;
     private const int MenuVerticalPadding = 16;
-
     private int CalculatedVerticalThreshold => VerticalThreshold ?? (Items.Count * EstimatedItemHeight + MenuVerticalPadding);
+
+    protected override void OnParametersSet()
+    {
+        if (!ReferenceEquals(_renderedItems, Items))
+        {
+            _renderedItems = Items;
+            _refreshMenuAfterRender = Open;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && OnRenderComplete.HasDelegate)
+        {
+            await OnRenderComplete.InvokeAsync();
+        }
+
+        if (_refreshMenuAfterRender)
+        {
+            _refreshMenuAfterRender = false;
+
+            if (_menu is { Id: { } menuId })
+            {
+                await MenuService.RefreshMenuAsync(menuId, Open);
+            }
+        }
+    }
 
     public async Task CloseAsync()
     {
-        if (_menu is { } menu)
-        {
-            await menu.CloseAsync();
-        }
+        await SetOpenAsync(false);
     }
 
     public async Task OpenAsync(int screenWidth, int screenHeight, int clientX, int clientY)
@@ -89,11 +134,7 @@ public partial class AspireMenu : FluentComponentBase
                 .AddStyle("min-width", "64px")
                 .Build();
 
-            Open = true;
-            if (OpenChanged.HasDelegate)
-            {
-                await OpenChanged.InvokeAsync(Open);
-            }
+            await SetOpenAsync(true);
 
             StateHasChanged();
         }
@@ -101,19 +142,34 @@ public partial class AspireMenu : FluentComponentBase
 
     private async Task HandleItemClicked(MenuButtonItem item)
     {
-        if (item.OnClick is {} onClick)
+        await SetOpenAsync(false);
+
+        if (RestoreFocusOnItemClick && !string.IsNullOrEmpty(Anchor))
+        {
+            await JS.InvokeVoidAsync("focusElement", Anchor);
+        }
+
+        // Item callbacks can move focus to a dialog or another control, so restore the
+        // menu trigger first to avoid stealing focus back after the callback completes.
+        if (item.OnClick is { } onClick)
         {
             await onClick();
         }
-        Open = false;
     }
 
-    private Task OnOpenChanged(bool open)
+    private async Task OnOpenChanged(bool open)
+    {
+        await SetOpenAsync(open);
+    }
+
+    private async Task SetOpenAsync(bool open)
     {
         Open = open;
+        StateHasChanged();
 
-        return OpenChanged.HasDelegate
-            ? OpenChanged.InvokeAsync(open)
-            : Task.CompletedTask;
+        if (OpenChanged.HasDelegate)
+        {
+            await OpenChanged.InvokeAsync(open);
+        }
     }
 }

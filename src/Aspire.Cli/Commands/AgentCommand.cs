@@ -15,10 +15,12 @@ internal sealed class AgentCommand : ParentCommand
     public AgentCommand(
         AgentMcpCommand mcpCommand,
         AgentInitCommand initCommand,
+        AgentTelemetryCommand telemetryCommand,
         CommonCommandServices services)
         : base("agent", AgentCommandStrings.Description, services)
     {
         Subcommands.Add(mcpCommand);
         Subcommands.Add(initCommand);
+        Subcommands.Add(telemetryCommand);
     }
 }

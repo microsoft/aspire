@@ -48,10 +48,11 @@
   <ItemGroup>
     <Using Include="Aspire.Hosting" />
     <Using Include="Aspire.Hosting.ApplicationModel" />
+    <Using Include="Aspire.Tests.Utils" />
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="$(TestsSharedDir)TempDirectory.cs" Link="shared/TempDirectory.cs" />
+    <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared/TemporaryWorkspace.cs" />
     <!-- Verify's [ModuleInitializer] that points snapshot resolution at each test's Snapshots/ dir.
          Consumers that only reference this helper assembly (and no longer reference Aspire.Hosting.Tests)
          rely on this initializer loading transitively, exactly as it did from Aspire.Hosting.Tests before

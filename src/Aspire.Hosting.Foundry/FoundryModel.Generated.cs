@@ -22,7 +22,7 @@ public partial class FoundryModel
         /// Claude Haiku 4.5 delivers near-frontier performance for a wide range of use cases, and stands out as one of the best coding and agent models – with the right speed and cost to power free products and scaled sub-agents.
         /// </summary>
         [AspireValue("FoundryModels")]
-        public static readonly FoundryModel ClaudeHaiku45 = new() { Name = "claude-haiku-4-5", Version = "20251001", Format = "Anthropic" };
+        public static readonly FoundryModel ClaudeHaiku45 = new() { Name = "claude-haiku-4-5", Version = "2", Format = "Anthropic" };
 
         /// <summary>
         /// Claude Mythos 5 (gated) is a new class of intelligence for cybersecurity, coding, and long-running agents. Only available as a gated research preview with access prioritized for defensive cybersecurity use cases
@@ -64,7 +64,13 @@ public partial class FoundryModel
         /// Claude Opus 4.8 is our most intelligent Opus model and the best generally available model for coding and agents, with deeper reasoning for enterprise workflows.
         /// </summary>
         [AspireValue("FoundryModels")]
-        public static readonly FoundryModel ClaudeOpus48 = new() { Name = "claude-opus-4-8", Version = "1", Format = "Anthropic" };
+        public static readonly FoundryModel ClaudeOpus48 = new() { Name = "claude-opus-4-8", Version = "2", Format = "Anthropic" };
+
+        /// <summary>
+        /// Claude Opus 5 is Anthropic's most advanced Opus model, powering long-running agents while delivering improvements in coding and professional work. It brings near-Fable intelligence to the model teams rely on daily for long-horizon coding and complex agenti
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel ClaudeOpus5 = new() { Name = "claude-opus-5", Version = "2", Format = "Anthropic" };
 
         /// <summary>
         /// Claude Sonnet 4.5 is Anthropic's most capable model for complex agents and an industry leader for coding and computer use.
@@ -77,6 +83,12 @@ public partial class FoundryModel
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel ClaudeSonnet46 = new() { Name = "claude-sonnet-4-6", Version = "1", Format = "Anthropic" };
+
+        /// <summary>
+        /// Claude Sonnet 5 is Anthropic's most capable Sonnet model yet, built for coding, agents, and professional work at scale. It brings near-Opus intelligence to the model teams run every day, with the same balance of capability, cost, and speed teams already re
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel ClaudeSonnet5 = new() { Name = "claude-sonnet-5", Version = "2", Format = "Anthropic" };
     }
 
     /// <summary>
@@ -119,6 +131,12 @@ public partial class FoundryModel
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel CohereCommandA = new() { Name = "cohere-command-a", Version = "4", Format = "Cohere" };
+
+        /// <summary>
+        /// Command A is a highly efficient generative model that excels at agentic and multilingual use cases.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel CohereCommandAPlus052026 = new() { Name = "Cohere-command-a-plus-05-2026", Version = "1", Format = "Cohere" };
 
         /// <summary>
         /// Cohere Embed English is the market's leading text representation model used for semantic search, retrieval-augmented generation (RAG), classification, and clustering.
@@ -223,10 +241,16 @@ public partial class FoundryModel
         public static readonly FoundryModel Llama3290BVisionInstruct = new() { Name = "Llama-3.2-90B-Vision-Instruct", Version = "5", Format = "Meta" };
 
         /// <summary>
+        /// Llama 3.3 70B Instruct offers enhanced reasoning, math, and instruction following with performance comparable to Llama 3.1 405B.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Llama3370BInstruct = new() { Name = "Llama-3.3-70B-Instruct", Version = "10", Format = "Meta" };
+
+        /// <summary>
         /// Llama 4 Maverick 17B 128E Instruct FP8 is great at precise image understanding and creative writing, offering high quality at a lower price compared to Llama 3.3 70B
         /// </summary>
         [AspireValue("FoundryModels")]
-        public static readonly FoundryModel Llama4Maverick17B128EInstructFP8 = new() { Name = "Llama-4-Maverick-17B-128E-Instruct-FP8", Version = "3", Format = "Meta" };
+        public static readonly FoundryModel Llama4Maverick17B128EInstructFP8 = new() { Name = "Llama-4-Maverick-17B-128E-Instruct-FP8", Version = "5", Format = "Meta" };
 
         /// <summary>
         /// Llama 4 Scout 17B 16E Instruct is great at multi-document summarization, parsing extensive user activity for personalized tasks, and reasoning over vast codebases.
@@ -1381,6 +1405,12 @@ public partial class FoundryModel
         public static readonly FoundryModel MaiVoice2 = new() { Name = "MAI-Voice-2", Version = "2026-06-02", Format = "Microsoft" };
 
         /// <summary>
+        /// MAI-Voice-2-Flash is a text-to-speech (TTS) model built for ultra-fast, low-latency generation. It delivers high-fidelity, natural, and expressive speech across 15 languages, while being optimized for real-time responsiveness for voice agents, assistants,
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel MaiVoice2Flash = new() { Name = "MAI-Voice-2-Flash", Version = "2026-07-22", Format = "Microsoft" };
+
+        /// <summary>
         /// Model router is a deployable AI model that is trained to select the most suitable large language model (LLM) for a given prompt.
         /// </summary>
         [AspireValue("FoundryModels")]
@@ -1884,6 +1914,12 @@ public partial class FoundryModel
         public static readonly FoundryModel MistralMedium2505 = new() { Name = "mistral-medium-2505", Version = "1", Format = "Mistral AI" };
 
         /// <summary>
+        /// Mistral Medium 3.5 is our first "fully merged" model with enhanced code and agentic capabilities. It demonstrates strong tool dexterity, making it suitable for both VIP (Vibe Code Scaffold) and agentic research tasks.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel MistralMedium35 = new() { Name = "mistral-medium-3-5", Version = "1", Format = "Mistral AI" };
+
+        /// <summary>
         /// Document conversion to markdown with interleaved images and text
         /// </summary>
         [AspireValue("FoundryModels")]
@@ -2215,6 +2251,24 @@ public partial class FoundryModel
         public static readonly FoundryModel Gpt55 = new() { Name = "gpt-5.5", Version = "2026-04-24", Format = "OpenAI" };
 
         /// <summary>
+        /// GPT‑5.6-luna is OpenAI's most capable frontier model, built to deliver faster, more reliable results for complex professional work.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Gpt56Luna = new() { Name = "gpt-5.6-luna", Version = "2026-07-09", Format = "OpenAI" };
+
+        /// <summary>
+        /// GPT‑5.6-sol is OpenAI's most capable frontier model, built to deliver faster, more reliable results for complex professional work.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Gpt56Sol = new() { Name = "gpt-5.6-sol", Version = "2026-07-09", Format = "OpenAI" };
+
+        /// <summary>
+        /// GPT‑5.6-terra is OpenAI's most capable frontier model, built to deliver faster, more reliable results for complex professional work.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Gpt56Terra = new() { Name = "gpt-5.6-terra", Version = "2026-07-09", Format = "OpenAI" };
+
+        /// <summary>
         /// Best suited for rich, asynchronous audio input/output interactions, such as creating spoken summaries from text.
         /// </summary>
         [AspireValue("FoundryModels")]
@@ -2236,7 +2290,7 @@ public partial class FoundryModel
         /// gpt-chat-latest (preview) is an advanced, natural, multimodal, and context-aware conversations for enterprise applications.
         /// </summary>
         [AspireValue("FoundryModels")]
-        public static readonly FoundryModel GptChatLatest = new() { Name = "gpt-chat-latest", Version = "2026-05-28", Format = "OpenAI" };
+        public static readonly FoundryModel GptChatLatest = new() { Name = "gpt-chat-latest", Version = "2026-06-24", Format = "OpenAI" };
 
         /// <summary>
         /// An efficient AI solution for diverse text and image tasks, including high quality, cheap text to image generation
@@ -2255,6 +2309,12 @@ public partial class FoundryModel
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel GptImage2 = new() { Name = "gpt-image-2", Version = "2026-04-21", Format = "OpenAI" };
+
+        /// <summary>
+        /// A new real-time speech-to-text (STT) model with enhanced transcription accuracy and low-latency streaming capabilities.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel GptLiveTranscribe = new() { Name = "gpt-live-transcribe", Version = "2026-07-28", Format = "OpenAI" };
 
         /// <summary>
         /// Push the open model frontier with GPT-OSS models, released under the permissive Apache 2.0 license, allowing anyone to use, modify, and deploy them freely.
@@ -2287,6 +2347,18 @@ public partial class FoundryModel
         public static readonly FoundryModel GptRealtime2 = new() { Name = "gpt-realtime-2", Version = "2026-05-07", Format = "OpenAI" };
 
         /// <summary>
+        /// Gpt‑realtime‑2.1 is a next‑generation speech‑to‑speech reasoning model that processes live audio input and generates audio responses with built‑in reasoning, enabling low‑latency conversational voice interactions.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel GptRealtime21 = new() { Name = "gpt-realtime-2.1", Version = "2026-07-07", Format = "OpenAI" };
+
+        /// <summary>
+        /// Gpt‑realtime‑2.1‑mini is a next‑generation speech‑to‑speech reasoning model that processes live audio input and generates audio responses with built‑in reasoning, enabling low‑latency conversational voice interactions.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel GptRealtime21Mini = new() { Name = "gpt-realtime-2.1-mini", Version = "2026-07-07", Format = "OpenAI" };
+
+        /// <summary>
         /// gpt-realtime-mini is a smaller version of gpt-realtime S2S (speech to speech) model built on chive architecture. This model excels at instruction following and is optimized for cost efficiency.
         /// </summary>
         [AspireValue("FoundryModels")]
@@ -2303,6 +2375,12 @@ public partial class FoundryModel
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel GptRealtimeWhisper = new() { Name = "gpt-realtime-whisper", Version = "2026-05-07", Format = "OpenAI" };
+
+        /// <summary>
+        /// A new real-time speech-to-text (STT) model with enhanced transcription accuracy and low-latency streaming capabilities.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel GptTranscribe = new() { Name = "gpt-transcribe", Version = "2026-07-28", Format = "OpenAI" };
 
         /// <summary>
         /// Focused on advanced reasoning and solving complex problems, including math and science tasks. Ideal for applications that require deep contextual understanding and agentic workflows.

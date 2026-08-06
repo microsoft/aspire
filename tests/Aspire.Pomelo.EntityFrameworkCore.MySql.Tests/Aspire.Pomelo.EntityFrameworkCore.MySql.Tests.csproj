@@ -19,7 +19,6 @@
 
     <PackageReference Include="Testcontainers.MySql" />
   </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\Aspire.Components.Common.TestUtilities\Aspire.Components.Common.TestUtilities.csproj" />
     <ProjectReference Include="..\..\src\Components\Aspire.Pomelo.EntityFrameworkCore.MySql\Aspire.Pomelo.EntityFrameworkCore.MySql.csproj" />

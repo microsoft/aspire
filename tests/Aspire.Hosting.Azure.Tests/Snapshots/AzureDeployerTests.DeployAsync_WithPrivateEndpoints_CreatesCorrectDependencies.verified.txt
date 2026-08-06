@@ -15,9 +15,9 @@ This shows the order in which steps would execute, respecting all dependencies.
 Steps with no dependencies run first, followed by steps that depend on them.
 
   1. azure-prepare-resources
-  2. validate-compute-environments
-  3. prepare-azure-container-apps-env
-  4. validate-azure-container-apps
+  2. validate-azure-container-apps
+  3. validate-compute-environments
+  4. prepare-azure-container-apps-env
   5. before-start
   6. process-parameters
   7. build-prereq
@@ -140,7 +140,7 @@ Step: login-to-acr-env-acr
 
 Step: prepare-azure-container-apps-env
     Description: Prepares Azure Container Apps deployment targets for env.
-    Dependencies: ✓ azure-prepare-resources, ✓ validate-compute-environments
+    Dependencies: ✓ azure-prepare-resources, ✓ validate-azure-container-apps, ✓ validate-compute-environments
     Resource: env (AzureContainerAppEnvironmentResource)
 
 Step: print-api-summary
@@ -310,7 +310,7 @@ Step: push-prereq
     Dependencies: ✓ login-to-acr-env-acr
 
 Step: validate-azure-container-apps
-    Dependencies: none
+    Dependencies: ✓ azure-prepare-resources
 
 Step: validate-azure-login
     Description: Validates Azure CLI authentication before deployment.
@@ -346,9 +346,10 @@ If targeting 'before-start':
   Direct dependencies: azure-prepare-resources, prepare-azure-container-apps-env, validate-azure-container-apps, validate-compute-environments
   Total steps: 5
   Execution order:
-    [0] azure-prepare-resources | validate-azure-container-apps | validate-compute-environments (parallel)
-    [1] prepare-azure-container-apps-env
-    [2] before-start
+    [0] azure-prepare-resources | validate-compute-environments (parallel)
+    [1] validate-azure-container-apps
+    [2] prepare-azure-container-apps-env
+    [3] before-start
 
 If targeting 'build':
   Direct dependencies: build-api
@@ -470,11 +471,12 @@ If targeting 'login-to-acr-env-acr':
     [5] login-to-acr-env-acr
 
 If targeting 'prepare-azure-container-apps-env':
-  Direct dependencies: azure-prepare-resources, validate-compute-environments
-  Total steps: 3
+  Direct dependencies: azure-prepare-resources, validate-azure-container-apps, validate-compute-environments
+  Total steps: 4
   Execution order:
     [0] azure-prepare-resources | validate-compute-environments (parallel)
-    [1] prepare-azure-container-apps-env
+    [1] validate-azure-container-apps
+    [2] prepare-azure-container-apps-env
 
 If targeting 'print-api-summary':
   Direct dependencies: provision-api-containerapp
@@ -821,10 +823,11 @@ If targeting 'push-prereq':
     [6] push-prereq
 
 If targeting 'validate-azure-container-apps':
-  Direct dependencies: none
-  Total steps: 1
+  Direct dependencies: azure-prepare-resources
+  Total steps: 2
   Execution order:
-    [0] validate-azure-container-apps
+    [0] azure-prepare-resources
+    [1] validate-azure-container-apps
 
 If targeting 'validate-azure-login':
   Direct dependencies: deploy-prereq

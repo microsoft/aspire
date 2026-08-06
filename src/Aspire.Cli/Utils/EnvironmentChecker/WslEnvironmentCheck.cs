@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 
 namespace Aspire.Cli.Utils.EnvironmentChecker;
@@ -9,7 +8,7 @@ namespace Aspire.Cli.Utils.EnvironmentChecker;
 /// <summary>
 /// Checks if running in WSL environment and detects potential issues.
 /// </summary>
-internal sealed class WslEnvironmentCheck : IEnvironmentCheck
+internal sealed class WslEnvironmentCheck(IEnvironment environment) : IEnvironmentCheck
 {
     internal const string CheckName = "wsl";
 
@@ -18,7 +17,7 @@ internal sealed class WslEnvironmentCheck : IEnvironmentCheck
     public Task<IReadOnlyList<EnvironmentCheckResult>> CheckAsync(CancellationToken cancellationToken = default)
     {
         // WSL detection only relevant on Linux
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        if (!environment.IsLinux())
         {
             // Not running on Linux, nothing to check
             return Task.FromResult<IReadOnlyList<EnvironmentCheckResult>>([]);

@@ -30,6 +30,7 @@ internal sealed class AppHostServerProjectFactory(
     BundleNuGetService bundleNuGetService,
     IDotNetSdkInstaller sdkInstaller,
     CliExecutionContext executionContext,
+    IEnvironment environment,
     IProcessExecutionFactory processExecutionFactory,
     ILoggerFactory loggerFactory) : IAppHostServerProjectFactory
 {
@@ -48,6 +49,7 @@ internal sealed class AppHostServerProjectFactory(
                 dotNetCliRunner,
                 packagingService,
                 processExecutionFactory,
+                environment,
                 loggerFactory.CreateLogger<DotNetBasedAppHostServerProject>(),
                 logFilePath: executionContext.LogFilePath);
         }
@@ -86,6 +88,7 @@ internal sealed class AppHostServerProjectFactory(
                 packagingService,
                 executionContext,
                 processExecutionFactory,
+                environment,
                 loggerFactory.CreateLogger<PrebuiltAppHostServer>(),
                 layoutLease);
         }

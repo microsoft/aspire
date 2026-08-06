@@ -1,4 +1,5 @@
-﻿<!DOCTYPE html>
+﻿@inject IStringLocalizer<Aspire.Dashboard.Resources.ControlsStrings> ControlsLoc
+<!DOCTYPE html>
 <html lang="@System.Globalization.CultureInfo.CurrentUICulture.Name">
 
 <head>
@@ -9,6 +10,12 @@
     <base href="/" />
     <link rel="icon" type="image/x-icon" href="favicon.ico" />
     <link rel="stylesheet" href="_content/Microsoft.FluentUI.AspNetCore.Components/css/reboot.css" />
+    @* Preload the variable fonts so text paints in Geist without a fallback flash.
+       crossorigin is required for font preloads even when same-origin. *@
+    <link rel="preload" href="fonts/geist/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="fonts/geist/GeistMono-Variable.woff2" as="font" type="font/woff2" crossorigin />
+    @* tokens.css must load before app.css so the --aspire-* primitives it defines are available to app.css. *@
+    <link rel="stylesheet" href="css/tokens.css" />
     <link rel="stylesheet" href="css/app.css" />
     <link rel="stylesheet" href="css/highlight.css" />
     <link rel="stylesheet" href="css/markdown.css" />
@@ -28,7 +35,8 @@
 
 </head>
 
-<body class="before-upgrade">
+<body class="before-upgrade"
+      data-scroll-to-bottom-label="@ControlsLoc[nameof(Aspire.Dashboard.Resources.ControlsStrings.ScrollToBottom)]">
     <Routes @rendermode="@(new InteractiveServerRenderMode(prerender: false))" />
     <ReconnectModal />
     <BlazorScript />

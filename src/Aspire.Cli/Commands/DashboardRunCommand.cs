@@ -21,9 +21,13 @@ namespace Aspire.Cli.Commands;
 /// </summary>
 internal sealed class DashboardRunCommand : BaseCommand
 {
+    private static readonly TimeSpan s_bundleStatusDelay = TimeSpan.FromMilliseconds(200);
+
     internal override HelpGroup HelpGroup => HelpGroup.Monitoring;
 
     protected override bool UpdateNotificationsEnabled => true;
+
+    protected override string CancellationMessage => DashboardCommandStrings.StoppingDashboard;
 
     private readonly IBundleService _bundleService;
     private readonly LayoutProcessRunner _layoutProcessRunner;
@@ -81,7 +85,7 @@ internal sealed class DashboardRunCommand : BaseCommand
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
-        using var layoutLease = await _bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "dashboard", cancellationToken).ConfigureAwait(false);
+        using var layoutLease = await EnsureDashboardBundleAsync(cancellationToken).ConfigureAwait(false);
         var layout = layoutLease?.Layout;
         if (layout is null)
         {
@@ -138,9 +142,24 @@ internal sealed class DashboardRunCommand : BaseCommand
         return await ExecuteForegroundAsync(managedPath, dashboardArgs, dashboardInfo, environmentVariables, cancellationToken).ConfigureAwait(false);
     }
 
+    private async Task<BundleLayoutLease?> EnsureDashboardBundleAsync(CancellationToken cancellationToken)
+    {
+        var layoutTask = _bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "dashboard", cancellationToken);
+
+        // Cached bundle acquisition normally completes quickly, so wait briefly before showing a status to avoid flicker during typical usage.
+        if (await Task.WhenAny(layoutTask, Task.Delay(s_bundleStatusDelay, CancellationToken.None)).ConfigureAwait(false) == layoutTask)
+        {
+            return await layoutTask.ConfigureAwait(false);
+        }
+
+        return await InteractionService.ShowStatusAsync(
+            DashboardCommandStrings.EnsuringDashboardBundle,
+            () => layoutTask).ConfigureAwait(false);
+    }
+
     private static void AddOptionArgs(ParseResult parseResult, List<string> args, IReadOnlyList<string> unmatchedTokens, IEnvironment environment)
     {
-        AddStringOptionArg(parseResult, args, unmatchedTokens, environment, s_frontendUrlOption, KnownConfigNames.AspNetCoreUrls, defaultValue: "http://localhost:18888");
+        AddStringOptionArg(parseResult, args, unmatchedTokens, environment, s_frontendUrlOption, KnownAspNetCoreConfigNames.Urls, defaultValue: "http://localhost:18888");
         AddStringOptionArg(parseResult, args, unmatchedTokens, environment, s_otlpGrpcUrlOption, KnownConfigNames.DashboardOtlpGrpcEndpointUrl, defaultValue: "http://localhost:4317");
         AddStringOptionArg(parseResult, args, unmatchedTokens, environment, s_otlpHttpUrlOption, KnownConfigNames.DashboardOtlpHttpEndpointUrl, defaultValue: "http://localhost:4318");
         AddBoolOptionArg(parseResult, args, unmatchedTokens, environment, s_allowAnonymousOption, KnownConfigNames.DashboardUnsecuredAllowAnonymous);
@@ -232,7 +251,7 @@ internal sealed class DashboardRunCommand : BaseCommand
 
     internal static DashboardInfo ResolveDashboardInfo(List<string> dashboardArgs, IReadOnlyList<string> unmatchedTokens, IEnvironment environment, string? browserToken)
     {
-        var frontendUrl = ResolveSettingValue(dashboardArgs, unmatchedTokens, environment, KnownConfigNames.AspNetCoreUrls) ?? "http://localhost:18888";
+        var frontendUrl = ResolveSettingValue(dashboardArgs, unmatchedTokens, environment, KnownAspNetCoreConfigNames.Urls) ?? "http://localhost:18888";
         var otlpGrpcUrl = ResolveSettingValue(dashboardArgs, unmatchedTokens, environment, KnownConfigNames.DashboardOtlpGrpcEndpointUrl) ?? "http://localhost:4317";
         var otlpHttpUrl = ResolveSettingValue(dashboardArgs, unmatchedTokens, environment, KnownConfigNames.DashboardOtlpHttpEndpointUrl) ?? "http://localhost:4318";
 
@@ -374,7 +393,10 @@ internal sealed class DashboardRunCommand : BaseCommand
         IProcessExecution process;
         try
         {
-            process = await _layoutProcessRunner.StartAsync(managedPath, dashboardArgs, environmentVariables: environmentVariables, options: options).ConfigureAwait(false);
+            // Foreground `aspire dashboard run`: the dashboard is a child of this CLI and must not
+            // outlive it, so bind it to the Windows kill-on-close job as an OS-level backstop on top of
+            // the cross-platform parent-liveness watchdog. No-op on non-Windows hosts.
+            process = await _layoutProcessRunner.StartAsync(managedPath, dashboardArgs, environmentVariables: environmentVariables, options: options, killOnParentExit: true).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -409,8 +431,6 @@ internal sealed class DashboardRunCommand : BaseCommand
 
         if (cancellationToken.IsCancellationRequested)
         {
-            InteractionService.DisplayMessage(KnownEmojis.StopSign, $"[teal bold]{DashboardCommandStrings.StoppingDashboard}[/]", allowMarkup: true);
-
             if (!process.HasExited)
             {
                 process.Kill(entireProcessTree: true);
@@ -461,8 +481,6 @@ internal sealed class DashboardRunCommand : BaseCommand
         }
         catch (OperationCanceledException)
         {
-            InteractionService.DisplayMessage(KnownEmojis.StopSign, $"[teal bold]{DashboardCommandStrings.StoppingDashboard}[/]", allowMarkup: true);
-
             if (!process.HasExited)
             {
                 process.Kill(entireProcessTree: true);

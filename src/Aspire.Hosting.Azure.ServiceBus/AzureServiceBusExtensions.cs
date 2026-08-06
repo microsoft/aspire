@@ -139,6 +139,7 @@ public static class AzureServiceBusExtensions
 
         var resource = new AzureServiceBusResource(name, configureInfrastructure);
         return builder.AddResource(resource)
+            .WithIconName("MailMultiple")
             .WithDefaultRoleAssignments(ServiceBusBuiltInRole.GetBuiltInRoleName,
                 ServiceBusBuiltInRole.AzureServiceBusDataOwner);
     }
@@ -182,7 +183,8 @@ public static class AzureServiceBusExtensions
         var queue = new AzureServiceBusQueueResource(name, queueName, builder.Resource);
         builder.Resource.Queues.Add(queue);
 
-        return builder.ApplicationBuilder.AddResource(queue);
+        return builder.ApplicationBuilder.AddResource(queue)
+            .WithIconName("Mail");
     }
 
     /// <summary>
@@ -267,7 +269,8 @@ public static class AzureServiceBusExtensions
         var topic = new AzureServiceBusTopicResource(name, topicName, builder.Resource);
         builder.Resource.Topics.Add(topic);
 
-        return builder.ApplicationBuilder.AddResource(topic);
+        return builder.ApplicationBuilder.AddResource(topic)
+            .WithIconName("Mail");
     }
 
     /// <summary>
@@ -339,7 +342,8 @@ public static class AzureServiceBusExtensions
         var subscription = new AzureServiceBusSubscriptionResource(name, subscriptionName, builder.Resource);
         builder.Resource.Subscriptions.Add(subscription);
 
-        return builder.ApplicationBuilder.AddResource(subscription);
+        return builder.ApplicationBuilder.AddResource(subscription)
+            .WithIconName("Mail");
     }
 
     /// <summary>

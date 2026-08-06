@@ -429,7 +429,7 @@ The bundle includes NuGet operations via the `aspire-managed nuget` subcommand, 
       "id": "Aspire.Hosting.Redis",
       "version": "13.2.0",
       "allVersions": ["13.1.0", "13.2.0"],
-      "description": "Redis hosting integration for .NET Aspire",
+      "description": "Redis hosting integration for Aspire",
       "authors": ["Microsoft"],
       "source": "nuget.org",
       "deprecated": false
