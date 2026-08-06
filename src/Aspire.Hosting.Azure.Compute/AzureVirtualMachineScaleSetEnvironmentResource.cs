@@ -268,18 +268,7 @@ public sealed class AzureVirtualMachineScaleSetEnvironmentResource : AzureBicepR
         var credential = context.Services.GetRequiredService<ITokenCredentialProvider>().TokenCredential;
         var timeProvider = context.Services.GetRequiredService<TimeProvider>();
         var blobClient = new BlobClient(packageUri, credential);
-        var uploadOptions = new BlobUploadOptions
-        {
-            HttpHeaders = new BlobHttpHeaders
-            {
-                ContentType = "application/gzip"
-            },
-            Metadata =
-            {
-                ["aspire-fingerprint"] = fingerprint,
-                ["aspire-version"] = ApplicationVersion
-            }
-        };
+        var uploadOptions = CreatePackageUploadOptions(fingerprint, ApplicationVersion);
 
         const int maximumAttempts = 10;
         for (var attempt = 1; ; attempt++)
@@ -313,5 +302,21 @@ public sealed class AzureVirtualMachineScaleSetEnvironmentResource : AzureBicepR
         }
 
         context.Summary.Add($"{Name} package upload", packageUri.GetLeftPart(UriPartial.Path));
+    }
+
+    internal static BlobUploadOptions CreatePackageUploadOptions(string fingerprint, string applicationVersion)
+    {
+        return new BlobUploadOptions
+        {
+            HttpHeaders = new BlobHttpHeaders
+            {
+                ContentType = "application/gzip"
+            },
+            Metadata = new Dictionary<string, string>
+            {
+                ["aspire-fingerprint"] = fingerprint,
+                ["aspire-version"] = applicationVersion
+            }
+        };
     }
 }

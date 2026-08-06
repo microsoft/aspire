@@ -462,6 +462,18 @@ public class AzureVirtualMachineScaleSetEnvironmentTests
     }
 
     [Fact]
+    public void PackageUploadOptionsContainPackageMetadata()
+    {
+        var options = AzureVirtualMachineScaleSetEnvironmentResource.CreatePackageUploadOptions(
+            "0123456789abcdef",
+            "1.2.3");
+
+        Assert.Equal("application/gzip", options.HttpHeaders.ContentType);
+        Assert.Equal("0123456789abcdef", options.Metadata["aspire-fingerprint"]);
+        Assert.Equal("1.2.3", options.Metadata["aspire-version"]);
+    }
+
+    [Fact]
     public async Task RejectsWorkloadIdentityThatDiffersFromEnvironmentIdentity()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
