@@ -1,6 +1,5 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
-
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
@@ -11,9 +10,9 @@ namespace Aspire.Hosting.ApplicationModel;
 public class MongoDBServerResource(string name) : ContainerResource(name), IResourceWithConnectionString
 {
     internal const string PrimaryEndpointName = "tcp";
-    private const string DefaultUserName = "admin";
-    private const string DefaultAuthenticationDatabase = "admin";
-    private const string DefaultAuthenticationMechanism = "SCRAM-SHA-256";
+    internal const string DefaultUserName = "admin";
+    internal const string DefaultAuthenticationDatabase = "admin";
+    internal const string DefaultAuthenticationMechanism = "SCRAM-SHA-256";
 
     private EndpointReference? _primaryEndpoint;
 
@@ -47,12 +46,17 @@ public class MongoDBServerResource(string name) : ContainerResource(name), IReso
     /// <summary>
     /// Gets the parameter that contains the MongoDb server password.
     /// </summary>
-    public ParameterResource? PasswordParameter { get; }
+    public ParameterResource? PasswordParameter { get; internal set; }
 
     /// <summary>
     /// Gets the parameter that contains the MongoDb server username.
     /// </summary>
-    public ParameterResource? UserNameParameter { get; }
+    public ParameterResource? UserNameParameter { get; internal set; }
+
+    /// <summary>
+    /// Gets the name of the replica set this MongoDB server belongs to, or <see langword="null"/> if it is not part of a replica set.
+    /// </summary>
+    public string? ReplicaSetName { get; internal set; }
 
     /// <summary>
     /// Gets a reference to the user name for the MongoDB server.
@@ -77,6 +81,11 @@ public class MongoDBServerResource(string name) : ContainerResource(name), IReso
     /// Format: <c>mongodb://[user:password@]{host}:{port}[?authSource=admin&amp;authMechanism=SCRAM-SHA-256]</c>. The credential and query segments are included only when a password is configured.
     /// </remarks>
     public ReferenceExpression UriExpression => BuildConnectionString();
+
+    /// <summary>
+    /// Gets a value indicating whether TLS is enabled for the MongoDB server.
+    /// </summary>
+    public bool TlsEnabled => this.HasAnnotationOfType<MongoDBServerTlsAnnotation>();
 
     private static ReferenceExpression AuthenticationDatabaseReference => ReferenceExpression.Create($"{DefaultAuthenticationDatabase}");
 
@@ -117,6 +126,21 @@ public class MongoDBServerResource(string name) : ContainerResource(name), IReso
             builder.Append($"{DefaultAuthenticationDatabase:uri}");
             builder.AppendLiteral("&authMechanism=");
             builder.Append($"{DefaultAuthenticationMechanism:uri}");
+        }
+
+        if (ReplicaSetName is not null)
+        {
+            builder.AppendLiteral(PasswordParameter is not null ? "&" : "?");
+            // NOTE: This is necessary when connecting to a single node that happens to be part of the replica set. Otherwise, the driver will attempt to discover other nodes in the replica set, and this would most notably fail upon attempting to `rs.initialize` since the replica set is not fully initialized at that point.
+            builder.AppendLiteral("directConnection=true");
+            // NOTE: The default read preference is "primary", which means that even though we have set `directionConnection` to `true`, any read operation run against individual nodes (which is what this connection string should enable, including for complex healthchecks, for example) would be rejected by the server. The way to resolve that is to set the read preference to either `secondaryPreferred`, which we do here for that reason. See https://www.mongodb.com/docs/manual/core/read-preference-use-cases/#indications-to-use-non-primary-read-preference
+            builder.AppendLiteral("&readPreference=secondaryPreferred");
+        }
+
+        if (TlsEnabled)
+        {
+            builder.AppendLiteral(PasswordParameter is not null || ReplicaSetName is not null ? "&" : "?");
+            builder.AppendLiteral("tls=true");
         }
 
         return builder.Build();

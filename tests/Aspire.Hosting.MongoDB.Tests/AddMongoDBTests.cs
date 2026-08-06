@@ -328,4 +328,76 @@ public class AddMongoDBTests(ITestOutputHelper testOutputHelper)
             config1.First(kvp => kvp.Key == "ME_CONFIG_MONGODB_SERVER").Value,
             config2.First(kvp => kvp.Key == "ME_CONFIG_MONGODB_SERVER").Value);
     }
+
+    [Fact]
+    public async Task WithBindIpAllAddsBindIpAllArg()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var mongo1 = builder.AddMongoDB("mongo1")
+            .WithBindIpAll();
+
+        Assert.True(mongo1.Resource.HasAnnotationOfType<MongoDBServerBindAllIpAnnotation>());
+        var args = await ArgumentEvaluator.GetArgumentListAsync(mongo1.Resource);
+        Assert.Contains("--bind_ip_all", args);
+    }
+
+    [Fact]
+    public async Task WithReplicaSetAddsReplSetArg()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var mongo1 = builder.AddMongoDB("mongo1")
+            .WithReplicaSet("test");
+
+        Assert.Equal("test", mongo1.Resource.ReplicaSetName);
+        Assert.True(mongo1.Resource.HasAnnotationOfType<MongoDBServerReplicaSetAnnotation>());
+        var args = await ArgumentEvaluator.GetArgumentListAsync(mongo1.Resource);
+        Assert.Contains("--replSet", args);
+        Assert.Contains("test", args);
+        Assert.Contains("--bind_ip_all", args);
+    }
+
+    [Fact]
+    public async Task WithKeyFileAddsKeyFileArg()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var mongo1 = builder.AddMongoDB("mongo1")
+            .WithKeyFile(new ParameterResource("test", _ => "test"), "/the/key/file/path");
+
+        Assert.True(mongo1.Resource.HasAnnotationOfType<MongoDBServerKeyFileAnnotation>());
+        var args = await ArgumentEvaluator.GetArgumentListAsync(mongo1.Resource);
+        Assert.Contains("--keyFile", args);
+        Assert.Contains("/the/key/file/path", args);
+    }
+
+    [Fact]
+    public async Task WithTlsAddsCorrectTlsArgs()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var mongo1 = builder.AddMongoDB("mongo1").WithTls();
+
+        Assert.True(mongo1.Resource.TlsEnabled);
+        Assert.True(mongo1.Resource.TryGetLastAnnotation<MongoDBServerTlsAnnotation>(out var annotation));
+        Assert.Equal(MongoDBTlsMode.RequireTls, annotation.Mode);
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(mongo1.Resource);
+        Assert.Contains("--tlsMode", args);
+        Assert.Contains("requireTLS", args);
+        Assert.Contains("--tlsAllowConnectionsWithoutCertificates", args);
+        Assert.Contains("--tlsAllowInvalidCertificates", args);
+    }
+
+    [Fact]
+    public async Task WithTlsWithAllowTlsModeAddsCorrectArg()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var mongo1 = builder.AddMongoDB("mongo1").WithTls(MongoDBTlsMode.AllowTls);
+
+        Assert.True(mongo1.Resource.TlsEnabled);
+        Assert.True(mongo1.Resource.TryGetLastAnnotation<MongoDBServerTlsAnnotation>(out var annotation));
+        Assert.Equal(MongoDBTlsMode.AllowTls, annotation.Mode);
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(mongo1.Resource);
+        Assert.Contains("--tlsMode", args);
+        Assert.Contains("allowTLS", args);
+    }
 }
