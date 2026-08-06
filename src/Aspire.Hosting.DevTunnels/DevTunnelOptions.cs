@@ -36,14 +36,14 @@ public sealed class DevTunnelOptions
         Region switch
         {
             DevTunnelRegion.WestEurope => "euw",
-            DevTunnelRegion.UkSouth => "uks1",
+            DevTunnelRegion.UKSouth => "uks1",
             DevTunnelRegion.NorthEurope => "eun1",
             DevTunnelRegion.EastUs => "use",
             DevTunnelRegion.EastUs2 => "use2",
             DevTunnelRegion.WestUs2 => "usw2",
             DevTunnelRegion.WestUs3 => "usw3",
             DevTunnelRegion.CentralIndia => "inc1",
-            DevTunnelRegion.SouthEastAsia => "asse",
+            DevTunnelRegion.SoutheastAsia => "asse",
             DevTunnelRegion.BrazilSouth => "brs",
             DevTunnelRegion.AustraliaCentral => "auc1",
             DevTunnelRegion.AustraliaEast => "aue",
@@ -86,7 +86,7 @@ public sealed class DevTunnelPortOptions
 /// <summary>
 /// Region options for dev tunnel creation.
 /// </summary>
-public enum DevTunnelRegion : byte
+public enum DevTunnelRegion
 {
     /// <summary>
     /// West Europe region.
@@ -96,7 +96,7 @@ public enum DevTunnelRegion : byte
     /// <summary>
     /// UK South region.
     /// </summary>
-    UkSouth,
+    UKSouth,
 
     /// <summary>
     /// North Europe region.
@@ -131,7 +131,7 @@ public enum DevTunnelRegion : byte
     /// <summary>
     /// Southeast Asia region.
     /// </summary>
-    SouthEastAsia,
+    SoutheastAsia,
 
     /// <summary>
     /// Brazil South region.
