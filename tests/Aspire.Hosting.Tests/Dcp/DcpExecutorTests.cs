@@ -1791,6 +1791,237 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ResourceLogging_CompletedFollowStreamIsDisposedAndCanRestart()
+    {
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        builder.AddContainer("database", "image");
+
+        var firstFollowStream = new GatedReadStream();
+        var secondFollowStreamStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var systemFollowStreamCount = 0;
+        var kubernetesService = new TestKubernetesService(startStreamWithFollow: (obj, logStreamType, follow) =>
+        {
+            if (obj is Container { Status.State: ContainerState.Running } &&
+                logStreamType == Logs.StreamTypeSystem &&
+                follow == true)
+            {
+                if (Interlocked.Increment(ref systemFollowStreamCount) == 1)
+                {
+                    return firstFollowStream;
+                }
+
+                secondFollowStreamStarted.TrySetResult();
+            }
+
+            return new MemoryStream();
+        });
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var resourceLoggerService = new ResourceLoggerService();
+        var appExecutor = CreateAppExecutor(
+            distributedAppModel,
+            kubernetesService: kubernetesService,
+            resourceLoggerService: resourceLoggerService);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+        IDisposable? firstSubscription = resourceLoggerService.Subscribe(container.Metadata.Name, _ => { });
+
+        try
+        {
+            container.Status = new ContainerStatus { State = ContainerState.Running };
+            kubernetesService.PushResourceModified(container);
+
+            await firstFollowStream.ReadStarted.DefaultTimeout();
+            await AsyncTestHelpers.AssertIsTrueRetryAsync(
+                () => appExecutor.ResourceWatcher.GetLogStreamTask(container.Metadata.Name) is not null,
+                "The first subscription should start a log stream.");
+            var firstLogStreamTask = appExecutor.ResourceWatcher.GetLogStreamTask(container.Metadata.Name);
+            Assert.NotNull(firstLogStreamTask);
+
+            firstFollowStream.Release();
+            await firstLogStreamTask.DefaultTimeout();
+            Assert.True(appExecutor.ResourceWatcher.IsLogStreamDisposed(container.Metadata.Name));
+
+            firstSubscription.Dispose();
+            firstSubscription = null;
+
+            using var secondSubscription = resourceLoggerService.Subscribe(container.Metadata.Name, _ => { });
+            await secondFollowStreamStarted.Task.DefaultTimeout();
+
+            Assert.Equal(2, Volatile.Read(ref systemFollowStreamCount));
+        }
+        finally
+        {
+            firstFollowStream.TryRelease();
+            firstSubscription?.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task ResourceLogging_OverlappingSameUidStreamCannotClearNewDeduplicationState()
+    {
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        builder.AddContainer("database", "image");
+
+        const string firstTerminalLogMessage = "first terminal period";
+        const string secondTerminalLogMessage = "second terminal period";
+        var firstTerminalLogLine = "2024-08-19T06:10:33.473275911Z " + firstTerminalLogMessage + Environment.NewLine;
+        var secondTerminalLogLine = "2024-08-19T06:10:34.473275911Z " + secondTerminalLogMessage + Environment.NewLine;
+        var previousFollowStream = new GatedReadStream();
+        var currentFollowStream = new GatedReadStream();
+        var logger = new GatedLogger<DcpExecutor>("was cancelled.");
+        var runningFollowStreams = 0;
+        var terminalFlushes = 0;
+
+        var kubernetesService = new TestKubernetesService(startStreamWithFollow: (obj, logStreamType, follow) =>
+        {
+            if (obj is Container container &&
+                logStreamType == Logs.StreamTypeStdErr &&
+                follow == true)
+            {
+                if (container.Status?.State == ContainerState.Running)
+                {
+                    return Interlocked.Increment(ref runningFollowStreams) == 1
+                        ? previousFollowStream
+                        : currentFollowStream;
+                }
+
+                if (container.Status?.State == ContainerState.Exited)
+                {
+                    return new MemoryStream(Encoding.UTF8.GetBytes(
+                        Interlocked.Increment(ref terminalFlushes) == 1
+                            ? firstTerminalLogLine
+                            : secondTerminalLogLine));
+                }
+            }
+
+            return new MemoryStream();
+        });
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var resourceLoggerService = new ResourceLoggerService();
+        var logLines = new ConcurrentQueue<LogLine>();
+        var runningNotifications = 0;
+        var terminalNotifications = 0;
+        string? dcpResourceName = null;
+
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceChangedContext>(context =>
+        {
+            if (context.DcpResourceName == dcpResourceName)
+            {
+                if (context.Status.State == ContainerState.Running)
+                {
+                    Interlocked.Increment(ref runningNotifications);
+                }
+                else if (context.Status.State == ContainerState.Exited)
+                {
+                    Interlocked.Increment(ref terminalNotifications);
+                }
+            }
+
+            return Task.CompletedTask;
+        });
+
+        var appExecutor = CreateAppExecutor(
+            distributedAppModel,
+            kubernetesService: kubernetesService,
+            resourceLoggerService: resourceLoggerService,
+            events: events,
+            logger: logger);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+        dcpResourceName = container.Metadata.Name;
+        Assert.False(string.IsNullOrEmpty(container.Metadata.Uid));
+
+        IDisposable? firstSubscription = resourceLoggerService.Subscribe(dcpResourceName, AddLogLines);
+        IDisposable? secondSubscription = null;
+
+        try
+        {
+            container.Status = new ContainerStatus { State = ContainerState.Running };
+            kubernetesService.PushResourceModified(container);
+            await previousFollowStream.ReadStarted.DefaultTimeout();
+            await AsyncTestHelpers.AssertIsTrueRetryAsync(
+                () => appExecutor.ResourceWatcher.GetLogStreamTask(dcpResourceName) is not null,
+                "The first terminal period should have an active follow stream.");
+            var previousLogStreamTask = appExecutor.ResourceWatcher.GetLogStreamTask(dcpResourceName);
+            Assert.NotNull(previousLogStreamTask);
+
+            container.Status = new ContainerStatus { State = ContainerState.Exited };
+            kubernetesService.PushResourceModified(container);
+            await AsyncTestHelpers.AssertIsTrueRetryAsync(
+                () => Volatile.Read(ref terminalNotifications) >= 1,
+                "The first terminal period should be reported.");
+            Assert.Single(logLines, line => line.Content.Contains(firstTerminalLogMessage, StringComparison.Ordinal));
+
+            container.Status = new ContainerStatus { State = ContainerState.Running };
+            kubernetesService.PushResourceModified(container);
+            await AsyncTestHelpers.AssertIsTrueRetryAsync(
+                () => Volatile.Read(ref runningNotifications) >= 2,
+                "The restarted resource should be reported as running.");
+
+            firstSubscription.Dispose();
+            firstSubscription = null;
+            await logger.Blocked.DefaultTimeout();
+
+            secondSubscription = resourceLoggerService.Subscribe(dcpResourceName, AddLogLines);
+            await currentFollowStream.ReadStarted.DefaultTimeout();
+            await AsyncTestHelpers.AssertIsTrueRetryAsync(
+                () => appExecutor.ResourceWatcher.GetLogStreamTask(dcpResourceName) is { } task && task != previousLogStreamTask,
+                "The second subscription should start a new follow stream.");
+            var currentLogStreamTask = appExecutor.ResourceWatcher.GetLogStreamTask(dcpResourceName);
+            Assert.NotNull(currentLogStreamTask);
+
+            container.Status = new ContainerStatus { State = ContainerState.Exited, ExitCode = 1 };
+            kubernetesService.PushResourceModified(container);
+            await AsyncTestHelpers.AssertIsTrueRetryAsync(
+                () => Volatile.Read(ref terminalNotifications) >= 2,
+                "The second terminal period should be reported.");
+            Assert.Single(logLines, line => line.Content.Contains(secondTerminalLogMessage, StringComparison.Ordinal));
+
+            // The canceled stream owns the first terminal period's deduplication state. Finishing it
+            // now must not clear the newer state installed for the same UID's second terminal period.
+            previousFollowStream.Release();
+            logger.Release();
+            await previousLogStreamTask.DefaultTimeout();
+
+            currentFollowStream.Release(secondTerminalLogLine);
+            await currentLogStreamTask.DefaultTimeout();
+
+            Assert.Equal(2, Volatile.Read(ref terminalFlushes));
+            Assert.Single(logLines, line => line.Content.Contains(secondTerminalLogMessage, StringComparison.Ordinal));
+        }
+        finally
+        {
+            logger.Release();
+            previousFollowStream.TryRelease();
+            currentFollowStream.TryRelease();
+            firstSubscription?.Dispose();
+            secondSubscription?.Dispose();
+        }
+
+        void AddLogLines(IReadOnlyList<LogLine> batch)
+        {
+            foreach (var logLine in batch)
+            {
+                logLines.Enqueue(logLine);
+            }
+        }
+    }
+
+    [Fact]
     public async Task ResourceWatch_ResourceWithoutResourceVersionIsAlwaysProcessed()
     {
         var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
@@ -1874,7 +2105,6 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         await appExecutor.RunApplicationAsync().DefaultTimeout();
 
         var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
-        container.Metadata.Uid = "database-instance";
 
         container.Status = new ContainerStatus { State = ContainerState.Running };
         kubernetesService.PushResourceModified(container);
@@ -1943,6 +2173,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         // observed for the previous object with the same kind and name. The Deleted event must clear
         // that version before the recreated object is delivered as Added.
         kubernetesService.PushResourceDeleted(container);
+        container.Metadata.Uid = "database-instance-2";
         container.Status = new ContainerStatus { State = ContainerState.Exited };
         kubernetesService.PushResourceUnchanged(container, k8s.WatchEventType.Added);
 
@@ -1963,22 +2194,39 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         builder.AddContainer("database", "image");
 
-        var normalStreamStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var terminalFollowStreamOpens = 0;
+        const string replacementLogMessage = "replacement terminal log";
+        var replacementLogLine = "2024-08-19T06:10:33.473275911Z " + replacementLogMessage + Environment.NewLine;
+        var previousFollowStream = new GatedReadStream();
+        var replacementFollowStream = new GatedReadStream();
+        var replacementFollowStreamStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var replacementStdErrFollowStreams = 0;
+        string? previousResourceUid = null;
+        string? replacementResourceUid = null;
+        var logger = new GatedLogger<DcpExecutor>("was cancelled.");
+
         var kubernetesService = new TestKubernetesService(startStreamWithFollow: (obj, logStreamType, follow) =>
         {
-            if (obj is Container { Status.State: ContainerState.Running } &&
-                logStreamType == Logs.StreamTypeSystem &&
+            if (obj is Container container &&
+                logStreamType == Logs.StreamTypeStdErr &&
                 follow == true)
             {
-                normalStreamStarted.TrySetResult();
-            }
+                if (container.Metadata.Uid == previousResourceUid &&
+                    container.Status?.State == ContainerState.Running)
+                {
+                    return previousFollowStream;
+                }
 
-            if (obj is Container { Status.State: ContainerState.Exited } &&
-                logStreamType == Logs.StreamTypeSystem &&
-                follow == true)
-            {
-                Interlocked.Increment(ref terminalFollowStreamOpens);
+                if (container.Metadata.Uid == replacementResourceUid &&
+                    container.Status?.State == ContainerState.Exited)
+                {
+                    if (Interlocked.Increment(ref replacementStdErrFollowStreams) == 1)
+                    {
+                        return new MemoryStream(Encoding.UTF8.GetBytes(replacementLogLine));
+                    }
+
+                    replacementFollowStreamStarted.TrySetResult();
+                    return replacementFollowStream;
+                }
             }
 
             return new MemoryStream();
@@ -1987,7 +2235,8 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
         var resourceLoggerService = new ResourceLoggerService();
-        var flushesAtNotification = new ConcurrentQueue<int>();
+        var logLines = new ConcurrentQueue<LogLine>();
+        var terminalNotifications = 0;
         string? dcpResourceName = null;
 
         var events = new DcpExecutorEvents();
@@ -1996,7 +2245,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             if (context.DcpResourceName == dcpResourceName &&
                 context.Status.State == ContainerState.Exited)
             {
-                flushesAtNotification.Enqueue(Volatile.Read(ref terminalFollowStreamOpens));
+                Interlocked.Increment(ref terminalNotifications);
             }
 
             return Task.CompletedTask;
@@ -2006,38 +2255,80 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             distributedAppModel,
             kubernetesService: kubernetesService,
             resourceLoggerService: resourceLoggerService,
-            events: events);
+            events: events,
+            logger: logger);
         await appExecutor.RunApplicationAsync().DefaultTimeout();
 
         var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
         dcpResourceName = container.Metadata.Name;
-        container.Metadata.Uid = "database-instance-1";
+        previousResourceUid = container.Metadata.Uid;
+        Assert.False(string.IsNullOrEmpty(previousResourceUid));
 
-        using var subscription = resourceLoggerService.Subscribe(dcpResourceName, _ => { });
+        using var subscription = resourceLoggerService.Subscribe(dcpResourceName, batch =>
+        {
+            foreach (var logLine in batch)
+            {
+                logLines.Enqueue(logLine);
+            }
+        });
 
-        container.Status = new ContainerStatus { State = ContainerState.Running };
-        kubernetesService.PushResourceModified(container);
-        await normalStreamStarted.Task.DefaultTimeout();
+        try
+        {
+            container.Status = new ContainerStatus { State = ContainerState.Running };
+            kubernetesService.PushResourceModified(container);
+            await previousFollowStream.ReadStarted.DefaultTimeout();
+            await AsyncTestHelpers.AssertIsTrueRetryAsync(
+                () => appExecutor.ResourceWatcher.GetLogStreamTask(dcpResourceName) is not null,
+                "The first resource incarnation should have an active log stream.");
+            var previousLogStreamTask = appExecutor.ResourceWatcher.GetLogStreamTask(dcpResourceName);
+            Assert.NotNull(previousLogStreamTask);
 
-        container.Status = new ContainerStatus { State = ContainerState.Exited };
-        kubernetesService.PushResourceModified(container);
+            container.Status = new ContainerStatus { State = ContainerState.Exited };
+            kubernetesService.PushResourceModified(container);
 
-        await AsyncTestHelpers.AssertIsTrueRetryAsync(
-            () => !flushesAtNotification.IsEmpty,
-            "The first resource incarnation should report its terminal state.");
+            await AsyncTestHelpers.AssertIsTrueRetryAsync(
+                () => Volatile.Read(ref terminalNotifications) >= 1,
+                "The first resource incarnation should report its terminal state.");
 
-        // Simulate a delete and recreation that happened while the watch was disconnected. The fresh
-        // list-and-watch reports only Added for the new UID, and resourceVersion is opaque enough that
-        // it can equal the value last observed for the previous object.
-        container.Metadata.Uid = "database-instance-2";
-        container.Status = new ContainerStatus { State = ContainerState.Exited, ExitCode = 1 };
-        kubernetesService.PushResourceUnchanged(container, k8s.WatchEventType.Added);
+            // Simulate a delete and recreation that happened while the watch was disconnected. The fresh
+            // list-and-watch reports only Added for the new UID, and resourceVersion is opaque enough that
+            // it can equal the value last observed for the previous object.
+            replacementResourceUid = "database-instance-2";
+            container.Metadata.Uid = replacementResourceUid;
+            container.Status = new ContainerStatus { State = ContainerState.Exited, ExitCode = 1 };
+            kubernetesService.PushResourceUnchanged(container, k8s.WatchEventType.Added);
 
-        await AsyncTestHelpers.AssertIsTrueRetryAsync(
-            () => flushesAtNotification.Count >= 2,
-            "The replacement resource should be processed even though no delete event was observed.");
+            await logger.Blocked.DefaultTimeout();
+            await AsyncTestHelpers.AssertIsTrueRetryAsync(
+                () => Volatile.Read(ref terminalNotifications) >= 2,
+                "The replacement resource should be processed even though no delete event was observed.");
+            await replacementFollowStreamStarted.Task.DefaultTimeout();
+            await AsyncTestHelpers.AssertIsTrueRetryAsync(
+                () => appExecutor.ResourceWatcher.GetLogStreamTask(dcpResourceName) is { } task && task != previousLogStreamTask,
+                "The replacement resource should start a new log stream.");
+            var replacementLogStreamTask = appExecutor.ResourceWatcher.GetLogStreamTask(dcpResourceName);
+            Assert.NotNull(replacementLogStreamTask);
 
-        Assert.Equal([1, 2], flushesAtNotification.ToArray());
+            Assert.Single(logLines, line => line.Content.Contains(replacementLogMessage, StringComparison.Ordinal));
+
+            // Let the canceled stream finish only after the replacement flush has installed its pending
+            // deduplication state. Its cleanup must not remove state owned by the replacement UID.
+            previousFollowStream.Release();
+            logger.Release();
+            await previousLogStreamTask.DefaultTimeout();
+
+            replacementFollowStream.Release(replacementLogLine);
+            await replacementLogStreamTask.DefaultTimeout();
+
+            Assert.Equal(2, Volatile.Read(ref replacementStdErrFollowStreams));
+            Assert.Single(logLines, line => line.Content.Contains(replacementLogMessage, StringComparison.Ordinal));
+        }
+        finally
+        {
+            logger.Release();
+            previousFollowStream.TryRelease();
+            replacementFollowStream.TryRelease();
+        }
     }
 
     [Fact]
