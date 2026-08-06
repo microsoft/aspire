@@ -20,7 +20,7 @@ using IArgCallbackAnnotation = ICallbackResourceAnnotation<CommandLineArgsCallba
 /// <list type="number">
 /// <item><description>
 /// They are always placed <em>first</em>, no matter when the annotation was added. The callback is evaluated
-/// against its own empty argument list and the result is inserted ahead of every other argument, so no
+/// against its own empty argument list and the result is resolved ahead of every other argument, so no
 /// <c>WithArgs</c> callback can observe it, mutate it, or clear it, and no registration order is implied.
 /// </description></item>
 /// <item><description>
@@ -113,6 +113,13 @@ internal sealed class LaunchToolArgsCallbackAnnotation : IResourceAnnotation, IA
         return context.Args.ToImmutableList();
     }
 }
+
+/// <summary>
+/// Carries unresolved launch tool arguments separately from the mutable ordinary argument list.
+/// </summary>
+/// <param name="Arguments">The unresolved tool-invocation prefix.</param>
+/// <param name="ShowInCommandLine">Whether the prefix is shown in the dashboard command line.</param>
+internal sealed record UnresolvedLaunchToolArgumentsData(ImmutableArray<object> Arguments, bool ShowInCommandLine) : IExecutionConfigurationData;
 
 /// <summary>
 /// Reports how many of the leading arguments in an execution configuration were produced by a

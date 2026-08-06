@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Immutable;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.ApplicationModel;
@@ -38,13 +39,12 @@ internal class ArgumentsExecutionConfigurationGatherer : IExecutionConfiguration
 
     /// <summary>
     /// Evaluates the resource's launch tool arguments (the tool-invocation prefix, e.g. <c>run ./cmd/api</c>) and
-    /// inserts them ahead of every other argument.
+    /// records them separately from every other argument.
     /// </summary>
     /// <remarks>
     /// The callback is deliberately evaluated <em>after</em> the ordinary argument callbacks but its result is
-    /// inserted <em>before</em> them. That is what makes the prefix order-independent: no <c>WithArgs</c> callback
-    /// can observe it, mutate it, or clear it, so it does not matter whether the tool invocation was declared before
-    /// or after the calls that add the program's own arguments.
+    /// resolved <em>before</em> them. Keeping the two segments separate makes the prefix order-independent: no
+    /// <c>WithArgs</c> or later configuration callback can observe it, mutate it, or clear it.
     /// </remarks>
     private static async ValueTask GatherLaunchToolArgumentsAsync(IExecutionConfigurationGathererContext context, IResource resource, ILogger resourceLogger, DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken)
     {
@@ -52,9 +52,9 @@ internal class ArgumentsExecutionConfigurationGatherer : IExecutionConfiguration
         // A container invokes the program through the image's ENTRYPOINT instead, so the prefix must not be repeated
         // in its arguments. This matters for executables published as a Dockerfile (Go, Python, JavaScript), where
         // PublishAsDockerFile() reuses the executable's annotations for the generated container resource. Note that
-        // the container's own `WithArgs(c => c.Args.Clear())` cannot undo this, because the prefix is inserted after
-        // all the ordinary argument callbacks have run.
-        if (resource is ContainerResource)
+        // the container's own `WithArgs(c => c.Args.Clear())` cannot undo a launch prefix because it is evaluated
+        // separately, so return before recording that segment.
+        if (resource.IsContainer())
         {
             return;
         }
@@ -78,7 +78,6 @@ internal class ArgumentsExecutionConfigurationGatherer : IExecutionConfiguration
             return;
         }
 
-        context.Arguments.InsertRange(0, launchToolArgs);
-        context.AddAdditionalData(new LaunchToolArgumentsData(launchToolArgs.Count, launchToolAnnotation.ShowInCommandLine));
+        context.AddAdditionalData(new UnresolvedLaunchToolArgumentsData(launchToolArgs.ToImmutableArray(), launchToolAnnotation.ShowInCommandLine));
     }
 }

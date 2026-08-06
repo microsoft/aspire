@@ -1165,11 +1165,10 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         Assert.Equal(EntrypointType.Module, entrypointAnnotation.Type);
         Assert.Equal("uvicorn", entrypointAnnotation.Entrypoint);
 
-        // Verify arguments. The entrypoint occupies its own leading slot, so switching it replaces only the
-        // entrypoint and leaves arguments added before the switch in place.
+        // Arguments for the previous entrypoint are cleared, while arguments added after the switch remain.
         var commandArguments = await ArgumentEvaluator.GetArgumentListAsync(resource, TestServiceProvider.Instance);
 
-        Assert.Equal(["-m", "uvicorn", "arg1", "arg2", "main:app", "--reload"], commandArguments);
+        Assert.Equal(["-m", "uvicorn", "main:app", "--reload"], commandArguments);
     }
 
     [Fact]

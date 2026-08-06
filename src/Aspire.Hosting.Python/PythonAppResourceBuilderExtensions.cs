@@ -1020,8 +1020,8 @@ public static class PythonAppResourceBuilderExtensions
     /// <item><description><b>Executable</b>: Runs the executable directly from the virtual environment</description></item>
     /// </list>
     /// <para>
-    /// <b>Note:</b> The entrypoint arguments always lead the resource's command line, so arguments added with
-    /// <c>WithArgs</c> before or after this call are preserved and stay after the entrypoint.
+    /// <b>Important:</b> This method resets all command-line arguments. If you need to add arguments after changing
+    /// the entrypoint, call <c>WithArgs</c> after this method.
     /// </para>
     /// </remarks>
     /// <example>
@@ -1064,6 +1064,10 @@ public static class PythonAppResourceBuilderExtensions
             Entrypoint = entrypoint
         },
         ResourceAnnotationMutationBehavior.Replace);
+
+        // Arguments already registered for the previous entrypoint may be invalid for the replacement. Keep this
+        // clear in the ordinary argument segment so arguments registered after WithEntrypoint are preserved.
+        builder.WithArgs(static context => context.Args.Clear());
 
         builder.WithLaunchToolArgs(static context =>
         {

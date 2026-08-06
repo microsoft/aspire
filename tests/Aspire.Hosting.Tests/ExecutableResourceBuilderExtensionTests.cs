@@ -9,6 +9,7 @@ using System.Text.Json;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Tests;
 
@@ -183,6 +184,30 @@ public class ExecutableResourceBuilderExtensionTests
             arg => Assert.Equal("base-arg", arg));
     }
 
+    [Fact]
+    public async Task ProcessArgumentValuesAsyncIncludesLaunchToolArgsForExecutables()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var executable = builder.AddExecutable("myexe", "command", "workingdirectory")
+            .WithArgs("base-arg")
+            .WithLaunchToolArgs(context => context.Args.Add("launch-tool-arg"));
+        var args = new List<string>();
+
+#pragma warning disable CS0618 // Type or member is obsolete
+        await executable.Resource.ProcessArgumentValuesAsync(
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            (_, value, exception, _) =>
+            {
+                Assert.Null(exception);
+                args.Add(Assert.IsType<string>(value));
+            },
+            NullLogger.Instance);
+#pragma warning restore CS0618 // Type or member is obsolete
+
+        Assert.Equal(["launch-tool-arg", "base-arg"], args);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -227,7 +252,7 @@ public class ExecutableResourceBuilderExtensionTests
     [Fact]
     public async Task WithLaunchToolArgsSurviveAnArgsCallbackThatClearsTheList()
     {
-        // No WithArgs callback can observe or clear the tool-invocation prefix: it is evaluated separately and inserted
+        // No WithArgs callback can observe or clear the tool-invocation prefix: it is evaluated separately and resolved
         // ahead of the arguments those callbacks produce.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
@@ -344,5 +369,19 @@ public class ExecutableResourceBuilderExtensionTests
         var args = await ArgumentEvaluator.GetArgumentListAsync(container);
 
         Assert.Empty(args);
+
+        var processedArgs = new List<string>();
+#pragma warning disable CS0618 // Type or member is obsolete
+        await container.ProcessArgumentValuesAsync(
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish),
+            (_, value, exception, _) =>
+            {
+                Assert.Null(exception);
+                processedArgs.Add(Assert.IsType<string>(value));
+            },
+            NullLogger.Instance);
+#pragma warning restore CS0618 // Type or member is obsolete
+
+        Assert.Empty(processedArgs);
     }
 }

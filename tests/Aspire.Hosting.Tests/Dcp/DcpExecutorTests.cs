@@ -5559,6 +5559,55 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ProjectExecutable_WithLaunchArgsOverride_AndLeadingLaunchToolArgumentToRemove_DisplaysOrdinaryArguments()
+    {
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        var projectBuilder = builder.AddProject<Projects.ServiceA>("ServiceA")
+            .WithArgs("-f", "net10.0-ios")
+            .WithLaunchToolArgs(static ctx => ctx.Args.Add("run"), showInCommandLine: false);
+#pragma warning disable ASPIREPROJECTS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+        projectBuilder.Resource.Annotations.Add(new ProjectLaunchArgsOverrideAnnotation(["build", "/t:Run"], leadingResourceArgumentToRemove: "run"));
+#pragma warning restore ASPIREPROJECTS001
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "ServiceA");
+
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+        Assert.Collection(
+            exe.Spec.Args!,
+            arg => Assert.Equal("build", arg),
+            arg => Assert.Equal("/t:Run", arg),
+            arg => Assert.EndsWith("ServiceA.csproj", arg, StringComparison.Ordinal),
+            arg => Assert.Equal("--configuration", arg),
+            arg => Assert.Equal(GetTestAssemblyConfiguration(), arg),
+            arg => Assert.Equal("-f", arg),
+            arg => Assert.Equal("net10.0-ios", arg));
+
+        Assert.True(exe.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var displayArgs));
+        Assert.Collection(displayArgs,
+            arg =>
+            {
+                Assert.Equal("-f", arg.Argument);
+                Assert.Equal(5, arg.EffectiveArgumentIndex);
+            },
+            arg =>
+            {
+                Assert.Equal("net10.0-ios", arg.Argument);
+                Assert.Equal(6, arg.EffectiveArgumentIndex);
+            });
+    }
+
+    [Fact]
     public async Task ProjectExecutable_WithLaunchArgsOverride_AndPersistentLifetime_RunsOverrideInProcessMode()
     {
         var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
@@ -5951,6 +6000,115 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             {
                 Assert.Equal("app-arg", arg.Argument);
                 Assert.Equal(0, arg.EffectiveArgumentIndex);
+            });
+    }
+
+    [Fact]
+    public async Task PlainExecutable_ExtensionMode_OwnedLaunchToolArgsCanBeHiddenFromCommandLine()
+    {
+        // A matching IDE launch configuration both performs the owned tool invocation and can hide that plumbing from
+        // the dashboard, leaving only the ordinary program arguments in both observable argument lists.
+        var builder = DistributedApplication.CreateBuilder();
+
+        var resource = new TestExecutableResource("test-working-directory");
+        builder.AddResource(resource)
+            .WithArgs("app-arg")
+            .WithLaunchToolArgs(
+                static ctx => ctx.Args.Add("run"),
+                ownedByLaunchConfigurationType: "test",
+                showInCommandLine: false)
+            .WithDebugSupport(
+                mode => new ExecutableLaunchConfiguration("test") { Mode = mode },
+                "test");
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo { ProtocolsSupported = ["test"], SupportedLaunchConfigurations = ["test"] }),
+            [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234",
+            [KnownConfigNames.DebugSessionRunMode] = "Debug"
+        };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "TestExecutable");
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        Assert.Equal(["app-arg"], exe.Spec.Args);
+        Assert.Null(exe.Spec.FallbackExecutionTypes);
+
+        Assert.True(exe.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var displayArgs));
+        var displayArg = Assert.Single(displayArgs);
+        Assert.Equal("app-arg", displayArg.Argument);
+        Assert.Equal(0, displayArg.EffectiveArgumentIndex);
+    }
+
+    [Fact]
+    public async Task PlainExecutable_ExtensionMode_CertificateCallbackCannotShiftLaunchToolPrefixBoundary()
+    {
+        // Certificate callbacks run after launch tool arguments are gathered and can mutate ordinary arguments.
+        // Keep the prefix in a separate segment so inserting at the front cannot change which arguments the IDE owns.
+        var builder = DistributedApplication.CreateBuilder();
+        using var certificate = CreateTestCertificate();
+        var certificateAuthorities = builder.AddCertificateAuthorityCollection("certificates")
+            .WithCertificate(certificate);
+
+        var resource = new TestExecutableResource("test-working-directory");
+        builder.AddResource(resource)
+            .WithArgs("app-arg")
+            .WithLaunchToolArgs(static ctx => ctx.Args.Add("run"), ownedByLaunchConfigurationType: "test")
+            .WithDebugSupport(
+                mode => new ExecutableLaunchConfiguration("test") { Mode = mode },
+                "test")
+            .WithCertificateAuthorityCollection(certificateAuthorities)
+            .WithCertificateTrustConfiguration(static ctx =>
+            {
+                ctx.Arguments.Insert(0, "certificate-arg");
+                return Task.CompletedTask;
+            });
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo { ProtocolsSupported = ["test"], SupportedLaunchConfigurations = ["test"] }),
+            [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234",
+            [KnownConfigNames.DebugSessionRunMode] = "Debug"
+        };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "TestExecutable");
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        Assert.Equal(["certificate-arg", "app-arg"], exe.Spec.Args);
+        Assert.Null(exe.Spec.FallbackExecutionTypes);
+
+        Assert.True(exe.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var displayArgs));
+        Assert.Collection(displayArgs,
+            arg =>
+            {
+                Assert.Equal("run", arg.Argument);
+                Assert.Null(arg.EffectiveArgumentIndex);
+            },
+            arg =>
+            {
+                Assert.Equal("certificate-arg", arg.Argument);
+                Assert.Equal(0, arg.EffectiveArgumentIndex);
+            },
+            arg =>
+            {
+                Assert.Equal("app-arg", arg.Argument);
+                Assert.Equal(1, arg.EffectiveArgumentIndex);
             });
     }
 
