@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "AspireUseCliBundle is now opt-in (false by default again), and a new AspireCliInvocationMode=Dnx MSBuild property lets AppHosts force CLI resolution via DNX, which restores and executes the exact Aspire CLI version paired with the AppHost SDK. When opt-in is enabled, the CLI is resolved in order: explicit AspireCliPath, forced DNX, aspire on PATH, then dnx on PATH.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\udd00",
+  "firstMergedAt": "2026-08-05T21:11:38Z",
+  "lastMergedAt": "2026-08-05T21:11:38Z",
+  "name": "Flexible CLI invocation mode with DNX fallback for AppHosts",
+  "owner": "DamianEdwards",
+  "prs": [
+    18850
+  ]
+}

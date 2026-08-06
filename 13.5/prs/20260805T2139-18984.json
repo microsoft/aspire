@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Bug fix for file-based AppHost launch failure in VS Code due to redundant build with wrong working directory",
+  "mergedAt": "2026-08-05T21:39:53Z",
+  "number": 18984,
+  "runDate": "2026-08-06T00:20:09Z",
+  "status": "included",
+  "title": "Fix VS Code file AppHost build ownership"
+}

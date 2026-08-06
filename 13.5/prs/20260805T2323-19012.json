@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "CI/test infrastructure improvement for caching extension E2E test downloads; no user-facing impact",
+  "mergedAt": "2026-08-05T23:23:20Z",
+  "number": 19012,
+  "runDate": "2026-08-06T00:20:09Z",
+  "status": "excluded",
+  "title": "Cache VS Code and ChromeDriver downloads for extension E2E tests"
+}

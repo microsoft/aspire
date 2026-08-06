@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "Adjusts CLI delegation defaults and adds DNX invocation mode for C# AppHosts; user-facing behavior change",
+  "mergedAt": "2026-08-05T21:11:38Z",
+  "number": 18850,
+  "runDate": "2026-08-06T00:20:09Z",
+  "status": "included",
+  "title": "Adjust required CLI behavior for C# AppHosts"
+}
