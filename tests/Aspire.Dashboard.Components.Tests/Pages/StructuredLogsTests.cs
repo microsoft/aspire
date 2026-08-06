@@ -232,6 +232,24 @@ public partial class StructuredLogsTests : DashboardTestContext
     }
 
     [Fact]
+    public void Render_FilterDisablesBrowserAutocomplete()
+    {
+        SetupStructureLogsServices();
+
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = RenderComponent<StructuredLogs>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+
+        Assert.Equal("off", cut.FindComponent<Microsoft.FluentUI.AspNetCore.Components.FluentSearch>().Instance.AutoComplete);
+    }
+
+    [Fact]
     public void PauseIncomingData_DisplaysPauseWarningImmediately()
     {
         SetupStructureLogsServices();
