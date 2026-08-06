@@ -10,15 +10,25 @@
 import { createServer } from "node:http";
 import { HTML, STYLES, APP_JS } from "./render.mjs";
 import { loadDashboard } from "./github.mjs";
+import { associateHealthSources, healthCounts, loadHealthDashboard } from "./health.mjs";
+import { resolveAzureDevOpsPipeline } from "./azure-devops.mjs";
 import { resolveAccounts } from "./accounts.mjs";
 import { buildAgentActionPrompt, buildAgentActionLog, resolveActionTarget, toActionPrNumber } from "./agent.mjs";
 import {
+  buildHealthActionLog,
+  buildHealthActionPrompt,
+  resolveHealthActionTarget,
+} from "./health-agent.mjs";
+import {
+  addAzurePipeline,
   loadPrefs,
+  removeAzurePipeline,
   savePrefs,
   parseRepos,
   accountConfig,
   setAccountRepos,
   setAccountActive,
+  setHealthOrder,
   activeIds,
 } from "./state.mjs";
 
@@ -48,6 +58,8 @@ let stateSeq = 0;
 // Logger captured from the most recent startInstance so background (non-request) work —
 // the poller and stale-while-revalidate refreshes — has somewhere to report failures.
 let bgLog = null;
+let prefsMutation = Promise.resolve();
+let latestHealthOrder = null;
 
 // Stale-while-revalidate window: /api/state serves the cached dashboard instantly and
 // only kicks a background refresh once the cache is older than this.
@@ -96,9 +108,13 @@ async function resolveAuth(prefs, { reprobe = false } = {}) {
     const best = accounts.find((a) => a.status !== "failed" && a.accessible > 0)
       ?? accounts.find((a) => a.status !== "failed");
     if (best) {
-      best.active = true;
-      setAccountActive(prefs, best.id, true);
-      await savePrefs(prefs);
+      const saved = await updatePrefs((next) => {
+        if (activeIds(next).length === 0 && Object.keys(next.accounts || {}).length === 0) {
+          setAccountActive(next, best.id, true);
+        }
+      });
+      Object.assign(prefs, saved);
+      best.active = accountConfig(prefs, best.id).active;
     }
   }
 
@@ -115,10 +131,59 @@ function invalidateAuth() {
 // `sourceKinds`/`status`/`repos`. Omitting them made set_repos return an empty repo list
 // and summary report undefined sources/status for active accounts.
 function decorateDashboard(dashboard, auth, active, prefs) {
-  if (!dashboard || dashboard.authenticated === false) return;
+  if (!dashboard) return;
   dashboard.accounts = auth.accounts;
   dashboard.activeAccounts = active.map((a) => ({ id: a.id, login: a.login, avatarUrl: a.avatarUrl, enterprise: a.enterprise, host: a.host, repos: a.repos, status: a.status, sourceKinds: a.sourceKinds }));
   dashboard.dismissedCount = (prefs.dismissedNotifications || []).length;
+  applyHealthOrder(dashboard, latestHealthOrder ?? prefs.healthOrder);
+}
+
+function prefsWithLatestHealthOrder(prefs) {
+  if (latestHealthOrder === null) {
+    latestHealthOrder = [...(prefs.healthOrder ?? [])];
+    return prefs;
+  }
+  return { ...prefs, healthOrder: [...latestHealthOrder] };
+}
+
+function mergePreviousHealthItems(partial) {
+  if (partial?.mode !== "health" || resolveSnapshot?.mode !== "health") return partial;
+  const current = Array.isArray(partial.health?.items) ? partial.health.items : [];
+  const previous = Array.isArray(resolveSnapshot.health?.items) ? resolveSnapshot.health.items : [];
+  const merged = new Map(previous.map((item) => [item.id, item]));
+  for (const item of current) merged.set(item.id, item);
+  const items = associateHealthSources([...merged.values()]);
+  const counts = healthCounts(items);
+  partial.health = { ...partial.health, items, counts, loading: true };
+  partial.counts = counts;
+  partial.loading = true;
+  return partial;
+}
+
+export function applyHealthOrder(dashboard, order) {
+  const items = dashboard?.health?.items;
+  if (!Array.isArray(items) || items.length < 2) return dashboard;
+  const rank = new Map((Array.isArray(order) ? order : []).map((id, index) => [id, index]));
+  const ordered = items
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => {
+      const aRank = rank.get(a.item?.id);
+      const bRank = rank.get(b.item?.id);
+      if (aRank === undefined && bRank === undefined) return a.index - b.index;
+      if (aRank === undefined) return 1;
+      if (bRank === undefined) return -1;
+      return aRank - bRank;
+    })
+    .map(({ item }) => item);
+  const grouped = new Map();
+  for (const item of ordered) {
+    const groupId = item?.groupId || `source:${String(item?.id ?? "")}`;
+    const group = grouped.get(groupId) ?? [];
+    group.push(item);
+    grouped.set(groupId, group);
+  }
+  dashboard.health.items = [...grouped.values()].flat();
+  return dashboard;
 }
 
 // Compute a fresh dashboard. When at least one iframe is connected we stream results:
@@ -129,14 +194,16 @@ function decorateDashboard(dashboard, auth, active, prefs) {
 async function computeDashboard({ progress = true } = {}) {
   const stream = sseClients.size > 0;
   const prefs = await loadPrefs();
+  prefsWithLatestHealthOrder(prefs);
   const auth = await resolveAuth(prefs);
   const active = auth.accounts.filter((a) => a.active && a.status !== "failed");
   const accountsForLoad = active
     .map((a) => ({ token: auth.tokenById.get(a.id), login: a.login, repos: a.repos, graphql: a.graphql }))
     .filter((a) => a.token && a.login);
 
+  const healthMode = prefs.mode === "health";
   let dashboard;
-  if (accountsForLoad.length === 0) {
+  if (accountsForLoad.length === 0 && !healthMode) {
     const anyDetected = auth.accounts.length > 0;
     const anyActive = auth.accounts.some((a) => a.active);
     dashboard = {
@@ -150,34 +217,45 @@ async function computeDashboard({ progress = true } = {}) {
       activeAccounts: [],
     };
   } else {
-    dashboard = await loadDashboard({
-      accounts: accountsForLoad,
-      mode: prefs.mode,
-      release: prefs.release,
-      prefs: prefs.notifications,
-      dismissed: prefs.dismissedNotifications,
-      showDrafts: prefs.showDrafts,
-      onProgress: stream && progress ? broadcastProgress : undefined,
-      onPartial: stream
-        ? (partial) => {
-            decorateDashboard(partial, auth, active, prefs);
-            // Stamp a strictly increasing revision so the client can order/ignore snapshots.
-            partial.seq = ++stateSeq;
-            // Publish the partial as the current cache so a canvas opening mid-load gets
-            // the freshest data-so-far, and push it to already-open iframes. Deliberately does
-            // NOT touch resolveSnapshot: a partial omits not-yet-loaded PRs, so using it to
-            // resolve a card action could strip a watched PR's host (see resolveSnapshot above).
-            cache = { dashboard: partial, prefs, at: Date.now() };
-            broadcastState(partial, prefs);
-          }
-        : undefined,
-    });
-    decorateDashboard(dashboard, auth, active, prefs);
+    const onPartial = stream
+      ? (partial) => {
+          if (healthMode) mergePreviousHealthItems(partial);
+          const partialPrefs = prefsWithLatestHealthOrder(prefs);
+          decorateDashboard(partial, auth, active, partialPrefs);
+          // Stamp a strictly increasing revision so the client can order/ignore snapshots.
+          partial.seq = ++stateSeq;
+          // Publish the partial as the current cache so a canvas opening mid-load gets
+          // the freshest data-so-far, and push it to already-open iframes. Deliberately does
+          // NOT touch resolveSnapshot: a partial omits not-yet-loaded PRs/health sources, so
+          // using it for action resolution would make a still-visible card disappear.
+          cache = { dashboard: partial, prefs: partialPrefs, at: Date.now() };
+          broadcastState(partial, partialPrefs);
+        }
+      : undefined;
+    dashboard = healthMode
+      ? await loadHealthDashboard({
+          accounts: accountsForLoad,
+          pipelines: prefs.azurePipelines,
+          onProgress: stream && progress ? broadcastProgress : undefined,
+          onPartial,
+        })
+      : await loadDashboard({
+          accounts: accountsForLoad,
+          mode: prefs.mode,
+          release: prefs.release,
+          prefs: prefs.notifications,
+          dismissed: prefs.dismissedNotifications,
+          showDrafts: prefs.showDrafts,
+          onProgress: stream && progress ? broadcastProgress : undefined,
+          onPartial,
+        });
   }
+  const finalPrefs = prefsWithLatestHealthOrder(prefs);
+  decorateDashboard(dashboard, auth, active, finalPrefs);
   // Stamp the final (or unauthenticated) snapshot after any partials so it always carries the
   // highest seq of this compute; the POST response returns this same cached object.
   dashboard.seq = ++stateSeq;
-  cache = { dashboard, prefs, at: Date.now() };
+  cache = { dashboard, prefs: finalPrefs, at: Date.now() };
   // Only a COMPLETE compute advances the action-resolution snapshot; partials (above) never do,
   // so mid-stream cache churn can't drop a watched PR's host and misroute its card action.
   resolveSnapshot = dashboard;
@@ -187,7 +265,7 @@ async function computeDashboard({ progress = true } = {}) {
   // though a client connects during this compute's GitHub fetch. Gating the final broadcast on the
   // stale snapshot would suppress it for that just-connected client, leaving the canvas stale until
   // the ~90s poll. The live set is authoritative at completion time.
-  if (sseClients.size > 0) { broadcastState(dashboard, prefs); }
+  if (sseClients.size > 0) { broadcastState(dashboard, finalPrefs); }
   return cache;
 }
 
@@ -373,6 +451,18 @@ function findCachedPr(repository, number, urlHint) {
   return onHost.length === 1 ? onHost[0] : undefined;
 }
 
+// Health action clients send only a source id. Resolve it against the last complete
+// snapshot so provider coordinates come from this server, never the iframe payload.
+function resolveHealthSource(ref) {
+  const id = String(ref?.id ?? ref ?? "").trim();
+  if (!id) return null;
+  const current = cache?.dashboard?.health?.items;
+  const currentMatch = Array.isArray(current) ? current.find((item) => item?.id === id) : null;
+  if (currentMatch) return currentMatch;
+  const complete = resolveSnapshot?.health?.items;
+  return Array.isArray(complete) ? complete.find((item) => item?.id === id) ?? null : null;
+}
+
 function send(res, status, body, type = "application/json") {
   res.writeHead(status, { "Content-Type": type + "; charset=utf-8", "Cache-Control": "no-store" });
   res.end(typeof body === "string" ? body : JSON.stringify(body));
@@ -499,22 +589,20 @@ async function handle(req, res, log, instanceId) {
     }
     if (req.method === "POST" && path === "/api/mode") {
       const { mode } = await readBody(req);
-      const prefs = await loadPrefs();
-      if (["review", "issues", "ship"].includes(mode)) prefs.mode = mode;
-      await savePrefs(prefs);
-      const next = await getDashboard(true);
-      broadcastRefresh();
+      const next = ["review", "issues", "ship", "health"].includes(mode)
+        ? await setDashboardMode(mode)
+        : await getDashboard(true);
       return send(res, 200, next);
     }
     if (req.method === "POST" && path === "/api/prefs") {
       // Release milestone + notification preferences + draft visibility. Watched
       // repos are configured per account via /api/account/repos.
       const body = await readBody(req);
-      const prefs = await loadPrefs();
-      if (typeof body.release === "string" && body.release.trim()) prefs.release = body.release.trim();
-      if (typeof body.showDrafts === "boolean") prefs.showDrafts = body.showDrafts;
-      if (body.notifications) prefs.notifications = { ...prefs.notifications, ...body.notifications };
-      await savePrefs(prefs);
+      await updatePrefs((prefs) => {
+        if (typeof body.release === "string" && body.release.trim()) prefs.release = body.release.trim();
+        if (typeof body.showDrafts === "boolean") prefs.showDrafts = body.showDrafts;
+        if (body.notifications) prefs.notifications = { ...prefs.notifications, ...body.notifications };
+      });
       const next = await getDashboard(true);
       broadcastRefresh();
       return send(res, 200, next);
@@ -522,9 +610,7 @@ async function handle(req, res, log, instanceId) {
     if (req.method === "POST" && path === "/api/account/toggle") {
       const { id, active } = await readBody(req);
       if (typeof id === "string" && id) {
-        const prefs = await loadPrefs();
-        setAccountActive(prefs, id, !!active);
-        await savePrefs(prefs);
+        await updatePrefs((prefs) => setAccountActive(prefs, id, !!active));
         invalidateAuth();
       }
       const next = await getDashboard(true);
@@ -537,16 +623,76 @@ async function handle(req, res, log, instanceId) {
       // clobber its local draft. The dashboard cache is still recomputed.
       const { id, repos } = await readBody(req);
       if (typeof id === "string" && id) {
-        const prefs = await loadPrefs();
         // Pass an empty fallback so a cleared submission resets to the account's own
         // default (public vs EMU) inside setAccountRepos, rather than parseRepos
         // pre-filling the public default here.
-        setAccountRepos(prefs, id, parseRepos(repos, []));
-        await savePrefs(prefs);
+        await updatePrefs((prefs) => setAccountRepos(prefs, id, parseRepos(repos, [])));
         invalidateAuth();
       }
       const next = await getDashboard(true);
       return send(res, 200, next);
+    }
+    if (req.method === "POST" && path === "/api/health/pipeline/add") {
+      const { url: pipelineUrl, branch } = await readBody(req);
+      if (typeof pipelineUrl !== "string" || !pipelineUrl.trim()) {
+        return send(res, 400, { error: "An Azure DevOps pipeline URL is required.", code: "invalid_pipeline_url" });
+      }
+      try {
+        const next = await addAzurePipelineSource(pipelineUrl, branch);
+        return send(res, 200, next);
+      } catch (error) {
+        return send(res, 400, { error: error.message, code: error.code ?? "invalid_pipeline" });
+      }
+    }
+    if (req.method === "POST" && path === "/api/health/pipeline/remove") {
+      const { id } = await readBody(req);
+      if (typeof id !== "string" || !id.trim()) {
+        return send(res, 400, { error: "A pipeline id is required.", code: "invalid_pipeline" });
+      }
+      try {
+        const next = await removeAzurePipelineSource(id);
+        return send(res, 200, next);
+      } catch (error) {
+        return send(res, 400, { error: error.message, code: error.code ?? "invalid_pipeline" });
+      }
+    }
+    if (req.method === "POST" && path === "/api/health/order") {
+      const { order } = await readBody(req);
+      if (!Array.isArray(order)) {
+        return send(res, 400, { error: "Health source order must be an array.", code: "invalid_health_order" });
+      }
+      try {
+        return send(res, 200, await setHealthSourceOrder(order));
+      } catch (error) {
+        return send(res, 400, { error: error.message, code: error.code ?? "invalid_health_order" });
+      }
+    }
+    if (req.method === "POST" && path === "/api/health/action") {
+      const { kind, target, source } = await readBody(req);
+      if (!agentSend) {
+        return send(res, 503, { error: "The Copilot session is not ready yet. Try again in a moment." });
+      }
+      const resolvedSource = resolveHealthSource(source);
+      if (!resolvedSource) {
+        return send(res, 400, { error: "This health source is no longer in view. Refresh and try again." });
+      }
+      let prompt;
+      try {
+        prompt = buildHealthActionPrompt(kind, resolvedSource, target);
+      } catch (error) {
+        return send(res, 400, { error: error.message });
+      }
+      const log = buildHealthActionLog(kind, resolvedSource, target);
+      const result = await agentSend({ prompt, log });
+      const messageId = typeof result === "string" ? result : (result && result.messageId) ?? null;
+      const queued = typeof result === "object" && result ? !!result.queued : false;
+      return send(res, 200, {
+        ok: true,
+        kind,
+        target: resolveHealthActionTarget(resolvedSource, target),
+        messageId,
+        queued,
+      });
     }
     if (req.method === "POST" && path === "/api/agent/action") {
       // A card action button (Test / Review / Resolve conflicts / Address review)
@@ -589,32 +735,28 @@ async function handle(req, res, log, instanceId) {
     if (req.method === "POST" && path === "/api/notifications/dismiss") {
       const { id } = await readBody(req);
       if (typeof id === "string" && id) {
-        const prefs = await loadPrefs();
-        if (!prefs.dismissedNotifications.includes(id)) {
-          prefs.dismissedNotifications.push(id);
-          await savePrefs(prefs);
-        }
+        await updatePrefs((prefs) => {
+          if (!prefs.dismissedNotifications.includes(id)) prefs.dismissedNotifications.push(id);
+        });
       }
       const next = await getDashboard(true);
       broadcastRefresh();
       return send(res, 200, next);
     }
     if (req.method === "POST" && path === "/api/notifications/dismiss-all") {
-      const prefs = await loadPrefs();
       const current = await getDashboard(false);
       const ids = (current.dashboard.notifications || []).map((n) => n.id).filter(Boolean);
-      const set = new Set(prefs.dismissedNotifications);
-      for (const id of ids) set.add(id);
-      prefs.dismissedNotifications = [...set];
-      await savePrefs(prefs);
+      await updatePrefs((prefs) => {
+        const set = new Set(prefs.dismissedNotifications);
+        for (const id of ids) set.add(id);
+        prefs.dismissedNotifications = [...set];
+      });
       const next = await getDashboard(true);
       broadcastRefresh();
       return send(res, 200, next);
     }
     if (req.method === "POST" && path === "/api/notifications/restore") {
-      const prefs = await loadPrefs();
-      prefs.dismissedNotifications = [];
-      await savePrefs(prefs);
+      await updatePrefs((prefs) => { prefs.dismissedNotifications = []; });
       const next = await getDashboard(true);
       broadcastRefresh();
       return send(res, 200, next);
@@ -707,9 +849,7 @@ export async function rescanAccounts() {
 }
 
 export async function toggleAccount(id, active) {
-  const prefs = await loadPrefs();
-  setAccountActive(prefs, id, !!active);
-  await savePrefs(prefs);
+  await updatePrefs((prefs) => setAccountActive(prefs, id, !!active));
   invalidateAuth();
   const next = await getDashboard(true);
   broadcastRefresh();
@@ -717,15 +857,101 @@ export async function toggleAccount(id, active) {
 }
 
 export async function setReposFor(id, repos) {
-  const prefs = await loadPrefs();
   // Empty fallback: a cleared list resets to the account's own default in
   // setAccountRepos (public vs EMU) instead of parseRepos forcing the public one.
-  setAccountRepos(prefs, id, parseRepos(repos, []));
-  await savePrefs(prefs);
+  await updatePrefs((prefs) => setAccountRepos(prefs, id, parseRepos(repos, [])));
   invalidateAuth();
   const next = await getDashboard(true);
   broadcastRefresh();
   return next;
+}
+
+async function updatePrefs(mutator) {
+  const run = prefsMutation
+    .catch(() => {})
+    .then(async () => {
+      const prefs = await loadPrefs();
+      await mutator(prefs);
+      await savePrefs(prefs);
+      latestHealthOrder = [...(prefs.healthOrder ?? [])];
+      return prefs;
+    });
+  prefsMutation = run.then(() => {}, () => {});
+  return run;
+}
+
+export async function addAzurePipelineSource(url, branch) {
+  const pipeline = await resolveAzureDevOpsPipeline(url, { branch });
+  await updatePrefs((prefs) => addAzurePipeline(prefs, pipeline));
+  const next = await getDashboard(true);
+  broadcastRefresh();
+  return next;
+}
+
+export async function setDashboardMode(mode) {
+  await updatePrefs((prefs) => { prefs.mode = mode; });
+  const next = await getDashboard(true);
+  broadcastRefresh();
+  return next;
+}
+
+export async function removeAzurePipelineSource(id) {
+  await updatePrefs((prefs) => {
+    const known = prefs.azurePipelines.some((pipeline) => pipeline.id === id);
+    if (!known) {
+      const error = new Error("The Azure DevOps pipeline is no longer configured.");
+      error.code = "pipeline_not_found";
+      throw error;
+    }
+    removeAzurePipeline(prefs, id);
+  });
+  const next = await getDashboard(true);
+  broadcastRefresh();
+  return next;
+}
+
+export async function setHealthSourceOrder(order) {
+  const currentItems = cache?.dashboard?.health?.items ?? resolveSnapshot?.health?.items;
+  const currentIds = Array.isArray(currentItems)
+    ? currentItems.map((item) => item?.id).filter((id) => typeof id === "string" && id)
+    : [];
+  if (currentIds.length === 0) {
+    const error = new Error("No health sources are currently available to reorder.");
+    error.code = "health_sources_unavailable";
+    throw error;
+  }
+
+  const currentSet = new Set(currentIds);
+  const submitted = [];
+  const seen = new Set();
+  for (const raw of order) {
+    const id = String(raw ?? "").trim();
+    if (currentSet.has(id) && !seen.has(id)) {
+      seen.add(id);
+      submitted.push(id);
+    }
+  }
+  for (const id of currentIds) {
+    if (!seen.has(id)) submitted.push(id);
+  }
+  const normalizedDashboard = { health: { items: [...currentItems] } };
+  applyHealthOrder(normalizedDashboard, submitted);
+  const normalizedSubmitted = normalizedDashboard.health.items.map((item) => item.id);
+
+  const prefs = await updatePrefs((next) => {
+    const unseen = (next.healthOrder ?? []).filter((id) => !currentSet.has(id));
+    setHealthOrder(next, [...normalizedSubmitted, ...unseen]);
+  });
+
+  const dashboards = new Set([cache?.dashboard, resolveSnapshot].filter(Boolean));
+  for (const dashboard of dashboards) applyHealthOrder(dashboard, prefs.healthOrder);
+  if (cache?.dashboard) {
+    cache.dashboard.seq = ++stateSeq;
+    cache = { dashboard: cache.dashboard, prefs, at: Date.now() };
+    broadcastState(cache.dashboard, prefs);
+    return cache;
+  }
+  return getDashboard(false);
 }
 
 export { getDashboard };
