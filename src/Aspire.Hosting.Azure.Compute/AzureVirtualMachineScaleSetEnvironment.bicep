@@ -124,7 +124,6 @@ resource vmss 'Microsoft.Compute/virtualMachineScaleSets@2025-04-01' = {
           managedDisk: {
             storageAccountType: 'Standard_LRS'
           }
-          deleteOption: 'Delete'
         }
       }
       networkProfile: {
@@ -134,7 +133,6 @@ resource vmss 'Microsoft.Compute/virtualMachineScaleSets@2025-04-01' = {
             name: 'primary'
             properties: {
               primary: true
-              deleteOption: 'Delete'
               ipConfigurations: [
                 {
                   name: 'primary'
