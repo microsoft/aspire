@@ -136,7 +136,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
         // Argument and launch-configuration callbacks can change on restart. Derive fallback availability from the
         // final execution type and resolved command line every time instead of carrying a preparation-time guess.
-        spec.FallbackExecutionTypes = ShouldOfferProcessFallback(er.ModelResource, spec, omittedLaunchToolArgumentCount)
+        spec.FallbackExecutionTypes = ShouldOfferProcessFallback(er.ModelResource, spec, resolvedLaunchToolArgumentCount, omittedLaunchToolArgumentCount)
             ? [ExecutionType.Process]
             : null;
 
@@ -282,7 +282,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
     /// both the IDE form and the process form of the command line: when the tool-invocation prefix is omitted for the
     /// IDE, no fallback can be offered.
     /// </remarks>
-    private bool ShouldOfferProcessFallback(IResource modelResource, ExecutableSpec spec, int omittedLaunchToolArgumentCount)
+    private bool ShouldOfferProcessFallback(IResource modelResource, ExecutableSpec spec, int resolvedLaunchToolArgumentCount, int omittedLaunchToolArgumentCount)
     {
         if (spec.ExecutionType != ExecutionType.IDE || omittedLaunchToolArgumentCount > 0)
         {
@@ -295,7 +295,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         }
 
         if (!modelResource.SupportsDebugging(_configuration, out var annotation)
-            || annotation.LaunchConfigurationType is "project")
+            || annotation.LaunchConfigurationType is KnownLaunchConfigurationTypes.Project)
         {
             return false;
         }
@@ -303,12 +303,12 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         // A project-backed plain executable suppresses its `dotnet run` process scaffold when the active launch
         // configuration performs the tool invocation. Even when that prefix resolves empty, the remaining command
         // line is IDE-only and cannot be reused as a Process fallback.
-        return !HasIncompleteProcessCommand(modelResource, annotation, omittedLaunchToolArgumentCount);
+        return !HasIncompleteProcessCommand(modelResource, annotation, resolvedLaunchToolArgumentCount);
     }
 
-    private static bool HasIncompleteProcessCommand(IResource modelResource, SupportsDebuggingAnnotation annotation, int launchToolArgumentCount)
+    private static bool HasIncompleteProcessCommand(IResource modelResource, SupportsDebuggingAnnotation annotation, int resolvedLaunchToolArgumentCount)
     {
-        return launchToolArgumentCount == 0
+        return resolvedLaunchToolArgumentCount == 0
             && modelResource is not ProjectResource
             && modelResource.HasAnnotationOfType<IProjectMetadata>()
             && modelResource.HasLaunchToolArgsOwnedBy(annotation);
@@ -728,6 +728,8 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             // Some integrations keep an SDK-shaped verb in resource args for model consumers, but the
             // launch override can already represent that verb. Only remove it when the annotation opts in.
             appHostArgList.RemoveAt(0);
+            launchToolArgumentCount = Math.Max(0, launchToolArgumentCount - 1);
+            omittedLaunchToolArgumentCount = Math.Max(0, omittedLaunchToolArgumentCount - 1);
         }
 
         var launchArgs = new List<LaunchArgument>();
