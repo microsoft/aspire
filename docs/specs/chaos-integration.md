@@ -609,18 +609,57 @@ The recommended HTTP mechanism is a generated isolation scope carried in a reser
 
 The scope is opaque local test metadata, not a credential, and may be visible to instrumented workloads as standard baggage. Policies with different isolation scopes are disjoint even on the same path. This guarantee requires propagation to cross every hop before the faulted edge. Workloads without compatible distributed-context propagation need an application-side client handler, separate AppHost instances, or serialized access to the shared edge. The API must not imply isolation that the traffic cannot provide.
 
-## Dashboard and MCP
+## Dashboard visualization and MCP
 
-The initial dashboard experience is the standard resource model:
+The dashboard must make active fault injection obvious. A developer should not need to inspect logs or remember that a test installed a policy to understand why requests are delayed or failing.
 
-- one visible chaos resource per mediated edge;
-- health and revision state;
-- policy count and pause state;
-- add, remove, list, pause, and resume resource commands;
-- resource logs for policy operations and reconciliation;
-- sanitized properties and bounded recent activity.
+### Initial experience using existing dashboard surfaces
 
-No custom dashboard tab is required. The original dashboard-extension discussion was exploratory, and a generic extension framework should not be coupled to this integration.
+The Resources page shows one run-only `chaos` resource. Its state and properties are projections from `ChaosPolicyController`, never the authoritative policy store.
+
+| Dashboard state | Meaning |
+| --- | --- |
+| `Running` | DCP capabilities are available, revisions are acknowledged, and no policy is paused or conflicted |
+| `Active` | At least one unexpired policy is enabled |
+| `Paused` | Policies remain installed but fault activation is paused |
+| `Reconciling` | Desired and acknowledged revisions differ |
+| `Degraded` | A proxy rejected a revision, a scope is unavailable, or rollback has not converged |
+
+The resource properties show:
+
+- active policy count and nearest expiry;
+- affected target endpoints and directed references when DCP can distinguish them;
+- desired and acknowledged revision;
+- paused scope, if any;
+- bounded activation, conflict, and expiry counts;
+- last successful reconciliation and last structured error.
+
+The `chaos` resource exposes dashboard command buttons for add, remove, list, pause, and resume. `list-policies` renders a sanitized table with policy ID, scope, effect summary, priority, expiry, state, and activation count. Add and remove operations use the same validation, confirmation, progress, and acknowledgement path as the CLI. The dashboard never calls a DCP management endpoint directly.
+
+Selected target resources should also display a derived `Chaos policies` property and a relationship to the `chaos` resource. This is a navigation and awareness aid only. Target resource state must not become unhealthy merely because a policy intentionally injects failures.
+
+Existing telemetry pages provide request-level visualization:
+
+- **Structured logs** record policy lifecycle and reconciliation without policy bodies or isolation values.
+- **Traces** mark an activated fault on the affected request span or a linked internal span, with policy ID, effect kind, canonical scope, and activation index.
+- **Metrics** show activations, expiry, conflicts, apply latency, and revision lag.
+
+This initial experience does not require a custom dashboard extension. It uses the existing resource, command, log, trace, and metric surfaces while still making chaos visible at both the environment and affected-resource levels.
+
+### Rich policy view
+
+The original meeting raised a custom dashboard tab as an exploratory direction. After the resource-based experience is validated, a richer view may add:
+
+- a filterable policy table grouped by target resource and endpoint;
+- a topology overlay highlighting scopes with active policies;
+- remaining TTL and live activation counts;
+- conflict and reconciliation diagnostics;
+- policy authoring and removal using the same controller commands;
+- links from a policy to matching traces and retained activation receipts.
+
+This view must consume controller projections and resource commands rather than introduce another policy store or dashboard-only control plane. It should be proposed with Aspire's general dashboard extensibility work, not implemented as a private Chaos extension mechanism.
+
+### MCP
 
 MCP uses the existing `execute_resource_command` tool against the same commands. MCP is not a privileged direct proxy client and does not receive an independent policy store. If MCP needs richer typed JSON handling, that should improve generic resource-command result propagation rather than add a Chaos-only backchannel.
 
