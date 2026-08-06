@@ -248,6 +248,19 @@ For resources emitted as legacy `Applications.*` types (Redis, MongoDB, RabbitMQ
 
 Radius additionally injects its own `CONNECTION_<NAME>_<PROPERTY>` environment variables for every entry in a container's `connections` block. Those are separate from — and not a replacement for — the `ConnectionStrings__*` variables Aspire's client integrations read.
 
+`rad install kubernetes` registers the built-in `Radius.Compute/*`, `Radius.Core/*` and `Applications.*` types, but the `Radius.Data/*` types used by PostgreSQL and SQL Server live in [`radius-project/resource-types-contrib`](https://github.com/radius-project/resource-types-contrib) and are installed per cluster. Registering the type with the control plane is not sufficient on its own — the Bicep compiler needs the type as well, otherwise the resource compiles to a classic ARM resource (`BCP081: ... does not have types available`) and `rad deploy` reports *"Azure deployment failed, please ensure you have configured an Azure provider with your Radius environment"*:
+
+```shell
+curl -fsSLO https://raw.githubusercontent.com/radius-project/resource-types-contrib/main/Data/postgreSqlDatabases/postgreSqlDatabases.yaml
+
+# 1. Register the type with the Radius control plane.
+rad resource-type create postgreSqlDatabases --from-file postgreSqlDatabases.yaml
+
+# 2. Give the Bicep compiler the same type, and import it from the generated app.bicep
+#    (`extension aspireudt`) with a matching entry in the generated bicepconfig.json.
+rad bicep publish-extension --from-file postgreSqlDatabases.yaml --target ./aspire-udt.tgz
+```
+
 Referencing a backing resource that is deployed to a *different* Radius environment fails the publish with `ASPIRERADIUS060`: another environment's recipe outputs are not reachable from the generated Bicep. Deploy the consumer and the backing resource to the same environment. The same failure surfaces from the Kubernetes, Azure Container Apps, and Azure App Service publishers when *they* reference a Radius-owned backing resource, as the public `RadiusBackingResourceEndpointException`.
 
 ### Diagnostics
