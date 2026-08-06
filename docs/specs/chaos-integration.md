@@ -2,6 +2,8 @@
 
 **Status:** Proposed contribution-oriented incubation, August 2026.
 
+## Summary
+
 This document proposes bringing the piloted `Aspire.Hosting.Chaos` experience into the Aspire ecosystem as a first-class hosting integration. It is not an Aspire roadmap or repository-ownership commitment. Product management has expressed enthusiastic support for the technical direction and for exploring CLI extensibility, while repository placement, architecture, and engineering ownership remain maintainer decisions.
 
 ## Decision summary
@@ -48,7 +50,7 @@ This proposal intentionally applies chaos to DCP. DCP does not support fault inj
 - Whether Gateway traffic proves database/container and `read|write|query` classification without request-body parsing; failure narrows Phase 1 to modeled container-level all-operations support.
 - Whether DCP can add stable per-reference listener identity without changing service-discovery values or breaking pooled connections.
 
-## Motivation and source context
+## Background and motivation
 
 The pilot addresses a practical inner-loop gap: applications often behave differently across developer hosts, Linux containers, and shared authenticated environments. Local fault injection can expose retry, timeout, idempotency, and partial-failure bugs before a developer needs a scarce shared environment.
 
@@ -56,7 +58,7 @@ Cosmos emulator Gateway faulting is a defining Phase 1 use case because it tests
 
 The Aspire discussion identified the existing service proxy as the right architectural direction, and subsequent product conversations supported exploring proxy-based fault handling and CLI extensibility. This remains **contribution-oriented incubation pending maintainer and engineering decisions**, not a shipping or repository-ownership commitment.
 
-## Goals
+## Design goals
 
 1. Provide zero-setup fault injection for eligible Aspire resources in Run mode.
 2. Make the complete Phase 1 policy model understandable as required `resource`, optional `fromResource`, resource-validated selectors such as Cosmos `operations`, and required typed `fault`.
@@ -85,7 +87,21 @@ The Aspire discussion identified the existing service proxy as the right archite
 - Replacing Azure Chaos Studio or other environment-level fault systems.
 - Making application code depend on a Chaos client library.
 
-## Current pilot
+## Terminology
+
+| Term | Meaning |
+| --- | --- |
+| Policy | One explicitly applied fault over one selected destination and caller scope until explicit removal |
+| Destination resource | The downstream Aspire resource named by required `resource` |
+| Caller scope | All callers when `fromResource` is omitted, or the one declared calling Aspire resource named by `fromResource` |
+| Logical profile | Stable versioned metadata inferred from the modeled destination, such as `http/v1` or `cosmos-gateway/v1`; never authored policy |
+| Fault catalog | The logical profile's closed discriminated union of supported fault types, parameters, constraints, and selectors |
+| Controller | The singleton `ChaosPolicyController`, authoritative for validation, desired state, acknowledgement, cleanup, and observations |
+| DCP proxy path | An internal protocol-aware path that enforces one controller revision; users never select it |
+| Control resource | The synthetic run-only `ChaosEnvironmentResource` that exposes commands, aggregate health, policy details, and row indicators |
+| Row indicator | A non-health Dashboard marker beside an affected resource name, published through `ResourceRowIndicatorSnapshot` |
+
+## Pilot baseline
 
 The pilot proves the end-to-end experience and provides useful invariants, but several details are incubation workarounds rather than the desired upstream design.
 
@@ -120,7 +136,7 @@ Pilot evidence includes:
 
 These paths are relative to the piloted Chaos repository, not this repository.
 
-## Relevant Aspire primitives
+## Existing Aspire contracts
 
 The proposal builds on current Aspire contracts rather than inventing parallel infrastructure.
 
@@ -170,9 +186,9 @@ The integration must not use obsolete `IDistributedApplicationLifecycleHook`. A 
 
 Today the main Resources grid renders the resource icon and name, lifecycle state and health-derived state icon, URLs, and actions. Highlighted properties and relationships appear only after opening resource details. Resource commands appear in the Actions column, and notifications can link to an action, but there is no general contract for a controller resource to place a compact indicator on another resource's main-grid row (`src/Aspire.Dashboard/Components/Pages/Resources.razor`, `ResourceNameDisplay.razor`, `StateColumnDisplay.razor`, and `ResourceDetails.razor`).
 
-Phase 1 therefore requires the small general-purpose `ResourceRowIndicatorSnapshot` contract described in [Dashboard visualization and MCP](#dashboard-visualization-and-mcp). Reusing lifecycle state or health would report false semantics, while a property or relationship alone would remain invisible in the main view.
+Phase 1 therefore requires the small general-purpose `ResourceRowIndicatorSnapshot` contract described in [Dashboard visualization](#dashboard-visualization). Reusing lifecycle state or health would report false semantics, while a property or relationship alone would remain invisible in the main view.
 
-## Proposed architecture
+## Architecture
 
 ```mermaid
 flowchart LR
@@ -681,7 +697,7 @@ public Task<IAsyncDisposable> ApplyLatencyAsync(
 
 Fixture teardown and AppHost disposal provide final cleanup boundaries. They do not replace per-test lease disposal or serialization.
 
-## Dashboard visualization and MCP
+## Dashboard visualization
 
 The dashboard must make active fault injection obvious in the main Resources view. A developer should not need to open the synthetic chaos resource, inspect details or logs, or remember that a test installed a policy to understand why a resource is delayed or failing.
 
@@ -826,7 +842,7 @@ Unresolved partial application, controller-liveness loss, and confirmed safety p
 
 Dashboard usage telemetry records indicator render counts by state, indicator activation, navigation target, and whether scope is all-callers, caller-specific, or inherited Cosmos. It does not include authored parameter values, policy bodies, resource connection data, or internal proxy identity. A persistent application-wide active-chaos banner remains optional Phase 2 work; it is not needed to satisfy Phase 1 because the affected main rows are always marked.
 
-### MCP
+## MCP UX
 
 MCP uses the existing `execute_resource_command` tool against the same commands and supplies the same canonical typed JSON policy payload as CLI file/stdin input. It is not a privileged DCP client and does not receive an independent policy store or schema.
 
@@ -1039,7 +1055,20 @@ Priority, composition, and effect overlap rules would immediately become part of
 
 This could provide polished syntax early, but it would make correctness depend on extension loading and duplicate the resource-command path. Rejected. A future alias may use the same control plane.
 
-## Phased delivery
+## Risks and mitigations
+
+| Risk | Mitigation or release gate |
+| --- | --- |
+| DCP does not provide a compatible live fault-control contract | Review capability, desired-state, acknowledgement, liveness, and status contracts in Phase 0; use YARP only as a conformance harness, not product topology |
+| Caller-specific routing changes service discovery or fails on pooled connections | Do not ship `fromResource` until stable eager per-reference identity, unchanged service-discovery values, multi-reference atomicity, and warmed-pool isolation are proven |
+| Cosmos traffic cannot be classified safely or TLS trust cannot be established cross-platform | Remove account/database or operation selectors as specified by the closed-matrix fallback; reject unsupported modes rather than silently no-op |
+| Proxy interception adds unacceptable pass-through overhead or semantic drift | Gate default-on availability on agreed semantic and performance budgets; otherwise require process/run opt-in |
+| Partial apply, controller loss, or proxy restart strands an unexpected fault | Require forward compensation, bounded acknowledgement, controller-liveness pass-through, and full-snapshot reconciliation |
+| Dashboard visibility corrupts workload lifecycle or health semantics | Use the bounded row-indicator contract; keep workload state and health untouched and attach reconciliation health only to the control resource |
+| Dashboard shows a stale Active marker after disconnect, removal, or restart | Replace the publisher's complete indicator set by resource UID and snapshot version, invalidate active styling on disconnect, and never restore from browser storage |
+| The v1 policy surface grows into a generic proxy or campaign language | Keep the shipping matrix, authored fields, conflict rules, and non-goals closed; require a separately reviewed profile or future design for additions |
+
+## Delivery phases
 
 ### Phase 0: proof spikes and maintainer decisions
 
@@ -1126,7 +1155,7 @@ This could provide polished syntax early, but it would make correctness depend o
 | Testing package shape | Keep the convenience API with the integration if dependency-safe | Project-reference and public API review |
 | Campaigns | Aspire may eventually own safe reproducible execution | Separate design with crash cleanup and reproducibility evidence |
 
-## Acceptance criteria for an implementation proposal
+## Acceptance criteria
 
 Phase 1 must not release until the following are demonstrated:
 
@@ -1171,7 +1200,7 @@ Phase 1 must not release until the following are demonstrated:
 39. Every indicator is keyboard focusable, understandable without color, has a sanitized expanded tooltip, and navigates to the control resource with the matching policy or aggregate group focused.
 40. The synthetic chaos resource provides aggregate health, policy details, observations, commands, and recovery; it is not the only place a user can discover that fault behavior affects a workload.
 
-## Source map
+## Implementation and source map
 
 | Concern | Aspire source |
 | --- | --- |
