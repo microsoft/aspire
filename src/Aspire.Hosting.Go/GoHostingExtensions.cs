@@ -692,7 +692,7 @@ public static class GoHostingExtensions
     /// </summary>
     /// <typeparam name="T">The type of the Go application resource.</typeparam>
     /// <param name="builder">The resource builder for the Go application.</param>
-    /// <param name="options">The options that configure the Delve server.</param>
+    /// <param name="options">The options that configure the Delve server. When <see langword="null"/>, the default options are used.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
@@ -715,11 +715,11 @@ public static class GoHostingExtensions
     [AspireExport]
     public static IResourceBuilder<T> WithDelveServer<T>(
         this IResourceBuilder<T> builder,
-        DelveServerOptions options)
+        DelveServerOptions? options = null)
         where T : GoAppResource
     {
         ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(options);
+        options ??= new DelveServerOptions();
 
         // WithDelveServer changes the resource into a headless Delve process that IDEs attach to
         // manually. Leaving the VS Code launch annotation in place would make DCP hand execution to

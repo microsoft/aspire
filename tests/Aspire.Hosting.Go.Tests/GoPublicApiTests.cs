@@ -426,15 +426,15 @@ public class GoPublicApiTests
     }
 
     [Fact]
-    public void WithDelveServerShouldThrowWhenOptionsIsNull()
+    public async Task WithDelveServerNullOptionsUseDefaults()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var app = builder.AddGoApp("api", builder.AppHostDirectory);
+        var app = builder.AddGoApp("api", builder.AppHostDirectory)
+            .WithDelveServer(options: null);
 
-        var action = () => app.WithDelveServer(options: null!);
+        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
 
-        var exception = Assert.Throws<ArgumentNullException>(action);
-        Assert.Equal("options", exception.ParamName);
+        Assert.Equal(["--headless=true", "--listen=127.0.0.1:2345", "--api-version=2", "debug", "."], args);
     }
 
     [Fact]
