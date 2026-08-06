@@ -75,8 +75,8 @@ checkout:
   # with `fatal: Needed a single revision` because the branch only exists in the
   # workspace (microsoft/aspire#18319, run 27765082872). The manifest already
   # maps `microsoft/aspire.dev -> path="."` (the workspace) here, so a mirror is
-  # not needed for the handler to rediscover the target repo. The safe-outputs
-  # job keeps its own separate `_repos/aspire.dev` checkout for bundle apply.
+  # not needed for the handler to rediscover the target repo. The compiler-generated
+  # safe-outputs job keeps its own `_repos/aspire.dev` checkout for bundle apply.
   - repository: microsoft/aspire.dev
     # gh-aw v0.85+ otherwise places cross-repository checkouts in a directory
     # named after the repository, but this workflow authors docs at workspace root.
@@ -129,37 +129,13 @@ safe-outputs:
     private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
     owner: "microsoft"
     repositories: ["aspire.dev", "aspire"]
+  # gh-aw generates the target-repository checkout required by create-pull-request.
+  # An additional actions/checkout step would trigger https://github.com/github/gh-aw/issues/50905
+  # in v0.85.4 and downgrade the app token from contents: write to contents: read.
   steps:
     - name: Set safe-output patch base fallback
       id: resolve-target
       run: echo "branch=main" >> "${GITHUB_OUTPUT}"
-    - name: Mirror target repo checkout
-      if: contains(needs.agent.outputs.output_types, 'create_pull_request')
-      uses: actions/checkout@v6.0.2
-      with:
-        repository: microsoft/aspire.dev
-        # Seed the mirrored workspace at aspire.dev main. The safe-outputs
-        # handler will fetch and use the agent-provided `base` override when
-        # creating the PR, restricted by `allowed-base-branches` below.
-        ref: main
-        token: ${{ steps.safe-outputs-app-token.outputs.token }}
-        persist-credentials: false
-        path: _repos/aspire.dev
-        fetch-depth: 1
-    - name: Configure mirrored target repo Git credentials
-      if: contains(needs.agent.outputs.output_types, 'create_pull_request')
-      working-directory: _repos/aspire.dev
-      env:
-        REPO_NAME: "microsoft/aspire.dev"
-        SERVER_URL: ${{ github.server_url }}
-        GIT_TOKEN: ${{ steps.safe-outputs-app-token.outputs.token }}
-      run: |
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
-        git config --global user.name "github-actions[bot]"
-        git config --global am.keepcr true
-        SERVER_URL_STRIPPED="${SERVER_URL#https://}"
-        git remote set-url origin "https://x-access-token:${GIT_TOKEN}@${SERVER_URL_STRIPPED}/${REPO_NAME}.git"
-        echo "Mirrored checkout configured with standard GitHub Actions identity"
   create-pull-request:
     title-prefix: "[docs] "
     labels: [docs-from-code]
