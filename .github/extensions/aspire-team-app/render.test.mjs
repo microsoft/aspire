@@ -4,9 +4,16 @@ import test from "node:test";
 
 import { APP_JS, STYLES } from "./render.mjs";
 
-test("renderer theme styles follow canvas tokens with accessible light fallbacks", () => {
-  assert.match(STYLES, /--bg: var\(--bgColor-default, var\(--background-color-default, #ffffff\)\)/);
-  assert.match(STYLES, /--fg: var\(--fgColor-default, var\(--text-color-default, #1f2328\)\)/);
+test("renderer follows canvas theme tokens and falls back to the system color scheme", () => {
+  assert.match(STYLES, /--bg: var\(--background-color-default, var\(--fallback-bg\)\)/);
+  assert.match(STYLES, /--fg: var\(--text-color-default, var\(--fallback-fg\)\)/);
+  assert.match(STYLES, /--muted: var\(--text-color-muted, var\(--fallback-muted\)\)/);
+  assert.match(STYLES, /--border: var\(--border-color-default, var\(--fallback-border\)\)/);
+  assert.match(STYLES, /--focus: var\(--color-focus-outline, var\(--fallback-focus\)\)/);
+  assert.match(STYLES, /--white: var\(--color-white, #ffffff\)/);
+  assert.match(STYLES, /@media \(prefers-color-scheme: dark\) \{[\s\S]*?--fallback-bg: #0d1117/);
+  assert.match(STYLES, /:root\[data-color-mode="light"\] \{[\s\S]*?--fallback-bg: #ffffff/);
+  assert.match(STYLES, /:root\[data-color-mode="dark"\] \{[\s\S]*?--fallback-bg: #0d1117/);
   assert.match(STYLES, /--surface: color-mix\(in srgb, var\(--bg\), var\(--fg\) 5%\)/);
   assert.match(STYLES, /data-color-mode="light".*color-scheme: light/);
   assert.match(STYLES, /data-color-mode="dark".*color-scheme: dark/);

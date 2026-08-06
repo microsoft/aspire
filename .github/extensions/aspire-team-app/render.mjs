@@ -51,22 +51,28 @@ export const HTML = `<!doctype html>
 export const STYLES = `
 :root {
   color-scheme: light dark;
-  /* Primer primitive first, then the canvas host's older vars, then a hex floor.
-     https://primer.style/foundations/primitives/color */
-  --bg: var(--bgColor-default, var(--background-color-default, #ffffff));
+  --fallback-bg: #ffffff;
+  --fallback-fg: #1f2328;
+  --fallback-muted: #656d76;
+  --fallback-border: #d0d7de;
+  --fallback-focus: #0969da;
+
+  /* The canvas runtime normally mirrors these documented semantic tokens for the active host
+     theme. The fallbacks cover standalone rendering and hosts that omit the theme payload. */
+  --bg: var(--background-color-default, var(--fallback-bg));
   --surface: color-mix(in srgb, var(--bg), var(--fg) 5%);
   --surface-2: color-mix(in srgb, var(--bg), var(--fg) 7%);
   --surface-3: color-mix(in srgb, var(--bg), var(--fg) 10%);
   --card: color-mix(in srgb, var(--bg), var(--fg) 4%);
   --card-hover: color-mix(in srgb, var(--bg), var(--fg) 8%);
   --head-hover: color-mix(in srgb, var(--fg) 8%, transparent);
-  --fg: var(--fgColor-default, var(--text-color-default, #1f2328));
-  --muted: var(--fgColor-muted, var(--text-color-muted, #656d76));
-  --border: var(--borderColor-default, var(--border-color-default, #d0d7de));
+  --fg: var(--text-color-default, var(--fallback-fg));
+  --muted: var(--text-color-muted, var(--fallback-muted));
+  --border: var(--border-color-default, var(--fallback-border));
   --border-soft: color-mix(in srgb, var(--border), transparent 35%);
   --border-strong: color-mix(in srgb, var(--border), var(--fg) 22%);
-  --focus: var(--focus-outlineColor, var(--color-focus-outline, #0969da));
-  --white: var(--fgColor-onEmphasis, var(--color-white, #fff));
+  --focus: var(--color-focus-outline, var(--fallback-focus));
+  --white: var(--color-white, #ffffff);
 
   /* Brand purple - reserved for the brand mark, PR identity, and the loading accent.
      Maps to Primer's "done" (purple) role. */
@@ -99,8 +105,34 @@ export const STYLES = `
   --radius: 6px;
 }
 
-:root[data-color-mode="light"], body[data-color-mode="light"] { color-scheme: light; }
-:root[data-color-mode="dark"], body[data-color-mode="dark"] { color-scheme: dark; }
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fallback-bg: #0d1117;
+    --fallback-fg: #f0f6fc;
+    --fallback-muted: #8c959f;
+    --fallback-border: #30363d;
+    --fallback-focus: #58a6ff;
+  }
+}
+
+:root[data-color-mode="light"] {
+  color-scheme: light;
+  --fallback-bg: #ffffff;
+  --fallback-fg: #1f2328;
+  --fallback-muted: #656d76;
+  --fallback-border: #d0d7de;
+  --fallback-focus: #0969da;
+}
+body[data-color-mode="light"] { color-scheme: light; }
+:root[data-color-mode="dark"] {
+  color-scheme: dark;
+  --fallback-bg: #0d1117;
+  --fallback-fg: #f0f6fc;
+  --fallback-muted: #8c959f;
+  --fallback-border: #30363d;
+  --fallback-focus: #58a6ff;
+}
+body[data-color-mode="dark"] { color-scheme: dark; }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
