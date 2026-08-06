@@ -8,7 +8,7 @@ This document proposes bringing the piloted `Aspire.Hosting.Chaos` experience in
 
 ### Direction established by this proposal
 
-- Every Phase 1 policy has two universal required fields: **resource + fault**. The controller resolves `resource`, infers a stable versioned logical profile, and validates `fault.type`, its closed parameters, and any typed selectors against that profile's catalog.
+- Every Phase 1 policy has two universal required fields: **resource + fault**. The controller resolves `resource`, infers a stable versioned logical profile, and uses that profile to select a closed, versioned `fault` discriminated union.
 - A policy applies exactly one fault to the selected scope until explicitly removed. Ordinary resources select all inbound traffic; modeled Cosmos account, database, or container resources may additionally select `read`, `write`, or `query` operations.
 - The logical profile is derived metadata, not authored policy and not a CLR type. Aspire compiles it to DCP's internal proxy topology and matcher/response templates. Policy authors never select a profile, endpoint, route, raw HTTP method, path, header, percentage, seed, policy lifetime, priority, effect order, or policy ID.
 - Phase 1 admits a resource only when DCP can apply the requested fault unambiguously and completely across every relevant proxied path. Otherwise, application fails with an actionable resource eligibility reason.
@@ -231,7 +231,7 @@ If any condition fails, the controller rejects the apply before activation. Diag
 - multiple relevant paths cannot be covered atomically; or
 - the selected DCP version does not advertise the required capability.
 
-`list-resources` and `describe-resource` resolve the app model and report the inferred logical profile, eligible faults, required parameters, and actionable ineligibility reasons. A developer does not need to guess resource names or understand CLR types, listeners, directed references, or address allocation. Each row shows:
+`list-resources` and `describe-resource` resolve the app model and report the inferred logical profile, eligible faults, required and optional parameters, and actionable ineligibility reasons. A developer does not need to guess resource names or understand CLR types, listeners, directed references, or address allocation. Each row shows:
 
 | Column | Purpose |
 | --- | --- |
@@ -239,7 +239,7 @@ If any condition fails, the controller rejects the apply before activation. Diag
 | Modeled resource type | Discoverability context such as project, container, or `AzureCosmosDBContainerResource`; never authored policy |
 | Logical profile/version | Stable controller contract such as `http/v1` or `cosmos-gateway/v1`; inferred rather than authored and not a CLR type |
 | Parent hierarchy | The account -> database -> container chain, when the resource has one |
-| Supported faults | Closed fault types and required parameters the controller and DCP can enforce for this resource today |
+| Supported faults | Closed fault types plus required and optional member parameters the controller and DCP can enforce for this resource today |
 | Eligibility reason | Why the resource is eligible, or the specific actionable reason it is not |
 
 For example:
@@ -300,9 +300,9 @@ Every Phase 1 policy has these universal fields:
 | Field | Meaning |
 | --- | --- |
 | `resource` | Required downstream Aspire resource name; the fault applies on requests entering this resource from every caller |
-| `fault` | Required single fault |
+| `fault` | Required member of the inferred profile's discriminated union; `fault.type` is the discriminator |
 
-The controller resolves `resource` against the AppHost model before interpreting `fault`. It infers a stable, versioned logical profile, then validates `fault.type` and that fault's closed parameter object against the profile's catalog. Authors do not provide `resourceType`, `profile`, or a generic parameter bag. The inferred profile is not a CLR type and may evolve only through explicit catalog versioning.
+The controller resolves `resource` against the AppHost model before interpreting `fault`. It infers a stable, versioned logical profile, then uses `fault.type` to select one member schema from that profile's closed discriminated union. Each member has explicit required and optional typed parameters. Authors do not provide `resourceType`, `profile`, or a generic parameter bag. The inferred profile is not a CLR type and may evolve only through explicit catalog versioning.
 
 Phase 1 initially defines:
 
@@ -311,13 +311,15 @@ Phase 1 initially defines:
 | `http/v1` | `latency` with required bounded `amount`; `httpStatus` with required valid `statusCode` |
 | `cosmos-gateway/v1` | `throttle` with optional bounded `retryAfter` and a catalog-defined default, compiled to a protocol-correct Cosmos 429 response |
 
+Catalog membership is profile-specific. Resolving ordinary `inventory` to `http/v1` permits the HTTP members above, while resolving a modeled Cosmos account, database, or container to `cosmos-gateway/v1` permits `throttle`; no fault type or parameter schema implicitly carries across profiles.
+
 The Cosmos profile also permits optional `operations`, whose allowed values are `read`, `write`, and `query`; omission means all operations in the selected Cosmos scope. Supplying `operations` for any non-Cosmos resource is rejected. If the operation-classification release gate fails, the fallback Cosmos profile supports modeled container-level all-operations faulting and rejects `operations` rather than guessing.
 
 Matcher, percentage, seed, duration, priority, endpoint, source, `from`, `resourceType`, `profile`, and campaign fields are not added to Phase 1. Generic HTTP method, path, header, body, or arbitrary fault-property matchers are explicitly rejected. Fields outside the universal schema or the inferred profile's closed selectors are rejected. Because `from` is a reserved future capability, Phase 1 rejects it with a specific directed-edge-capability-not-supported diagnostic rather than generic unknown-field wording.
 
 The controller generates an opaque policy ID after a successful apply. The ID is returned for later removal but is never user-authored policy content. Revision, ownership, proxy coverage, acknowledgement state, and liveness metadata remain internal.
 
-Fault-specific parameters exist only when defined by the inferred catalog and intrinsic to the fault. Unknown or missing parameters fail with an actionable diagnostic listing valid fault types and required parameters for the resolved resource.
+Fault-specific parameters exist only in their discriminated-union member schema. An unknown fault type, unknown parameter, or missing required parameter fails before activation with a diagnostic listing every valid fault type and its required and optional parameters for the resolved resource.
 
 ### Examples
 
@@ -403,7 +405,7 @@ The controller rejects a policy before activation whenever its identifiers do no
 | `resource` names something that does not exist in the current AppHost model | Rejected with an unknown-resource diagnostic |
 | `resource` names a Cosmos container that is only reached through EF Core and was never modeled with `AddContainer` | Rejected for container scope; `list-resources` also warns about the unmodeled container |
 | `operations` is supplied for a resource outside the Cosmos profile | Rejected; `operations` only has meaning for a Cosmos account, database, or container resource |
-| `fault.type` is not in the inferred resource catalog, or its closed parameters are missing or unknown | Rejected with the inferred logical profile/version plus valid fault types and required parameters, for example: `inventory uses http/v1; valid faults are latency(amount) and httpStatus(statusCode)` |
+| `fault.type` is not in the inferred resource catalog, or its member parameters are missing or unknown | Rejected with the inferred logical profile/version plus valid fault types and required/optional parameters, for example: `inventory uses http/v1; valid faults are latency(amount required) and httpStatus(statusCode required)` |
 | Authored input supplies `resourceType` or `profile` | Rejected; both are inferred metadata and never authored policy |
 | The Cosmos client uses Direct/TCP (RNTBD), or targets a real (non-emulator) account whose connection mode cannot be proven | Rejected as ineligible; the controller fails loudly rather than silently no-op |
 | `from` names a resource with no existing declared reference to `resource` | Rejected; the directed-edge capability only faults a reference the AppHost already declares, not an arbitrary caller/destination pair |
@@ -869,7 +871,7 @@ This could provide polished syntax early, but it would make correctness depend o
 - Use an explicit YARP-compatible engine only as a conformance harness if DCP is not available.
 - Review universal `resource + fault`, inferred versioned catalogs, and closed Cosmos `operations` with CLI, dashboard, MCP, and testing consumers.
 - Prove resource-to-logical-profile inference is deterministic, independent of CLR type names, and represented consistently in list, describe, canonical command output, dashboard, telemetry, and diagnostics.
-- Prove invalid resource/fault combinations list only valid fault types and required parameters for the inferred catalog.
+- Prove invalid resource/fault combinations list only valid discriminated-union members and their required/optional parameters for the inferred catalog.
 - Census modeled Cosmos account/database/container resources through public APIs and report EF Core or otherwise unmodeled container gaps.
 - Capture Cosmos emulator Gateway traffic and prove database/container plus `read|write|query` classification from URI, method, and headers without request-body parsing; if operation classification needs bodies, reject `operations` and retain modeled container-level all-operations support.
 - Prove Aspire-managed double-leg TLS trust across Windows, Linux, and macOS without disabling certificate validation on either leg.
@@ -923,7 +925,7 @@ This could provide polished syntax early, but it would make correctness depend o
 | Runtime persistence | None | Revisit only if restart use cases outweigh stale-fault risk |
 | Controller loss | Force pass-through after a fixed platform interval | Crash, disconnect, and recovery tests |
 | Dashboard extension | Existing resource surfaces first | User evidence that commands and telemetry are insufficient |
-| Logical fault catalogs | Infer stable versioned identifiers from the AppHost model; never author them | Compatibility review plus deterministic list/describe/canonical output and invalid-combination diagnostics |
+| Logical fault catalogs | Infer stable versioned identifiers from the AppHost model; never author them | Compatibility review of profile-specific discriminated unions plus deterministic list/describe/canonical output and invalid-combination diagnostics |
 | General HTTPS | Deferred outside the Cosmos profile | Separate cross-platform certificate identity, trust, and protocol proof |
 | Cosmos profile | Phase 1 modeled emulator Gateway HTTPS only; keep typed profile in Aspire and DCP generic | Resource hierarchy census, double-leg TLS trust, protocol-correct 429, warmed-client isolation, and loud rejection of bypass modes |
 | Cosmos operations | Phase 1 `read|write|query`; omit means all, contingent on classification proof | Prove URI/method/header classification; if bodies are required, reject the field and retain container-level all-operations support |
@@ -936,7 +938,7 @@ This could provide polished syntax early, but it would make correctness depend o
 
 Phase 1 must not release until the following are demonstrated:
 
-1. A reader can explain the complete Phase 1 authored policy as universal `resource + fault`; the controller infers a stable versioned logical catalog before validating fault type, closed parameters, and selectors.
+1. A reader can explain the complete Phase 1 authored policy as universal `resource + fault`; the controller infers a stable versioned logical profile whose closed `fault.type` discriminated union defines the valid typed member schemas.
 2. Existing AppHost code requires no chaos-specific setup.
 3. CLI, dashboard, MCP, and tests all mutate the same controller instance.
 4. Applying and disposing a test lease each await acknowledgement from every affected DCP proxy path.
@@ -962,7 +964,7 @@ Phase 1 must not release until the following are demonstrated:
 24. Cosmos `operations` ships only if Gateway traffic proves profile-defined typed classification without body parsing; otherwise Phase 1 rejects the field and supports modeled container-level all-operations throttling.
 25. Cosmos Gateway proofs demonstrate protocol-correct 429 retry behavior and selected-container write throttling without affecting reads or sibling containers, with warmed `CosmosClient` connections and cross-platform TLS validation intact; Direct/RNTBD, real-account, and unprovable modes fail eligibility rather than no-op.
 26. Authored policy rejects `resourceType`, `profile`, and arbitrary parameter bags; logical profile/version appears only as derived list, describe, canonical result, dashboard, telemetry, and diagnostic metadata.
-27. Invalid resource/fault combinations report the inferred profile/version, valid fault types, and required parameters, while CLI and dashboard resolve the resource before offering fault controls.
+27. Invalid resource/fault combinations report the inferred profile/version, valid fault types, and each member's required/optional parameters, while CLI and dashboard resolve the resource before offering fault controls.
 
 ## Source map
 
