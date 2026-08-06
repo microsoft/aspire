@@ -18,6 +18,7 @@ export type Capability =
     | 'node' // Support for running Node.js projects
     | 'bun' // Support for running Bun projects
     | 'oven.bun-vscode' // Bun debug adapter extension identifier
+    | 'deno' // Support for running Deno projects (built-in to VS Code via js-debug)
     | 'browser' // Support for browser debugging (built-in to VS Code via js-debug)
     | 'maui' // Support for running .NET MAUI projects
     | 'ms-dotnettools.dotnet-maui' // MAUI debug adapter extension identifier
@@ -101,6 +102,9 @@ export function getSupportedCapabilities(): Capabilities {
         capabilities.push("bun");
         capabilities.push("oven.bun-vscode");
     }
+
+    // Deno debugging uses VS Code's built-in js-debug, so no extension probe is required.
+    capabilities.push("deno");
 
     if (isMauiInstalled()) {
         capabilities.push("maui");

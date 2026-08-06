@@ -51,7 +51,30 @@ public static class OtlpConfigurationExtensions
         RegisterOtlpEnvironment(resource, configuration, environment);
     }
 
-    private static void RegisterOtlpEnvironment(IResource resource, IConfiguration configuration, IHostEnvironment environment)
+    /// <summary>
+    /// Configures OTLP export only when the required collector endpoint is available.
+    /// </summary>
+    internal static IResourceBuilder<T> WithOtlpExporterIfEndpointAvailable<T>(
+        this IResourceBuilder<T> builder,
+        OtlpProtocol protocol) where T : IResourceWithEnvironment
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Resource.Annotations.Add(new OtlpExporterAnnotation { RequiredProtocol = protocol });
+        RegisterOtlpEnvironment(
+            builder.Resource,
+            builder.ApplicationBuilder.Configuration,
+            builder.ApplicationBuilder.Environment,
+            skipIfEndpointUnavailable: true);
+
+        return builder;
+    }
+
+    private static void RegisterOtlpEnvironment(
+        IResource resource,
+        IConfiguration configuration,
+        IHostEnvironment environment,
+        bool skipIfEndpointUnavailable = false)
     {
         // Configure OpenTelemetry in projects using environment variables.
         // https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/configuration/sdk-environment-variables.md
@@ -80,6 +103,12 @@ public static class OtlpConfigurationExtensions
             }
             else
             {
+                if (skipIfEndpointUnavailable &&
+                    !HasConfiguredOtlpEndpoint(configuration, otlpExporterAnnotation.RequiredProtocol))
+                {
+                    return;
+                }
+
                 // Fall back to resolving from configuration. This is the case when the dashboard resource
                 // is not in the model (e.g. in tests or publish mode).
                 var (url, protocol) = OtlpEndpointResolver.ResolveOtlpEndpoint(configuration, otlpExporterAnnotation.RequiredProtocol);
@@ -119,6 +148,23 @@ public static class OtlpConfigurationExtensions
                 context.EnvironmentVariables[KnownOtelConfigNames.InstrumentationGenAiCaptureMessageContent] = "true";
             }
         }));
+    }
+
+    private static bool HasConfiguredOtlpEndpoint(IConfiguration configuration, OtlpProtocol? requiredProtocol)
+    {
+        var grpcEndpoint = configuration.GetString(
+            KnownConfigNames.DashboardOtlpGrpcEndpointUrl,
+            KnownConfigNames.Legacy.DashboardOtlpGrpcEndpointUrl);
+        var httpEndpoint = configuration.GetString(
+            KnownConfigNames.DashboardOtlpHttpEndpointUrl,
+            KnownConfigNames.Legacy.DashboardOtlpHttpEndpointUrl);
+
+        return requiredProtocol switch
+        {
+            OtlpProtocol.Grpc => !string.IsNullOrWhiteSpace(grpcEndpoint),
+            OtlpProtocol.HttpProtobuf or OtlpProtocol.HttpJson => !string.IsNullOrWhiteSpace(httpEndpoint),
+            _ => !string.IsNullOrWhiteSpace(grpcEndpoint) || !string.IsNullOrWhiteSpace(httpEndpoint),
+        };
     }
 
     /// <summary>

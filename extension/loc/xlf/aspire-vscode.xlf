@@ -205,6 +205,9 @@
     <trans-unit id="aspire-vscode.strings.debugProject">
       <source xml:lang="en">Debug {0}</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.denoTaskDebuggingUnsupported">
+      <source xml:lang="en">Deno task launches cannot be debugged automatically because Deno does not accept inspector flags on the task subcommand. Use a direct Deno entrypoint for Aspire debugging, or configure and launch a Deno task that starts with an inspector flag manually.</source>
+    </trans-unit>
     <trans-unit id="command.deploy">
       <source xml:lang="en">Deploy app</source>
     </trans-unit>
@@ -294,6 +297,9 @@
     </trans-unit>
     <trans-unit id="command.settings">
       <source xml:lang="en">Extension settings</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.denoInspectorPortAllocationFailed">
+      <source xml:lang="en">Failed to allocate a Deno inspector port.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.failedToConfigureLaunchJson">
       <source xml:lang="en">Failed to configure launch.json: {0}.</source>

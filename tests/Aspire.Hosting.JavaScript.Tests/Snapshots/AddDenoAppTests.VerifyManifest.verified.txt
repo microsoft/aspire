@@ -1,0 +1,24 @@
+﻿{
+  "type": "executable.v0",
+  "workingDirectory": ".",
+  "command": "deno",
+  "args": [
+    "run",
+    "-A",
+    "main.ts"
+  ],
+  "env": {
+    "OTEL_DENO": "true",
+    "NODE_ENV": "production",
+    "PORT": "{denoapp.bindings.http.targetPort}"
+  },
+  "bindings": {
+    "http": {
+      "scheme": "http",
+      "protocol": "tcp",
+      "transport": "http",
+      "port": 5033,
+      "targetPort": 8000
+    }
+  }
+}

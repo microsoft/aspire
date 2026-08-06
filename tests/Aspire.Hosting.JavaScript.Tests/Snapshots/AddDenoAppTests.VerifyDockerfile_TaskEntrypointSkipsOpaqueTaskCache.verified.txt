@@ -1,0 +1,22 @@
+﻿FROM denoland/deno:2.9.0 AS build
+
+ENV DENO_DIR=/deno-dir
+
+WORKDIR /app
+COPY . .
+
+RUN mkdir -p /deno-dir
+
+FROM denoland/deno:2.9.0 AS runtime
+
+ENV DENO_DIR=/deno-dir
+
+WORKDIR /app
+COPY --from=build --chown=deno:deno /app /app
+COPY --from=build --chown=deno:deno /deno-dir /deno-dir
+
+ENV NODE_ENV=production
+
+USER deno
+
+ENTRYPOINT ["deno","task","--config","deno.json","--lock","custom.lock","--node-modules-dir=auto","--unstable-sloppy-imports","start"]

@@ -99,6 +99,8 @@
   "aspire-vscode.strings.disconnectingFromSession": "Disconnecting from Aspire debug session... Child processes will be stopped.",
   "aspire-vscode.strings.processExitedWithCode": "Process exited with code {0}.",
   "aspire-vscode.strings.failedToStartPythonProgram": "Failed to start Python program: {0}.",
+  "aspire-vscode.strings.denoInspectorPortAllocationFailed": "Failed to allocate a Deno inspector port.",
+  "aspire-vscode.strings.denoTaskDebuggingUnsupported": "Deno task launches cannot be debugged automatically because Deno does not accept inspector flags on the task subcommand. Use a direct Deno entrypoint for Aspire debugging, or configure and launch a Deno task that starts with an inspector flag manually.",
   "aspire-vscode.strings.csharpSupportNotEnabled": "C# support is not enabled in this workspace. This project should have started through the Aspire CLI.",
   "aspire-vscode.strings.failedToStartProject": "Failed to start project: {0}.",
   "aspire-vscode.strings.dcpServerNotInitialized": "DCP server not initialized - cannot forward debug output.",

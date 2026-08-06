@@ -52,6 +52,8 @@ export const launchingWithAppHost = (sessionType: 'run' | 'debug', appHostPath: 
 export const disconnectingFromSession = vscode.l10n.t('Disconnecting from Aspire debug session... Child processes will be stopped.');
 export const processExitedWithCode = (code: number | string) => vscode.l10n.t('Process exited with code {0}.', code);
 export const failedToStartPythonProgram = (errorMessage: string) => vscode.l10n.t('Failed to start Python program: {0}.', errorMessage);
+export const denoInspectorPortAllocationFailed = vscode.l10n.t('Failed to allocate a Deno inspector port.');
+export const denoTaskDebuggingUnsupported = vscode.l10n.t('Deno task launches cannot be debugged automatically because Deno does not accept inspector flags on the task subcommand. Use a direct Deno entrypoint for Aspire debugging, or configure and launch a Deno task that starts with an inspector flag manually.');
 export const csharpSupportNotEnabled = vscode.l10n.t('C# support is not enabled in this workspace. This project should have started through the Aspire CLI.');
 export const failedToStartProject = (errorMessage: string) => vscode.l10n.t('Failed to start project: {0}.', errorMessage);
 export const dcpServerNotInitialized = vscode.l10n.t('DCP server not initialized - cannot forward debug output.');
@@ -158,6 +160,8 @@ export const goDisplayName = (program: string) => `Go: ${program}`;
 export const goLabel = 'Go';
 export const bunDisplayName = (script: string) => `Bun: ${script}`;
 export const bunLabel = 'Bun';
+export const denoDisplayName = (script: string) => `Deno: ${script}`;
+export const denoLabel = 'Deno';
 export const nodeDisplayName = (script: string) => `Node.js: ${script}`;
 export const nodeLabel = 'Node.js';
 export const dontShowAgainLabel = vscode.l10n.t("Don't Show Again");

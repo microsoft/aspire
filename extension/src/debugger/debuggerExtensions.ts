@@ -11,6 +11,7 @@ import { browserDebuggerExtension } from "./languages/browser";
 import { azureFunctionsDebuggerExtension } from "./languages/azureFunctions";
 import { goDebuggerExtension } from "./languages/go";
 import { bunDebuggerExtension } from "./languages/bun";
+import { denoDebuggerExtension } from "./languages/deno";
 import { mauiDebuggerExtension } from "./languages/maui";
 import { isDirectory } from "../utils/io";
 import { waitForRunStartIdle } from "./runStartRegistry";
@@ -95,6 +96,8 @@ export function getResourceDebuggerExtensions(): ResourceDebuggerExtension[] {
     if (isBunInstalled()) {
         extensions.push(bunDebuggerExtension);
     }
+
+    extensions.push(denoDebuggerExtension);
 
     if (isMauiInstalled()) {
         extensions.push(mauiDebuggerExtension);
