@@ -5,13 +5,14 @@ using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Dashboard.Otlp.Storage;
 
 /// <summary>
 /// Partial class containing push-based streaming (watcher) functionality.
 /// </summary>
-public sealed partial class TelemetryRepository
+public sealed partial class InMemoryTelemetryRepository
 {
     // Watcher fields are defined in the main file:
     // private readonly object _watchersLock;
@@ -55,7 +56,7 @@ public sealed partial class TelemetryRepository
         {
             // Get existing spans directly using GetSpans, which applies all filters
             // (resource, traceId, hasError, telemetry filters, text fragments) at the query level.
-            var existingSpans = GetSpans(new GetSpansRequest
+            var existingSpans = await GetSpansAsync(new GetSpansRequest
             {
                 ResourceKeys = request.ResourceKeys,
                 StartIndex = 0,
@@ -64,7 +65,7 @@ public sealed partial class TelemetryRepository
                 TraceId = request.TraceId,
                 HasError = request.HasError,
                 TextFragments = request.TextFragments
-            });
+            }, cancellationToken).ConfigureAwait(false);
 
             // Track seen span IDs to deduplicate spans that arrive during the snapshot read.
             // Race condition: watcher is registered BEFORE GetSpans, so spans arriving during
@@ -146,14 +147,14 @@ public sealed partial class TelemetryRepository
         try
         {
             // Get existing logs snapshot (capped to prevent OOM)
-            var existingLogs = GetLogs(new GetLogsContext
+            var existingLogs = await GetLogsAsync(new GetLogsContext
             {
                 ResourceKeys = request.ResourceKeys,
                 StartIndex = 0,
                 Count = MaxWatcherSnapshotCount,
                 Filters = request.Filters,
                 TextFragments = request.TextFragments
-            });
+            }, cancellationToken).ConfigureAwait(false);
 
             // Track the highest log ID we've yielded to deduplicate
             long maxYieldedLogId = 0;

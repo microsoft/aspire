@@ -11,6 +11,7 @@ namespace Aspire.Dashboard.Model;
 public sealed class ConsoleLogsFetcher
 {
     private readonly IDashboardClient _dashboardClient;
+    private readonly DashboardDataSource _dataSource;
     private readonly ConsoleLogsManager _consoleLogsManager;
 
     public bool IsEnabled => _dashboardClient.IsEnabled;
@@ -18,11 +19,13 @@ public sealed class ConsoleLogsFetcher
     /// <summary>
     /// Initializes a new instance of the <see cref="ConsoleLogsFetcher"/> class.
     /// </summary>
+    /// <param name="dataSource">The selected dashboard run data source.</param>
     /// <param name="dashboardClient">The dashboard client.</param>
     /// <param name="consoleLogsManager">The console logs manager.</param>
-    public ConsoleLogsFetcher(IDashboardClient dashboardClient, ConsoleLogsManager consoleLogsManager)
+    public ConsoleLogsFetcher(DashboardDataSource dataSource, IDashboardClient dashboardClient, ConsoleLogsManager consoleLogsManager)
     {
         _dashboardClient = dashboardClient;
+        _dataSource = dataSource;
         _consoleLogsManager = consoleLogsManager;
     }
 
@@ -31,7 +34,10 @@ public sealed class ConsoleLogsFetcher
         var logEntries = new List<LogEntry>();
         var logParser = new LogParser(ConsoleColor.Black);
 
-        await foreach (var batch in _dashboardClient.GetConsoleLogs(resourceName, cancellationToken).ConfigureAwait(false))
+        // Export uses the persisted snapshot, which can omit logs that weren't captured by a demand-driven
+        // subscription. This is a known limitation; the historical Console Logs page displays a notice when
+        // logs aren't available for the selected run. See https://github.com/microsoft/aspire/issues/18823.
+        await foreach (var batch in _dataSource.ResourceRepository.GetConsoleLogs(resourceName, cancellationToken).ConfigureAwait(false))
         {
             foreach (var logLine in batch)
             {
@@ -60,7 +66,7 @@ public sealed class ConsoleLogsFetcher
             throw new InvalidOperationException("Can't fetch console logs when the dashboard client is not enabled.");
         }
 
-        var resources = _dashboardClient.GetResources().Where(r => resourceNames.Contains(r.Name)).ToList();
+        var resources = _dataSource.ResourceRepository.GetResources().Where(r => resourceNames.Contains(r.Name)).ToList();
         var result = new Dictionary<string, List<LogEntry>>(StringComparer.OrdinalIgnoreCase);
 
         // Fetch logs for all resources in parallel

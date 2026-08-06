@@ -35,13 +35,18 @@
             return @<FluentMenuItem Id="@item.Id" Class="@item.Class" OnClick="() => HandleItemClicked(item)" Disabled="@item.IsDisabled" Role="@item.Role" Checked="@item.Checked" AdditionalAttributes="@additionalMenuItemAttributes" Label="@item.Text" MenuItems="@RenderNestedItems(item)">
                 @if (item.Icon != null)
                 {
-                    <span slot="start">
-                        <FluentIcon Value="@item.Icon" Style="vertical-align: text-bottom;" Width="16px" />
-                    </span>
+                    <FluentIcon Value="@item.Icon" Style="vertical-align: text-bottom;" Width="16px" Slot="@GetIconSlot(item.Role)" />
                 }
             </FluentMenuItem>;
         }
     }
+
+    private static string GetIconSlot(MenuItemRole? role) => role switch
+    {
+        MenuItemRole.MenuItemCheckbox => "checkbox-indicator",
+        MenuItemRole.MenuItemRadio => "radio-indicator",
+        _ => "start"
+    };
 
     private RenderFragment? RenderNestedItems(MenuButtonItem item)
     {

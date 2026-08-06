@@ -22,6 +22,7 @@ public class TestDashboardClient : IDashboardClient
     private readonly IList<ResourceViewModel>? _initialResources;
 
     public bool IsEnabled { get; }
+    public bool IsReadOnly { get; }
     public Task WhenConnected { get; }
     public string ApplicationName { get; } = "TestApp";
     public string? MinRequiredVersion => null;
@@ -41,9 +42,11 @@ public class TestDashboardClient : IDashboardClient
         Func<string, string, CommandViewModel, ExecuteResourceCommandOptions, CancellationToken, Task<ResourceCommandResponseViewModel>>? executeResourceCommand = null,
         Channel<WatchInteractionsRequestUpdate>? sendInteractionUpdateChannel = null,
         IList<ResourceViewModel>? initialResources = null,
-        Task? whenConnected = null)
+        Task? whenConnected = null,
+        bool isReadOnly = false)
     {
         IsEnabled = isEnabled ?? false;
+        IsReadOnly = isReadOnly;
         ApplicationName = applicationName ?? "TestApp";
         WhenConnected = whenConnected ?? Task.CompletedTask;
         _consoleLogsChannelProvider = consoleLogsChannelProvider;

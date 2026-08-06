@@ -13,6 +13,11 @@ namespace Aspire.Dashboard.Utils;
 
 internal static class DashboardUIHelpers
 {
+    // Virtualize represents unloaded rows with CSS spacers. Browser engines clamp very tall
+    // elements, causing the spacer observer to report inconsistent measurements and render forever.
+    // At the dashboard's 46px grid row height, 200,000 items use a 9.2 million pixel spacer.
+    public const int MaxVirtualizedItemCount = 200_000;
+
     public const string MessageBarSection = "MessagesTop";
 
     // Blazor SectionOutlet/SectionContent name used to teleport the current page's title
@@ -38,6 +43,8 @@ internal static class DashboardUIHelpers
     // If there is no count then default to a limit to avoid getting all data.
     // Given the size of rows on dashboard grids, 100 rows should always fill the grid on the screen.
     public const int DefaultDataGridResultCount = 100;
+
+    public static int GetVirtualizedItemCount(int totalItemCount) => Math.Min(totalItemCount, MaxVirtualizedItemCount);
 
     // Don't attempt to display more than 2 highlighted commands. Many commands will take up too much space.
     public const int MaxHighlightedCommands = 2;

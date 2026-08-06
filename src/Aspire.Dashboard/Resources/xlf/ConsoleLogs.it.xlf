@@ -47,6 +47,11 @@
         <target state="translated">Non eseguire il wrapping delle righe di log</target>
         <note />
       </trans-unit>
+      <trans-unit id="ConsoleLogsNotCapturedForRun">
+        <source>Console logs weren't captured for this run. Console logs are only captured if this page is visited while the AppHost is running.</source>
+        <target state="new">Console logs weren't captured for this run. Console logs are only captured if this page is visited while the AppHost is running.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ConsoleLogsPageTitle">
         <source>{0} console logs</source>
         <target state="translated">{0} log della console</target>

@@ -74,6 +74,12 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsNoLogsFound", resourceCulture);
             }
         }
+
+        public static string ConsoleLogsNotCapturedForRun {
+            get {
+                return ResourceManager.GetString("ConsoleLogsNotCapturedForRun", resourceCulture);
+            }
+        }
         
         public static string ConsoleLogsNoLogsMatchFilter {
             get {

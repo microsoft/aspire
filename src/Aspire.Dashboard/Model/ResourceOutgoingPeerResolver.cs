@@ -19,64 +19,84 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
     private static partial Regex HostRegex();
 
     private readonly ConcurrentDictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
-    private readonly CancellationTokenSource _watchContainersTokenSource = new();
-    private readonly List<ModelSubscription> _subscriptions = [];
+    private readonly ActivitySource _activitySource;
+    private readonly ILogger<ResourceOutgoingPeerResolver> _logger;
+    private readonly CancellationTokenSource _watchContainersTokenSource;
+    private readonly CancellationToken _watchContainersToken;
+    private readonly List<PeerChangesSubscription> _subscriptions = [];
     private readonly object _lock = new();
     private readonly Task? _watchTask;
 
-    public ResourceOutgoingPeerResolver(IDashboardClient resourceService)
+    public ResourceOutgoingPeerResolver(
+        IResourceRepository resourceRepository,
+        DashboardActivitySource activitySource,
+        ILogger<ResourceOutgoingPeerResolver> logger)
     {
-        if (!resourceService.IsEnabled)
+        _activitySource = activitySource.ActivitySource;
+        _logger = logger;
+        _watchContainersTokenSource = new();
+        _watchContainersToken = _watchContainersTokenSource.Token;
+
+        if (resourceRepository is IDashboardClient { IsEnabled: false })
         {
             return;
         }
 
-        _watchTask = Task.Run(async () =>
+        // This watcher lives for the lifetime of the resolver. Don't let the request or component that
+        // causes the resolver to be constructed become the parent of that long-running operation.
+        using (ExecutionContext.SuppressFlow())
         {
-            var (snapshot, subscription) = await resourceService.SubscribeResourcesAsync(_watchContainersTokenSource.Token).ConfigureAwait(false);
+            _watchTask = Task.Run(() => WatchResourcesAsync(resourceRepository));
+        }
+    }
 
-            if (snapshot.Length > 0)
+    private async Task WatchResourcesAsync(IResourceRepository resourceRepository)
+    {
+        var (snapshot, subscription) = await resourceRepository.SubscribeResourcesAsync(_watchContainersToken).ConfigureAwait(false);
+
+        if (snapshot.Length > 0)
+        {
+            foreach (var resource in snapshot)
             {
-                foreach (var resource in snapshot)
-                {
-                    var added = _resourceByName.TryAdd(resource.Name, resource);
-                    Debug.Assert(added, "Should not receive duplicate resources in initial snapshot data.");
-                }
-
-                await RaisePeerChangesAsync().ConfigureAwait(false);
+                var added = _resourceByName.TryAdd(resource.Name, resource);
+                Debug.Assert(added, "Should not receive duplicate resources in initial snapshot data.");
             }
 
-            await foreach (var changes in subscription.WithCancellation(_watchContainersTokenSource.Token).ConfigureAwait(false))
+            await RaisePeerChangesAsync().ConfigureAwait(false);
+        }
+
+        await foreach (var changes in subscription.WithCancellation(_watchContainersToken).ConfigureAwait(false))
+        {
+            using var activity = _activitySource.StartActivity("Process resource subscription changes", ActivityKind.Consumer);
+
+            var hasPeerRelevantChanges = false;
+
+            foreach (var (changeType, resource) in changes)
             {
-                var hasPeerRelevantChanges = false;
-
-                foreach (var (changeType, resource) in changes)
+                if (changeType == ResourceViewModelChangeType.Upsert)
                 {
-                    if (changeType == ResourceViewModelChangeType.Upsert)
-                    {
-                        if (!_resourceByName.TryGetValue(resource.Name, out var existingResource) || 
-                            !ArePeerRelevantPropertiesEquivalent(resource, existingResource))
-                        {
-                            hasPeerRelevantChanges = true;
-                        }
-
-                        _resourceByName[resource.Name] = resource;
-                    }
-                    else if (changeType == ResourceViewModelChangeType.Delete)
+                    if (!_resourceByName.TryGetValue(resource.Name, out var existingResource) ||
+                        !ArePeerRelevantPropertiesEquivalent(resource, existingResource))
                     {
                         hasPeerRelevantChanges = true;
-
-                        var removed = _resourceByName.TryRemove(resource.Name, out _);
-                        Debug.Assert(removed, "Cannot remove unknown resource.");
                     }
-                }
 
-                if (hasPeerRelevantChanges)
+                    _resourceByName[resource.Name] = resource;
+                }
+                else if (changeType == ResourceViewModelChangeType.Delete)
                 {
-                    await RaisePeerChangesAsync().ConfigureAwait(false);
+                    hasPeerRelevantChanges = true;
+
+                    var removed = _resourceByName.TryRemove(resource.Name, out _);
+                    Debug.Assert(removed, "Cannot remove unknown resource.");
                 }
             }
-        });
+
+            if (hasPeerRelevantChanges)
+            {
+                await RaisePeerChangesAsync().ConfigureAwait(false);
+            }
+        }
     }
 
     private static bool ArePeerRelevantPropertiesEquivalent(ResourceViewModel resource1, ResourceViewModel resource2)
@@ -251,13 +271,13 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
     {
         lock (_lock)
         {
-            var subscription = new ModelSubscription(callback, RemoveSubscription);
+            var subscription = new PeerChangesSubscription(callback, RemoveSubscription, _logger);
             _subscriptions.Add(subscription);
             return subscription;
         }
     }
 
-    private void RemoveSubscription(ModelSubscription subscription)
+    private void RemoveSubscription(PeerChangesSubscription subscription)
     {
         lock (_lock)
         {
@@ -267,12 +287,12 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
 
     private async Task RaisePeerChangesAsync()
     {
-        if (_subscriptions.Count == 0 || _watchContainersTokenSource.IsCancellationRequested)
+        if (_watchContainersTokenSource.IsCancellationRequested)
         {
             return;
         }
 
-        ModelSubscription[] subscriptions;
+        PeerChangesSubscription[] subscriptions;
         lock (_lock)
         {
             subscriptions = _subscriptions.ToArray();
@@ -287,8 +307,56 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
     public async ValueTask DisposeAsync()
     {
         _watchContainersTokenSource.Cancel();
+
+        PeerChangesSubscription[] subscriptions;
+        lock (_lock)
+        {
+            subscriptions = _subscriptions.ToArray();
+        }
+        foreach (var subscription in subscriptions)
+        {
+            subscription.Dispose();
+        }
+
         _watchContainersTokenSource.Dispose();
 
         await TaskHelpers.WaitIgnoreCancelAsync(_watchTask).ConfigureAwait(false);
+    }
+
+    private sealed class PeerChangesSubscription : IDisposable
+    {
+        private const int StateNone = 0;
+        private const int StateDisposed = 1;
+
+        private readonly CallbackThrottler _callbackThrottler;
+        private readonly Action<PeerChangesSubscription> _onDispose;
+        private int _disposed;
+
+        public PeerChangesSubscription(
+            Func<Task> callback,
+            Action<PeerChangesSubscription> onDispose,
+            ILogger logger)
+        {
+            _callbackThrottler = new CallbackThrottler(
+                nameof(OnPeerChanges),
+                logger,
+                CallbackThrottler.DefaultMinExecuteInterval,
+                callback,
+                executionContext: null);
+            _onDispose = onDispose;
+        }
+
+        public Task ExecuteAsync() => _callbackThrottler.ExecuteAsync();
+
+        public void Dispose()
+        {
+            if (Interlocked.CompareExchange(ref _disposed, StateDisposed, StateNone) == StateDisposed)
+            {
+                return;
+            }
+
+            _onDispose(this);
+            _callbackThrottler.Dispose();
+        }
     }
 }

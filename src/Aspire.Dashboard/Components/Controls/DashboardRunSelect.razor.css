@@ -1,0 +1,8 @@
+.application-run-select ::deep .application-run-select-button {
+    margin-right: 8px;
+}
+
+.application-run-select ::deep .application-run-select-button::part(control) {
+    padding-left: 8px;
+    padding-right: 8px;
+}

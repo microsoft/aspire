@@ -81,8 +81,16 @@ public sealed class SpanHasAttributeTelemetryFilter : TelemetryFilter
 {
     private readonly string[] _attributeNames;
 
+    internal IReadOnlyList<string> AttributeNames => _attributeNames;
+
     public SpanHasAttributeTelemetryFilter(string[] attributeNames)
     {
+        ArgumentNullException.ThrowIfNull(attributeNames);
+        if (attributeNames.Length == 0)
+        {
+            throw new ArgumentException("At least one attribute name is required.", nameof(attributeNames));
+        }
+
         _attributeNames = attributeNames;
     }
 
@@ -114,8 +122,16 @@ public sealed class SpanNoMatchTelemetryFilter : TelemetryFilter
 {
     private readonly TelemetryFilter[] _filters;
 
+    internal IReadOnlyList<TelemetryFilter> Filters => _filters;
+
     public SpanNoMatchTelemetryFilter(TelemetryFilter[] filters)
     {
+        ArgumentNullException.ThrowIfNull(filters);
+        if (filters.Length == 0)
+        {
+            throw new ArgumentException("At least one filter is required.", nameof(filters));
+        }
+
         _filters = filters;
     }
 
@@ -147,8 +163,16 @@ public sealed class SpanScopePrefixTelemetryFilter : TelemetryFilter
 {
     private readonly string[] _scopePrefixes;
 
+    internal IReadOnlyList<string> ScopePrefixes => _scopePrefixes;
+
     public SpanScopePrefixTelemetryFilter(string[] scopePrefixes)
     {
+        ArgumentNullException.ThrowIfNull(scopePrefixes);
+        if (scopePrefixes.Length == 0)
+        {
+            throw new ArgumentException("At least one scope prefix is required.", nameof(scopePrefixes));
+        }
+
         _scopePrefixes = scopePrefixes;
     }
 

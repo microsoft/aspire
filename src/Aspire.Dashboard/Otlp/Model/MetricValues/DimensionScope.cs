@@ -31,6 +31,7 @@ public class DimensionScope
 
     public void AddPointValue(NumberDataPoint d, OtlpContext context)
     {
+        OtlpHelpers.ValidateNumberDataPoint(d);
         var start = OtlpHelpers.UnixNanoSecondsToDateTime(d.StartTimeUnixNano);
         var end = OtlpHelpers.UnixNanoSecondsToDateTime(d.TimeUnixNano);
 
@@ -81,11 +82,7 @@ public class DimensionScope
     {
         var start = OtlpHelpers.UnixNanoSecondsToDateTime(h.StartTimeUnixNano);
         var end = OtlpHelpers.UnixNanoSecondsToDateTime(h.TimeUnixNano);
-
-        if (h.BucketCounts.Count > 0 && h.ExplicitBounds.Count == 0)
-        {
-            throw new InvalidOperationException("Histogram data point has bucket counts without any explicit bounds.");
-        }
+        OtlpHelpers.ValidateHistogramDataPoint(h);
 
         var lastHistogramValue = _lastValue as HistogramValue;
         if (lastHistogramValue is not null && lastHistogramValue.Values.Length != h.BucketCounts.Count)
@@ -135,8 +132,12 @@ public class DimensionScope
                     continue;
                 }
 
-                var start = OtlpHelpers.UnixNanoSecondsToDateTime(exemplar.TimeUnixNano);
                 var exemplarValue = exemplar.HasAsDouble ? exemplar.AsDouble : exemplar.AsInt;
+                if (!double.IsFinite(exemplarValue))
+                {
+                    continue;
+                }
+                var start = OtlpHelpers.UnixNanoSecondsToDateTime(exemplar.TimeUnixNano);
 
                 var exists = false;
                 foreach (var existingExemplar in value.Exemplars)

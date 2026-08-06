@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Globalization;
 using System.IO.Compression;
 using System.Text;
@@ -10,6 +11,7 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Otlp.Serialization;
+using Aspire.Tests;
 using Google.Protobuf.Collections;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenTelemetry.Proto.Logs.V1;
@@ -23,11 +25,29 @@ public sealed class TelemetryImportServiceTests
 {
     private static readonly DateTime s_testTime = new(2024, 1, 15, 10, 30, 0, DateTimeKind.Utc);
 
-    private static TelemetryImportService CreateImportService(TelemetryRepository repository, bool disableImport = false)
+    private static TelemetryImportService CreateImportService(InMemoryTelemetryRepository repository, bool disableImport = false, DashboardActivitySource? activitySource = null)
     {
         var options = new DashboardOptions { UI = new UIOptions { DisableImport = disableImport } };
         var optionsMonitor = new TestOptionsMonitor<DashboardOptions>(options);
-        return new TelemetryImportService(repository, optionsMonitor, NullLogger<TelemetryImportService>.Instance);
+        return new TelemetryImportService(repository, optionsMonitor, NullLogger<TelemetryImportService>.Instance, activitySource ?? new DashboardActivitySource());
+    }
+
+    [Fact]
+    public async Task ImportAsync_CreatesActivity()
+    {
+        var repository = CreateRepository();
+        using var activitySource = new DashboardActivitySource();
+        var service = CreateImportService(repository, activitySource: activitySource);
+        var activities = new List<Activity>();
+        using var listener = ActivityListenerHelper.Create(activitySource.ActivitySource, onActivityStopped: activities.Add);
+        var stream = new MemoryStream(Encoding.UTF8.GetBytes(CreateLogsJson("TestService", "instance-1", "Test log message")));
+
+        await service.ImportAsync("logs.json", stream, CancellationToken.None);
+
+        var activity = Assert.Single(activities);
+        Assert.Equal(DashboardActivitySource.ActivitySourceName, activity.Source.Name);
+        Assert.Equal("Import telemetry data", activity.OperationName);
+        Assert.Equal(ActivityKind.Internal, activity.Kind);
     }
 
     [Fact]
@@ -64,7 +84,7 @@ public sealed class TelemetryImportServiceTests
         Assert.Single(resources);
         Assert.Equal("TestService", resources[0].ResourceName);
 
-        var logs = repository.GetLogs(GetLogsContext.ForResourceKey(resources[0].ResourceKey));
+        var logs = await repository.GetLogsAsync(GetLogsContext.ForResourceKey(resources[0].ResourceKey), cancellationToken: CancellationToken.None);
 
         Assert.Single(logs.Items);
         Assert.Equal("Test log message", logs.Items[0].Message);
@@ -88,7 +108,7 @@ public sealed class TelemetryImportServiceTests
         var resources = repository.GetResources();
         Assert.Single(resources);
 
-        var traces = repository.GetTraces(GetTracesRequest.ForResourceKey(resources[0].ResourceKey));
+        var traces = await repository.GetTracesAsync(GetTracesRequest.ForResourceKey(resources[0].ResourceKey), cancellationToken: CancellationToken.None);
 
         Assert.Single(traces.PagedResult.Items);
     }
@@ -111,7 +131,7 @@ public sealed class TelemetryImportServiceTests
         var resources = repository.GetResources();
         Assert.Single(resources);
 
-        var instruments = resources[0].GetInstrumentsSummary();
+        var instruments = repository.GetInstrumentSummaries(resources[0].ResourceKey);
         Assert.Single(instruments);
         Assert.Equal("test.metric", instruments[0].Name);
     }
@@ -269,7 +289,7 @@ public sealed class TelemetryImportServiceTests
         var sourceRepository = CreateRepository();
         var addContext = new AddContext();
 
-        sourceRepository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await sourceRepository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -286,7 +306,7 @@ public sealed class TelemetryImportServiceTests
         });
 
         var resources = sourceRepository.GetResources();
-        var logs = sourceRepository.GetLogs(GetLogsContext.ForResourceKey(resources[0].ResourceKey));
+        var logs = await sourceRepository.GetLogsAsync(GetLogsContext.ForResourceKey(resources[0].ResourceKey), cancellationToken: CancellationToken.None);
 
         // Export
         var exportedJson = TelemetryExportService.ConvertLogsToOtlpJson(logs.Items);
@@ -306,7 +326,7 @@ public sealed class TelemetryImportServiceTests
         Assert.Equal("RoundTripService", importedResources[0].ResourceName);
         Assert.Equal("round-trip-1", importedResources[0].InstanceId);
 
-        var importedLogs = targetRepository.GetLogs(GetLogsContext.ForResourceKey(importedResources[0].ResourceKey));
+        var importedLogs = await targetRepository.GetLogsAsync(GetLogsContext.ForResourceKey(importedResources[0].ResourceKey), cancellationToken: CancellationToken.None);
 
         Assert.Single(importedLogs.Items);
         Assert.Equal("Round trip test", importedLogs.Items[0].Message);
@@ -320,7 +340,7 @@ public sealed class TelemetryImportServiceTests
         var sourceRepository = CreateRepository();
         var addContext = new AddContext();
 
-        sourceRepository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await sourceRepository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -337,7 +357,7 @@ public sealed class TelemetryImportServiceTests
         });
 
         var resources = sourceRepository.GetResources();
-        var logs = sourceRepository.GetLogs(GetLogsContext.ForResourceKey(resources[0].ResourceKey));
+        var logs = await sourceRepository.GetLogsAsync(GetLogsContext.ForResourceKey(resources[0].ResourceKey), cancellationToken: CancellationToken.None);
         var originalInternalId = logs.Items[0].InternalId;
 
         // Export adds aspire.log_id attribute
@@ -361,7 +381,7 @@ public sealed class TelemetryImportServiceTests
         var importedResources = targetRepository.GetResources();
         Assert.Single(importedResources);
 
-        var importedLogs = targetRepository.GetLogs(GetLogsContext.ForResourceKey(importedResources[0].ResourceKey));
+        var importedLogs = await targetRepository.GetLogsAsync(GetLogsContext.ForResourceKey(importedResources[0].ResourceKey), cancellationToken: CancellationToken.None);
         Assert.Single(importedLogs.Items);
 
         // Verify aspire.log_id is NOT in the imported log's attributes (it should be filtered out)
@@ -381,7 +401,7 @@ public sealed class TelemetryImportServiceTests
         var sourceRepository = CreateRepository();
         var addContext = new AddContext();
 
-        sourceRepository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await sourceRepository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -398,10 +418,10 @@ public sealed class TelemetryImportServiceTests
         });
 
         var resources = sourceRepository.GetResources();
-        var traces = sourceRepository.GetTraces(GetTracesRequest.ForResourceKey(resources[0].ResourceKey));
+        var traces = await sourceRepository.GetTracesAsync(GetTracesRequest.ForResourceKey(resources[0].ResourceKey), cancellationToken: CancellationToken.None);
 
         // Export
-        var exportedJson = TelemetryExportService.ConvertTracesToOtlpJson(traces.PagedResult.Items, []);
+        var exportedJson = TelemetryExportService.ConvertTracesToOtlpJson(traces.PagedResult.Items);
         var jsonString = JsonSerializer.Serialize(exportedJson, OtlpJsonSerializerContext.DefaultOptions);
 
         // Import
@@ -417,7 +437,7 @@ public sealed class TelemetryImportServiceTests
         Assert.Single(importedResources);
         Assert.Equal("TraceRoundTrip", importedResources[0].ResourceName);
 
-        var importedTraces = targetRepository.GetTraces(GetTracesRequest.ForResourceKey(importedResources[0].ResourceKey));
+        var importedTraces = await targetRepository.GetTracesAsync(GetTracesRequest.ForResourceKey(importedResources[0].ResourceKey), cancellationToken: CancellationToken.None);
 
         Assert.Single(importedTraces.PagedResult.Items);
     }

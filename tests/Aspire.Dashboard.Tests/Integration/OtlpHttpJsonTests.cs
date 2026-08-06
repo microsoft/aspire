@@ -485,7 +485,7 @@ public class OtlpHttpJsonTests
         _testOutputHelper = testOutputHelper;
     }
 
-    private static OtlpResource AssertMyServiceResource(TelemetryRepository telemetryRepository)
+    private static OtlpResource AssertMyServiceResource(ITelemetryRepository telemetryRepository)
     {
         var resources = telemetryRepository.GetResourcesByName("my.service");
         var resource = Assert.Single(resources);
@@ -521,16 +521,16 @@ public class OtlpHttpJsonTests
         Assert.NotNull(response);
 
         // Verify data was stored in the repository
-        var telemetryRepository = app.Services.GetRequiredService<TelemetryRepository>();
+        var telemetryRepository = app.Services.GetRequiredService<ITelemetryRepository>();
         var resource = AssertMyServiceResource(telemetryRepository);
 
-        var traces = telemetryRepository.GetTraces(new GetTracesRequest
+        var traces = await telemetryRepository.GetTracesAsync(new GetTracesRequest
         {
             ResourceKeys = [resource.ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
-        });
+        }, cancellationToken: CancellationToken.None);
         Assert.NotEmpty(traces.PagedResult.Items);
 
         var trace = traces.PagedResult.Items.First();
@@ -581,16 +581,16 @@ public class OtlpHttpJsonTests
         Assert.NotNull(response);
 
         // Verify data was stored in the repository
-        var telemetryRepository = app.Services.GetRequiredService<TelemetryRepository>();
+        var telemetryRepository = app.Services.GetRequiredService<ITelemetryRepository>();
         var resource = AssertMyServiceResource(telemetryRepository);
 
-        var logs = telemetryRepository.GetLogs(new GetLogsContext
+        var logs = await telemetryRepository.GetLogsAsync(new GetLogsContext
         {
             ResourceKeys = [resource.ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
-        });
+        }, cancellationToken: CancellationToken.None);
         Assert.NotEmpty(logs.Items);
 
         var log = logs.Items.First();
@@ -658,16 +658,16 @@ public class OtlpHttpJsonTests
         Assert.NotNull(response);
 
         // Verify data was stored in the repository (events are stored as logs)
-        var telemetryRepository = app.Services.GetRequiredService<TelemetryRepository>();
+        var telemetryRepository = app.Services.GetRequiredService<ITelemetryRepository>();
         var resource = AssertMyServiceResource(telemetryRepository);
 
-        var logs = telemetryRepository.GetLogs(new GetLogsContext
+        var logs = await telemetryRepository.GetLogsAsync(new GetLogsContext
         {
             ResourceKeys = [resource.ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
-        });
+        }, cancellationToken: CancellationToken.None);
         Assert.NotEmpty(logs.Items);
 
         var log = logs.Items.First();
@@ -708,10 +708,10 @@ public class OtlpHttpJsonTests
         Assert.NotNull(response);
 
         // Verify data was stored in the repository
-        var telemetryRepository = app.Services.GetRequiredService<TelemetryRepository>();
+        var telemetryRepository = app.Services.GetRequiredService<ITelemetryRepository>();
         var resource = AssertMyServiceResource(telemetryRepository);
 
-        var instruments = resource.GetInstrumentsSummary();
+        var instruments = telemetryRepository.GetInstrumentSummaries(resource.ResourceKey);
         Assert.Collection(instruments,
             counter =>
             {
@@ -758,22 +758,22 @@ public class OtlpHttpJsonTests
         var response = System.Text.Json.JsonSerializer.Deserialize(responseBody, OtlpJsonSerializerContext.Default.OtlpExportMetricsServiceResponseJson);
         Assert.NotNull(response);
 
-        var telemetryRepository = app.Services.GetRequiredService<TelemetryRepository>();
+        var telemetryRepository = app.Services.GetRequiredService<ITelemetryRepository>();
         var resources = telemetryRepository.GetResourcesByName("copilot-chat");
         var resource = Assert.Single(resources);
 
-        var instruments = resource.GetInstrumentsSummary();
+        var instruments = telemetryRepository.GetInstrumentSummaries(resource.ResourceKey);
         var summary = Assert.Single(instruments);
         Assert.Equal("copilot_chat.tool.call.duration", summary.Name);
 
-        var instrumentData = telemetryRepository.GetInstrument(new GetInstrumentRequest
+        var instrumentData = await telemetryRepository.GetInstrumentAsync(new GetInstrumentRequest
         {
             ResourceKey = resource.ResourceKey,
             InstrumentName = "copilot_chat.tool.call.duration",
             MeterName = "copilot-chat",
             StartTime = DateTime.MinValue,
             EndTime = DateTime.MaxValue
-        });
+        }, cancellationToken: CancellationToken.None);
         Assert.NotNull(instrumentData);
 
         var dimension = Assert.Single(instrumentData.Dimensions);

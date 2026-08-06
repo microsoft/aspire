@@ -23,15 +23,18 @@ public sealed class DefaultInstrumentUnitResolverTests
         // Arrange
         var localizer = new TestStringLocalizer<ControlsStrings>();
         var resolver = new DefaultInstrumentUnitResolver(localizer);
+        var context = TelemetryTestHelpers.CreateContext();
+        var resource = new OtlpResource("resource", instanceId: null, uninstrumentedPeer: false, context);
 
         var otlpInstrumentSummary = new OtlpInstrumentSummary
         {
             Description = "Description!",
             Name = name,
-            Parent = TelemetryTestHelpers.CreateOtlpScope(TelemetryTestHelpers.CreateContext(), name: "meter_name"),
+            Parent = TelemetryTestHelpers.CreateOtlpScope(context, name: "meter_name"),
             Type = OtlpInstrumentType.Gauge,
             Unit = unit,
-            AggregationTemporality = OtlpAggregationTemporality.Cumulative
+            AggregationTemporality = OtlpAggregationTemporality.Cumulative,
+            ResourceView = new OtlpResourceView(resource, Array.Empty<KeyValuePair<string, string>>())
         };
 
         // Act

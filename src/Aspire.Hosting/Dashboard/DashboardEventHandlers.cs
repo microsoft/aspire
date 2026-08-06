@@ -599,6 +599,20 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
         context.EnvironmentVariables[KnownAspNetCoreConfigNames.Environment] = environment;
         context.EnvironmentVariables[DashboardConfigNames.ResourceServiceUrlName.EnvVarName] = resourceServiceUrl;
+        SetEnvironmentVariableWithFallback(
+            context,
+            DashboardConfigNames.DashboardApplicationName,
+            "AppHost:DashboardApplicationName",
+            transform: DashboardService.GetDashboardApplicationName);
+        SetEnvironmentVariableWithFallback(
+            context,
+            DashboardConfigNames.DashboardDataDirectoryName,
+            DashboardConfigNames.DashboardDataDirectoryName.ConfigKey);
+        SetEnvironmentVariableWithFallback(
+            context,
+            DashboardConfigNames.DashboardPersistenceModeName,
+            "Aspire:Dashboard:PersistenceMode",
+            defaultValue: "Run");
 
         PopulateDashboardUrls(context);
 
@@ -709,7 +723,34 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         {
             context.EnvironmentVariables[DashboardConfigNames.DebugSessionTelemetryOptOutName.EnvVarName] = optOutValue;
         }
+    }
 
+    private void SetEnvironmentVariableWithFallback(
+        EnvironmentCallbackContext context,
+        ConfigName configName,
+        string fallbackConfigurationKey,
+        string? defaultValue = null,
+        Func<string, string>? transform = null)
+    {
+        if (!string.IsNullOrWhiteSpace(configuration[configName.EnvVarName]))
+        {
+            return;
+        }
+
+        var value = configuration[fallbackConfigurationKey];
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            value = defaultValue;
+        }
+        else if (transform is not null)
+        {
+            value = transform(value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            context.EnvironmentVariables[configName.EnvVarName] = value;
+        }
     }
 
     private class EndpointGenerationContext

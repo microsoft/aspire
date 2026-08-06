@@ -8,6 +8,23 @@
       },
       "applicationUrl": "https://localhost:15888"
     },
+    "https (browser only + telemetry)": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4317",
+        "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc",
+        "Dashboard__TelemetryLimits__MaxLogCount": "2147483647",
+        "Dashboard__TelemetryLimits__MaxTraceCount": "2147483647",
+        "Dashboard__TelemetryLimits__MaxMetricsCount": "2147483647",
+        "Dashboard__TelemetryLimits__MaxAttributeCount": "2147483647",
+        "Dashboard__TelemetryLimits__MaxAttributeLength": "2147483647",
+        "Dashboard__TelemetryLimits__MaxSpanEventCount": "2147483647",
+        "Dashboard__TelemetryLimits__MaxResourceCount": "2147483647"
+      },
+      "applicationUrl": "https://localhost:15888"
+    },
     "http (browser only)": {
       "commandName": "Project",
       "launchBrowser": true,

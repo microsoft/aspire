@@ -25,6 +25,7 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
     private static readonly Icon s_toolIcon = new Icons.Regular.Size16.Code();
 
     private readonly string _copyButtonId = $"copy-{Guid.NewGuid():N}";
+    private readonly CancellationTokenSource _cts = new();
 
     private MarkdownProcessor _markdownProcess = default!;
     private Subscription? _resourcesSubscription;
@@ -33,6 +34,7 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
 
     private List<OtlpSpan> _contextSpans = default!;
     private int _currentSpanContextIndex;
+    private long _contentUpdateVersion;
     private GenAIVisualizerDialogViewModel? _content;
 
     private GenAIItemViewModel? SelectedItem { get; set; }
@@ -47,7 +49,9 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
     public required BrowserTimeProvider TimeProvider { get; init; }
 
     [Inject]
-    public required TelemetryRepository TelemetryRepository { get; init; }
+    public required DashboardDataSource DataSource { get; init; }
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
     [Inject]
     public required IStringLocalizer<Resources.Dialogs> Loc { get; init; }
@@ -87,6 +91,7 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
     {
         if (_content != Content)
         {
+            Interlocked.Increment(ref _contentUpdateVersion);
             _contextSpans = Content.GetContextGenAISpans();
             _currentSpanContextIndex = _contextSpans.FindIndex(s => s.SpanId == Content.Span.SpanId);
             _content = Content;
@@ -101,7 +106,7 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
     private async Task UpdateDialogData()
     {
         // Multiple threads can call this. Run check inside InvokeAsync to avoid concurrency issues.
-        await InvokeAsync(() =>
+        await InvokeAsync(async () =>
         {
             var hasUpdatedTrace = TelemetryRepository.HasUpdatedTrace(Content.Span.Trace);
             var newContextSpans = Content.GetContextGenAISpans();
@@ -116,7 +121,7 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
                 _contextSpans = newContextSpans;
                 _currentSpanContextIndex = _contextSpans.IndexOf(span);
 
-                TryUpdateViewedGenAISpan(span);
+                await TryUpdateViewedGenAISpanAsync(span);
                 StateHasChanged();
             }
         });
@@ -227,19 +232,19 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
         MessageActiveView = viewKind;
     }
 
-    private void OnPreviousGenAISpan()
+    private async Task OnPreviousGenAISpan()
     {
         if (TryGetContextSpanByIndex(_currentSpanContextIndex - 1, out var span))
         {
-            TryUpdateViewedGenAISpan(span);
+            await TryUpdateViewedGenAISpanAsync(span);
         }
     }
 
-    private void OnNextGenAISpan()
+    private async Task OnNextGenAISpan()
     {
         if (TryGetContextSpanByIndex(_currentSpanContextIndex + 1, out var span))
         {
-            TryUpdateViewedGenAISpan(span);
+            await TryUpdateViewedGenAISpanAsync(span);
         }
     }
 
@@ -249,12 +254,19 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
         return span != null;
     }
 
-    private bool TryUpdateViewedGenAISpan(OtlpSpan newSpan)
+    private async Task<bool> TryUpdateViewedGenAISpanAsync(OtlpSpan newSpan)
     {
+        var updateVersion = Interlocked.Increment(ref _contentUpdateVersion);
         var selectedIndex = SelectedItem?.Index;
+        var getContextGenAISpans = Content.GetContextGenAISpans;
 
         var spanDetailsViewModel = SpanDetailsViewModel.Create(newSpan, TelemetryRepository, TelemetryRepository.GetResources());
-        var dialogViewModel = GenAIVisualizerDialogViewModel.Create(spanDetailsViewModel, selectedLogEntryId: null, ErrorRecorder, TelemetryRepository, Content.GetContextGenAISpans);
+        var dialogViewModel = await GenAIVisualizerDialogViewModel.CreateAsync(spanDetailsViewModel, selectedLogEntryId: null, ErrorRecorder, TelemetryRepository, getContextGenAISpans, _cts.Token);
+
+        if (updateVersion != Volatile.Read(ref _contentUpdateVersion))
+        {
+            return false;
+        }
 
         if (selectedIndex != null)
         {
@@ -363,6 +375,9 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
 
     public void Dispose()
     {
+        Interlocked.Increment(ref _contentUpdateVersion);
+        _cts.Cancel();
+        _cts.Dispose();
         _resourcesSubscription?.Dispose();
         _tracesSubscription?.Dispose();
         _logsSubscription?.Dispose();
@@ -371,7 +386,8 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
 
     public static async Task OpenDialogAsync(DashboardDialogService dialogService,
         OtlpSpan span, long? selectedLogEntryId,
-        TelemetryRepository telemetryRepository, ITelemetryErrorRecorder errorRecorder, List<OtlpResource> resources, Func<List<OtlpSpan>> getContextGenAISpans)
+        ITelemetryRepository telemetryRepository, ITelemetryErrorRecorder errorRecorder, List<OtlpResource> resources, Func<List<OtlpSpan>> getContextGenAISpans,
+        CancellationToken cancellationToken)
     {
         var title = span.Name;
         var width = dialogService.IsDesktop ? "75vw" : "100vw";
@@ -386,7 +402,7 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
 
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, telemetryRepository, resources);
 
-        var dialogViewModel = GenAIVisualizerDialogViewModel.Create(spanDetailsViewModel, selectedLogEntryId, errorRecorder, telemetryRepository, getContextGenAISpans);
+        var dialogViewModel = await GenAIVisualizerDialogViewModel.CreateAsync(spanDetailsViewModel, selectedLogEntryId, errorRecorder, telemetryRepository, getContextGenAISpans, cancellationToken);
 
         await dialogService.ShowDialogAsync<GenAIVisualizerDialog>(dialogViewModel, parameters);
     }

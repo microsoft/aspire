@@ -44,26 +44,24 @@ public class OtlpTrace
             throw new InvalidOperationException($"Duplicate span id '{span.SpanId}' detected.");
         }
 
-        var added = false;
+        var insertIndex = 0;
         for (var i = Spans.Count - 1; i >= 0; i--)
         {
             if (span.StartTime > Spans[i].StartTime)
             {
-                Spans.Insert(i + 1, span);
-                added = true;
+                insertIndex = i + 1;
                 break;
             }
         }
-        if (!added)
-        {
-            Spans.Insert(0, span);
-        }
+        Spans.Insert(insertIndex, span);
 
         if (HasCircularReference(span))
         {
             Spans.Remove(span);
             throw new InvalidOperationException($"Circular loop detected for span '{span.SpanId}' with parent '{span.ParentSpanId}'.");
         }
+
+        _duration = null;
 
         if (string.IsNullOrEmpty(span.ParentSpanId))
         {
@@ -90,7 +88,7 @@ public class OtlpTrace
             LastUpdatedDate = DateTime.UtcNow;
         }
 
-        AssertSpanOrder();
+        AssertSpanOrder(insertIndex);
 
         static string BuildFullName(OtlpSpan existingSpan)
         {
@@ -124,18 +122,13 @@ public class OtlpTrace
     }
 
     [Conditional("DEBUG")]
-    private void AssertSpanOrder()
+    private void AssertSpanOrder(int index)
     {
-        DateTime current = default;
-        for (var i = 0; i < Spans.Count; i++)
+        var span = Spans[index];
+        if ((index > 0 && span.StartTime < Spans[index - 1].StartTime) ||
+            (index < Spans.Count - 1 && span.StartTime > Spans[index + 1].StartTime))
         {
-            var span = Spans[i];
-            if (span.StartTime < current)
-            {
-                throw new InvalidOperationException($"Trace {TraceId} spans not in order at index {i}.");
-            }
-
-            current = span.StartTime;
+            throw new InvalidOperationException($"Trace {TraceId} spans not in order at index {index}.");
         }
     }
 

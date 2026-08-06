@@ -24,12 +24,12 @@ public sealed class Subscription : IDisposable
     public SubscriptionType SubscriptionType { get; }
     public string Name { get; }
 
-    public Subscription(string name, ResourceKey? resourceKey, SubscriptionType subscriptionType, Func<Task> callback, Action unsubscribe, ExecutionContext? executionContext, TelemetryRepository telemetryRepository)
+    public Subscription(string name, ResourceKey? resourceKey, SubscriptionType subscriptionType, Func<Task> callback, Action unsubscribe, ExecutionContext? executionContext, ILogger logger, TimeSpan minExecuteInterval)
     {
         Name = name;
         ResourceKey = resourceKey;
         SubscriptionType = subscriptionType;
-        _callbackThrottler = new CallbackThrottler(name, telemetryRepository._otlpContext.Logger, telemetryRepository._subscriptionMinExecuteInterval, callback, executionContext);
+        _callbackThrottler = new CallbackThrottler(name, logger, minExecuteInterval, callback, executionContext);
         _unsubscribe = unsubscribe;
     }
 

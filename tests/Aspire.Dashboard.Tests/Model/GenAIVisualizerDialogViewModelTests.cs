@@ -21,13 +21,13 @@ public sealed class GenAIVisualizerDialogViewModelTests
     private static readonly DateTime s_testTime = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
     [Fact]
-    public void Create_NoGenAIAttributes_NoMessages()
+    public async Task Create_NoGenAIAttributes_NoMessages()
     {
         // Arrange
         var repository = CreateRepository();
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -51,7 +51,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert
         Assert.Empty(vm.Items);
@@ -61,7 +61,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
     }
 
     [Fact]
-    public void Create_SpanError_HasErrorItem()
+    public async Task Create_SpanError_HasErrorItem()
     {
         // Arrange
         var repository = CreateRepository();
@@ -77,7 +77,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         };
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -101,7 +101,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert
         Assert.Collection(vm.Items,
@@ -119,13 +119,13 @@ public sealed class GenAIVisualizerDialogViewModelTests
     }
 
     [Fact]
-    public void Create_GenAILogEntries_HasMessages()
+    public async Task Create_GenAILogEntries_HasMessages()
     {
         // Arrange
         var repository = CreateRepository();
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -144,7 +144,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
             }
         });
         Assert.Equal(0, addContext.FailureCount);
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -185,7 +185,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert
         Assert.Collection(vm.Items,
@@ -216,13 +216,13 @@ public sealed class GenAIVisualizerDialogViewModelTests
     }
 
     [Fact]
-    public void Create_GenAILogEntries_EmptyMessage_NoMessagesCreated()
+    public async Task Create_GenAILogEntries_EmptyMessage_NoMessagesCreated()
     {
         // Arrange
         var repository = CreateRepository();
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -241,7 +241,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
             }
         });
         Assert.Equal(0, addContext.FailureCount);
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -276,7 +276,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert
         Assert.Empty(vm.Items);
@@ -284,7 +284,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
     }
 
     [Fact]
-    public void Create_GenAISpanEvents_HasMessages()
+    public async Task Create_GenAISpanEvents_HasMessages()
     {
         // Arrange
         var repository = CreateRepository();
@@ -321,7 +321,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         };
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -345,7 +345,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert
         Assert.Collection(vm.Items,
@@ -376,7 +376,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
     }
 
     [Fact]
-    public void Create_GenAISpanEvents_EmptyContent_NoMessagesCreated()
+    public async Task Create_GenAISpanEvents_EmptyContent_NoMessagesCreated()
     {
         // Arrange
         var repository = CreateRepository();
@@ -399,7 +399,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         };
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -423,7 +423,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert
         Assert.Empty(vm.Items);
@@ -431,7 +431,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
     }
 
     [Fact]
-    public void Create_GenAISpanEvents_MissingContent_NoMessagesCreated()
+    public async Task Create_GenAISpanEvents_MissingContent_NoMessagesCreated()
     {
         // Arrange
         var repository = CreateRepository();
@@ -448,7 +448,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         };
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -472,7 +472,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert
         Assert.Empty(vm.Items);
@@ -480,7 +480,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
     }
 
     [Fact]
-    public void Create_GenAISpanAttributes_HasMessages()
+    public async Task Create_GenAISpanAttributes_HasMessages()
     {
         // Arrange
         var repository = CreateRepository();
@@ -528,7 +528,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         };
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -552,7 +552,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert
         Assert.Collection(vm.Items,
@@ -603,7 +603,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
     }
 
     [Fact]
-    public void Create_GenAISpanAttributes_InvalidJson_DisplayErrorMessage()
+    public async Task Create_GenAISpanAttributes_InvalidJson_DisplayErrorMessage()
     {
         // Arrange
         var repository = CreateRepository();
@@ -644,7 +644,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         };
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -668,7 +668,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert
         Assert.Empty(vm.Items);
@@ -676,7 +676,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
     }
 
     [Fact]
-    public void Create_GenAISpanAttributesWithoutContent_HasNoMessageContent()
+    public async Task Create_GenAISpanAttributesWithoutContent_HasNoMessageContent()
     {
         // Arrange
         var repository = CreateRepository();
@@ -724,7 +724,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         };
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -748,7 +748,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert
         Assert.Collection(vm.Items,
@@ -796,7 +796,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
     }
 
     [Fact]
-    public void Create_NoMessages_HasNoMessageContent()
+    public async Task Create_NoMessages_HasNoMessageContent()
     {
         // Arrange
         var repository = CreateRepository();
@@ -808,7 +808,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         };
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -832,7 +832,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert
         Assert.Empty(vm.Items);
@@ -840,7 +840,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
     }
 
     [Fact]
-    public void Create_LangSmithFormat_HasMessages()
+    public async Task Create_LangSmithFormat_HasMessages()
     {
         // Arrange
         var repository = CreateRepository();
@@ -861,7 +861,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         };
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -885,7 +885,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert
         Assert.Collection(vm.Items,
@@ -916,7 +916,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
     }
 
     [Fact]
-    public void Create_LangSmithFormat_MessageRoleContentFallback_HasMessages()
+    public async Task Create_LangSmithFormat_MessageRoleContentFallback_HasMessages()
     {
         // Arrange
         var repository = CreateRepository();
@@ -937,7 +937,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         };
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -961,7 +961,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert
         Assert.Collection(vm.Items,
@@ -992,7 +992,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
     }
 
     [Fact]
-    public void Create_LangSmithFormat_WithGapsInIndices_HasMessages()
+    public async Task Create_LangSmithFormat_WithGapsInIndices_HasMessages()
     {
         // Arrange
         var repository = CreateRepository();
@@ -1020,7 +1020,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         };
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -1044,7 +1044,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert
         // Messages should be parsed in order of their indices (0, 2, 5 for prompts; 0, 3 for completions)
@@ -1090,7 +1090,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
     }
 
     [Fact]
-    public void Create_GenAIToolDefinitions_ParsesToolDefinitions()
+    public async Task Create_GenAIToolDefinitions_ParsesToolDefinitions()
     {
         // Arrange
         var repository = CreateRepository();
@@ -1127,7 +1127,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         };
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -1151,7 +1151,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert
         Assert.Collection(vm.ToolDefinitions,
@@ -1186,7 +1186,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
     }
 
     [Fact]
-    public void Create_GenAIToolDefinitions_InvalidJson_EmptyToolDefinitions()
+    public async Task Create_GenAIToolDefinitions_InvalidJson_EmptyToolDefinitions()
     {
         // Arrange
         var repository = CreateRepository();
@@ -1198,7 +1198,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         };
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -1222,14 +1222,14 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert
         Assert.Empty(vm.ToolDefinitions);
     }
 
     [Fact]
-    public void Create_NoToolDefinitions_EmptyToolDefinitions()
+    public async Task Create_NoToolDefinitions_EmptyToolDefinitions()
     {
         // Arrange
         var repository = CreateRepository();
@@ -1240,7 +1240,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         };
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -1264,14 +1264,14 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert
         Assert.Empty(vm.ToolDefinitions);
     }
 
     [Fact]
-    public void Create_GenAISpanAttributes_JsonWithCommentsAndTrailingCommas_HasMessages()
+    public async Task Create_GenAISpanAttributes_JsonWithCommentsAndTrailingCommas_HasMessages()
     {
         // Arrange
         var repository = CreateRepository();
@@ -1327,7 +1327,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         };
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -1351,7 +1351,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert - verify JSON with comments and trailing commas is parsed correctly
         Assert.Collection(vm.Items,
@@ -1377,7 +1377,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
     }
 
     [Fact]
-    public void Create_GenAIToolDefinitions_JsonWithCommentsAndTrailingCommas_HasToolDefinitions()
+    public async Task Create_GenAIToolDefinitions_JsonWithCommentsAndTrailingCommas_HasToolDefinitions()
     {
         // Arrange
         var repository = CreateRepository();
@@ -1416,7 +1416,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         };
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -1440,7 +1440,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert - verify tool definitions with comments and trailing commas are parsed correctly
         Assert.Equal(2, vm.ToolDefinitions.Count);
@@ -1449,7 +1449,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
     }
 
     [Fact]
-    public void Create_GenAIToolDefinitions_TypeAsArray_ParsesToolDefinitions()
+    public async Task Create_GenAIToolDefinitions_TypeAsArray_ParsesToolDefinitions()
     {
         // Arrange
         var repository = CreateRepository();
@@ -1489,7 +1489,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         };
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -1513,7 +1513,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert
         Assert.Collection(vm.ToolDefinitions,
@@ -1550,7 +1550,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
     }
 
     [Fact]
-    public void Create_GenAIToolDefinitions_WithArrayItems_ParsesAndFormatsCorrectly()
+    public async Task Create_GenAIToolDefinitions_WithArrayItems_ParsesAndFormatsCorrectly()
     {
         // Arrange
         var repository = CreateRepository();
@@ -1597,7 +1597,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         };
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -1621,7 +1621,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert
         Assert.Collection(vm.ToolDefinitions,
@@ -1656,26 +1656,27 @@ public sealed class GenAIVisualizerDialogViewModelTests
             });
     }
 
-    private static GenAIVisualizerDialogViewModel Create(
-        TelemetryRepository repository,
+    private static Task<GenAIVisualizerDialogViewModel> CreateAsync(
+        InMemoryTelemetryRepository repository,
         SpanDetailsViewModel spanDetailsViewModel)
     {
-        return GenAIVisualizerDialogViewModel.Create(
+        return GenAIVisualizerDialogViewModel.CreateAsync(
             spanDetailsViewModel,
             selectedLogEntryId: null,
             errorRecorder: new TestTelemetryErrorRecorder(),
             telemetryRepository: repository,
-            () => [spanDetailsViewModel.Span]);
+            () => [spanDetailsViewModel.Span],
+            CancellationToken.None);
     }
 
     [Fact]
-    public void Create_NoEvaluationResults_EmptyEvaluationsList()
+    public async Task Create_NoEvaluationResults_EmptyEvaluationsList()
     {
         // Arrange
         var repository = CreateRepository();
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -1699,20 +1700,20 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert
         Assert.Empty(vm.Evaluations);
     }
 
     [Fact]
-    public void Create_EvaluationResultsInLogEntries_ParsedCorrectly()
+    public async Task Create_EvaluationResultsInLogEntries_ParsedCorrectly()
     {
         // Arrange
         var repository = CreateRepository();
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -1731,7 +1732,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
             }
         });
 
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1779,7 +1780,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert
         Assert.Collection(vm.Evaluations,
@@ -1804,7 +1805,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
     }
 
     [Fact]
-    public void Create_EvaluationResultsInSpanEvents_ParsedCorrectly()
+    public async Task Create_EvaluationResultsInSpanEvents_ParsedCorrectly()
     {
         // Arrange
         var repository = CreateRepository();
@@ -1833,7 +1834,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         };
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -1862,7 +1863,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert
         Assert.Collection(vm.Evaluations,
@@ -1887,13 +1888,13 @@ public sealed class GenAIVisualizerDialogViewModelTests
     }
 
     [Fact]
-    public void Create_EvaluationResultsMinimalData_ParsedCorrectly()
+    public async Task Create_EvaluationResultsMinimalData_ParsedCorrectly()
     {
         // Arrange
         var repository = CreateRepository();
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -1912,7 +1913,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
             }
         });
 
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1944,7 +1945,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert
         Assert.Single(vm.Evaluations);
@@ -1957,7 +1958,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
     }
 
     [Fact]
-    public void Create_EvaluationResultsFromBothLogEntriesAndSpanEvents_AllParsed()
+    public async Task Create_EvaluationResultsFromBothLogEntriesAndSpanEvents_AllParsed()
     {
         // Arrange
         var repository = CreateRepository();
@@ -1975,7 +1976,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         };
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -1999,7 +2000,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
             }
         });
 
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -2032,7 +2033,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert
         Assert.Equal(2, vm.Evaluations.Count);
@@ -2041,7 +2042,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
     }
 
     [Fact]
-    public void Create_GenAIToolDefinitions_UnexpectedTypeObject_DoesNotThrow()
+    public async Task Create_GenAIToolDefinitions_UnexpectedTypeObject_DoesNotThrow()
     {
         // Arrange
         var repository = CreateRepository();
@@ -2080,7 +2081,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         };
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -2104,7 +2105,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act - should not throw an exception
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert - tool definition should be parsed, with valid parameter parsed correctly
         // and invalid parameter handled gracefully (type will be null instead of throwing)
@@ -2131,7 +2132,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
     }
 
     [Fact]
-    public void Create_GenAISpanAttributes_TruncatedInputMessages_DisplaysAvailableMessages()
+    public async Task Create_GenAISpanAttributes_TruncatedInputMessages_DisplaysAvailableMessages()
     {
         // Arrange
         var repository = CreateRepository();
@@ -2166,7 +2167,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         };
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -2190,7 +2191,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert - first two messages parsed, third truncated, plus truncation indicator
         Assert.Null(vm.DisplayErrorMessage);
@@ -2216,7 +2217,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
     }
 
     [Fact]
-    public void Create_GenAISpanAttributes_TruncatedSystemInstructions_DisplaysPartialContent()
+    public async Task Create_GenAISpanAttributes_TruncatedSystemInstructions_DisplaysPartialContent()
     {
         // Arrange
         var repository = CreateRepository();
@@ -2238,7 +2239,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         };
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -2262,7 +2263,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert - first instruction parsed, second truncated, plus truncation indicator
         Assert.Null(vm.DisplayErrorMessage);
@@ -2277,7 +2278,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
     }
 
     [Fact]
-    public void Create_GenAISpanAttributes_TruncatedOutputMessages_DisplaysAvailableMessages()
+    public async Task Create_GenAISpanAttributes_TruncatedOutputMessages_DisplaysAvailableMessages()
     {
         // Arrange
         var repository = CreateRepository();
@@ -2307,7 +2308,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         };
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -2331,7 +2332,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
 
         // Act
-        var vm = Create(repository, spanDetailsViewModel);
+        var vm = await CreateAsync(repository, spanDetailsViewModel);
 
         // Assert - first output message parsed, second truncated, plus truncation indicator
         Assert.Null(vm.DisplayErrorMessage);

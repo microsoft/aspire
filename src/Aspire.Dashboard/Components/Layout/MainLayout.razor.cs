@@ -18,6 +18,8 @@ namespace Aspire.Dashboard.Components.Layout;
 public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 {
     private bool _isNavMenuOpen;
+    private bool _runSelectionChanged;
+    private bool _isSwitchingRuns;
 
     // Desktop nav rail layout. false = collapsed to icons only (default, most content space,
     // labels still available via each item's tooltip); true = expanded so each item shows its
@@ -77,11 +79,46 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     [Inject]
     public required ILocalStorage LocalStorage { get; init; }
 
+    [Inject]
+    public required ISessionStorage SessionStorage { get; init; }
+
+    [Inject]
+    public required IDashboardRunStore RunStore { get; init; }
+
+    [Inject]
+    public required IDashboardRunSelection RunSelection { get; init; }
+
+    [Inject]
+    public required ILogger<MainLayout> Logger { get; init; }
+
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
+        if (RunStore.SupportsRunSelection)
+        {
+            var selectedRunResult = await SessionStorage.GetAsync<string>(BrowserStorageKeys.SelectedDashboardRunId);
+            var selectedRunId = selectedRunResult is { Success: true } ? selectedRunResult.Value : null;
+            if (!_runSelectionChanged && !string.IsNullOrEmpty(selectedRunId))
+            {
+                try
+                {
+                    RunSelection.SelectRun(selectedRunId);
+                }
+                catch (Exception exception)
+                {
+                    Logger.LogError(exception, "Failed to restore dashboard run '{RunId}'. Falling back to the current run.", selectedRunId);
+                    RunSelection.SelectRun(runId: null);
+                }
+
+                if (RunSelection.SelectedRun.IsCurrent)
+                {
+                    await SessionStorage.SetAsync(BrowserStorageKeys.SelectedDashboardRunId, string.Empty);
+                }
+            }
+        }
+
         // Theme change can be triggered from the settings dialog. This logic applies the new theme to the browser window.
         // Note that this event could be raised from a settings dialog opened in a different browser window.
         _themeChangedSubscription = ThemeManager.OnThemeChanged(async () =>
@@ -224,6 +261,41 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     }
 
     private string GetDefaultReturnFocusElementId(string desktopButtonId) => ViewportInformation.IsDesktop ? desktopButtonId : NavigationButtonId;
+
+    private async Task SwitchDashboardRunAsync(string? runId)
+    {
+        _runSelectionChanged = true;
+        var selectedRunId = RunSelection.SelectedRun is { IsCurrent: false } selectedRun ? selectedRun.RunId : null;
+        if (string.Equals(runId, selectedRunId, StringComparison.Ordinal))
+        {
+            await SessionStorage.SetAsync(BrowserStorageKeys.SelectedDashboardRunId, runId ?? string.Empty);
+            return;
+        }
+
+        _isSwitchingRuns = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            RunSelection.SelectRun(runId);
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(
+                exception,
+                "Failed to switch to dashboard run '{RunId}'. Keeping dashboard run '{SelectedRunId}' selected.",
+                runId,
+                RunSelection.SelectedRun.RunId);
+        }
+        finally
+        {
+            _isSwitchingRuns = false;
+            await InvokeAsync(StateHasChanged);
+        }
+
+        var persistedRunId = RunSelection.SelectedRun is { IsCurrent: false } actualSelectedRun ? actualSelectedRun.RunId : string.Empty;
+        await SessionStorage.SetAsync(BrowserStorageKeys.SelectedDashboardRunId, persistedRunId);
+    }
 
     private string? GetVisibleReturnFocusElementId(string? returnFocusElementId, string desktopButtonId)
     {

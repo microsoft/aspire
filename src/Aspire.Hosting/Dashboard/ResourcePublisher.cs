@@ -61,7 +61,7 @@ internal sealed class ResourcePublisher(CancellationToken cancellationToken)
 
                 try
                 {
-                    await foreach (var batch in channel.GetBatchesAsync(cancellationToken: linked.Token).ConfigureAwait(false))
+                    await foreach (var batch in channel.GetBatchesAsync(cancellationToken: linked.Token, minReadInterval: TimeSpan.FromMilliseconds(100)).ConfigureAwait(false))
                     {
                         yield return batch;
                     }

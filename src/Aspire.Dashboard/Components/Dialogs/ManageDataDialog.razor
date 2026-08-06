@@ -140,13 +140,13 @@
         <FluentButton IconStart="@(new Icons.Regular.Size16.Delete())"
                       OnClick="RemoveSelectedAsync"
                       Loading="@_isRemoving"
-                      Disabled="@AreNoneSelected()"
+                      Disabled="@(TelemetryRepository.IsReadOnly || AreNoneSelected())"
                       Title="@Loc[nameof(Dialogs.ManageDataRemoveButtonText)]"
                       aria-label="@Loc[nameof(Dialogs.ManageDataRemoveButtonText)]">
             @Loc[nameof(Dialogs.ManageDataRemoveButtonText)]
         </FluentButton>
     </div>
-    @if (TelemetryImportService.IsImportEnabled)
+    @if (TelemetryImportService.IsImportEnabled && !TelemetryRepository.IsReadOnly)
     {
         <div>
             <FluentInputFile AnchorId="import-button"
