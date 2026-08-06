@@ -5,15 +5,16 @@
   "breaking": false,
   "changeType": "Improvements",
   "communityContributors": [],
-  "description": "Updated the introductory text in the AI agents dialog to better explain how Aspire gives AI coding agents deep observability into your app, enabling faster issue diagnosis and fix verification.",
+  "description": "Updated AI agents dialog text to better explain that coding agents use the same observability information visible in the dashboard. The AppHost mode dialog now includes a Getting started section to make CLI setup steps easier to find.",
   "docsPrs": [],
   "docsRequired": false,
   "emoji": "🤖",
   "firstMergedAt": "2026-07-27T03:33:59Z",
-  "lastMergedAt": "2026-07-27T03:33:59Z",
+  "lastMergedAt": "2026-08-06T07:49:33Z",
   "name": "Improved AI agent observability messaging",
   "owner": "JamesNK",
   "prs": [
-    18868
+    18868,
+    19042
   ]
 }

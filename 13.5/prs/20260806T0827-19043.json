@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Bug fix for metrics chart ignoring dashboard 24-hour time format preference",
+  "mergedAt": "2026-08-06T08:27:41Z",
+  "number": 19043,
+  "runDate": "2026-08-06T12:39:16Z",
+  "status": "included",
+  "title": "Fix metrics chart 24-hour time format"
+}
