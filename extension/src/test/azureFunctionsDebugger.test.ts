@@ -8,8 +8,7 @@ import { DotNetService } from '../debugger/languages/dotnet';
 import { cleanupRun } from '../debugger/runCleanupRegistry';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
 import { AspireResourceExtendedDebugConfiguration, AzureFunctionsLaunchConfiguration, EnvVar, LaunchOptions } from '../dcp/types';
-import { azureFunctionsCmdPercentArgument, azureFunctionsUnsupportedTaskShell } from '../loc/strings';
-import * as io from '../utils/io';
+import { azureFunctionsCmdDelayedExpansion, azureFunctionsCmdPercentArgument, azureFunctionsUnsupportedTaskShell } from '../loc/strings';
 
 suite('Azure Functions Debugger Extension Tests', () => {
     setup(() => {
@@ -21,7 +20,7 @@ suite('Azure Functions Debugger Extension Tests', () => {
         sinon.restore();
     });
 
-    test('starts func host with build output path and HTTPS arguments in run mode', async () => {
+    test('builds the project and starts func host with HTTPS arguments in run mode', async () => {
         const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');
         const targetPath = path.join('/workspace', 'FunctionsApp', 'bin', 'Debug', 'net10.0', 'FunctionsApp.dll');
         const certificatePath = path.join('/workspace with spaces', 'FunctionsApp', 'aspire-functions-https.pfx');
@@ -30,7 +29,6 @@ suite('Azure Functions Debugger Extension Tests', () => {
         const startFuncProcess = sinon.stub().resolves({ success: true, processId: '4242' });
         const debugConfiguration = createDebugConfiguration(projectPath, ['--cert', certificatePath, '--password', ')456Y7R.D*S3Fwdr7mAv-p']);
 
-        sinon.stub(io, 'doesFileExist').resolves(false);
         stubTaskShell('win32', { path: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe' });
         installAzureFunctionsExtensionStub(createAzureFunctionsApi(startFuncProcess));
 
@@ -43,6 +41,7 @@ suite('Azure Functions Debugger Extension Tests', () => {
 
         assert.ok(getDotNetTargetPath.calledOnceWith(projectPath));
         assert.ok(buildDotNetProject.calledOnceWith(projectPath));
+        sinon.assert.callOrder(buildDotNetProject, getDotNetTargetPath, startFuncProcess);
         assert.ok(startFuncProcess.calledOnceWith(
             path.dirname(targetPath),
             ['--cert', `"${certificatePath}"`, '--password', '")456Y7R.D*S3Fwdr7mAv-p"'],
@@ -66,8 +65,7 @@ suite('Azure Functions Debugger Extension Tests', () => {
 
         sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
         sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
-        sinon.stub(io, 'doesFileExist').resolves(true);
-        stubTaskShell('win32', { path: 'C:\\Windows\\System32\\cmd.exe' });
+        stubTaskShell('win32', { path: 'C:\\Windows\\System32\\cmd.exe', args: ['/d', '/v:off', '/c'] });
         installAzureFunctionsExtensionStub(createAzureFunctionsApi(startFuncProcess));
 
         await azureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
@@ -91,7 +89,6 @@ suite('Azure Functions Debugger Extension Tests', () => {
 
         sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
         sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
-        sinon.stub(io, 'doesFileExist').resolves(true);
         stubTaskShell('linux', { path: '/bin/bash' });
         installAzureFunctionsExtensionStub(createAzureFunctionsApi(startFuncProcess));
 
@@ -116,7 +113,6 @@ suite('Azure Functions Debugger Extension Tests', () => {
 
         sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
         sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
-        sinon.stub(io, 'doesFileExist').resolves(true);
         stubTaskShell('win32', { path: 'C:\\Windows\\System32\\cmd.exe' });
         installAzureFunctionsExtensionStub(createAzureFunctionsApi(startFuncProcess));
 
@@ -131,6 +127,28 @@ suite('Azure Functions Debugger Extension Tests', () => {
         assert.ok(startFuncProcess.notCalled);
     });
 
+    test('rejects delayed expansion for a configured cmd task shell', async () => {
+        const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');
+        const targetPath = path.join('/workspace', 'FunctionsApp', 'bin', 'Debug', 'net10.0', 'FunctionsApp.dll');
+        const startFuncProcess = sinon.stub().resolves({ success: true, processId: '4242' });
+        const debugConfiguration = createDebugConfiguration(projectPath, ['--password', '!ASPIRE_PASSWORD!']);
+
+        sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
+        sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+        stubTaskShell('win32', { path: 'C:\\Windows\\System32\\cmd.exe', args: ['/d /v:on /c'] });
+        installAzureFunctionsExtensionStub(createAzureFunctionsApi(startFuncProcess));
+
+        await assert.rejects(
+            azureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
+                createLaunchConfiguration(projectPath),
+                debugConfiguration.args as string[],
+                [],
+                createLaunchOptions(false),
+                debugConfiguration),
+            (error: Error) => error.message === azureFunctionsCmdDelayedExpansion);
+        assert.ok(startFuncProcess.notCalled);
+    });
+
     test('rejects unsafe arguments for an unsupported task shell', async () => {
         const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');
         const targetPath = path.join('/workspace', 'FunctionsApp', 'bin', 'Debug', 'net10.0', 'FunctionsApp.dll');
@@ -139,7 +157,6 @@ suite('Azure Functions Debugger Extension Tests', () => {
 
         sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
         sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
-        sinon.stub(io, 'doesFileExist').resolves(true);
         stubTaskShell('win32', { path: 'C:\\tools\\nu.exe' });
         installAzureFunctionsExtensionStub(createAzureFunctionsApi(startFuncProcess));
 
@@ -162,7 +179,6 @@ suite('Azure Functions Debugger Extension Tests', () => {
 
         sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
         sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
-        sinon.stub(io, 'doesFileExist').resolves(true);
         stubTaskShell('win32', { path: 'C:\\tools\\nu.exe' });
         installAzureFunctionsExtensionStub(createAzureFunctionsApi(startFuncProcess));
 
@@ -185,7 +201,6 @@ suite('Azure Functions Debugger Extension Tests', () => {
 
         sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
         sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
-        sinon.stub(io, 'doesFileExist').resolves(true);
         stubTaskShell('win32', { path: 'C:\\tools\\nu.exe' });
         installAzureFunctionsExtensionStub(createAzureFunctionsApi(startFuncProcess));
 
@@ -208,7 +223,6 @@ suite('Azure Functions Debugger Extension Tests', () => {
         sinon.stub(vscode.debug, 'stopDebugging').resolves();
         sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
         sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
-        sinon.stub(io, 'doesFileExist').resolves(true);
         installAzureFunctionsExtensionStub(createAzureFunctionsApi(sinon.stub().resolves({ success: true, processId: '4242' })));
 
         const preparedSession = await prepareDebugSession(
@@ -216,7 +230,7 @@ suite('Azure Functions Debugger Extension Tests', () => {
             createLaunchConfiguration(projectPath),
             ['--cert', certificatePath, '--password', 'secret-password'],
             createEnvironmentVariables(),
-            createLaunchOptions(false, false, aspireDebugSession),
+            createLaunchOptions(false, aspireDebugSession),
             azureFunctionsDebuggerExtension);
 
         assert.ok(preparedSession.alreadyStartedSession);
@@ -248,7 +262,6 @@ suite('Azure Functions Debugger Extension Tests', () => {
 
         sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
         sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
-        sinon.stub(io, 'doesFileExist').resolves(true);
         installAzureFunctionsExtensionStub(createAzureFunctionsApi(startFuncProcess));
 
         const resourceDebugSession = await azureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
@@ -281,7 +294,6 @@ suite('Azure Functions Debugger Extension Tests', () => {
 
         sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
         sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
-        sinon.stub(io, 'doesFileExist').resolves(true);
         installAzureFunctionsExtensionStub(createAzureFunctionsApi(startFuncProcess));
 
         const resourceDebugSession = await azureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
@@ -313,7 +325,6 @@ suite('Azure Functions Debugger Extension Tests', () => {
             sinon.stub(process, 'platform').value(platform);
             sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
             sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
-            sinon.stub(io, 'doesFileExist').resolves(true);
             installAzureFunctionsExtensionStub(createAzureFunctionsApi(startFuncProcess));
 
             const resourceDebugSession = await azureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
@@ -338,7 +349,6 @@ suite('Azure Functions Debugger Extension Tests', () => {
         const startFuncProcess = sinon.stub().resolves({ success: true, processId: '4242' });
         const debugConfiguration = createDebugConfiguration(projectPath, ['--verbose']);
 
-        sinon.stub(io, 'doesFileExist').resolves(true);
         installAzureFunctionsExtensionStub(createAzureFunctionsApi(startFuncProcess));
 
         const resourceDebugSession = await azureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
@@ -349,7 +359,7 @@ suite('Azure Functions Debugger Extension Tests', () => {
             debugConfiguration);
 
         assert.ok(getDotNetTargetPath.calledOnceWith(projectPath));
-        assert.ok(buildDotNetProject.notCalled);
+        assert.ok(buildDotNetProject.calledOnceWith(projectPath));
         assert.ok(startFuncProcess.calledOnceWith(
             path.dirname(targetPath),
             ['--verbose'],
@@ -368,26 +378,6 @@ suite('Azure Functions Debugger Extension Tests', () => {
         assert.strictEqual(resourceDebugSession, undefined);
     });
 
-    test('forces build when requested even if target output exists', async () => {
-        const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');
-        const targetPath = path.join('/workspace', 'FunctionsApp', 'bin', 'Debug', 'net10.0', 'FunctionsApp.dll');
-        sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
-        const buildDotNetProject = sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
-        const debugConfiguration = createDebugConfiguration(projectPath);
-
-        sinon.stub(io, 'doesFileExist').resolves(true);
-        installAzureFunctionsExtensionStub(createAzureFunctionsApi(sinon.stub().resolves({ success: true, processId: '4242' })));
-
-        await azureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
-            createLaunchConfiguration(projectPath),
-            [],
-            [],
-            createLaunchOptions(false, true),
-            debugConfiguration);
-
-        assert.ok(buildDotNetProject.calledOnceWith(projectPath));
-    });
-
     test('surfaces Azure Functions API startup failures', async () => {
         const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');
         const targetPath = path.join('/workspace', 'FunctionsApp', 'bin', 'Debug', 'net10.0', 'FunctionsApp.dll');
@@ -395,7 +385,6 @@ suite('Azure Functions Debugger Extension Tests', () => {
 
         sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
         sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
-        sinon.stub(io, 'doesFileExist').resolves(true);
         installAzureFunctionsExtensionStub(createAzureFunctionsApi(sinon.stub().resolves({ success: false, processId: '', error: 'func failed' })));
 
         await assert.rejects(
@@ -436,10 +425,9 @@ function createDebugConfiguration(projectPath: string, args: string[] = []): Asp
     };
 }
 
-function createLaunchOptions(debug: boolean, forceBuild = false, debugSession: AspireDebugSession = {} as AspireDebugSession): LaunchOptions {
+function createLaunchOptions(debug: boolean, debugSession: AspireDebugSession = {} as AspireDebugSession): LaunchOptions {
     return {
         debug,
-        forceBuild,
         runId: 'azure-functions-test-run',
         debugSessionId: 'azure-functions-test-debug-session',
         isApphost: false,
@@ -488,7 +476,7 @@ function stubFuncTaskEvents(): {
     };
 }
 
-function stubTaskShell(platform: NodeJS.Platform, profile: { path: string }): void {
+function stubTaskShell(platform: NodeJS.Platform, profile: { path: string; args?: string[] }): void {
     sinon.stub(process, 'platform').value(platform);
     const settingsPlatform = platform === 'win32' ? 'windows' : platform === 'darwin' ? 'osx' : 'linux';
     sinon.stub(vscode.workspace, 'getConfiguration').withArgs('terminal.integrated').returns({
@@ -538,5 +526,5 @@ function createAspireDebugSession(): AspireDebugSession {
         isDebugConfigEnvironmentLoggingEnabled: () => false,
     };
 
-    return new AspireDebugSession(parentDebugSession, {} as any, {} as any, terminalProvider as any, () => { });
+    return new AspireDebugSession(parentDebugSession, {} as any, { sendNotification: sinon.stub() } as any, terminalProvider as any, () => { });
 }

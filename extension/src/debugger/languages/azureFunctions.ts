@@ -1,10 +1,9 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, isAzureFunctionsLaunchConfiguration } from '../../dcp/types';
-import { azureFunctionsCmdPercentArgument, azureFunctionsUnsupportedTaskShell, invalidLaunchConfiguration } from '../../loc/strings';
+import { azureFunctionsCmdDelayedExpansion, azureFunctionsCmdPercentArgument, azureFunctionsUnsupportedTaskShell, invalidLaunchConfiguration } from '../../loc/strings';
 import { assertNoTerminalControlCharacters, quoteShellArg } from '../../utils/AspireTerminalProvider';
 import { quoteCmdArgument } from '../../utils/cmdShim';
-import { doesFileExist } from '../../utils/io';
 import { extensionLogOutputChannel } from '../../utils/logging';
 import { AlreadyStartedResourceDebugSession, ResourceDebuggerExtension } from '../debuggerExtensions';
 import { DotNetService } from './dotnet';
@@ -40,6 +39,7 @@ interface AzureFunctionsApiProvider {
 type FuncHostTaskShell = 'cmd' | 'powershell' | 'posix';
 
 type TerminalProfileConfiguration = {
+    args?: string | string[];
     path?: string | string[];
     source?: string;
 };
@@ -182,6 +182,7 @@ function classifyFuncHostTaskShell(profile: TerminalProfileConfiguration | undef
     }
 
     if (identity.includes('command prompt') || /(?:^|[\\/\s])cmd(?:\.exe)?(?:$|\s)/.test(identity)) {
+        assertCmdDelayedExpansionDisabled(profile);
         return 'cmd';
     }
 
@@ -191,6 +192,27 @@ function classifyFuncHostTaskShell(profile: TerminalProfileConfiguration | undef
     }
 
     return undefined;
+}
+
+function assertCmdDelayedExpansionDisabled(profile: TerminalProfileConfiguration | undefined): void {
+    const profileArgs = typeof profile?.args === 'string' ? [profile.args] : profile?.args ?? [];
+    let delayedExpansionEnabled = false;
+
+    for (const profileArgument of profileArgs) {
+        for (const token of profileArgument.split(/\s+/)) {
+            if (/^\/v:on$/i.test(token)) {
+                delayedExpansionEnabled = true;
+            } else if (/^\/v:off$/i.test(token)) {
+                delayedExpansionEnabled = false;
+            }
+        }
+    }
+
+    // cmd performs delayed !NAME! expansion after quote parsing, so even quoted
+    // certificate passwords can be changed when the task shell enables /v:on.
+    if (delayedExpansionEnabled) {
+        throw new Error(azureFunctionsCmdDelayedExpansion);
+    }
 }
 
 function throwUnsupportedTaskShell(): never {
@@ -231,11 +253,11 @@ export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
         // later supports non-.NET Functions resources, that launch config should carry
         // an explicit language/build contract instead of reusing this .NET project path.
         // The AF extension API expects the project build output as buildPath.
+        // Always build because path-based Functions resources do not have to be ProjectReferences
+        // of the AppHost, so an existing target can be stale even after the AppHost was rebuilt.
+        extensionLogOutputChannel.info(`Building Azure Functions project before starting via extension API: ${projectPath}`);
+        await dotNetService.buildDotNetProject(projectPath);
         const targetPath = await dotNetService.getDotNetTargetPath(projectPath);
-        if (!(await doesFileExist(targetPath)) || launchOptions.forceBuild) {
-            extensionLogOutputChannel.info(`Building Azure Functions project before starting via extension API: ${projectPath}`);
-            await dotNetService.buildDotNetProject(projectPath);
-        }
         const buildOutputPath = path.dirname(targetPath);
         extensionLogOutputChannel.info(`Starting Azure Functions project via extension API: ${projectPath} (buildPath: ${buildOutputPath})`);
 
