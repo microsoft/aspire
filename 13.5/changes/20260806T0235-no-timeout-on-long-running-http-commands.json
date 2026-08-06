@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "HTTP resource commands no longer fail after 100 seconds due to the default HttpClient timeout. Commands invoked without a named HTTP client now run until they complete or the command cancellation token is cancelled.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "⏱️",
+  "firstMergedAt": "2026-08-06T02:35:29Z",
+  "lastMergedAt": "2026-08-06T02:35:29Z",
+  "name": "No timeout on long-running HTTP commands",
+  "owner": "JamesNK",
+  "prs": [
+    18986
+  ]
+}

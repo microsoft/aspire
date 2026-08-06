@@ -1,19 +1,20 @@
 {
   "area": "Dashboard",
-  "areaEmoji": "\ud83d\udcca",
+  "areaEmoji": "📊",
   "backport": false,
   "breaking": false,
   "changeType": "Improvements",
   "communityContributors": [],
-  "description": "The Aspire Dashboard received a major visual refresh including a CSS design-token system for consistent colors, spacing, and typography, a Geist font update, UX polish across multiple pages, and automated axe accessibility tests to prevent regressions.",
+  "description": "The Aspire Dashboard received a major visual refresh including a CSS design-token system for consistent colors, spacing, and typography, a Geist font update, UX polish across multiple pages, and accessibility fixes: focus rings on Fluent text inputs, corrected scroll control viewport behavior, and WCAG AA contrast for syntax colors and accent button states.",
   "docsPrs": [],
   "docsRequired": false,
-  "emoji": "\ud83c\udfa8",
+  "emoji": "🎨",
   "firstMergedAt": "2026-08-04T20:12:53Z",
-  "lastMergedAt": "2026-08-04T20:12:53Z",
+  "lastMergedAt": "2026-08-06T06:49:38Z",
   "name": "Dashboard design-token system and visual refresh",
   "owner": "IEvangelist",
   "prs": [
-    18943
+    18943,
+    19027
   ]
 }

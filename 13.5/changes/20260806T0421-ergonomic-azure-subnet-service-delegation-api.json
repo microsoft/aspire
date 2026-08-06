@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "��",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "New fluent helpers WithServiceDelegation and WithContainerInstanceDelegation on IResourceBuilder<AzureSubnetResource> make it easy to delegate Azure subnets to services like Azure Container Instances without duplicating the service name string.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🌐",
+  "firstMergedAt": "2026-08-06T04:21:55Z",
+  "lastMergedAt": "2026-08-06T04:21:55Z",
+  "name": "Ergonomic Azure subnet service-delegation API",
+  "owner": "IEvangelist",
+  "prs": [
+    18728
+  ]
+}

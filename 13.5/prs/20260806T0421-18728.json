@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "New ergonomic fluent API for Azure subnet service delegation",
+  "mergedAt": "2026-08-06T04:21:55Z",
+  "number": 18728,
+  "runDate": "2026-08-06T06:52:20Z",
+  "status": "included",
+  "title": "Add ergonomic Azure subnet service-delegation API"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Bug fix: removes implicit HttpClient timeout on HTTP resource commands so long-running commands don't fail after 100 seconds",
+  "mergedAt": "2026-08-06T02:35:29Z",
+  "number": 18986,
+  "runDate": "2026-08-06T06:52:20Z",
+  "status": "included",
+  "title": "Disable default timeout for HTTP commands"
+}
