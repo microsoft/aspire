@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Dashboard.Utils;
 
 namespace Aspire.Dashboard.Model;
@@ -63,5 +64,18 @@ public class BrowserTimeProvider : TimeProvider, ITimeFormatProvider
     public void SetConfiguredTimeFormat(TimeFormat timeFormat)
     {
         ConfiguredTimeFormat = timeFormat;
+    }
+
+    /// <summary>
+    /// Determines whether the specified time format uses a 24-hour clock.
+    /// </summary>
+    internal static bool Is24HourFormat(TimeFormat timeFormat)
+    {
+        return timeFormat switch
+        {
+            TimeFormat.TwentyFourHour => true,
+            TimeFormat.TwelveHour => false,
+            _ => DateTimeFormatInfo.CurrentInfo.LongTimePattern.StartsWith('H')
+        };
     }
 }

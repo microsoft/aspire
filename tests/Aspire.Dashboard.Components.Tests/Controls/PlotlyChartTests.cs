@@ -48,6 +48,7 @@ public class PlotlyChartTests : DashboardTestContext
     }
 
     [Theory]
+    [InlineData(TimeFormat.System, "12:59:57 AM", "%-I:%M:%S %p")]
     [InlineData(TimeFormat.TwelveHour, "12:59:57 AM", "%-I:%M:%S %p")]
     [InlineData(TimeFormat.TwentyFourHour, "0:59:57", "%H:%M:%S")]
     public async Task Render_HasInstrument_InitializeChartInvocation(TimeFormat timeFormat, string expectedTooltipTime, string expectedPlotlyTimeFormat)
