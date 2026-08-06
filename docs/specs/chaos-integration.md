@@ -8,11 +8,11 @@ This document proposes bringing the piloted `Aspire.Hosting.Chaos` experience in
 
 ### Direction established by this proposal
 
-- Model chaos topology statically in the AppHost and mutate policies dynamically at run time.
+- Keep DCP endpoint topology stable for the Run session and mutate policies dynamically at run time.
 - Use one authoritative controller and policy state model for resource commands, the CLI, dashboard, MCP, and tests.
 - Make the CLI a client of resource commands, not a second policy engine.
 - Make both required mutation paths first-class:
-  - `aspire resource chaos add-policy|remove-policy|list-policies`, where `chaos` is the single run-only control resource and each policy names its validated scope
+  - `aspire resource chaos add-policy|remove-policy|list-policies`, where `chaos` is the preferred name for the single run-only control resource (Phase 0 decides whether that name is formally reserved or a deterministic collision-safe fallback is used when it is already taken) and each policy names its validated scope
   - typed test-scoped policy application and removal through `ApplyChaosPolicyAsync(...)`
 - Keep the integration run-only. Chaos control resources and metadata must not appear in publish output; publish emits normal references or fails.
 - Keep policy cleanup explicit. TTL is a safety net rather than the primary lifecycle.
@@ -33,6 +33,7 @@ This proposal intentionally applies chaos to DCP. DCP does not support fault inj
 - Which HTTP/2 behaviors pass the required correctness spikes.
 - Whether and how consumer-facing HTTPS interception can establish trusted identity across hosts and containers.
 - Whether a richer dashboard experience is warranted after resource commands and telemetry prove sufficient.
+- Whether the semantic and performance budgets agreed with DCP owners support a default-on activation model, or whether the feature ships default-off with process/run opt-in instead.
 
 ## Motivation and source context
 
@@ -42,7 +43,7 @@ The Aspire discussion identified the existing service proxy as the right archite
 
 ## Goals
 
-1. Make fault behavior available on DCP-proxied endpoints without requiring AppHost setup.
+1. Make fault behavior available on DCP-proxied endpoints without requiring AppHost setup or policy authoring.
 2. Let developers add, remove, inspect, pause, and resume policies without restarting the AppHost.
 3. Give tests a typed, scoped, acknowledgement-based lifecycle that is safe in fixtures and honest about parallel execution.
 4. Route every mutation surface through one controller and one policy contract.
@@ -69,13 +70,13 @@ The pilot proves the end-to-end experience and provides useful invariants, but s
 | Area | Pilot behavior | Native design treatment |
 | --- | --- | --- |
 | Resource | `ChaosProxyResource` is a thin `ContainerResource` with service discovery | Replace it with one inert `ChaosEnvironmentResource`; DCP carries traffic |
-| Topology | One proxy per selected existing edge; topology is fixed for the run | Preserve static policy scope; decide DCP endpoint-versus-reference granularity in Phase 0 |
+| Topology | One proxy per selected existing edge; topology is fixed for the run | Use whole-target-endpoint scope in Phase 1; gate finer granularity on a future DCP capability |
 | Policies | Bootstrap and declared policies load at startup; runtime policies use HTTP CRUD | Do not port startup policy authoring; use the shared runtime controller for every policy |
 | State | In-memory immutable-list reads and locked writes | Preserve in-memory state; replace install-order precedence |
 | Cleanup | Explicit delete is primary; runtime TTL defaults to five minutes; expiry sweeps every 30 seconds | Preserve |
 | Pause | Global pause is independent of policy mutation and survives clear | Preserve, with explicit resource/all scope |
 | Telemetry | Fire counts and fired paths survive policy expiry for late assertions | Preserve as bounded, sanitized receipts |
-| Scope | Mesh allowlists validate requested edges and fail closed | Derive valid scopes from the AppHost model and fail closed |
+| Scope | Mesh allowlists validate requested edges and fail closed | Derive Phase 1 target-endpoint scopes from the AppHost model and fail closed |
 | Publish | Proxy resources are excluded from the manifest | Strengthen: also prove references bypass the proxies |
 | Proxy image | Each edge builds its own image because of an Aspire 13.3.5 image-tag workaround | Do not port |
 | Certificates | Development certificates and accept-any upstream TLS support emulator scenarios | Replace with a reviewed local trust/control-channel design |
@@ -161,7 +162,7 @@ flowchart LR
 
 The architecture has four layers:
 
-1. **App-model topology** declares which directed endpoint references are mediated.
+1. **App-model topology and DCP capabilities** identify eligible target endpoints and any finer-grained scopes the data plane can actually distinguish.
 2. **`ChaosPolicyController`** owns authoritative desired policy state, policy revisions, pause state, leases, expiry, and acknowledgement.
 3. **`IChaosDataPlaneAdapter`** applies a canonical policy revision to one or more proxy instances.
 4. **Data-plane proxies** match requests, inject faults, and emit bounded observations.
@@ -187,50 +188,93 @@ The proxy retains only the last acknowledged data-plane snapshot, absolute polic
 
 `CustomResourceSnapshot` may display `policyCount`, `paused`, `desiredRevision`, `acknowledgedRevision`, and last-operation status. Those values are projections of controller state.
 
-### Controller concurrency
+### Controller concurrency and DCP contract
 
 Use a single-reader mutation queue for state that spans policy registration and proxy acknowledgement. Read-only operations may use immutable snapshots and must remain available while a mutation is active.
 
-Each mutation:
+The DCP control protocol is deliberately minimal:
 
-1. Validates and canonicalizes the complete request.
-2. Detects policy ID and composition conflicts.
-3. Registers the accepted operation before enqueueing.
-4. Produces a new immutable desired snapshot and revision.
-5. Prepares that inactive revision on all affected proxies.
-6. Waits for prepare acknowledgements within a bounded deadline.
-7. Commits the prepared revision and waits until all affected proxies report it active.
-8. Commits the new authoritative state and updates presentation.
-9. Completes the caller with success, cancellation, or a structured failure.
+- `GetCapabilities` returns supported scope variants, protocols, matchers, effects, and proxy-path coverage.
+- `SetDesiredPolicies(revision, policies[])` sends the complete desired snapshot, not an incremental patch.
+- `GetStatus` returns `acknowledgedRevision` plus bounded observations and structured rejection details.
 
-Prepare, commit, and rollback are idempotent by revision. If prepare fails, no proxy activates the revision. If commit partially succeeds, the controller rolls acknowledged proxies back to the prior committed revision and continuously reconciles every affected proxy to that revision. The chaos resources remain unready until convergence. A known-unready proxy causes apply to fail before enqueueing, one unresponsive proxy must not stall the queue indefinitely, and the controller must not return success when only queue acceptance occurred.
+Acknowledgement of a sent revision may come back synchronously in the `SetDesiredPolicies` response, or be observed asynchronously through bounded `GetStatus` polling; either transport is subject to the same configured apply and compensation deadlines described below.
+
+For each mutation, the controller validates and canonicalizes the request, detects conflicts, produces a new immutable desired snapshot and monotonically increasing revision, and sends that snapshot to every affected DCP proxy path. It returns success only when every affected path acknowledges the revision. It remains the sole writer and continuously reconciles lagging paths to the latest desired revision; it does not roll authoritative state back to an older snapshot. A known-unavailable path causes application to fail before enqueueing, and one unresponsive path must not stall the queue indefinitely.
+
+If any affected path rejects or times out on a sent revision N after other paths have already acknowledged it, the controller does not leave that inconsistency in place. It immediately computes and sends a compensating revision N+1 that omits the just-attempted policy and reconciles every affected path back to a consistent snapshot. The originating mutation returns ordinary failure only after that compensating revision is acknowledged everywhere — a rejected apply must never return ordinary failure while a live acknowledged fault from the failed attempt is still active on any path. If compensation itself cannot converge before its own deadline, the controller returns a typed partially-applied failure that names the unresolved paths and the absolute TTL fence each still carries, so a caller always has an outer bound on when the stray fault self-clears even without further intervention. `ApplyChaosPolicyAsync(...)` surfaces that case as a typed `ChaosPolicyApplyException` carrying an `IAsyncDisposable CleanupLease` for the attempted policy's compensation state, so callers and test infrastructure can `await using` or otherwise dispose it to keep pursuing cleanup instead of leaking a policy that outlives the failed apply call (see [Aspire.Hosting.Testing UX](#aspirehostingtesting-ux)).
+
+DCP must provide all-or-reject behavior across every host and container proxy path covered by a scope. If it cannot guarantee that boundary, the scope is unsupported and policy application fails closed. A prepare/commit protocol is a rejected, deferred escalation: revisit it only if Phase 0 proves that full-snapshot reconciliation cannot provide this guarantee.
 
 ## Resource and topology model
 
 ### Implicit control resource and model-derived scopes
 
-Aspire Hosting automatically adds one run-only `ChaosEnvironmentResource`, named `chaos`, whenever the selected DCP version advertises the fault-control capability. This is a synthetic command and aggregate-status resource; it does not carry traffic or add another network hop. Traffic continues through DCP proxies.
+Aspire Hosting automatically adds one visible run-only `ChaosEnvironmentResource` whenever the selected DCP version advertises the fault-control capability. This is a synthetic command and aggregate-status resource; it does not carry traffic or add another network hop. Traffic continues through DCP proxies.
+
+`chaos` is the **preferred** resource name, not a reserved name taken from user code. If it is already present, Aspire selects the first available deterministic fallback (`aspire-chaos`, then a numeric suffix). Model construction never throws or silently disables the feature because of a collision. The resolved control-resource name is always surfaced in startup logs, the dashboard, and `aspire resource list`/discovery, so a developer never has to guess it.
 
 The feature requires no `AddChaos`, special reference API, or per-endpoint setting. Every DCP-proxied endpoint is behaviorally pass-through until a policy is applied. The automatically added resource has:
 
-- the stable `chaos` resource name;
-- the target endpoints present in the AppHost model and, where DCP supports it, distinguishable directed references;
+- the resolved control-resource name (`chaos` when available, otherwise the deterministic fallback);
+- the eligible target endpoints present in the AppHost model;
 - DCP capability and acknowledged-revision state by policy scope;
 - resource commands attached by Aspire Hosting.
 
-The policy carries its scope. The controller resolves that scope against the current AppHost model and rejects unknown resources, endpoints, proxyless endpoints, and directed references that DCP cannot distinguish. A CLI payload cannot redirect faults to an arbitrary host because raw destination addresses are not valid policy scopes.
+The policy carries its scope. The controller resolves that scope against the current AppHost model and rejects unknown resources, endpoints, proxyless endpoints, and scope variants that the negotiated DCP capability cannot distinguish. A CLI payload cannot redirect faults to an arbitrary host because raw destination addresses are not valid policy scopes.
 
 There is no Chaos API in AppHost code. The `ChaosEnvironmentResource` appears automatically in the dashboard and CLI, while DCP services remain the traffic endpoints. Standard resource declarations, references, and service-discovery values do not change.
 
-The product default is available in Run mode with zero active policies. A host-level configuration opt-out should exist for organizations that prohibit local fault injection or need to disable the control surface. The exact setting belongs in the DCP/Hosting contract review; normal applications should not need to set it. Publish and Deploy never enable the capability.
+Default-on availability in Run mode with zero active policies is conditional on Phase 0 proving it against semantic and performance budgets agreed with DCP owners — added p99 latency, throughput regression, and startup/memory overhead when the capability is present but inactive; this proposal does not invent exact numeric thresholds for those budgets. If the budgets pass, the capability is available by default and the proposed process/host-level administrative opt-out is `ASPIRE_CHAOS_ENABLED=false`. If the budgets fail, the default flips to process/run opt-in instead: the capability stays off until a caller sets `ASPIRE_CHAOS_ENABLED=true` for that run, and once enabled that way, protocol-aware mode remains in effect for the entire Run session rather than toggling per policy. Normal AppHost code remains unchanged either way; Publish and Deploy never enable the capability.
 
 HTTPS/TLS scopes remain unavailable until DCP can preserve target identity and trust while injecting the requested effect. Applying a policy to an unsupported scope fails explicitly; model construction itself does not fail merely because the application has an HTTPS endpoint.
+
+### Scope capability and Phase 1 eligibility
+
+The policy scope is a discriminated, capability-gated union with closed schema variants, distinguished by an explicit `kind` field. Phase 1 supports only the target-endpoint shape:
+
+```json
+{ "kind": "targetEndpoint", "targetResource": "inventory", "endpointName": "http" }
+```
+
+Canonical output always includes `kind`. Omitting it on input is accepted only as a v1alpha1 compatibility default that resolves to `targetEndpoint`.
+
+A directed-reference variant is available only when DCP advertises a distinct capability for it. Otherwise application fails closed:
+
+```json
+{
+  "kind": "directedReference",
+  "sourceResource": "orders",
+  "targetResource": "inventory",
+  "endpointName": "http"
+}
+```
+
+The likely implementation lever is per-reference address allocation or listener identity. That adds listeners and startup cost, so the capability and its limits require DCP-owner review. Phase 1 does not claim directed-reference isolation.
+
+Phase 1 eligibility is limited to DCP-proxied HTTP or h2c endpoint paths covered by the negotiated capability. `list-scopes` reports ineligible scopes with a structured reason, including:
+
+- HTTPS endpoints;
+- proxyless endpoints;
+- persistent-lifetime resources that default to proxyless, unless platform behavior changes;
+- container-to-container paths that bypass the host proxy;
+- endpoints with multiple paths when DCP cannot guarantee coverage for all of them.
+
+Phase 0 must census representative and playground endpoints and record each path's eligibility reason. If coverage is low, HTTPS and proxy-coverage work becomes a roadmap priority rather than an implicit Phase 1 promise.
 
 ### Stable startup topology
 
 DCP proxy endpoints are created and allocated at startup whether or not any policies are active. An empty policy set is pass-through. Adding and removing policies never rewrites service-discovery endpoints or restarts workloads.
 
 This preserves the pilot's core inner-loop property: topology is static, policy is dynamic.
+
+### Connection semantics
+
+When DCP advertises HTTP chaos capability, the endpoint is protocol-aware for the entire Run session, including when zero policies are installed. It must not switch from L4 forwarding to L7 handling when the first policy arrives.
+
+Acknowledged revision R governs every request dispatched after acknowledgement, including requests sent on pre-existing pooled HTTP connections. A request already in flight keeps the revision selected at dispatch. Policy removal uses the same boundary: after the removal revision is acknowledged, the next dispatched request uses the new snapshot.
+
+This contract requires pass-through semantic conformance, not only overhead measurements. Coverage includes headers, trailers, connection reuse, `Expect: 100-continue`, cancellation, and HTTP/2 flow control. Phase 0 and implementation acceptance must warm an `HttpClient` connection pool, apply a policy and prove the next request faults, then remove it and prove the next request passes on the existing pool.
 
 ## DCP proxy extension
 
@@ -259,7 +303,7 @@ This option deliberately extends DCP and Aspire Hosting with:
 - This is a cross-repository DCP feature, not an integration-only change.
 - Current DCP proxy metadata is port/protocol oriented and does not model HTTP matching or effects.
 - Proxyless endpoints cannot participate.
-- A DCP proxy is currently associated with a target endpoint, not a directed consumer-to-target edge. Phase 0 must either add per-reference proxy identity or narrow initial policy scope to the whole target endpoint; it must not claim edge isolation that the data plane cannot observe.
+- A DCP proxy is currently associated with a target endpoint, so Phase 1 scope is the whole target endpoint. Per-reference identity remains a separately negotiated future capability.
 - Schema compatibility, DCP version skew, update acknowledgement, and engine security become platform contracts.
 - Waiting for this contract delays validation of the desired CLI and testing experience.
 
@@ -299,8 +343,9 @@ var policy = new ChaosPolicy
     SchemaVersion = "v1alpha1",
     Id = "inventory-timeout",
     Priority = 100,
-    Scope = ChaosPolicyScope.ForReference(
-        sourceResource: "orders",
+    // ForEndpoint(...) sets Kind = ChaosScopeKind.TargetEndpoint internally; the
+    // canonicalized wire form always carries "kind": "targetEndpoint" explicitly.
+    Scope = ChaosPolicyScope.ForEndpoint(
         targetResource: "inventory",
         endpointName: "http"),
     Match = new HttpChaosMatch
@@ -325,9 +370,9 @@ The canonical schema should include:
 | Field | Contract |
 | --- | --- |
 | `schemaVersion` | Required for wire payloads |
-| `id` | Stable caller-supplied ID or controller-generated ID |
+| `id` | Required for wire payloads; optional for typed test use, where the lease generates an owner-scoped unique ID |
 | `priority` | Required signed integer with no implicit default; higher values win |
-| `scope` | Required structured target endpoint or directed reference; resolved against the current AppHost model |
+| `scope` | Required capability-gated scope variant with an explicit `kind` discriminator; Phase 1 accepts only `{ kind: "targetEndpoint", targetResource, endpointName }` |
 | `match` | Protocol-specific, fail-closed selector |
 | `effects` | Ordered effects within one policy |
 | `probability` | Bounded from 0 through 1 |
@@ -335,6 +380,8 @@ The canonical schema should include:
 | `maxActivationsPerEpoch` | Optional bounded fire count within one controller-assigned policy activation epoch |
 | `ttl` | Required/defaulted for runtime mutation; resolved to an expiry time |
 | `metadata` | Bounded labels for diagnostics; never executable behavior |
+
+Every `scope` variant carries its `kind` explicitly in canonical output (`targetEndpoint`, `directedReference`, ...). Omitting `kind` on input is accepted only as a v1alpha1 compatibility default resolving to `targetEndpoint`; it is never omitted from anything the controller, CLI, or dashboard emits.
 
 The policy identifies its scope using Aspire resource and endpoint identities, never a raw destination URI. The controller rejects scopes absent from the AppHost model or unsupported by the negotiated DCP capability.
 
@@ -350,7 +397,7 @@ Every example resolves `scope` against model-derived resources and endpoints, ne
   "id": "checkout-payments-latency",
   "priority": 100,
   "scope": {
-    "sourceResource": "checkout",
+    "kind": "targetEndpoint",
     "targetResource": "payments",
     "endpointName": "http"
   },
@@ -376,7 +423,7 @@ Deterministic HTTP/1.1 delay-then-abort. Both effects are in Phase 1 scope, so n
   "id": "orders-partial-failure",
   "priority": 90,
   "scope": {
-    "sourceResource": "web",
+    "kind": "targetEndpoint",
     "targetResource": "orders",
     "endpointName": "http"
   },
@@ -403,7 +450,7 @@ A synthetic-error test wants a reproducible partial-failure rate rather than fai
   "id": "catalog-cosmos-throttle",
   "priority": 100,
   "scope": {
-    "sourceResource": "catalog",
+    "kind": "targetEndpoint",
     "targetResource": "catalog-cosmos",
     "endpointName": "https"
   },
@@ -420,31 +467,7 @@ A synthetic-error test wants a reproducible partial-failure rate rather than fai
 
 Illustrative only — Phase 1 defers Cosmos direct/TCP mode and gateway HTTPS (see Protocol scope), so this `https` scope does not resolve against any capability DCP negotiates yet. Applying it fails explicitly rather than silently falling back to plain-HTTP proxying, until DCP advertises a gateway-HTTPS fault capability. A protocol-correct throttling or precondition-failure response also needs Cosmos-specific shaping — `x-ms-substatus`, `Retry-After`, the SDK's precondition-failure envelope — that a generic HTTP `status` effect does not attempt. That shaping belongs in a Cosmos integration/profile layered over this engine-neutral schema, not in the core matcher/effect vocabulary.
 
-**Redis/TCP reset (future, capability-gated)**
-
-```json
-{
-  "schemaVersion": "v1alpha1",
-  "id": "sessions-redis-reset",
-  "priority": 100,
-  "scope": {
-    "sourceResource": "web",
-    "targetResource": "sessions-redis",
-    "endpointName": "tcp"
-  },
-  "match": {
-    "protocol": "tcp"
-  },
-  "effects": [
-    { "kind": "connectionReset" }
-  ],
-  "probability": 0.5,
-  "seed": 918,
-  "ttl": "00:01:00"
-}
-```
-
-Future and capability-gated — generic TCP faults are explicitly deferred (see Protocol scope), and the `match`/`effects` shapes shown are placeholders for whatever a future TCP-capable engine defines. DCP has no TCP fault capability to negotiate today, so this scope fails to resolve the same way an unsupported HTTP scope does, until DCP advertises one. `probability`/`seed` are meaningful because an intermittent reset, not a permanent one, is the realistic test case.
+Future TCP support needs a negotiated TCP capability, an explicit matcher discriminator, and connection-level effects with defined lifecycle semantics. Until those contracts exist, TCP policy documents fail schema and capability validation; the HTTP matcher/effect vocabulary never broadens to accept a placeholder TCP shape.
 
 ### Composition and precedence
 
@@ -452,7 +475,7 @@ Do not preserve first-installed-wins. Installation order depends on racing calle
 
 The recommended model is:
 
-1. Filter to active, unexpired policies for the edge.
+1. Filter to active, unexpired policies for the resolved scope.
 2. Filter by the request matcher and optional isolation scope.
 3. Select the highest explicit `priority`.
 4. If exactly one policy has that priority, apply its effects in declared order.
@@ -466,9 +489,9 @@ The controller assigns an opaque activation epoch when a policy ID is first appl
 
 ### Fail-closed matching
 
-- Unknown fields, unsupported matcher kinds, invalid regular expressions, and unresolved edge scopes reject the policy.
-- An empty selector means match all traffic on the named edge only; it never broadens to other edges.
-- A missing requested mesh edge fails model validation.
+- Unknown fields, unsupported matcher kinds, invalid regular expressions, and unresolved scopes reject the policy.
+- An empty selector means match all traffic on the named target endpoint only; it never broadens to another endpoint.
+- A missing requested target endpoint fails model validation.
 - Unsupported protocol features reject application rather than silently degrading to a broader HTTP rule.
 - Management paths are never eligible for fault injection.
 
@@ -480,10 +503,12 @@ Applying a policy is complete only when:
 
 1. the controller accepts and canonicalizes it;
 2. a new desired revision is created;
-3. every affected proxy acknowledges that revision; and
-4. the controller commits the revision.
+3. the full desired snapshot is sent to every affected DCP proxy path; and
+4. every affected path acknowledges that revision.
 
 Applying the same policy ID with identical canonical content and the same owner is idempotent. Reusing an ID with different content or a different owner fails with a conflict.
+
+If any affected path rejects or times out on step 4 after other paths have already acknowledged the attempted revision, apply follows the forward-compensation contract described in [Controller concurrency and DCP contract](#controller-concurrency-and-dcp-contract): the controller always compensates before returning any failure, and only throws the typed `ChaosPolicyApplyException` (with its disposable `CleanupLease`) if that compensation itself cannot converge by its deadline.
 
 ### Remove
 
@@ -496,9 +521,10 @@ Removing an already absent or expired policy is idempotent success when the call
 Pause is state independent of policy mutation:
 
 - pausing stops fault activation while preserving policies, TTLs, counters, and receipts;
+- pause-all also stops new campaign selections without extending a campaign's total duration; resume continues within the remaining scheduled duration;
 - resuming re-enables eligible policies;
 - clearing policies does not implicitly resume;
-- pause may target one chaos resource or all chaos resources;
+- `aspire resource chaos pause` with no scope pauses all policies and campaigns; narrower scopes remain available;
 - repeated pause and resume operations are idempotent.
 
 Pause is useful for diagnosis and recovery, but tests should prefer lease disposal so cleanup remains scoped.
@@ -507,7 +533,7 @@ Pause is useful for diagnosis and recovery, but tests should prefer lease dispos
 
 - Runtime policies applied by CLI, MCP, dashboard, or tests default to a bounded TTL, initially five minutes.
 - Callers may request a shorter TTL and may extend within a configured maximum.
-- The committed revision carries an absolute expiry time. Each proxy independently stops activating the policy at that time.
+- The desired snapshot carries an absolute expiry time. Each proxy independently stops activating the policy at that time.
 - The controller also reconciles expiry by removing only the expired policy ID and awaiting proxy acknowledgement.
 - Explicit removal remains the primary cleanup path.
 
@@ -515,7 +541,7 @@ Pause is useful for diagnosis and recovery, but tests should prefer lease dispos
 
 | Restart | Behavior |
 | --- | --- |
-| Proxy restarts while AppHost remains alive | Stable proxy endpoint remains allocated. Controller marks the proxy not ready, reapplies the current committed revision, and restores readiness after acknowledgement. Policy activation epochs, counters, `maxActivationsPerEpoch` budgets, and deterministic random sequences restart; receipts include the activation epoch. Exact activation-budget tests must treat proxy restart as an invalidating event. A stronger cross-restart budget is not claimed. |
+| Proxy restarts while AppHost remains alive | Stable proxy endpoint remains allocated. Controller reports failed reconciliation, reapplies the latest desired revision, and clears that health report after acknowledgement. Policy activation epochs, counters, `maxActivationsPerEpoch` budgets, and deterministic random sequences restart; receipts include the activation epoch. Exact activation-budget tests must treat proxy restart as an invalidating event. A stronger cross-restart budget is not claimed. |
 | AppHost restarts | Runtime policies and pause state are intentionally lost. Proxies start pass-through with an empty revision. Callers may replay a retained policy or campaign receipt explicitly. |
 | Controller shuts down | It attempts bounded explicit removal and proxy pause. Proxy-enforced absolute TTL and controller-liveness pass-through remain independent fallbacks if shutdown is interrupted. |
 | Workload restarts | Static proxy endpoint and active policy revision remain unchanged. |
@@ -548,7 +574,7 @@ The campaign definition is declarative and bounded:
   "maxActivations": 25,
   "scopes": [
     {
-      "sourceResource": "orders",
+      "kind": "targetEndpoint",
       "targetResource": "inventory",
       "endpointName": "http"
     }
@@ -568,13 +594,14 @@ The campaign definition is declarative and bounded:
 }
 ```
 
-The controller validates the complete campaign, expands the seed into a deterministic selection schedule, and records that schedule before activation. Only model-resolved scopes and supported, bounded effect templates participate. Unknown effects, an empty scope set, unbounded duration, or limits above configured maxima reject the campaign.
+The controller validates the complete campaign, expands the seed into a deterministic selection schedule, and records that schedule before activation. Selection is deterministic; the observed outcome still depends on whether matching traffic arrives. Only model-resolved scopes and supported, bounded effect templates participate. Unknown effects, an empty scope set, unbounded duration, or limits above configured maxima reject the campaign.
 
-At each interval the controller installs or removes ordinary policies through the same revision and acknowledgement protocol. Campaign-generated policies are not a second policy type and do not bypass precedence or conflict rules. Stopping or disposing a campaign removes only policies owned by that campaign and awaits acknowledgement. Campaign TTL is enforced by both the controller and DCP data plane.
+At each interval the controller installs or removes ordinary policies through the same revision and acknowledgement protocol. Manual and campaign-generated policies use the same precedence and conflict rules. Stopping or disposing a campaign removes only policies owned by that campaign and awaits acknowledgement. Campaign TTL is enforced by both the controller and DCP data plane. Pause-all stops new selections but does not extend total campaign duration; resume continues the recorded schedule only for its remaining duration.
 
 Proposed commands:
 
 ```console
+aspire resource chaos preview-campaign --campaign-json @checkout-shakeout.json
 aspire resource chaos start-campaign --campaign-json @checkout-shakeout.json
 aspire resource chaos campaign-status --campaign-id checkout-shakeout
 aspire resource chaos stop-campaign --campaign-id checkout-shakeout
@@ -583,7 +610,7 @@ aspire resource chaos replay-campaign --receipt ./checkout-shakeout.receipt.json
 
 The existing resource-command path may require generic file-input support before the `@file` syntax is available. Inline JSON remains the compatibility path.
 
-An agent's role is orchestration: select a goal, ask Aspire to preview the canonical plan, start it, observe telemetry, stop it early when appropriate, and use the recorded seed or receipt to replay a finding. Aspire owns random selection and enforcement so an agent crash cannot strand faults or make the run irreproducible.
+Campaigns remain Phase 2. The Phase 1 agent story is explicit `add-policy` and `remove-policy` only. In Phase 2, an agent's role is orchestration: select a goal, ask Aspire to preview the canonical plan, start it, observe telemetry, stop it early when appropriate, and use the recorded seed or receipt to replay a finding. Aspire owns random selection and enforcement so an agent crash cannot strand faults or make the run irreproducible.
 
 Tests may use the same lifecycle through a proposed `StartChaosCampaignAsync(...) -> ChaosCampaignLease : IAsyncDisposable`. Random campaigns should not be the default for correctness tests; fixed seeds and retained receipts are required when a campaign failure must be reproducible.
 
@@ -592,16 +619,21 @@ Tests may use the same lifecycle through a proposed `StartChaosCampaignAsync(...
 The immediate CLI uses existing resource commands. The following command lines and flags are **proposed syntax**; command argument projection must follow the final resource-command conventions.
 
 ```console
-aspire resource chaos add-policy --policy-json '{"schemaVersion":"v1alpha1","id":"inventory-timeout","priority":100,"scope":{"sourceResource":"orders","targetResource":"inventory","endpointName":"http"},"match":{"methods":["GET"],"path":"/api/inventory/*"},"effects":[{"kind":"delay","milliseconds":2000}],"ttl":"00:02:00"}'
+aspire resource chaos add-policy --policy-json '{"schemaVersion":"v1alpha1","id":"inventory-timeout","priority":100,"scope":{"kind":"targetEndpoint","targetResource":"inventory","endpointName":"http"},"match":{"methods":["GET"],"path":"/api/inventory/*"},"effects":[{"kind":"delay","milliseconds":2000}],"ttl":"00:02:00"}'
 aspire resource chaos remove-policy --policy-id inventory-timeout
 aspire resource chaos list-policies --target-resource inventory --endpoint http
 aspire resource chaos pause --target-resource inventory --endpoint http
+aspire resource chaos pause
 aspire resource chaos resume --target-resource inventory --endpoint http
-aspire resource chaos start-campaign --campaign-json '{"schemaVersion":"v1alpha1","id":"checkout-shakeout","seed":72491,"duration":"00:05:00","selectionInterval":"00:00:20","maxConcurrentPolicies":1,"maxActivations":25,"scopes":[{"sourceResource":"orders","targetResource":"inventory","endpointName":"http"}],"effectCatalog":[{"kind":"delay","minMilliseconds":100,"maxMilliseconds":1500,"weight":4},{"kind":"abort","weight":1}]}'
+aspire resource chaos list-scopes
+aspire resource chaos preview-campaign --campaign-json '{"schemaVersion":"v1alpha1","id":"checkout-shakeout","seed":72491,"duration":"00:05:00","selectionInterval":"00:00:20","maxConcurrentPolicies":1,"maxActivations":25,"scopes":[{"kind":"targetEndpoint","targetResource":"inventory","endpointName":"http"}],"effectCatalog":[{"kind":"delay","minMilliseconds":100,"maxMilliseconds":1500,"weight":4},{"kind":"abort","weight":1}]}'
+aspire resource chaos start-campaign --campaign-json '{"schemaVersion":"v1alpha1","id":"checkout-shakeout","seed":72491,"duration":"00:05:00","selectionInterval":"00:00:20","maxConcurrentPolicies":1,"maxActivations":25,"scopes":[{"kind":"targetEndpoint","targetResource":"inventory","endpointName":"http"}],"effectCatalog":[{"kind":"delay","minMilliseconds":100,"maxMilliseconds":1500,"weight":4},{"kind":"abort","weight":1}]}'
 aspire resource chaos stop-campaign --campaign-id checkout-shakeout
 ```
 
-`chaos` is the automatically added singleton `ChaosEnvironmentResource`. Policy and filter arguments identify a model-resolved DCP scope; the CLI resource name is not part of that scope.
+These examples assume `chaos` is the resolved control-resource name. If a pre-existing AppHost resource already claimed `chaos` and Phase 0 chose the collision-safe fallback path (see [Implicit control resource and model-derived scopes](#implicit-control-resource-and-model-derived-scopes)), use `aspire resource list`/discovery to find the actual control resource name and substitute it for `chaos` in each command. Policy and filter arguments identify a model-resolved DCP scope; the CLI resource name is not part of that scope.
+
+`add-policy` and `start-campaign` require interactive confirmation before activation, with an explicit non-interactive confirmation flag for automation. `aspire resource chaos pause` with no scope is the panic path: it pauses all policies and campaigns.
 
 Mutations go through `ResourceCommandService` to `ChaosPolicyController`. The CLI does not call the proxy management endpoint and does not parse or own policy semantics.
 
@@ -614,16 +646,18 @@ Commands return one structured JSON document. Illustrative `add-policy` output:
   "resource": "chaos",
   "policyId": "inventory-timeout",
   "scope": {
-    "sourceResource": "orders",
+    "kind": "targetEndpoint",
     "targetResource": "inventory",
     "endpointName": "http"
   },
   "revision": 12,
   "expiresAt": "2026-08-06T05:03:00Z",
-  "acknowledgedProxies": 1,
+  "acknowledgedProxyPaths": 1,
   "status": "applied"
 }
 ```
+
+The `resource` field always reflects the actual resolved control-resource name (`chaos` or the deterministic fallback), never a hardcoded literal.
 
 Illustrative `list-policies` output:
 
@@ -665,8 +699,10 @@ await using ChaosPolicyLease lease =
 
 The lease contract is:
 
+- `ApplyChaosPolicyAsync(...)` requires isolated traffic by default. Callers must use the explicit `ChaosIsolation.None` opt-out when exclusive AppHost ownership or serialization makes unscoped matching intentional.
+- A missing policy `Id` is assigned an owner-scoped unique ID by the lease.
 - `PolicyId`, canonical scope, canonical policy, and expiry are inspectable.
-- Creation completes only after the apply revision is acknowledged.
+- Creation completes only after the apply revision is acknowledged. If a peer path rejects or times out and the controller's forward compensation cannot converge by its deadline (see [Controller concurrency and DCP contract](#controller-concurrency-and-dcp-contract)), `ApplyChaosPolicyAsync(...)` throws a typed `ChaosPolicyApplyException` naming the unresolved paths and their absolute TTL fences; the exception carries an `IAsyncDisposable CleanupLease` for the attempted policy's compensation state so the caller can `await using` or otherwise dispose it to keep pursuing cleanup rather than leaking a stray fault.
 - `DisposeAsync` removes only the lease's policy ID.
 - `DisposeAsync` waits for removal acknowledgement within a bounded cleanup deadline.
 - Disposal is idempotent and succeeds if TTL already removed the policy.
@@ -674,7 +710,7 @@ The lease contract is:
 - A lease cannot remove a policy owned by another lease.
 - Late assertion APIs read bounded receipts retained after policy expiry or removal.
 
-If the cleanup deadline expires, `DisposeAsync` throws a typed cleanup exception and reports that proxy-enforced absolute TTL and controller-liveness pass-through are now the remaining safety nets. Cleanup failure must not be silently converted into success. Test infrastructure should preserve both the test failure and cleanup failure when its assertion framework supports aggregated exceptions.
+If the cleanup deadline expires, `DisposeAsync` throws a typed cleanup exception and reports that proxy-enforced absolute TTL and controller-liveness pass-through are now the remaining safety nets. Cleanup failure must not be silently converted into success. Test infrastructure should preserve both the test failure and cleanup failure when its assertion framework supports aggregated exceptions. This is a distinct failure mode from `ChaosPolicyApplyException` above: the `DisposeAsync` cleanup exception covers a lease that applied successfully but could not be torn down, while `ChaosPolicyApplyException` covers an apply attempt whose own forward compensation could not converge — both carry disposable cleanup ownership rather than stranding the caller with a bare failure.
 
 Illustrative test:
 
@@ -683,22 +719,18 @@ Illustrative test:
 await using var app = await testingBuilder.BuildAsync();
 await app.StartAsync();
 
-using var client = app.CreateHttpClient("orders");
-var scope = ChaosTestScope.Create();
-scope.ApplyToCurrentDistributedContext();
-
 await using var lease = await app.ApplyChaosPolicyAsync(
     new ChaosPolicy
     {
-        Id = $"inventory-timeout-{scope.Id}",
         Priority = 100,
-        Scope = ChaosPolicyScope.ForReference("orders", "inventory", "http"),
-        Match = HttpChaosMatch.Get("/api/inventory/*", scope),
+        Scope = ChaosPolicyScope.ForEndpoint("inventory", "http"),
+        Match = HttpChaosMatch.Get("/api/inventory/*"),
         Effects = [ChaosEffect.Delay(TimeSpan.FromSeconds(2))],
         TimeToLive = TimeSpan.FromMinutes(2)
     },
     cancellationToken);
 
+using var client = lease.CreateHttpClient("orders", endpointName: null);
 var response = await client.GetAsync("/checkout", cancellationToken);
 
 var receipt = await lease.WaitForActivationAsync(
@@ -727,18 +759,19 @@ Fixture teardown disposes the application and provides a final cleanup boundary.
 
 ### Parallel-test isolation
 
-Parallel tests sharing an AppHost and edge are safe only when their traffic is distinguishable.
+Parallel tests sharing an AppHost and target endpoint are safe only when their traffic is distinguishable. The primary safe path is `lease.CreateHttpClient("orders", endpointName: null)` (or an equivalent lease-bound client factory matching the normal `Aspire.Hosting.Testing` `CreateHttpClient(resourceName, endpointName)` overload semantics), which attaches the generated isolation scope without a manual setup sequence.
 
-The recommended HTTP mechanism is a generated isolation scope carried in a reserved W3C baggage entry:
+The HTTP isolation scope is carried in a reserved W3C baggage entry:
 
-- `ChaosTestScope.Create()` creates a cryptographically random opaque value.
-- The policy matcher includes that exact scope.
-- The test adds the reserved baggage entry to the current distributed context.
-- Instrumented inbound and outbound HTTP propagation carries the baggage across intermediate services to the faulted edge.
-- Every chaos proxy preserves the baggage so the same scoped test can target later mediated edges in the call graph.
+- The lease generates a cryptographically random opaque value and includes it in the policy matcher.
+- The lease-bound client adds the reserved baggage entry.
+- Instrumented inbound and outbound HTTP propagation carries the baggage across intermediate services to the faulted endpoint.
+- Every chaos proxy preserves the baggage so the same scoped test can target later mediated endpoints in the call graph.
 - The scope value is never included in snapshots, logs, spans, or receipts.
 
-The scope is opaque local test metadata, not a credential, and may be visible to instrumented workloads as standard baggage. Policies with different isolation scopes are disjoint even on the same path. This guarantee requires propagation to cross every hop before the faulted edge. Workloads without compatible distributed-context propagation need an application-side client handler, separate AppHost instances, or serialized access to the shared edge. The API must not imply isolation that the traffic cannot provide.
+Ambient baggage is a fallback for cross-hop propagation when traffic cannot originate from a lease-bound client, not the default manual three-step workflow. The scope is opaque local test metadata, not a credential, and may be visible to instrumented workloads as standard baggage. Policies with different isolation scopes are disjoint even on the same path. This guarantee requires propagation to cross every hop before the faulted endpoint. Workloads without compatible distributed-context propagation need an application-side client handler, separate AppHost instances, serialized access, or the explicit `ChaosIsolation.None` opt-out. The API must not imply isolation that the traffic cannot provide.
+
+`WaitForActivationAsync` timeout diagnostics distinguish at least: no request observed at the resolved proxy path, request observed but matcher mismatch, isolation mismatch, and unresolved or unavailable scope.
 
 ## Dashboard visualization and MCP
 
@@ -748,33 +781,33 @@ The dashboard must make active fault injection obvious. A developer should not n
 
 The Resources page shows one run-only `chaos` resource. Its state and properties are projections from `ChaosPolicyController`, never the authoritative policy store.
 
-| Dashboard state | Meaning |
-| --- | --- |
-| `Running` | DCP capabilities are available, revisions are acknowledged, and no policy is paused or conflicted |
-| `Active` | At least one unexpired policy is enabled |
-| `Paused` | Policies remain installed but fault activation is paused |
-| `Reconciling` | Desired and acknowledged revisions differ |
-| `Degraded` | A proxy rejected a revision, a scope is unavailable, or rollback has not converged |
+The resource `State` remains `Running` while its process-level control surface is available. It uses `StateStyle = warning` whenever any policy or campaign is active. Reconciliation failure, revision drift, and unavailable scope appear as health reports rather than invented lifecycle states. Properties carry active counts, desired and acknowledged revisions, pause state, nearest expiry, and campaign timing.
+
+The resource stays visible rather than hidden so zero-setup capability and active faults are discoverable. This intentionally accepts one row of resource-list clutter. It is never a `WaitFor` participant and must not gate workload startup or readiness.
 
 The resource properties show:
 
 - active policy count and nearest expiry;
 - active campaign, seed, elapsed time, and remaining safety budgets;
-- affected target endpoints and directed references when DCP can distinguish them;
+- affected target endpoints and, for a future separately negotiated capability, directed references DCP can distinguish;
 - desired and acknowledged revision;
 - paused scope, if any;
 - bounded activation, conflict, and expiry counts;
 - last successful reconciliation and last structured error.
 
-The `chaos` resource exposes dashboard command buttons for add, remove, list, pause, and resume. `list-policies` renders a sanitized table with policy ID, scope, effect summary, priority, expiry, state, and activation count. Add and remove operations use the same validation, confirmation, progress, and acknowledgement path as the CLI. The dashboard never calls a DCP management endpoint directly.
+The `chaos` resource exposes dashboard command buttons for add, remove, list, pause, and resume. `list-policies` renders a sanitized table with policy ID, scope, effect summary, priority, expiry, state, and activation count. Add-policy and start-campaign require confirmation. **Pause all** is itself a highlighted resource command with confirmation on the `chaos` resource — the existing resource-commands primitive, not a new dashboard surface. First activation in a Run session emits a one-time `IInteractionService.PromptNotificationAsync` message-bar notification whose link navigates to the `chaos` resource page; the notification's link is navigation, not a direct **Pause all** action itself. Operations use the same validation, progress, and acknowledgement path as the CLI. The dashboard never calls a DCP management endpoint directly.
+
+This initial experience is built entirely from existing dashboard primitives: the visible resource, `Running` state with `warning` styling, health reports, highlighted resource commands with confirmation, properties, relationships, logs/traces/metrics, and the first-activation message-bar notification described above. A persistent global active-chaos indicator visible outside any resource's details is a different kind of thing — it is proposed Dashboard core work, not a reuse of an existing surface, so it belongs in Phase 2 (see [Rich policy view](#rich-policy-view)) unless Dashboard owners explicitly choose to pull it into Phase 1.
 
 Selected target resources should also display a derived `Chaos policies` property and a relationship to the `chaos` resource. This is a navigation and awareness aid only. Target resource state must not become unhealthy merely because a policy intentionally injects failures.
 
 Existing telemetry pages provide request-level visualization:
 
-- **Structured logs** record policy lifecycle and reconciliation without policy bodies or isolation values.
+- **Structured logs** record policy lifecycle and reconciliation without policy bodies or isolation values, and project a bounded activation message into each affected resource's log stream.
 - **Traces** mark an activated fault on the affected request span or a linked internal span, with policy ID, effect kind, canonical scope, and activation index.
 - **Metrics** show activations, expiry, conflicts, apply latency, and revision lag.
+
+Synthetic responses include `x-aspire-chaos-policy` by default, with a policy option to suppress it. Abort and reset effects cannot carry a response header, so trace and log markers provide the developer-near signal. An intentional activation never makes the target resource unhealthy.
 
 This initial experience does not require a custom dashboard extension. It uses the existing resource, command, log, trace, and metric surfaces while still making chaos visible at both the environment and affected-resource levels.
 
@@ -782,6 +815,7 @@ This initial experience does not require a custom dashboard extension. It uses t
 
 The original meeting raised a custom dashboard tab as an exploratory direction. After the resource-based experience is validated, a richer view may add:
 
+- a persistent global active-chaos indicator visible outside any resource's details — unlike the rest of this list, this requires new Dashboard core chrome rather than an existing per-resource primitive, so it ships in Phase 2 unless Dashboard owners explicitly pull it into Phase 1;
 - a filterable policy table grouped by target resource and endpoint;
 - campaign plan, current selection, seed, budget consumption, stop, and replay controls;
 - a topology overlay highlighting scopes with active policies;
@@ -800,7 +834,7 @@ MCP uses the existing `execute_resource_command` tool against the same commands.
 
 ### Resource state
 
-Publish presentation updates only after controller state transitions. Suggested non-sensitive properties:
+Publish presentation updates only after controller state transitions. `State` remains `Running`; active behavior changes `StateStyle` to `warning`, while failures use health reports. Suggested non-sensitive properties:
 
 - policy count;
 - paused state;
@@ -819,17 +853,17 @@ Suggested telemetry:
 | `aspire.chaos.policy.remove` | Removal duration and result |
 | `aspire.chaos.policy.expired` | TTL cleanup |
 | `aspire.chaos.policy.conflict` | Ambiguous precedence or ownership conflict |
-| `aspire.chaos.fault.activated` | Count by policy ID, edge, and effect kind |
+| `aspire.chaos.fault.activated` | Count by policy ID, resolved scope, and effect kind |
 | `aspire.chaos.proxy.revision_lag` | Desired minus acknowledged revision |
 
-Fault spans should link to the proxied request span where possible and include policy ID, edge resource, effect kind, and deterministic activation index. Do not capture authorization headers, cookies, bodies, isolation scope values, connection strings, or unbounded URLs.
+Fault spans should link to the proxied request span where possible and include policy ID, target resource, endpoint, effect kind, and deterministic activation index. Do not capture authorization headers, cookies, bodies, isolation scope values, connection strings, or unbounded URLs.
 
 ### Late assertion receipts
 
 Retain a bounded ring of sanitized activation receipts per policy after expiry or removal. A receipt may include:
 
 - policy ID;
-- edge resource;
+- target resource and endpoint;
 - activation time;
 - method;
 - normalized or sanitized path;
@@ -866,12 +900,12 @@ Expose separate checks:
 | --- | --- |
 | Process liveness | Proxy process is responsive |
 | Data-plane readiness | Listener is bound and routing configuration is valid |
-| Control-plane readiness | Controller authentication succeeds and committed revision is acknowledged |
+| Control-plane health | Controller authentication succeeds and the desired revision is acknowledged |
 | Upstream observation | Original target endpoint is resolvable; this does not mutate target state |
 
-The proxy should wait for the target to start, not necessarily become healthy, to avoid introducing readiness cycles. A consuming resource that requires mediated traffic should wait for the chaos resource's readiness.
+The proxy should wait for the target to start, not necessarily become healthy, to avoid introducing readiness cycles. State reconciliation health is exposed as a registered `IHealthCheck` — a health-check annotation attached to the `chaos` resource itself that reads controller reconciliation state. The visible `chaos` resource is never a `WaitFor` participant, and that health check never participates in another resource's `WaitForHealthy`; health reports communicate control-plane problems without creating workload readiness dependencies.
 
-An empty policy set is healthy pass-through. Revision drift makes the chaos resource unready. Presentation command state should indicate that new applies are unavailable, but it is only a UI hint: the controller independently rejects new applies. Remove, pause, list, and clear remain available for recovery. Health checks must remain observational.
+An empty policy set is healthy pass-through. Revision drift emits a health report while the resource state remains `Running`. Presentation command state should indicate that new applies are unavailable, but it is only a UI hint: the controller independently rejects new applies. Remove, pause, list, and clear remain available for recovery. Health checks must remain observational.
 
 ## Run, publish, and deploy behavior
 
@@ -882,7 +916,7 @@ Chaos is run-only.
 - Materialize the singleton chaos control resource.
 - Keep the existing DCP-proxied endpoint under the target's service name.
 - Start the controller with an empty pass-through revision.
-- Keep the DCP proxy pass-through when no policy is active.
+- Keep the DCP proxy protocol-aware and semantically pass-through when no policy is active.
 
 ### Publish
 
@@ -982,28 +1016,34 @@ This could provide polished syntax early, but it would make correctness depend o
 ### Phase 0: proof spikes and maintainer decisions
 
 - Decide repository placement and engineering owner.
-- Review a versioned DCP policy, acknowledgement, capability, and telemetry contract with DCP owners.
+- Prove deterministic control-resource fallback naming and discovery when `chaos` or `aspire-chaos` is already present.
+- Review the minimal `GetCapabilities`, `SetDesiredPolicies`, and `GetStatus` contract with DCP owners.
+- Agree the semantic and performance budgets with DCP owners that gate the default-on activation model — added p99 latency, throughput regression, and startup/memory overhead when the capability is present but inactive; if those budgets fail, ship default-off with process/run opt-in `ASPIRE_CHAOS_ENABLED=true` instead.
 - Prove standard `WithReference` behavior and service-discovery values are unchanged when the DCP fault capability is present but inactive.
 - Prove the control resource and DCP fault capability exist only in Run mode and the host-level opt-out removes them.
-- Decide and prove DCP policy granularity: a whole target endpoint or a distinguishable directed reference.
+- Census representative and playground endpoint paths with `list-scopes`, including HTTPS, proxyless, persistent-lifetime, container-to-container, and multi-path ineligibility reasons.
+- Prove target-endpoint policy scope across every covered host and container proxy path; directed references remain capability-gated and deferred.
 - Prove authenticated controller-to-proxy revision application and restart reconciliation.
-- Run HTTP/1.1 and HTTP/2 conformance tests for the initial effects.
-- Validate test isolation through a propagated W3C baggage member across at least two mediated edges and an intermediate service.
-- Measure DCP pass-through and enabled-fault overhead.
+- Run HTTP/1.1 and HTTP/2 semantic conformance tests for the initial effects, including headers, trailers, connection reuse, `Expect: 100-continue`, cancellation, and flow control.
+- Warm an `HttpClient` pool, apply a policy and prove the next request faults, then remove it and prove the next request passes without rebuilding the pool.
+- Validate test isolation through a propagated W3C baggage member across at least two mediated endpoint paths and an intermediate service.
+- Measure DCP pass-through and enabled-fault overhead after semantic conformance passes.
 - Use the explicit YARP-compatible engine only as a conformance harness if the DCP implementation is not yet available.
 - Review the policy and campaign schemas with CLI, dashboard, MCP, and testing consumers.
 - Validate the DCP contract against the engine-neutral adapter boundary.
 
 ### Phase 1: minimal native loop
 
-- Automatically added singleton chaos control resource with model-derived DCP policy scopes.
-- Singleton controller and engine-neutral revision contract.
-- DCP adapter implementing prepare, commit, rollback, capability discovery, and observations.
+- Automatically added singleton chaos control resource with model-derived DCP policy scopes, using preferred name `chaos` or the deterministic collision-safe fallback.
+- Target-endpoint scope `{ kind: "targetEndpoint", targetResource, endpointName }`; no directed-reference isolation claim.
+- Singleton controller and minimal full-snapshot reconciliation contract, including forward compensation on partial rejection/timeout.
+- DCP adapter implementing capability discovery, desired-policy snapshots, acknowledged revision, and observations.
 - Add, remove, list, pause, and resume resource commands with JSON results.
-- `ApplyChaosPolicyAsync` and `ChaosPolicyLease`.
+- `ApplyChaosPolicyAsync`, default isolation, lease-bound clients, `ChaosPolicyLease`, and `ChaosPolicyApplyException` with its `CleanupLease`.
 - TTL expiry, explicit cleanup, restart reconciliation, and bounded receipts.
 - HTTP/1.1 plus only the HTTP/2 behaviors that passed Phase 0.
 - Publish bypass validation.
+- Existing-primitive dashboard experience: visible resource, health check, highlighted resource commands, properties, relationships, telemetry, and the first-activation message-bar notification.
 
 ### Phase 2: campaigns and diagnostics
 
@@ -1012,6 +1052,7 @@ This could provide polished syntax early, but it would make correctness depend o
 - Fire-once and counter-reset operations.
 - Scope discovery, filtering, and presets over model-derived DCP endpoints.
 - Richer resource properties and telemetry.
+- Persistent global active-chaos indicator visible outside resource details (new Dashboard core work), unless Dashboard owners explicitly pull it into Phase 1.
 
 ### Phase 3: broader platform integration
 
@@ -1026,17 +1067,17 @@ This could provide polished syntax early, but it would make correctness depend o
 | Repository placement | Continue contribution review without assuming ownership | Jose, Aspire maintainers, and owning engineering team decision |
 | First data plane | DCP proxy extension | Reviewed DCP schema/control proposal and Phase 0 conformance results |
 | Conformance fallback | Explicit YARP-compatible adapter, not product topology | Evidence that DCP sequencing blocks policy validation |
-| Activation model | Available by default on DCP-proxied endpoints in Run mode; host-level opt-out | Compatibility, security, inactive-overhead, and run/publish proofs |
+| Activation model | Default-on in Run mode with host-level opt-out, conditional on Phase 0 semantic/performance budgets agreed with DCP owners; falls back to default-off with process/run opt-in (`ASPIRE_CHAOS_ENABLED=true`) if those budgets fail | Compatibility, security, semantic/performance-budget conformance (p99 latency, throughput, startup/memory), and run/publish proofs |
 | HTTP/2 scope | Ship only proven effects | Multiplexing, cancellation, flow-control, and trailer conformance |
 | Unary gRPC | Defer by default | Status/trailer/deadline/retry test matrix |
 | Policy overlap | Explicit priority; equal-priority conflict fails closed | Parallel apply and runtime overlap tests |
 | Random campaigns | Aspire owns bounded seeded execution; agents orchestrate through commands | Crash cleanup, deterministic replay, budget enforcement, and receipt conformance |
-| Test isolation | Reserved W3C baggage member preserved across workload hops and scrubbed from diagnostics | End-to-end proof across two mediated edges and an intermediate service over HTTP/1.1 and HTTP/2 |
+| Test isolation | Reserved W3C baggage member preserved across workload hops and scrubbed from diagnostics | End-to-end proof across two mediated endpoint paths and an intermediate service over HTTP/1.1 and HTTP/2 |
 | Runtime persistence | None | Revisit only if restart use cases outweigh stale-fault risk |
 | Dashboard extension | Standard resource commands first | User evidence that commands and telemetry are insufficient |
-| Proxy granularity | One DCP proxy per target endpoint; do not promise directed-edge isolation until DCP can distinguish references | DCP routing design and a two-consumer isolation proof |
+| Directed-reference scope | Deferred and fail closed unless DCP advertises a distinct capability | Per-reference listener/address design, startup-cost review, and a two-consumer isolation proof |
 | Proxy execution model | Existing DCP proxy topology | DCP ownership, deployment, restart, and compatibility review |
-| TLS behavior | Phase 1 consumer edge is HTTP/h2c; HTTPS interception remains deferred | Cross-platform certificate identity and trust proof for host and container clients |
+| TLS behavior | Phase 1 endpoint path is HTTP/h2c; HTTPS interception remains deferred | Cross-platform certificate identity and trust proof for host and container clients |
 | Policy schema location | Shared engine-neutral contract | Dependency and versioning review |
 | Testing package shape | Keep lease API with integration if dependency-safe | Project-reference and public API review |
 
@@ -1046,20 +1087,26 @@ An implementation should not begin until the following are demonstrated:
 
 1. A publish snapshot containing a chaos-enabled run model emits normal references with no chaos metadata.
 2. CLI, dashboard, MCP, and tests all mutate the same controller instance.
-3. Applying and disposing a lease each await proxy acknowledgement.
+3. Applying and disposing a lease each await acknowledgement from every affected DCP proxy path.
 4. Lease disposal cannot remove another test's policy.
 5. Equal-priority overlap is deterministic and fail closed.
-6. Parallel scoped policies do not affect each other's requests.
-7. Proxy restart restores the committed revision before readiness.
+6. Parallel isolated test policies do not affect each other's requests, and the default API refuses unisolated use without `ChaosIsolation.None`.
+7. Proxy restart restores the latest desired revision and clears its reconciliation health report after acknowledgement.
 8. AppHost restart clears runtime policies.
 9. TTL expiry is observable and explicit removal remains the normal path.
 10. Snapshots and receipts contain no secrets, bodies, isolation values, or raw sensitive headers.
 11. Unsupported protocols and effects fail explicitly.
-12. HTTP/1.1 and each claimed HTTP/2 behavior pass protocol-specific conformance tests.
+12. HTTP/1.1 and each claimed HTTP/2 behavior pass semantic conformance tests for pass-through and faulted traffic.
 13. Existing AppHost code requires no chaos-specific setup, and standard references are unchanged when no policy is active.
 14. Proxies enforce absolute TTL and controller-liveness pass-through independently of controller acknowledgement.
 15. Phase 1 rejects consumer HTTPS edges rather than silently changing endpoint scheme.
-16. Each policy scope maps unambiguously to the DCP proxy instance and acknowledged revision that enforce it; directed-edge scope is exposed only if DCP can distinguish that reference.
+16. Each Phase 1 `{ kind: "targetEndpoint", targetResource, endpointName }` scope maps unambiguously to every DCP proxy path that enforces it; a directed-reference scope is exposed only through a separately negotiated capability.
+17. A warmed `HttpClient` pool observes an acknowledged apply on the next request and an acknowledged removal on the next request without reconnecting.
+18. The visible control resource remains `Running`, uses warning styling for active faults, reports reconciliation problems through a registered `IHealthCheck` that never gates another resource's `WaitForHealthy`, and never gates `WaitFor` itself.
+19. A pre-existing AppHost resource named `chaos` never causes model construction to throw or causes the control resource to silently disable itself; the actual resolved control-resource name is discoverable through startup logs, the dashboard, and `aspire resource list`/discovery.
+20. A rejected or timed-out apply never returns ordinary failure while an acknowledged fault from that attempt remains live on any path; the controller compensates first, and `ApplyChaosPolicyAsync(...)` only throws `ChaosPolicyApplyException` (with its disposable `CleanupLease`) when compensation itself cannot converge by its deadline.
+21. If Phase 0's agreed semantic and performance budgets fail, the feature ships default-off with process/run opt-in (`ASPIRE_CHAOS_ENABLED=true`) rather than default-on, and protocol-aware mode remains stable for the whole Run session once enabled that way.
+22. A Run session's first fault activation surfaces through a message-bar notification whose link navigates to the resolved control-resource page; no persistent global active-chaos indicator ships before Phase 2 without explicit Dashboard-owner sign-off to pull it into Phase 1.
 
 ## Source map
 
