@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { accountConfig, setAccountActive, setAccountRepos } from "./state.mjs";
+import { accountConfig, DEFAULT_PREFS, setAccountActive, setAccountRepos } from "./state.mjs";
 import { DEFAULT_REPOS, DEFAULT_EMU_REPOS } from "./github.mjs";
+
+test("background updates apply automatically by default", () => {
+  assert.equal(DEFAULT_PREFS.autoApplyUpdates, true);
+});
 
 test("accountConfig defaults unconfigured EMU accounts to the first-party repos", () => {
   const emu = accountConfig({ accounts: {} }, "acct:github.com/dapine_microsoft");
