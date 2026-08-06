@@ -12,24 +12,24 @@ This document proposes bringing the piloted `Aspire.Hosting.Chaos` experience in
 - Use one authoritative controller and policy state model for resource commands, the CLI, dashboard, MCP, and tests.
 - Make the CLI a client of resource commands, not a second policy engine.
 - Make both required mutation paths first-class:
-  - `aspire resource <chaos-resource> add-policy|remove-policy|list-policies`
+  - `aspire resource orders-to-inventory-chaos add-policy|remove-policy|list-policies`, where `orders-to-inventory-chaos` is the generated control resource for that service edge
   - typed test-scoped policy application and removal through `ApplyChaosPolicyAsync(...)`
-- Keep the integration run-only. Chaos resources must not appear in publish output, and publish must use the original direct references or fail.
+- Keep the integration run-only. Chaos control resources and metadata must not appear in publish output; publish emits normal references or fails.
 - Keep policy cleanup explicit. TTL is a safety net rather than the primary lifecycle.
 - Treat `CustomResourceSnapshot` as presentation state only.
 - Start with HTTP/1.1 and proven HTTP/2 request/response behavior. Explicitly defer generic TCP, AMQP, Cosmos direct/TCP, and streaming gRPC.
 
 ### Recommendation
 
-Implement the first native increment with an explicit run-only L7 proxy resource backed by YARP-compatible routing and a singleton AppHost controller. Preserve an engine-neutral policy and acknowledgement contract so a future DCP proxy fault-control contract can replace the data plane without replacing the CLI, dashboard, MCP, or testing experience.
+Implement the native integration by extending the DCP proxy with a versioned fault-control contract, backed by a singleton AppHost controller. This is the direction Damian suggested in the original meeting: keep Aspire's transparent proxy topology and add fault behavior at that layer. Keep the controller contract engine-neutral so the policy model, CLI, dashboard, MCP, and testing experience are not coupled to DCP implementation details.
 
-Do not imply that DCP supports fault injection today. Current DCP support controls whether an endpoint is proxied and how its address is allocated; it exposes no live fault configuration seam.
+This proposal intentionally applies chaos to DCP. DCP does not support fault injection today: current support controls whether an endpoint is proxied and how its address is allocated. The native work therefore includes adding the live policy, acknowledgement, capability, and telemetry seam described below rather than routing around DCP with a second permanent proxy layer.
 
 ### Decisions still required
 
 - Whether the contribution belongs directly in `microsoft/aspire` or should continue incubating in an Azure-owned repository before moving into the Aspire namespace.
-- Whether the first-party data plane should be an explicit YARP-based resource or wait for a new DCP proxy contract.
-- Whether the explicit proxy runs as a published first-party container or an in-process AppHost service.
+- The DCP and Aspire Hosting ownership split for the new proxy fault-control contract.
+- Whether an explicit YARP-compatible adapter is useful as a temporary conformance harness while the DCP contract is implemented.
 - The final public topology API and polyglot projection.
 - Which HTTP/2 behaviors pass the required correctness spikes.
 - Whether and how consumer-facing HTTPS interception can establish trusted identity across hosts and containers.
@@ -50,14 +50,14 @@ The appropriate status is therefore **contribution-oriented incubation with supp
 
 ## Goals
 
-1. Give AppHost authors a stable, explicit way to place fault-capable proxies on selected service edges.
+1. Give AppHost authors a stable, explicit way to enable fault behavior on DCP-proxied service edges.
 2. Let developers add, remove, inspect, pause, and resume policies without restarting the AppHost.
 3. Give tests a typed, scoped, acknowledgement-based lifecycle that is safe in fixtures and honest about parallel execution.
 4. Route every mutation surface through one controller and one policy contract.
 5. Preserve deterministic behavior under concurrent callers.
 6. Keep local development safe through bounded policies, TTL expiry, explicit cleanup, sanitized diagnostics, and fail-closed scope validation.
 7. Keep publish output deterministic and free of run-only chaos topology.
-8. Leave a credible migration path to a future DCP-native data plane.
+8. Make DCP the native data plane without coupling callers to DCP-specific wire types.
 
 ## Non-goals
 
@@ -76,8 +76,8 @@ The pilot proves the end-to-end experience and provides useful invariants, but s
 
 | Area | Pilot behavior | Native design treatment |
 | --- | --- | --- |
-| Resource | `ChaosProxyResource` is a thin `ContainerResource` with service discovery | Preserve an inert resource shape |
-| Topology | One proxy per selected existing edge; topology is fixed for the run | Preserve |
+| Resource | `ChaosProxyResource` is a thin `ContainerResource` with service discovery | Replace it with an inert per-edge control resource; DCP carries traffic |
+| Topology | One proxy per selected existing edge; topology is fixed for the run | Preserve static policy scope; decide DCP endpoint-versus-reference granularity in Phase 0 |
 | Policies | Bootstrap and declared policies load at startup; runtime policies use HTTP CRUD | Preserve the static/dynamic split; replace direct clients with the shared controller |
 | State | In-memory immutable-list reads and locked writes | Preserve in-memory state; replace install-order precedence |
 | Cleanup | Explicit delete is primary; runtime TTL defaults to five minutes; expiry sweeps every 30 seconds | Preserve |
@@ -123,7 +123,7 @@ Current DCP proxy integration is allocation and on/off behavior:
 - DCP service specs carry address, port, protocol, and allocation mode; `Proxyless` bypasses the proxy (`src/Aspire.Hosting/Dcp/Model/Service.cs`).
 - `DcpExecutor` creates proxied or proxyless services and waits for effective addresses, but no current model carries fault rules or live policy revisions (`src/Aspire.Hosting/Dcp/DcpExecutor.cs`).
 
-Adding faults to DCP would be new product work across Hosting and DCP, not use of an existing extension point.
+Adding faults to DCP is new product work across Hosting and DCP, not use of an existing extension point. That is the intended native integration in this proposal.
 
 ### Resource commands and clients
 
@@ -160,8 +160,8 @@ flowchart LR
     Backchannel --> Commands
     Commands --> Controller["ChaosPolicyController\n(authoritative state)"]
     Controller --> Adapter["IChaosDataPlaneAdapter"]
-    Adapter --> ProxyA["Edge proxy A"]
-    Adapter --> ProxyB["Edge proxy B"]
+    Adapter --> ProxyA["DCP endpoint proxy A"]
+    Adapter --> ProxyB["DCP endpoint proxy B"]
     Controller --> Snapshot["ResourceNotificationService\n(presentation only)"]
     ProxyA --> TargetA["Target A"]
     ProxyB --> TargetB["Target B"]
@@ -215,19 +215,17 @@ Prepare, commit, and rollback are idempotent by revision. If prepare fails, no p
 
 ## Resource and topology model
 
-### Edge resource
+### Edge control resource
 
-Each mediated directed edge is represented by a `ChaosProxyResource`. Each edge runs its own proxy instance, while every instance uses the same versioned first-party image. The resource has:
+Each selected directed edge is represented in the AppHost model by a run-only `ChaosEdgeResource`. This is a synthetic command and status resource; it does not carry traffic or add another network hop. Traffic continues through the DCP proxy already allocated for the referenced endpoint. The resource has:
 
 - a stable Aspire resource name;
-- one stable application-facing endpoint allocated at startup;
-- a structured reference to the original target endpoint;
+- structured identities for the source resource, target resource, and target endpoint;
 - a relationship to the target for dashboard grouping;
-- an internal management endpoint excluded from reference resolution;
-- a health check and controller acknowledgement state;
+- DCP capability and acknowledged-revision state;
 - resource commands attached during final-model preparation.
 
-One edge resource keeps policy scope obvious, limits blast radius, and matches the pilot's proven topology. It also avoids an N-by-N mesh: only declared existing references become proxy edges.
+One control resource per selected edge keeps policy scope obvious, limits blast radius, and gives the existing resource-command path a concrete target. Only declared references become chaos-enabled edges.
 
 The following is **proposed pseudocode**; these APIs do not exist:
 
@@ -239,22 +237,23 @@ var orders = builder.AddProject<Projects.Orders>("orders");
 
 var inventoryChaos = orders.WithChaosReferenceTo(
     inventory,
-    proxyName: "orders-to-inventory-chaos",
+    resourceName: "orders-to-inventory-chaos",
     endpointName: "http");
 ```
 
-`WithChaosReferenceTo` is the reference-creation API, not a decorator for an existing `WithReference`. It installs one mode-aware environment/reference callback: run mode emits only the proxy endpoint under the target's service name, while publish emits only the original structured target endpoint. It must not add the proxy as a second endpoint under the target service name because Aspire service discovery would retain both indexed endpoints and could load-balance around the proxy.
+`WithChaosReferenceTo` creates the normal DCP-backed service reference and adds run-only chaos metadata for that directed edge. It must not add a second endpoint under the target service name. The consumer continues to resolve the same DCP-allocated endpoint it would use without chaos.
 
 ```csharp
-// Proposed conceptual result after run-mode transformation:
-// services__inventory__http__0 points only to the chaos proxy.
+// Proposed conceptual result in run mode:
+// services__inventory__http__0 remains the DCP-proxied inventory endpoint.
+// The edge control resource identifies that proxy as fault-capable.
 //
-// Publish restores the original structured inventory endpoint reference.
+// Publish emits the normal inventory reference without chaos metadata.
 ```
 
-The proxy still appears as an explicit commandable `ChaosProxyResource`, but consumers resolve it under the original target's service name. The implementation must use the existing named-reference capability without first registering a normal target reference. Removing an `EndpointReferenceAnnotation` after `WithReference` is insufficient because its environment callback has already captured the original annotation. A proof spike must validate an atomic reference API that projects cleanly to TypeScript, does not depend on call order, and emits the exact original structured reference in publish mode.
+The `ChaosEdgeResource` appears in the dashboard and CLI, while the DCP service remains the traffic endpoint. A proof spike must validate an atomic reference API that projects cleanly to TypeScript, does not depend on call order, and omits all chaos metadata in publish mode.
 
-Final-model validation rejects any consumer that has both a mediated and direct reference for the same target endpoint, regardless of fluent-call order, with guidance to keep only `WithChaosReferenceTo`. Phase 1 also rejects HTTPS/TLS consumer endpoints at model time; it must not rewrite an HTTPS service-discovery entry to an HTTP proxy.
+Final-model validation rejects duplicate direct and chaos-enabled references for the same target endpoint, regardless of fluent-call order, with guidance to keep only `WithChaosReferenceTo`. Phase 1 also rejects HTTPS/TLS edges unless DCP can preserve the target identity and trust contract while injecting the requested effect.
 
 ### Mesh convenience
 
@@ -272,15 +271,15 @@ Mesh selection must be an explicit allowlist. If a requested edge cannot be foun
 
 ### Stable startup topology
 
-Proxy endpoints are created and allocated at startup whether or not any policies are active. An empty policy set is pass-through. Adding and removing policies never rewrites service-discovery endpoints or restarts workloads.
+DCP proxy endpoints are created and allocated at startup whether or not any policies are active. An empty policy set is pass-through. Adding and removing policies never rewrites service-discovery endpoints or restarts workloads.
 
 This preserves the pilot's core inner-loop property: topology is static, policy is dynamic.
 
-## Data-plane choice and the DCP proxy tension
+## DCP proxy extension
 
 The original meeting discussed plugging faults into Aspire's existing proxy layer. Brent's August 4 proposal likewise described extending that layer. Current source, however, shows no DCP fault-extension seam.
 
-### Option A: add a DCP proxy fault-control contract
+### Recommended native path: add a DCP proxy fault-control contract
 
 This option deliberately extends DCP and Aspire Hosting with:
 
@@ -303,10 +302,11 @@ This option deliberately extends DCP and Aspire Hosting with:
 - This is a cross-repository DCP feature, not an integration-only change.
 - Current DCP proxy metadata is port/protocol oriented and does not model HTTP matching or effects.
 - Proxyless endpoints cannot participate.
+- A DCP proxy is currently associated with a target endpoint, not a directed consumer-to-target edge. Phase 0 must either add per-reference proxy identity or narrow initial policy scope to the whole target endpoint; it must not claim edge isolation that the data plane cannot observe.
 - Schema compatibility, DCP version skew, update acknowledgement, and engine security become platform contracts.
 - Waiting for this contract delays validation of the desired CLI and testing experience.
 
-### Option B: explicit run-only L7 proxy resource and controller
+### Incubation fallback: explicit run-only L7 proxy resource and controller
 
 This option creates a normal run-only resource that forwards to the original target and receives canonical revisions from the AppHost controller.
 
@@ -326,11 +326,11 @@ This option creates a normal run-only resource that forwards to the original tar
 
 ### Recommended staged path
 
-Choose Option B first. Define the controller-to-data-plane contract independently of YARP-specific types. After the user experience and policy semantics stabilize, propose Option A with evidence from real usage and conformance tests.
+Design and review the DCP contract first. Use the pilot's YARP-compatible engine as a conformance harness for policy semantics only if DCP implementation sequencing would otherwise block that validation. Do not make the explicit proxy the committed native topology merely because it is implementable with today's public Aspire primitives.
 
-This still aligns with Maddy's direction: build the experience as it should work, then upstream it or use it as concrete inspiration. It also honors the proxy-layer direction without claiming a seam that does not exist.
+This directly follows Damian's suggestion and Brent's later framing to Maddy: extend Aspire's existing proxy layer, then expose policy handling through the CLI and testing APIs. It also states the actual engineering cost rather than implying the DCP seam already exists.
 
-If DCP later implements the contract, `IChaosDataPlaneAdapter` can target DCP endpoints instead of explicit proxy resources. CLI commands, test leases, policy IDs, composition, TTL, telemetry, and dashboard projections remain unchanged.
+`IChaosDataPlaneAdapter` keeps the controller insulated from the DCP wire contract and allows the conformance harness to run the same tests. CLI commands, test leases, policy IDs, composition, TTL, telemetry, and dashboard projections remain unchanged.
 
 ## Policy schema
 
@@ -464,6 +464,8 @@ aspire resource orders-to-inventory-chaos list-policies
 aspire resource orders-to-inventory-chaos pause
 aspire resource orders-to-inventory-chaos resume
 ```
+
+`orders-to-inventory-chaos` is the proposed `ChaosEdgeResource` name for traffic from the `orders` resource to the `inventory` resource. It is a control-plane handle for the DCP-proxied edge, not another application endpoint.
 
 Mutations go through `ResourceCommandService` to `ChaosPolicyController`. The CLI does not call the proxy management endpoint and does not parse or own policy semantics.
 
@@ -697,22 +699,20 @@ Chaos is run-only.
 
 ### Run
 
-- Materialize the proxy resource and stable endpoint.
-- Emit only the mediated endpoint under the target's service name.
+- Materialize the synthetic edge control resource.
+- Keep the existing DCP-proxied endpoint under the target's service name.
 - Start the controller and reconcile the initial declared policy revision.
-- Keep the proxy pass-through when no policy is active.
+- Keep the DCP proxy pass-through when no policy is active.
 
 ### Publish
 
-- Do not materialize chaos proxies in deployable output.
-- Preserve or restore the original direct target references deterministically.
+- Do not materialize chaos control resources or fault metadata in deployable output.
+- Emit the normal target references deterministically.
 - Do not serialize policy state, pause state, controller revisions, local endpoints, credentials, or observations.
-- Validate that no published reference points to a chaos resource.
-- Fail publish with an actionable error if direct-reference restoration cannot be proven.
+- Validate that no published reference carries chaos metadata.
+- Fail publish with an actionable error if the normal reference cannot be proven.
 
-Calling only `.ExcludeFromManifest()` is insufficient because a consumer could still reference an excluded proxy and produce a broken topology.
-
-The preferred implementation branches before run-only reference transformation. If final API constraints require a shared model transformation, it must retain the original structured endpoint reference and apply an explicit inverse transformation in publish mode.
+Calling only `.ExcludeFromManifest()` is insufficient because DCP fault metadata could still leak into publish processing. The preferred implementation treats chaos as run-only metadata on an otherwise normal structured endpoint reference.
 
 ### Deploy
 
@@ -769,13 +769,13 @@ If incubation remains outside `microsoft/aspire`, use the same contract boundari
 
 ## Alternatives considered
 
-### Wait for DCP-native faults
+### Avoid DCP changes
 
-This produces the cleanest eventual topology but blocks user-experience validation on an uncommitted cross-repository contract. Rejected as the first step; retained as the intended long-term evaluation.
+Building only an explicit proxy is implementable in the hosting integration, but it bypasses the native proxy layer Damian identified and leaves Aspire with two local proxy topologies. Rejected as the product destination.
 
 ### Use the explicit proxy permanently
 
-This is viable for HTTP and may remain the best protocol-aware engine. It adds visible resources and hops, so the design should not preclude DCP adopting the contract later.
+This is viable for HTTP as an incubation or conformance engine. It adds visible resources and hops and bypasses Aspire's native proxy topology, so it is not the recommended product destination.
 
 ### Host YARP in the AppHost process
 
@@ -802,19 +802,22 @@ This could provide polished syntax early, but it would make correctness depend o
 ### Phase 0: proof spikes and maintainer decisions
 
 - Decide repository placement and engineering owner.
-- Prove explicit-reference run/publish transformation with no dangling manifest references.
+- Review a versioned DCP policy, acknowledgement, capability, and telemetry contract with DCP owners.
+- Prove the chaos-enabled reference emits the normal DCP endpoint in run and the normal reference without chaos metadata in publish.
+- Decide and prove DCP policy granularity: a whole target endpoint or a distinguishable directed reference.
 - Prove authenticated controller-to-proxy revision application and restart reconciliation.
 - Run HTTP/1.1 and HTTP/2 conformance tests for the initial effects.
 - Validate test isolation through a propagated W3C baggage member across at least two mediated edges and an intermediate service.
-- Measure per-edge proxy startup and pass-through overhead.
-- Compare a published first-party proxy container with an in-process host and document offline acquisition behavior.
+- Measure DCP pass-through and enabled-fault overhead.
+- Use the explicit YARP-compatible engine only as a conformance harness if the DCP implementation is not yet available.
 - Sketch and review the C# and generated TypeScript topology APIs.
-- Write a short DCP contract sketch to confirm the adapter boundary is sufficient.
+- Validate the DCP contract against the engine-neutral adapter boundary.
 
 ### Phase 1: minimal native loop
 
-- Explicit edge resource and run-only topology.
+- Synthetic edge control resource over the existing DCP proxy topology.
 - Singleton controller and engine-neutral revision contract.
+- DCP adapter implementing prepare, commit, rollback, capability discovery, and observations.
 - Add, remove, list, pause, and resume resource commands with JSON results.
 - `ApplyChaosPolicyAsync` and `ChaosPolicyLease`.
 - TTL expiry, explicit cleanup, restart reconciliation, and bounded receipts.
@@ -830,11 +833,10 @@ This could provide polished syntax early, but it would make correctness depend o
 - Richer resource properties and telemetry.
 - TypeScript AppHost projection for topology APIs.
 
-### Phase 3: platform integration evaluation
+### Phase 3: broader platform integration
 
-- Evaluate a DCP fault-control contract using Phase 1 and 2 evidence.
-- Compare startup cost, transparency, protocol coverage, compatibility, and security.
-- If adopted, implement a DCP data-plane adapter without changing caller contracts.
+- Evaluate additional DCP proxy engines and protocol coverage using Phase 1 and 2 evidence.
+- Compare transparency, compatibility, and security across supported protocols.
 - Consider a richer dashboard view and `aspire chaos` alias independently.
 
 ## Open questions and proof spikes
@@ -842,17 +844,17 @@ This could provide polished syntax early, but it would make correctness depend o
 | Question | Recommended default | Evidence required |
 | --- | --- | --- |
 | Repository placement | Continue contribution review without assuming ownership | Jose, Aspire maintainers, and owning engineering team decision |
-| First data plane | Explicit YARP-compatible proxy | Phase 0 correctness and performance results |
-| DCP future | Preserve adapter path, do not block Phase 1 | Reviewed DCP schema/control proposal |
-| Topology API | Prefer explicit resource; compare decorator ergonomics | C# and TypeScript API sketches plus publish transform prototype |
+| First data plane | DCP proxy extension | Reviewed DCP schema/control proposal and Phase 0 conformance results |
+| Conformance fallback | Explicit YARP-compatible adapter, not product topology | Evidence that DCP sequencing blocks policy validation |
+| Topology API | Synthetic edge control resource over a normal DCP reference | C# and TypeScript API sketches plus run/publish prototype |
 | HTTP/2 scope | Ship only proven effects | Multiplexing, cancellation, flow-control, and trailer conformance |
 | Unary gRPC | Defer by default | Status/trailer/deadline/retry test matrix |
 | Policy overlap | Explicit priority; equal-priority conflict fails closed | Parallel apply and runtime overlap tests |
 | Test isolation | Reserved W3C baggage member preserved across workload hops and scrubbed from diagnostics | End-to-end proof across two mediated edges and an intermediate service over HTTP/1.1 and HTTP/2 |
 | Runtime persistence | None | Revisit only if restart use cases outweigh stale-fault risk |
 | Dashboard extension | Standard resource commands first | User evidence that commands and telemetry are insufficient |
-| Proxy granularity | One proxy per selected edge | Startup and memory measurements for representative graphs |
-| Proxy execution model | One container instance per edge, all using the same published first-party image | Startup, offline acquisition, isolation, and in-process comparison |
+| Proxy granularity | One DCP proxy per target endpoint; do not promise directed-edge isolation until DCP can distinguish references | DCP routing design and a two-consumer isolation proof |
+| Proxy execution model | Existing DCP proxy topology | DCP ownership, deployment, restart, and compatibility review |
 | TLS behavior | Phase 1 consumer edge is HTTP/h2c; HTTPS interception remains deferred | Cross-platform certificate identity and trust proof for host and container clients |
 | Policy schema location | Shared engine-neutral contract | Dependency and versioning review |
 | Testing package shape | Keep lease API with integration if dependency-safe | Project-reference and public API review |
@@ -861,7 +863,7 @@ This could provide polished syntax early, but it would make correctness depend o
 
 An implementation should not begin until the following are demonstrated:
 
-1. A publish snapshot containing a chaos-enabled run model emits only the original direct references.
+1. A publish snapshot containing a chaos-enabled run model emits normal references with no chaos metadata.
 2. CLI, dashboard, MCP, and tests all mutate the same controller instance.
 3. Applying and disposing a lease each await proxy acknowledgement.
 4. Lease disposal cannot remove another test's policy.
@@ -873,10 +875,10 @@ An implementation should not begin until the following are demonstrated:
 10. Snapshots and receipts contain no secrets, bodies, isolation values, or raw sensitive headers.
 11. Unsupported protocols and effects fail explicitly.
 12. HTTP/1.1 and each claimed HTTP/2 behavior pass protocol-specific conformance tests.
-13. Final-model validation rejects direct and mediated references to the same target endpoint regardless of call order.
+13. Final-model validation rejects duplicate direct and chaos-enabled references to the same target endpoint regardless of call order.
 14. Proxies enforce absolute TTL and controller-liveness pass-through independently of controller acknowledgement.
 15. Phase 1 rejects consumer HTTPS edges rather than silently changing endpoint scheme.
-16. Each edge has one proxy instance while all instances use the same versioned first-party image.
+16. Each policy scope maps unambiguously to the DCP proxy instance and acknowledged revision that enforce it; directed-edge scope is exposed only if DCP can distinguish that reference.
 
 ## Source map
 
