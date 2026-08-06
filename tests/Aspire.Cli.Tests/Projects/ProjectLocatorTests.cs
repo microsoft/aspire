@@ -1579,6 +1579,36 @@ builder.Build().Run();");
     }
 
     [Fact]
+    public async Task UseOrFindAppHostProjectFileThrowsBuildFailureWhenDirectoryOnlyContainsPossiblyUnbuildableProject()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var projectDirectory = workspace.WorkspaceRoot.CreateSubdirectory("UnbuildableAppHost");
+        var projectFile = new FileInfo(Path.Combine(projectDirectory.FullName, "UnbuildableAppHost.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostCallback = _ => new AppHostValidationResult(IsValid: false, IsPossiblyUnbuildable: true)
+        };
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
+        var directoryAsFileInfo = new FileInfo(projectDirectory.FullName);
+
+        var ex = await Assert.ThrowsAsync<ProjectLocatorException>(async () =>
+        {
+            await projectLocator.UseOrFindAppHostProjectFileAsync(directoryAsFileInfo, createSettingsFile: true).DefaultTimeout();
+        });
+
+        Assert.Equal(ErrorStrings.AppHostsMayNotBeBuildable, ex.Message);
+        Assert.Equal(ProjectLocatorFailureReason.AppHostsMayNotBeBuildable, ex.FailureReason);
+
+        var (exitCode, errorMessage) = ProjectLocatorErrorHelper.GetExitCodeAndMessage(ex, projectOptionSpecifiedAsDirectory: true);
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode);
+        Assert.Equal(InteractionServiceStrings.ProjectCouldNotBeBuilt, errorMessage);
+    }
+
+    [Fact]
     public async Task UseOrFindAppHostProjectFilePromptsWhenDirectoryHasMultipleProjects()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

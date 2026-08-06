@@ -849,6 +849,11 @@ internal sealed class ProjectLocator(
 
                 if (appHostProjects.Count == 0)
                 {
+                    if (searchResults.UnbuildableSuspectedAppHostProjects.Count > 0)
+                    {
+                        throw new ProjectLocatorException(ErrorStrings.AppHostsMayNotBeBuildable, ProjectLocatorFailureReason.AppHostsMayNotBeBuildable);
+                    }
+
                     if (searchResults.HasUnsupportedProjects)
                     {
                         throw new ProjectLocatorException(ErrorStrings.NoProjectFileFound, ProjectLocatorFailureReason.UnsupportedProjects);
