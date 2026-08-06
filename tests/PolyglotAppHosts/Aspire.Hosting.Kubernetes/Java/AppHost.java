@@ -47,6 +47,7 @@ void main() throws Exception {
         var persistentVolume = kubernetes.addPersistentVolume("data");
         persistentVolume.withStorageClass("fast-storage");
         persistentVolume.withCapacity("5Gi");
+        var _persistentVolumeResourceName = persistentVolume.getResourceName();
         var parameterizedPersistentVolume = kubernetes.addPersistentVolume("parameterized-data");
         parameterizedPersistentVolume.withStorageClassParam(persistentVolumeStorageClass);
         parameterizedPersistentVolume.withCapacityParam(persistentVolumeCapacity);

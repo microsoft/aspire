@@ -66,6 +66,7 @@ func main() {
 	persistentVolume := kubernetes.AddPersistentVolume("data")
 	persistentVolume.WithStorageClass("fast-storage")
 	persistentVolume.WithCapacity("5Gi")
+	_, _ = persistentVolume.GetResourceName()
 
 	parameterizedPersistentVolume := kubernetes.AddPersistentVolume("parameterized-data")
 	parameterizedPersistentVolume.WithStorageClassParam(persistentVolumeStorageClass)

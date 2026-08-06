@@ -61,6 +61,7 @@ await ingress.withTls('ingress-tls');
 const persistentVolume = await kubernetes.addPersistentVolume('data');
 await persistentVolume.withStorageClass('fast-storage');
 await persistentVolume.withCapacity('5Gi');
+const _persistentVolumeResourceName: string = await persistentVolume.getResourceName();
 
 const parameterizedPersistentVolume = await kubernetes.addPersistentVolume('parameterized-data');
 await parameterizedPersistentVolume.withStorageClassParam(persistentVolumeStorageClass);

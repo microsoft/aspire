@@ -39,6 +39,7 @@ with create_builder() as builder:
     persistent_volume = kubernetes.add_persistent_volume("data")
     persistent_volume.with_storage_class("fast-storage")
     persistent_volume.with_capacity("5Gi")
+    _persistent_volume_resource_name = persistent_volume.get_resource_name()
     parameterized_persistent_volume = kubernetes.add_persistent_volume("parameterized-data")
     parameterized_persistent_volume.with_storage_class_param(persistent_volume_storage_class)
     parameterized_persistent_volume.with_capacity_param(persistent_volume_capacity)
