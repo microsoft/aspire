@@ -85,6 +85,18 @@ public static class BlazorGatewayExtensions
     /// publish scenarios. This restriction is expected to be lifted once container execution lands for
     /// <see cref="DotnetProjectResource"/>.
     /// </remarks>
+    /// <param name="builder">The distributed application builder.</param>
+    /// <param name="name">The name of the gateway resource.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the gateway resource.</returns>
+    /// <exception cref="NotSupportedException">Thrown when the application is being published.</exception>
+    /// <ats-summary>Adds the built-in Blazor gateway as a run-mode .NET resource.</ats-summary>
+    /// <ats-remarks>
+    /// This gateway can be used only when running the AppHost. Publishing it is not supported; use the standard
+    /// Blazor gateway for publish scenarios.
+    /// </ats-remarks>
+    /// <ats-param name="builder">The distributed application builder.</ats-param>
+    /// <ats-param name="name">The name of the gateway resource.</ats-param>
+    /// <ats-returns>The gateway resource builder.</ats-returns>
     [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<DotnetProjectResource> AddDotnetProjectBlazorGateway(
@@ -189,6 +201,17 @@ public static class BlazorGatewayExtensions
     /// <param name="apiPrefix">The URL path prefix for API proxy routes. Defaults to <c>"_api"</c>.</param>
     /// <param name="otlpPrefix">The URL path prefix for OTLP proxy routes. Defaults to <c>"_otlp"</c>.</param>
     /// <param name="proxyTelemetry"><see langword="true"/> to expose the OTLP proxy for the client app; otherwise, <see langword="false"/>.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the gateway resource.</returns>
+    /// <ats-summary>
+    /// Attaches a Blazor WebAssembly app to the gateway. The app's resource name becomes its URL path prefix,
+    /// and its service references are forwarded to the gateway for proxying.
+    /// </ats-summary>
+    /// <ats-param name="gateway">The gateway resource builder.</ats-param>
+    /// <ats-param name="wasmApp">The Blazor WebAssembly app to attach to the gateway.</ats-param>
+    /// <ats-param name="apiPrefix">The URL path prefix for API proxy routes. The default is <c>"_api"</c>.</ats-param>
+    /// <ats-param name="otlpPrefix">The URL path prefix for telemetry proxy routes. The default is <c>"_otlp"</c>.</ats-param>
+    /// <ats-param name="proxyTelemetry"><see langword="true"/> to expose the telemetry proxy for the client app; otherwise, <see langword="false"/>.</ats-param>
+    /// <ats-returns>The gateway resource builder.</ats-returns>
     [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport("withDotnetProjectBlazorClientApp", MethodName = "withBlazorClientApp")]
     public static IResourceBuilder<DotnetProjectResource> WithBlazorClientApp(
@@ -246,7 +269,7 @@ public static class BlazorGatewayExtensions
     /// transformed (AssetFile prefixed, runtime tree wrapped under prefix), then injected
     /// into the Gateway as environment variables.
     /// </summary>
-    [AspireExportIgnore(Reason = "Blazor gateway APIs are not yet stable for ATS export.")]
+    [AspireExportIgnore(Reason = "Internal open-generic implementation helper; polyglot AppHosts use the exported WithBlazorClientApp methods.")]
     internal static IResourceBuilder<TGateway> WithBlazorApp<TGateway>(
         this IResourceBuilder<TGateway> gateway,
         IResourceBuilder<BlazorWasmAppResource> wasmApp,

@@ -168,6 +168,14 @@ path_rules:
     targets: [job:polyglot]
     reason: polyglot fixtures + workflow; the typesystem/SDK/CLI/codegen production projects are in affected_project_rules
   - paths:
+      - src/Aspire.Hosting.Blazor/Aspire.Hosting.Blazor.csproj
+      - src/Aspire.Hosting.Blazor/BlazorGatewayExtensions.cs
+      - src/Aspire.Hosting.Blazor/buildTransitive/**
+      - src/Aspire.Hosting.Blazor/Scripts/**
+      - src/Aspire.Hosting.Blazor/targets/**
+    targets: [test:Aspire.Hosting.Tests, test:Aspire.Cli.EndToEnd.Tests, job:polyglot]
+    reason: Blazor gateway runtime assets must work from both MSBuild output and package-loaded polyglot AppHosts
+  - paths:
       - tests/Aspire.Hosting.CodeGeneration.TypeScript.JsTests/**
       - src/Aspire.Cli/Templating/Templates/ts-starter/**
       - .github/workflows/typescript-sdk-tests.yml
