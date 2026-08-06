@@ -419,7 +419,37 @@ public class DeploymentStateManagerTests : IDisposable
             stateManager.StateFilePath);
     }
 
-    private FileDeploymentStateManager CreateFileDeploymentStateManager(string? sha = null)
+    [Fact]
+    public async Task SourceAppHostStateMigratesFromLegacyPathOnSave()
+    {
+        var legacySha = Guid.NewGuid().ToString("N");
+        var currentSha = Guid.NewGuid().ToString("N");
+        var legacyStateManager = CreateFileDeploymentStateManager(legacySha);
+        var legacySection = await legacyStateManager.AcquireSectionAsync("Migration");
+        legacySection.Data["legacy"] = true;
+        await legacyStateManager.SaveSectionAsync(legacySection);
+        var legacyPath = legacyStateManager.StateFilePath;
+
+        var migratingStateManager = CreateFileDeploymentStateManager(currentSha, legacySha);
+        var migratedSection = await migratingStateManager.AcquireSectionAsync("Migration");
+        Assert.True(migratedSection.Data["legacy"]?.GetValue<bool>());
+
+        migratedSection.Data["current"] = true;
+        await migratingStateManager.SaveSectionAsync(migratedSection);
+
+        var currentPath = migratingStateManager.StateFilePath;
+        Assert.NotEqual(legacyPath, currentPath);
+        Assert.True(File.Exists(currentPath));
+        Assert.False(File.Exists(legacyPath));
+
+        var currentStateManager = CreateFileDeploymentStateManager(currentSha);
+        var currentSection = await currentStateManager.AcquireSectionAsync("Migration");
+        Assert.True(currentSection.Data["legacy"]?.GetValue<bool>());
+        Assert.True(currentSection.Data["current"]?.GetValue<bool>());
+        await migratingStateManager.ClearAllStateAsync();
+    }
+
+    private FileDeploymentStateManager CreateFileDeploymentStateManager(string? sha = null, string? legacySha = null)
     {
         // Use a unique SHA per test by default to avoid test interference,
         // but allow tests to share state by passing the same SHA
@@ -427,6 +457,7 @@ public class DeploymentStateManagerTests : IDisposable
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["AppHost:PathSha256"] = sha ?? Guid.NewGuid().ToString("N"),
+                ["AppHost:LegacyPathSha256"] = legacySha,
                 [KnownConfigNames.AspireHome] = _aspireHome.FullName
             })
             .Build();

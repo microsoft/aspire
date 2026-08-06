@@ -49,6 +49,34 @@ builder.AddProject<Projects.ApiService>("api")
     });
 ```
 
+The same APIs are available to TypeScript AppHosts:
+
+```typescript
+import {
+    AzureSandboxAutoSuspendMode,
+    AzureSandboxTier,
+    createBuilder
+} from "./.aspire/modules/aspire.mjs";
+
+const builder = await createBuilder();
+const sandboxGroup = await builder.addAzureSandboxGroup("sandboxes");
+
+const api = await builder
+    .addContainer("api", "nginx", "alpine")
+    .withHttpEndpoint({ name: "http", targetPort: 80 })
+    .withExternalHttpEndpoints();
+
+await api.publishAsAzureSandbox(sandboxGroup, {
+    tier: AzureSandboxTier.Medium,
+    autoSuspendEnabled: true,
+    autoSuspendInterval: 900_000,
+    autoSuspendMode: AzureSandboxAutoSuspendMode.Disk,
+    endpoints: [{ name: "http", anonymous: true }]
+});
+
+await builder.build().run();
+```
+
 Endpoints are not exposed unless they are marked external. External endpoints require an explicit `Anonymous = true` opt-in for anonymous access. Sandbox egress is configured with full inspection and deny-by-default behavior.
 
 Images are resolved to immutable Linux/amd64 digests before import. Deployment state stores sandbox, disk-image, endpoint, and endpoint-security metadata, but does not persist registry credentials. Stable ownership labels are derived from the AppHost and Azure deployment scope so a later deploy or destroy can find resources after `--clear-cache`; the scope and application identity remain part of the label to prevent resource-name-only sweeping across apps.
