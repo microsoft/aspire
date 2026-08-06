@@ -36,7 +36,7 @@ interface AzureFunctionsApiProvider {
     getApi(apiVersion: string): AzureFunctionsApi;
 }
 
-type FuncHostTaskShell = 'cmd' | 'powershell' | 'posix';
+type FuncHostTaskShell = 'cmd' | 'fish' | 'powershell' | 'posix';
 
 type TerminalProfileConfiguration = {
     path?: string | string[];
@@ -123,7 +123,7 @@ function quoteFuncHostArguments(args: string[] | undefined): string[] {
 function quoteFuncHostArgument(argument: string, shell: FuncHostTaskShell): string {
     // Keep ordinary flags and paths unchanged so the Azure Functions extension can
     // still inspect exact flag values before it flattens the array for ShellExecution.
-    const isShellSafe = shell === 'posix'
+    const isShellSafe = shell === 'posix' || shell === 'fish'
         ? /^[A-Za-z0-9_./:-]+$/.test(argument)
         : /^[A-Za-z0-9_./:\\-]+$/.test(argument);
     if (isShellSafe) {
@@ -145,6 +145,12 @@ function quoteFuncHostArgument(argument: string, shell: FuncHostTaskShell): stri
         }
 
         return quoteCmdArgument(argument);
+    }
+
+    if (shell === 'fish') {
+        // Fish only recognizes \' and \\ inside single quotes, so escape both before
+        // wrapping the argument. See https://fishshell.com/docs/current/language.html#quotes.
+        return `'${argument.replace(/[\\']/g, value => `\\${value}`)}'`;
     }
 
     return quoteShellArg(argument, shell === 'powershell' ? 'win32' : 'linux');
@@ -189,6 +195,10 @@ function classifyFuncHostTaskShell(profile: TerminalProfileConfiguration | undef
 
     if (identity.includes('command prompt') || /(?:^|[\\/\s])cmd(?:\.exe)?(?:$|\s)/.test(identity)) {
         return 'cmd';
+    }
+
+    if (/(?:^|[\\/\s])fish(?:\.exe)?(?:$|\s)/.test(identity)) {
+        return 'fish';
     }
 
     if (identity.includes('git bash') || identity.includes('wsl') || identity.includes('cygwin') || identity.includes('msys') ||

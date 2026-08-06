@@ -106,6 +106,31 @@ suite('Azure Functions Debugger Extension Tests', () => {
             {}));
     });
 
+    test('quotes a backslash before an apostrophe for a configured fish task shell', async () => {
+        const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');
+        const targetPath = path.join('/workspace', 'FunctionsApp', 'bin', 'Debug', 'net10.0', 'FunctionsApp.dll');
+        const startFuncProcess = sinon.stub().resolves({ success: true, processId: '4242' });
+        const password = String.raw`prefix\'; touch /tmp/owned`;
+        const debugConfiguration = createDebugConfiguration(projectPath, ['--password', password]);
+
+        sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
+        sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+        stubTaskShell('linux', { path: '/usr/bin/fish' });
+        installAzureFunctionsExtensionStub(createAzureFunctionsApi(startFuncProcess));
+
+        await azureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
+            createLaunchConfiguration(projectPath),
+            debugConfiguration.args as string[],
+            [],
+            createLaunchOptions(false),
+            debugConfiguration);
+
+        assert.ok(startFuncProcess.calledOnceWith(
+            path.dirname(targetPath),
+            ['--password', String.raw`'prefix\\\'; touch /tmp/owned'`],
+            {}));
+    });
+
     test('rejects percent expansion for a configured cmd task shell', async () => {
         const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');
         const targetPath = path.join('/workspace', 'FunctionsApp', 'bin', 'Debug', 'net10.0', 'FunctionsApp.dll');
