@@ -32,8 +32,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="$(SharedDir)StringComparers.cs" Link="Utils\StringComparers.cs" />
-    <Compile Include="$(SharedDir)Model\KnownRelationshipTypes.cs" Link="Utils\KnownRelationshipTypes.cs" />
+    <!-- StringComparers and KnownRelationshipTypes are provided by the referenced Aspire.Hosting
+         assembly (which source-shares them and exposes internals here via InternalsVisibleTo),
+         so they must not be source-shared again or they would conflict (CS0436). -->
+    <!-- Source-share browser debugger types with Aspire.Hosting.JavaScript via the shared source directory -->
+    <Compile Include="$(SharedDir)BrowserDebuggerResource.cs" Link="BrowserDebuggerResource.cs" />
+    <Compile Include="$(SharedDir)BrowserLaunchConfiguration.cs" Link="BrowserLaunchConfiguration.cs" />
   </ItemGroup>
 
   <ItemGroup>

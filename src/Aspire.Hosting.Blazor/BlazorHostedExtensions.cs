@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
+using System.Xml.Linq;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Logging;
 
@@ -68,6 +69,24 @@ public static class BlazorHostedExtensions
         return host;
     }
 
+    /// <summary>
+    /// Configures the browser launched when starting a debug session for the hosted Blazor WebAssembly client.
+    /// The value is read when the debugger is registered on the first <see cref="ProxyBlazorService"/> or
+    /// <see cref="ProxyBlazorTelemetry"/> call, so call this before proxying to guarantee it takes effect.
+    /// </summary>
+    /// <param name="host">The host resource builder.</param>
+    /// <param name="browser">The browser to use for debugging. Defaults to <c>"msedge"</c>. Supported values include <c>"msedge"</c> and <c>"chrome"</c>.</param>
+    [AspireExportIgnore(Reason = "Blazor hosted APIs are not yet stable for ATS export.")]
+    public static IResourceBuilder<ProjectResource> WithBlazorDebuggerBrowser(
+        this IResourceBuilder<ProjectResource> host,
+        string browser = "msedge")
+    {
+        var annotation = GetOrAddHostedClientAnnotation(host.Resource);
+        annotation.DebuggerBrowser = browser;
+
+        return host;
+    }
+
     private static void EnsureEnvironmentCallback(
         IResourceBuilder<ProjectResource> host,
         HostedClientAnnotation annotation)
@@ -78,6 +97,22 @@ public static class BlazorHostedExtensions
         }
 
         annotation.IsInitialized = true;
+
+        // Register "Debug in Browser" for the hosted WASM client automatically (idempotent).
+        if (!host.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            var debuggerName = $"{host.Resource.Name}-wasm-debugger";
+            if (!host.ApplicationBuilder.Resources.Any(r => r.Name == debuggerName))
+            {
+                var projectMetadata = host.Resource.GetProjectMetadata();
+                // The debug bridge (monovsdbg_wasm) needs the CLIENT project path to resolve
+                // WASM BCL assemblies on disk. Passing the server's path fails because the
+                // server's output doesn't contain browser-wasm BCL DLLs (e.g. mscorlib.dll).
+                var clientProjectPath = ResolveBlazorWasmClientProjectPath(projectMetadata.ProjectPath)
+                    ?? projectMetadata.ProjectPath;
+                AddBrowserDebuggerResource(host, clientProjectPath, relativePath: null, browser: annotation.DebuggerBrowser);
+            }
+        }
 
         host.WithEnvironment(context =>
         {
@@ -134,6 +169,69 @@ public static class BlazorHostedExtensions
         var endpoint = resource.GetEndpoint(endpointName);
         return endpoint.Exists ? endpoint : null;
     }
+
+    /// <summary>
+    /// Resolves the Blazor WebAssembly client project path from the server project's references.
+    /// The server's .csproj contains a ProjectReference to the client which uses
+    /// Microsoft.NET.Sdk.BlazorWebAssembly. We find that reference so the debug bridge
+    /// can locate WASM BCL assemblies in the client's output directory.
+    /// </summary>
+    private static string? ResolveBlazorWasmClientProjectPath(string serverProjectPath)
+    {
+        try
+        {
+            var serverDir = Path.GetDirectoryName(serverProjectPath);
+            if (serverDir is null)
+            {
+                return null;
+            }
+
+            var doc = XDocument.Load(serverProjectPath);
+            var ns = doc.Root?.Name.Namespace ?? XNamespace.None;
+
+            var projectRefs = doc.Descendants(ns + "ProjectReference")
+                .Select(e => e.Attribute("Include")?.Value)
+                .Where(v => v is not null);
+
+            foreach (var relPath in projectRefs)
+            {
+                var fullPath = Path.GetFullPath(Path.Combine(serverDir, relPath!));
+                if (!File.Exists(fullPath))
+                {
+                    continue;
+                }
+
+                // Check if this project uses the BlazorWebAssembly SDK
+                var refDoc = XDocument.Load(fullPath);
+                var sdk = refDoc.Root?.Attribute("Sdk")?.Value;
+                if (string.Equals(sdk, "Microsoft.NET.Sdk.BlazorWebAssembly", StringComparison.OrdinalIgnoreCase))
+                {
+                    return fullPath;
+                }
+            }
+        }
+        catch
+        {
+            // If we can't resolve the client project, fall back to the server path.
+        }
+
+        return null;
+    }
+
+    private static void AddBrowserDebuggerResource(
+        IResourceBuilder<ProjectResource> host,
+        string clientProjectPath,
+        string? relativePath,
+        string browser)
+    {
+        BrowserDebuggerHelper.AddBrowserDebuggerResource(
+            host.ApplicationBuilder,
+            host.Resource,
+            host,
+            clientProjectPath,
+            relativePath,
+            browser: browser);
+    }
 }
 
 /// <summary>
@@ -145,6 +243,7 @@ internal sealed class HostedClientAnnotation : IResourceAnnotation
     public bool ProxyBlazorTelemetry { get; set; }
     public bool IsInitialized { get; set; }
     public string OtlpPrefix { get; set; } = GatewayConfigurationBuilder.DefaultOtlpPrefix;
+    public string DebuggerBrowser { get; set; } = "msedge";
 }
 
 /// <summary>

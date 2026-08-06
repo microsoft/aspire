@@ -1,8 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREEXTENSION001
+
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Dcp.Model;
+using Aspire.Hosting.JavaScript;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Blazor.Tests;
 
@@ -172,6 +177,138 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public void WithClient_WhenWasmDebuggerEnabled_AddsDebuggerResourceAndCommands()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.Configuration[KnownConfigNames.WasmDebuggerEnabled] = bool.TrueString;
+
+        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+            .WithHttpEndpoint()
+            .WithHttpsEndpoint();
+
+        var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj")
+            .WithBlazorDebuggerBrowser("chrome");
+
+        gateway.WithBlazorClientApp(wasmApp);
+
+        var debuggerResource = Assert.Single(builder.Resources.OfType<BrowserDebuggerResource>());
+        Assert.Equal("gateway-store-debugger", debuggerResource.Name);
+        Assert.Equal("chrome", debuggerResource.Command);
+        Assert.True(debuggerResource.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _));
+        Assert.True(debuggerResource.TryGetLastAnnotation<ManifestPublishingCallbackAnnotation>(out var manifestAnnotation));
+        Assert.Same(ManifestPublishingCallbackAnnotation.Ignore, manifestAnnotation);
+
+        var parentRelationship = Assert.Single(
+            debuggerResource.Annotations.OfType<ResourceRelationshipAnnotation>(),
+            annotation => annotation.Type == "Parent");
+        Assert.Same(gateway.Resource, parentRelationship.Resource);
+
+        Assert.True(debuggerResource.TryGetLastAnnotation<ResourceSnapshotAnnotation>(out var snapshotAnnotation));
+        Assert.Equal("BrowserDebugger", snapshotAnnotation.InitialSnapshot.ResourceType);
+        Assert.True(snapshotAnnotation.InitialSnapshot.IsHidden);
+
+        var commandNames = wasmApp.Resource.Annotations
+            .OfType<ResourceCommandAnnotation>()
+            .Select(annotation => annotation.Name)
+            .ToList();
+        Assert.Contains("debug-in-browser", commandNames);
+        Assert.Contains("stop-browser-debug", commandNames);
+        Assert.DoesNotContain(gateway.Resource.Annotations, annotation => annotation is ResourceCommandAnnotation);
+    }
+
+    [Fact]
+    public void WithClient_WhenWasmDebuggerDisabled_DoesNotAddDebuggerResourceOrCommands()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+            .WithHttpEndpoint()
+            .WithHttpsEndpoint();
+
+        var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
+
+        gateway.WithBlazorClientApp(wasmApp);
+
+        Assert.Empty(builder.Resources.OfType<BrowserDebuggerResource>());
+        Assert.DoesNotContain(wasmApp.Resource.Annotations, annotation => annotation is ResourceCommandAnnotation);
+        Assert.Single(gateway.Resource.Annotations.OfType<GatewayAppsAnnotation>());
+    }
+
+    [Fact]
+    public void WithClient_InPublishMode_DoesNotAddDebuggerResourceOrCommands()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.Configuration[KnownConfigNames.WasmDebuggerEnabled] = bool.TrueString;
+
+        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+            .WithHttpEndpoint()
+            .WithHttpsEndpoint();
+
+        var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
+
+        gateway.WithBlazorClientApp(wasmApp);
+
+        Assert.Empty(builder.Resources.OfType<BrowserDebuggerResource>());
+        Assert.DoesNotContain(wasmApp.Resource.Annotations, annotation => annotation is ResourceCommandAnnotation);
+        Assert.Single(gateway.Resource.Annotations.OfType<GatewayAppsAnnotation>());
+    }
+
+    [Theory]
+    [InlineData("Running", ResourceCommandState.Enabled)]
+    [InlineData("Starting", ResourceCommandState.Disabled)]
+    [InlineData("Exited", ResourceCommandState.Disabled)]
+    public void WithClient_DebuggerCommandsHaveExpectedInitialState(string resourceState, ResourceCommandState expectedDebugState)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.Configuration[KnownConfigNames.WasmDebuggerEnabled] = bool.TrueString;
+
+        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+            .WithHttpsEndpoint();
+        var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
+        gateway.WithBlazorClientApp(wasmApp);
+
+        var commands = wasmApp.Resource.Annotations.OfType<ResourceCommandAnnotation>().ToDictionary(annotation => annotation.Name);
+        var context = new UpdateCommandStateContext
+        {
+            ResourceSnapshot = new CustomResourceSnapshot
+            {
+                ResourceType = "BlazorWasmApp",
+                Properties = [],
+                State = resourceState
+            },
+            ServiceProvider = new ServiceCollection().BuildServiceProvider()
+        };
+
+        Assert.Equal(expectedDebugState, commands["debug-in-browser"].UpdateState(context));
+        Assert.Equal(ResourceCommandState.Hidden, commands["stop-browser-debug"].UpdateState(context));
+    }
+
+    [Fact]
+    public void WithClient_WhenWasmDebuggerEnabled_CreatesBrowserLaunchConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.Configuration[KnownConfigNames.WasmDebuggerEnabled] = bool.TrueString;
+
+        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+            .WithHttpEndpoint()
+            .WithHttpsEndpoint()
+            .WithEndpoint("https", endpoint => endpoint.AllocatedEndpoint = new(endpoint, "localhost", 7443), createIfNotExists: false);
+
+        var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj")
+            .WithBlazorDebuggerBrowser("chrome");
+
+        gateway.WithBlazorClientApp(wasmApp);
+
+        var debuggerResource = Assert.Single(builder.Resources.OfType<BrowserDebuggerResource>());
+        var launchConfiguration = InvokeLaunchConfigurationAnnotator(debuggerResource);
+
+        Assert.Equal(ExecutableLaunchMode.Debug, launchConfiguration.Mode);
+        Assert.Equal("https://localhost:7443/store/", launchConfiguration.Url);
+        Assert.Equal(wasmApp.Resource.ProjectPath, launchConfiguration.WebRoot);
+        Assert.Equal("chrome", launchConfiguration.Browser);
+    }
+
+    [Fact]
     public void WithClient_CanDisableTelemetryProxy()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
@@ -297,6 +434,19 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
         Assert.Collection(service.EndpointNames.Order(),
             name => Assert.Equal("admin", name),
             name => Assert.Equal("public", name));
+    }
+
+    private static BrowserLaunchConfiguration InvokeLaunchConfigurationAnnotator(IResource resource)
+    {
+        Assert.True(resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
+
+        var executable = Executable.Create("test", "browser");
+        supportsDebugging.LaunchConfigurationAnnotator(executable, ExecutableLaunchMode.Debug);
+
+        Assert.True(executable.TryGetAnnotationAsObjectList<BrowserLaunchConfiguration>(
+            Executable.LaunchConfigurationsAnnotation,
+            out var launchConfigurations));
+        return Assert.Single(launchConfigurations);
     }
 
     private sealed class TestProjectMetadata : IProjectMetadata
