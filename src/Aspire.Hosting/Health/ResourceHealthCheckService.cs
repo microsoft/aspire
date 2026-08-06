@@ -115,7 +115,7 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
     private async Task MonitorResourceHealthAsync(ResourceMonitorState state)
     {
         var cancellationToken = state.CancellationToken;
-        var resource = state.LatestEvent.Resource;
+        var resource = state.Resource;
 
         if (!resource.TryGetAnnotationsIncludingAncestorsOfType<HealthCheckAnnotation>(out var annotations))
         {
@@ -254,6 +254,22 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
 
     private void FireResourceReadyEvent(IResource resource, CancellationToken cancellationToken)
     {
+        var resourceGenerations = new List<(string ResourceId, long Generation)>();
+        foreach (var resourceId in resource.GetResolvedResourceNames())
+        {
+            if (resourceNotificationService.TryGetCurrentState(resourceId, out var resourceEvent) &&
+                string.Equals(resourceEvent.Snapshot.State?.Text, KnownResourceStates.Running, StringComparisons.ResourceState))
+            {
+                resourceGenerations.Add((resourceId, resourceEvent.Snapshot.ResourceGeneration));
+            }
+        }
+
+        if (resourceGenerations.Count == 0)
+        {
+            logger.LogDebug("Resource '{ResourceName}' is no longer running. Skipping ResourceReadyEvent.", resource.Name);
+            return;
+        }
+
         logger.LogDebug("Resource '{ResourceName}' is ready.", resource.Name);
 
         // We don't want to block the monitoring loop while we fire the event.
@@ -275,11 +291,14 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
 
             logger.LogDebug("Publishing the result of ResourceReadyEvent for '{ResourceName}'.", resource.Name);
 
-            await resourceNotificationService.PublishUpdateAsync(resource, s => s with
+            foreach (var (resourceId, generation) in resourceGenerations)
             {
-                ResourceReadyEvent = new(task)
-            })
-            .ConfigureAwait(false);
+                await resourceNotificationService.PublishUpdateAsync(resource, resourceId, snapshot => snapshot with
+                {
+                    ResourceReadyEvent = new(task, generation)
+                })
+                .ConfigureAwait(false);
+            }
         },
         cancellationToken);
     }
@@ -331,6 +350,7 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
             _logger = logger;
             _cts = CancellationTokenSource.CreateLinkedTokenSource(serviceStoppingToken);
             _resourceName = initialEvent.Resource.Name;
+            Resource = initialEvent.Resource;
             LatestEvent = initialEvent;
 
             _logger.LogDebug("Starting health monitoring for resource '{ResourceName}'.", _resourceName);
@@ -338,6 +358,8 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
 
         // Used to cancel and exit the monitoring loop for a resource.
         public CancellationToken CancellationToken => _cts.Token;
+
+        public IResource Resource { get; }
 
         public ResourceEvent LatestEvent { get; private set; }
 

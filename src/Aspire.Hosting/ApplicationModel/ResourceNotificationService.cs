@@ -938,6 +938,10 @@ public class ResourceNotificationService : IDisposable
             var previousState = GetCurrentSnapshot(resource, notificationState);
 
             var newState = stateFactory(previousState);
+            newState = newState with
+            {
+                ResourceGeneration = GetResourceGeneration(previousState, newState)
+            };
 
             if (!string.Equals(newState.State?.Text, KnownResourceStates.Waiting, StringComparisons.ResourceState))
             {
@@ -947,7 +951,7 @@ public class ResourceNotificationService : IDisposable
                 };
             }
 
-            if (ShouldClearResourceReadyEvent(previousState, newState))
+            if (ShouldClearResourceReadyEvent(newState))
             {
                 newState = newState with
                 {
@@ -1059,9 +1063,9 @@ public class ResourceNotificationService : IDisposable
         return Task.CompletedTask;
     }
 
-    internal static bool ShouldClearResourceReadyEvent(CustomResourceSnapshot previousState, CustomResourceSnapshot newState)
+    internal static bool ShouldClearResourceReadyEvent(CustomResourceSnapshot newState)
     {
-        if (newState.ResourceReadyEvent is null || !Equals(previousState.ResourceReadyEvent, newState.ResourceReadyEvent))
+        if (newState.ResourceReadyEvent is not { } resourceReadyEvent)
         {
             return false;
         }
@@ -1071,9 +1075,28 @@ public class ResourceNotificationService : IDisposable
             return true;
         }
 
+        // Ready-event callbacks can finish after their process has restarted. Reject results from
+        // an older process generation before waiters can observe them on the new running snapshot.
+        return resourceReadyEvent.ResourceGeneration != newState.ResourceGeneration;
+    }
+
+    internal static long GetResourceGeneration(CustomResourceSnapshot previousState, CustomResourceSnapshot newState)
+    {
+        if (!string.Equals(newState.State?.Text, KnownResourceStates.Running, StringComparisons.ResourceState))
+        {
+            return previousState.ResourceGeneration;
+        }
+
+        if (!string.Equals(previousState.State?.Text, KnownResourceStates.Running, StringComparisons.ResourceState))
+        {
+            return previousState.ResourceGeneration + 1;
+        }
+
         return previousState.StartTimeStamp is not null &&
                newState.StartTimeStamp is not null &&
-               previousState.StartTimeStamp != newState.StartTimeStamp;
+               previousState.StartTimeStamp != newState.StartTimeStamp
+            ? previousState.ResourceGeneration + 1
+            : previousState.ResourceGeneration;
     }
 
     private void RecordResourceLifecycleMilestones(

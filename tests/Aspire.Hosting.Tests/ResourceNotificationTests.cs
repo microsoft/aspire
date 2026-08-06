@@ -85,7 +85,7 @@ public class ResourceNotificationTests
         {
             ResourceType = "test",
             State = state,
-            ResourceReadyEvent = hasResourceReadyEvent ? new EventSnapshot(Task.CompletedTask) : null,
+            ResourceReadyEvent = hasResourceReadyEvent ? new EventSnapshot(Task.CompletedTask, 0) : null,
             Properties = []
         };
 
@@ -95,44 +95,81 @@ public class ResourceNotificationTests
     }
 
     [Theory]
-    [InlineData(null, false, false, 0, 0, false)]
-    [InlineData(nameof(KnownResourceStates.Starting), true, false, 0, 0, false)]
-    [InlineData(null, true, true, 0, 0, true)]
-    [InlineData(nameof(KnownResourceStates.Starting), true, true, 0, 0, true)]
-    [InlineData("running", true, true, 0, 0, false)]
-    [InlineData(nameof(KnownResourceStates.Running), true, true, 0, 1, true)]
-    [InlineData(nameof(KnownResourceStates.Running), true, true, null, 1, false)]
-    [InlineData(nameof(KnownResourceStates.Running), true, true, 0, null, false)]
+    [InlineData(null, false, false, 1, 1, 1, false)]
+    [InlineData(nameof(KnownResourceStates.Starting), true, false, 1, 1, 1, true)]
+    [InlineData(nameof(KnownResourceStates.Starting), true, true, 1, 1, 1, true)]
+    [InlineData("running", true, true, 1, 1, 1, false)]
+    [InlineData(nameof(KnownResourceStates.Running), true, true, 1, 2, 1, true)]
+    [InlineData(nameof(KnownResourceStates.Running), true, false, 2, 2, 1, true)]
+    [InlineData(nameof(KnownResourceStates.Running), true, false, 2, 2, 2, false)]
     public void ResourceReadyEventClearDecisionHandlesStateAndRestartChanges(
         string? state,
         bool hasNewResourceReadyEvent,
         bool reuseResourceReadyEvent,
-        int? previousStartOffset,
-        int? newStartOffset,
+        long previousGeneration,
+        long newGeneration,
+        long resourceReadyEventGeneration,
         bool expected)
     {
-        var resourceReadyEvent = new EventSnapshot(Task.CompletedTask);
-        var startTime = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var resourceReadyEvent = new EventSnapshot(Task.CompletedTask, resourceReadyEventGeneration);
         var previousState = new CustomResourceSnapshot
         {
             ResourceType = "test",
             State = KnownResourceStates.Running,
-            StartTimeStamp = previousStartOffset is int previousOffset ? startTime.AddSeconds(previousOffset) : null,
+            ResourceGeneration = previousGeneration,
             ResourceReadyEvent = resourceReadyEvent,
             Properties = []
         };
         var newState = previousState with
         {
             State = state,
-            StartTimeStamp = newStartOffset is int currentOffset ? startTime.AddSeconds(currentOffset) : null,
+            ResourceGeneration = newGeneration,
             ResourceReadyEvent = hasNewResourceReadyEvent
                 ? reuseResourceReadyEvent
                     ? resourceReadyEvent
-                    : new EventSnapshot(new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously).Task)
+                    : new EventSnapshot(
+                        new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously).Task,
+                        resourceReadyEventGeneration)
                 : null
         };
 
-        var actual = ResourceNotificationService.ShouldClearResourceReadyEvent(previousState, newState);
+        var actual = ResourceNotificationService.ShouldClearResourceReadyEvent(newState);
+
+        Assert.Equal(expected, actual);
+    }
+
+    [Theory]
+    [InlineData(null, null, null, null, 7)]
+    [InlineData(null, nameof(KnownResourceStates.Running), null, null, 8)]
+    [InlineData(nameof(KnownResourceStates.Starting), nameof(KnownResourceStates.Running), null, null, 8)]
+    [InlineData(nameof(KnownResourceStates.Exited), "running", null, null, 8)]
+    [InlineData(nameof(KnownResourceStates.Running), nameof(KnownResourceStates.Starting), null, null, 7)]
+    [InlineData(nameof(KnownResourceStates.Running), "running", 0, 0, 7)]
+    [InlineData(nameof(KnownResourceStates.Running), nameof(KnownResourceStates.Running), 0, 1, 8)]
+    [InlineData(nameof(KnownResourceStates.Running), nameof(KnownResourceStates.Running), null, 1, 7)]
+    public void ResourceGenerationAdvancesOnlyForNewRunningProcess(
+        string? previousStateText,
+        string? newStateText,
+        int? previousStartOffset,
+        int? newStartOffset,
+        long expected)
+    {
+        var startTime = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var previousState = new CustomResourceSnapshot
+        {
+            ResourceType = "test",
+            State = previousStateText,
+            StartTimeStamp = previousStartOffset is int previousOffset ? startTime.AddSeconds(previousOffset) : null,
+            ResourceGeneration = 7,
+            Properties = []
+        };
+        var newState = previousState with
+        {
+            State = newStateText,
+            StartTimeStamp = newStartOffset is int currentOffset ? startTime.AddSeconds(currentOffset) : null
+        };
+
+        var actual = ResourceNotificationService.GetResourceGeneration(previousState, newState);
 
         Assert.Equal(expected, actual);
     }
@@ -542,7 +579,7 @@ public class ResourceNotificationTests
             (s with
             {
                 State = KnownResourceStates.Running,
-                ResourceReadyEvent = new EventSnapshot(Task.CompletedTask)
+                ResourceReadyEvent = new EventSnapshot(Task.CompletedTask, s.ResourceGeneration + 1)
             }).WithHealthReports(
             [
                 new HealthReportSnapshot("dependency1-health", HealthStatus.Healthy, "Dependency is healthy.", null)
@@ -560,7 +597,7 @@ public class ResourceNotificationTests
             (s with
             {
                 State = KnownResourceStates.Running,
-                ResourceReadyEvent = new EventSnapshot(Task.CompletedTask)
+                ResourceReadyEvent = new EventSnapshot(Task.CompletedTask, s.ResourceGeneration + 1)
             }).WithHealthReports(
             [
                 new HealthReportSnapshot("dependency2-health", HealthStatus.Healthy, "Dependency is healthy.", null)
@@ -1736,8 +1773,6 @@ public class ResourceNotificationTests
 
         // Create a TaskCompletionSource to control when the ResourceReadyEvent completes
         var resourceReadyTcs = new TaskCompletionSource();
-        var eventSnapshot = new EventSnapshot(resourceReadyTcs.Task);
-
         // Start the wait task - this should not complete until ResourceReadyEvent is done
         var waitTask = notificationService.WaitForResourceHealthyAsync("myResource");
 
@@ -1751,7 +1786,7 @@ public class ResourceNotificationTests
         await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
         {
             State = KnownResourceStates.Running,
-            ResourceReadyEvent = eventSnapshot
+            ResourceReadyEvent = new EventSnapshot(resourceReadyTcs.Task, snapshot.ResourceGeneration)
         }).DefaultTimeout();
 
         // Complete the ResourceReadyEvent
@@ -1781,8 +1816,6 @@ public class ResourceNotificationTests
 
         // Create a TaskCompletionSource that will throw an exception
         var resourceReadyTcs = new TaskCompletionSource();
-        var eventSnapshot = new EventSnapshot(resourceReadyTcs.Task);
-
         // Start the wait task
         var waitTask = notificationService.WaitForResourceHealthyAsync("myResource");
 
@@ -1790,7 +1823,7 @@ public class ResourceNotificationTests
         await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
         {
             State = KnownResourceStates.Running,
-            ResourceReadyEvent = eventSnapshot
+            ResourceReadyEvent = new EventSnapshot(resourceReadyTcs.Task, snapshot.ResourceGeneration + 1)
         }).DefaultTimeout();
 
         // Set an exception in the ResourceReadyEvent
@@ -1808,8 +1841,8 @@ public class ResourceNotificationTests
     {
         var resource = new CustomResource("myResource");
         var notificationService = ResourceNotificationServiceTestHelpers.Create();
-        var firstResourceReadyEvent = new EventSnapshot(Task.CompletedTask);
         var firstStartTime = DateTime.UtcNow;
+        var firstResourceReadyEvent = new EventSnapshot(Task.CompletedTask, 1);
 
         await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
         {
@@ -1843,7 +1876,7 @@ public class ResourceNotificationTests
         await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
         {
             State = KnownResourceStates.Running,
-            ResourceReadyEvent = new EventSnapshot(secondResourceReadyTcs.Task)
+            ResourceReadyEvent = new EventSnapshot(secondResourceReadyTcs.Task, snapshot.ResourceGeneration)
         }).DefaultTimeout();
 
         Assert.False(secondWaitTask.IsCompleted);
@@ -1940,7 +1973,7 @@ public class ResourceNotificationTests
         await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
         {
             State = KnownResourceStates.Running,
-            ResourceReadyEvent = new EventSnapshot(Task.CompletedTask)
+            ResourceReadyEvent = new EventSnapshot(Task.CompletedTask, snapshot.ResourceGeneration)
         }).DefaultTimeout();
 
         // Now the wait task should complete

@@ -203,6 +203,156 @@ public class ResourceHealthCheckServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ResourceReadyEventFromPreviousRunIsNotPublishedAfterRestart()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        builder.Services.AddHealthChecks().AddCheck("healthcheck_a", () => HealthCheckResult.Healthy());
+
+        var firstReadyStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirstReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondReadyStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseSecondReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var readyEventCount = 0;
+        var resource = builder.AddResource(new ParentResource("resource"))
+            .WithHealthCheck("healthcheck_a")
+            .OnResourceReady(async (_, _, _) =>
+            {
+                if (Interlocked.Increment(ref readyEventCount) == 1)
+                {
+                    firstReadyStarted.SetResult();
+                    // Simulate a user callback that doesn't observe cancellation and outlives the process.
+                    await releaseFirstReady.Task;
+                }
+                else
+                {
+                    secondReadyStarted.SetResult();
+                    await releaseSecondReady.Task;
+                }
+            });
+
+        await using var app = await builder.BuildAsync().DefaultTimeout();
+        await app.StartAsync().DefaultTimeout();
+
+        await app.ResourceNotifications.PublishUpdateAsync(resource.Resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+
+        await firstReadyStarted.Task.DefaultTimeout();
+        Assert.True(app.ResourceNotifications.TryGetCurrentState(resource.Resource.Name, out var firstRunningEvent));
+        var firstGeneration = firstRunningEvent.Snapshot.ResourceGeneration;
+
+        var healthService = app.Services.GetRequiredService<ResourceHealthCheckService>();
+        var firstMonitor = healthService.GetResourceMonitorState(resource.Resource.Name)!;
+        var firstMonitorStopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        firstMonitor.CancellationToken.Register(firstMonitorStopped.SetResult);
+
+        await app.ResourceNotifications.PublishUpdateAsync(resource.Resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Exited
+        }).DefaultTimeout();
+        await firstMonitorStopped.Task.DefaultTimeout();
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => healthService.GetResourceMonitorState(resource.Resource.Name) is null,
+            "Wait for the first resource monitor to be removed.");
+
+        await app.ResourceNotifications.PublishUpdateAsync(resource.Resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running,
+            HealthReports = [new HealthReportSnapshot("healthcheck_a", Status: null, Description: null, ExceptionText: null)]
+        }).DefaultTimeout();
+
+        await secondReadyStarted.Task.DefaultTimeout();
+        var secondRunHealthyEvent = await app.ResourceNotifications.WaitForResourceAsync(
+            resource.Resource.Name,
+            resourceEvent =>
+                resourceEvent.Snapshot.ResourceGeneration > firstGeneration &&
+                resourceEvent.Snapshot.HealthReports.Single().Status == HealthStatus.Healthy).DefaultTimeout();
+        Assert.Null(secondRunHealthyEvent.Snapshot.ResourceReadyEvent);
+
+        var secondWaitTask = app.ResourceNotifications.WaitForResourceHealthyAsync(resource.Resource.Name);
+        Assert.False(secondWaitTask.IsCompleted);
+
+        releaseFirstReady.SetResult();
+
+        var staleReadyPublishEvent = await app.ResourceNotifications.WaitForResourceAsync(
+            resource.Resource.Name,
+            resourceEvent => resourceEvent.Snapshot.Version > secondRunHealthyEvent.Snapshot.Version).DefaultTimeout();
+        Assert.Equal(secondRunHealthyEvent.Snapshot.ResourceGeneration, staleReadyPublishEvent.Snapshot.ResourceGeneration);
+        Assert.Null(staleReadyPublishEvent.Snapshot.ResourceReadyEvent);
+        Assert.False(secondWaitTask.IsCompleted);
+
+        releaseSecondReady.SetResult();
+
+        var secondReadyEvent = await secondWaitTask.DefaultTimeout();
+        Assert.Equal(secondReadyEvent.Snapshot.ResourceGeneration, secondReadyEvent.Snapshot.ResourceReadyEvent?.ResourceGeneration);
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ResourceReadyEventUsesCurrentGenerationForEachReplica()
+    {
+        var healthCheckCanComplete = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.Services.AddHealthChecks().AddAsyncCheck("healthcheck_a", async () =>
+        {
+            await healthCheckCanComplete.Task;
+            return HealthCheckResult.Healthy();
+        });
+
+        var resource = builder.AddResource(new ParentResource("resource"))
+            .WithAnnotation(new DcpInstancesAnnotation([
+                new("resource-one", "one", 0),
+                new("resource-two", "two", 1)
+            ]))
+            .WithHealthCheck("healthcheck_a");
+
+        await using var app = await builder.BuildAsync().DefaultTimeout();
+        await app.StartAsync().DefaultTimeout();
+
+        await app.ResourceNotifications.PublishUpdateAsync(resource.Resource, "resource-one", snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+        await app.ResourceNotifications.PublishUpdateAsync(resource.Resource, "resource-two", snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+        await app.ResourceNotifications.PublishUpdateAsync(resource.Resource, "resource-two", snapshot => snapshot with
+        {
+            State = KnownResourceStates.Exited
+        }).DefaultTimeout();
+        await app.ResourceNotifications.PublishUpdateAsync(resource.Resource, "resource-two", snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+
+        Assert.True(app.ResourceNotifications.TryGetCurrentState("resource-one", out var firstReplicaRunningEvent));
+        Assert.True(app.ResourceNotifications.TryGetCurrentState("resource-two", out var secondReplicaRunningEvent));
+        Assert.NotEqual(firstReplicaRunningEvent.Snapshot.ResourceGeneration, secondReplicaRunningEvent.Snapshot.ResourceGeneration);
+
+        var firstReplicaReadyTask = app.ResourceNotifications.WaitForResourceAsync(
+            resource.Resource.Name,
+            resourceEvent => resourceEvent.ResourceId == "resource-one" && resourceEvent.Snapshot.ResourceReadyEvent is not null);
+        var secondReplicaReadyTask = app.ResourceNotifications.WaitForResourceAsync(
+            resource.Resource.Name,
+            resourceEvent => resourceEvent.ResourceId == "resource-two" && resourceEvent.Snapshot.ResourceReadyEvent is not null);
+
+        healthCheckCanComplete.SetResult();
+
+        var firstReplicaReadyEvent = await firstReplicaReadyTask.DefaultTimeout();
+        var secondReplicaReadyEvent = await secondReplicaReadyTask.DefaultTimeout();
+
+        Assert.Equal(firstReplicaReadyEvent.Snapshot.ResourceGeneration, firstReplicaReadyEvent.Snapshot.ResourceReadyEvent?.ResourceGeneration);
+        Assert.Equal(secondReplicaReadyEvent.Snapshot.ResourceGeneration, secondReplicaReadyEvent.Snapshot.ResourceReadyEvent?.ResourceGeneration);
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
     public async Task HealthCheckIntervalSlowsAfterSteadyHealthyState()
     {
         var testSink = new TestSink();

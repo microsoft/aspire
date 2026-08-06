@@ -1493,7 +1493,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         await notificationService.PublishUpdateAsync(dashboard, snapshot => snapshot with
         {
             State = KnownResourceStates.Running,
-            ResourceReadyEvent = new EventSnapshot(Task.CompletedTask)
+            ResourceReadyEvent = new EventSnapshot(Task.CompletedTask, snapshot.ResourceGeneration + 1)
         }).DefaultTimeout();
 
         var target = new AuxiliaryBackchannelRpcTarget(

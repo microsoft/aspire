@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRECOMMAND001 // Required command validation APIs are experimental.
 #pragma warning disable ASPIREEXTENSION001 // Debug support APIs are experimental.
 
 using Aspire.Hosting.ApplicationModel;

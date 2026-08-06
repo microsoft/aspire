@@ -25,6 +25,11 @@ public sealed record CustomResourceSnapshot
     internal long Version { get; init; }
 
     /// <summary>
+    /// Monotonically increasing generation of the running resource instance.
+    /// </summary>
+    internal long ResourceGeneration { get; init; }
+
+    /// <summary>
     /// Gets whether the normalized snapshot state came from DCP executable termination.
     /// </summary>
     internal bool IsDcpExecutableTerminated { get; init; }
@@ -316,7 +321,8 @@ public sealed record CustomResourceSnapshot
 /// A snapshot of an event.
 /// </summary>
 /// <param name="EventTask">The task the represents the result of executing the event.</param>
-internal record EventSnapshot(Task EventTask);
+/// <param name="ResourceGeneration">The generation of the resource instance that raised the event.</param>
+internal record EventSnapshot(Task EventTask, long ResourceGeneration);
 
 /// <summary>
 /// A snapshot of the resource state
