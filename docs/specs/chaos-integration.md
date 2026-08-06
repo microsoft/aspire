@@ -338,6 +338,114 @@ The canonical schema should include:
 
 The policy identifies its scope using Aspire resource and endpoint identities, never a raw destination URI. The controller rejects scopes absent from the AppHost model or unsupported by the negotiated DCP capability.
 
+### Policy schema examples
+
+Every example resolves `scope` against model-derived resources and endpoints, never a raw address. `probability` and `seed` appear only where the example is intentionally probabilistic; a deterministic policy omits both and fires on every match.
+
+**HTTP latency or abort (initial scope)**
+
+```json
+{
+  "schemaVersion": "v1alpha1",
+  "id": "checkout-payments-latency",
+  "priority": 100,
+  "scope": {
+    "sourceResource": "checkout",
+    "targetResource": "payments",
+    "endpointName": "http"
+  },
+  "match": {
+    "methods": ["POST"],
+    "path": "/api/payments/charge"
+  },
+  "effects": [
+    { "kind": "delay", "milliseconds": 3000 },
+    { "kind": "abort" }
+  ],
+  "ttl": "00:05:00"
+}
+```
+
+Deterministic HTTP/1.1 delay-then-abort. Both effects are in Phase 1 scope, so no probability or seed is needed — every matching request gets the same treatment.
+
+**HTTP synthetic response/error (initial scope)**
+
+```json
+{
+  "schemaVersion": "v1alpha1",
+  "id": "orders-partial-failure",
+  "priority": 90,
+  "scope": {
+    "sourceResource": "web",
+    "targetResource": "orders",
+    "endpointName": "http"
+  },
+  "match": {
+    "methods": ["GET"],
+    "path": "/api/orders/*"
+  },
+  "effects": [
+    { "kind": "status", "statusCode": 503, "reason": "Service Unavailable" }
+  ],
+  "probability": 0.25,
+  "seed": 4271,
+  "ttl": "00:10:00"
+}
+```
+
+A synthetic-error test wants a reproducible partial-failure rate rather than failing every request, so `probability` and `seed` are meaningful here.
+
+**Cosmos DB gateway-mode throttling or precondition failure (illustrative, deferred)**
+
+```json
+{
+  "schemaVersion": "v1alpha1",
+  "id": "catalog-cosmos-throttle",
+  "priority": 100,
+  "scope": {
+    "sourceResource": "catalog",
+    "targetResource": "catalog-cosmos",
+    "endpointName": "https"
+  },
+  "match": {
+    "methods": ["GET", "POST"],
+    "path": "/dbs/catalog/colls/items/*"
+  },
+  "effects": [
+    { "kind": "status", "statusCode": 429, "reason": "TooManyRequests" }
+  ],
+  "ttl": "00:02:00"
+}
+```
+
+Illustrative only — Phase 1 defers Cosmos direct/TCP mode and gateway HTTPS (see Protocol scope), so this `https` scope does not resolve against any capability DCP negotiates yet. Applying it fails explicitly rather than silently falling back to plain-HTTP proxying, until DCP advertises a gateway-HTTPS fault capability. A protocol-correct throttling or precondition-failure response also needs Cosmos-specific shaping — `x-ms-substatus`, `Retry-After`, the SDK's precondition-failure envelope — that a generic HTTP `status` effect does not attempt. That shaping belongs in a Cosmos integration/profile layered over this engine-neutral schema, not in the core matcher/effect vocabulary.
+
+**Redis/TCP reset (future, capability-gated)**
+
+```json
+{
+  "schemaVersion": "v1alpha1",
+  "id": "sessions-redis-reset",
+  "priority": 100,
+  "scope": {
+    "sourceResource": "web",
+    "targetResource": "sessions-redis",
+    "endpointName": "tcp"
+  },
+  "match": {
+    "protocol": "tcp"
+  },
+  "effects": [
+    { "kind": "connectionReset" }
+  ],
+  "probability": 0.5,
+  "seed": 918,
+  "ttl": "00:01:00"
+}
+```
+
+Future and capability-gated — generic TCP faults are explicitly deferred (see Protocol scope), and the `match`/`effects` shapes shown are placeholders for whatever a future TCP-capable engine defines. DCP has no TCP fault capability to negotiate today, so this scope fails to resolve the same way an unsupported HTTP scope does, until DCP advertises one. `probability`/`seed` are meaningful because an intermittent reset, not a permanent one, is the realistic test case.
+
 ### Composition and precedence
 
 Do not preserve first-installed-wins. Installation order depends on racing callers and is unsuitable for parallel tests.
