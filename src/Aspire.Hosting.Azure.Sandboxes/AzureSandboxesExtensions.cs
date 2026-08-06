@@ -22,6 +22,7 @@ namespace Aspire.Hosting;
 [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public static class AzureSandboxesExtensions
 {
+    // https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#container-apps-sandboxgroup-data-owner
     private const string SandboxGroupDataOwnerRoleId = "c24cf47c-5077-412d-a19c-45202126392c";
 
     /// <summary>
