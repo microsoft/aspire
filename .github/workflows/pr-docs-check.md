@@ -74,10 +74,13 @@ checkout:
   # `git -C <mirror> rev-parse --verify refs/heads/<branch>^{commit}`, which fails
   # with `fatal: Needed a single revision` because the branch only exists in the
   # workspace (microsoft/aspire#18319, run 27765082872). The manifest already
-  # maps `microsoft/aspire.dev -> path=""` (the workspace) here, so a mirror is
+  # maps `microsoft/aspire.dev -> path="."` (the workspace) here, so a mirror is
   # not needed for the handler to rediscover the target repo. The safe-outputs
   # job keeps its own separate `_repos/aspire.dev` checkout for bundle apply.
   - repository: microsoft/aspire.dev
+    # gh-aw v0.85+ otherwise places cross-repository checkouts in a directory
+    # named after the repository, but this workflow authors docs at workspace root.
+    path: .
     github-app:
       app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
       private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
@@ -127,6 +130,9 @@ safe-outputs:
     owner: "microsoft"
     repositories: ["aspire.dev", "aspire"]
   steps:
+    - name: Set safe-output patch base fallback
+      id: resolve-target
+      run: echo "branch=main" >> "${GITHUB_OUTPUT}"
     - name: Mirror target repo checkout
       if: contains(needs.agent.outputs.output_types, 'create_pull_request')
       uses: actions/checkout@v6.0.2
@@ -162,10 +168,10 @@ safe-outputs:
     # that decision can't live in static frontmatter. The `notify-source-pr`
     # safe-output job below requests the SME on the drafted PR after creation.
     draft: true
-    # Default to aspire.dev main, but allow the agent to override the PR base
-    # per run using the milestone/linked-issue/source-base reasoning in the
-    # prompt body. Restrict overrides to main and release/*.
-    base-branch: main
+    # Generate the agent-time patch against the aspire.dev branch selected below.
+    # The separate safe-outputs job emits main from the fallback step with the same
+    # ID, then honors the agent's allowlisted per-call base override when applying.
+    base-branch: ${{ steps.resolve-target.outputs.branch || 'main' }}
     allowed-base-branches:
       - main
       - release/*
@@ -458,6 +464,7 @@ pre-agent-steps:
         aspire
         aspire.dev
   - name: Resolve target aspire.dev branch
+    id: resolve-target
     env:
       GH_TOKEN: ${{ steps.resolve-target-app-token.outputs.token }}
       # event.pull_request.number is set on `pull_request: closed` triggers;
@@ -750,6 +757,7 @@ pre-agent-steps:
       rm -f "${RELEASE_BRANCHES_FILE}" "${PR_JSON}"
 
       echo "Effective     : ${EFFECTIVE} (resolution=${RESOLUTION})"
+      echo "branch=${EFFECTIVE}" >> "${GITHUB_OUTPUT}"
 
       # --- 7. Emit target.json ---------------------------------------------
       jq -n \
