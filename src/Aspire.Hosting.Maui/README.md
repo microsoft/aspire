@@ -112,6 +112,8 @@ When you configure OTLP with dev tunnel, the following environment variables are
 
 When both OTLP/HTTP and OTLP/gRPC endpoint URLs are configured, MAUI dev tunnels prefer OTLP/HTTP because mobile telemetry travels through the dev tunnel HTTPS forwarding path using `http/protobuf`.
 
+If the dashboard OTLP listener is reallocated while a MAUI app is already running, the dev tunnel is updated to the new listener. Restart the MAUI platform resource so the app receives the updated tunnel URL in its process environment.
+
 ## Example: Complete Aspire App with MAUI
 
 ```csharp

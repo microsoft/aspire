@@ -247,6 +247,7 @@ public class ResourceSnapshotBuilderTests
 
         Assert.Equal(KnownResourceStates.Exited, snapshot.State?.Text);
         Assert.True(snapshot.IsDcpExecutableTerminated);
+        Assert.False(snapshot.HasPendingDcpExitCode);
     }
 
     [Fact]
@@ -276,6 +277,37 @@ public class ResourceSnapshotBuilderTests
 
         Assert.Equal(KnownResourceStates.Exited, snapshot.State?.Text);
         Assert.True(snapshot.IsDcpExecutableTerminated);
+        Assert.False(snapshot.HasPendingDcpExitCode);
+    }
+
+    [Fact]
+    public void ExitedExecutableWithoutExitCodeHasPendingExitCode()
+    {
+        var executable = Executable.Create("exe", "pwsh");
+        executable.Status = new ExecutableStatus
+        {
+            State = KnownResourceStates.Exited
+        };
+
+        var snapshot = CreateSnapshotBuilder().ToSnapshot(executable, CreatePreviousSnapshot());
+
+        Assert.True(snapshot.HasPendingDcpExitCode);
+    }
+
+    [Fact]
+    public void ExitedContainerWithoutExitCodeDoesNotHavePendingExecutableExitCode()
+    {
+        var container = Container.Create("container", "image");
+        container.Status = new ContainerStatus
+        {
+            State = KnownResourceStates.Exited,
+            ExitCode = Conventions.UnknownExitCode
+        };
+
+        var snapshot = CreateSnapshotBuilder().ToSnapshot(container, CreatePreviousSnapshot());
+
+        Assert.Null(snapshot.ExitCode);
+        Assert.False(snapshot.HasPendingDcpExitCode);
     }
 
     [Fact]

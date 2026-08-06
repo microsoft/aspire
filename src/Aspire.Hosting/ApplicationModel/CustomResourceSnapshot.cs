@@ -35,6 +35,11 @@ public sealed record CustomResourceSnapshot
     internal bool IsDcpExecutableTerminated { get; init; }
 
     /// <summary>
+    /// Gets whether DCP has reported an executable exit before its exit code snapshot.
+    /// </summary>
+    internal bool HasPendingDcpExitCode { get; init; }
+
+    /// <summary>
     /// The type of the resource.
     /// </summary>
     public required string ResourceType { get; init; }
@@ -190,7 +195,10 @@ public sealed record CustomResourceSnapshot
 
         // Version counts publications rather than describing the resource. HealthStatus is derived
         // from State and HealthReports, so neither property needs an independent comparison.
-        if (ResourceType != other.ResourceType ||
+        if (ResourceGeneration != other.ResourceGeneration ||
+            IsDcpExecutableTerminated != other.IsDcpExecutableTerminated ||
+            HasPendingDcpExitCode != other.HasPendingDcpExitCode ||
+            ResourceType != other.ResourceType ||
             CreationTimeStamp != other.CreationTimeStamp ||
             StartTimeStamp != other.StartTimeStamp ||
             StopTimeStamp != other.StopTimeStamp ||

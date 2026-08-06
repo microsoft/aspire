@@ -417,12 +417,10 @@ public class ResourceNotificationService : IDisposable
             return false;
         }
 
-        // DCP can publish an Exited state before the exit code snapshot arrives. Keep waiting
-        // unless DCP explicitly reported Terminated, which is normalized to Exited and does not
-        // carry an exit code for WaitForCompletion to compare.
-        return !string.Equals(state, KnownResourceStates.Exited, StringComparisons.ResourceState) ||
-               snapshot.ExitCode is not null ||
-               snapshot.IsDcpExecutableTerminated;
+        // DCP can publish an executable Exited state before the exit code snapshot arrives.
+        // Other resource types may never report an exit code, so only wait when DCP explicitly
+        // marks the executable exit code as pending.
+        return snapshot.ExitCode is not null || !snapshot.HasPendingDcpExitCode;
     }
 
     private async Task WaitUntilStateAsync(IResource resource, IResource dependency, WaitBehavior waitBehavior,

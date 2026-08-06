@@ -18,6 +18,7 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
     // Internal for testing.
     internal TimeSpan HealthyHealthCheckInterval { get; set; } = TimeSpan.FromSeconds(30);
     internal TimeSpan NonHealthyHealthCheckStepInterval { get; set; } = TimeSpan.FromSeconds(1);
+    internal event Action<string, long>? ResourceReadyEventResultProcessed;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -156,7 +157,7 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
                     continue;
                 }
 
-                state.BeginHealthCheck();
+                var healthCheckGeneration = state.BeginHealthCheck();
 
                 HealthReport report;
                 try
@@ -178,6 +179,14 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
                 var lastRunAt = timeProvider.GetUtcNow().UtcDateTime;
 
                 logger.LogTrace("Health report status for '{ResourceName}' is {HealthReportStatus}.", resource.Name, report.Status);
+
+                if (!state.IsHealthCheckGenerationCurrent(healthCheckGeneration))
+                {
+                    logger.LogTrace("Discarding stale health report for an earlier generation of resource '{ResourceName}'.", resource.Name);
+                    lastHealthCheckTimestamp = timeProvider.GetTimestamp();
+                    lastDelayInterrupted = true;
+                    continue;
+                }
 
                 if (report.Status == HealthStatus.Healthy)
                 {
@@ -331,6 +340,7 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
                 ? snapshot with { ResourceReadyEvent = new(eventTask, resourceGeneration) }
                 : snapshot;
         }).ConfigureAwait(false);
+        ResourceReadyEventResultProcessed?.Invoke(resourceId, resourceGeneration);
     }
 
     private static ImmutableArray<HealthReportSnapshot> MergeHealthReports(ImmutableArray<HealthReportSnapshot> healthReports, HealthReport report, DateTime runAt)
@@ -429,13 +439,22 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
             }
         }
 
-        public void BeginHealthCheck()
+        public long BeginHealthCheck()
         {
             lock (_lock)
             {
                 // A generation that arrives during this health check increments the signal again,
                 // ensuring the next delay is interrupted if this check did not cover it.
                 _handledReadyGenerationSignalVersion = _readyGenerationSignalVersion;
+                return _readyGenerationSignalVersion;
+            }
+        }
+
+        public bool IsHealthCheckGenerationCurrent(long healthCheckGeneration)
+        {
+            lock (_lock)
+            {
+                return _readyGenerationSignalVersion == healthCheckGeneration;
             }
         }
 

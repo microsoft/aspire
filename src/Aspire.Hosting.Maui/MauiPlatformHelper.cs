@@ -74,7 +74,7 @@ internal static class MauiPlatformHelper
     /// <param name="tfmExample">Example TFM for error messages (e.g., "net10.0-windows10.0.19041.0").</param>
     /// <param name="isSupported">Function to check if the platform is supported on the current host.</param>
     /// <param name="iconName">The icon name for the resource.</param>
-    /// <param name="additionalArgs">Optional additional command-line arguments to pass to dotnet run.</param>
+    /// <param name="additionalArgs">Optional additional command-line arguments to pass to the MAUI Run target.</param>
     /// <returns>The detected target framework for the platform, or an empty string if one was not found.</returns>
     internal static string ConfigurePlatformResource<T>(
         IResourceBuilder<T> resourceBuilder,

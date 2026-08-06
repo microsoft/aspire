@@ -22,6 +22,9 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class MauiOtlpExtensions
 {
+    private const string OtlpTargetEndpointPropertyName = "MauiOtlpTargetEndpoint";
+    private const string OtlpTargetTransportPropertyName = "MauiOtlpTargetTransport";
+
     private const string OtlpGrpcProtocol = "grpc";
     private const string OtlpHttpProtobufProtocol = "http/protobuf";
     private static readonly TimeSpan s_dashboardOtlpEndpointWatcherRestartDelay = TimeSpan.FromSeconds(1);
@@ -123,7 +126,12 @@ public static class MauiOtlpExtensions
         stubBuilder.WithHidden().WithInitialState(new CustomResourceSnapshot
         {
             ResourceType = "OtlpStub",
-            Properties = []
+            Properties = configuredOtlpEndpoint is not null
+                ? [
+                    new(OtlpTargetEndpointPropertyName, stubResource.OtlpEndpoint.AllocatedEndpoint?.UriString),
+                    new(OtlpTargetTransportPropertyName, stubResource.OtlpEndpoint.Transport)
+                ]
+                : []
         });
 
         if (configuredOtlpEndpoint is null)
@@ -527,11 +535,58 @@ public static class MauiOtlpExtensions
         // as dev tunnel ports resolve their target port.
         return tunnelConfig.UpdateOtlpEndpoint(target.Scheme, target.Port, GetEndpointTransport(target.Protocol)) switch
         {
-            OtlpEndpointUpdateResult.FirstResolution => eventing.PublishAsync(new ResourceEndpointsAllocatedEvent(tunnelConfig.OtlpStub, services), cancellationToken),
-            OtlpEndpointUpdateResult.Updated => services.GetRequiredService<ResourceNotificationService>().PublishUpdateAsync(tunnelConfig.OtlpStub, static snapshot => snapshot),
+            OtlpEndpointUpdateResult.FirstResolution => PublishInitialOtlpStubEndpointAsync(tunnelConfig, services, eventing, cancellationToken),
+            OtlpEndpointUpdateResult.Updated => PublishUpdatedOtlpStubEndpointAsync(tunnelConfig, services),
             OtlpEndpointUpdateResult.Unchanged => Task.CompletedTask,
             _ => throw new DistributedApplicationException("Unexpected MAUI OTLP endpoint update result.")
         };
+    }
+
+    private static async Task PublishInitialOtlpStubEndpointAsync(
+        OtlpDevTunnelConfigurationAnnotation tunnelConfig,
+        IServiceProvider services,
+        IDistributedApplicationEventing eventing,
+        CancellationToken cancellationToken)
+    {
+        await PublishOtlpStubEndpointUpdateAsync(tunnelConfig, services).ConfigureAwait(false);
+        await eventing.PublishAsync(new ResourceEndpointsAllocatedEvent(tunnelConfig.OtlpStub, services), cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task PublishUpdatedOtlpStubEndpointAsync(
+        OtlpDevTunnelConfigurationAnnotation tunnelConfig,
+        IServiceProvider services)
+    {
+        await PublishOtlpStubEndpointUpdateAsync(tunnelConfig, services).ConfigureAwait(false);
+
+        var (uriString, _) = tunnelConfig.GetResolvedOtlpEndpoint();
+        var logger = services.GetRequiredService<ResourceLoggerService>().GetLogger(tunnelConfig.DevTunnel.Resource);
+        logger.LogWarning(
+            "The dashboard OTLP listener changed to '{OtlpEndpoint}'. Restart any running MAUI app resources so they use the updated dev tunnel URL.",
+            uriString);
+    }
+
+    private static Task PublishOtlpStubEndpointUpdateAsync(
+        OtlpDevTunnelConfigurationAnnotation tunnelConfig,
+        IServiceProvider services)
+    {
+        var notifications = services.GetRequiredService<ResourceNotificationService>();
+        return notifications.PublishUpdateAsync(tunnelConfig.OtlpStub, snapshot =>
+        {
+            var (uriString, transport) = tunnelConfig.GetResolvedOtlpEndpoint();
+
+            // Endpoint annotations aren't part of resource snapshots. Mirror the changed target into
+            // properties so snapshot deduplication still notifies the dev tunnel endpoint watcher.
+            return snapshot with
+            {
+                Properties =
+                [
+                    .. snapshot.Properties.Where(property =>
+                        property.Name is not OtlpTargetEndpointPropertyName and not OtlpTargetTransportPropertyName),
+                    new(OtlpTargetEndpointPropertyName, uriString),
+                    new(OtlpTargetTransportPropertyName, transport)
+                ]
+            };
+        });
     }
 
     /// <summary>

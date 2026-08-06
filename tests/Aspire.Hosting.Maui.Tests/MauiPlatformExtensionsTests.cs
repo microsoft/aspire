@@ -767,6 +767,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         Assert.Null(stubEndpoint.AllocatedEndpoint);
 
         await using var app = appBuilder.Build();
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
 
         var dashboardEndpoint = dashboard.Resource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == KnownEndpointNames.OtlpHttpEndpointName);
         dashboardEndpoint.AllocatedEndpoint = new AllocatedEndpoint(dashboardEndpoint, "localhost", 55076);
@@ -778,21 +779,36 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         Assert.Equal("http://localhost:55076", stubEndpoint.AllocatedEndpoint?.UriString);
         Assert.Equal("http", stubEndpoint.Transport);
         Assert.Equal(1, stubEndpointEventCount);
+        Assert.True(notificationService.TryGetCurrentState(tunnelConfig.OtlpStub.Name, out var initialStubState));
+        Assert.Contains(initialStubState.Snapshot.Properties, property =>
+            property.Name == "MauiOtlpTargetEndpoint" &&
+            Equals(property.Value, "http://localhost:55076"));
 
-        await app.Services.GetRequiredService<ResourceNotificationService>()
-            .PublishUpdateAsync(dashboard.Resource, snapshot => snapshot with
-            {
-                State = KnownResourceStates.Running,
-                EnvironmentVariables =
-                [
-                    new(
-                        KnownConfigNames.DashboardOtlpHttpEndpointUrl,
-                        "http://localhost:55099",
-                        IsFromSpec: false)
-                ]
-            });
+        using var stubUpdateCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var stubUpdateTask = notificationService.WaitForResourceAsync(
+            tunnelConfig.OtlpStub.Name,
+            resourceEvent => resourceEvent.Snapshot.Properties.Any(property =>
+                property.Name == "MauiOtlpTargetEndpoint" &&
+                Equals(property.Value, "http://localhost:55099")),
+            stubUpdateCts.Token);
+
+        await notificationService.PublishUpdateAsync(dashboard.Resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running,
+            EnvironmentVariables =
+            [
+                new(
+                    KnownConfigNames.DashboardOtlpHttpEndpointUrl,
+                    "http://localhost:55099",
+                    IsFromSpec: false)
+            ]
+        });
 
         await WaitForStubEndpointAsync(stubEndpoint, "http", 55099);
+        var stubUpdate = await stubUpdateTask;
+        Assert.Contains(stubUpdate.Snapshot.Properties, property =>
+            property.Name == "MauiOtlpTargetTransport" &&
+            Equals(property.Value, "http"));
         Assert.Equal(1, stubEndpointEventCount);
 
         var tunnelEndpoint = tunnelConfig.DevTunnel.GetEndpoint(tunnelConfig.OtlpStub, "otlp");

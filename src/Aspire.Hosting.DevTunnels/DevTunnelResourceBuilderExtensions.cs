@@ -15,6 +15,7 @@ using Aspire.Hosting.Eventing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Retry;
@@ -26,6 +27,7 @@ namespace Aspire.Hosting;
 /// </summary>
 public static partial class DevTunnelsResourceBuilderExtensions
 {
+    private const string PortReconcileHealthCheckName = "devtunnel-port-reconcile";
     private static readonly string s_aspireUserAgent = GetUserAgent();
     private static readonly TimeSpan s_targetEndpointWatcherRestartDelay = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan s_targetEndpointWatcherRestartMaxDelay = TimeSpan.FromSeconds(30);
@@ -175,7 +177,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
                 // that become active during startup, so deleting before ActiveTunnelPort is updated can
                 // remove the newly modeled forwarding rule.
                 await DeleteUnmodeledPortsAsync().ConfigureAwait(false);
-                StartTargetEndpointWatcher(tunnelResource, e.Services, ct);
+                StartTargetEndpointWatcher(tunnelResource, e.Services);
 
                 async Task DeleteUnmodeledPortsAsync()
                 {
@@ -699,9 +701,10 @@ public static partial class DevTunnelsResourceBuilderExtensions
             });
     }
 
-    private static void StartTargetEndpointWatcher(DevTunnelResource tunnelResource, IServiceProvider services, CancellationToken cancellationToken)
+    private static void StartTargetEndpointWatcher(DevTunnelResource tunnelResource, IServiceProvider services)
     {
-        var watcherCts = tunnelResource.ResetTargetEndpointWatcher(cancellationToken);
+        var applicationStopping = services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping;
+        var watcherCts = tunnelResource.ResetTargetEndpointWatcher(applicationStopping);
 
         var notifications = services.GetRequiredService<ResourceNotificationService>();
         var logger = services.GetRequiredService<ResourceLoggerService>().GetLogger(tunnelResource);
@@ -744,7 +747,8 @@ public static partial class DevTunnelsResourceBuilderExtensions
                         foreach (var portResource in matchingPorts)
                         {
                             var tunnelPort = await portResource.GetTunnelPortAsync(cancellationToken).ConfigureAwait(false);
-                            if (portResource.ActiveTunnelPort != tunnelPort)
+                            if (portResource.ActiveTunnelPort != tunnelPort ||
+                                HasPortReconcileFailure(portResource, notifications))
                             {
                                 baselinePortsToReconcile.Add(portResource);
                             }
@@ -768,6 +772,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
                         {
                             logger.LogWarning(ex, "Failed to reconcile dev tunnel port '{PortName}' after target endpoint update.", portResource.Name);
                             await MarkPortReconcileFailedAsync(portResource, notifications).ConfigureAwait(false);
+                            throw;
                         }
                     }
                 }
@@ -782,10 +787,21 @@ public static partial class DevTunnelsResourceBuilderExtensions
 
     private static Task MarkPortReconcileFailedAsync(DevTunnelPortResource portResource, ResourceNotificationService notifications)
     {
-        return notifications.PublishUpdateAsync(portResource, snapshot => snapshot with
-        {
-            State = new ResourceStateSnapshot(KnownResourceStates.RuntimeUnhealthy, KnownResourceStateStyles.Error)
-        });
+        return notifications.PublishUpdateAsync(portResource, snapshot => snapshot.WithHealthReports(
+        [
+            .. snapshot.HealthReports.Where(report => report.Name != PortReconcileHealthCheckName),
+            new(
+                PortReconcileHealthCheckName,
+                HealthStatus.Unhealthy,
+                "The dev tunnel port could not be updated for the target endpoint.",
+                ExceptionText: null)
+        ]));
+    }
+
+    private static bool HasPortReconcileFailure(DevTunnelPortResource portResource, ResourceNotificationService notifications)
+    {
+        return notifications.TryGetCurrentState(portResource.Name, out var currentState) &&
+            currentState.Snapshot.HealthReports.Any(report => report.Name == PortReconcileHealthCheckName);
     }
 
     private static async Task ReconcilePortAsync(DevTunnelPortResource portResource, IServiceProvider services, CancellationToken cancellationToken)
@@ -802,9 +818,8 @@ public static partial class DevTunnelsResourceBuilderExtensions
             {
                 if (!await RefreshAndPublishPortReadyAsync(portResource, services, cancellationToken).ConfigureAwait(false))
                 {
-                    var notifications = services.GetRequiredService<ResourceNotificationService>();
-                    await MarkPortReconcileFailedAsync(portResource, notifications).ConfigureAwait(false);
-                    return;
+                    throw new DistributedApplicationException(
+                        $"The public URL for dev tunnel port '{tunnelPort}' on tunnel '{portResource.DevTunnel.TunnelId}' was not available before retry attempts were exhausted.");
                 }
             }
 
@@ -832,13 +847,8 @@ public static partial class DevTunnelsResourceBuilderExtensions
 
         if (!await RefreshAndPublishPortReadyAsync(portResource, services, cancellationToken).ConfigureAwait(false))
         {
-            portLogger.LogDebug(
-                "The dev tunnel port '{Port}' on tunnel '{Tunnel}' was created, but its public URL was not available before retry attempts were exhausted.",
-                tunnelPort,
-                portResource.DevTunnel.TunnelId);
-            var notifications = services.GetRequiredService<ResourceNotificationService>();
-            await MarkPortReconcileFailedAsync(portResource, notifications).ConfigureAwait(false);
-            return;
+            throw new DistributedApplicationException(
+                $"The public URL for dev tunnel port '{tunnelPort}' on tunnel '{portResource.DevTunnel.TunnelId}' was not available before retry attempts were exhausted.");
         }
 
         await DeleteStalePortsAsync(portResource, services, cancellationToken).ConfigureAwait(false);
@@ -1108,7 +1118,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
                     Uri.TryCreate(url.Url, UriKind.Absolute, out var uri) &&
                     !string.Equals(uri.Host, tunnelPortStatus.PortUri.Host, StringComparison.OrdinalIgnoreCase));
 
-                return snapshot with
+                return (snapshot with
                 {
                     State = KnownResourceStates.Running,
                     Properties = tunnelUrlChanged
@@ -1130,7 +1140,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
                         {
                             DisplayProperties = new("Inspect")
                         }]
-                };
+                }).WithHealthReports([.. snapshot.HealthReports.Where(report => report.Name != PortReconcileHealthCheckName)]);
             }).ConfigureAwait(false);
 
             var portLogger = services.GetRequiredService<ResourceLoggerService>().GetLogger(portResource);

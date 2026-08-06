@@ -50,20 +50,21 @@ public class ResourceNotificationTests
 
     [Theory]
     [InlineData(nameof(KnownResourceStates.Finished), null, false, true)]
-    [InlineData(nameof(KnownResourceStates.Exited), null, false, false)]
-    [InlineData(nameof(KnownResourceStates.Exited), null, true, true)]
+    [InlineData(nameof(KnownResourceStates.Exited), null, false, true)]
+    [InlineData(nameof(KnownResourceStates.Exited), null, true, false)]
     [InlineData(nameof(KnownResourceStates.Exited), 0, false, true)]
+    [InlineData(nameof(KnownResourceStates.Exited), 0, true, true)]
     [InlineData(nameof(KnownResourceStates.FailedToStart), null, false, true)]
     [InlineData(nameof(KnownResourceStates.Running), 0, false, false)]
     [InlineData(null, 0, false, false)]
-    public void CompletionWaitOnlyYieldsOnTerminalStates(string? state, int? exitCode, bool isDcpExecutableTerminated, bool expected)
+    public void CompletionWaitOnlyYieldsOnTerminalStates(string? state, int? exitCode, bool hasPendingDcpExitCode, bool expected)
     {
         var snapshot = new CustomResourceSnapshot
         {
             ResourceType = "test",
             State = state,
             ExitCode = exitCode,
-            IsDcpExecutableTerminated = isDcpExecutableTerminated,
+            HasPendingDcpExitCode = hasPendingDcpExitCode,
             Properties = []
         };
 
@@ -677,7 +678,8 @@ public class ResourceNotificationTests
 
         await notificationService.PublishUpdateAsync(dependency, s => s with
         {
-            State = "exited"
+            State = "exited",
+            HasPendingDcpExitCode = true
         }).DefaultTimeout();
 
         Assert.False(waitTask.IsCompleted);
@@ -2168,6 +2170,22 @@ public class ResourceNotificationTests
     }
 
     [Theory]
+    [InlineData(nameof(CustomResourceSnapshot.ResourceGeneration))]
+    [InlineData(nameof(CustomResourceSnapshot.ResourceReadyEvent))]
+    public void SnapshotContentEqualityIncludesManagedReadinessChanges(string propertyName)
+    {
+        var snapshot = new CustomResourceSnapshot
+        {
+            ResourceType = "test",
+            Properties = []
+        };
+        var property = GetContentProperty(typeof(CustomResourceSnapshot), propertyName);
+        var changed = MutateProperty(snapshot, property);
+
+        Assert.False(snapshot.ContentEquals(changed));
+    }
+
+    [Theory]
     [MemberData(nameof(ResourcePropertyContentPropertyNames))]
     public async Task PublishUpdateAsyncPublishesEveryResourcePropertyContentChange(string propertyName)
     {
@@ -2214,7 +2232,11 @@ public class ResourceNotificationTests
     private static readonly string[] s_snapshotContentPropertyExclusions =
     [
         nameof(CustomResourceSnapshot.Version),
-        nameof(CustomResourceSnapshot.HealthStatus)
+        nameof(CustomResourceSnapshot.HealthStatus),
+        // PublishUpdateAsync derives the generation and validates ready-event generations, so these
+        // managed values are covered directly instead of through arbitrary reflection mutations.
+        nameof(CustomResourceSnapshot.ResourceGeneration),
+        nameof(CustomResourceSnapshot.ResourceReadyEvent)
     ];
 
     private static TheoryData<string> CreatePropertyTheoryData(Type type, params string[] excludedPropertyNames)

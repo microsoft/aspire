@@ -673,6 +673,14 @@ public class DevTunnelResourceBuilderExtensionsTests
             () => tunnelPort.StaleTunnelPorts.ContainsKey(5001),
             "Expected the previous port to stay pending when the new port URL is not available.",
             retries: 20);
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () =>
+                notificationService.TryGetCurrentState(tunnelPort.Name, out var failedPortState) &&
+                failedPortState.Snapshot.HealthReports.Any(report =>
+                    report.Name == "devtunnel-port-reconcile" &&
+                    report.Status == HealthStatus.Unhealthy),
+            "Expected the failed replacement port to be reported as unhealthy.",
+            retries: 20);
 
         var stoppedSnapshot = new CustomResourceSnapshot
         {
@@ -910,6 +918,8 @@ public class DevTunnelResourceBuilderExtensionsTests
         Assert.DoesNotContain(5001, tunnelPort.StaleTunnelPorts.Keys);
         Assert.Contains(client.Calls, call => call.Method == nameof(IDevTunnelClient.DeletePortAsync) && call.PortNumber == 5001);
         Assert.Equal("https://mytunnel-5002.devtunnels.ms:443", tunnelPort.TunnelEndpoint.Url);
+        Assert.True(notificationService.TryGetCurrentState(tunnelPort.Name, out var recoveredPortState));
+        Assert.DoesNotContain(recoveredPortState.Snapshot.HealthReports, report => report.Name == "devtunnel-port-reconcile");
     }
 
     [Fact]
@@ -1201,38 +1211,37 @@ public class DevTunnelResourceBuilderExtensionsTests
 
         var statesAfterDuplicateReady = new List<string?>();
         var baselineObserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var runningAfterDuplicateReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var watchCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
         var watchTask = Task.Run(async () =>
         {
-            var baselineSeen = false;
-            await foreach (var evt in notificationService.WatchAsync(watchCts.Token))
+            try
             {
-                if (!ReferenceEquals(evt.Resource, tunnelPort))
+                var baselineSeen = false;
+                await foreach (var evt in notificationService.WatchAsync(watchCts.Token))
                 {
-                    continue;
-                }
+                    if (!ReferenceEquals(evt.Resource, tunnelPort))
+                    {
+                        continue;
+                    }
 
-                if (!baselineSeen)
-                {
-                    baselineSeen = true;
-                    baselineObserved.TrySetResult();
-                    continue;
-                }
+                    if (!baselineSeen)
+                    {
+                        baselineSeen = true;
+                        baselineObserved.TrySetResult();
+                        continue;
+                    }
 
-                statesAfterDuplicateReady.Add(evt.Snapshot.State?.Text);
-                if (string.Equals(evt.Snapshot.State?.Text, KnownResourceStates.Running, StringComparisons.ResourceState))
-                {
-                    runningAfterDuplicateReady.TrySetResult();
-                    return;
+                    statesAfterDuplicateReady.Add(evt.Snapshot.State?.Text);
                 }
+            }
+            catch (OperationCanceledException) when (watchCts.IsCancellationRequested)
+            {
             }
         }, watchCts.Token);
 
         await baselineObserved.Task.DefaultTimeout();
         var portBeforeStartedEventsAfterFirstReady = Volatile.Read(ref portBeforeStartedEvents);
         await builder.Eventing.PublishAsync(new ResourceReadyEvent(tunnel.Resource, app.Services)).DefaultTimeout();
-        await runningAfterDuplicateReady.Task.DefaultTimeout();
         await watchCts.CancelAsync();
         await watchTask.DefaultTimeout();
 
@@ -1288,7 +1297,8 @@ public class DevTunnelResourceBuilderExtensionsTests
 
         await notificationService.PublishUpdateAsync(target.Resource, snapshot => snapshot with
         {
-            State = KnownResourceStates.Running
+            State = KnownResourceStates.Running,
+            Urls = [new UrlSnapshot("http", "http://localhost:5002", IsInternal: false)]
         });
 
         await AsyncTestHelpers.AssertIsTrueRetryAsync(
@@ -1333,7 +1343,8 @@ public class DevTunnelResourceBuilderExtensionsTests
         };
         var targetUpdateTask = notificationService.PublishUpdateAsync(target.Resource, snapshot => snapshot with
         {
-            State = KnownResourceStates.Running
+            State = KnownResourceStates.Running,
+            Urls = [new UrlSnapshot("http", "http://localhost:5001", IsInternal: false)]
         });
 
         Assert.Equal(5002, tunnelPort.ActiveTunnelPort);
@@ -1429,7 +1440,7 @@ public class DevTunnelResourceBuilderExtensionsTests
     }
 
     [Fact]
-    public async Task OnBeforeResourceStarted_MarksPortRuntimeUnhealthyWhenReconcileCreateFails()
+    public async Task OnBeforeResourceStarted_MarksPortUnhealthyWhenReconcileCreateFails()
     {
         var client = new TestDevTunnelClient();
 
@@ -1471,6 +1482,11 @@ public class DevTunnelResourceBuilderExtensionsTests
         Assert.Equal(KnownResourceStates.Running, initialPortState.Snapshot.State?.Text);
         Assert.Equal("https://mytunnel-5001.devtunnels.ms:443", tunnelPort.TunnelEndpoint.Url);
 
+        await notificationService.PublishUpdateAsync(tunnelPort, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Starting
+        });
+
         tunnelPort.TargetEndpoint.EndpointAnnotation.TargetPort = 5002;
         client.CreatePortException = new InvalidOperationException("Failed to create port.");
 
@@ -1489,13 +1505,36 @@ public class DevTunnelResourceBuilderExtensionsTests
         await AsyncTestHelpers.AssertIsTrueRetryAsync(
             () =>
                 notificationService.TryGetCurrentState(tunnelPort.Name, out var updatedPortState) &&
-                string.Equals(updatedPortState.Snapshot.State?.Text, KnownResourceStates.RuntimeUnhealthy, StringComparisons.ResourceState),
-            "Expected failed dev tunnel port reconciliation to mark the port runtime unhealthy.",
+                string.Equals(updatedPortState.Snapshot.State?.Text, KnownResourceStates.Starting, StringComparisons.ResourceState) &&
+                updatedPortState.Snapshot.HealthReports.Any(report =>
+                    report.Name == "devtunnel-port-reconcile" &&
+                    report.Status == HealthStatus.Unhealthy),
+            "Expected failed dev tunnel port reconciliation to mark the port unhealthy without changing its lifecycle state.",
             retries: 20);
+
+        client.CreatePortException = null;
+        client.TunnelStatus = new("mytunnel", HostConnections: 1, ClientConnections: 0, Description: "", Labels: [])
+        {
+            Ports = [
+                new(5002, "http")
+                {
+                    PortUri = new("https://mytunnel-5002.devtunnels.ms")
+                }
+            ]
+        };
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () =>
+                client.Calls.Count(call => call.Method == nameof(IDevTunnelClient.CreatePortAsync) && call.PortNumber == 5002) >= 2 &&
+                notificationService.TryGetCurrentState(tunnelPort.Name, out var recoveredPortState) &&
+                string.Equals(recoveredPortState.Snapshot.State?.Text, KnownResourceStates.Running, StringComparisons.ResourceState) &&
+                recoveredPortState.Snapshot.HealthReports.All(report => report.Name != "devtunnel-port-reconcile"),
+            "Expected failed dev tunnel port reconciliation to retry and recover without another target update.",
+            retries: 50);
     }
 
     [Fact]
-    public async Task OnBeforeResourceStarted_MarksPortRuntimeUnhealthyWhenReconcileReadyPollingFails()
+    public async Task OnBeforeResourceStarted_MarksPortUnhealthyWhenReconcileReadyPollingFails()
     {
         var client = new TestDevTunnelClient();
 
@@ -1544,9 +1583,30 @@ public class DevTunnelResourceBuilderExtensionsTests
         await AsyncTestHelpers.AssertIsTrueRetryAsync(
             () =>
                 notificationService.TryGetCurrentState(tunnelPort.Name, out var updatedPortState) &&
-                string.Equals(updatedPortState.Snapshot.State?.Text, KnownResourceStates.RuntimeUnhealthy, StringComparisons.ResourceState),
-            "Expected dev tunnel port reconciliation with no ready public URL to mark the port runtime unhealthy.",
+                string.Equals(updatedPortState.Snapshot.State?.Text, KnownResourceStates.Running, StringComparisons.ResourceState) &&
+                updatedPortState.Snapshot.HealthReports.Any(report =>
+                    report.Name == "devtunnel-port-reconcile" &&
+                    report.Status == HealthStatus.Unhealthy),
+            "Expected dev tunnel port reconciliation with no ready public URL to mark the port unhealthy without changing its lifecycle state.",
             retries: 20);
+
+        client.TunnelStatus = new("mytunnel", HostConnections: 1, ClientConnections: 0, Description: "", Labels: [])
+        {
+            Ports = [
+                new(5002, "http")
+                {
+                    PortUri = new("https://mytunnel-5002.devtunnels.ms")
+                }
+            ]
+        };
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () =>
+                string.Equals(tunnelPort.TunnelEndpoint.Url, "https://mytunnel-5002.devtunnels.ms:443", StringComparison.Ordinal) &&
+                notificationService.TryGetCurrentState(tunnelPort.Name, out var recoveredPortState) &&
+                recoveredPortState.Snapshot.HealthReports.All(report => report.Name != "devtunnel-port-reconcile"),
+            "Expected dev tunnel port readiness polling to retry and recover without another target update.",
+            retries: 50);
     }
 
     [Fact]
@@ -1697,7 +1757,7 @@ public class DevTunnelResourceBuilderExtensionsTests
     }
 
     [Fact]
-    public async Task OnBeforeResourceStarted_IgnoresTargetWatcherBaselineReplay()
+    public async Task OnBeforeResourceStarted_IgnoresTargetWatcherBaselineReplayAfterStartTokenIsCanceled()
     {
         var client = new TestDevTunnelClient
         {
@@ -1734,7 +1794,9 @@ public class DevTunnelResourceBuilderExtensionsTests
             State = KnownResourceStates.Running
         });
 
-        await builder.Eventing.PublishAsync(new BeforeResourceStartedEvent(tunnel.Resource, app.Services)).DefaultTimeout();
+        using var startCts = new CancellationTokenSource();
+        await builder.Eventing.PublishAsync(new BeforeResourceStartedEvent(tunnel.Resource, app.Services), startCts.Token).DefaultTimeout();
+        await startCts.CancelAsync();
 
         tunnelPort.TargetEndpoint.EndpointAnnotation.TargetPort = 5002;
         client.TunnelStatus = new("mytunnel", HostConnections: 1, ClientConnections: 0, Description: "", Labels: [])
@@ -1748,7 +1810,8 @@ public class DevTunnelResourceBuilderExtensionsTests
         };
         await notificationService.PublishUpdateAsync(target.Resource, snapshot => snapshot with
         {
-            State = KnownResourceStates.Running
+            State = KnownResourceStates.Running,
+            Urls = [new UrlSnapshot("http", "http://localhost:5002", IsInternal: false)]
         });
 
         await AsyncTestHelpers.AssertIsTrueRetryAsync(

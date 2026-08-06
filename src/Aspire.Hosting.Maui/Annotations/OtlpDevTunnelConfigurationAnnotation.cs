@@ -72,6 +72,17 @@ internal sealed class OtlpDevTunnelConfigurationAnnotation : IResourceAnnotation
                     : OtlpEndpointUpdateResult.Unchanged;
         }
     }
+
+    internal (string UriString, string Transport) GetResolvedOtlpEndpoint()
+    {
+        lock (_otlpEndpointLock)
+        {
+            var endpoint = OtlpStub.OtlpEndpoint;
+            return (
+                endpoint.AllocatedEndpoint?.UriString ?? throw new InvalidOperationException("The OTLP endpoint has not been resolved."),
+                endpoint.Transport ?? throw new InvalidOperationException("The OTLP endpoint transport has not been resolved."));
+        }
+    }
 }
 
 internal enum OtlpEndpointUpdateResult

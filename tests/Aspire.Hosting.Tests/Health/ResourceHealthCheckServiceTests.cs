@@ -318,11 +318,18 @@ public class ResourceHealthCheckServiceTests(ITestOutputHelper testOutputHelper)
         var secondWaitTask = app.ResourceNotifications.WaitForResourceHealthyAsync(resource.Resource.Name);
         Assert.False(secondWaitTask.IsCompleted);
 
+        var firstReadyResultProcessed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        healthService.ResourceReadyEventResultProcessed += (resourceId, generation) =>
+        {
+            if (resourceId == firstRunningEvent.ResourceId && generation == firstGeneration)
+            {
+                firstReadyResultProcessed.TrySetResult();
+            }
+        };
         releaseFirstReady.SetResult();
 
-        var staleReadyPublishEvent = await app.ResourceNotifications.WaitForResourceAsync(
-            resource.Resource.Name,
-            resourceEvent => resourceEvent.Snapshot.Version > secondRunHealthyEvent.Snapshot.Version).DefaultTimeout();
+        await firstReadyResultProcessed.Task.DefaultTimeout();
+        Assert.True(app.ResourceNotifications.TryGetCurrentState(resource.Resource.Name, out var staleReadyPublishEvent));
         Assert.Equal(secondRunHealthyEvent.Snapshot.ResourceGeneration, staleReadyPublishEvent.Snapshot.ResourceGeneration);
         Assert.Null(staleReadyPublishEvent.Snapshot.ResourceReadyEvent);
         Assert.False(secondWaitTask.IsCompleted);
@@ -400,14 +407,19 @@ public class ResourceHealthCheckServiceTests(ITestOutputHelper testOutputHelper)
                 resourceEvent.Snapshot.ResourceReadyEvent is not null).DefaultTimeout();
         var secondGenerationReadyTask = secondGenerationReadyEvent.Snapshot.ResourceReadyEvent!.EventTask;
 
+        var staleReadyResultProcessed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var healthService = app.Services.GetRequiredService<ResourceHealthCheckService>();
+        healthService.ResourceReadyEventResultProcessed += (resourceId, generation) =>
+        {
+            if (resourceId == "resource-two" && generation == 1)
+            {
+                staleReadyResultProcessed.TrySetResult();
+            }
+        };
         releaseFirstReady.SetResult();
 
-        var stalePublishEvent = await app.ResourceNotifications.WaitForResourceAsync(
-            resource.Resource.Name,
-            resourceEvent =>
-                resourceEvent.ResourceId == "resource-two" &&
-                resourceEvent.Snapshot.Version > secondGenerationReadyEvent.Snapshot.Version).DefaultTimeout();
-
+        await staleReadyResultProcessed.Task.DefaultTimeout();
+        Assert.True(app.ResourceNotifications.TryGetCurrentState("resource-two", out var stalePublishEvent));
         Assert.Equal(2, stalePublishEvent.Snapshot.ResourceGeneration);
         Assert.Same(secondGenerationReadyTask, stalePublishEvent.Snapshot.ResourceReadyEvent?.EventTask);
 
@@ -417,6 +429,91 @@ public class ResourceHealthCheckServiceTests(ITestOutputHelper testOutputHelper)
 
         Assert.Equal(firstReplicaReadyEvent.Snapshot.ResourceGeneration, firstReplicaReadyEvent.Snapshot.ResourceReadyEvent?.ResourceGeneration);
         Assert.Equal(2, Volatile.Read(ref readyEventCount));
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task HealthCheckFromPreviousReplicaGenerationDoesNotPublishReadyEvent()
+    {
+        var firstCheckStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirstCheck = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondCheckStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseSecondCheck = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var readyEventStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var healthCheckCount = 0;
+
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.Services.AddHealthChecks().AddAsyncCheck("healthcheck_a", async () =>
+        {
+            switch (Interlocked.Increment(ref healthCheckCount))
+            {
+                case 1:
+                    firstCheckStarted.SetResult();
+                    await releaseFirstCheck.Task;
+                    break;
+                case 2:
+                    secondCheckStarted.SetResult();
+                    await releaseSecondCheck.Task;
+                    break;
+            }
+
+            return HealthCheckResult.Healthy();
+        });
+
+        var resource = builder.AddResource(new ParentResource("resource"))
+            .WithAnnotation(new DcpInstancesAnnotation([
+                new("resource-one", "one", 0),
+                new("resource-two", "two", 1)
+            ]))
+            .WithHealthCheck("healthcheck_a")
+            .OnResourceReady((_, _, _) =>
+            {
+                readyEventStarted.TrySetResult();
+                return Task.CompletedTask;
+            });
+
+        await using var app = await builder.BuildAsync().DefaultTimeout();
+        await app.StartAsync().DefaultTimeout();
+
+        await app.ResourceNotifications.PublishUpdateAsync(resource.Resource, "resource-one", snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+        await firstCheckStarted.Task.DefaultTimeout();
+
+        await app.ResourceNotifications.PublishUpdateAsync(resource.Resource, "resource-two", snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+        await app.ResourceNotifications.PublishUpdateAsync(resource.Resource, "resource-two", snapshot => snapshot with
+        {
+            State = KnownResourceStates.Exited
+        }).DefaultTimeout();
+        await app.ResourceNotifications.PublishUpdateAsync(resource.Resource, "resource-two", snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+
+        releaseFirstCheck.SetResult();
+
+        Assert.NotSame(
+            secondCheckStarted.Task,
+            await Task.WhenAny(secondCheckStarted.Task, Task.Delay(TimeSpan.FromMilliseconds(100))).DefaultTimeout());
+
+        await secondCheckStarted.Task.DefaultTimeout();
+        Assert.False(readyEventStarted.Task.IsCompleted);
+
+        releaseSecondCheck.SetResult();
+
+        await readyEventStarted.Task.DefaultTimeout();
+        var secondReplicaReadyEvent = await app.ResourceNotifications.WaitForResourceAsync(
+            resource.Resource.Name,
+            resourceEvent =>
+                resourceEvent.ResourceId == "resource-two" &&
+                resourceEvent.Snapshot.ResourceGeneration == 2 &&
+                resourceEvent.Snapshot.ResourceReadyEvent is not null).DefaultTimeout();
+        Assert.Equal(2, secondReplicaReadyEvent.Snapshot.ResourceReadyEvent?.ResourceGeneration);
 
         await app.StopAsync().DefaultTimeout();
     }
