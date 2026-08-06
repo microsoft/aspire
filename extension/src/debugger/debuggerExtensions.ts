@@ -27,6 +27,7 @@ export interface ResourceDebuggerExtension {
 }
 
 export interface AlreadyStartedResourceDebugSession extends AspireResourceDebugSession {
+    processId: number;
     termination: Promise<number>;
 }
 

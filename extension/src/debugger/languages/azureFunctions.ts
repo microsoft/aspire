@@ -39,7 +39,6 @@ interface AzureFunctionsApiProvider {
 type FuncHostTaskShell = 'cmd' | 'powershell' | 'posix';
 
 type TerminalProfileConfiguration = {
-    args?: string | string[];
     path?: string | string[];
     source?: string;
 };
@@ -138,6 +137,13 @@ function quoteFuncHostArgument(argument: string, shell: FuncHostTaskShell): stri
             throw new Error(azureFunctionsCmdPercentArgument);
         }
 
+        // Delayed expansion can be enabled by the terminal profile or the Command
+        // Processor registry settings. No quoting form preserves arbitrary !
+        // sequences through a .cmd shim under both expansion modes.
+        if (argument.includes('!')) {
+            throw new Error(azureFunctionsCmdDelayedExpansion);
+        }
+
         return quoteCmdArgument(argument);
     }
 
@@ -182,7 +188,6 @@ function classifyFuncHostTaskShell(profile: TerminalProfileConfiguration | undef
     }
 
     if (identity.includes('command prompt') || /(?:^|[\\/\s])cmd(?:\.exe)?(?:$|\s)/.test(identity)) {
-        assertCmdDelayedExpansionDisabled(profile);
         return 'cmd';
     }
 
@@ -192,27 +197,6 @@ function classifyFuncHostTaskShell(profile: TerminalProfileConfiguration | undef
     }
 
     return undefined;
-}
-
-function assertCmdDelayedExpansionDisabled(profile: TerminalProfileConfiguration | undefined): void {
-    const profileArgs = typeof profile?.args === 'string' ? [profile.args] : profile?.args ?? [];
-    let delayedExpansionEnabled = false;
-
-    for (const profileArgument of profileArgs) {
-        for (const token of profileArgument.split(/\s+/)) {
-            if (/^\/v:on$/i.test(token)) {
-                delayedExpansionEnabled = true;
-            } else if (/^\/v:off$/i.test(token)) {
-                delayedExpansionEnabled = false;
-            }
-        }
-    }
-
-    // cmd performs delayed !NAME! expansion after quote parsing, so even quoted
-    // certificate passwords can be changed when the task shell enables /v:on.
-    if (delayedExpansionEnabled) {
-        throw new Error(azureFunctionsCmdDelayedExpansion);
-    }
 }
 
 function throwUnsupportedTaskShell(): never {
@@ -362,6 +346,7 @@ export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
 
             return {
                 id: runId,
+                processId: workerPidNumber,
                 session: { id: runId } as vscode.DebugSession,
                 stopSession: async () => {
                     complete(-1);

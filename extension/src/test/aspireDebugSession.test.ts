@@ -1103,7 +1103,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         assert.strictEqual(startDebuggingStub.firstCall.args[2], parentDebugSession);
     });
 
-    test('tracks an already-started resource without launching another debug session', async () => {
+    test('tracks an already-started resource and reports its process without launching another debug session', async () => {
         const parentDebugSession = {
             id: 'aspire-session',
             type: 'aspire',
@@ -1131,18 +1131,31 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         const stopSession = sinon.stub();
         const alreadyStartedSession = {
             id: 'run-1',
+            processId: 4242,
             session: { id: 'run-1' } as vscode.DebugSession,
             stopSession,
             termination: new Promise<number>(() => { }),
         };
+        const sendNotification = sinon.stub();
         const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(false);
         sinon.stub(vscode.debug, 'stopDebugging').resolves();
-        const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, {} as any, terminalProvider as any, () => { });
+        const aspireDebugSession = new AspireDebugSession(
+            parentDebugSession as unknown as vscode.DebugSession,
+            {} as any,
+            { sendNotification } as any,
+            terminalProvider as any,
+            () => { });
 
         const result = aspireDebugSession.trackAlreadyStartedResourceSession(debugConfig, alreadyStartedSession);
 
         assert.strictEqual(result, alreadyStartedSession);
         assert.strictEqual(startDebuggingStub.called, false);
+        assert.deepStrictEqual(sendNotification.firstCall.args[0], {
+            notification_type: 'processRestarted',
+            session_id: 'run-1',
+            dcp_id: 'debug-1',
+            pid: 4242,
+        });
 
         aspireDebugSession.dispose();
         assert.strictEqual(stopSession.calledOnce, true);
@@ -1187,6 +1200,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
 
         aspireDebugSession.trackAlreadyStartedResourceSession(debugConfig, {
             id: 'run-1',
+            processId: 4242,
             session: { id: 'run-1' } as vscode.DebugSession,
             stopSession: sinon.stub(),
             termination,
@@ -1195,12 +1209,20 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         await termination;
         await Promise.resolve();
 
-        assert.deepStrictEqual(sendNotification.firstCall.args[0], {
-            notification_type: 'sessionTerminated',
-            session_id: 'run-1',
-            dcp_id: 'debug-1',
-            exit_code: 17,
-        });
+        assert.deepStrictEqual(sendNotification.getCalls().map(call => call.args[0]), [
+            {
+                notification_type: 'processRestarted',
+                session_id: 'run-1',
+                dcp_id: 'debug-1',
+                pid: 4242,
+            },
+            {
+                notification_type: 'sessionTerminated',
+                session_id: 'run-1',
+                dcp_id: 'debug-1',
+                exit_code: 17,
+            },
+        ]);
 
         aspireDebugSession.dispose();
     });
@@ -1237,6 +1259,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
 
         const result = aspireDebugSession.trackAlreadyStartedResourceSession(debugConfig, {
             id: 'run-1',
+            processId: 4242,
             session: { id: 'run-1' } as vscode.DebugSession,
             stopSession,
             termination: new Promise<number>(() => { }),

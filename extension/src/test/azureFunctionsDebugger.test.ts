@@ -51,6 +51,7 @@ suite('Azure Functions Debugger Extension Tests', () => {
             }));
         assert.ok(resourceDebugSession);
         assert.strictEqual(resourceDebugSession.id, 'azure-functions-test-run');
+        assert.strictEqual(resourceDebugSession.processId, 4242);
         assert.strictEqual(debugConfiguration.processId, undefined);
 
         await resourceDebugSession.stopSession();
@@ -65,7 +66,7 @@ suite('Azure Functions Debugger Extension Tests', () => {
 
         sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
         sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
-        stubTaskShell('win32', { path: 'C:\\Windows\\System32\\cmd.exe', args: ['/d', '/v:off', '/c'] });
+        stubTaskShell('win32', { path: 'C:\\Windows\\System32\\cmd.exe', args: ['/d', '/v:on', '/c'] });
         installAzureFunctionsExtensionStub(createAzureFunctionsApi(startFuncProcess));
 
         await azureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
@@ -127,7 +128,7 @@ suite('Azure Functions Debugger Extension Tests', () => {
         assert.ok(startFuncProcess.notCalled);
     });
 
-    test('rejects delayed expansion for a configured cmd task shell', async () => {
+    test('rejects exclamation mark arguments for a configured cmd task shell', async () => {
         const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');
         const targetPath = path.join('/workspace', 'FunctionsApp', 'bin', 'Debug', 'net10.0', 'FunctionsApp.dll');
         const startFuncProcess = sinon.stub().resolves({ success: true, processId: '4242' });
@@ -135,7 +136,7 @@ suite('Azure Functions Debugger Extension Tests', () => {
 
         sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
         sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
-        stubTaskShell('win32', { path: 'C:\\Windows\\System32\\cmd.exe', args: ['/d /v:on /c'] });
+        stubTaskShell('win32', { path: 'C:\\Windows\\System32\\cmd.exe', args: ['/d', '/v:off', '/c'] });
         installAzureFunctionsExtensionStub(createAzureFunctionsApi(startFuncProcess));
 
         await assert.rejects(
@@ -234,6 +235,7 @@ suite('Azure Functions Debugger Extension Tests', () => {
             azureFunctionsDebuggerExtension);
 
         assert.ok(preparedSession.alreadyStartedSession);
+        assert.strictEqual(preparedSession.alreadyStartedSession.processId, 4242);
         const resourceDebugSession = aspireDebugSession.trackAlreadyStartedResourceSession(
             preparedSession.debugConfiguration,
             preparedSession.alreadyStartedSession);

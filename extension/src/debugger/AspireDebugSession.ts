@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { EventEmitter } from "vscode";
 import { promises as fs } from "fs";
 import { createDebugAdapterTracker, AppHostOutputHandler, AppHostRestartHandler } from "./adapterTracker";
-import { AspireResourceExtendedDebugConfiguration, AspireResourceDebugSession, EnvVar, AspireExtendedDebugConfiguration, NodeLaunchConfiguration, ProjectLaunchConfiguration, SessionTerminatedNotification, StartAppHostOptions } from "../dcp/types";
+import { AspireResourceExtendedDebugConfiguration, AspireResourceDebugSession, EnvVar, AspireExtendedDebugConfiguration, NodeLaunchConfiguration, ProcessRestartedNotification, ProjectLaunchConfiguration, SessionTerminatedNotification, StartAppHostOptions } from "../dcp/types";
 import { extensionLogOutputChannel } from "../utils/logging";
 import AspireDcpServer, { generateDcpIdPrefix } from "../dcp/AspireDcpServer";
 import { spawnCliProcess } from "./languages/cli";
@@ -576,6 +576,20 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     if (this._disposed) {
       resourceDebugSession.stopSession();
       return undefined;
+    }
+
+    if (debugConfig.debugSessionId === null) {
+      extensionLogOutputChannel.warn(`Unable to report process start for run ${debugConfig.runId} because the DCP session ID is missing.`);
+    }
+    else {
+      const notification: ProcessRestartedNotification = {
+        notification_type: 'processRestarted',
+        session_id: debugConfig.runId,
+        dcp_id: debugConfig.debugSessionId,
+        pid: resourceDebugSession.processId
+      };
+
+      this._dcpServer.sendNotification(notification);
     }
 
     void resourceDebugSession.termination.then(exitCode => {
