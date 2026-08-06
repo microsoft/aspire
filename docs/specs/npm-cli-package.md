@@ -51,6 +51,8 @@ bin/aspire.js
 bin/aspire-package-map.json
 ```
 
+The generated top-level README identifies the packaged CLI version and links to the matching notes on GitHub Releases. npmjs.com renders this README on the package page, making the release-notes link discoverable before users update.
+
 The top-level `package.json` declares:
 
 - `bin.aspire = "bin/aspire.js"`
@@ -158,7 +160,7 @@ The launcher's cache-freshness check compares both file size and `mtime`. A cach
 3. Extracting both tarballs.
 4. Extracting the native CLI archive.
 5. Comparing the RID tarball binary byte-for-byte with the archive binary.
-6. Verifying pointer package metadata, `bin/aspire.js`, `aspire-package-map.json`, and optional dependency version alignment.
+6. Verifying pointer package metadata, the version-stamped README and release-notes link, `bin/aspire.js`, `aspire-package-map.json`, and optional dependency version alignment.
 
 `eng/pipelines/templates/prepare-npm-cli-packages.yml` runs after the byte-for-byte verification and performs real end-to-end installation tests on Windows, Linux, and the native macOS build-pool RID:
 

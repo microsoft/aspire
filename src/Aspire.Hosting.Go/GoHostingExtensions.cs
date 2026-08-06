@@ -88,6 +88,7 @@ public static class GoHostingExtensions
         var resource = new GoAppResource(name, appDirectory);
 
         var rb = builder.AddResource(resource)
+            .WithIconName("Code")
             .WithArgs(ctx =>
             {
                 var programArgs = ctx.Resource.TryGetLastAnnotation<GoAppArgsAnnotation>(out var argsAnnotation)

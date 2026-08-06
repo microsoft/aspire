@@ -83,7 +83,8 @@ public static partial class KubernetesHelmChartExtensions
             return builder.ApplicationBuilder.CreateResourceBuilder(resource);
         }
 
-        var chartBuilder = builder.ApplicationBuilder.AddResource(resource);
+        var chartBuilder = builder.ApplicationBuilder.AddResource(resource)
+            .WithIconName("Archive");
 
         chartBuilder.WithAnnotation(new PipelineStepAnnotation(_ =>
         {

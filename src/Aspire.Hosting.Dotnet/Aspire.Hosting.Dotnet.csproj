@@ -12,6 +12,26 @@
     <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />
   </ItemGroup>
 
+  <!-- Source-shared helpers. Linking them (rather than reaching into Aspire.Hosting internals through
+       InternalsVisibleTo) keeps this package buildable from the public Aspire.Hosting surface only. -->
+  <ItemGroup>
+    <Compile Include="$(SharedDir)CommandLineArgsParser.cs" Link="Utils\CommandLineArgsParser.cs" />
+    <Compile Include="$(SharedDir)PathNormalizer.cs" Link="Utils\PathNormalizer.cs" />
+    <Compile Include="$(SharedDir)ProjectPathResolver.cs" Link="Utils\ProjectPathResolver.cs" />
+    <Compile Include="$(SharedDir)\LaunchProfiles\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Aspire.Hosting\Resources\LaunchProfileStrings.Designer.cs">
+      <Link>Resources\LaunchProfileStrings.Designer.cs</Link>
+      <DependentUpon>LaunchProfileStrings.resx</DependentUpon>
+    </Compile>
+    <EmbeddedResource Include="..\Aspire.Hosting\Resources\LaunchProfileStrings.resx">
+      <Link>Resources\LaunchProfileStrings.resx</Link>
+      <LogicalName>Aspire.Hosting.Resources.LaunchProfileStrings.resources</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
   <ItemGroup>
     <InternalsVisibleTo Include="Aspire.Hosting.Dotnet.Tests" />
   </ItemGroup>

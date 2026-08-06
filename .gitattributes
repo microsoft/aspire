@@ -62,4 +62,4 @@ src/Components/**/ConfigurationSchema.json text eol=lf
 # this only affects the repo's language statistics
 *.h linguist-language=C
 
-.github/workflows/*.lock.yml linguist-generated=true merge=ours
+.github/workflows/*.lock.yml linguist-generated=true

@@ -44,24 +44,21 @@ concurrency:
   cancel-in-progress: false
 
 checkout:
-  # Use aspire.dev as the current workspace because that is where the
-  # support.mdx edit lives, and keep a mirrored checkout under _repos so the
-  # safeoutputs create_pull_request handler can reliably rediscover the target
-  # repo in multi-repo mode. Mirrors the pattern used by pr-docs-check.md.
+  # Check out aspire.dev exactly once at the workspace root because that is
+  # where the support.mdx edit and PR branch are created. A second checkout of
+  # the same repository would shadow this entry in gh-aw's checkout manifest,
+  # causing create_pull_request to look for the branch in the wrong checkout.
+  # The safe-outputs job keeps its own separate mirror for applying the bundle.
   - repository: microsoft/aspire.dev
+    # gh-aw v0.85+ otherwise derives "aspire.dev" for a cross-repository
+    # checkout, changing the workspace layout used by this workflow.
+    path: .
     github-app:
       app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
       private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
       owner: "microsoft"
       repositories: ["aspire.dev"]
     current: true
-  - repository: microsoft/aspire.dev
-    path: _repos/aspire.dev
-    github-app:
-      app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
-      private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
-      owner: "microsoft"
-      repositories: ["aspire.dev"]
 
 permissions:
   contents: read
@@ -157,10 +154,10 @@ into this prompt — fetch them in Step 1 using the GitHub API
 (`GET /repos/microsoft/aspire/releases/tags/<tag>`).
 
 > [!NOTE]
-> The agent runs with `microsoft/aspire.dev` as the current workspace and also
-> has a mirrored checkout at `_repos/aspire.dev`. Use GitHub tools for any
-> cross-repo lookups (release metadata on `microsoft/aspire`, open PRs on
-> `microsoft/aspire.dev`).
+> The agent runs with `microsoft/aspire.dev` as the current workspace. The
+> separate safe-outputs job creates its own mirror after the agent finishes;
+> that mirror is not available here. Use GitHub tools for cross-repo lookups
+> (release metadata on `microsoft/aspire`, open PRs on `microsoft/aspire.dev`).
 >
 > For security, this workflow only auto-activates for stable, non-prerelease
 > releases on `microsoft/aspire`. Manual `workflow_dispatch` runs require a

@@ -19,6 +19,8 @@ import { AspireTerminalProvider, shellArg } from '../utils/AspireTerminalProvide
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 import { terminalCommandArgumentControlCharacters, appHostPathCopiedToClipboard, appHostPathInvalid } from '../loc/strings';
 import { onDidInvokeCommand, withCommandTelemetry } from '../utils/telemetry';
+import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
+import { lsJsonStreamCapability } from '../types/configInfo';
 
 function makeResource(overrides: Partial<ResourceJson> = {}): ResourceJson {
     const base: ResourceJson = {
@@ -255,6 +257,18 @@ function makeProofTerminalProvider(sandbox: sinon.SinonSandbox, proof: ShellProo
 
 async function flushPromises(): Promise<void> {
     await new Promise(resolve => setImmediate(resolve));
+}
+
+async function waitForCondition(condition: () => boolean, message: string): Promise<void> {
+    for (let i = 0; i < 100; i++) {
+        if (condition()) {
+            return;
+        }
+
+        await flushPromises();
+    }
+
+    assert.fail(message);
 }
 
 suite('shortenPath', () => {
@@ -1441,9 +1455,10 @@ suite('AppHostDataRepository', () => {
 
     setup(() => {
         sandbox = sinon.createSandbox();
-        // The repository eagerly probes `aspire config info --json` in its constructor. Stub it so
-        // it doesn't spawn through the shared spawnCliProcess fake and clobber the discovery callback.
-        sandbox.stub(configInfoProvider.ConfigInfoProvider.prototype, 'getConfigInfo').resolves(null);
+        // Keep the capability probe out of the shared spawn fake while exercising streamed discovery.
+        sandbox.stub(configInfoProvider.ConfigInfoProvider.prototype, 'getConfigInfo').resolves({
+            capabilities: [lsJsonStreamCapability],
+        } as any);
     });
 
     teardown(() => {
@@ -1451,38 +1466,70 @@ suite('AppHostDataRepository', () => {
     });
 
     test('workspace apphost name uses all candidates to disambiguate duplicate filenames', async () => {
-        let lineCallback: ((line: string) => void) | undefined;
+        const clock = sinon.useFakeTimers();
+        let clockRestored = false;
+        let emitCandidates: ((candidates: CandidateAppHostDisplayInfo[]) => void) | undefined;
+        let completeDiscovery: (() => void) | undefined;
         sandbox.stub(vscode.workspace, 'workspaceFolders').value([{
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
             index: 0,
         }]);
-        sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
-            lineCallback = line => {
-                options?.stdoutCallback?.(line);
-                options?.exitCallback?.(0);
+        sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args, options) => {
+            if (args?.[0] !== 'ls') {
+                return { kill: () => { } } as any;
+            }
+
+            emitCandidates = candidates => {
+                for (const candidate of candidates) {
+                    options?.lineCallback?.(JSON.stringify(candidate));
+                }
             };
+            completeDiscovery = () => options?.exitCallback?.(0);
             return { kill: () => { } } as any;
         });
         const repository = new AppHostDataRepository(makeTerminalProvider());
 
         try {
-            await flushPromises();
-            assert.ok(lineCallback);
+            await clock.tickAsync(0);
+            assert.ok(emitCandidates);
+            assert.ok(completeDiscovery);
 
-            lineCallback(JSON.stringify({
-                selected_project_file: '/workspace/apps/Store/AppHost.csproj',
-                all_project_file_candidates: [
-                    '/workspace/apps/Store/AppHost.csproj',
-                    '/workspace/samples/Store/AppHost.csproj',
-                ],
-            }));
-            await flushPromises();
-            await new Promise(resolve => setTimeout(resolve, 0));
-            await flushPromises();
+            emitCandidates([
+                {
+                    path: '/workspace/apps/Store/AppHost.csproj',
+                    language: 'csharp',
+                    status: 'buildable',
+                    selected: true,
+                },
+                {
+                    path: '/workspace/samples/Store/AppHost.csproj',
+                    language: 'csharp',
+                    status: 'buildable',
+                    selected: false,
+                },
+            ]);
+            await clock.tickAsync(50);
+
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, [
+                '/workspace/apps/Store/AppHost.csproj',
+                '/workspace/samples/Store/AppHost.csproj',
+            ]);
+            assert.strictEqual(repository.workspaceAppHostName, undefined);
+
+            clock.restore();
+            clockRestored = true;
+            completeDiscovery();
+            await waitForCondition(
+                () => repository.workspaceAppHostName === 'apps/Store/AppHost.csproj',
+                'workspace AppHost name was not updated');
 
             assert.strictEqual(repository.workspaceAppHostName, 'apps/Store/AppHost.csproj');
         } finally {
+            if (!clockRestored) {
+                clock.restore();
+            }
+            completeDiscovery?.();
             repository.dispose();
         }
     });
@@ -1671,14 +1718,39 @@ suite('getResourceIcon', () => {
         assert.strictEqual(icon.id, 'circle-outline');
     });
 
-    test('FailedToStart shows error icon', () => {
+    test('FailedToStart shows warning icon', () => {
         const icon = getResourceIcon(makeResource({ state: ResourceState.FailedToStart }));
-        assert.strictEqual(icon.id, 'error');
+        assert.strictEqual(icon.id, 'warning');
+        assert.ok(icon.color instanceof vscode.ThemeColor);
+        assert.strictEqual(icon.color.id, 'list.warningForeground');
     });
 
-    test('RuntimeUnhealthy shows error icon', () => {
-        const icon = getResourceIcon(makeResource({ state: ResourceState.RuntimeUnhealthy }));
+    test('FailedToStart with exit code 0 shows warning icon', () => {
+        const icon = getResourceIcon(makeResource({ state: ResourceState.FailedToStart, exitCode: 0 }));
+        assert.strictEqual(icon.id, 'warning');
+        assert.ok(icon.color instanceof vscode.ThemeColor);
+        assert.strictEqual(icon.color.id, 'list.warningForeground');
+    });
+
+    test('FailedToStart with exit code -1 shows error icon', () => {
+        const icon = getResourceIcon(makeResource({ state: ResourceState.FailedToStart, exitCode: -1 }));
         assert.strictEqual(icon.id, 'error');
+        assert.ok(icon.color instanceof vscode.ThemeColor);
+        assert.strictEqual(icon.color.id, 'list.errorForeground');
+    });
+
+    test('FailedToStart with a non-zero exit code shows error icon', () => {
+        const icon = getResourceIcon(makeResource({ state: ResourceState.FailedToStart, exitCode: 1 }));
+        assert.strictEqual(icon.id, 'error');
+        assert.ok(icon.color instanceof vscode.ThemeColor);
+        assert.strictEqual(icon.color.id, 'list.errorForeground');
+    });
+
+    test('RuntimeUnhealthy shows warning icon', () => {
+        const icon = getResourceIcon(makeResource({ state: ResourceState.RuntimeUnhealthy }));
+        assert.strictEqual(icon.id, 'warning');
+        assert.ok(icon.color instanceof vscode.ThemeColor);
+        assert.strictEqual(icon.color.id, 'list.warningForeground');
     });
 
     test('Starting shows loading spinner', () => {
@@ -2103,6 +2175,27 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             'workspaceAppHost',
         ]);
         provider.dispose();
+    });
+
+    test('loading hides stale AppHosts', () => {
+        const appHostPath = '/repo/AppHost/AppHost.csproj';
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        for (const viewMode of ['workspace', 'global'] as const) {
+            const repository = {
+                viewMode,
+                isLoading: true,
+                appHosts: [makeAppHost({ appHostPath })],
+                workspaceResources: [],
+                workspaceAppHostPath: undefined,
+                workspaceAppHostCandidatePaths: [],
+                workspaceAppHostName: undefined,
+                onDidChangeData,
+            } as unknown as AppHostDataRepository;
+            const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
+
+            assert.deepStrictEqual(provider.getChildren(), []);
+            provider.dispose();
+        }
     });
 
     test('workspace mode renders launching AppHost with spinner and no context menu', async () => {

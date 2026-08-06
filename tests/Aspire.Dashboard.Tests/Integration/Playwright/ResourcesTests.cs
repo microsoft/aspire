@@ -29,7 +29,8 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
 
             var viewOptionsButton = page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = Dashboard.Resources.Resources.ResourcesChangeViewOptions, Exact = true });
-            await Assertions.Expect(viewOptionsButton).ToHaveAttributeAsync("aria-expanded", "false");
+            var initialExpandedState = await viewOptionsButton.GetAttributeAsync("aria-expanded");
+            Assert.Null(initialExpandedState);
 
             await viewOptionsButton.ClickAsync();
             await Assertions.Expect(viewOptionsButton).ToHaveAttributeAsync("aria-expanded", "true");

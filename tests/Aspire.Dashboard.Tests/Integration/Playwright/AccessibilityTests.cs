@@ -106,6 +106,126 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
         return AssertNoBlockingWcagViolationsAsync(startUrl, theme, s_desktopViewport, openSurfaceAsync: openSurfaceAsync, surfaceLabel: label);
     }
 
+    [Theory]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    [InlineData("Light", "fluent-text-field", "root")]
+    [InlineData("Light", "fluent-search", "root")]
+    [InlineData("Light", "fluent-number-field", "root")]
+    [InlineData("Light", "fluent-text-area", "control")]
+    [InlineData("Dark", "fluent-text-field", "root")]
+    [InlineData("Dark", "fluent-search", "root")]
+    [InlineData("Dark", "fluent-number-field", "root")]
+    [InlineData("Dark", "fluent-text-area", "control")]
+    public async Task FluentDelegatedInput_ShowsVisibleFocusIndicator(string theme, string controlName, string partName)
+    {
+        var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
+
+        await using var context = await PlaywrightFixture.Browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            IgnoreHTTPSErrors = true,
+            BaseURL = baseUrl,
+            ViewportSize = s_desktopViewport
+        });
+
+        await context.AddCookiesAsync([new Cookie { Name = "currentTheme", Value = theme, Url = baseUrl }]);
+
+        var page = await context.NewPageAsync();
+        await page.GotoAsync("/").DefaultTimeout();
+        await page.WaitForSelectorAsync("body:not(.before-upgrade)").DefaultTimeout();
+        await page.WaitForSelectorAsync(
+            $"html[data-theme='{theme.ToLowerInvariant()}']",
+            new PageWaitForSelectorOptions { State = WaitForSelectorState.Attached }).DefaultTimeout();
+        await Assertions.Expect(page.GetByText("frontend", new PageGetByTextOptions { Exact = true }).First).ToBeVisibleAsync();
+        await WaitForComponentsAndFontsAsync(page);
+
+        ILocator control;
+        if (string.Equals(controlName, "fluent-search", StringComparison.Ordinal))
+        {
+            control = page.Locator("fluent-search[name='resources-search']");
+        }
+        else
+        {
+            await page.EvaluateAsync(
+                """
+                async controlName => {
+                    await customElements.whenDefined(controlName);
+                    const control = document.createElement(controlName);
+                    control.id = 'delegated-focus-probe';
+                    control.style.cssText = 'position:fixed;left:-99999px;top:0;';
+                    document.body.appendChild(control);
+                    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+                }
+                """,
+                controlName).DefaultTimeout();
+            control = page.Locator("#delegated-focus-probe");
+        }
+
+        await AssertVisibleFocusIndicatorAsync(control, partName);
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task DarkAccentButtonInteractionStates_MeetWcagAaContrast()
+    {
+        var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
+
+        await using var context = await PlaywrightFixture.Browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            IgnoreHTTPSErrors = true,
+            BaseURL = baseUrl,
+            ViewportSize = s_desktopViewport
+        });
+
+        await context.AddCookiesAsync([new Cookie { Name = "currentTheme", Value = "Dark", Url = baseUrl }]);
+
+        var page = await context.NewPageAsync();
+        await page.GotoAsync("/").DefaultTimeout();
+        await page.WaitForSelectorAsync("body:not(.before-upgrade)").DefaultTimeout();
+        await page.WaitForSelectorAsync(
+            "html[data-theme='dark']",
+            new PageWaitForSelectorOptions { State = WaitForSelectorState.Attached }).DefaultTimeout();
+        await WaitForComponentsAndFontsAsync(page);
+
+        await page.EvaluateAsync("""
+            async () => {
+                await customElements.whenDefined('fluent-button');
+                const button = document.createElement('fluent-button');
+                button.id = 'accent-contrast-probe';
+                button.setAttribute('appearance', 'accent');
+                button.textContent = 'Primary action';
+                button.style.cssText = 'position:fixed;left:16px;top:16px;z-index:10000;';
+                document.body.appendChild(button);
+                await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            }
+            """).DefaultTimeout();
+
+        var button = page.Locator("#accent-contrast-probe");
+        var states = new List<(string Name, (int R, int G, int B) Foreground, (int R, int G, int B) Background)>();
+        var rest = await ReadFluentControlColorsAsync(button);
+        states.Add(("rest", rest.Foreground, rest.Background));
+
+        await button.HoverAsync();
+        var hover = await ReadFluentControlColorsAsync(button);
+        states.Add(("hover", hover.Foreground, hover.Background));
+
+        await page.Mouse.DownAsync();
+        var active = await ReadFluentControlColorsAsync(button);
+        states.Add(("active", active.Foreground, active.Background));
+        await page.Mouse.UpAsync();
+
+        var failures = states
+            .Select(state => (state.Name, state.Foreground, state.Background, Ratio: ContrastRatio(state.Foreground, state.Background)))
+            .Where(state => state.Ratio < WcagAaContrastMinimum)
+            .Select(state =>
+                $"  {state.Name}: {state.Ratio:F2}:1 " +
+                $"(text rgb({state.Foreground.R},{state.Foreground.G},{state.Foreground.B}) on background rgb({state.Background.R},{state.Background.G},{state.Background.B}))")
+            .ToList();
+
+        Assert.True(
+            failures.Count == 0,
+            $"Dark accent button state contrast falls below the WCAG AA {WcagAaContrastMinimum:F1}:1 minimum:{Environment.NewLine}{string.Join(Environment.NewLine, failures)}");
+    }
+
     // Maps each dialog surface (the InlineData key) to the page it's opened from, a human-readable
     // label used in failure messages, and the interaction that opens it and waits for it to render.
     // Settings is a right-aligned flyout panel reachable from every page's header; Filter is the
@@ -179,19 +299,23 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
 
         var probeJson = await page.EvaluateAsync<string>(CodeblockColorProbeScript);
         using var probe = JsonDocument.Parse(probeJson);
-        var root = probe.RootElement;
-        var background = ReadRgb(root.GetProperty("bg"));
 
         var failures = new List<string>();
-        foreach (var token in root.GetProperty("tokens").EnumerateArray())
+        foreach (var surface in probe.RootElement.GetProperty("surfaces").EnumerateArray())
         {
-            var foreground = ReadRgb(token);
-            var ratio = ContrastRatio(foreground, background);
-            if (ratio < WcagAaContrastMinimum)
+            var surfaceName = surface.GetProperty("name").GetString();
+            var background = ReadRgb(surface.GetProperty("bg"));
+
+            foreach (var token in surface.GetProperty("tokens").EnumerateArray())
             {
-                failures.Add(
-                    $"  {token.GetProperty("name").GetString()}: {ratio:F2}:1 " +
-                    $"(text rgb({foreground.R},{foreground.G},{foreground.B}) on background rgb({background.R},{background.G},{background.B}))");
+                var foreground = ReadRgb(token);
+                var ratio = ContrastRatio(foreground, background);
+                if (ratio < WcagAaContrastMinimum)
+                {
+                    failures.Add(
+                        $"  {surfaceName} / {token.GetProperty("name").GetString()}: {ratio:F2}:1 " +
+                        $"(text rgb({foreground.R},{foreground.G},{foreground.B}) on background rgb({background.R},{background.G},{background.B}))");
+                }
             }
         }
 
@@ -402,6 +526,95 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
     private static (int R, int G, int B) ReadRgb(JsonElement element)
         => (element.GetProperty("r").GetInt32(), element.GetProperty("g").GetInt32(), element.GetProperty("b").GetInt32());
 
+    private static async Task AssertVisibleFocusIndicatorAsync(ILocator host, string partName)
+    {
+        var focusJson = await host.EvaluateAsync<string>(
+            """
+            (element, partName) => {
+                const focusTarget = element.shadowRoot?.querySelector(
+                    'input, textarea, [role="combobox"], [tabindex]:not([tabindex="-1"])');
+                if (!focusTarget) {
+                    throw new Error(`No delegated focus target found for ${element.localName}.`);
+                }
+
+                focusTarget.focus();
+
+                const part = element.shadowRoot.querySelector(`[part~="${partName}"]`);
+                if (!part) {
+                    const availableParts = [...element.shadowRoot.querySelectorAll('[part]')]
+                        .map(node => node.getAttribute('part'))
+                        .join(', ');
+                    throw new Error(
+                        `No ${partName} part found for ${element.localName}. Available parts: ${availableParts}.`);
+                }
+
+                const style = getComputedStyle(part);
+                return JSON.stringify({
+                    focusWithin: element.matches(':focus-within'),
+                    focusVisible: element.matches(':focus-visible'),
+                    outlineStyle: style.outlineStyle,
+                    outlineWidth: Number.parseFloat(style.outlineWidth),
+                    outlineColor: style.outlineColor
+                });
+            }
+            """,
+            partName);
+
+        using var focus = JsonDocument.Parse(focusJson);
+        var root = focus.RootElement;
+        var outlineStyle = root.GetProperty("outlineStyle").GetString();
+        var outlineWidth = root.GetProperty("outlineWidth").GetDouble();
+        var outlineColor = root.GetProperty("outlineColor").GetString();
+        var hasOpaqueOutline = !string.Equals(outlineColor, "transparent", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(outlineColor, "rgba(0, 0, 0, 0)", StringComparison.OrdinalIgnoreCase);
+
+        Assert.True(root.GetProperty("focusWithin").GetBoolean(), $"Expected {await host.EvaluateAsync<string>("element => element.localName")} to contain delegated focus.");
+        Assert.True(
+            !string.Equals(outlineStyle, "none", StringComparison.Ordinal) && outlineWidth >= 2 && hasOpaqueOutline,
+            $"Expected a visible focus outline on the {partName} part, but got style '{outlineStyle}', width {outlineWidth}px, color {outlineColor}, host :focus-visible={root.GetProperty("focusVisible").GetBoolean()}.");
+    }
+
+    private static async Task<((int R, int G, int B) Foreground, (int R, int G, int B) Background)> ReadFluentControlColorsAsync(ILocator host)
+    {
+        var colorsJson = await host.EvaluateAsync<string>(
+            """
+            element => {
+                function parseRgb(s) {
+                    s = String(s).trim();
+                    let m = s.match(/rgba?\(([^)]+)\)/);
+                    if (m) {
+                        const p = m[1].split(/[ ,\/]+/).filter(Boolean).map(parseFloat);
+                        return [p[0], p[1], p[2]];
+                    }
+                    m = s.match(/color\(srgb\s+([^)]+)\)/);
+                    if (m) {
+                        const p = m[1].split(/[ \/]+/).filter(Boolean).map(parseFloat);
+                        return [Math.round(p[0] * 255), Math.round(p[1] * 255), Math.round(p[2] * 255)];
+                    }
+                    throw new Error('unparseable color: ' + s);
+                }
+
+                const control = element.shadowRoot?.querySelector('[part~="control"]');
+                if (!control) {
+                    throw new Error(`No control part found for ${element.localName}.`);
+                }
+
+                const style = getComputedStyle(control);
+                const foreground = parseRgb(style.color);
+                const background = parseRgb(style.backgroundColor);
+                return JSON.stringify({
+                    fg: { r: foreground[0], g: foreground[1], b: foreground[2] },
+                    bg: { r: background[0], g: background[1], b: background[2] }
+                });
+            }
+            """);
+
+        using var colors = JsonDocument.Parse(colorsJson);
+        var root = colors.RootElement;
+
+        return (ReadRgb(root.GetProperty("fg")), ReadRgb(root.GetProperty("bg")));
+    }
+
     // WCAG 2.x relative luminance and contrast ratio.
     // See https://www.w3.org/TR/WCAG21/#dfn-relative-luminance and #dfn-contrast-ratio.
     private static double ContrastRatio((int R, int G, int B) foreground, (int R, int G, int B) background)
@@ -423,11 +636,11 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
         return (0.2126 * Channel(r)) + (0.7152 * Channel(g)) + (0.0722 * Channel(b));
     }
 
-    // Renders an off-screen text visualizer on the same neutral-layer-1 surface used by dialogs so its
-    // theme-scoped highlight.js colors resolve exactly as they do in the product. The active theme is
+    // Render the two production syntax-highlight surfaces off-screen: Text Visualizer inherits the
+    // dialog surface, while rendered markdown paints its own code-block surface. The active theme is
     // whatever the page booted with (data-theme on <html>). WCAG math is done in C# in the test.
     private const string CodeblockColorProbeScript = """
-        () => {
+        async () => {
             function parseRgb(s) {
                 s = String(s).trim();
                 let m = s.match(/rgba?\(([^)]+)\)/);
@@ -436,31 +649,77 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
                 if (m) { const p = m[1].split(/[ \/]+/).filter(Boolean).map(parseFloat); return [Math.round(p[0] * 255), Math.round(p[1] * 255), Math.round(p[2] * 255)]; }
                 throw new Error('unparseable color: ' + s);
             }
+
             const groups = { default: 'hljs', comment: 'hljs-comment', variable: 'hljs-variable', literal: 'hljs-literal', attribute: 'hljs-attribute', string: 'hljs-string', section: 'hljs-section', keyword: 'hljs-keyword' };
             const theme = document.documentElement.getAttribute('data-theme');
-            const container = document.createElement('div');
-            container.className = 'text-visualizer-container';
-            container.style.cssText = 'position:fixed;left:-99999px;top:0;background:var(--neutral-layer-1);';
+
+            async function readSurface(name, container, getBackgroundElement, line) {
+                document.body.appendChild(container);
+                await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+                const backgroundElement = getBackgroundElement();
+                if (!backgroundElement) {
+                    throw new Error(`No production background element found for ${name}.`);
+                }
+
+                const bg = parseRgb(getComputedStyle(backgroundElement).backgroundColor);
+                const tokens = [];
+
+                for (const tokenName of Object.keys(groups)) {
+                    const cls = groups[tokenName];
+                    let element;
+                    if (cls === 'hljs') {
+                        element = line;
+                    } else {
+                        element = document.createElement('span');
+                        element.className = cls;
+                        element.textContent = 'x';
+                        line.appendChild(element);
+                    }
+
+                    const fg = parseRgb(getComputedStyle(element).color);
+                    tokens.push({ name: tokenName, r: fg[0], g: fg[1], b: fg[2] });
+                }
+
+                container.remove();
+                return { name: name, bg: { r: bg[0], g: bg[1], b: bg[2] }, tokens: tokens };
+            }
+
+            await customElements.whenDefined('fluent-dialog');
+            const dialog = document.createElement('fluent-dialog');
+            dialog.style.cssText = 'position:fixed;left:-99999px;top:0;';
+            const textVisualizer = document.createElement('div');
+            textVisualizer.className = 'text-visualizer-container';
             const overflow = document.createElement('div');
             overflow.className = 'log-overflow';
-            const line = document.createElement('span');
-            line.className = 'log-content highlight-line hljs theme-a11y-' + theme + '-min';
-            line.textContent = 'sample';
-            overflow.appendChild(line);
-            container.appendChild(overflow);
-            document.body.appendChild(container);
-            const bg = parseRgb(getComputedStyle(container).backgroundColor);
-            const tokens = [];
-            for (const name of Object.keys(groups)) {
-                const cls = groups[name];
-                let el;
-                if (cls === 'hljs') { el = line; }
-                else { el = document.createElement('span'); el.className = cls; el.textContent = 'x'; line.appendChild(el); }
-                const fg = parseRgb(getComputedStyle(el).color);
-                tokens.push({ name: name, r: fg[0], g: fg[1], b: fg[2] });
-            }
-            document.body.removeChild(container);
-            return JSON.stringify({ bg: { r: bg[0], g: bg[1], b: bg[2] }, tokens: tokens });
+            const visualizerLine = document.createElement('span');
+            visualizerLine.className = 'log-content highlight-line hljs theme-a11y-' + theme + '-min';
+            visualizerLine.textContent = 'sample';
+            overflow.appendChild(visualizerLine);
+            textVisualizer.appendChild(overflow);
+            dialog.appendChild(textVisualizer);
+
+            const markdown = document.createElement('div');
+            markdown.className = 'markdown-container';
+            markdown.style.cssText = 'position:fixed;left:-99999px;top:0;';
+            const codeBlock = document.createElement('div');
+            codeBlock.className = 'code-block';
+            const markdownCode = document.createElement('code');
+            markdownCode.className = 'hljs theme-a11y-' + theme + '-min';
+            markdownCode.textContent = 'sample';
+            codeBlock.appendChild(markdownCode);
+            markdown.appendChild(codeBlock);
+
+            return JSON.stringify({
+                surfaces: [
+                    await readSurface(
+                        'text visualizer',
+                        dialog,
+                        () => dialog.shadowRoot?.querySelector('[part~="control"]'),
+                        visualizerLine),
+                    await readSurface('rendered markdown', markdown, () => codeBlock, markdownCode)
+                ]
+            });
         }
         """;
 

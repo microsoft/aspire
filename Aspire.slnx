@@ -451,6 +451,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/Aspire.Deployment.EndToEnd.Tests/Aspire.Deployment.EndToEnd.Tests.csproj" />
     <Project Path="tests/Aspire.EndToEnd.Tests/Aspire.EndToEnd.Tests.csproj" />
+    <Project Path="tests/Aspire.Hosting.Sdk.Tests.FakeCommand/Aspire.Hosting.Sdk.Tests.FakeCommand.csproj" />
     <Project Path="tests/Aspire.Hosting.Sdk.Tests/Aspire.Hosting.Sdk.Tests.csproj" />
     <Project Path="tests/Aspire.Managed.Tests/Aspire.Managed.Tests.csproj" />
     <Project Path="tests/Aspire.Playground.Tests/Aspire.Playground.Tests.csproj" />

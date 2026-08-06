@@ -205,7 +205,7 @@ public static class MauiiOSExtensions
             "iOS",
             "net10.0-ios",
             OperatingSystem.IsMacOS, // iOS development requires macOS
-            "PhoneTablet",
+            "PhoneLaptop",
             additionalArgs.ToArray());
 
         resourceBuilder.WithMauiIdeLaunchConfiguration(
@@ -408,7 +408,7 @@ public static class MauiiOSExtensions
             "iOS",
             "net10.0-ios",
             OperatingSystem.IsMacOS, // iOS development requires macOS
-            "PhoneTablet",
+            "PhoneLaptop",
             additionalArgs.ToArray());
 
         resourceBuilder.WithMauiIdeLaunchConfiguration(

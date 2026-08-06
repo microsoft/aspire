@@ -45,7 +45,7 @@
                     {
                         <div slot="end">
                             <FluentCounterBadge HorizontalPosition="70" Count="@(PageViewModel.Filters.GetEnabledFilters().Count())" Appearance="Appearance.Accent">
-                                <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" Items="@GetFilterMenuItems()" />
+                                <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" ItemsProvider="GetFilterMenuItems" />
                             </FluentCounterBadge>
                         </div>
                     }
@@ -54,7 +54,7 @@
                     </FluentButton>
                     <AspireMenuButton ButtonAppearance="Appearance.Lightweight"
                                       Icon="@(new Icons.Regular.Size20.Options())"
-                                      Items="@_traceActionsMenuItems"
+                                      ItemsProvider="@(() => _traceActionsMenuItems)"
                                       Title="@ControlStringsLoc[nameof(ControlsStrings.ActionsButtonText)]"
                                       Text="@ControlStringsLoc[nameof(ControlsStrings.ActionsButtonText)]"/>
                 }
@@ -378,7 +378,7 @@
                 {
                     <div slot="end">
                         <FluentCounterBadge HorizontalPosition="70" Count="@(PageViewModel.Filters.GetEnabledFilters().Count())" Appearance="Appearance.Accent">
-                            <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" Items="@GetFilterMenuItems()" />
+                            <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" ItemsProvider="GetFilterMenuItems" />
                         </FluentCounterBadge>
                     </div>
                 }
@@ -391,7 +391,7 @@
 
                 <AspireMenuButton ButtonAppearance="Appearance.Lightweight"
                                   Icon="@(new Icons.Regular.Size20.Options())"
-                                  Items="@_traceActionsMenuItems"
+                                  ItemsProvider="@(() => _traceActionsMenuItems)"
                                   Title="@ControlStringsLoc[nameof(ControlsStrings.ActionsButtonText)]" />
             </div>
         </div>;

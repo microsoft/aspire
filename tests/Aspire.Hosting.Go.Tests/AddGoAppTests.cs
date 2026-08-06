@@ -489,7 +489,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
     // ---- VS Code debugging --------------------------------------------------
 
     [Fact]
-    public void WithVSCodeDebugging_PopulatesGoLaunchConfiguration()
+    public async Task WithVSCodeDebugging_PopulatesGoLaunchConfiguration()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -502,7 +502,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
             gcFlags: "all=-N -l",
             raceDetector: true);
 
-        var launchConfig = InvokeLaunchConfigurationAnnotator(app.Resource);
+        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(app.Resource);
 
         Assert.Equal("go", launchConfig.Type);
         Assert.Equal(ExecutableLaunchMode.Debug, launchConfig.Mode);
@@ -512,7 +512,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void WithVSCodeDebugging_OmitsBuildFlagsWhenNoneConfigured()
+    public async Task WithVSCodeDebugging_OmitsBuildFlagsWhenNoneConfigured()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -520,7 +520,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
 
         var app = builder.AddGoApp("api", sourceDir.FullName);
 
-        var launchConfig = InvokeLaunchConfigurationAnnotator(app.Resource);
+        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(app.Resource);
 
         Assert.Null(launchConfig.BuildFlags);
     }
@@ -1138,12 +1138,12 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
         await Verify(content);
     }
 
-    private static GoLaunchConfiguration InvokeLaunchConfigurationAnnotator(IResource resource)
+    private static async Task<GoLaunchConfiguration> InvokeLaunchConfigurationAnnotatorAsync(IResource resource)
     {
         Assert.True(resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
 
         var exe = Executable.Create("test", "go");
-        supportsDebugging.LaunchConfigurationAnnotator(exe, ExecutableLaunchMode.Debug);
+        await supportsDebugging.LaunchConfigurationAnnotator(exe, ExecutableLaunchMode.Debug, CancellationToken.None);
 
         Assert.True(exe.TryGetAnnotationAsObjectList<GoLaunchConfiguration>(
             Executable.LaunchConfigurationsAnnotation,

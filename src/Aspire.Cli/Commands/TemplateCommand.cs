@@ -10,6 +10,8 @@ internal sealed class TemplateCommand : BaseCommand
 {
     private readonly Func<ParseResult, CancellationToken, Task<CommandResult>> _executeCallback;
 
+    internal override bool PrefetchesTemplatePackageMetadata => true;
+
     public TemplateCommand(ITemplate template, Func<ParseResult, CancellationToken, Task<CommandResult>> executeCallback, CommonCommandServices services)
         : base(template.Name, template.Description, services)
     {

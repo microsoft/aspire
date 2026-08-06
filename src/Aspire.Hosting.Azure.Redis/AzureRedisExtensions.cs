@@ -123,6 +123,7 @@ public static class AzureRedisExtensions
 
         var resource = new AzureRedisCacheResource(name, ConfigureRedisInfrastructure);
         return builder.AddResource(resource)
+            .WithIconName("Database")
             .WithAnnotation(new DefaultRoleAssignmentsAnnotation(new HashSet<RoleDefinition>()));
     }
 

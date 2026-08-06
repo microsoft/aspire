@@ -122,7 +122,7 @@
                                        instead of taking their own toolbar band. On mobile they live in the filter drawer. *@
                                     @if (ViewportInformation.IsDesktop)
                                     {
-                                        <div class="resource-tabs-toolbar" role="toolbar" aria-label="@ControlsStringsLoc[nameof(ControlsStrings.PageToolbarLandmark)]">
+                                        <div class="resource-tabs-toolbar" role="group" aria-label="@ControlsStringsLoc[nameof(ControlsStrings.PageToolbarLandmark)]">
                                             @GetDesktopFilterControls()
                                         </div>
                                     }
@@ -322,7 +322,7 @@
             {
                 <AspireMenuButton ButtonAppearance="Appearance.Stealth"
                                   Icon="@(new Icons.Regular.Size20.Options())"
-                                  Items="@_resourcesMenuItems"
+                                  ItemsProvider="@(() => _resourcesMenuItems)"
                                   RestoreFocusOnItemClick="true"
                                   Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesChangeViewOptions)]"
                                   slot="end" />

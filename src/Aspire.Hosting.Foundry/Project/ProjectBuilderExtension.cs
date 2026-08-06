@@ -707,7 +707,7 @@ public static class AzureCognitiveServicesProjectExtensions
     private static AzureContainerRegistryResource CreateDefaultRegistry(IDistributedApplicationBuilder builder, string name)
     {
         var resource = new AzureContainerRegistryResource(name, ContainerRegistryInfrastructure.ConfigureContainerRegistry);
-        builder.AddResource(resource);
+        builder.AddResource(resource).WithIconName("Archive");
         return resource;
     }
 
