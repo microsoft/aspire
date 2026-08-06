@@ -1,0 +1,17 @@
+{
+  "id": "cli-environmentchecker-timedout-flaky",
+  "type": "flaky-test",
+  "title": "Flaky: EnvironmentCheckerTests.CheckAllAsync_TimedOutCheckReportsWarningAndContinues - check completes too slowly under CI load",
+  "test_name": "Aspire.Cli.Tests.Utils.EnvironmentCheckerTests.CheckAllAsync_TimedOutCheckReportsWarningAndContinues",
+  "error_pattern": "Assert.Collection() Failure: Item comparison failure\nExpected: EnvironmentCheckResult { Message = \"Completed\", ... }\nActual:   EnvironmentCheckResult { Message = \"Environment check 'test-environment' timed out aft\"..., ... }\n   at Aspire.Cli.Tests.Utils.EnvironmentCheckerTests.CheckAllAsync_TimedOutCheckReportsWarningAndContinues() in ...\\EnvironmentCheckerTests.cs:line 55",
+  "occurrences": [
+    {
+      "run_id": 31066050322,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/31066050322",
+      "job": "Tests / Cli / Cli (windows-latest)",
+      "pr_number": 18986,
+      "observed_at": "2026-08-06T03:28:52Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19039"
+}

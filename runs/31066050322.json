@@ -1,0 +1,38 @@
+{
+  "run_id": 31066050322,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/31066050322",
+  "analyzed_at": "2026-08-06T03:28:52Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 18986,
+    "title": "Disable default timeout for HTTP commands",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "fix-http-command-timeout",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18986"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Cli / Cli (windows-latest)",
+      "id": 92504201389,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31066050322/job/92504201389",
+      "classification": "flaky-test",
+      "reason": "Single test failed in EnvironmentCheckerTests - unrelated to PR changes (HTTP command options in Aspire.Hosting). The test shows a timing issue where environment checks that should 'Complete' are instead timing out.",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Utils.EnvironmentCheckerTests.CheckAllAsync_TimedOutCheckReportsWarningAndContinues",
+      "job": "Tests / Cli / Cli (windows-latest)",
+      "error": "Assert.Collection() Failure: Item comparison failure\n                                                                                                                                                                                   ↓ (pos 1)\nCollection: [EnvironmentCheckResult { Category = \"environment\", Details = null, Fix = null, Link = null, Message = \"Environment check 'test-environment' timed out aft\"···, ··· }, EnvironmentCheckResult { Category = \"environment\", Details = null, Fix = null, Link = null, Message = \"Environment check 'test-environment' timed out aft\"···, ··· }]\nError:      Assert.Same() Failure: Values are not the same instance\n            Expected: EnvironmentCheckResult { Category = \"environment\", Details = null, Fix = null, Link = null, Message = \"Completed\", ··· }\n            Actual:   EnvironmentCheckResult { Category = \"environment\", Details = null, Fix = null, Link = null, Message = \"Environment check 'test-environment' timed out aft\"···, ··· }",
+      "stack_trace": "at Aspire.Cli.Tests.Utils.EnvironmentCheckerTests.CheckAllAsync_TimedOutCheckReportsWarningAndContinues() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Utils\\EnvironmentCheckerTests.cs:line 55",
+      "classification": "flaky",
+      "reason": "The test is in Aspire.Cli.Tests which is unrelated to the PR's changes (HttpCommandOptions in Aspire.Hosting). The failure is a timing issue: a check that was expected to 'Complete' instead timed out, suggesting CI resource contention on the Windows runner caused the check to exceed its timeout threshold."
+    }
+  ],
+  "causes": ["cli-environmentchecker-timedout-flaky"]
+}
