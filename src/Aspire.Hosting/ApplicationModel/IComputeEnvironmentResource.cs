@@ -12,6 +12,55 @@ namespace Aspire.Hosting.ApplicationModel;
 public interface IComputeEnvironmentResource : IResource
 {
     /// <summary>
+    /// Gets a value indicating whether this environment can be selected automatically when it is the only compute environment in the application model.
+    /// </summary>
+    /// <remarks>
+    /// Environments that require workloads to opt in explicitly should return <see langword="false"/>.
+    /// </remarks>
+    [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    bool AllowsImplicitBinding => true;
+
+    /// <summary>
+    /// Gets the minimum number of compute resources that must be bound to this environment.
+    /// </summary>
+    [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    int MinimumResourceCount => 0;
+
+    /// <summary>
+    /// Gets the maximum number of compute resources that can be bound to this environment, or <see langword="null"/> when no maximum applies.
+    /// </summary>
+    [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    int? MaximumResourceCount => null;
+
+    /// <summary>
+    /// Determines whether the specified compute resource can be bound to this environment.
+    /// </summary>
+    /// <param name="resource">The compute resource to evaluate.</param>
+    /// <returns><see langword="true"/> when the resource is supported; otherwise, <see langword="false"/>.</returns>
+    [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    bool SupportsResource(IComputeResource resource)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+        return true;
+    }
+
+    /// <summary>
+    /// Determines whether the specified compute resource should be built as a container image for this environment.
+    /// </summary>
+    /// <param name="resource">The compute resource to evaluate.</param>
+    /// <returns><see langword="true"/> when the resource requires a container image; otherwise, <see langword="false"/>.</returns>
+    /// <remarks>
+    /// Compute environments that deploy projects or executables without containers can return <see langword="false"/>
+    /// and provide their own build pipeline steps.
+    /// </remarks>
+    [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    bool UsesContainerImages(IComputeResource resource)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+        return true;
+    }
+
+    /// <summary>
     /// Gets a <see cref="ReferenceExpression"/> representing the host address or host name for the specified <see cref="EndpointReference"/>.
     /// </summary>
     /// <param name="endpointReference">The endpoint reference for which to retrieve the host address or host name.</param>

@@ -1,0 +1,20 @@
+﻿{
+  "type": "azure.bicep.v0",
+  "path": "aspire.hosting.azure.compute.azurevirtualmachinescalesetenvironment.bicep",
+  "params": {
+    "resourceName": "compute",
+    "vmSku": "Standard_D2s_v5",
+    "capacity": "2",
+    "imagePublisher": "Canonical",
+    "imageOffer": "ubuntu-24_04-lts",
+    "imageSku": "server",
+    "imageVersion": "latest",
+    "subnetId": "{network.outputs.compute_subnet_Id}",
+    "vmApplicationPackageUri": "https://account.blob.core.windows.net/applications/app-001.tar.gz",
+    "vmApplicationVersion": "1.2.3",
+    "adminSshPublicKey": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCapabilityProof",
+    "workloadIdentityName": "{compute-identity.outputs.name}",
+    "galleryName": "{compute-foundation.outputs.galleryName}",
+    "galleryApplicationName": "{compute-foundation.outputs.galleryApplicationName}"
+  }
+}

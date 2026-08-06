@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
+    <PackageTags>aspire integration hosting azure compute virtual-machine-scale-set vmss cloud</PackageTags>
+    <Description>Azure Virtual Machine Scale Set compute environment resource types for Aspire.</Description>
+    <PackageIconFullPath>$(SharedDir)Azure_256x.png</PackageIconFullPath>
+    <EnablePackageValidation>false</EnablePackageValidation>
+    <NoWarn>$(NoWarn);AZPROVISION001;ASPIREAZURE003;ASPIREAZURE004;ASPIRECOMPUTE002</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Aspire.Hosting.Azure.Network\Aspire.Hosting.Azure.Network.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Dotnet\Aspire.Hosting.Dotnet.csproj" />
+    <PackageReference Include="Azure.Storage.Blobs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="AzureVirtualMachineScaleSetFoundation.bicep" />
+    <EmbeddedResource Include="AzureVirtualMachineScaleSetEnvironment.bicep" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Hosting.Azure.Tests" />
+  </ItemGroup>
+
+</Project>

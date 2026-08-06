@@ -717,16 +717,18 @@ public class DistributedApplication : IHost, IAsyncDisposable
     }
 
     /// <summary>
-    /// When the model contains exactly one compute environment, applies a
+    /// When the model contains exactly one compute environment that allows implicit binding, applies a
     /// <see cref="ComputeEnvironmentAnnotation"/> pointing to that environment to every
     /// <see cref="IComputeResource"/> that doesn't already have one.
     /// </summary>
     /// <remarks>
     /// This implements the "single compute environment is the default" convention: when only one
-    /// compute environment is present (e.g., a single <c>AzureContainerAppEnvironmentResource</c>),
+    /// compatible compute environment is present (e.g., a single <c>AzureContainerAppEnvironmentResource</c>),
     /// developers don't need to call <c>WithComputeEnvironment(...)</c> on every compute resource —
     /// the unique environment is auto-assigned here. Resources that have been explicitly bound to a
-    /// compute environment (via <c>WithComputeEnvironment</c> or otherwise) are left untouched.
+    /// compute environment (via <c>WithComputeEnvironment</c> or otherwise) are left untouched. Environments
+    /// that return <see langword="false"/> from <see cref="IComputeEnvironmentResource.AllowsImplicitBinding"/>
+    /// require every targeted workload to opt in explicitly.
     ///
     /// When zero or more than one compute environment is present we deliberately do nothing.
     /// - With zero compute environments there is no default to apply.
@@ -741,10 +743,19 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// </remarks>
     private static void EnsureComputeEnvironmentAnnotationsApplied(DistributedApplicationModel appModel)
     {
-        var computeEnvironments = appModel.Resources.OfType<IComputeEnvironmentResource>().ToList();
+        var computeEnvironments = appModel.Resources
+            .OfType<IComputeEnvironmentResource>()
+            .Where(static environment =>
+            {
+#pragma warning disable ASPIRECOMPUTE002
+                return environment.AllowsImplicitBinding;
+#pragma warning restore ASPIRECOMPUTE002
+            })
+            .ToList();
         if (computeEnvironments.Count == 1)
         {
             var environment = computeEnvironments[0];
+
             foreach (var computeResource in appModel.Resources.OfType<IComputeResource>())
             {
                 // Skip resources that already have an explicit compute environment binding so we
