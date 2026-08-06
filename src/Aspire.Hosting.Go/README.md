@@ -90,7 +90,7 @@ application is replaced by a headless Delve server:
 
 ```csharp
 builder.AddGoApp("api", "../go-api")
-    .WithDelveServer(port: 2345)
+    .WithDelveServer()
     .WithHttpEndpoint(port: 8080);
 ```
 

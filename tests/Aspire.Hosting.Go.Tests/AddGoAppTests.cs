@@ -338,7 +338,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
 
         var app = builder.AddGoApp("api", AppContext.BaseDirectory)
-            .WithDelveServer(port: 2345);
+            .WithDelveServer();
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
 
@@ -489,7 +489,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
         builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
 
         var app = builder.AddGoApp("api", AppContext.BaseDirectory)
-            .WithDelveServer(port: 2345);
+            .WithDelveServer();
         var application = builder.Build();
 
         var commandArguments = await ArgumentEvaluator.GetArgumentListAsync(app.Resource, application.Services);
@@ -615,7 +615,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
         var app = builder.AddGoApp("api", AppContext.BaseDirectory,
                 buildTags: ["netgo"],
                 ldFlags: "-s -w")
-            .WithDelveServer(port: 2345);
+            .WithDelveServer();
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
 
@@ -645,7 +645,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
 
         var app = builder.AddGoApp("api", AppContext.BaseDirectory, raceDetector: true)
-            .WithDelveServer(port: 2345);
+            .WithDelveServer();
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
 
@@ -675,7 +675,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
 
         var app = builder.AddGoApp("api", AppContext.BaseDirectory, gcFlags: "all=-N -l")
-            .WithDelveServer(port: 2345);
+            .WithDelveServer();
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
 
@@ -706,7 +706,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
 
         var app = builder.AddGoApp("api", AppContext.BaseDirectory)
             .WithAppArgs("--port", "9090")
-            .WithDelveServer(port: 2345);
+            .WithDelveServer();
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
 

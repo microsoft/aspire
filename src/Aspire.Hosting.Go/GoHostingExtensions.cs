@@ -625,7 +625,6 @@ public static class GoHostingExtensions
     /// </summary>
     /// <typeparam name="T">The type of the Go application resource.</typeparam>
     /// <param name="builder">The resource builder for the Go application.</param>
-    /// <param name="port">The TCP port Delve listens on. Defaults to <c>2345</c>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <remarks>
     /// <para>
@@ -654,10 +653,34 @@ public static class GoHostingExtensions
     /// <example>
     /// <code lang="csharp">
     /// builder.AddGoApp("api", "../go-api")
-    ///        .WithDelveServer(port: 2345);
+    ///        .WithDelveServer();
     /// </code>
     /// </example>
-    [AspireExportIgnore(Reason = "This compatibility overload is C#-only. Polyglot AppHosts use the DelveServerOptions overload.")]
+    [AspireExportIgnore(Reason = "This C# convenience overload uses default options. Polyglot AppHosts use the DelveServerOptions overload.")]
+    public static IResourceBuilder<T> WithDelveServer<T>(this IResourceBuilder<T> builder)
+        where T : GoAppResource
+        => builder.WithDelveServer(new DelveServerOptions());
+
+    /// <summary>
+    /// Starts a headless Delve debug server on the specified port.
+    /// </summary>
+    /// <typeparam name="T">The type of the Go application resource.</typeparam>
+    /// <param name="builder">The resource builder for the Go application.</param>
+    /// <param name="port">The TCP port Delve listens on. Defaults to <c>2345</c>.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// This overload is retained for binary compatibility. Use <see cref="WithDelveServer{T}(IResourceBuilder{T})"/>
+    /// for the default port or <see cref="WithDelveServer{T}(IResourceBuilder{T}, DelveServerOptions)"/>
+    /// to configure the port and other Delve server options.
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// builder.AddGoApp("api", "../go-api")
+    ///        .WithDelveServer(new DelveServerOptions { Port = 3456 });
+    /// </code>
+    /// </example>
+    [Obsolete("Use WithDelveServer() or WithDelveServer(DelveServerOptions) instead.")]
+    [AspireExportIgnore(Reason = "This obsolete compatibility overload is C#-only. Polyglot AppHosts use the DelveServerOptions overload.")]
     public static IResourceBuilder<T> WithDelveServer<T>(this IResourceBuilder<T> builder, int port = 2345)
         where T : GoAppResource
         => builder.WithDelveServer(new DelveServerOptions { Port = port });

@@ -137,7 +137,7 @@ public class GoPublicApiTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var app = builder.AddGoApp("api", builder.AppHostDirectory, packagePath: "./cmd/server")
-                         .WithDelveServer(port: 2345);
+                         .WithDelveServer();
 
         var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
 
@@ -452,7 +452,7 @@ public class GoPublicApiTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var app = builder.AddGoApp("api", builder.AppHostDirectory)
-                         .WithDelveServer(port: 2345);
+                         .WithDelveServer();
 
         Assert.Equal("dlv", app.Resource.Command);
     }
@@ -462,11 +462,25 @@ public class GoPublicApiTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var app = builder.AddGoApp("api", builder.AppHostDirectory)
-                         .WithDelveServer(port: 2345);
+                         .WithDelveServer();
 
         var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
 
         Assert.Equal(["--headless=true", "--listen=127.0.0.1:2345", "--api-version=2", "debug", "."], args);
+    }
+
+    [Fact]
+    public async Task ObsoleteWithDelveServerPortOverloadPreservesBehavior()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+#pragma warning disable CS0618 // The obsolete overload must remain callable for source and binary compatibility.
+        var app = builder.AddGoApp("api", builder.AppHostDirectory)
+            .WithDelveServer(port: 3456);
+#pragma warning restore CS0618
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
+
+        Assert.Equal(["--headless=true", "--listen=127.0.0.1:3456", "--api-version=2", "debug", "."], args);
     }
 
     [Fact]
@@ -509,7 +523,7 @@ public class GoPublicApiTests
         var app = builder.AddGoApp("api", builder.AppHostDirectory,
                             buildTags: ["netgo"],
                             ldFlags: "-s -w")
-                         .WithDelveServer(port: 2345);
+                         .WithDelveServer();
 
         var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
 
@@ -523,7 +537,7 @@ public class GoPublicApiTests
         using var builder = TestDistributedApplicationBuilder.Create();
         var app = builder.AddGoApp("api", builder.AppHostDirectory)
                          .WithAppArgs("--config", "dev.yaml")
-                         .WithDelveServer(port: 2345);
+                         .WithDelveServer();
 
         var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
 
