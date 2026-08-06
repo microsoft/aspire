@@ -76,7 +76,7 @@ checkout:
   # workspace (microsoft/aspire#18319, run 27765082872). The manifest already
   # maps `microsoft/aspire.dev -> path="."` (the workspace) here, so a mirror is
   # not needed for the handler to rediscover the target repo. The compiler-generated
-  # safe-outputs job keeps its own `_repos/aspire.dev` checkout for bundle apply.
+  # safe-outputs job checks out the target repo at its workspace root for bundle apply.
   - repository: microsoft/aspire.dev
     # gh-aw v0.85+ otherwise places cross-repository checkouts in a directory
     # named after the repository, but this workflow authors docs at workspace root.

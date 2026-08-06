@@ -48,7 +48,8 @@ checkout:
   # where the support.mdx edit and PR branch are created. A second checkout of
   # the same repository would shadow this entry in gh-aw's checkout manifest,
   # causing create_pull_request to look for the branch in the wrong checkout.
-  # The compiler-generated safe-outputs job keeps its own mirror for bundle apply.
+  # The compiler-generated safe-outputs job checks out the target repo at its
+  # workspace root for bundle apply.
   - repository: microsoft/aspire.dev
     # gh-aw v0.85+ otherwise derives "aspire.dev" for a cross-repository
     # checkout, changing the workspace layout used by this workflow.
