@@ -137,14 +137,8 @@ internal class ResourceSnapshotBuilder
         if (executable.AppModelResourceName is not null &&
             _resourceState.ApplicationModel.TryGetValue(executable.AppModelResourceName, out appModelResource))
         {
-            if (appModelResource is ProjectResource projectResource)
+            if (appModelResource.TryGetProjectMetadata(out var projectMetadata))
             {
-                projectPath = projectResource.GetProjectMetadata().ProjectPath;
-                launchProfileName = projectResource.GetEffectiveLaunchProfile()?.Name;
-            }
-            else if (appModelResource.TryGetProjectMetadata(out var projectMetadata))
-            {
-                // New-style, annotation-based C# service (DotnetProjectResource)
                 projectPath = projectMetadata.ProjectPath;
                 launchProfileName = appModelResource.GetEffectiveLaunchProfile()?.Name;
             }

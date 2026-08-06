@@ -818,7 +818,7 @@ public static class ResourceExtensions
             };
 
             // Track HTTP schemes encountered for ProjectResources
-            if (resource is ProjectResource && IsHttpScheme(endpoint.UriScheme))
+            if (resource.TryGetProjectAnnotation(out _) && IsHttpScheme(endpoint.UriScheme))
             {
                 httpSchemesEncountered.Add(endpoint.UriScheme);
             }
@@ -955,7 +955,7 @@ public static class ResourceExtensions
             return false;
         }
 
-        return resource is ProjectResource || resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _);
+        return resource.TryGetProjectAnnotation(out _) || resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _);
     }
 
     /// <summary>
@@ -1753,7 +1753,8 @@ public static class ResourceExtensions
     /// <summary>
     /// Gets the resource type string for the specified resource.
     /// </summary>
-    internal static string GetResourceType(this IResource resource) => resource switch
+    internal static string GetResourceType(this IResource resource)
+    => resource switch
     {
         ProjectResource => KnownResourceTypes.Project,
         ContainerResource => KnownResourceTypes.Container,
@@ -1766,5 +1767,6 @@ public static class ResourceExtensions
         ExternalServiceResource => KnownResourceTypes.ExternalService,
         _ => resource.GetType().Name
     };
+
 #pragma warning restore ASPIREDOTNETTOOL
 }
