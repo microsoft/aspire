@@ -316,7 +316,9 @@ Every request to `inventory` receives two seconds of added latency until the pol
 
 Every request to `orders` receives the protocol-correct synthetic response until the policy is removed.
 
-### Deferred capability-gated example
+### Cosmos container write throttling (deferred)
+
+Assume the AppHost models a Cosmos container with `AddContainer("carts", ...)`. The policy's `resource` field selects that `AzureCosmosDBContainerResource`:
 
 ```json
 {
@@ -331,7 +333,7 @@ Every request to `orders` receives the protocol-correct synthetic response until
 
 This schema is illustrative and invalid in Phase 1. `from` optionally selects the caller side of an existing AppHost reference; omitted `from` retains resource-wide behavior. The field is named `from`, not `source`, because Aspire uses source for the referenced or producing resource. `operations` is provisional and Cosmos-profile-specific, initially limited to `read`, `write`, and `query`; omitted `operations` means all operations. It ships only if Gateway capture proves that classification from URI, method, and headers without request-body parsing. If body parsing is required, drop `operations` and retain container-scope-only policy. Point-operation verbs may be added only after evidence justifies them. `from` and `operations` remain orthogonal.
 
-Here, `carts` is the name of an existing Aspire Cosmos account, database, or container resource. Authors do not repeat Cosmos database or container names in policy. The Aspire-side Cosmos profile compiles the typed resource and operation selectors to an internal method/path/header matcher and a protocol-correct response template. Raw HTTP paths, methods, headers, and response details remain internal to the profile/data-plane contract; DCP stays generic.
+In this example, `carts` specifically names the modeled Cosmos container—not the Cosmos account or database. More generally, `resource` may name an existing Aspire Cosmos account, database, or container resource to select that scope. Authors do not repeat raw Cosmos database or container names in policy. The Aspire-side Cosmos profile compiles the typed resource and operation selectors to an internal method/path/header matcher and a protocol-correct response template. Raw HTTP paths, methods, headers, and response details remain internal to the profile/data-plane contract; DCP stays generic.
 
 The first profile target is modeled Cosmos emulator resources in Gateway HTTPS mode. Aspire's emulator integration forces Gateway and `LimitToEndpoint`, but interception must establish Aspire-managed trust on both TLS legs across supported hosts and containers. Direct/TCP (RNTBD), real accounts, and unprovable connection modes remain unsupported. EF Core container usage not represented by an `AzureCosmosDBContainerResource` is ineligible for container scope until the AppHost uses `AddContainer`.
 
