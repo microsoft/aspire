@@ -346,7 +346,7 @@ public static class EFMigrationResourceBuilderExtensions
 
     // Resolves the pipeline output directory the same way PipelineOutputService does, so the
     // Docker build context captured at configuration time matches the path the generate step
-    // uses at execution time (via IPipelineOutputService.GetOutputDirectory()).
+    // uses at execution time (via context.Outputs.PrimaryOutput.OutputPath).
     private static string ResolvePipelineOutputDirectory(IResourceBuilder<EFMigrationResource> builder)
     {
         var configured = builder.ApplicationBuilder.Configuration["Pipeline:OutputPath"];

@@ -27,6 +27,8 @@ internal interface IAppHostCliBackchannel
     Task CompletePromptResponseAsync(string promptId, PublishingPromptInputAnswer[] answers, CancellationToken cancellationToken);
     Task UpdatePromptResponseAsync(string promptId, PublishingPromptInputAnswer[] answers, CancellationToken cancellationToken);
     Task<GetPipelineStepsResponse> GetPipelineStepsAsync(string? step, CancellationToken cancellationToken);
+    Task<GetPipelineOutputsResponse> GetPipelineOutputsAsync(CancellationToken cancellationToken);
+    Task AuthorizePipelineExecutionAsync(CancellationToken cancellationToken);
     Task<UploadFileResponse> UploadFileAsync(string filePath, string fileName, CancellationToken cancellationToken);
 }
 
@@ -552,6 +554,44 @@ internal sealed class AppHostCliBackchannel(
         logger.LogDebug("Received {StepCount} pipeline steps.", response.Steps.Length);
 
         return response;
+    }
+
+    public async Task<GetPipelineOutputsResponse> GetPipelineOutputsAsync(CancellationToken cancellationToken)
+    {
+        using var activity = telemetry.StartDiagnosticActivity();
+        var rpc = await GetRpcTaskAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        logger.LogDebug("Requesting pipeline outputs.");
+
+        var response = await rpc.InvokeWithProfilingAsync<GetPipelineOutputsResponse>(
+            profilingTelemetry,
+            "apphost",
+            "GetPipelineOutputsAsync",
+            [new GetPipelineOutputsRequest()],
+            cancellationToken).ConfigureAwait(false);
+
+        logger.LogDebug("Received {OutputCount} pipeline outputs.", response.Outputs.Length);
+        return response;
+    }
+
+    public async Task AuthorizePipelineExecutionAsync(CancellationToken cancellationToken)
+    {
+        using var activity = telemetry.StartDiagnosticActivity();
+        var rpc = await GetRpcTaskAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        logger.LogDebug("Authorizing pipeline execution.");
+
+        var response = await rpc.InvokeWithProfilingAsync<AuthorizePipelineExecutionResponse>(
+            profilingTelemetry,
+            "apphost",
+            "AuthorizePipelineExecutionAsync",
+            [new AuthorizePipelineExecutionRequest()],
+            cancellationToken).ConfigureAwait(false);
+
+        if (!response.IsAuthorized)
+        {
+            throw new InvalidOperationException("The AppHost did not authorize pipeline execution.");
+        }
     }
 
     public async Task<UploadFileResponse> UploadFileAsync(string filePath, string fileName, CancellationToken cancellationToken)

@@ -34,6 +34,11 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
     public TaskCompletionSource? GetPipelineStepsAsyncCalled { get; set; }
     public Func<string?, CancellationToken, Task<GetPipelineStepsResponse>>? GetPipelineStepsAsyncCallback { get; set; }
 
+    public TaskCompletionSource? GetPipelineOutputsAsyncCalled { get; set; }
+    public Func<CancellationToken, Task<GetPipelineOutputsResponse>>? GetPipelineOutputsAsyncCallback { get; set; }
+    public TaskCompletionSource? AuthorizePipelineExecutionAsyncCalled { get; set; }
+    public Func<CancellationToken, Task>? AuthorizePipelineExecutionAsyncCallback { get; set; }
+
     public Task RequestStopAsync(CancellationToken cancellationToken)
     {
         RequestStopAsyncCalled?.SetResult();
@@ -277,6 +282,29 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
                 new PipelineStepInfo { Name = "deploy-webapi", DependsOn = ["build-webapi"], Tags = ["deploy-compute"] }
             ]
         };
+    }
+
+    public async Task<GetPipelineOutputsResponse> GetPipelineOutputsAsync(CancellationToken cancellationToken)
+    {
+        GetPipelineOutputsAsyncCalled?.SetResult();
+        if (GetPipelineOutputsAsyncCallback is not null)
+        {
+            return await GetPipelineOutputsAsyncCallback(cancellationToken).ConfigureAwait(false);
+        }
+
+        return new GetPipelineOutputsResponse
+        {
+            AppHostDirectory = Environment.CurrentDirectory,
+            State = "Prepared",
+            Steps = [],
+            Outputs = []
+        };
+    }
+
+    public Task AuthorizePipelineExecutionAsync(CancellationToken cancellationToken)
+    {
+        AuthorizePipelineExecutionAsyncCalled?.SetResult();
+        return AuthorizePipelineExecutionAsyncCallback?.Invoke(cancellationToken) ?? Task.CompletedTask;
     }
 
     public Func<string, string, CancellationToken, Task<UploadFileResponse>>? UploadFileAsyncCallback { get; set; }
