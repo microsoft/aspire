@@ -8,9 +8,9 @@ This document proposes bringing the piloted `Aspire.Hosting.Chaos` experience in
 
 ### Direction established by this proposal
 
-- Every Phase 1 policy has two universal required fields: **resource + fault**. Closed, resource-type-validated profiles may add typed selectors; the Phase 1 Cosmos profile adds optional `operations`.
+- Every Phase 1 policy has two universal required fields: **resource + fault**. The controller resolves `resource`, infers a stable versioned logical profile, and validates `fault.type`, its closed parameters, and any typed selectors against that profile's catalog.
 - A policy applies exactly one fault to the selected scope until explicitly removed. Ordinary resources select all inbound traffic; modeled Cosmos account, database, or container resources may additionally select `read`, `write`, or `query` operations.
-- Aspire resolves the resource profile to DCP's internal proxy topology and matcher/response templates. Policy authors never select an endpoint, route, raw HTTP method, path, header, percentage, seed, policy lifetime, priority, effect order, or policy ID.
+- The logical profile is derived metadata, not authored policy and not a CLR type. Aspire compiles it to DCP's internal proxy topology and matcher/response templates. Policy authors never select a profile, endpoint, route, raw HTTP method, path, header, percentage, seed, policy lifetime, priority, effect order, or policy ID.
 - Phase 1 admits a resource only when DCP can apply the requested fault unambiguously and completely across every relevant proxied path. Otherwise, application fails with an actionable resource eligibility reason.
 - Only one policy may be active for an ordinary Aspire resource or overlapping Cosmos account/database/container hierarchy scope. Applying an overlapping policy fails until the first is removed.
 - Use one authoritative controller for CLI, dashboard, MCP, and tests. The CLI remains a client of resource commands rather than a second policy engine.
@@ -56,7 +56,7 @@ The Aspire discussion identified the existing service proxy as the right archite
 ## Goals
 
 1. Provide zero-setup fault injection for eligible Aspire resources in Run mode.
-2. Make the complete Phase 1 policy model understandable as universal `resource + fault`, with only closed, resource-type-validated profile selectors such as Cosmos `operations`.
+2. Make the complete Phase 1 policy model understandable as universal `resource + fault`, with an inferred closed fault catalog and only resource-validated selectors such as Cosmos `operations`.
 3. Apply and remove faults dynamically without restarting the AppHost or changing service discovery.
 4. Keep proxy topology and protocol details out of user-facing policy, CLI, and testing APIs.
 5. Route CLI, dashboard, MCP, and tests through one controller and one acknowledgement path.
@@ -90,7 +90,7 @@ The pilot proves the end-to-end experience and provides useful invariants, but s
 | --- | --- | --- |
 | Resource | `ChaosProxyResource` is a thin `ContainerResource` with service discovery | Replace it with one inert run-only `ChaosEnvironmentResource`; DCP carries traffic |
 | Topology | One explicit proxy per selected edge | Keep topology internal to DCP and admit only resources with complete fault coverage |
-| Policies | Startup and runtime policy documents include detailed matching and lifetime controls | No startup authoring; runtime policy has universal `resource + fault` plus closed typed profile selectors |
+| Policies | Startup and runtime policy documents include detailed matching and lifetime controls | No startup authoring; runtime policy has universal `resource + fault`, inferred catalogs, and closed typed selectors |
 | State | Proxy-local in-memory policy stores | One AppHost controller owns authoritative state |
 | Cleanup | Explicit delete plus expiry | Explicit remove only; controller-liveness loss forces pass-through |
 | Composition | Installation order resolves overlap | Exactly one active policy per ordinary resource or overlapping Cosmos hierarchy scope |
@@ -186,8 +186,8 @@ flowchart LR
 The architecture has four layers:
 
 1. **App-model resources and DCP capabilities** determine whether a fault can cover a resource completely.
-2. **`ChaosPolicyController`** owns active policies, generated policy IDs, revisions, leases, acknowledgement, and bounded activation observations.
-3. **`IChaosDataPlaneAdapter`** translates the small Aspire policy and any closed resource-profile selectors into DCP's internal desired-state contract.
+2. **`ChaosPolicyController`** resolves the resource, infers its stable logical profile and closed fault catalog, validates the policy, and owns active policies, generated policy IDs, revisions, leases, acknowledgement, and bounded activation observations.
+3. **`IChaosDataPlaneAdapter`** translates the small Aspire policy and selectors validated by the inferred catalog into DCP's internal desired-state contract.
 4. **DCP proxies** inject faults and report acknowledgement, liveness, and bounded observations.
 
 All callers use the controller. No caller writes directly to proxy state.
@@ -215,6 +215,7 @@ Enforcement requires DCP to eagerly allocate distinct per-reference proxy/listen
 A resource is eligible for a fault only when:
 
 - the resource exists in the current AppHost model;
+- the controller can infer a supported logical profile and catalog version from that resource;
 - every relevant traffic path is mediated by a DCP proxy that supports the fault;
 - DCP can preserve pass-through behavior for the resource's protocol;
 - applying the fault has one complete, unambiguous meaning for the resource;
@@ -230,23 +231,24 @@ If any condition fails, the controller rejects the apply before activation. Diag
 - multiple relevant paths cannot be covered atomically; or
 - the selected DCP version does not advertise the required capability.
 
-`list-resources` reports eligible faults and actionable ineligibility reasons so a developer does not need to guess resource names or understand listeners, directed references, or address allocation. Each row shows:
+`list-resources` and `describe-resource` resolve the app model and report the inferred logical profile, eligible faults, required parameters, and actionable ineligibility reasons. A developer does not need to guess resource names or understand CLR types, listeners, directed references, or address allocation. Each row shows:
 
 | Column | Purpose |
 | --- | --- |
 | Resource name | The exact identifier to use in `resource` (and, once shipped, `from`) |
-| Resource type | For example project, container, or `AzureCosmosDBContainerResource` |
+| Modeled resource type | Discoverability context such as project, container, or `AzureCosmosDBContainerResource`; never authored policy |
+| Logical profile/version | Stable controller contract such as `http/v1` or `cosmos-gateway/v1`; inferred rather than authored and not a CLR type |
 | Parent hierarchy | The account -> database -> container chain, when the resource has one |
-| Supported faults | Faults DCP can enforce unambiguously for this resource today |
+| Supported faults | Closed fault types and required parameters the controller and DCP can enforce for this resource today |
 | Eligibility reason | Why the resource is eligible, or the specific actionable reason it is not |
 
 For example:
 
-| Resource name | Resource type | Parent hierarchy | Supported faults | Eligibility reason |
-| --- | --- | --- | --- | --- |
-| `inventory` | Project | — | latency, httpStatus | Eligible |
-| `carts` | `AzureCosmosDBContainerResource` | `cosmos` -> `shop-db` -> `carts` | throttle (`read`, `write`, `query`, or all) | Eligible when modeled with `AddContainer` and proven Gateway HTTPS emulator mode |
-| `legacy-orders` | Container | — | — | Ineligible: some container traffic bypasses DCP |
+| Resource name | Modeled resource type | Logical profile/version | Parent hierarchy | Supported faults | Eligibility reason |
+| --- | --- | --- | --- | --- | --- |
+| `inventory` | Project | `http/v1` | — | `latency(amount)`, `httpStatus(statusCode)` | Eligible |
+| `carts` | `AzureCosmosDBContainerResource` | `cosmos-gateway/v1` | `cosmos` -> `shop-db` -> `carts` | `throttle(retryAfter?)` with `read`, `write`, `query`, or all | Eligible when modeled with `AddContainer` and proven Gateway HTTPS emulator mode |
+| `legacy-orders` | Container | — | — | — | Ineligible: some container traffic bypasses DCP |
 
 Phase 0 must census representative and playground resources and record eligibility reasons. Low coverage should become explicit roadmap evidence, not an excuse to expose proxy topology in the v1 contract.
 
@@ -277,11 +279,11 @@ The recommended path extends DCP and Aspire Hosting with:
 - controller-liveness fail-safe behavior; and
 - bounded activation telemetry.
 
-The internal DCP contract may describe proxy path coverage, protocol details, normalized effect configuration, matcher/response templates, and compatibility versions. Those are generic platform contracts between Hosting and DCP. The Aspire-side Cosmos profile compiles modeled resource identity and typed operations into those templates; raw HTTP methods, paths, headers, and Cosmos response details are not fields in authored policy.
+The internal DCP contract may describe proxy path coverage, protocol details, normalized effect configuration, matcher/response templates, and compatibility versions. Those are generic platform contracts between Hosting and DCP. Aspire infers the logical profile from modeled resource identity, validates its closed fault catalog, and compiles typed operations into those templates; raw HTTP methods, paths, headers, Cosmos response details, and the inferred profile identifier are not fields in authored policy.
 
 The minimal operations are:
 
-- `GetCapabilities`, which returns resource coverage and supported faults;
+- `GetCapabilities`, which returns resource coverage and normalized effect capabilities that Aspire intersects with its versioned logical fault catalogs;
 - `SetDesiredPolicies(revision, policies[])`, which sends the complete desired snapshot; and
 - `GetStatus`, which returns the acknowledged revision, controller-liveness state, bounded observations, and structured rejection details.
 
@@ -300,13 +302,22 @@ Every Phase 1 policy has these universal fields:
 | `resource` | Required downstream Aspire resource name; the fault applies on requests entering this resource from every caller |
 | `fault` | Required single fault |
 
-Resource profiles may add only documented, closed fields validated against the selected resource type. The Phase 1 Cosmos profile adds optional `operations`, whose allowed values are `read`, `write`, and `query`; omission means all operations in the selected Cosmos scope. Supplying `operations` for any non-Cosmos resource is rejected. If the operation-classification release gate fails, the fallback Cosmos profile supports modeled container-level all-operations faulting and rejects `operations` rather than guessing.
+The controller resolves `resource` against the AppHost model before interpreting `fault`. It infers a stable, versioned logical profile, then validates `fault.type` and that fault's closed parameter object against the profile's catalog. Authors do not provide `resourceType`, `profile`, or a generic parameter bag. The inferred profile is not a CLR type and may evolve only through explicit catalog versioning.
 
-Matcher, percentage, seed, duration, priority, endpoint, source, `from`, and campaign fields are not added to Phase 1. Generic HTTP method, path, header, or body matchers are explicitly rejected. Fields outside the universal schema or the selected resource's closed profile are rejected. Because `from` is a reserved future capability, Phase 1 rejects it with a specific directed-edge-capability-not-supported diagnostic rather than generic unknown-field wording.
+Phase 1 initially defines:
+
+| Inferred logical profile | Closed fault catalog |
+| --- | --- |
+| `http/v1` | `latency` with required bounded `amount`; `httpStatus` with required valid `statusCode` |
+| `cosmos-gateway/v1` | `throttle` with optional bounded `retryAfter` and a catalog-defined default, compiled to a protocol-correct Cosmos 429 response |
+
+The Cosmos profile also permits optional `operations`, whose allowed values are `read`, `write`, and `query`; omission means all operations in the selected Cosmos scope. Supplying `operations` for any non-Cosmos resource is rejected. If the operation-classification release gate fails, the fallback Cosmos profile supports modeled container-level all-operations faulting and rejects `operations` rather than guessing.
+
+Matcher, percentage, seed, duration, priority, endpoint, source, `from`, `resourceType`, `profile`, and campaign fields are not added to Phase 1. Generic HTTP method, path, header, body, or arbitrary fault-property matchers are explicitly rejected. Fields outside the universal schema or the inferred profile's closed selectors are rejected. Because `from` is a reserved future capability, Phase 1 rejects it with a specific directed-edge-capability-not-supported diagnostic rather than generic unknown-field wording.
 
 The controller generates an opaque policy ID after a successful apply. The ID is returned for later removal but is never user-authored policy content. Revision, ownership, proxy coverage, acknowledgement state, and liveness metadata remain internal.
 
-Fault-specific parameters exist only when they are intrinsic to the fault. For example, latency needs an amount and a synthetic HTTP response needs a status code.
+Fault-specific parameters exist only when defined by the inferred catalog and intrinsic to the fault. Unknown or missing parameters fail with an actionable diagnostic listing valid fault types and required parameters for the resolved resource.
 
 ### Examples
 
@@ -360,7 +371,8 @@ Assume the AppHost already models a Cosmos container with `AddContainer("carts",
   "resource": "carts",
   "operations": ["write"],
   "fault": {
-    "type": "throttle"
+    "type": "throttle",
+    "retryAfter": "1s"
   }
 }
 ```
@@ -370,7 +382,7 @@ The table below labels each field:
 | Field | Availability | Meaning |
 | --- | --- | --- |
 | `resource` | Phase 1 | Required downstream Aspire resource name; see [How resource selection works](#how-resource-selection-works) |
-| `fault` | Phase 1 | Required single fault |
+| `fault` | Phase 1 | Required single fault whose type and closed parameters are validated against the inferred resource catalog |
 | `operations` | Phase 1 Cosmos profile, subject to the classification release gate | Optional operation categories: `read`, `write`, `query`. Omitted means all operations within the selected resource's scope |
 | `from` | Deferred | Future optional calling Aspire resource. Resolves an existing declared reference (`WithReference`) to `resource`; Phase 1 rejects this field with a directed-edge-capability-not-supported diagnostic |
 
@@ -378,7 +390,7 @@ Because this Phase 1 policy omits `from`, write throttling applies to every call
 
 `operations` describes what kind of Cosmos activity the fault applies to, in plain terms: `read` for point/item reads, `write` for creates/updates/deletes, and `query` for SQL queries. Gateway traffic capture must prove that classification from URI, method, and headers alone, without parsing request bodies. If body parsing is required, Phase 1 rejects `operations` and ships only modeled container-level all-operations support; it must not expose a misleading selector. Point-operation verbs may be added only after evidence justifies them.
 
-In this example, `carts` specifically names the modeled Cosmos container, not the Cosmos account or database. More generally, `resource` may name an existing Aspire Cosmos account, database, or container resource to select that hierarchy scope. Authors do not repeat raw Cosmos database or container names in policy. The Aspire-side Cosmos profile compiles the typed resource and operation selectors to an internal matcher and a protocol-correct 429 response template, including the Cosmos retry metadata and body needed to engage normal SDK retry behavior. Raw HTTP paths, methods, headers, and response details remain internal to the profile/data-plane contract; DCP stays generic.
+In this example, `carts` specifically names the modeled Cosmos container, not the Cosmos account or database. More generally, `resource` may name an existing Aspire Cosmos account, database, or container resource to select that hierarchy scope. Authors do not repeat raw Cosmos database or container names or an inferred profile in policy. Aspire compiles the typed resource, `retryAfter`, and operation selectors to an internal matcher and a protocol-correct 429 response template, including the Cosmos retry metadata and body needed to engage normal SDK retry behavior. Raw HTTP paths, methods, headers, and response details remain internal to the profile/data-plane contract; DCP stays generic.
 
 The first profile target is modeled Cosmos emulator resources in Gateway HTTPS mode. Aspire's emulator integration forces Gateway and `LimitToEndpoint`, but interception must establish Aspire-managed trust on both TLS legs across supported hosts and containers. Direct/TCP (RNTBD), real accounts, and unprovable connection modes remain unsupported. EF Core container usage not represented by an `AzureCosmosDBContainerResource` is ineligible for container scope until the AppHost uses `AddContainer`.
 
@@ -391,6 +403,8 @@ The controller rejects a policy before activation whenever its identifiers do no
 | `resource` names something that does not exist in the current AppHost model | Rejected with an unknown-resource diagnostic |
 | `resource` names a Cosmos container that is only reached through EF Core and was never modeled with `AddContainer` | Rejected for container scope; `list-resources` also warns about the unmodeled container |
 | `operations` is supplied for a resource outside the Cosmos profile | Rejected; `operations` only has meaning for a Cosmos account, database, or container resource |
+| `fault.type` is not in the inferred resource catalog, or its closed parameters are missing or unknown | Rejected with the inferred logical profile/version plus valid fault types and required parameters, for example: `inventory uses http/v1; valid faults are latency(amount) and httpStatus(statusCode)` |
+| Authored input supplies `resourceType` or `profile` | Rejected; both are inferred metadata and never authored policy |
 | The Cosmos client uses Direct/TCP (RNTBD), or targets a real (non-emulator) account whose connection mode cannot be proven | Rejected as ineligible; the controller fails loudly rather than silently no-op |
 | `from` names a resource with no existing declared reference to `resource` | Rejected; the directed-edge capability only faults a reference the AppHost already declares, not an arbitrary caller/destination pair |
 
@@ -426,7 +440,7 @@ If one proxy path rejects or times out after another has acknowledged an apply, 
 
 If compensation cannot converge within its fixed internal deadline, the controller returns a typed partially-applied failure naming the unresolved internal paths. Proxies that lose controller liveness force pass-through after a fixed platform safety interval. The interval is not policy content and is not configurable by the policy author.
 
-`ApplyChaosPolicyAsync(...)` surfaces partial application as a typed `ChaosPolicyApplyException` with cleanup ownership so test infrastructure can continue attempting removal. A rejected apply must never return ordinary failure while an acknowledged fault from that attempt remains active.
+The typed apply APIs surface partial application as a `ChaosPolicyApplyException` with cleanup ownership so test infrastructure can continue attempting removal. A rejected apply must never return ordinary failure while an acknowledged fault from that attempt remains active.
 
 ## Policy lifecycle
 
@@ -472,9 +486,12 @@ aspire resource chaos add-policy --resource carts --operations write --throttle
 aspire resource chaos remove-policy --policy-id <policy-id-returned-by-add>
 aspire resource chaos list-policies
 aspire resource chaos list-resources
+aspire resource chaos describe-resource --resource carts
 ```
 
-Exactly one fault flag is required. `--operations` accepts the closed Cosmos values `read`, `write`, and `query` and is invalid for other resource types. The common cases use readable flags. `--policy-json` may support automation while preserving the same universal fields and closed resource profiles.
+The CLI resolves `--resource` first. Completion and interactive prompting then offer only the fault flags, parameters, and selectors in that resource's inferred catalog; the dashboard follows the same describe contract. Exactly one valid fault flag is required. `--operations` accepts the closed Cosmos values `read`, `write`, and `query` and is invalid for other resources. The common cases use readable flags. `--policy-json` may support automation while preserving universal fields and inferred validation.
+
+Non-interactive input still receives controller validation. An invalid combination reports the inferred logical profile/version and valid syntax rather than exposing a generic property bag.
 
 These examples assume `chaos` is the resolved control-resource name. If user code already claimed that name, `aspire resource list` reveals the deterministic fallback.
 
@@ -487,6 +504,7 @@ Illustrative `add-policy` output:
   "controlResource": "chaos",
   "policyId": "policy-7f3a",
   "resource": "inventory",
+  "resourceProfile": "http/v1",
   "fault": {
     "type": "latency",
     "amount": "2s"
@@ -505,6 +523,7 @@ Illustrative `list-policies` output:
     {
       "policyId": "policy-7f3a",
       "resource": "inventory",
+      "resourceProfile": "http/v1",
       "fault": {
         "type": "latency",
         "amount": "2s"
@@ -516,36 +535,38 @@ Illustrative `list-policies` output:
 }
 ```
 
+`resourceProfile` is output-only derived metadata in canonical apply/list/describe results. Supplying it in authored policy is rejected.
+
 Read-only commands remain available during mutations. Failures use nonzero command status and structured diagnostics rather than success-shaped JSON with an embedded error.
 
 A future `aspire chaos ...` alias may provide shorter syntax over the same controller. Custom CLI extension loading must never be required for correctness or testing.
 
 ## Aspire.Hosting.Testing UX
 
-Tests use a typed convenience API rather than shelling out or constructing policy objects:
+Tests use typed, catalog-specific convenience APIs rather than shelling out or constructing generic policy property bags:
 
 ```csharp
 // Proposed pseudocode. These APIs do not exist.
-await using var lease = await app.ApplyChaosPolicyAsync(
+await using var lease = await app.ApplyHttpChaosPolicyAsync(
     "inventory",
-    ChaosFault.Latency(TimeSpan.FromSeconds(2)),
+    HttpChaosFault.Latency(TimeSpan.FromSeconds(2)),
     cancellationToken);
 ```
 
-Cosmos tests use a typed profile selector rather than a generic request matcher:
+Cosmos tests use typed fault and operation selectors rather than a generic request matcher:
 
 ```csharp
 // Proposed pseudocode. These APIs do not exist.
-await using var lease = await app.ApplyChaosPolicyAsync(
+await using var lease = await app.ApplyCosmosChaosPolicyAsync(
     "carts",
-    ChaosResourceProfile.Cosmos(CosmosOperation.Write),
-    ChaosFault.Throttle(),
+    CosmosChaosFault.Throttle(retryAfter: TimeSpan.FromSeconds(1)),
+    [CosmosOperation.Write],
     cancellationToken);
 ```
 
-The Cosmos overload is available only when the typed operation classifier passes its release gate; the container-level fallback omits the profile argument and affects all operations. No testing API accepts raw HTTP methods, paths, headers, or response templates.
+The method name and typed fault improve discoverability but do not author a resource profile. The controller still resolves `carts`, infers its catalog, and rejects a mismatch. The typed operation overload is available only when the classifier passes its release gate; the container-level fallback omits the operations argument and affects all operations. No testing API accepts raw HTTP methods, paths, headers, arbitrary parameter bags, or response templates.
 
-`ApplyChaosPolicyAsync(...)` returns an `IAsyncDisposable` lease. A richer concrete lease may expose `PolicyId`, `Resource`, `ResourceProfile`, `Fault`, `ActivationCount`, and bounded activation observations, but those details are not required for the common path.
+The apply APIs return an `IAsyncDisposable` lease. A richer concrete lease may expose `PolicyId`, `Resource`, inferred `ResourceProfile`, `Fault`, `ActivationCount`, and bounded activation observations, but those details are not required for the common path.
 
 The lease contract is:
 
@@ -563,9 +584,9 @@ Illustrative test:
 await using var app = await testingBuilder.BuildAsync();
 await app.StartAsync();
 
-await using var lease = await app.ApplyChaosPolicyAsync(
+await using var lease = await app.ApplyHttpChaosPolicyAsync(
     "inventory",
-    ChaosFault.Latency(TimeSpan.FromSeconds(2)),
+    HttpChaosFault.Latency(TimeSpan.FromSeconds(2)),
     cancellationToken);
 
 using var client = app.CreateHttpClient("orders");
@@ -590,9 +611,9 @@ public Task<IAsyncDisposable> ApplyLatencyAsync(
     string resource,
     TimeSpan amount,
     CancellationToken cancellationToken) =>
-    App.ApplyChaosPolicyAsync(
+    App.ApplyHttpChaosPolicyAsync(
         resource,
-        ChaosFault.Latency(amount),
+        HttpChaosFault.Latency(amount),
         cancellationToken);
 ```
 
@@ -608,14 +629,14 @@ The Resources page shows one run-only chaos control resource. Its state and prop
 
 The control resource remains `Running` while available and uses warning styling whenever a policy is active. Reconciliation failure and revision drift appear as health reports rather than invented lifecycle states. The resource never gates workload startup or readiness.
 
-The Phase 1 policy table shows resource type/profile and operation scope when applicable:
+The Phase 1 policy table shows the inferred logical profile and operation scope when applicable:
 
-| Resource | Type/profile | Operations | Fault | State | Activation count |
+| Resource | Logical profile | Operations | Fault | State | Activation count |
 | --- | --- | --- | --- | --- | ---: |
-| `inventory` | Project / HTTP | All inbound | Latency 2s | Active | 3 |
-| `carts` | Cosmos container / Gateway HTTPS | Write | Throttle (429) | Active | 7 |
+| `inventory` | `http/v1` | All inbound | Latency 2s | Active | 3 |
+| `carts` | `cosmos-gateway/v1` | Write | Throttle (429, retry after 1s) | Active | 7 |
 
-The control resource exposes commands for add, remove, list policies, and list resources. Operations use the same validation and acknowledgement path as CLI and tests. The dashboard never calls DCP directly.
+The control resource exposes commands for add, remove, list policies, list resources, and describe resource. After resource selection, the dashboard dynamically renders only controls from the inferred catalog. Operations use the same validation and acknowledgement path as CLI and tests. The dashboard never calls DCP directly.
 
 Selected workload resources may show a derived `Chaos fault` property and a relationship to the control resource. Intentional fault activation must not make the workload resource unhealthy.
 
@@ -655,11 +676,11 @@ Suggested telemetry:
 | --- | --- |
 | `aspire.chaos.policy.apply` | Apply latency and result |
 | `aspire.chaos.policy.remove` | Removal latency and result |
-| `aspire.chaos.fault.activated` | Count by generated policy ID, resource, resource profile, operation scope, and fault type |
+| `aspire.chaos.fault.activated` | Count by generated policy ID, resource, inferred logical profile/version, operation scope, and fault type |
 | `aspire.chaos.proxy.revision_lag` | Desired minus acknowledged revision |
 | `aspire.chaos.controller.liveness_loss` | Forced pass-through events |
 
-Fault spans should link to the proxied request span where possible and include generated policy ID, Aspire resource, resource profile, operation scope when applicable, fault type, and activation index. Structured logs record lifecycle and reconciliation without serializing credentials or policy bodies.
+Fault spans should link to the proxied request span where possible and include generated policy ID, Aspire resource, inferred logical profile/version, operation scope when applicable, fault type, and activation index. Structured logs record lifecycle and reconciliation without serializing credentials or policy bodies.
 
 Synthetic responses may include `x-aspire-chaos-policy`. Faults that cannot carry a response header rely on trace and log markers. Intentional activation never makes the affected resource unhealthy.
 
@@ -669,7 +690,7 @@ Retain a bounded ring of sanitized observations per generated policy ID after re
 
 - generated policy ID;
 - Aspire resource;
-- resource profile and typed operation scope when applicable;
+- inferred logical profile/version and typed operation scope when applicable;
 - activation time;
 - fault type;
 - activation index; and
@@ -685,7 +706,7 @@ Do not retain request bodies, authorization data, cookies, connection strings, r
 - Policy documents have strict size limits. Fault parameters have reviewed bounds, such as maximum latency amount and valid synthetic status codes.
 - Policies cannot specify arbitrary upstream destinations.
 - Unknown fields, unsupported faults, and ineligible resources reject the apply rather than broadening behavior.
-- Resource-profile fields use explicit allowlists and resource-type validation; generic HTTP matchers are not accepted.
+- Inferred catalogs use explicit allowlists for fault types, parameters, and selectors; generic property bags and HTTP matchers are not accepted.
 - Management traffic is never eligible for fault injection.
 - Request and response bodies are not captured by default.
 - Cosmos operation classification never parses request bodies.
@@ -769,7 +790,8 @@ If maintainers approve direct inclusion:
 - Use a focused preview package named `Aspire.Hosting.Chaos`.
 - Keep resource modeling, controller contracts, and the testing convenience API together unless dependency analysis requires a small companion package.
 - Keep the DCP runtime implementation internal to the supported distribution model.
-- Version the internal DCP contract independently from the universal `resource + fault` fields and closed authored resource profiles.
+- Version the internal DCP contract independently from the universal authored fields and Aspire's stable logical fault catalogs.
+- Treat logical profile identifiers and catalog versions as compatibility contracts. They are output metadata, not CLR type names or authored input.
 - Mark unstable public APIs experimental.
 - Add the package to `aspire add` only when minimum run, publish, protocol, and liveness tests pass.
 - Keep the authored policy language-neutral; typed test helpers may remain C#-only initially.
@@ -780,7 +802,7 @@ If incubation remains outside `microsoft/aspire`, use the same boundaries and av
 
 - Do not retain preview APIs solely for compatibility.
 - Translate startup policies into explicit CLI, dashboard, MCP, or testing operations.
-- Replace direct `ChaosProxyClient` usage with controller commands or `ApplyChaosPolicyAsync`.
+- Replace direct `ChaosProxyClient` usage with controller commands or the typed testing apply APIs.
 - Remove detailed request matching, probabilistic activation, expiry, and composition from the native v1 contract.
 - Remove internal-feed, per-edge Docker build, generated-certificate, and Aspire-version workaround code.
 - Do not move Conductor, run-to-green, or custom MCP orchestration.
@@ -810,7 +832,11 @@ Attaching caller identity to application traffic would avoid per-reference liste
 
 ### Expose generic request matching
 
-Path, method, and header matchers could describe Cosmos traffic, but they would leak protocol details into authored policy and create an unsafe generic matching language. Rejected. An Aspire-side resource profile owns typed selectors and compiles them to DCP's internal generic data-plane contract.
+Path, method, and header matchers could describe Cosmos traffic, but they would leak protocol details into authored policy and create an unsafe generic matching language. Rejected. An Aspire-side inferred logical catalog owns typed selectors and compiles them to DCP's internal generic data-plane contract.
+
+### Require an authored resource type or profile
+
+Asking authors to repeat `resourceType` or `profile` could simplify parsing, but it duplicates AppHost truth, can drift from the selected resource, and couples policy to implementation types. Rejected. The controller resolves `resource` first and emits its stable logical profile only as derived discovery and result metadata.
 
 ### Expose DCP topology to policy authors
 
@@ -841,7 +867,9 @@ This could provide polished syntax early, but it would make correctness depend o
 - Warm an `HttpClient` pool and prove acknowledged apply and remove behavior without reconnecting.
 - Measure pass-through and enabled-fault overhead after semantic conformance passes.
 - Use an explicit YARP-compatible engine only as a conformance harness if DCP is not available.
-- Review universal `resource + fault` plus the closed Cosmos `operations` profile with CLI, dashboard, MCP, and testing consumers.
+- Review universal `resource + fault`, inferred versioned catalogs, and closed Cosmos `operations` with CLI, dashboard, MCP, and testing consumers.
+- Prove resource-to-logical-profile inference is deterministic, independent of CLR type names, and represented consistently in list, describe, canonical command output, dashboard, telemetry, and diagnostics.
+- Prove invalid resource/fault combinations list only valid fault types and required parameters for the inferred catalog.
 - Census modeled Cosmos account/database/container resources through public APIs and report EF Core or otherwise unmodeled container gaps.
 - Capture Cosmos emulator Gateway traffic and prove database/container plus `read|write|query` classification from URI, method, and headers without request-body parsing; if operation classification needs bodies, reject `operations` and retain modeled container-level all-operations support.
 - Prove Aspire-managed double-leg TLS trust across Windows, Linux, and macOS without disabling certificate validation on either leg.
@@ -852,12 +880,13 @@ This could provide polished syntax early, but it would make correctness depend o
 ### Phase 1: minimal native loop
 
 - Automatically added run-only chaos control resource with deterministic fallback naming.
-- Universal authored `resource + fault`, closed resource profiles, and generated policy IDs.
+- Universal authored `resource + fault`, inferred versioned fault catalogs, and generated policy IDs.
 - Complete resource eligibility with actionable rejection.
 - Exactly one active policy per ordinary resource or overlapping Cosmos hierarchy scope.
 - Singleton controller and DCP full-snapshot reconciliation with forward compensation.
-- Add, remove, list policies, and list resources commands with JSON results.
-- `ApplyChaosPolicyAsync(resource, fault)` and its typed Cosmos-profile overload, each returning an `IAsyncDisposable` lease.
+- Add, remove, list policies, list resources, and describe resource commands with JSON results and output-only logical profile metadata.
+- Resource-first CLI and dashboard discovery that offers only valid faults, parameters, and selectors.
+- Typed HTTP and Cosmos testing apply APIs returning `IAsyncDisposable` leases without authored profile fields or generic parameter bags.
 - Explicit removal, AppHost cleanup, restart clearing, and controller-liveness pass-through.
 - HTTP/1.1 plus only proven HTTP/2 behavior.
 - Modeled Cosmos emulator Gateway HTTPS account/database/container selection with protocol-correct throttling.
@@ -868,7 +897,7 @@ This could provide polished syntax early, but it would make correctness depend o
 ### Phase 2: evidence-driven diagnostics
 
 - Richer activation observations and links from policies to traces.
-- Additional closed fault profiles that preserve universal `resource + fault` authoring.
+- Additional inferred closed fault catalogs that preserve universal `resource + fault` authoring.
 - Spike eager per-reference listeners that keep service discovery stable and isolate `orders -> inventory` from `frontend -> inventory`, including warmed pooled connections.
 - Add optional directed-edge `from` only after that non-blocking future spike proves stable listener identity.
 - A persistent global active-chaos indicator if Dashboard owners approve the core work.
@@ -894,6 +923,7 @@ This could provide polished syntax early, but it would make correctness depend o
 | Runtime persistence | None | Revisit only if restart use cases outweigh stale-fault risk |
 | Controller loss | Force pass-through after a fixed platform interval | Crash, disconnect, and recovery tests |
 | Dashboard extension | Existing resource surfaces first | User evidence that commands and telemetry are insufficient |
+| Logical fault catalogs | Infer stable versioned identifiers from the AppHost model; never author them | Compatibility review plus deterministic list/describe/canonical output and invalid-combination diagnostics |
 | General HTTPS | Deferred outside the Cosmos profile | Separate cross-platform certificate identity, trust, and protocol proof |
 | Cosmos profile | Phase 1 modeled emulator Gateway HTTPS only; keep typed profile in Aspire and DCP generic | Resource hierarchy census, double-leg TLS trust, protocol-correct 429, warmed-client isolation, and loud rejection of bypass modes |
 | Cosmos operations | Phase 1 `read|write|query`; omit means all, contingent on classification proof | Prove URI/method/header classification; if bodies are required, reject the field and retain container-level all-operations support |
@@ -906,7 +936,7 @@ This could provide polished syntax early, but it would make correctness depend o
 
 Phase 1 must not release until the following are demonstrated:
 
-1. A reader can explain the complete Phase 1 authored policy as universal `resource + fault` plus only closed, resource-type-validated profile selectors.
+1. A reader can explain the complete Phase 1 authored policy as universal `resource + fault`; the controller infers a stable versioned logical catalog before validating fault type, closed parameters, and selectors.
 2. Existing AppHost code requires no chaos-specific setup.
 3. CLI, dashboard, MCP, and tests all mutate the same controller instance.
 4. Applying and disposing a test lease each await acknowledgement from every affected DCP proxy path.
@@ -921,7 +951,7 @@ Phase 1 must not release until the following are demonstrated:
 13. AppHost restart clears all policies, and proxy restart reconciles from the live controller.
 14. A publish snapshot emits normal references with no chaos control resource, state, or metadata.
 15. HTTP/1.1 and every claimed HTTP/2 behavior pass semantic conformance for pass-through, apply, and remove on pooled connections.
-16. Dashboard policy presentation contains Resource, resource type/profile, operation scope when applicable, Fault, State, and activation count.
+16. Dashboard policy presentation contains Resource, inferred logical profile/version, operation scope when applicable, Fault, State, and activation count.
 17. Snapshots and observations contain no credentials, bodies, connection strings, or raw sensitive headers.
 18. A pre-existing resource named `chaos` does not break model construction or silently disable the feature; the resolved fallback is discoverable.
 19. Random campaigns do not appear in the Phase 1 policy schema or command set.
@@ -931,6 +961,8 @@ Phase 1 must not release until the following are demonstrated:
 23. A Phase 1 Cosmos policy names an existing modeled account, database, or container resource; no duplicate physical names appear in authored policy, and unmodeled EF Core containers produce a `list-resources` warning that directs the user to `AddContainer`.
 24. Cosmos `operations` ships only if Gateway traffic proves profile-defined typed classification without body parsing; otherwise Phase 1 rejects the field and supports modeled container-level all-operations throttling.
 25. Cosmos Gateway proofs demonstrate protocol-correct 429 retry behavior and selected-container write throttling without affecting reads or sibling containers, with warmed `CosmosClient` connections and cross-platform TLS validation intact; Direct/RNTBD, real-account, and unprovable modes fail eligibility rather than no-op.
+26. Authored policy rejects `resourceType`, `profile`, and arbitrary parameter bags; logical profile/version appears only as derived list, describe, canonical result, dashboard, telemetry, and diagnostic metadata.
+27. Invalid resource/fault combinations report the inferred profile/version, valid fault types, and required parameters, while CLI and dashboard resolve the resource before offering fault controls.
 
 ## Source map
 
