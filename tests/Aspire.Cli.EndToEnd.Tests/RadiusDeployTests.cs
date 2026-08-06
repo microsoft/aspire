@@ -261,6 +261,19 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
         // https://github.com/radius-project/resource-types-contrib/blob/main/Data/postgreSqlDatabases/recipes/kubernetes/bicep/kubernetes-postgresql.bicep
         const string PostgresImage = "postgres:16-alpine";
 
+        // `rad install kubernetes` registers the built-in Radius.Compute/*, Radius.Core/* and
+        // Applications.* types, but the Radius.Data/* types Aspire emits for PostgreSQL and SQL
+        // Server live in resource-types-contrib and are installed per cluster. Pinned to a commit
+        // rather than main so an upstream schema change cannot silently alter what this asserts.
+        const string PostgresTypeManifestUrl =
+            "https://raw.githubusercontent.com/radius-project/resource-types-contrib/39f65be914c931acce42bc730ebdedff6fcc7af7/Data/postgreSqlDatabases/postgreSqlDatabases.yaml";
+
+        // The value bound to the @secure() `pg_password` parameter Aspire emits. Passing it
+        // explicitly is what makes the assertion meaningful: the same literal has to come back out
+        // of the deployed container's environment *and* authenticate against the database the
+        // recipe provisioned, which is only true if it reached the resource's `password` property.
+        const string PostgresPassword = "AspireE2E-pg-1";
+
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
         using var workspace = TemporaryWorkspace.Create(output);
@@ -289,6 +302,10 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
             await auto.CreateKindClusterWithRegistryAsync(counter, clusterName);
             await auto.InstallRadCliAsync(counter);
             await auto.InstallRadiusControlPlaneAsync(counter, clusterName);
+
+            await auto.TypeAsync($"curl -fsSL -o /tmp/postgresqldatabases.yaml {PostgresTypeManifestUrl} && rad resource-type create postgreSqlDatabases --from-file /tmp/postgresqldatabases.yaml");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(3));
 
             // =================================================================
             // Phase 2: Scaffold the AppHost
@@ -359,9 +376,28 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
-            // Longer than the container-only deploy: this one also pulls the PostgreSQL recipe and
-            // waits for the database the recipe provisions.
-            await auto.TypeAsync("aspire deploy");
+            // The Bicep extension `rad` resolves (br:biceptypes.azurecr.io/radius:<version>) carries
+            // types only for the built-in namespaces, so a contrib type such as
+            // Radius.Data/postgreSqlDatabases compiles to a *classic* ARM resource (BCP081, "does
+            // not have types available") and the deployment engine routes it to the Azure provider:
+            //   "Azure deployment failed, please ensure you have configured an Azure provider..."
+            // Registering the type with the control plane is not enough; the compiler needs it too.
+            // Generating a local extension from the same manifest and importing it is the supported
+            // workaround, and it is what a user deploying an Aspire-generated Radius app with a
+            // PostgreSQL or SQL Server resource has to do today.
+            await auto.TypeAsync("rad bicep publish-extension --from-file /tmp/postgresqldatabases.yaml --target radius-output/aspire-udt.tgz --force");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(3));
+
+            await auto.TypeAsync("sed -i 's#\"extensions\": {#\"extensions\": {\\n        \"aspireudt\": \"./aspire-udt.tgz\",#' radius-output/bicepconfig.json && " +
+                "sed -i '1a extension aspireudt' radius-output/app.bicep && head -3 radius-output/app.bicep");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
+
+            // `rad deploy` on the published output rather than `aspire deploy`, because the latter
+            // republishes and would discard the extension import added above. The artifacts under
+            // test are still exactly the ones Aspire generated.
+            await auto.TypeAsync($"rad deploy radius-output/app.bicep --group default -p pg_password={PostgresPassword}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(20));
 
@@ -394,6 +430,14 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
                 $"PGPASSWORD=$({envValue}'{{.spec.template.spec.containers[0].env[?(@.name==\"APPDB_PASSWORD\")].value}}') && " +
                 "echo \"projected host=$PGHOST port=$PGPORT user=$PGUSER database=$PGDATABASE password_length=${#PGPASSWORD}\"");
             await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            // The consumer must receive the very parameter that was written onto the resource's
+            // `password` property, not a recipe-generated one — that agreement is what makes the
+            // connection string usable.
+            await auto.TypeAsync($"test \"$PGPASSWORD\" = '{PostgresPassword}' && echo PWMATCH''_OK");
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("PWMATCH_OK", timeout: TimeSpan.FromSeconds(60));
             await auto.WaitForSuccessPromptAsync(counter);
 
             // A wrong password, user, or database name fails here rather than producing a silently
