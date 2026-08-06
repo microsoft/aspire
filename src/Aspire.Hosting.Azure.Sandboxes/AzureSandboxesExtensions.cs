@@ -609,10 +609,6 @@ public static class AzureSandboxesExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
-        builder.AddAzureProvisioning();
-        AzureSandboxCleanupResource.EnsureAdded(builder);
-        builder.Services.Configure<AzureProvisioningOptions>(options => options.SupportsTargetedRoleAssignments = true);
-
         static void ConfigureInfrastructure(AzureResourceInfrastructure infrastructure)
         {
             var sandboxResource = (AzureSandboxGroupResource)infrastructure.AspireResource;
@@ -644,11 +640,16 @@ public static class AzureSandboxesExtensions
             }
         }
 
-        var resource = new AzureSandboxGroupResource(name, ConfigureInfrastructure)
+        var resource = new AzureSandboxGroupResource(name, ConfigureInfrastructure);
+        if (builder.ExecutionContext.IsRunMode)
         {
-            DefaultContainerRegistry = CreateDefaultAzureContainerRegistry(builder, $"{name}-acr")
-        };
+            return builder.CreateResourceBuilder(resource);
+        }
 
+        builder.AddAzureProvisioning();
+        AzureSandboxCleanupResource.EnsureAdded(builder);
+        builder.Services.Configure<AzureProvisioningOptions>(options => options.SupportsTargetedRoleAssignments = true);
+        resource.DefaultContainerRegistry = CreateDefaultAzureContainerRegistry(builder, $"{name}-acr");
         return builder.AddResource(resource);
     }
 

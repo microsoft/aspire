@@ -538,6 +538,8 @@ public class AzureSandboxesTests
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var computeResource = Assert.Single(model.GetComputeResources(), resource => resource.Name == "frontend");
 
+        Assert.DoesNotContain(model.Resources, resource => resource is AzureSandboxGroupResource or AzureSandboxCleanupResource);
+        Assert.DoesNotContain(model.Resources, resource => resource.Name == "sandboxes-acr");
         Assert.Null(computeResource.GetDeploymentTargetAnnotation(sandboxGroup.Resource));
         Assert.True(configureCalled);
         Assert.Equal(buildOptionsCallbackCount, container.Resource.Annotations.OfType<ContainerBuildOptionsCallbackAnnotation>().Count());
@@ -848,17 +850,25 @@ public class AzureSandboxesTests
     }
 
     [Fact]
-    public void SandboxStableOwnerSurvivesClearedStateAndPreservesIsolation()
+    public void SandboxStableOwnerUsesAppHostPathIdentityAndPreservesIsolation()
     {
+        using var firstPolyglotBuilder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var secondPolyglotBuilder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        firstPolyglotBuilder.Configuration["AppHost:PathSha256"] = "POLYGLOT-APPHOST-PATH-ONE";
+        secondPolyglotBuilder.Configuration["AppHost:PathSha256"] = "POLYGLOT-APPHOST-PATH-TWO";
+
         var scope = new AzureDevComputeResourceScope("sub", "rg", "sandboxes", "westus3");
-        var owner = AzureSandboxContainerDeployment.CreateStableOwnerId("AppHost", scope, "frontend-sandbox-container");
-        var freshRunOwner = AzureSandboxContainerDeployment.CreateStableOwnerId("apphost", scope, "frontend-sandbox-container");
-        var otherAppOwner = AzureSandboxContainerDeployment.CreateStableOwnerId("OtherAppHost", scope, "frontend-sandbox-container");
+        var firstAppHostIdentity = AzureSandboxContainerDeployment.GetStableAppHostIdentity(firstPolyglotBuilder.Configuration);
+        var secondAppHostIdentity = AzureSandboxContainerDeployment.GetStableAppHostIdentity(secondPolyglotBuilder.Configuration);
+        var owner = AzureSandboxContainerDeployment.CreateStableOwnerId(firstAppHostIdentity, scope, "frontend-sandbox-container");
+        var freshRunOwner = AzureSandboxContainerDeployment.CreateStableOwnerId(firstAppHostIdentity.ToLowerInvariant(), scope, "frontend-sandbox-container");
+        var otherAppOwner = AzureSandboxContainerDeployment.CreateStableOwnerId(secondAppHostIdentity, scope, "frontend-sandbox-container");
         var otherScopeOwner = AzureSandboxContainerDeployment.CreateStableOwnerId(
-            "AppHost",
+            firstAppHostIdentity,
             new AzureDevComputeResourceScope("sub", "other-rg", "sandboxes", "westus3"),
             "frontend-sandbox-container");
 
+        Assert.NotEqual(firstAppHostIdentity, secondAppHostIdentity);
         Assert.Equal(owner, freshRunOwner);
         Assert.NotEqual(owner, otherAppOwner);
         Assert.NotEqual(owner, otherScopeOwner);
@@ -873,6 +883,18 @@ public class AzureSandboxesTests
             "frontend-sandbox-container",
             new HashSet<string>(),
             new HashSet<string>()));
+    }
+
+    [Fact]
+    public void SandboxStableOwnerRequiresCanonicalAppHostIdentity()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.Configuration["AppHost:PathSha256"] = null;
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            AzureSandboxContainerDeployment.GetStableAppHostIdentity(builder.Configuration));
+
+        Assert.Contains("AppHost:PathSha256", exception.Message);
     }
 
     [Fact]

@@ -18,8 +18,8 @@ using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Azure;
@@ -220,7 +220,7 @@ internal static class AzureSandboxContainerDeployment
         ValidateDeploymentScope(stateSection, dataPlaneScope);
         var previousStateSection = CloneStateSection(stateSection);
         var ownerId = CreateStableOwnerId(
-            context.Services.GetRequiredService<IHostEnvironment>().ApplicationName,
+            GetStableAppHostIdentity(context.Services.GetRequiredService<IConfiguration>()),
             dataPlaneScope,
             resource.Name);
         stateSection.Data["OwnerId"] = ownerId;
@@ -1166,9 +1166,8 @@ internal static class AzureSandboxContainerDeployment
     {
         var deploymentStateManager = context.Services.GetRequiredService<IDeploymentStateManager>();
         var stateSection = await deploymentStateManager.AcquireSectionAsync(GetStateSectionName(resource), context.CancellationToken).ConfigureAwait(false);
-
         var ownerId = stateSection.Data["OwnerId"]?.GetValue<string>();
-        var applicationName = context.Services.GetRequiredService<IHostEnvironment>().ApplicationName;
+        var appHostIdentity = GetStableAppHostIdentity(context.Services.GetRequiredService<IConfiguration>());
         if (!HasRemoteDeploymentState(stateSection))
         {
             try
@@ -1179,7 +1178,7 @@ internal static class AzureSandboxContainerDeployment
                     azureState.ResourceGroup,
                     GetRequiredOutput(resource.Parent, "name"),
                     azureState.Location);
-                var stableOwnerId = CreateStableOwnerId(applicationName, fallbackScope, resource.Name);
+                var stableOwnerId = CreateStableOwnerId(appHostIdentity, fallbackScope, resource.Name);
                 await DeleteRemoteDeploymentsByResourceLabelAsync(
                     context,
                     CreateAzureDevComputeClient(context),
@@ -1218,12 +1217,11 @@ internal static class AzureSandboxContainerDeployment
         {
             await DeleteRemoteDeploymentsByResourceLabelAsync(context, client, scope, ownerId, resource.Name, s_noExcludedIds, s_noExcludedIds, s_noExcludedIds, throwOnError: true).ConfigureAwait(false);
         }
-        var stableOwnerIdForScope = CreateStableOwnerId(applicationName, scope, resource.Name);
+        var stableOwnerIdForScope = CreateStableOwnerId(appHostIdentity, scope, resource.Name);
         if (!string.Equals(ownerId, stableOwnerIdForScope, StringComparison.Ordinal))
         {
             await DeleteRemoteDeploymentsByResourceLabelAsync(context, client, scope, stableOwnerIdForScope, resource.Name, s_noExcludedIds, s_noExcludedIds, s_noExcludedIds, throwOnError: true).ConfigureAwait(false);
         }
-
         await deploymentStateManager.DeleteSectionAsync(stateSection, context.CancellationToken).ConfigureAwait(false);
     }
 
@@ -1262,7 +1260,6 @@ internal static class AzureSandboxContainerDeployment
                 {
                     await DeleteRemoteDeploymentsByResourceLabelAsync(context, client, scope, ownerId, GetStateResourceName(stateSection, sectionName), s_noExcludedIds, s_noExcludedIds, s_noExcludedIds, throwOnError: true).ConfigureAwait(false);
                 }
-
                 await deploymentStateManager.DeleteSectionAsync(stateSection, context.CancellationToken).ConfigureAwait(false);
                 await cleanupTask.CompleteAsync($"Deleted stale sandbox deployment {sectionName}", CompletionState.Completed, context.CancellationToken).ConfigureAwait(false);
             }
@@ -1496,17 +1493,17 @@ internal static class AzureSandboxContainerDeployment
     }
 
     internal static string CreateStableOwnerId(
-        string applicationName,
+        string appHostIdentity,
         AzureDevComputeResourceScope scope,
         string resourceName)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(applicationName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(appHostIdentity);
         ArgumentException.ThrowIfNullOrWhiteSpace(resourceName);
 
         var identity = string.Join(
             "\n",
             [
-                applicationName.ToLowerInvariant(),
+                appHostIdentity.ToLowerInvariant(),
                 scope.SubscriptionId.ToLowerInvariant(),
                 scope.ResourceGroupName.ToLowerInvariant(),
                 scope.SandboxGroupName.ToLowerInvariant(),
@@ -1514,6 +1511,13 @@ internal static class AzureSandboxContainerDeployment
             ]);
         var hash = XxHash3.HashToUInt64(Encoding.UTF8.GetBytes(identity));
         return $"aspire-{hash:x16}";
+    }
+
+    internal static string GetStableAppHostIdentity(IConfiguration configuration)
+    {
+        return configuration["AppHost:PathSha256"] is { Length: > 0 } appHostPathHash
+            ? appHostPathHash
+            : throw new InvalidOperationException("AppHost:PathSha256 is required to isolate Azure sandbox ownership between AppHosts.");
     }
 
     internal static string CreateDeploymentSecurityFingerprint(
