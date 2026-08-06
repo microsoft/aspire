@@ -127,7 +127,6 @@ resource vmss 'Microsoft.Compute/virtualMachineScaleSets@2025-04-01' = {
         }
       }
       networkProfile: {
-        networkApiVersion: '2020-11-01'
         networkInterfaceConfigurations: [
           {
             name: 'primary'
