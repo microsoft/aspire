@@ -2205,15 +2205,18 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         builder.AddContainer("database", "image");
 
+        const string previousLateLogMessage = "late log from previous resource";
         const string replacementLogMessage = "replacement terminal log";
+        var previousLateLogLine = "2024-08-19T06:10:32.473275911Z " + previousLateLogMessage + Environment.NewLine;
         var replacementLogLine = "2024-08-19T06:10:33.473275911Z " + replacementLogMessage + Environment.NewLine;
         var previousFollowStream = new GatedReadStream();
         var replacementFollowStream = new GatedReadStream();
+        var previousBatchReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releasePreviousBatch = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var replacementFollowStreamStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var replacementStdErrFollowStreams = 0;
         string? previousResourceUid = null;
         string? replacementResourceUid = null;
-        var logger = new GatedLogger<DcpExecutor>("was cancelled.");
 
         var kubernetesService = new TestKubernetesService(startStreamWithFollow: (obj, logStreamType, follow) =>
         {
@@ -2266,8 +2269,15 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             distributedAppModel,
             kubernetesService: kubernetesService,
             resourceLoggerService: resourceLoggerService,
-            events: events,
-            logger: logger);
+            events: events);
+        appExecutor.ResourceWatcher.BeforeLogBatchDeliveryAsync = async resourceUid =>
+        {
+            if (resourceUid == previousResourceUid)
+            {
+                previousBatchReady.TrySetResult();
+                await releasePreviousBatch.Task.ConfigureAwait(false);
+            }
+        };
         await appExecutor.RunApplicationAsync().DefaultTimeout();
 
         var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
@@ -2301,6 +2311,11 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
                 () => Volatile.Read(ref terminalNotifications) >= 1,
                 "The first resource incarnation should report its terminal state.");
 
+            // Pause after the old stream has yielded a batch to DcpResourceWatcher. Cancellation can stop
+            // future reads, but it cannot revoke a batch that the outer await-foreach loop already received.
+            previousFollowStream.Release(previousLateLogLine);
+            await previousBatchReady.Task.DefaultTimeout();
+
             // Simulate a delete and recreation that happened while the watch was disconnected. The fresh
             // list-and-watch reports only Added for the new UID, and resourceVersion is opaque enough that
             // it can equal the value last observed for the previous object.
@@ -2309,7 +2324,6 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             container.Status = new ContainerStatus { State = ContainerState.Exited, ExitCode = 1 };
             kubernetesService.PushResourceUnchanged(container, k8s.WatchEventType.Added);
 
-            await logger.Blocked.DefaultTimeout();
             await AsyncTestHelpers.AssertIsTrueRetryAsync(
                 () => Volatile.Read(ref terminalNotifications) >= 2,
                 "The replacement resource should be processed even though no delete event was observed.");
@@ -2319,24 +2333,27 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
                 "The replacement resource should start a new log stream.");
             var replacementLogStreamTask = appExecutor.ResourceWatcher.GetLogStreamTask(dcpResourceName);
             Assert.NotNull(replacementLogStreamTask);
-
             Assert.Single(logLines, line => line.Content.Contains(replacementLogMessage, StringComparison.Ordinal));
 
-            // Let the canceled stream finish only after the replacement flush has installed its pending
-            // deduplication state. Its cleanup must not remove state owned by the replacement UID.
-            previousFollowStream.Release();
-            logger.Release();
+            // Let the old batch continue only after the replacement stream has installed its pending
+            // deduplication state. It must neither publish under the replacement's name nor remove that state.
+            releasePreviousBatch.TrySetResult();
             await previousLogStreamTask.DefaultTimeout();
 
             replacementFollowStream.Release(replacementLogLine);
             await replacementLogStreamTask.DefaultTimeout();
 
             Assert.Equal(2, Volatile.Read(ref replacementStdErrFollowStreams));
-            Assert.Single(logLines, line => line.Content.Contains(replacementLogMessage, StringComparison.Ordinal));
+            Assert.Collection(
+                logLines.Where(line =>
+                    line.Content.Contains(previousLateLogMessage, StringComparison.Ordinal) ||
+                    line.Content.Contains(replacementLogMessage, StringComparison.Ordinal)),
+                line => Assert.Contains(replacementLogMessage, line.Content, StringComparison.Ordinal));
         }
         finally
         {
-            logger.Release();
+            appExecutor.ResourceWatcher.BeforeLogBatchDeliveryAsync = null;
+            releasePreviousBatch.TrySetResult();
             previousFollowStream.TryRelease();
             replacementFollowStream.TryRelease();
         }

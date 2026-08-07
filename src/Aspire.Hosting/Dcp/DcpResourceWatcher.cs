@@ -68,6 +68,9 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         return _logStreams.TryGetValue(resourceName, out var logStream) ? logStream.Task : null;
     }
 
+    // Internal for testing.
+    internal Func<string?, ValueTask>? BeforeLogBatchDeliveryAsync { get; set; }
+
     public DcpResourceWatcher(
         ILogger logger,
         IKubernetesService kubernetesService,
@@ -173,10 +176,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                     }
                     else
                     {
-                        if (_logStreams.TryRemove(entry.ResourceName, out var logStream))
-                        {
-                            logStream.Cancel();
-                        }
+                        CancelLogStream(entry.ResourceName);
                     }
                 }
 
@@ -389,10 +389,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
 
     private void ResetResourceLogState(string resourceName)
     {
-        if (_logStreams.TryRemove(resourceName, out var logStream))
-        {
-            logStream.Cancel();
-        }
+        CancelLogStream(resourceName);
 
         lock (_pendingFollowLogDeduplicationsLock)
         {
@@ -400,6 +397,18 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         }
 
         _allLogsFlushed.TryRemove(resourceName, out _);
+    }
+
+    private void CancelLogStream(string resourceName)
+    {
+        if (_logStreams.TryGetValue(resourceName, out var logStream))
+        {
+            // Keep this registration until cancellation has synchronized with any synchronous batch
+            // delivery. Otherwise another stream can claim the same name while the old stream is
+            // still publishing a batch that ResourceLogSource yielded before cancellation.
+            logStream.Cancel();
+            _logStreams.TryRemove(new(resourceName, logStream));
+        }
     }
 
     private async Task<bool> FlushCurrentLogsAsync<T>(T resource, ResourceStatus status, CancellationToken cancellationToken)
@@ -614,8 +623,16 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                     await foreach (var batch in enumerable.WithCancellation(cancellationToken).ConfigureAwait(false))
                     {
                         var logEntries = CreateLogEntries(batch).ToList();
-                        logEntries = DeduplicateFollowBatch(resourceName, logStream, logEntries);
-                        _loggerService.AddLogEntries(resourceName, logEntries, inMemorySource: false, skipExisting: false);
+                        if (BeforeLogBatchDeliveryAsync is { } beforeLogBatchDeliveryAsync)
+                        {
+                            await beforeLogBatchDeliveryAsync(logStream.ResourceUid).ConfigureAwait(false);
+                        }
+
+                        logStream.TryDeliver(() =>
+                        {
+                            logEntries = DeduplicateFollowBatch(resourceName, logStream, logEntries);
+                            _loggerService.AddLogEntries(resourceName, logEntries, inMemorySource: false, skipExisting: false);
+                        });
                     }
                 }
                 catch (OperationCanceledException)
@@ -984,6 +1001,22 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
 
         // Access is guarded by the owning DcpResourceWatcher's pending-deduplication lock.
         public PendingFollowLogDeduplication? PendingDeduplication { get; set; }
+
+        public bool TryDeliver(Action deliver)
+        {
+            lock (_lock)
+            {
+                if (_disposed || _cancellation.IsCancellationRequested)
+                {
+                    return false;
+                }
+
+                // Cancellation takes this same lock, so reset cannot free the resource-name slot
+                // until a delivery that already started has finished publishing synchronously.
+                deliver();
+                return true;
+            }
+        }
 
         public void Cancel()
         {
