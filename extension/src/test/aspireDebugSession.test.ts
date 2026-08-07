@@ -1103,6 +1103,172 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         assert.strictEqual(startDebuggingStub.firstCall.args[2], parentDebugSession);
     });
 
+    test('tracks an already-started resource and reports its process without launching another debug session', async () => {
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/AppHost/AppHost.csproj',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const terminalProvider = {
+            isDebugConfigEnvironmentLoggingEnabled: () => false,
+        };
+        const debugConfig = {
+            runId: 'run-1',
+            debugSessionId: 'debug-1',
+            type: 'coreclr',
+            name: 'Azure Functions',
+            request: 'launch',
+        } as AspireResourceExtendedDebugConfiguration;
+        const stopSession = sinon.stub();
+        const alreadyStartedSession = {
+            id: 'run-1',
+            processId: 4242,
+            session: { id: 'run-1' } as vscode.DebugSession,
+            stopSession,
+            termination: new Promise<number>(() => { }),
+        };
+        const sendNotification = sinon.stub();
+        const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(false);
+        sinon.stub(vscode.debug, 'stopDebugging').resolves();
+        const aspireDebugSession = new AspireDebugSession(
+            parentDebugSession as unknown as vscode.DebugSession,
+            {} as any,
+            { sendNotification } as any,
+            terminalProvider as any,
+            () => { });
+
+        const result = aspireDebugSession.trackAlreadyStartedResourceSession(debugConfig, alreadyStartedSession);
+
+        assert.strictEqual(result, alreadyStartedSession);
+        assert.strictEqual(startDebuggingStub.called, false);
+        assert.deepStrictEqual(sendNotification.firstCall.args[0], {
+            notification_type: 'processRestarted',
+            session_id: 'run-1',
+            dcp_id: 'debug-1',
+            pid: 4242,
+        });
+
+        aspireDebugSession.dispose();
+        assert.strictEqual(stopSession.calledOnce, true);
+    });
+
+    test('reports termination of an already-started resource to DCP', async () => {
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/AppHost/AppHost.csproj',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const terminalProvider = {
+            isDebugConfigEnvironmentLoggingEnabled: () => false,
+        };
+        const debugConfig = {
+            runId: 'run-1',
+            debugSessionId: 'debug-1',
+            type: 'coreclr',
+            name: 'Azure Functions',
+            request: 'launch',
+        } as AspireResourceExtendedDebugConfiguration;
+        let completeSession: (exitCode: number) => void;
+        const termination = new Promise<number>(resolve => {
+            completeSession = resolve;
+        });
+        const sendNotification = sinon.stub();
+        const aspireDebugSession = new AspireDebugSession(
+            parentDebugSession as unknown as vscode.DebugSession,
+            {} as any,
+            { sendNotification } as any,
+            terminalProvider as any,
+            () => { });
+
+        aspireDebugSession.trackAlreadyStartedResourceSession(debugConfig, {
+            id: 'run-1',
+            processId: 4242,
+            session: { id: 'run-1' } as vscode.DebugSession,
+            stopSession: sinon.stub(),
+            termination,
+        });
+        completeSession!(17);
+        await termination;
+        await Promise.resolve();
+
+        assert.deepStrictEqual(sendNotification.getCalls().map(call => call.args[0]), [
+            {
+                notification_type: 'processRestarted',
+                session_id: 'run-1',
+                dcp_id: 'debug-1',
+                pid: 4242,
+            },
+            {
+                notification_type: 'sessionTerminated',
+                session_id: 'run-1',
+                dcp_id: 'debug-1',
+                exit_code: 17,
+            },
+        ]);
+
+        aspireDebugSession.dispose();
+    });
+
+    test('stops an already-started resource handed off after the Aspire session was disposed', async () => {
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/AppHost/AppHost.csproj',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const terminalProvider = {
+            isDebugConfigEnvironmentLoggingEnabled: () => false,
+        };
+        const debugConfig = {
+            runId: 'run-1',
+            debugSessionId: 'debug-1',
+            type: 'coreclr',
+            name: 'Azure Functions',
+            request: 'launch',
+        } as AspireResourceExtendedDebugConfiguration;
+        const stopSession = sinon.stub();
+        sinon.stub(vscode.debug, 'stopDebugging').resolves();
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, {} as any, terminalProvider as any, () => { });
+        aspireDebugSession.dispose();
+
+        const result = aspireDebugSession.trackAlreadyStartedResourceSession(debugConfig, {
+            id: 'run-1',
+            processId: 4242,
+            session: { id: 'run-1' } as vscode.DebugSession,
+            stopSession,
+            termination: new Promise<number>(() => { }),
+        });
+
+        assert.strictEqual(result, undefined);
+        assert.strictEqual(stopSession.calledOnce, true);
+    });
+
     test('retries MAUI resource debug sessions when the first start attempt is canceled', async () => {
         let startSessionCallback: ((session: vscode.DebugSession) => void) | undefined;
         const parentDebugSession = {

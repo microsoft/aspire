@@ -50,7 +50,9 @@ card shows are driven by its lane and its signal pills:
 
 - **Review mode** — buckets every open PR across your watched repos into lanes:
   Needs your review, Ready to merge, CI failing, Unresolved feedback, and Your PRs.
-- **Issues mode** — Assigned to you, Your issues, Needs triage, Recently active.
+- **Issues mode** — Assigned to you, Your issues, Needs triage, Recently active,
+  with linked pull requests shown directly on issue cards and opened in in-app
+  browser tabs.
 - **Ship mode** — PRs in the current release milestone grouped into Ready to ship,
   In progress, and Blocked.
 - **Health mode** — default-branch CI state, failure streak, last successful
@@ -62,6 +64,11 @@ card shows are driven by its lane and its signal pills:
   N unresolved, Approved, Ready to merge, Needs review, Quick win, Stalled.
 - **Notifications** — review requested, your PR ready to merge, changes requested,
   CI failing, with per-category preferences. Live updates over SSE.
+- **Stable background refresh** — GitHub data is assembled into a complete snapshot
+  while the current board remains visible, then applied in one update. The compact
+  **Auto** toolbar switch can pause automatic UI updates; when paused, an **Apply
+  update** pill appears only after changed data is ready. The refresh button tooltip
+  counts down to the next background data check.
 - **Multiple GitHub accounts** — every detected credential (gh CLI, environment,
   Copilot) appears on the Accounts screen. Activate any number of them and their
   results **interleave across every tab**, de-duplicated by PR/issue URL. Each
@@ -75,14 +82,20 @@ card shows are driven by its lane and its signal pills:
 
 ## Health mode
 
-Health mode checks the default branch of every watched GitHub repository. It also
-checks the Azure CLI's configured default organization and project for Azure Repos
-whose name uniquely matches a watched github.com repository. For each unambiguous
-match, the app auto-discovers one enabled delivery pipeline, preferring production,
-release, deployment, or publish definitions over a generic build. Merge, mirror,
-cleanup, provisioning, generated, old, and disabled definitions are ignored. The
-catalog is cached for ten minutes, and discovery never scans other Azure DevOps
-projects or organizations.
+Health mode checks the default branch of every watched GitHub repository. When
+`microsoft/aspire` is watched, it also checks the known `dnceng/internal`
+`microsoft-aspire` mirror for the curated official CodeQL, NuGet release, and CI
+pipelines. This first-party discovery does not depend on the Azure CLI's configured
+defaults, excludes the unofficial pipeline, and quietly skips the internal sources
+when the CLI, authentication, or repository access is unavailable.
+
+Separately, the app checks the Azure CLI's configured default organization and
+project for Azure Repos whose name uniquely matches a watched github.com repository.
+For each unambiguous match, it auto-discovers one enabled delivery pipeline,
+preferring production, release, deployment, or publish definitions over a generic
+build. Merge, mirror, cleanup, provisioning, generated, old, unofficial, and disabled
+definitions are ignored. The catalog is cached for ten minutes, and discovery never
+scans other Azure DevOps projects or organizations.
 
 Paste a pipeline URL such as
 `https://dev.azure.com/{org}/{project}/_build?definitionId={id}` or a build-results
@@ -100,9 +113,10 @@ an unavailable provider does not hide results from the other provider.
 When a configured Azure pipeline builds a watched GitHub repository directly, provider
 metadata links both sources into one repository group. Azure Repos mirrors do not expose
 an upstream GitHub origin, so the app discovers and groups a mirror only when its
-repository name has exactly one normalized GitHub match. The source is labeled
-**Auto-discovered**, and the group is labeled as a repository-name match. Ambiguous
-names remain separate.
+repository name has exactly one normalized GitHub match. Curated first-party sources
+are labeled **Official default**; default-project matches are labeled
+**Auto-discovered**. Both use a repository-name group, and ambiguous names remain
+separate.
 
 | State | Meaning |
 | --- | --- |
@@ -137,7 +151,7 @@ without refetching provider data.
 | File | Responsibility |
 | --- | --- |
 | `extension.mjs` | Wiring: `joinSession` + `createCanvas`, agent-facing actions. |
-| `server.mjs` | Per-instance loopback HTTP server, JSON API, SSE refresh, multi-account interleave, health orchestration. |
+| `server.mjs` | Per-instance loopback HTTP server, atomic complete-snapshot cache, background polling, SSE refresh, multi-account interleave, and health orchestration. |
 | `accounts.mjs` | Credential discovery, per-account repo-access probing, host/enterprise detection. |
 | `github.mjs` | GraphQL queries, lane bucketing, signals, avatars, cross-account merge. |
 | `health.mjs` | GitHub default-branch health and provider-neutral health aggregation. |
@@ -147,7 +161,7 @@ without refetching provider data.
 | `render.mjs` | Iframe HTML / CSS / client JS, styled with Copilot theme tokens. |
 | `agent.mjs` | Card-action prompt/log builders (Test, Review, Resolve conflicts, Address review, Evaluate CI failures, Discuss review, Address feedback) with untrusted-PR hardening. |
 | `health-agent.mjs` | Canonical health-action routing and injection-hardened diagnosis/fix prompts. |
-| `state.mjs` | Durable per-account and pipeline preferences (watched repos, active flag, notifications, Azure pipeline coordinates, health card order). |
+| `state.mjs` | Durable preferences (watched repos, active accounts, notifications, refresh behavior, Azure pipeline coordinates, and health card order). |
 
 The canvas reads each account's token from `GH_TOKEN` / `GITHUB_TOKEN`, the
 per-account Copilot credentials, or `gh auth token`, and queries the matching

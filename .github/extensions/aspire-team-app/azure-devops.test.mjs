@@ -131,7 +131,7 @@ test("Azure discovery selects and caches one production delivery pipeline for a 
   };
 
   const first = await discoverAzureDevOpsPipelines(
-    { repositories: ["microsoft/aspire.dev", "microsoft/aspire"] },
+    { repositories: ["microsoft/aspire.dev"] },
     options,
   );
   const second = await discoverAzureDevOpsPipelines(
@@ -158,6 +158,106 @@ test("Azure discovery selects and caches one production delivery pipeline for a 
   assert.equal(calls.filter((args) => args[0] === "pipelines" && args[1] === "list").length, 1);
   assert.ok(calls.find((args) => args[0] === "pipelines" && args[1] === "list").includes("--repository"));
   assert.equal(calls.filter((args) => args[0] === "pipelines" && args[1] === "show").length, 5);
+});
+
+test("Azure discovery loads curated official Aspire pipelines without CLI defaults", async () => {
+  const calls = [];
+  let defaultsCalls = 0;
+  const definitions = new Map([
+    [1599, officialDefinition(1599, "microsoft-aspire-codeql", "eng/pipelines/azure-pipelines-codeql.yml")],
+    [1600, officialDefinition(1600, "microsoft-aspire-Release-To-NuGet", "eng/pipelines/release-publish-nuget.yml")],
+    [1601, officialDefinition(1601, "microsoft-aspire-unofficial", "eng/pipelines/azure-pipelines-unofficial.yml")],
+    [1602, officialDefinition(1602, "microsoft-aspire", "eng/pipelines/azure-pipelines.yml")],
+  ]);
+  const runAz = async (args) => {
+    calls.push(args);
+    if (args[0] === "pipelines" && args[1] === "list") {
+      return [...definitions.values()].map(({ id, name, path, queueStatus }) => ({ id, name, path, queueStatus }));
+    }
+    if (args[0] === "pipelines" && args[1] === "show") {
+      return definitions.get(Number(args[args.indexOf("--id") + 1]));
+    }
+    throw new Error(`Unexpected az call: ${args.join(" ")}`);
+  };
+  const options = {
+    runAz,
+    runAzText: async () => {
+      defaultsCalls++;
+      return "[defaults]\n";
+    },
+    cache: new Map(),
+    nowMs: Date.parse("2026-08-06T15:00:00Z"),
+  };
+
+  const first = await discoverAzureDevOpsPipelines({ repositories: ["microsoft/aspire"] }, options);
+  const second = await discoverAzureDevOpsPipelines({ repositories: ["microsoft/aspire"] }, options);
+
+  assert.deepEqual(first.pipelines.map((pipeline) => pipeline.definitionId), [1599, 1600, 1602]);
+  assert.ok(first.pipelines.every((pipeline) => pipeline.discovered));
+  assert.ok(first.pipelines.every((pipeline) => pipeline.discovery.kind === "official-default"));
+  assert.ok(first.pipelines.every((pipeline) => pipeline.discovery.repository === "microsoft/aspire"));
+  assert.equal(first.pipelines.some((pipeline) => pipeline.definitionId === 1601), false);
+  assert.deepEqual(first.warnings, []);
+  assert.deepEqual(second, first);
+  assert.equal(defaultsCalls, 1);
+  assert.equal(calls.filter((args) => args[0] === "pipelines" && args[1] === "list").length, 1);
+  assert.equal(calls.filter((args) => args[0] === "pipelines" && args[1] === "show").length, 3);
+  const listCall = calls.find((args) => args[0] === "pipelines" && args[1] === "list");
+  assert.equal(listCall[listCall.indexOf("--organization") + 1], "https://dev.azure.com/dnceng");
+  assert.equal(listCall[listCall.indexOf("--project") + 1], "internal");
+  assert.equal(listCall[listCall.indexOf("--repository") + 1], "microsoft-aspire");
+});
+
+test("official Azure discovery quietly skips missing CLI, authentication, and internal access", async (t) => {
+  for (const code of ["az_cli_missing", "azdo_auth_required", "azdo_access_denied"]) {
+    await t.test(code, async () => {
+      let runAzCalls = 0;
+      const options = {
+        runAz: async () => {
+          runAzCalls++;
+          throw new AzureDevOpsError(code, "Expected unavailable credential.");
+        },
+        runAzText: async () => "[defaults]\n",
+        cache: new Map(),
+        nowMs: Date.parse("2026-08-06T15:00:00Z"),
+      };
+      const first = await discoverAzureDevOpsPipelines({ repositories: ["microsoft/aspire"] }, options);
+      const second = await discoverAzureDevOpsPipelines({ repositories: ["microsoft/aspire"] }, options);
+
+      assert.deepEqual(first, { pipelines: [], warnings: [] });
+      assert.deepEqual(second, first);
+      assert.equal(runAzCalls, 1);
+    });
+  }
+});
+
+test("official Azure discovery does not report an inspected pipeline as missing after a transient failure", async () => {
+  const definitions = new Map([
+    [1599, officialDefinition(1599, "microsoft-aspire-codeql", "eng/pipelines/azure-pipelines-codeql.yml")],
+    [1600, officialDefinition(1600, "microsoft-aspire-Release-To-NuGet", "eng/pipelines/release-publish-nuget.yml")],
+    [1602, officialDefinition(1602, "microsoft-aspire", "eng/pipelines/azure-pipelines.yml")],
+  ]);
+  const result = await discoverAzureDevOpsPipelines(
+    { repositories: ["microsoft/aspire"] },
+    {
+      runAz: async (args) => {
+        if (args[0] === "pipelines" && args[1] === "list") {
+          return [...definitions.values()].map(({ id, name, path, queueStatus }) => ({ id, name, path, queueStatus }));
+        }
+        const id = Number(args[args.indexOf("--id") + 1]);
+        if (id === 1602) throw new AzureDevOpsError("azdo_timeout", "The Azure DevOps query timed out.");
+        return definitions.get(id);
+      },
+      runAzText: async () => "[defaults]\n",
+      cache: new Map(),
+      nowMs: Date.parse("2026-08-06T15:00:00Z"),
+    },
+  );
+
+  assert.deepEqual(result.pipelines.map((pipeline) => pipeline.definitionId), [1599, 1600]);
+  assert.deepEqual(result.warnings, [
+    "Official pipeline 1602 could not be inspected: The Azure DevOps query timed out.",
+  ]);
 });
 
 test("loadAzureDevOpsPipelineHealth reports failures, last success, and blocked deployment evidence", async () => {
@@ -373,6 +473,23 @@ function discoveredDefinition(id, name, yamlFilename) {
       type: "TfsGit",
       url: "https://dev.azure.com/dnceng/aspire-msft/_git/aspire.dev",
       defaultBranch: "refs/heads/deploy",
+    },
+  };
+}
+
+function officialDefinition(id, name, yamlFilename) {
+  return {
+    id,
+    name,
+    path: "\\microsoft-aspire",
+    queueStatus: "enabled",
+    process: { type: 2, yamlFilename },
+    repository: {
+      id: "repo-microsoft-aspire",
+      name: "microsoft-aspire",
+      type: "TfsGit",
+      url: "https://dev.azure.com/dnceng/internal/_git/microsoft-aspire",
+      defaultBranch: "refs/heads/main",
     },
   };
 }

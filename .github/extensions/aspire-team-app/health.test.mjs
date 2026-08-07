@@ -198,6 +198,50 @@ test("loadHealthDashboard auto-discovers and groups a matching Azure delivery so
   assert.equal(azure.groupMatch, "name");
 });
 
+test("loadHealthDashboard groups official Azure defaults with microsoft/aspire", async () => {
+  const pipelines = [1599, 1600, 1602].map((definitionId) => ({
+    id: `azdo:dnceng/internal/${definitionId}`,
+    provider: "azure-devops",
+    url: `https://dev.azure.com/dnceng/internal/_build?definitionId=${definitionId}`,
+    organization: "https://dev.azure.com/dnceng",
+    organizationName: "dnceng",
+    project: "internal",
+    definitionId,
+    name: definitionId === 1602 ? "microsoft-aspire" : `Official pipeline ${definitionId}`,
+    branch: "refs/heads/main",
+    repository: { id: "repo-id", name: "microsoft-aspire", type: "TfsGit" },
+    discovered: true,
+    discovery: {
+      kind: "official-default",
+      repository: "microsoft/aspire",
+      azureRepository: "microsoft-aspire",
+      pipelineCandidates: 3,
+    },
+  }));
+  const dashboard = await loadHealthDashboard({
+    accounts: [{ token: "token", login: "octo", repos: ["microsoft/aspire"] }],
+    githubLoader: async ({ repository }) => ({
+      ...healthItem(`github:github.com/${repository}`, "github", repository, "healthy"),
+      repository,
+      host: "github.com",
+    }),
+    azureDiscovery: async () => ({ pipelines, warnings: [] }),
+    azureLoader: async (source) => ({
+      ...healthItem(source.id, "azure-devops", source.name, "healthy"),
+      ...source,
+    }),
+    now: new Date("2026-08-06T15:00:00Z"),
+  });
+
+  assert.equal(dashboard.health.items.length, 4);
+  const github = dashboard.health.items.find((item) => item.provider === "github");
+  const azure = dashboard.health.items.filter((item) => item.provider === "azure-devops");
+  assert.equal(azure.length, 3);
+  assert.ok(azure.every((item) => item.discovery.kind === "official-default"));
+  assert.ok(azure.every((item) => item.groupId === github.groupId));
+  assert.ok(azure.every((item) => item.groupMatch === "name"));
+});
+
 test("loadHealthDashboard de-duplicates an explicitly configured pipeline from discovery", async () => {
   const pipeline = {
     id: "azdo:dnceng/aspire-msft/1576",

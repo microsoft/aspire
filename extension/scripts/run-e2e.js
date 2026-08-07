@@ -86,6 +86,7 @@ const COMMAND_INTERPRETER_NAME = isWindows ? 'cmd.exe' : '/bin/sh';
 const COMMAND_INERT_PATH_ALPHABET = isWindows ? '._-+@~:\\/' : '._-+,=:@%/';
 const primaryAppHostProject = path.join(workspaceRoot, 'AspireE2E.AppHost', 'AspireE2E.AppHost.csproj');
 const workspaceNuGetConfigPath = path.join(workspaceRoot, 'NuGet.config');
+const enableAzureFunctionsE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS === 'true';
 let cliPathForCleanup;
 const csharpFileHeader = `// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
@@ -341,6 +342,7 @@ function logE2eConfiguration() {
   console.log(`  ExTester: ${extesterVersion}`);
   console.log(`  download cache: ${downloadCacheRoot}`);
   console.log(`  current CLI regressions: ${process.env.ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS === 'true' ? 'skipped' : 'included'}`);
+  console.log(`  Azure Functions: ${enableAzureFunctionsE2E ? 'enabled' : 'disabled'}`);
   console.log(`  results: ${path.relative(extensionRoot, resultsDir)}`);
   console.log(`  storage diagnostics: ${path.relative(extensionRoot, storageDiagnosticsDir)}`);
   console.log(`  workspace diagnostics: ${path.relative(extensionRoot, workspaceDiagnosticsDir)}`);
@@ -626,6 +628,10 @@ async function main() {
       throw new Error(`VSIX not found at ${vsixPath}`);
     }
     validateVsix(vsixPath);
+    const azureFunctionsVsixPaths = resolveAzureFunctionsVsixPaths();
+    if (enableAzureFunctionsE2E) {
+      validateAzureFunctionsCoreTools();
+    }
 
     ensureExtester();
     patchExtesterLaunchLocale();
@@ -645,6 +651,7 @@ async function main() {
       ASPIRE_EXTENSION_E2E_PRIMARY_APPHOST: primaryAppHostProject,
       ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION: appHostSdkVersion,
       ASPIRE_EXTENSION_E2E_EXTESTER_MODULE: extesterModule,
+      ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS: enableAzureFunctionsE2E ? 'true' : 'false',
       VSCODE_NLS_CONFIG: JSON.stringify({ locale: 'en', availableLanguages: {} }),
       LANG: 'C.UTF-8',
       LC_ALL: 'C.UTF-8',
@@ -683,6 +690,10 @@ async function main() {
 
     logStep('Installing VSIX');
     run(process.execPath, [extesterCli, 'install-vsix', '--storage', storageDir, '--extensions_dir', extensionsDir, '--vsix_file', vsixPath], extestEnv, { timeout: 300000 });
+    for (const azureFunctionsVsix of azureFunctionsVsixPaths) {
+      logStep(`Installing ${azureFunctionsVsix.displayName} VSIX`);
+      run(process.execPath, [extesterCli, 'install-vsix', '--storage', storageDir, '--extensions_dir', extensionsDir, '--vsix_file', azureFunctionsVsix.path], extestEnv, { timeout: 300000 });
+    }
 
     recording = startRecording();
     try {
@@ -805,6 +816,59 @@ function validateCliPath(resolvedCliPath) {
   }
 }
 
+function resolveAzureFunctionsVsixPaths() {
+  if (!enableAzureFunctionsE2E) {
+    return [];
+  }
+
+  // The Functions extension activates the Azure Resource Groups extension directly.
+  // Install both VSIXes explicitly because the E2E VS Code instance runs offline.
+  return [
+    {
+      displayName: 'Azure Resource Groups',
+      path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX'),
+    },
+    {
+      displayName: 'Azure Functions',
+      path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX'),
+    },
+  ];
+}
+
+function resolveRequiredVsixPath(environmentVariable) {
+  const configuredPath = process.env[environmentVariable];
+  if (!configuredPath) {
+    throw new Error(`${environmentVariable} is required when ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS=true.`);
+  }
+
+  const resolvedPath = path.resolve(configuredPath);
+  if (!fs.existsSync(resolvedPath)) {
+    throw new Error(`${environmentVariable} points to a missing file: ${resolvedPath}`);
+  }
+
+  validateVsix(resolvedPath);
+  return resolvedPath;
+}
+
+function validateAzureFunctionsCoreTools() {
+  const executable = process.platform === 'win32' ? 'func.cmd' : 'func';
+  const result = spawnSync(executable, ['--version'], {
+    cwd: extensionRoot,
+    env: getAspireCliEnvironment(),
+    shell: false,
+    encoding: 'utf8',
+    timeout: 60000,
+  });
+
+  if (result.error) {
+    throw new Error(`Unable to execute Azure Functions Core Tools (${executable}): ${result.error.message}`);
+  }
+
+  if (result.status !== 0) {
+    throw new Error(`Azure Functions Core Tools failed --version with code ${result.status ?? `signal ${result.signal ?? 'unknown'}`}.\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+  }
+}
+
 function packageVsix() {
   run('corepack', ['yarn@1.22.22', 'run', 'vsce', 'package', '--pre-release', '-o', defaultVsixPath], {}, { timeout: 300000 });
   return defaultVsixPath;
@@ -889,7 +953,10 @@ function prepareWorkspaceFixture(resolvedCliPath, resolvedAppHostSdkVersion) {
   fs.mkdirSync(workspaceRoot, { recursive: true });
   fs.writeFileSync(workspaceMarkerFile, `${runId}\n`);
   writeWorkerProject('AspireE2E.Worker');
-  writeAppHostProject('AspireE2E.AppHost', resolvedAppHostSdkVersion);
+  if (enableAzureFunctionsE2E) {
+    writeAzureFunctionsProject('AspireE2E.Functions');
+  }
+  writeAppHostProject('AspireE2E.AppHost', resolvedAppHostSdkVersion, enableAzureFunctionsE2E);
   writeNuGetConfigIfLocalPackageSourcesExist();
 
   const vscodeDirectory = path.join(workspaceRoot, '.vscode');
@@ -937,9 +1004,12 @@ function restoreWorkspaceFixture() {
   }
 }
 
-function writeAppHostProject(projectName, resolvedAppHostSdkVersion) {
+function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzureFunctions) {
   const projectDirectory = path.join(workspaceRoot, projectName);
   fs.mkdirSync(projectDirectory, { recursive: true });
+  const azureFunctionsPackageReference = includeAzureFunctions
+    ? `    <PackageReference Include="Aspire.Hosting.Azure.Functions" Version="${resolvedAppHostSdkVersion}" />\n`
+    : '';
   fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), `<Project Sdk="Aspire.AppHost.Sdk/${resolvedAppHostSdkVersion}">
 
   <PropertyGroup>
@@ -951,11 +1021,14 @@ function writeAppHostProject(projectName, resolvedAppHostSdkVersion) {
 
   <ItemGroup>
     <ProjectReference Include="../AspireE2E.Worker/AspireE2E.Worker.csproj" />
-  </ItemGroup>
+${azureFunctionsPackageReference}  </ItemGroup>
 
 </Project>
 `);
 
+  const azureFunctionsResource = includeAzureFunctions
+    ? `\nbuilder.AddAzureFunctionsProject("e2e-functions", "../AspireE2E.Functions/AspireE2E.Functions.csproj");\n`
+    : '';
   fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `${csharpFileHeader}#pragma warning disable ASPIREINTERACTION001
 #pragma warning disable ASPIRETERMINAL001
 // The E2E fixture intentionally covers interaction command arguments and terminal metadata while those APIs are still experimental.
@@ -1033,11 +1106,86 @@ builder.AddResource(new NoCommandsResource("e2e-no-commands"));
 builder.AddProject<Projects.AspireE2E_Worker>("e2e-terminal")
     .WithHttpEndpoint(name: "http")
     .WithTerminal();
+${azureFunctionsResource}
 
 builder.Build().Run();
 
 sealed class NoCommandsResource(string name) : Aspire.Hosting.ApplicationModel.Resource(name);
 `);
+}
+
+function writeAzureFunctionsProject(projectName) {
+  const projectDirectory = path.join(workspaceRoot, projectName);
+  const propertiesDirectory = path.join(projectDirectory, 'Properties');
+  const certificatePath = path.join(projectDirectory, 'https-e2e.pfx');
+  const certificatePassword = 'AspireE2E';
+  fs.mkdirSync(propertiesDirectory, { recursive: true });
+  fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), `<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AzureFunctionsVersion>v4</AzureFunctionsVersion>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="2.52.0" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Http.AspNetCore" Version="2.1.0" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="2.0.7" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="host.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>
+`);
+
+  fs.writeFileSync(path.join(projectDirectory, 'Program.cs'), `${csharpFileHeader}using Microsoft.Azure.Functions.Worker.Builder;
+using Microsoft.Extensions.Hosting;
+
+var builder = FunctionsApplication.CreateBuilder(args);
+builder.ConfigureFunctionsWebApplication();
+builder.Build().Run();
+`);
+
+  fs.writeFileSync(path.join(projectDirectory, 'HttpsFunction.cs'), `${csharpFileHeader}using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Azure.Functions.Worker.Http;
+
+public sealed class HttpsFunction
+{
+    [Function("HttpsFunction")]
+    public IActionResult Run([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "https-proof")] HttpRequest request)
+    {
+        return new OkObjectResult("Aspire HTTPS Functions E2E");
+    }
+}
+`);
+
+  fs.writeFileSync(path.join(projectDirectory, 'host.json'), JSON.stringify({
+    version: '2.0',
+  }, undefined, 2));
+
+  fs.writeFileSync(path.join(propertiesDirectory, 'launchSettings.json'), JSON.stringify({
+    profiles: {
+      [projectName]: {
+        commandName: 'Project',
+        commandLineArgs: `--useHttps --cert ${certificatePath} --password ${certificatePassword}`,
+        launchBrowser: false,
+      },
+    },
+  }, undefined, 2));
+
+  // Core Tools otherwise depends on ambient development-certificate state, which
+  // is intentionally absent on clean hosted runners.
+  run('dotnet', ['dev-certs', 'https', '--export-path', certificatePath, '--password', certificatePassword], {}, { timeout: 120000 });
 }
 
 function writeWorkerProject(projectName) {

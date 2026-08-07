@@ -19,6 +19,18 @@ const DISCOVERY_CACHE_TTL_MS = 10 * 60 * 1000;
 const DISCOVERY_DEFINITION_LIMIT = 100;
 const DISCOVERY_CONCURRENCY = 6;
 const discoveryCache = new Map();
+const OFFICIAL_PIPELINE_TARGETS = [{
+  githubRepository: "microsoft/aspire",
+  organization: "https://dev.azure.com/dnceng",
+  organizationName: "dnceng",
+  project: "internal",
+  azureRepository: "microsoft-aspire",
+  pipelineNames: [
+    "microsoft-aspire-codeql",
+    "microsoft-aspire-Release-To-NuGet",
+    "microsoft-aspire",
+  ],
+}];
 
 export class AzureDevOpsError extends Error {
   constructor(code, message) {
@@ -201,6 +213,152 @@ export async function discoverAzureDevOpsPipelines(
   const watched = watchedRepositories(repositories);
   if (watched.length === 0) return { pipelines: [], warnings: [] };
 
+  const [official, configuredDefault] = await Promise.all([
+    discoverOfficialAzureDevOpsPipelines(watched, {
+      runAz,
+      cache,
+      nowMs,
+      cacheTtlMs,
+    }),
+    discoverDefaultProjectAzureDevOpsPipelines(watched, {
+      runAz,
+      runAzText,
+      cache,
+      nowMs,
+      cacheTtlMs,
+    }),
+  ]);
+  const pipelinesById = new Map();
+  for (const pipeline of [...official.pipelines, ...configuredDefault.pipelines]) {
+    if (pipeline?.id && !pipelinesById.has(pipeline.id)) pipelinesById.set(pipeline.id, pipeline);
+  }
+  return {
+    pipelines: [...pipelinesById.values()],
+    warnings: boundedDiscoveryWarnings([...official.warnings, ...configuredDefault.warnings]),
+  };
+}
+
+async function discoverOfficialAzureDevOpsPipelines(
+  watched,
+  {
+    runAz,
+    cache,
+    nowMs,
+    cacheTtlMs,
+  },
+) {
+  const targets = OFFICIAL_PIPELINE_TARGETS.filter((target) =>
+    watched.some((repository) => repository.repository.toLowerCase() === target.githubRepository.toLowerCase()));
+  const results = await Promise.all(targets.map(async (target) => {
+    const projectKey = `${target.organizationName.toLowerCase()}/${target.project.toLowerCase()}`;
+    const cacheKey = `official-definitions:${projectKey}/${target.azureRepository.toLowerCase()}`;
+    const cached = cachedValue(cache, cacheKey, nowMs);
+    if (cached !== undefined) return cached;
+
+    let summaries;
+    try {
+      const definitionsRaw = await invokeAz(runAz, [
+        "pipelines", "list",
+        "--organization", target.organization,
+        "--project", target.project,
+        "--repository", target.azureRepository,
+        "--repository-type", "tfsgit",
+        "--query-order", "ModifiedDesc",
+        "--top", String(DISCOVERY_DEFINITION_LIMIT),
+      ]);
+      const expectedNames = new Set(target.pipelineNames.map((name) => name.toLowerCase()));
+      summaries = (Array.isArray(definitionsRaw) ? definitionsRaw : [])
+        .filter((definition) => positiveInteger(definition?.id))
+        .filter((definition) => String(definition?.queueStatus ?? "").toLowerCase() !== "disabled")
+        .filter((definition) => expectedNames.has(String(definition?.name ?? "").toLowerCase()))
+        .slice(0, DISCOVERY_DEFINITION_LIMIT);
+    } catch (error) {
+      const failure = asAzureDevOpsError(error);
+      if (optionalOfficialDiscoveryFailure(failure)) {
+        const result = { pipelines: [], warnings: [] };
+        cacheValue(cache, cacheKey, result, nowMs, cacheTtlMs);
+        return result;
+      }
+      return {
+        pipelines: [],
+        warnings: [`Official Azure DevOps pipelines could not be discovered: ${failure.message}`],
+      };
+    }
+
+    const inspected = await mapConcurrent(summaries, DISCOVERY_CONCURRENCY, async (summary) => {
+      try {
+        const detail = await invokeAz(runAz, [
+          "pipelines", "show",
+          "--id", String(summary.id),
+          "--organization", target.organization,
+          "--project", target.project,
+        ]);
+        return {
+          definition: { ...summary, ...detail, queueStatus: detail?.queueStatus ?? summary.queueStatus },
+          warning: null,
+        };
+      } catch (error) {
+        const failure = asAzureDevOpsError(error);
+        return {
+          definition: null,
+          warning: optionalOfficialDiscoveryFailure(failure)
+            ? null
+            : `Official pipeline ${summary.id} could not be inspected: ${failure.message}`,
+        };
+      }
+    });
+
+    const inspectedDefinitions = inspected.map((entry) => entry.definition).filter(Boolean);
+    const repository = {
+      name: target.azureRepository,
+      type: "TfsGit",
+    };
+    const definitions = inspectedDefinitions
+      .filter((definition) => definitionUsesRepository(definition, repository));
+    const listedNames = new Set(summaries.map((summary) => String(summary.name ?? "").toLowerCase()));
+    const warnings = [
+      ...inspected.map((entry) => entry.warning).filter(Boolean),
+      ...inspectedDefinitions
+        .filter((definition) => !definitionUsesRepository(definition, repository))
+        .map((definition) => `Official pipeline ${definition.id} is not bound to ${target.azureRepository}.`),
+      ...target.pipelineNames
+        .filter((name) => !listedNames.has(name.toLowerCase()))
+        .map((name) => `Official pipeline ${name} was not found in ${target.organizationName}/${target.project}.`),
+    ];
+    const pipelineOrder = new Map(target.pipelineNames.map((name, index) => [name.toLowerCase(), index]));
+    const pipelines = definitions
+      .sort((a, b) =>
+        (pipelineOrder.get(String(a.name ?? "").toLowerCase()) ?? Number.MAX_SAFE_INTEGER)
+        - (pipelineOrder.get(String(b.name ?? "").toLowerCase()) ?? Number.MAX_SAFE_INTEGER))
+      .map((definition) => normalizePipelineDefinition(target, definition, {
+        discovery: {
+          kind: "official-default",
+          repository: target.githubRepository,
+          azureRepository: target.azureRepository,
+          pipelineCandidates: definitions.length,
+        },
+      }));
+    const result = { pipelines, warnings };
+    cacheValue(cache, cacheKey, result, nowMs, cacheTtlMs);
+    return result;
+  }));
+
+  return {
+    pipelines: results.flatMap((result) => result.pipelines),
+    warnings: results.flatMap((result) => result.warnings),
+  };
+}
+
+async function discoverDefaultProjectAzureDevOpsPipelines(
+  watched,
+  {
+    runAz,
+    runAzText,
+    cache,
+    nowMs,
+    cacheTtlMs,
+  },
+) {
   let defaults = cachedValue(cache, "defaults", nowMs);
   if (defaults === undefined) {
     try {
@@ -295,7 +453,7 @@ export async function discoverAzureDevOpsPipelines(
       },
     }));
   }
-  return { pipelines, warnings: boundedDiscoveryWarnings(warnings) };
+  return { pipelines, warnings };
 }
 
 export async function loadAzureDevOpsPipelineHealth(rawConfig, { now = new Date(), runAz = runAzureCli } = {}) {
@@ -768,7 +926,8 @@ function normalizePipelineDefinition(parsed, definition, { branch, discovery } =
 }
 
 function normalizeDiscovery(value) {
-  if (value?.kind !== "azure-cli-default") return null;
+  const kind = String(value?.kind ?? "");
+  if (!["azure-cli-default", "official-default"].includes(kind)) return null;
   const repository = String(value.repository ?? "").trim();
   const azureRepository = String(value.azureRepository ?? "").trim();
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)
@@ -778,7 +937,7 @@ function normalizeDiscovery(value) {
     return null;
   }
   return {
-    kind: "azure-cli-default",
+    kind,
     repository,
     azureRepository,
     pipelineCandidates: Math.max(1, positiveInteger(value.pipelineCandidates) ?? 1),
@@ -845,7 +1004,7 @@ function definitionUsesRepository(definition, repository) {
 
 function isAuxiliaryPipeline(definition) {
   const text = pipelineSearchText(definition);
-  return /(merge\s*changes|mergechanges|sync|mirror|cleanup|provision|generated|\bold\b)/i.test(text);
+  return /(merge\s*changes|mergechanges|sync|mirror|cleanup|provision|generated|\bunofficial\b|\bold\b)/i.test(text);
 }
 
 function compareDeliveryPipelines(a, b) {
@@ -916,6 +1075,11 @@ function optionalDiscoveryFailure(error) {
     "az_cli_unsupported",
     "azdo_extension_missing",
   ]).has(error?.code);
+}
+
+function optionalOfficialDiscoveryFailure(error) {
+  return optionalDiscoveryFailure(error)
+    || new Set(["azdo_auth_required", "azdo_access_denied"]).has(error?.code);
 }
 
 function boundedDiscoveryWarnings(warnings) {

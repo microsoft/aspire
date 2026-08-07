@@ -14,6 +14,7 @@ import {
   removeAzurePipelineSource,
   rescanAccounts,
   setAgentSend,
+  setBrowserOpen,
   setDashboardMode,
   setReposFor,
   startInstance,
@@ -271,4 +272,19 @@ setAgentSend(async ({ prompt, log }) => {
   } finally {
     sendsInFlight--;
   }
+});
+
+setBrowserOpen(async (pr) => {
+  const instanceId = `aspire-team-app-pr-${pr.repository}-${pr.number}`
+    .replace(/[^a-zA-Z0-9._-]/g, "-")
+    .slice(0, 128);
+  return session.rpc.canvas.open({
+    canvasId: "browser",
+    instanceId,
+    input: {
+      url: pr.url,
+      title: `${pr.repository} #${pr.number}`,
+      placement: { surface: "panel", focus: true },
+    },
+  });
 });
