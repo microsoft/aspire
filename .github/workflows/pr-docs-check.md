@@ -123,6 +123,35 @@ tools:
       owner: "microsoft"
       repositories: ["aspire.dev", "aspire"]
 
+jobs:
+  validate-docs-outcome:
+      name: "Validate documentation outcome"
+      needs: [agent, safe_outputs]
+      if: >-
+        (!cancelled())
+        && needs.agent.result != 'skipped'
+      runs-on: ubuntu-latest
+      permissions:
+        contents: read
+      steps:
+        - name: Check out outcome validator
+          uses: actions/checkout@v4
+          with:
+            sparse-checkout: .github/workflows/pr-docs-check/validate_outcome.py
+            sparse-checkout-cone-mode: false
+        - name: Download agent output
+          uses: actions/download-artifact@v4
+          with:
+            name: agent
+            path: /tmp/gh-aw/
+        - name: Require a conclusive documentation outcome
+          env:
+            CREATED_PR_URL: ${{ needs.safe_outputs.outputs.created_pr_url }}
+          run: >-
+            python .github/workflows/pr-docs-check/validate_outcome.py
+            --agent-output /tmp/gh-aw/agent_output.json
+            --created-pr-url "${CREATED_PR_URL}"
+
 safe-outputs:
   github-app:
     app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
