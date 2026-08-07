@@ -24,7 +24,6 @@ variables:
       value: True
     - name: _SignType
       value: real
-    # Publish-Build-Assets provides: MaestroAccessToken, BotAccount-dotnet-maestro-bot-PAT
     # DotNet-HelixApi-Access provides: HelixApiAccessToken
     - group: DotNet-HelixApi-Access
     - group: SDL_Settings
