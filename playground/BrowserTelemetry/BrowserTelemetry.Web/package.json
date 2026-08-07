@@ -27,6 +27,7 @@
   },
   "overrides": {
     "esbuild": "0.28.1",
+    "fast-uri": "3.1.5",
     "@opentelemetry/core": "2.8.0"
   }
 }
