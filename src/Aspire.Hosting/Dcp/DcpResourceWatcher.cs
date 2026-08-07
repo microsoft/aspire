@@ -319,15 +319,12 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                     // a completed flush would stall all resource watches. A later changed terminal notification
                     // can retry point-in-time FailedToStart reads and incomplete attempts because they are not
                     // recorded as complete. The marker is cleared below if the resource is restarted.
+                    var logsAvailable = HasLogsAvailable(resource);
                     var isTerminal = status.State is not null && KnownResourceStates.TerminalStates.Contains(status.State);
-                    var terminalLogsHandledForActiveSubscribers = false;
                     if (isTerminal)
                     {
-                        terminalLogsHandledForActiveSubscribers =
-                            HasLogsAvailable(resource) &&
-                            _loggerService.HasActiveSubscribers(resource.Metadata.Name);
-
-                        if (terminalLogsHandledForActiveSubscribers &&
+                        if (logsAvailable &&
+                            _loggerService.HasActiveSubscribers(resource.Metadata.Name) &&
                             !_allLogsFlushed.ContainsKey(resource.Metadata.Name))
                         {
                             var completed = await FlushCurrentLogsAsync(resource, status, _shutdownToken).ConfigureAwait(false);
@@ -344,15 +341,15 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
 
                     await _executorEvents.PublishAsync(new OnResourceChangedContext(_shutdownToken, resourceType, appModelResource, resource.Metadata.Name, status, s => snapshotFactory(resource, s))).ConfigureAwait(false);
 
-                    if (HasLogsAvailable(resource))
+                    if (logsAvailable)
                     {
-                        // Avoid opening a second follow stream when terminal handling already served the active
-                        // subscribers. A replacement still needs its own stream after its old registration was reset.
-                        // If no subscriber was active during the check above, keep this notification startable so a
-                        // concurrent subscriber notification cannot fall between the terminal check and this write.
+                        // Avoid opening a second follow stream only after a terminal follow flush completed. Timed-out
+                        // flushes and point-in-time FailedToStart reads leave the normal stream startable so an existing
+                        // subscriber can receive later logs without another subscriber change or resource notification.
+                        // A replacement still needs its own stream after its old registration was reset.
                         var shouldStartStream =
                             resourceChange == ResourceChangeResult.Replaced ||
-                            !terminalLogsHandledForActiveSubscribers;
+                            !_allLogsFlushed.ContainsKey(resource.Metadata.Name);
                         _logInformationChannel.Writer.TryWrite(new(resource.Metadata.Name, LogsAvailable: true, HasSubscribers: null, ShouldStartStream: shouldStartStream));
                     }
                 }

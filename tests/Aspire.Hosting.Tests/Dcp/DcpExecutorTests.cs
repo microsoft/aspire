@@ -1537,6 +1537,88 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ResourceLogging_ActiveSubscriberReceivesFailedToStartLogsAfterSnapshot()
+    {
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        builder.AddContainer("database", "image");
+
+        const string failedToStartLogMessage = "failure discovered after the point-in-time snapshot";
+        var runningFollowStreamStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var failedToStartSnapshotStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var failedToStartFollowStreamStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var failedToStartFollowStreamCount = 0;
+        var kubernetesService = new TestKubernetesService(startStreamWithFollow: (obj, logStreamType, follow) =>
+        {
+            if (obj is Container { Status.State: ContainerState.Running } &&
+                logStreamType == Logs.StreamTypeSystem &&
+                follow == true)
+            {
+                runningFollowStreamStarted.TrySetResult();
+            }
+
+            if (obj is Container { Status.State: ContainerState.FailedToStart } &&
+                logStreamType == Logs.StreamTypeStdErr)
+            {
+                if (follow == false)
+                {
+                    failedToStartSnapshotStarted.TrySetResult();
+                }
+                else if (follow == true)
+                {
+                    Interlocked.Increment(ref failedToStartFollowStreamCount);
+                    failedToStartFollowStreamStarted.TrySetResult();
+                    return new MemoryStream(Encoding.UTF8.GetBytes(
+                        "2024-08-19T06:10:33.473275911Z " + failedToStartLogMessage + Environment.NewLine));
+                }
+            }
+
+            return new MemoryStream();
+        });
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var resourceLoggerService = new ResourceLoggerService();
+        var logLines = new ConcurrentQueue<LogLine>();
+        var appExecutor = CreateAppExecutor(
+            distributedAppModel,
+            kubernetesService: kubernetesService,
+            resourceLoggerService: resourceLoggerService);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+        using var subscription = resourceLoggerService.Subscribe(container.Metadata.Name, batch =>
+        {
+            foreach (var logLine in batch)
+            {
+                logLines.Enqueue(logLine);
+            }
+        });
+
+        container.Status = new ContainerStatus { State = ContainerState.Running };
+        kubernetesService.PushResourceModified(container);
+
+        await runningFollowStreamStarted.Task.DefaultTimeout();
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => appExecutor.ResourceWatcher.GetLogStreamTask(container.Metadata.Name) is null,
+            "The initial follow stream should complete before the terminal transition.");
+
+        container.Status = new ContainerStatus { State = ContainerState.FailedToStart };
+        kubernetesService.PushResourceModified(container);
+
+        await failedToStartSnapshotStarted.Task.DefaultTimeout();
+        await failedToStartFollowStreamStarted.Task.DefaultTimeout();
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => logLines.Any(line => line.Content.Contains(failedToStartLogMessage, StringComparison.Ordinal)),
+            "The normal follow stream should deliver logs after the point-in-time snapshot.");
+
+        Assert.Equal(1, Volatile.Read(ref failedToStartFollowStreamCount));
+        Assert.Single(logLines, line => line.Content.Contains(failedToStartLogMessage, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task ResourceLogging_TerminalStateFollowsLogsBeforeNotification()
     {
         var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
@@ -1624,7 +1706,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         string? blockingDcpResourceName = null;
         var normalStreamStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var blockingFlushAttempts = 0;
+        var blockingTerminalFollowStreamCount = 0;
         var kubernetesService = new TestKubernetesService(startStreamWithFollow: (obj, logStreamType, follow) =>
         {
             if (obj.Metadata.Name == blockingDcpResourceName &&
@@ -1641,7 +1723,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
                 logStreamType == Logs.StreamTypeStdErr &&
                 follow == true)
             {
-                if (Interlocked.Increment(ref blockingFlushAttempts) == 1)
+                if (Interlocked.Increment(ref blockingTerminalFollowStreamCount) == 1)
                 {
                     return new Pipe().Reader.AsStream();
                 }
@@ -1705,7 +1787,96 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             "The terminal state change after a timed-out flush should be reported.");
 
         Assert.Equal(2, Volatile.Read(ref blockingTerminalNotifications));
-        Assert.Equal(2, Volatile.Read(ref blockingFlushAttempts));
+        // The first terminal event opens the timed-out flush and its recovery stream. The changed
+        // terminal event then retries the flush because the first one was not recorded as complete.
+        Assert.Equal(3, Volatile.Read(ref blockingTerminalFollowStreamCount));
+    }
+
+    [Fact]
+    public async Task ResourceLogging_ActiveSubscriberContinuesAfterTerminalFlushTimeout()
+    {
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        builder.AddContainer("database", "image");
+
+        const string terminalLogMessage = "log delivered after terminal flush timeout";
+        var timedOutFlushPipe = new Pipe();
+        var runningFollowStreamStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var terminalFollowStreamStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var terminalStdErrFollowStreamCount = 0;
+        var kubernetesService = new TestKubernetesService(startStreamWithFollow: (obj, logStreamType, follow) =>
+        {
+            if (obj is Container { Status.State: ContainerState.Running } &&
+                logStreamType == Logs.StreamTypeSystem &&
+                follow == true)
+            {
+                runningFollowStreamStarted.TrySetResult();
+            }
+
+            if (obj is Container { Status.State: ContainerState.Exited } &&
+                logStreamType == Logs.StreamTypeStdErr &&
+                follow == true)
+            {
+                if (Interlocked.Increment(ref terminalStdErrFollowStreamCount) == 1)
+                {
+                    return timedOutFlushPipe.Reader.AsStream();
+                }
+
+                terminalFollowStreamStarted.TrySetResult();
+                return new MemoryStream(Encoding.UTF8.GetBytes(
+                    "2024-08-19T06:10:33.473275911Z " + terminalLogMessage + Environment.NewLine));
+            }
+
+            return new MemoryStream();
+        });
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var resourceLoggerService = new ResourceLoggerService();
+        var logLines = new ConcurrentQueue<LogLine>();
+        var appExecutor = CreateAppExecutor(
+            distributedAppModel,
+            kubernetesService: kubernetesService,
+            resourceLoggerService: resourceLoggerService);
+        appExecutor.ResourceWatcher.TerminalLogFlushTimeout = TimeSpan.FromMilliseconds(100);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+        using var subscription = resourceLoggerService.Subscribe(container.Metadata.Name, batch =>
+        {
+            foreach (var logLine in batch)
+            {
+                logLines.Enqueue(logLine);
+            }
+        });
+
+        try
+        {
+            container.Status = new ContainerStatus { State = ContainerState.Running };
+            kubernetesService.PushResourceModified(container);
+
+            await runningFollowStreamStarted.Task.DefaultTimeout();
+            await AsyncTestHelpers.AssertIsTrueRetryAsync(
+                () => appExecutor.ResourceWatcher.GetLogStreamTask(container.Metadata.Name) is null,
+                "The initial follow stream should complete before the terminal transition.");
+
+            container.Status = new ContainerStatus { State = ContainerState.Exited };
+            kubernetesService.PushResourceModified(container);
+
+            await terminalFollowStreamStarted.Task.DefaultTimeout();
+            await AsyncTestHelpers.AssertIsTrueRetryAsync(
+                () => logLines.Any(line => line.Content.Contains(terminalLogMessage, StringComparison.Ordinal)),
+                "The normal follow stream should deliver logs after the terminal flush times out.");
+
+            Assert.Equal(2, Volatile.Read(ref terminalStdErrFollowStreamCount));
+            Assert.Single(logLines, line => line.Content.Contains(terminalLogMessage, StringComparison.Ordinal));
+        }
+        finally
+        {
+            timedOutFlushPipe.Writer.Complete();
+        }
     }
 
     [Fact]
