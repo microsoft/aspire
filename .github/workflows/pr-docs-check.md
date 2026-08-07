@@ -333,6 +333,8 @@ safe-outputs:
               }
 
               if (notifications.length === 1) {
+                // An invalid or mismatched agent association is a trust-boundary violation.
+                // The validator fails the workflow; this notifier intentionally does not post.
                 const agentNumber = item.source_pr_number;
                 if (!Number.isInteger(agentNumber) || agentNumber <= 0 || agentNumber > 10_000_000) {
                   core.warning(`Invalid source_pr_number from agent: ${item.source_pr_number}; skipping comment.`);

@@ -68,6 +68,10 @@ def validate_outcome(
         return f"Confirmed drafted documentation PR: {created_pr_url}"
     if result == "skipped" and not created_pr_url:
         return "Confirmed that no documentation update is needed."
+    if result == "draft_failed" and created_pr_url:
+        raise OutcomeValidationError(
+            f"The agent reported documentation drafting failed, but safe outputs created {created_pr_url}."
+        )
     if result == "draft_failed":
         raise OutcomeValidationError(
             "Documentation was required, but no docs PR was created."
