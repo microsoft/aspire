@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Renames DevTunnelRegion members for .NET naming conventions",
+  "mergedAt": "2026-08-07T00:54:48Z",
+  "number": 19060,
+  "runDate": "2026-08-07T01:14:33Z",
+  "status": "included",
+  "title": "Update DevTunnelOptions.cs"
+}

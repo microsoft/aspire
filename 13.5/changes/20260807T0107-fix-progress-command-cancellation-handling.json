@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Canceling a dashboard progress command now stays a cancellation all the way through IInteractionService and resource command execution, instead of surfacing as a success or failure. This applies to every command using CommandProgressOptions, including WithHttpCommand and Foundry prompt-agent send-message commands.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🚫",
+  "firstMergedAt": "2026-08-07T01:07:35Z",
+  "lastMergedAt": "2026-08-07T01:07:35Z",
+  "name": "Fix progress command cancellation handling",
+  "owner": "JamesNK",
+  "prs": [
+    18600
+  ]
+}

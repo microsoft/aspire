@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Fixes progress command cancellation propagation",
+  "mergedAt": "2026-08-07T01:07:35Z",
+  "number": 18600,
+  "runDate": "2026-08-07T01:14:33Z",
+  "status": "included",
+  "title": "Fix progress command cancellation handling"
+}

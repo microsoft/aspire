@@ -1,0 +1,9 @@
+{
+  "author": "krubenok",
+  "comment": "Fixes dev tunnel ghost conflict retry loop",
+  "mergedAt": "2026-08-06T17:53:08Z",
+  "number": 18912,
+  "runDate": "2026-08-07T01:14:33Z",
+  "status": "included",
+  "title": "Handle ghost dev tunnel conflicts"
+}

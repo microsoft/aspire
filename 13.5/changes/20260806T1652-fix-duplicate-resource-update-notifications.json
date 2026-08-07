@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed the app model repeatedly emitting object update notifications for resources that hadn't actually changed, reducing unnecessary churn in resource state processing.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔁",
+  "firstMergedAt": "2026-08-06T16:52:15Z",
+  "lastMergedAt": "2026-08-06T16:52:15Z",
+  "name": "Fix duplicate resource update notifications",
+  "owner": "karolz-ms",
+  "prs": [
+    18952
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Automated npm dependency security bump for playground/tests, not user-facing",
+  "mergedAt": "2026-08-07T01:06:19Z",
+  "number": 19053,
+  "runDate": "2026-08-07T01:14:33Z",
+  "status": "excluded",
+  "title": "[auto-sec] npm: @angular 21.2.19 + brace-expansion 5.0.9 (frontend cluster)"
+}

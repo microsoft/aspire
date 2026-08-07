@@ -1,0 +1,21 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@krubenok"
+  ],
+  "description": "Dev tunnel startup no longer gets stuck retrying a create/update sequence when the tunnel service has a ghost record for a deterministic tunnel ID. Aspire now stops after one attempt and reports an actionable error telling you how to select a fresh explicit tunnel ID.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "👻",
+  "firstMergedAt": "2026-08-06T17:53:08Z",
+  "lastMergedAt": "2026-08-06T17:53:08Z",
+  "name": "Fix ghost dev tunnel conflicts",
+  "owner": "DamianEdwards",
+  "prs": [
+    18912
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Engineering/CI fix for docs PR generation workflow, not user-facing",
+  "mergedAt": "2026-08-06T15:16:26Z",
+  "number": 19055,
+  "runDate": "2026-08-07T01:14:33Z",
+  "status": "excluded",
+  "title": "Fix docs PR generation for release branches"
+}

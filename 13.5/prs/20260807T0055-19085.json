@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Internal API tightening (List to IReadOnlyList) with no observable user-facing effect",
+  "mergedAt": "2026-08-07T00:55:23Z",
+  "number": 19085,
+  "runDate": "2026-08-07T01:14:33Z",
+  "status": "excluded",
+  "title": "Make hidden annotation exit codes read-only"
+}

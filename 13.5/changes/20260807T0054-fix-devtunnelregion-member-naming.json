@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": true,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Renamed DevTunnelRegion.UkSouth to UKSouth and SouthEastAsia to SoutheastAsia to align with .NET naming conventions, and removed the explicit byte underlying type. Update any code referencing the old member names.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🌍",
+  "firstMergedAt": "2026-08-07T00:54:48Z",
+  "lastMergedAt": "2026-08-07T00:54:48Z",
+  "name": "Fix DevTunnelRegion member naming",
+  "owner": "sebastienros",
+  "prs": [
+    19060
+  ]
+}

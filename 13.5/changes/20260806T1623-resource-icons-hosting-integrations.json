@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [
+    "@afscrome"
+  ],
+  "description": "Added explicit resource icons to hosting integration packages that previously fell back to generic type-based heuristics. Resources in the dashboard now show semantically meaningful icons (database, message broker, AI model, cloud service, etc.) instead of a generic box or code icon.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🖼️",
+  "firstMergedAt": "2026-08-06T16:23:03Z",
+  "lastMergedAt": "2026-08-06T16:23:03Z",
+  "name": "Resource icons for hosting integration packages",
+  "owner": "JamesNK",
+  "prs": [
+    18954
+  ]
+}

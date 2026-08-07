@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Fixes duplicate resource update notifications",
+  "mergedAt": "2026-08-06T16:52:15Z",
+  "number": 18952,
+  "runDate": "2026-08-07T01:14:33Z",
+  "status": "included",
+  "title": "Properly process object update notifications from DCP"
+}
