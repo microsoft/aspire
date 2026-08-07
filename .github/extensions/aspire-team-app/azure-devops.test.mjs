@@ -109,7 +109,7 @@ test("Azure discovery selects and caches one production delivery pipeline for a 
     }
     if (args[0] === "pipelines" && args[1] === "list") {
       return [
-        ...definitions.values().map(({ id, name, path, queueStatus }) => ({ id, name, path, queueStatus })),
+        ...[...definitions.values()].map(({ id, name, path, queueStatus }) => ({ id, name, path, queueStatus })),
         { id: 1999, name: "Restricted pipeline", path: "\\aspire.dev", queueStatus: "enabled" },
       ];
     }
