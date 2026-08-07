@@ -10,7 +10,9 @@ using Aspire.Hosting.VersionChecking;
 using Aspire.Shared;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 using Semver;
 
 namespace Aspire.Hosting.Tests.VersionChecking;
@@ -352,6 +354,31 @@ public class VersionCheckServiceTests
         Assert.Equal("100.0.0", mockSecretsManager.Secrets[VersionCheckService.IgnoreVersionKey]);
     }
 
+    [Fact]
+    public async Task ExecuteAsync_IgnoreVersionWithoutUserSecrets_LogsWarning()
+    {
+        var interactionService = new TestInteractionService();
+        var packagesTcs = new TaskCompletionSource<List<NuGetPackage>>();
+        var logger = new FakeLogger<VersionCheckService>();
+        var service = CreateVersionCheckService(
+            interactionService: interactionService,
+            packageFetcher: new TestPackageFetcher(packagesTcs.Task),
+            userSecretsManager: new MockUserSecretsManager(canSetSecret: false),
+            logger: logger);
+
+        _ = service.StartAsync(CancellationToken.None);
+
+        packagesTcs.TrySetResult([new NuGetPackage { Id = PackageFetcher.PackageId, Version = "100.0.0" }]);
+
+        var interaction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        interaction.CompletionTcs.TrySetResult(InteractionResult.Ok(true));
+
+        await service.ExecuteTask!.DefaultTimeout();
+
+        var warning = Assert.Single(logger.Collector.GetSnapshot(), log => log.Level == LogLevel.Warning);
+        Assert.Equal("Could not ignore the notification to update to version 100.0.0 because user secrets are not configured correctly. See https://aka.ms/aspire/user-secrets for more information.", warning.Message);
+    }
+
     private static VersionCheckService CreateVersionCheckService(
         IInteractionService? interactionService = null,
         IPackageFetcher? packageFetcher = null,
@@ -359,11 +386,12 @@ public class VersionCheckServiceTests
         TimeProvider? timeProvider = null,
         DistributedApplicationOptions? options = null,
         IPackageVersionProvider? packageVersionProvider = null,
-        IUserSecretsManager? userSecretsManager = null)
+        IUserSecretsManager? userSecretsManager = null,
+        ILogger<VersionCheckService>? logger = null)
     {
         return new VersionCheckService(
             interactionService ?? new TestInteractionService(),
-            NullLogger<VersionCheckService>.Instance,
+            logger ?? NullLogger<VersionCheckService>.Instance,
             configuration ?? new ConfigurationManager(),
             options ?? new DistributedApplicationOptions(),
             packageFetcher ?? new TestPackageFetcher(),
