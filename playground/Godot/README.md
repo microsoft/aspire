@@ -12,6 +12,10 @@ This playground demonstrates hosting a Godot 4 dedicated game server as an Aspir
 
 **The repository build and CI do not require Godot.** The `Godot.AppHost` and `Godot.Matchmaker` projects are plain .NET projects that build with `dotnet build` like any other playground project. The `GameServer/` directory contains only GDScript and a Godot project file, neither of which participates in the .NET build.
 
+## Run mode only
+
+The `godot-server` resource is added **only in run mode** (`builder.ExecutionContext.IsRunMode`). `WithExplicitStart()` means "do not launch this until a user starts it from the dashboard", which has no meaning during publish or deploy. Emitting the executable into a published manifest would produce a resource nothing can start, plus a matchmaker service-discovery binding to a port that is never allocated. In publish mode this playground therefore contains only `matchmaker`, and the matchmaker has no `godot-server` reference at all.
+
 ## Manual Run
 
 Running the AppHost with a live Godot server requires:
@@ -28,10 +32,10 @@ Running the AppHost with a live Godot server requires:
    $env:GODOT_BIN = "C:\Godot\Godot_v4.3-stable_win64.exe"
    ```
 
-2. **Start the AppHost:**
+2. **Start the AppHost** from the repository root:
 
    ```bash
-   aspire start --apphost playground/Godot/Godot.AppHost/Godot.AppHost.csproj
+   aspire run --apphost playground/Godot/Godot.AppHost/Godot.AppHost.csproj
    ```
 
 3. **Start the `godot-server` resource** from the Aspire dashboard (it is marked explicit-start and will not launch automatically). The Aspire dashboard URL is printed to the console on AppHost startup.
@@ -40,8 +44,24 @@ Running the AppHost with a live Godot server requires:
 
 | Resource | Type | Notes |
 |---|---|---|
-| `matchmaker` | .NET project | Minimal HTTP API; `/health` and `/servers` |
-| `godot-server` | Executable | Headless Godot server; **explicit-start**; listens on UDP |
+| `matchmaker` | .NET project | Minimal HTTP API; `/health` and `/configuration` |
+| `godot-server` | Executable | Headless Godot server; **explicit-start**; listens on UDP; **run mode only** |
+
+## The `/configuration` route
+
+`GET /configuration` reports the game server's **configured** endpoint as the matchmaker received it through Aspire service discovery:
+
+```json
+{
+  "resourceName": "godot-server",
+  "endpointConfigured": true,
+  "configuredPort": 23021,
+  "configuredEndpoint": "udp://localhost:23021",
+  "note": "Configured endpoint only. The godot-server resource is explicit-start, so this port may not be listening."
+}
+```
+
+This route is deliberately **not** called `/servers`. Aspire allocates the endpoint's port when the application model is built, but `godot-server` is explicit-start, so in practice the port is allocated while nothing is listening on it. An allocated port is not a live server. A real matchmaker would need genuine registration or a readiness probe before advertising a server to players; this playground only demonstrates that the endpoint reaches the matchmaker as configuration.
 
 ## Environment Variables
 

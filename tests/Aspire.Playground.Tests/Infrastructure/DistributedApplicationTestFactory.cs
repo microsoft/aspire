@@ -1,10 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using SamplesIntegrationTests.Infrastructure;
 using Xunit;
@@ -16,9 +18,44 @@ internal static class DistributedApplicationTestFactory
     /// <summary>
     /// Creates an <see cref="IDistributedApplicationTestingBuilder"/> for the specified app host assembly.
     /// </summary>
-    public static async Task<IDistributedApplicationTestingBuilder> CreateAsync(Type appHostProgramType, ITestOutputHelper? testOutput, Action<IDistributedApplicationTestingBuilder>? configureBuilder = null)
+    /// <remarks>
+    /// <paramref name="configureBuilder"/> runs *after* the AppHost's Program.cs has already executed, so it can only
+    /// mutate the built application model. It cannot influence configuration the AppHost reads while constructing
+    /// resources. Use <see cref="CreateWithHostSettingsAsync"/> when the AppHost reads a configuration value at
+    /// construction time.
+    /// </remarks>
+    public static Task<IDistributedApplicationTestingBuilder> CreateAsync(Type appHostProgramType, ITestOutputHelper? testOutput, Action<IDistributedApplicationTestingBuilder>? configureBuilder = null)
+        => CreateCoreAsync(appHostProgramType, testOutput, configureHostSettings: null, configureBuilder);
+
+    /// <summary>
+    /// Creates an <see cref="IDistributedApplicationTestingBuilder"/> for the specified app host assembly, applying
+    /// <paramref name="configureHostSettings"/> *before* the AppHost's Program.cs runs.
+    /// </summary>
+    /// <remarks>
+    /// This is the only hook that can seed configuration an AppHost reads while it builds its resources (for example
+    /// <c>builder.Configuration["SOME_TOOL_PATH"]</c> or <c>AppHost:Operation</c>). Seeding that configuration through
+    /// the post-build <c>configureBuilder</c> callback is silently ineffective.
+    /// </remarks>
+    public static Task<IDistributedApplicationTestingBuilder> CreateWithHostSettingsAsync(
+        Type appHostProgramType,
+        ITestOutputHelper? testOutput,
+        Action<DistributedApplicationOptions, HostApplicationBuilderSettings> configureHostSettings,
+        Action<IDistributedApplicationTestingBuilder>? configureBuilder = null)
     {
-        var builder = await DistributedApplicationTestingBuilder.CreateAsync(appHostProgramType);
+        ArgumentNullException.ThrowIfNull(configureHostSettings);
+
+        return CreateCoreAsync(appHostProgramType, testOutput, configureHostSettings, configureBuilder);
+    }
+
+    private static async Task<IDistributedApplicationTestingBuilder> CreateCoreAsync(
+        Type appHostProgramType,
+        ITestOutputHelper? testOutput,
+        Action<DistributedApplicationOptions, HostApplicationBuilderSettings>? configureHostSettings,
+        Action<IDistributedApplicationTestingBuilder>? configureBuilder)
+    {
+        var builder = configureHostSettings is null
+            ? await DistributedApplicationTestingBuilder.CreateAsync(appHostProgramType)
+            : await DistributedApplicationTestingBuilder.CreateAsync(appHostProgramType, [], configureHostSettings);
 
         // Custom hook needed because we want to only override the registry when
         // the original is from `docker.io`, but the options.ContainerRegistryOverride will
