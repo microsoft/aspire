@@ -307,16 +307,46 @@ safe-outputs:
                 return;
               }
 
-              // Source PR number is supplied by the agent. Validate it as a
-              // positive integer with a sane upper bound; the safe-jobs framework
-              // does not pass workflow-context expressions through env: cleanly,
-              // and threat detection has already gated this output.
-              const agentNumber = parseInt(String(item.source_pr_number), 10);
+              // GITHUB_EVENT_PATH contains a trusted event payload in one of these shapes:
+              //   pull_request:     { "pull_request": { "number": 18868 } }
+              //   workflow_dispatch: { "inputs": { "pr_number": "18868" } }
+              // Read it directly because custom safe-job env expressions do not reliably
+              // preserve workflow context.
+              const eventPath = process.env.GITHUB_EVENT_PATH;
+              if (!eventPath || !fs.existsSync(eventPath)) {
+                core.warning(`Workflow event payload not found at ${eventPath}; skipping comment.`);
+                return;
+              }
+
+              let event;
+              try {
+                event = JSON.parse(fs.readFileSync(eventPath, 'utf8'));
+              } catch (e) {
+                core.warning(`Failed to parse workflow event payload: ${e.message}; skipping comment.`);
+                return;
+              }
+
+              const rawExpectedNumber = event?.pull_request?.number ?? event?.inputs?.pr_number;
+              const expectedNumber = typeof rawExpectedNumber === 'string' && /^[1-9]\d*$/.test(rawExpectedNumber.trim())
+                ? Number(rawExpectedNumber.trim())
+                : rawExpectedNumber;
+              if (!Number.isInteger(expectedNumber) || expectedNumber <= 0 || expectedNumber > 10_000_000) {
+                core.warning(`Invalid triggering source PR number: ${rawExpectedNumber}; skipping comment.`);
+                return;
+              }
+
+              const agentNumber = item.source_pr_number;
               if (!Number.isInteger(agentNumber) || agentNumber <= 0 || agentNumber > 10_000_000) {
                 core.warning(`Invalid source_pr_number from agent: ${item.source_pr_number}; skipping comment.`);
                 return;
               }
-              const sourcePrNumber = agentNumber;
+              if (agentNumber !== expectedNumber) {
+                core.warning(
+                  `Agent source_pr_number ${agentNumber} does not match triggering source PR ${expectedNumber}; skipping comment.`
+                );
+                return;
+              }
+              const sourcePrNumber = expectedNumber;
 
               const result = (item.result || '').toString().trim().toLowerCase();
               const targetBranch = (item.target_branch || '').toString().trim();
