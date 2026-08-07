@@ -28,6 +28,7 @@ internal sealed class TestDevTunnelClient(Version? cliVersion = null) : IDevTunn
     public TaskCompletionSource? AllowGetAccess { get; set; }
     public TaskCompletionSource<int>? DeletePortStarted { get; set; }
     public TaskCompletionSource? AllowDeletePort { get; set; }
+    public Func<int, Exception?>? DeletePortExceptionFactory { get; set; }
     public bool CreatePortCalledWhileDeleteBlocked { get; private set; }
     public Action? OnGetPortList { get; set; }
 
@@ -85,6 +86,11 @@ internal sealed class TestDevTunnelClient(Version? cliVersion = null) : IDevTunn
         if (AllowDeletePort is { } allowDeletePort)
         {
             await allowDeletePort.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (DeletePortExceptionFactory?.Invoke(portNumber) is { } exception)
+        {
+            throw exception;
         }
 
         return new DevTunnelPortDeleteResult(portNumber.ToString(CultureInfo.InvariantCulture));

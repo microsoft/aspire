@@ -150,7 +150,12 @@ public static class MauiOtlpExtensions
 
                     StartDashboardOtlpEndpointWatcher(currentTunnelConfig, dashboardResource, evt.Services);
 
-                    if (await TryResolveDashboardOtlpEndpointAsync(dashboardResource, evt.Services, waitForRuntimeSnapshot: true, ct).ConfigureAwait(false) is { } dashboardOtlpEndpoint)
+                    if (await TryResolveDashboardOtlpEndpointAsync(
+                        dashboardResource,
+                        evt.Services,
+                        waitForRuntimeSnapshot: true,
+                        currentTunnelConfig.RuntimeSnapshotResolutionTimeout,
+                        ct).ConfigureAwait(false) is { } dashboardOtlpEndpoint)
                     {
                         await AllocateOtlpStubEndpointAsync(currentTunnelConfig, dashboardOtlpEndpoint, evt.Services, appBuilder.Eventing, ct).ConfigureAwait(false);
                         return;
@@ -167,7 +172,12 @@ public static class MauiOtlpExtensions
                 // later dynamic dashboard listener changes arrive through resource snapshots.
                 StartDashboardOtlpEndpointWatcher(currentTunnelConfig, evt.Resource, evt.Services);
 
-                if (await TryResolveDashboardOtlpEndpointAsync(evt.Resource, evt.Services, waitForRuntimeSnapshot: false, ct).ConfigureAwait(false) is { } dashboardOtlpEndpoint)
+                if (await TryResolveDashboardOtlpEndpointAsync(
+                    evt.Resource,
+                    evt.Services,
+                    waitForRuntimeSnapshot: false,
+                    currentTunnelConfig.RuntimeSnapshotResolutionTimeout,
+                    ct).ConfigureAwait(false) is { } dashboardOtlpEndpoint)
                 {
                     await AllocateOtlpStubEndpointAsync(currentTunnelConfig, dashboardOtlpEndpoint, evt.Services, appBuilder.Eventing, ct).ConfigureAwait(false);
                 }
@@ -252,6 +262,7 @@ public static class MauiOtlpExtensions
         IResource resource,
         IServiceProvider services,
         bool waitForRuntimeSnapshot,
+        TimeSpan runtimeSnapshotResolutionTimeout,
         CancellationToken cancellationToken)
     {
         if (!string.Equals(resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName) || resource is not IResourceWithEndpoints dashboardResource)
@@ -270,7 +281,13 @@ public static class MauiOtlpExtensions
 
         if (httpEndpoint.Exists && await HasUnresolvedTargetPortExpressionAsync(httpEndpoint, cancellationToken).ConfigureAwait(false))
         {
-            return await TryResolveDashboardOtlpEndpointFromRuntimeSnapshotAsync(httpEndpoint, null, services, waitForRuntimeSnapshot, cancellationToken).ConfigureAwait(false);
+            return await TryResolveDashboardOtlpEndpointFromRuntimeSnapshotAsync(
+                httpEndpoint,
+                null,
+                services,
+                waitForRuntimeSnapshot,
+                runtimeSnapshotResolutionTimeout,
+                cancellationToken).ConfigureAwait(false);
         }
 
         var grpcEndpoint = dashboardResource.GetEndpoint(KnownEndpointNames.OtlpGrpcEndpointName);
@@ -284,7 +301,13 @@ public static class MauiOtlpExtensions
             return null;
         }
 
-        return await TryResolveDashboardOtlpEndpointFromRuntimeSnapshotAsync(httpEndpoint, grpcEndpoint, services, waitForRuntimeSnapshot, cancellationToken).ConfigureAwait(false);
+        return await TryResolveDashboardOtlpEndpointFromRuntimeSnapshotAsync(
+            httpEndpoint,
+            grpcEndpoint,
+            services,
+            waitForRuntimeSnapshot,
+            runtimeSnapshotResolutionTimeout,
+            cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task WatchDashboardOtlpEndpointAsync(
@@ -429,6 +452,7 @@ public static class MauiOtlpExtensions
         EndpointReference? grpcEndpoint,
         IServiceProvider services,
         bool waitForRuntimeSnapshot,
+        TimeSpan runtimeSnapshotResolutionTimeout,
         CancellationToken cancellationToken)
     {
         var notificationService = services.GetService<ResourceNotificationService>();
@@ -449,11 +473,24 @@ public static class MauiOtlpExtensions
             return null;
         }
 
-        var resourceEvent = await notificationService.WaitForResourceAsync(
-            resourceName,
-            re => TryResolveDashboardOtlpEndpointFromSnapshot(httpEndpoint, grpcEndpoint, re) is not null ||
-                  IsUnavailableState(re.Snapshot.State?.Text),
-            cancellationToken).ConfigureAwait(false);
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(runtimeSnapshotResolutionTimeout);
+
+        ResourceEvent resourceEvent;
+        try
+        {
+            resourceEvent = await notificationService.WaitForResourceAsync(
+                resourceName,
+                re => TryResolveDashboardOtlpEndpointFromSnapshot(httpEndpoint, grpcEndpoint, re) is not null ||
+                      IsUnavailableState(re.Snapshot.State?.Text),
+                timeoutCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new DistributedApplicationException(
+                $"The Aspire dashboard resource '{resourceName}' did not publish a concrete OTLP listener within {runtimeSnapshotResolutionTimeout:c}.",
+                ex);
+        }
 
         return TryResolveDashboardOtlpEndpointFromSnapshot(httpEndpoint, grpcEndpoint, resourceEvent);
     }

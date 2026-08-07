@@ -36,6 +36,11 @@ internal sealed class OtlpDevTunnelConfigurationAnnotation : IResourceAnnotation
     /// </summary>
     public bool IsOtlpEndpointResolved => Volatile.Read(ref _isOtlpEndpointResolved) != 0;
 
+    /// <summary>
+    /// Gets or sets the maximum time to wait for DCP to publish the dashboard's concrete OTLP listener.
+    /// </summary>
+    internal TimeSpan RuntimeSnapshotResolutionTimeout { get; set; } = TimeSpan.FromMinutes(10);
+
     public OtlpDevTunnelConfigurationAnnotation(
         OtlpLoopbackResource otlpStub,
         IResourceBuilder<OtlpLoopbackResource> otlpStubBuilder,

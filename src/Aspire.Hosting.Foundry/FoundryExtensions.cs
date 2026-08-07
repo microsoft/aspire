@@ -178,6 +178,7 @@ public static class FoundryExtensions
 
         builder.WithInitializer();
         builder.OnResourceStopped(static (_, _, ct) => FoundryLocalService.StopAsync(ct));
+        builder.ApplicationBuilder.Services.TryAddSingleton<IFoundryLocalModelService, FoundryLocalModelService>();
 
         foreach (var deployment in resource.Deployments)
         {
@@ -301,6 +302,9 @@ public static class FoundryExtensions
                 {
                     await FoundryLocalService.StartAsync(logger, ct).ConfigureAwait(false);
                 }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                }
                 catch (Exception e)
                 {
                     logger.LogInformation("Foundry Local could not be started. Ensure it's installed correctly: https://learn.microsoft.com/azure/ai-foundry/foundry-local/get-started (Error: {Error}).", e.Message);
@@ -342,54 +346,83 @@ public static class FoundryExtensions
             var loggerService = @event.Services.GetRequiredService<ResourceLoggerService>();
             var logger = loggerService.GetLogger(deployment);
             var eventing = @event.Services.GetRequiredService<IDistributedApplicationEventing>();
+            var localModelService = @event.Services.GetRequiredService<IFoundryLocalModelService>();
 
             var model = deployment.ModelName;
 
             _ = Task.Run(async () =>
             {
-                await rns.PublishUpdateAsync(deployment, state => state with
-                {
-                    State = new ResourceStateSnapshot($"Downloading model {model}", KnownResourceStateStyles.Info),
-                    Properties = [.. state.Properties, new(CustomResourceKnownProperties.Source, model)]
-                }).ConfigureAwait(false);
-
-                var progressChannel = Channel.CreateUnbounded<float>();
-                var downloadTask = DownloadModelAsync();
-
-                await foreach (var progress in progressChannel.Reader.ReadAllAsync(ct).ConfigureAwait(false))
-                {
-                    logger.LogInformation("Downloading model {Model}: {Progress:F2}%", model, progress);
-                    await rns.PublishUpdateAsync(deployment, state => state with
-                    {
-                        State = new ResourceStateSnapshot($"Downloading model {model}: {progress:F2}%", KnownResourceStateStyles.Info)
-                    }).ConfigureAwait(false);
-                }
-
+                var lockTaken = false;
                 try
                 {
-                    deployment.ModelId = await downloadTask.ConfigureAwait(false);
-                    logger.LogInformation("Model {Model} downloaded successfully ({ModelId}).", model, deployment.ModelId);
+                    await deployment.LocalInitializationLock.WaitAsync(ct).ConfigureAwait(false);
+                    lockTaken = true;
 
-                    // Re-publish the connection string since the model id is now known.
+                    if (deployment.ModelId is null)
+                    {
+                        await rns.PublishUpdateAsync(deployment, state => state with
+                        {
+                            State = new ResourceStateSnapshot($"Downloading model {model}", KnownResourceStateStyles.Info),
+                            Properties = state.Properties.SetResourceProperty(CustomResourceKnownProperties.Source, model)
+                        }).ConfigureAwait(false);
+
+                        var progressChannel = Channel.CreateUnbounded<float>();
+                        var downloadTask = DownloadModelAsync();
+
+                        await foreach (var progress in progressChannel.Reader.ReadAllAsync(ct).ConfigureAwait(false))
+                        {
+                            logger.LogInformation("Downloading model {Model}: {Progress:F2}%", model, progress);
+                            await rns.PublishUpdateAsync(deployment, state => state with
+                            {
+                                State = new ResourceStateSnapshot($"Downloading model {model}: {progress:F2}%", KnownResourceStateStyles.Info)
+                            }).ConfigureAwait(false);
+                        }
+
+                        deployment.ModelId = await downloadTask.ConfigureAwait(false);
+                        logger.LogInformation("Model {Model} downloaded successfully ({ModelId}).", model, deployment.ModelId);
+
+                        async Task<string> DownloadModelAsync()
+                        {
+                            try
+                            {
+                                return await localModelService.DownloadModelAsync(model, progress => progressChannel.Writer.TryWrite(progress), ct).ConfigureAwait(false);
+                            }
+                            finally
+                            {
+                                progressChannel.Writer.TryComplete();
+                            }
+                        }
+                    }
+
+                    var modelId = deployment.ModelId ?? throw new InvalidOperationException($"Foundry Local did not return an identifier for model '{model}'.");
+
+                    // The parent endpoint can change after a restart, so republish the connection string
+                    // even when the model was downloaded by an earlier resource generation.
                     var connectionStringAvailableEvent = new ConnectionStringAvailableEvent(deployment, @event.Services);
                     await eventing.PublishAsync(connectionStringAvailableEvent, ct).ConfigureAwait(false);
 
                     await rns.PublishUpdateAsync(deployment, state => state with
                     {
-                        Properties = [.. state.Properties, new(CustomResourceKnownProperties.Source, $"{model} ({deployment.ModelId})")]
+                        Properties = state.Properties.SetResourceProperty(CustomResourceKnownProperties.Source, $"{model} ({modelId})")
                     }).ConfigureAwait(false);
 
-                    await rns.PublishUpdateAsync(deployment, state => state with
+                    if (!await localModelService.IsModelLoadedAsync(modelId, ct).ConfigureAwait(false))
                     {
-                        State = new ResourceStateSnapshot("Loading model", KnownResourceStateStyles.Info)
-                    }).ConfigureAwait(false);
+                        await rns.PublishUpdateAsync(deployment, state => state with
+                        {
+                            State = new ResourceStateSnapshot("Loading model", KnownResourceStateStyles.Info)
+                        }).ConfigureAwait(false);
 
-                    await FoundryLocalService.LoadModelAsync(deployment.ModelId, ct).ConfigureAwait(false);
+                        await localModelService.LoadModelAsync(modelId, ct).ConfigureAwait(false);
+                    }
 
                     await rns.PublishUpdateAsync(deployment, state => state with
                     {
                         State = KnownResourceStates.Running
                     }).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
                 }
                 catch (Exception e)
                 {
@@ -400,19 +433,14 @@ public static class FoundryExtensions
                         State = KnownResourceStates.FailedToStart
                     }).ConfigureAwait(false);
                 }
-
-                async Task<string> DownloadModelAsync()
+                finally
                 {
-                    try
+                    if (lockTaken)
                     {
-                        return await FoundryLocalService.DownloadModelAsync(model, progress => progressChannel.Writer.TryWrite(progress), ct).ConfigureAwait(false);
-                    }
-                    finally
-                    {
-                        progressChannel.Writer.TryComplete();
+                        deployment.LocalInitializationLock.Release();
                     }
                 }
-            }, ct);
+            }, CancellationToken.None);
 
             return Task.CompletedTask;
         });

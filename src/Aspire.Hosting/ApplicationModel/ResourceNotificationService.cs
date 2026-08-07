@@ -417,7 +417,7 @@ public class ResourceNotificationService : IDisposable
             return false;
         }
 
-        // DCP can publish an executable Exited state before the exit code snapshot arrives.
+        // DCP can publish an executable terminal state before the exit code snapshot arrives.
         // Other resource types may never report an exit code, so only wait when DCP explicitly
         // marks the executable exit code as pending.
         return snapshot.ExitCode is not null || !snapshot.HasPendingDcpExitCode;

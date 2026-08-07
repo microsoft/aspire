@@ -846,7 +846,7 @@ public class DevTunnelResourceBuilderExtensionsTests
     }
 
     [Fact]
-    public async Task OnResourceReady_DeletesPendingStalePortAfterLaterReadyPublish()
+    public async Task OnResourceReady_RetriesPendingStalePortDeletionAfterFailure()
     {
         var client = new TestDevTunnelClient();
 
@@ -913,8 +913,28 @@ public class DevTunnelResourceBuilderExtensionsTests
         tunnel.Resource.LastKnownAccessStatus = client.AccessStatus;
         tunnelPort.LastKnownAccessStatus = client.AccessStatus;
 
+        var deleteAttempts = 0;
+        client.DeletePortExceptionFactory = portNumber =>
+            portNumber == 5001 && Interlocked.Increment(ref deleteAttempts) <= 2
+                ? new InvalidOperationException("Deletion unavailable.")
+                : null;
+
         await builder.Eventing.PublishAsync(new ResourceReadyEvent(tunnel.Resource, app.Services)).DefaultTimeout();
 
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () =>
+                notificationService.TryGetCurrentState(tunnelPort.Name, out var failedPortState) &&
+                failedPortState.Snapshot.HealthReports.Any(report =>
+                    report.Name == "devtunnel-port-reconcile" &&
+                    report.Status == HealthStatus.Unhealthy),
+            "Expected the failed stale port deletion to be reported as unhealthy.",
+            retries: 10);
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => !tunnelPort.StaleTunnelPorts.ContainsKey(5001),
+            "Expected stale port deletion to be retried by the endpoint watcher.",
+            retries: 10);
+
+        Assert.True(Volatile.Read(ref deleteAttempts) >= 3);
         Assert.DoesNotContain(5001, tunnelPort.StaleTunnelPorts.Keys);
         Assert.Contains(client.Calls, call => call.Method == nameof(IDevTunnelClient.DeletePortAsync) && call.PortNumber == 5001);
         Assert.Equal("https://mytunnel-5002.devtunnels.ms:443", tunnelPort.TunnelEndpoint.Url);
@@ -1068,7 +1088,7 @@ public class DevTunnelResourceBuilderExtensionsTests
     }
 
     [Fact]
-    public async Task OnResourceReady_RemovesAnonymousAccessWhenPortUrlChangesBeforeAccessRefreshCompletes()
+    public async Task OnResourceReady_PublishesUnknownAnonymousAccessAndRetriesFailedRefresh()
     {
         var client = new TestDevTunnelClient
         {
@@ -1090,6 +1110,8 @@ public class DevTunnelResourceBuilderExtensionsTests
         var tunnel = builder.AddDevTunnel("tunnel", "mytunnel")
             .WithReference(target);
         var tunnelPort = Assert.Single(tunnel.Resource.Ports);
+        tunnelPort.AccessStatusRetryDelay = TimeSpan.FromMilliseconds(1);
+        tunnelPort.AccessStatusMaxRetryDelay = TimeSpan.FromMilliseconds(5);
         tunnelPort.TargetEndpoint.EndpointAnnotation.AllocatedEndpoint = new(
             tunnelPort.TargetEndpoint.EndpointAnnotation,
             "localhost",
@@ -1146,8 +1168,29 @@ public class DevTunnelResourceBuilderExtensionsTests
             retries: 20);
         await client.GetAccessStarted.Task.DefaultTimeout();
 
-        Assert.True(notificationService.TryGetCurrentState(tunnelPort.Name, out var updatedPortState));
-        Assert.DoesNotContain(updatedPortState.Snapshot.Properties, property => string.Equals(property.Name, "Anonymous access", StringComparison.OrdinalIgnoreCase));
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () =>
+                notificationService.TryGetCurrentState(tunnelPort.Name, out var failedPortState) &&
+                failedPortState.Snapshot.Properties.Any(property =>
+                    string.Equals(property.Name, "Anonymous access", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(property.Value?.ToString(), "Unknown", StringComparison.OrdinalIgnoreCase)) &&
+                failedPortState.Snapshot.HealthReports.Any(report =>
+                    report.Name == "devtunnel-port-access-refresh" &&
+                    report.Status == HealthStatus.Unhealthy),
+            "Expected failed access refresh to publish unknown access status and unhealthy health.",
+            retries: 20);
+
+        client.GetAccessException = null;
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () =>
+                notificationService.TryGetCurrentState(tunnelPort.Name, out var recoveredPortState) &&
+                recoveredPortState.Snapshot.Properties.Any(property =>
+                    string.Equals(property.Name, "Anonymous access", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(property.Value?.ToString(), "Allowed", StringComparison.OrdinalIgnoreCase)) &&
+                recoveredPortState.Snapshot.HealthReports.All(report => report.Name != "devtunnel-port-access-refresh"),
+            "Expected access refresh retry to recover the published policy and health.",
+            retries: 20);
     }
 
     [Fact]

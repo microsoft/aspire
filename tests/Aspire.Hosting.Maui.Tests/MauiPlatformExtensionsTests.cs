@@ -3,9 +3,11 @@
 
 #pragma warning disable ASPIRECOMMAND001 // Required command validation APIs are experimental.
 #pragma warning disable ASPIREEXTENSION001 // Debug support APIs are experimental.
+#pragma warning disable ASPIREFILESYSTEM001 // File system service APIs are experimental.
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
+using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Maui;
 using Aspire.Hosting.Maui.Annotations;
 using Aspire.Hosting.Maui.Utilities;
@@ -550,6 +552,70 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
 
         Assert.Contains(envVars, kvp => kvp.Key == "DEBUG_MODE" && kvp.Value == "true");
         Assert.Contains(envVars, kvp => kvp.Key == "API_TIMEOUT" && kvp.Value == "30");
+    }
+
+    [Theory]
+    [InlineData("android", "net10.0-android")]
+    [InlineData("ios", "net10.0-ios")]
+    public async Task MobileEnvironmentTargetsFileIsRegeneratedWhenResourceRestarts(string platform, string targetFramework)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent(targetFramework));
+
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var resource = platform == "android"
+            ? (IResource)maui.AddAndroidEmulator().Resource
+            : maui.AddiOSSimulator().Resource;
+        resource.Annotations.Add(new EnvironmentCallbackAnnotation(context =>
+        {
+            context.EnvironmentVariables["RESTART_VALUE"] = "first";
+        }));
+
+        var existingArgumentCallbacks = resource.Annotations.OfType<CommandLineArgsCallbackAnnotation>().ToHashSet();
+
+        await using var app = appBuilder.Build();
+        var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        IDistributedApplicationEventingSubscriber environmentSubscriber = platform == "android"
+            ? new MauiAndroidEnvironmentSubscriber(
+                executionContext,
+                app.Services.GetRequiredService<ResourceLoggerService>(),
+                app.Services.GetRequiredService<ResourceNotificationService>(),
+                app.Services.GetRequiredService<IFileSystemService>())
+            : new MauiiOSEnvironmentSubscriber(
+                executionContext,
+                app.Services.GetRequiredService<ResourceLoggerService>(),
+                app.Services.GetRequiredService<ResourceNotificationService>(),
+                app.Services.GetRequiredService<IFileSystemService>());
+        await environmentSubscriber.SubscribeAsync(eventing, executionContext, CancellationToken.None);
+        await eventing.PublishAsync(new BeforeResourceStartedEvent(resource, app.Services), CancellationToken.None);
+
+        var targetsFileCallback = Assert.Single(
+            resource.Annotations.OfType<CommandLineArgsCallbackAnnotation>(),
+            callback => !existingArgumentCallbacks.Contains(callback));
+
+        var firstPath = await EvaluateTargetsFileAsync(targetsFileCallback, resource);
+        Assert.Contains("RESTART_VALUE=first", await File.ReadAllTextAsync(firstPath));
+
+        resource.Annotations.Add(new EnvironmentCallbackAnnotation(context =>
+        {
+            context.EnvironmentVariables["RESTART_VALUE"] = "second";
+        }));
+
+        var secondPath = await EvaluateTargetsFileAsync(targetsFileCallback, resource);
+        Assert.Equal(firstPath, secondPath);
+        Assert.Contains("RESTART_VALUE=second", await File.ReadAllTextAsync(secondPath));
+
+        static async Task<string> EvaluateTargetsFileAsync(CommandLineArgsCallbackAnnotation callback, IResource resource)
+        {
+            var args = new List<object>();
+            await callback.Callback(new CommandLineArgsCallbackContext(args, resource, CancellationToken.None));
+            var property = Assert.Single(args.OfType<string>(), arg => arg.StartsWith("-p:CustomAfterMicrosoftCommonTargets=", StringComparison.Ordinal));
+
+            return property["-p:CustomAfterMicrosoftCommonTargets=".Length..];
+        }
     }
 
     [Theory]
@@ -1283,6 +1349,49 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => beforeStartTask.WaitAsync(TimeSpan.FromSeconds(10)));
         Assert.Contains("does not have an allocated OTLP endpoint", exception.Message);
         Assert.Null(stubEndpoint.AllocatedEndpoint);
+    }
+
+    [Fact]
+    public async Task WithOtlpDevTunnel_TimesOutWaitingForDashboardRuntimeSnapshot()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
+
+        var appBuilder = DistributedApplication.CreateBuilder();
+        ClearDashboardOtlpEndpointConfiguration(appBuilder.Configuration);
+
+        var dashboard = appBuilder.AddResource(new ExecutableResource(KnownResourceNames.AspireDashboard, "dashboard", ""));
+        dashboard.Resource.Annotations.Add(new EndpointAnnotation(
+            ProtocolType.Tcp,
+            name: KnownEndpointNames.OtlpHttpEndpointName,
+            uriScheme: "http",
+            isProxied: true));
+
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        maui.AddiOSSimulator()
+            .WithOtlpDevTunnel();
+
+        var tunnelConfig = maui.Resource.Annotations.OfType<OtlpDevTunnelConfigurationAnnotation>().Single();
+        tunnelConfig.RuntimeSnapshotResolutionTimeout = TimeSpan.FromMilliseconds(50);
+
+        await using var app = appBuilder.Build();
+
+        var dashboardEndpoint = dashboard.Resource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == KnownEndpointNames.OtlpHttpEndpointName);
+        dashboardEndpoint.AllocatedEndpoint = new AllocatedEndpoint(dashboardEndpoint, "localhost", 55076, targetPortExpression: """{{- portForServing "dashboard-otlp-http" -}}""");
+
+        await app.Services.GetRequiredService<ResourceNotificationService>()
+            .PublishUpdateAsync(dashboard.Resource, snapshot => snapshot with
+            {
+                State = KnownResourceStates.Running
+            });
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            appBuilder.Eventing.PublishAsync(
+                new BeforeResourceStartedEvent(tunnelConfig.DevTunnel.Resource, app.Services),
+                CancellationToken.None));
+
+        Assert.Contains("did not publish a concrete OTLP listener", exception.Message);
     }
 
     [Fact]

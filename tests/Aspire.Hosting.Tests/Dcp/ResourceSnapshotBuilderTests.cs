@@ -280,13 +280,31 @@ public class ResourceSnapshotBuilderTests
         Assert.False(snapshot.HasPendingDcpExitCode);
     }
 
-    [Fact]
-    public void ExitedExecutableWithoutExitCodeHasPendingExitCode()
+    [Theory]
+    [InlineData(ExecutableState.Finished)]
+    [InlineData("Exited")]
+    public void CompletedExecutableWithoutExitCodeHasPendingExitCode(string state)
     {
         var executable = Executable.Create("exe", "pwsh");
         executable.Status = new ExecutableStatus
         {
-            State = KnownResourceStates.Exited
+            State = state
+        };
+
+        var snapshot = CreateSnapshotBuilder().ToSnapshot(executable, CreatePreviousSnapshot());
+
+        Assert.True(snapshot.HasPendingDcpExitCode);
+    }
+
+    [Theory]
+    [InlineData(ExecutableState.Finished)]
+    [InlineData("Exited")]
+    public void CompletedContainerExecWithoutExitCodeHasPendingExitCode(string state)
+    {
+        var executable = ContainerExec.Create("exec", "container", "pwsh");
+        executable.Status = new ContainerExecStatus
+        {
+            State = state
         };
 
         var snapshot = CreateSnapshotBuilder().ToSnapshot(executable, CreatePreviousSnapshot());

@@ -658,8 +658,10 @@ public class ResourceNotificationTests
         Assert.DoesNotContain(completedWaitingEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.WaitingFor);
     }
 
-    [Fact]
-    public async Task WaitForDependenciesWaitsWhenCompletionDependencyExitsBeforeExitCode()
+    [Theory]
+    [InlineData("exited")]
+    [InlineData("finished")]
+    public async Task WaitForDependenciesWaitsWhenDcpCompletionDependencyEntersTerminalStateBeforeExitCode(string state)
     {
         var dependency = new CustomResource("dependency");
         var resource = new CustomResource("resource");
@@ -678,7 +680,7 @@ public class ResourceNotificationTests
 
         await notificationService.PublishUpdateAsync(dependency, s => s with
         {
-            State = "exited",
+            State = state,
             HasPendingDcpExitCode = true
         }).DefaultTimeout();
 
@@ -686,7 +688,7 @@ public class ResourceNotificationTests
 
         await notificationService.PublishUpdateAsync(dependency, s => s with
         {
-            State = "exited",
+            State = state,
             ExitCode = 0
         }).DefaultTimeout();
 

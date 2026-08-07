@@ -41,6 +41,10 @@ public sealed class DevTunnelResource(string name, string tunnelId, string comma
 
     internal DevTunnelAccessStatus? LastKnownAccessStatus { get; set; }
 
+    // Port resources have independent update locks, but create/delete operations affect the shared
+    // tunnel. Serialize those operations so stale cleanup cannot delete a port a sibling just adopted.
+    internal SemaphoreSlim PortAllocationLock { get; } = new(1, 1);
+
     private readonly object _targetEndpointWatcherLock = new();
     private CancellationTokenSource? _targetEndpointWatcherCts;
 
@@ -119,9 +123,51 @@ public sealed class DevTunnelPortResource : Resource, IResourceWithServiceDiscov
     internal int? ActiveTunnelPort { get; set; }
     internal ConcurrentDictionary<int, byte> StaleTunnelPorts { get; } = [];
     internal SemaphoreSlim PortUpdateLock { get; } = new(1, 1);
+    internal TimeSpan AccessStatusRetryDelay { get; set; } = TimeSpan.FromSeconds(1);
+    internal TimeSpan AccessStatusMaxRetryDelay { get; set; } = TimeSpan.FromSeconds(30);
     internal TimeSpan TunnelPortReadyRetryDelay { get; set; } = TimeSpan.FromMilliseconds(500);
     internal TimeSpan TunnelPortReadyMaxRetryDelay { get; set; } = TimeSpan.FromSeconds(5);
     internal int TunnelPortReadyRetryCount { get; set; } = 20;
+
+    private readonly object _accessStatusRefreshLock = new();
+    private CancellationTokenSource? _accessStatusRefreshCts;
+
+    internal CancellationTokenSource StartAccessStatusRefresh(CancellationToken cancellationToken)
+    {
+        var refreshCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        lock (_accessStatusRefreshLock)
+        {
+            // CompleteAccessStatusRefresh disposes the source under this lock, so cancellation must
+            // also happen here to prevent racing a completed refresh's disposal.
+            _accessStatusRefreshCts?.Cancel();
+            _accessStatusRefreshCts = refreshCts;
+        }
+
+        return refreshCts;
+    }
+
+    internal void CompleteAccessStatusRefresh(CancellationTokenSource refreshCts)
+    {
+        lock (_accessStatusRefreshLock)
+        {
+            if (ReferenceEquals(_accessStatusRefreshCts, refreshCts))
+            {
+                _accessStatusRefreshCts = null;
+            }
+        }
+
+        refreshCts.Dispose();
+    }
+
+    internal void StopAccessStatusRefresh()
+    {
+        lock (_accessStatusRefreshLock)
+        {
+            _accessStatusRefreshCts?.Cancel();
+            _accessStatusRefreshCts = null;
+        }
+    }
 
     internal async ValueTask<int> GetTunnelPortAsync(CancellationToken cancellationToken = default)
     {

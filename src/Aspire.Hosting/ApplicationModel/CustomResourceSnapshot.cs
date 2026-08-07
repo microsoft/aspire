@@ -35,7 +35,7 @@ public sealed record CustomResourceSnapshot
     internal bool IsDcpExecutableTerminated { get; init; }
 
     /// <summary>
-    /// Gets whether DCP has reported an executable exit before its exit code snapshot.
+    /// Gets whether DCP has reported executable completion before its exit code snapshot.
     /// </summary>
     internal bool HasPendingDcpExitCode { get; init; }
 

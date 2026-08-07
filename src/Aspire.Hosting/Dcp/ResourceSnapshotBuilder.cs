@@ -231,7 +231,8 @@ internal class ResourceSnapshotBuilder
 
     private static bool HasPendingDcpExitCode(string? state, int? exitCode, string? rawState)
     {
-        return string.Equals(state, KnownResourceStates.Exited, StringComparisons.ResourceState) &&
+        return (string.Equals(state, KnownResourceStates.Finished, StringComparisons.ResourceState) ||
+                string.Equals(state, KnownResourceStates.Exited, StringComparisons.ResourceState)) &&
             exitCode is null &&
             !DcpStateMapper.IsExecutableTerminated(rawState);
     }

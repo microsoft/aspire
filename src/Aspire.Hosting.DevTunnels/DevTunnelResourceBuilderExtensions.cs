@@ -669,11 +669,22 @@ public static partial class DevTunnelsResourceBuilderExtensions
                 // We need to do this in this handler so that it runs every time the tunnel is started.
                 if (await PublishPortReadyAsync(portResource, e.Services, ct).ConfigureAwait(false))
                 {
-                    await DeleteStalePortsAsync(portResource, e.Services, ct).ConfigureAwait(false);
+                    try
+                    {
+                        await DeleteStalePortsAsync(portResource, e.Services, ct).ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+                    {
+                        var notifications = e.Services.GetRequiredService<ResourceNotificationService>();
+                        var portLogger = e.Services.GetRequiredService<ResourceLoggerService>().GetLogger(portResource);
+                        portLogger.LogWarning(ex, "Failed to delete stale dev tunnel ports for '{PortName}'; scheduling reconciliation.", portResource.Name);
+                        await MarkPortReconcileFailedAsync(portResource, notifications).ConfigureAwait(false);
+                    }
                 }
             })
             .OnResourceStopped(async (tunnelResource, e, ct) =>
             {
+                portResource.StopAccessStatusRefresh();
                 await portResource.PortUpdateLock.WaitAsync(ct).ConfigureAwait(false);
                 try
                 {
@@ -686,12 +697,13 @@ public static partial class DevTunnelsResourceBuilderExtensions
 
                     portLogger.LogInformation("Port forwarding stopped");
                     CustomResourceSnapshot? stoppedSnapshot = default;
-                    await notifications.PublishUpdateAsync(portResource, snapshot => stoppedSnapshot = snapshot with
-                    {
-                        State = KnownResourceStates.Finished,
-                        StopTimeStamp = DateTime.UtcNow,
-                        Urls = [.. snapshot.Urls.Select(u => u with { IsInactive = true /* All URLs inactive */ })]
-                    }).ConfigureAwait(false);
+                    await notifications.PublishUpdateAsync(portResource, snapshot =>
+                        stoppedSnapshot = (snapshot with
+                        {
+                            State = KnownResourceStates.Finished,
+                            StopTimeStamp = DateTime.UtcNow,
+                            Urls = [.. snapshot.Urls.Select(u => u with { IsInactive = true /* All URLs inactive */ })]
+                        }).WithHealthReports([.. snapshot.HealthReports.Where(report => report.Name != DevTunnelAccessStatusRefresh.HealthCheckName)])).ConfigureAwait(false);
                     await eventing.PublishAsync<ResourceStoppedEvent>(new(portResource, e.Services, new(portResource, portResource.Name, stoppedSnapshot!)), ct).ConfigureAwait(false);
                 }
                 finally
@@ -737,7 +749,10 @@ public static partial class DevTunnelsResourceBuilderExtensions
                 await foreach (var resourceEvent in notifications.WatchAsync(cancellationToken).ConfigureAwait(false))
                 {
                     var matchingPorts = tunnelResource.Ports
-                        .Where(port => ReferenceEquals(port.TargetEndpoint.Resource, resourceEvent.Resource))
+                        .Where(port =>
+                            ReferenceEquals(port.TargetEndpoint.Resource, resourceEvent.Resource) ||
+                            (ReferenceEquals(port, resourceEvent.Resource) &&
+                             (!port.StaleTunnelPorts.IsEmpty || HasPortReconcileFailure(port, notifications))))
                         .ToArray();
 
                     if (baselineSnapshots.TryGetValue(resourceEvent.ResourceId, out var baselineSnapshot) &&
@@ -748,6 +763,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
                         {
                             var tunnelPort = await portResource.GetTunnelPortAsync(cancellationToken).ConfigureAwait(false);
                             if (portResource.ActiveTunnelPort != tunnelPort ||
+                                !portResource.StaleTunnelPorts.IsEmpty ||
                                 HasPortReconcileFailure(portResource, notifications))
                             {
                                 baselinePortsToReconcile.Add(portResource);
@@ -866,22 +882,23 @@ public static partial class DevTunnelsResourceBuilderExtensions
         {
             var devTunnelClient = services.GetRequiredService<IDevTunnelClient>();
             var portLogger = services.GetRequiredService<ResourceLoggerService>().GetLogger(portResource);
-            var protectedPorts = portResource.DevTunnel.Ports
-                .Select(port => port.ActiveTunnelPort)
-                .OfType<int>()
-                .ToHashSet();
-
-            foreach (var stalePort in portResource.StaleTunnelPorts.Keys.Where(port => !protectedPorts.Contains(port)).ToArray())
+            await portResource.DevTunnel.PortAllocationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
             {
-                try
+                var protectedPorts = portResource.DevTunnel.Ports
+                    .Select(port => port.ActiveTunnelPort)
+                    .OfType<int>()
+                    .ToHashSet();
+
+                foreach (var stalePort in portResource.StaleTunnelPorts.Keys.Where(port => !protectedPorts.Contains(port)).ToArray())
                 {
                     await devTunnelClient.DeletePortAsync(portResource.DevTunnel.ResolvedTunnelId, stalePort, portLogger, cancellationToken).ConfigureAwait(false);
                     portResource.StaleTunnelPorts.TryRemove(stalePort, out _);
                 }
-                catch (Exception ex)
-                {
-                    portLogger.LogDebug(ex, "Failed to delete stale dev tunnel port '{Port}' on tunnel '{Tunnel}'.", stalePort, portResource.DevTunnel.TunnelId);
-                }
+            }
+            finally
+            {
+                portResource.DevTunnel.PortAllocationLock.Release();
             }
         }
         finally
@@ -901,7 +918,8 @@ public static partial class DevTunnelsResourceBuilderExtensions
         }
 
         var notifications = services.GetRequiredService<ResourceNotificationService>();
-        if (!notifications.TryGetCurrentState(portResource.Name, out var currentState))
+        if (!notifications.TryGetCurrentState(portResource.Name, out var currentState) ||
+            currentState.Snapshot.HealthReports.Any(report => report.Name == PortReconcileHealthCheckName))
         {
             return true;
         }
@@ -943,16 +961,24 @@ public static partial class DevTunnelsResourceBuilderExtensions
         // Create the tunnel port
         try
         {
-            _ = await devTunnelClient.CreatePortAsync(
-                    portResource.DevTunnel.ResolvedTunnelId,
-                    tunnelPort,
-                    portResource.Options,
-                    portLogger,
-                    cancellationToken)
-                .ConfigureAwait(false);
+            await portResource.DevTunnel.PortAllocationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                _ = await devTunnelClient.CreatePortAsync(
+                        portResource.DevTunnel.ResolvedTunnelId,
+                        tunnelPort,
+                        portResource.Options,
+                        portLogger,
+                        cancellationToken)
+                    .ConfigureAwait(false);
 
-            portResource.ActiveTunnelPort = tunnelPort;
-            portLogger.LogInformation("Created dev tunnel port '{Port}' on tunnel '{Tunnel}' targeting endpoint '{Endpoint}' on resource '{TargetResource}'", tunnelPort, portResource.DevTunnel.TunnelId, portResource.TargetEndpoint.EndpointName, portResource.TargetEndpoint.Resource.Name);
+                portResource.ActiveTunnelPort = tunnelPort;
+                portLogger.LogInformation("Created dev tunnel port '{Port}' on tunnel '{Tunnel}' targeting endpoint '{Endpoint}' on resource '{TargetResource}'", tunnelPort, portResource.DevTunnel.TunnelId, portResource.TargetEndpoint.EndpointName, portResource.TargetEndpoint.Resource.Name);
+            }
+            finally
+            {
+                portResource.DevTunnel.PortAllocationLock.Release();
+            }
         }
         catch (Exception ex)
         {
@@ -1121,8 +1147,9 @@ public static partial class DevTunnelsResourceBuilderExtensions
                 return (snapshot with
                 {
                     State = KnownResourceStates.Running,
-                    Properties = tunnelUrlChanged
-                        ? [.. snapshot.Properties.Where(p => !string.Equals(p.Name, "Anonymous access", StringComparison.OrdinalIgnoreCase))]
+                    Properties = tunnelUrlChanged ||
+                                 !snapshot.Properties.Any(p => string.Equals(p.Name, DevTunnelAccessStatusRefresh.AnonymousAccessPropertyName, StringComparison.OrdinalIgnoreCase))
+                        ? snapshot.Properties.SetResourceProperty(DevTunnelAccessStatusRefresh.AnonymousAccessPropertyName, DevTunnelAccessStatusRefresh.UnknownAccessPolicy)
                         : snapshot.Properties,
                     Urls = [.. snapshot.Urls
                         .Where(u => !string.Equals(u.DisplayProperties.DisplayName, "Inspect", StringComparison.OrdinalIgnoreCase))
