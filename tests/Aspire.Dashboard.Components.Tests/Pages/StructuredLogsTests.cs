@@ -18,6 +18,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Logs.V1;
 using Xunit;
 using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
@@ -246,7 +247,9 @@ public partial class StructuredLogsTests : DashboardTestContext
             builder.Add(p => p.ViewportInformation, viewport);
         });
 
-        Assert.Equal("off", cut.FindComponent<Microsoft.FluentUI.AspNetCore.Components.FluentSearch>().Instance.AutoComplete);
+        // FluentSearch writes the autocomplete attribute through JS interop, so bUnit can only verify the component parameter.
+        var search = Assert.Single(cut.FindComponents<FluentSearch>());
+        Assert.Equal("off", search.Instance.AutoComplete);
     }
 
     [Fact]

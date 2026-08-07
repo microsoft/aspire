@@ -35,6 +35,7 @@
                               Immediate="true"
                               ImmediateDelay="@FluentUIExtensions.InputDelay"
                               Name="resources-search"
+                              AutoComplete="off"
                               @bind-Value="PageViewModel.TextFilter"
                               slot="end"
                               Label="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)].Value"
@@ -305,6 +306,7 @@
                           Immediate="true"
                           ImmediateDelay="@FluentUIExtensions.InputDelay"
                           Name="resources-search"
+                          AutoComplete="off"
                           @bind-Value="PageViewModel.TextFilter"
                           slot="end"
                           @bind-Value:after="HandleSearchFilterChangedAsync" />
