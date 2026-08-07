@@ -201,11 +201,17 @@ public sealed class AppHostSyntaxErrorOutputTests(ITestOutputHelper output)
     private static readonly CommandOutputExpectation s_dotNetMissingSdkRunOutputExpectation = new(
         RequiredText:
         [
+            // https://github.com/microsoft/aspire/issues/19035: the whole point of the fix is that the
+            // MSBuild SDK-resolution failure reaches the user. Match on the bare error code because the
+            // full sentence ("The SDK 'Missing.AppHost.Sdk' specified could not be found.") is long
+            // enough to be wrapped across lines in the terminal recording.
+            "MSB4236",
             "The project could not be built."
         ],
         ForbiddenText:
         [
-            "The --apphost option specified a project that does not exist."
+            InteractionServiceStrings.ProjectOptionDoesntExist,
+            InteractionServiceStrings.UnbuildableAppHostsDetected
         ]);
 
     private static readonly CommandOutputExpectation s_dotNetStartOutputExpectation = new(
