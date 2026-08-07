@@ -442,6 +442,13 @@ jobs:
              --only-show-errors -o json ||
              echo "⚠ Could not read Microsoft.ContainerService quota in westus3."
 
+          echo "AKS-specific Standard_D2as_v5 availability in westus3:"
+          az rest --method get \
+             --uri "https://management.azure.com/subscriptions/$sub/providers/Microsoft.ContainerService/locations/westus3/vmSkus?api-version=2026-05-02-preview" \
+             --query "value[?name=='Standard_D2as_v5'].{name:name, family:family, locations:locations, restrictions:restrictions}" \
+             -o json ||
+             echo "⚠ Could not read AKS VM SKU availability in westus3."
+
   # Run each test class in parallel
   deploy-test:
     name: Deploy (${{ matrix.shortname }})
