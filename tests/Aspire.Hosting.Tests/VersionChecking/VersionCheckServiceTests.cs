@@ -376,7 +376,7 @@ public class VersionCheckServiceTests
         await service.ExecuteTask!.DefaultTimeout();
 
         var warning = Assert.Single(logger.Collector.GetSnapshot(), log => log.Level == LogLevel.Warning);
-        Assert.Equal("Could not ignore the notification to update to version 100.0.0 because user secrets are not configured correctly. See https://aka.ms/aspire/user-secrets for more information.", warning.Message);
+        Assert.Equal("Could not ignore the version update notification to 100.0.0 because user secrets are not configured correctly. See https://aka.ms/aspire/user-secrets for more information.", warning.Message);
     }
 
     private static VersionCheckService CreateVersionCheckService(

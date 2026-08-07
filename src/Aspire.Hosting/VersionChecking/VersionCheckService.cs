@@ -171,7 +171,7 @@ internal sealed class VersionCheckService : BackgroundService
 
             if (!_userSecretsManager.TrySetSecret(IgnoreVersionKey, ignoredVersion))
             {
-                _logger.LogWarning("Could not ignore the notification to update to version {Version} because user secrets are not configured correctly. See https://aka.ms/aspire/user-secrets for more information.", latestVersion);
+                _logger.LogWarning("Could not ignore the version update notification to {Version} because user secrets are not configured correctly. See https://aka.ms/aspire/user-secrets for more information.", latestVersion);
             }
         }
     }
