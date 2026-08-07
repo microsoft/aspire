@@ -247,6 +247,75 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AddDotnetProject_CustomLaunchToolArgs_ReplaceDotnetRunScaffoldingInRunMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var projectPath = Path.Combine(builder.AppHostDirectory, "MyService", "MyService.csproj");
+        var app = builder.AddDotnetProject("svc", projectPath, o => o.ExcludeLaunchProfile = true)
+                         .WithArgs("--config", "prod.yaml")
+                         .WithLaunchToolArgs(AddCustomLaunchToolArgs, ownedByLaunchConfigurationType: "custom")
+                         .WithDebugSupport(_ => new ExecutableLaunchConfiguration("custom"), "custom");
+
+        using var application = builder.Build();
+        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource, application.Services);
+
+        Assert.Equal(["tool", "exec", "package", "--yes", "--", "--config", "prod.yaml"], args);
+    }
+
+    [Fact]
+    public async Task AddDotnetProject_CustomLaunchToolArgs_ReplaceDotnetRunScaffoldingInPublishMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var projectPath = Path.Combine(builder.AppHostDirectory, "MyService", "MyService.csproj");
+        var app = builder.AddDotnetProject("svc", projectPath, o => o.ExcludeLaunchProfile = true)
+                         .WithArgs("--config", "prod.yaml")
+                         .WithLaunchToolArgs(AddCustomLaunchToolArgs, ownedByLaunchConfigurationType: "custom")
+                         .WithDebugSupport(_ => new ExecutableLaunchConfiguration("custom"), "custom");
+
+        Assert.Empty(app.Resource.Annotations.OfType<SupportsDebuggingAnnotation>());
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
+
+        Assert.Equal(["tool", "exec", "package", "--yes", "--", "--config", "prod.yaml"], args);
+    }
+
+    [Fact]
+    public async Task AddDotnetProject_CustomLaunchToolArgs_PreserveLaunchProfileArguments()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectDir = Directory.CreateDirectory(Path.Combine(workspace.Path, "MyService"));
+        var projectPath = Path.Combine(projectDir.FullName, "MyService.csproj");
+        await File.WriteAllTextAsync(projectPath, "<Project />");
+
+        var propertiesDir = Directory.CreateDirectory(Path.Combine(projectDir.FullName, "Properties"));
+        await File.WriteAllTextAsync(Path.Combine(propertiesDir.FullName, "launchSettings.json"), """
+            {
+              "profiles": {
+                "http": {
+                  "commandName": "Project",
+                  "commandLineArgs": "--profile-arg \"profile value\""
+                }
+              }
+            }
+            """);
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var app = builder.AddDotnetProject("svc", projectPath)
+                         .WithArgs("--config", "prod.yaml")
+                         .WithLaunchToolArgs(AddCustomLaunchToolArgs, ownedByLaunchConfigurationType: "custom")
+                         .WithDebugSupport(_ => new ExecutableLaunchConfiguration("custom"), "custom");
+
+        using var application = builder.Build();
+        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource, application.Services);
+
+        Assert.Equal(
+            ["tool", "exec", "package", "--yes", "--", "--profile-arg", "profile value", "--config", "prod.yaml"],
+            args);
+    }
+
+    [Fact]
     public async Task AddDotnetProject_InDebugSession_OmitsDotnetRunScaffolding()
     {
         // When the active IDE advertises support for the "project" launch configuration, the IDE owns the
@@ -469,5 +538,14 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         Assert.Equal("--no-cache", args[3]);
         Assert.Contains("--no-launch-profile", args);
         Assert.Equal("--flag", args[^1]);
+    }
+
+    private static void AddCustomLaunchToolArgs(CommandLineArgsCallbackContext context)
+    {
+        context.Args.Add("tool");
+        context.Args.Add("exec");
+        context.Args.Add("package");
+        context.Args.Add("--yes");
+        context.Args.Add("--");
     }
 }
