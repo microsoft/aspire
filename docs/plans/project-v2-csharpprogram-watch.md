@@ -38,7 +38,7 @@ generalize cleanly so Go/Python/JavaScript can add watch support later.
 | **D4** | **Only C# watch is implemented now.** Design a **general per-language-package watch seam** so Go/Python/JavaScript can adopt watch later, but do not implement them in this plan. Non-C# services run normally under watch until their package adds support. |
 | **D5** | **Core exposes run configuration as state** on `DistributedApplicationExecutionContext` (a `RunConfiguration` with a `WatchEnabled` property); language packages query it. **All watch mechanics** (server, `host`/`resource`/`server` commands, pipes, builds) live in the language package. Core is **not** involved in watch details. |
 | **D6** | **Watch tool referenced from `Aspire.Hosting.Dotnet`** via a NuGet `PackageReference` (`GeneratePathProperty=true`) + a `.targets` file that injects the tool dll path as **app-host assembly metadata** (the DCP/dashboard/terminal-host pattern); the running app host invokes it with `dotnet exec`. **Not bundled in the CLI.** The CLI obtains the tool for the `host` command by resolving it from the **restored app host project** (handled in the app-host-watch session). |
-| **D7** | **Coordinated INITIAL build is in scope**, owned by `Aspire.Hosting.Dotnet`, for **both project and file-based entrypoints** ([#19037](https://github.com/microsoft/aspire/issues/19037)). Before any service starts, generate a temp `.slnx` of all `.csproj` entrypoints and run one `dotnet build`, then run `dotnet build <app.cs>` for each file-based entrypoint **serially**. As an optional incremental improvement, when the active SDK supports file apps in `dotnet reference` (.NET SDK `10.0.400` or `11.0.100-preview.7` and later), run `dotnet reference list --file <app.cs>` for each file entrypoint and include the discovered `#:project` references in the initial `.slnx`. The serial file builds remain the correctness fallback for older SDKs and still prevent two file apps, or a file app and the `.slnx` build, from writing a shared dependency's outputs concurrently. Launches consume those outputs without another initial build. This is identical for watch and non-watch; the watch tool performs only later **incremental** builds. Library: `Microsoft.VisualStudio.SolutionPersistence`. |
+| **D7** | **Coordinated INITIAL build is in scope**, owned by `Aspire.Hosting.Dotnet`, for **both project and file-based entrypoints** ([#19037](https://github.com/microsoft/aspire/issues/19037)). Before any service starts, generate a temp `.slnx` of all `.csproj` entrypoints and run one `dotnet build`, then run `dotnet build <app.cs>` for each file-based entrypoint **serially**. As an optional incremental improvement, evaluate each file entrypoint with `dotnet build <app.cs> --no-restore -getItem:ProjectReference -getResultOutputFile:<path>`, take the evaluated `.csproj` items' `FullPath` metadata, and include those projects in the initial `.slnx`. This resolves directory-form, relative, and MSBuild-evaluated references instead of consuming raw `#:project` display values; the `.slnx` build follows their transitive project-reference graphs. The serial file builds remain the correctness fallback and still prevent two file apps, or a file app and the `.slnx` build, from writing a shared dependency's outputs concurrently. Launches consume those outputs without another initial build. This is identical for watch and non-watch; the watch tool performs only later **incremental** builds. Library: `Microsoft.VisualStudio.SolutionPersistence`. |
 | **D8** | **App-host watch via the tool's `host` command is a separate implementation session.** The earlier service-watch sessions run the app host normally; the host-command session layers app-host hot reload on top and reconciles/replaces today's whole-app-host `dotnet watch`. |
 | **D9** | **Non-watch debugging/F5 parity is required** for `DotnetProjectResource`. Because it is an `ExecutableResource` (not a `ProjectResource`), this requires generalizing the DCP project-launch/debug path (§6, R1). |
 
@@ -208,11 +208,15 @@ exclusion (mirrors `AddRebuilderResource`). One per app run (MVP). Includes a sm
 for **both** run modes:
 
 1. Collect and de-duplicate all project-based `DotnetProjectResource` `.csproj` entrypoints. As an optional
-   optimization, when the active SDK is `10.0.400` or `11.0.100-preview.7` and later, run
-   `dotnet reference list --file <app.cs>` for each file-based entrypoint and add its discovered `#:project`
-   references to the same set. Generate a temp `.slnx` (`Microsoft.VisualStudio.SolutionPersistence`) from
-   that set and run one coordinated `dotnet build`. Older SDKs skip discovery and rely on the serialized
-   file-app phase for correctness.
+   optimization, evaluate each file-based entrypoint with
+   `dotnet build <app.cs> --no-restore -getItem:ProjectReference -getResultOutputFile:<path>`. Read the
+   structured item output, take `FullPath` only for evaluated `.csproj` references, normalize/de-duplicate
+   those paths into the same set, and reject malformed output rather than guessing from raw directive text.
+   The query performs MSBuild evaluation without executing the build, so directory-form and relative
+   `#:project` references are resolved consistently with the generated file-app project. Generate a temp
+   `.slnx` (`Microsoft.VisualStudio.SolutionPersistence`) from that set and run one coordinated `dotnet build`;
+   its normal project-reference traversal handles transitive dependencies. If this optional discovery is not
+   implemented, the serialized file-app phase remains the correctness path.
 2. After the `.slnx` build succeeds, build each file-based `.cs` entrypoint with `dotnet build <app.cs>`,
    one at a time in deterministic resource order and with the same configuration/build-affecting inputs used
    for launch. Do not hand-parse `#:project`; the .NET SDK's generated file-app project is the authoritative
@@ -368,11 +372,13 @@ that gap before Session 6 rather than launching file apps through an uncoordinat
 
 ### Session 5 — Coordinated initial build (`.slnx` + file apps)
 Add/mirror `Microsoft.VisualStudio.SolutionPersistence` (A2). Implement `DotnetProjectBuildOrchestrator`
-(§5.3): build a temp `.slnx` containing all project entrypoints and, on supported SDKs, the references returned
-by `dotnet reference list --file <app.cs>`; then serially `dotnet build` every file-based entrypoint so the SDK
-discovers and builds its complete `#:project` graph without overlapping another build. Treat both phases as one
-startup barrier **identically for watch and non-watch**; stream logs; fail fast; launch from the result with
-build suppression. The reference-list optimization must be SDK-gated and must not replace the serial fallback.
+(§5.3): build a temp `.slnx` containing all project entrypoints and, as an optional optimization, the resolved
+`.csproj` `FullPath` values returned by
+`dotnet build <app.cs> --no-restore -getItem:ProjectReference -getResultOutputFile:<path>`; then serially
+`dotnet build` every file-based entrypoint so the SDK discovers and builds its complete `#:project` graph
+without overlapping another build. Treat both phases as one startup barrier **identically for watch and
+non-watch**; stream logs; fail fast; launch from the result with build suppression. Evaluated-item discovery
+must not replace the serial fallback.
 
 **Verify:** from a TS app host then a C# app host: (1) multiple `.csproj` resources share a library; (2) two
 file-based apps share the same `#:project` class-library reference; and (3) a file-based app and a `.csproj`
