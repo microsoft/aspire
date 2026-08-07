@@ -45,6 +45,7 @@ public sealed class ResourceUrlAnnotation : IResourceAnnotation
 
     internal ResourceUrlAnnotation WithEndpoint(EndpointReference endpoint)
     {
+#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be copied for compatibility.
         return new()
         {
             Url = Url,
@@ -53,6 +54,7 @@ public sealed class ResourceUrlAnnotation : IResourceAnnotation
             DisplayOrder = DisplayOrder,
             DisplayLocation = DisplayLocation
         };
+#pragma warning restore CS0618
     }
 }
 
