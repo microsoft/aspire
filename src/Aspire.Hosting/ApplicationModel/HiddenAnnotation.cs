@@ -36,5 +36,5 @@ public sealed class HiddenAnnotation(HiddenBehavior behavior) : IResourceAnnotat
     /// <summary>
     /// Gets the exit codes that are treated as successful completion when <see cref="Behavior"/> is <see cref="HiddenBehavior.OnCompletion"/>.
     /// </summary>
-    public List<int> SuccessfulExitCodes { get; init; } = [0];
+    public IReadOnlyList<int> SuccessfulExitCodes { get; init; } = [0];
 }

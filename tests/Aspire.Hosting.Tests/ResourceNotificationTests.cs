@@ -1,7 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Immutable;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using Aspire.Dashboard.Model;
+using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Utils;
 using Aspire.Hosting.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -1410,9 +1414,395 @@ public class ResourceNotificationTests
         }
     }
 
+    [Fact]
+    public async Task PublishUpdateAsyncSkipsSnapshotsThatDidNotChange()
+    {
+        var resource = new CustomResource("myResource");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with { State = "SomeState" }).DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState("myResource", out var initial));
+
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with { State = "SomeState" }).DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState("myResource", out var unchanged));
+        Assert.Equal(initial.Snapshot.Version, unchanged.Snapshot.Version);
+
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with { State = "SomeOtherState" }).DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState("myResource", out var changed));
+        Assert.True(changed.Snapshot.Version > initial.Snapshot.Version, "A real change should publish a new version.");
+        Assert.Equal("SomeOtherState", changed.Snapshot.State?.Text);
+    }
+
+    [Fact]
+    public async Task PublishUpdateAsyncSkipsUnchangedSnapshotsWithRebuiltCollections()
+    {
+        var resource = new CustomResource("myResource");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        // UpdateCommands rebuilds command snapshots while retaining the annotation-owned arguments.
+        // Keep that same ownership shape here rather than defining deep equality for mutable inputs.
+        var commandArguments = Array.Empty<InteractionInput>();
+
+        // Producers rebuild the snapshot collections every time. ImmutableArray equality compares the
+        // underlying array reference, and a property value can itself be a collection, so this is the
+        // case that plain record equality gets wrong. List<T> is covered explicitly because it does
+        // not implement IStructuralEquatable: it is the shape DCP uses for effective arguments.
+        CustomResourceSnapshot BuildSnapshot(CustomResourceSnapshot snapshot) => snapshot with
+        {
+            State = "SomeState",
+            Properties =
+            [
+                new("Ports", ImmutableArray.Create(8080, 8081))
+                {
+                    DisplayName = "Ports",
+                    IsSensitive = true,
+                    IsHighlighted = true,
+                    SortOrder = 1
+                },
+                new("Args", new List<string> { "--verbose", "--port", "8080" }),
+                new("Tags", new[] { "a", "b" })
+            ],
+            EnvironmentVariables = [new("Key", "Value", IsFromSpec: true)],
+            Urls =
+            [
+                new UrlSnapshot("ep", "http://localhost:8080", IsInternal: false)
+                {
+                    DisplayProperties = new("Endpoint", 1)
+                }
+            ],
+            Volumes = [new("/source", "/target", VolumeMountType.Bind, IsReadOnly: true)],
+            Commands = [CreateTestCommand(commandArguments)],
+            Relationships = [new("parent", "Parent")],
+            HealthReports =
+            [
+                new("health", HealthStatus.Healthy, "Healthy", ExceptionText: null)
+                {
+                    LastRunAt = DateTime.UnixEpoch
+                }
+            ]
+        };
+
+        await notificationService.PublishUpdateAsync(resource, BuildSnapshot).DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState("myResource", out var initial));
+
+        await notificationService.PublishUpdateAsync(resource, BuildSnapshot).DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState("myResource", out var unchanged));
+        Assert.Equal(initial.Snapshot.Version, unchanged.Snapshot.Version);
+
+        await notificationService.PublishUpdateAsync(resource, snapshot => BuildSnapshot(snapshot) with
+        {
+            Properties =
+            [
+                new("Ports", ImmutableArray.Create(8080, 8081)),
+                new("Args", new List<string> { "--verbose", "--port", "9090" }),
+                new("Tags", new[] { "a", "b" })
+            ]
+        }).DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState("myResource", out var changed));
+        Assert.True(changed.Snapshot.Version > initial.Snapshot.Version, "A changed value inside a List<T> property should publish a new version.");
+    }
+
+    [Fact]
+    public async Task PublishUpdateAsyncIgnoresVersionOnlyChanges()
+    {
+        var resource = new CustomResource("myResource");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        await notificationService.PublishUpdateAsync(resource, static snapshot => snapshot).DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState(resource.Name, out var initial));
+
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            Version = snapshot.Version + 100
+        }).DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState(resource.Name, out var unchanged));
+        Assert.Equal(initial.Snapshot.Version, unchanged.Snapshot.Version);
+    }
+
+    [Theory]
+    [MemberData(nameof(SnapshotContentPropertyNames))]
+    public async Task PublishUpdateAsyncPublishesEverySnapshotContentChange(string propertyName)
+    {
+        var property = GetContentProperty(
+            typeof(CustomResourceSnapshot),
+            propertyName,
+            s_snapshotContentPropertyExclusions);
+        var resource = new CustomResource("myResource");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        await notificationService.PublishUpdateAsync(resource, static snapshot => snapshot).DefaultTimeout();
+        Assert.True(notificationService.TryGetCurrentState(resource.Name, out var initial));
+
+        await notificationService.PublishUpdateAsync(resource, snapshot => MutateProperty(snapshot, property)).DefaultTimeout();
+        Assert.True(notificationService.TryGetCurrentState(resource.Name, out var changed));
+
+        Assert.True(
+            changed.Snapshot.Version > initial.Snapshot.Version,
+            $"Changing {nameof(CustomResourceSnapshot)}.{propertyName} should publish a new snapshot.");
+    }
+
+    [Theory]
+    [MemberData(nameof(ResourcePropertyContentPropertyNames))]
+    public async Task PublishUpdateAsyncPublishesEveryResourcePropertyContentChange(string propertyName)
+    {
+        var property = GetContentProperty(typeof(ResourcePropertySnapshot), propertyName);
+        var resource = new CustomResource("myResource");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            Properties =
+            [
+                new ResourcePropertySnapshot("property", new List<string> { "original" })
+                {
+                    DisplayName = "Property",
+                    SortOrder = 1
+                }
+            ]
+        }).DefaultTimeout();
+        Assert.True(notificationService.TryGetCurrentState(resource.Name, out var initial));
+
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            Properties = [MutateProperty(snapshot.Properties.Single(), property)]
+        }).DefaultTimeout();
+        Assert.True(notificationService.TryGetCurrentState(resource.Name, out var changed));
+
+        Assert.True(
+            changed.Snapshot.Version > initial.Snapshot.Version,
+            $"Changing {nameof(ResourcePropertySnapshot)}.{propertyName} should publish a new snapshot.");
+    }
+
     private static string[] GetWaitingForDependencies(ResourceEvent resourceEvent)
     {
         var property = resourceEvent.Snapshot.Properties.SingleOrDefault(p => p.Name == KnownProperties.Resource.WaitingFor);
         return property?.Value is IEnumerable<string> dependencyNames ? dependencyNames.ToArray() : [];
+    }
+
+    public static TheoryData<string> SnapshotContentPropertyNames =>
+        CreatePropertyTheoryData(typeof(CustomResourceSnapshot), s_snapshotContentPropertyExclusions);
+
+    public static TheoryData<string> ResourcePropertyContentPropertyNames =>
+        CreatePropertyTheoryData(typeof(ResourcePropertySnapshot));
+
+    private static readonly string[] s_snapshotContentPropertyExclusions =
+    [
+        nameof(CustomResourceSnapshot.Version),
+        nameof(CustomResourceSnapshot.HealthStatus)
+    ];
+
+    private static TheoryData<string> CreatePropertyTheoryData(Type type, params string[] excludedPropertyNames)
+    {
+        var data = new TheoryData<string>();
+        foreach (var property in GetContentProperties(type, excludedPropertyNames))
+        {
+            data.Add(property.Name);
+        }
+
+        return data;
+    }
+
+    private static PropertyInfo GetContentProperty(Type type, string propertyName, params string[] excludedPropertyNames)
+    {
+        return GetContentProperties(type, excludedPropertyNames).Single(property => property.Name == propertyName);
+    }
+
+    private static PropertyInfo[] GetContentProperties(Type type, params string[] excludedPropertyNames)
+    {
+        const BindingFlags Flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+
+        var properties = type.GetProperties(Flags)
+            // EqualityContract is generated for records and describes their runtime type rather than
+            // snapshot content. Other get-only properties remain in the data so they fail loudly unless
+            // their mutation is implemented or they are intentionally excluded.
+            .Where(property => property.Name != "EqualityContract" ||
+                property.GetMethod?.IsDefined(typeof(CompilerGeneratedAttribute), inherit: false) is not true)
+            .OrderBy(property => property.Name, StringComparer.Ordinal)
+            .ToArray();
+
+        var unknownExclusions = excludedPropertyNames
+            .Except(properties.Select(property => property.Name), StringComparer.Ordinal)
+            .ToArray();
+        if (unknownExclusions.Length > 0)
+        {
+            throw new InvalidOperationException($"Unknown excluded properties for {type}: {string.Join(", ", unknownExclusions)}.");
+        }
+
+        return properties
+            .Where(property => !excludedPropertyNames.Contains(property.Name, StringComparer.Ordinal))
+            .ToArray();
+    }
+
+    private static CustomResourceSnapshot MutateProperty(CustomResourceSnapshot snapshot, PropertyInfo property)
+    {
+        EnsurePropertyCanBeMutated(property);
+
+        var mutated = snapshot with { };
+        property.SetValue(mutated, CreateDifferentValue(property, property.GetValue(snapshot)));
+        return mutated;
+    }
+
+    private static ResourcePropertySnapshot MutateProperty(ResourcePropertySnapshot snapshot, PropertyInfo property)
+    {
+        EnsurePropertyCanBeMutated(property);
+
+        var mutated = snapshot with { };
+        property.SetValue(mutated, CreateDifferentValue(property, property.GetValue(snapshot)));
+        return mutated;
+    }
+
+    private static void EnsurePropertyCanBeMutated(PropertyInfo property)
+    {
+        if (property.GetSetMethod(nonPublic: true) is null)
+        {
+            throw new NotSupportedException(
+                $"{property.DeclaringType}.{property.Name} cannot be dynamically mutated. " +
+                $"Implement its mutation or add it to the intentional exclusions.");
+        }
+    }
+
+    private static object? CreateDifferentValue(PropertyInfo property, object? currentValue)
+    {
+        var type = property.PropertyType;
+
+        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ImmutableArray<>))
+        {
+            var elementType = type.GetGenericArguments()[0];
+            var addMethod = type.GetMethod(nameof(ImmutableArray<int>.Add), [elementType])
+                ?? throw new InvalidOperationException($"Could not find {type}.{nameof(ImmutableArray<int>.Add)}.");
+
+            // A fresh empty array would only change storage identity. Adding an element guarantees the
+            // snapshot's collection content is different and recursively exercises child record equality.
+            return addMethod.Invoke(currentValue, [CreateValue(elementType)]);
+        }
+
+        if (currentValue is null)
+        {
+            return CreateValue(type);
+        }
+
+        if (Nullable.GetUnderlyingType(type) is not null ||
+            (!type.IsValueType && new NullabilityInfoContext().Create(property).WriteState == NullabilityState.Nullable))
+        {
+            // The current value is non-null, so null is always a distinct value without requiring
+            // type-specific knowledge about the property's contents.
+            return null;
+        }
+
+        if (type == typeof(string))
+        {
+            return currentValue + "-changed";
+        }
+
+        if (type == typeof(bool))
+        {
+            return !(bool)currentValue;
+        }
+
+        if (type.IsEnum)
+        {
+            var values = Enum.GetValues(type);
+            if (values.Length < 2)
+            {
+                throw new NotSupportedException($"Cannot create a different value for single-value enum {type}.");
+            }
+
+            var currentIndex = Enumerable.Range(0, values.Length)
+                .Single(index => Equals(values.GetValue(index), currentValue));
+            return values.GetValue((currentIndex + 1) % values.Length);
+        }
+
+        var value = CreateValue(type);
+        if (Equals(currentValue, value))
+        {
+            throw new NotSupportedException($"Cannot create a different value for {type}. Extend {nameof(CreateDifferentValue)}.");
+        }
+
+        return value;
+    }
+
+    private static object CreateValue(Type type)
+    {
+        if (Nullable.GetUnderlyingType(type) is { } underlyingType)
+        {
+            return CreateValue(underlyingType);
+        }
+
+        if (type == typeof(string))
+        {
+            return "__comparison_test";
+        }
+
+        if (type == typeof(object))
+        {
+            return new object();
+        }
+
+        if (type == typeof(bool))
+        {
+            return true;
+        }
+
+        if (type == typeof(int))
+        {
+            return 1;
+        }
+
+        if (type == typeof(long))
+        {
+            return 1L;
+        }
+
+        if (type == typeof(DateTime))
+        {
+            return DateTime.UnixEpoch;
+        }
+
+        if (type == typeof(Task))
+        {
+            return Task.CompletedTask;
+        }
+
+        if (type.IsEnum)
+        {
+            return Enum.GetValues(type).GetValue(0)
+                ?? throw new NotSupportedException($"Enum {type} has no values.");
+        }
+
+        // Snapshot child records expose a primary constructor and a generated copy constructor.
+        // Exclude the copy constructor because value generation has no existing instance to supply.
+        var constructor = type
+            .GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            .Where(constructor =>
+            {
+                var parameters = constructor.GetParameters();
+                return parameters.Length != 1 || parameters[0].ParameterType != type;
+            })
+            .OrderByDescending(constructor => constructor.GetParameters().Length)
+            .FirstOrDefault()
+            ?? throw new NotSupportedException($"Cannot create a value for {type}. Extend {nameof(CreateValue)}.");
+        var arguments = constructor.GetParameters()
+            .Select(parameter => CreateValue(parameter.ParameterType))
+            .ToArray();
+
+        return constructor.Invoke(arguments);
+    }
+
+    private static ResourceCommandSnapshot CreateTestCommand(IReadOnlyList<InteractionInput> arguments)
+    {
+#pragma warning disable CS0618 // Parameter remains part of the compatibility constructor.
+        return new("command", ResourceCommandState.Enabled, "Command", DisplayDescription: null, Parameter: null, ConfirmationMessage: null, IconName: null, IconVariant: null, IsHighlighted: false)
+        {
+            Arguments = arguments
+        };
+#pragma warning restore CS0618
     }
 }

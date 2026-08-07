@@ -196,7 +196,7 @@ public static class MauiAndroidExtensions
             "Android",
             "net10.0-android",
             () => true, // Allow on all platforms, validation happens at dotnet run time
-            "PhoneTablet",
+            "PhoneLaptop",
             additionalArgs.ToArray());
 
         resourceBuilder.WithMauiIdeLaunchConfiguration(
@@ -401,7 +401,7 @@ public static class MauiAndroidExtensions
             "Android",
             "net10.0-android",
             () => true, // Allow on all platforms, validation happens at dotnet run time
-            "PhoneTablet",
+            "PhoneLaptop",
             additionalArgs.ToArray());
 
         resourceBuilder.WithMauiIdeLaunchConfiguration(

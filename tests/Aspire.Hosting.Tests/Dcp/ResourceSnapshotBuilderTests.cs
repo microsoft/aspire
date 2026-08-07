@@ -85,6 +85,31 @@ public class ResourceSnapshotBuilderTests
     }
 
     [Fact]
+    public void ProjectSnapshotRejectsMultipleProjectMetadataAnnotations()
+    {
+        var project = new ProjectResource("project");
+        project.Annotations.Add(new TestProjectMetadata());
+        project.Annotations.Add(new OverrideTestProjectMetadata());
+
+        var executable = Executable.Create("project", "dotnet");
+        executable.Annotate(DcpCustomResource.ResourceNameAnnotation, project.Name);
+        executable.Status = new ExecutableStatus
+        {
+            EffectiveArgs = ["run"],
+            ProcessId = 1234
+        };
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            CreateSnapshotBuilder(new Dictionary<string, IResource>
+            {
+                [project.Name] = project
+            }).ToSnapshot(executable, CreatePreviousSnapshot()));
+
+        Assert.Contains(project.Name, exception.Message);
+        Assert.Contains("more than one", exception.Message);
+    }
+
+    [Fact]
     public void ExecutableWithProjectMetadataSnapshotAddsProjectPropertiesAndPreservesCustomResourceType()
     {
         // A plain ExecutableResource that carries IProjectMetadata (e.g. DotnetProjectResource, an
@@ -274,6 +299,24 @@ public class ResourceSnapshotBuilderTests
             Profiles =
             {
                 ["https"] = new LaunchProfile
+                {
+                    CommandName = "Project"
+                }
+            }
+        };
+    }
+
+    private sealed class OverrideTestProjectMetadata : IProjectMetadata
+    {
+        public string ProjectPath => "/app/override.csproj";
+
+        // Launch settings are supplied inline so launch profile resolution never falls back to reading
+        // Properties/launchSettings.json from disk for this fake project path.
+        public LaunchSettings LaunchSettings { get; } = new()
+        {
+            Profiles =
+            {
+                ["http"] = new LaunchProfile
                 {
                     CommandName = "Project"
                 }

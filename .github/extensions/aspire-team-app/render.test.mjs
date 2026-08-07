@@ -4,9 +4,16 @@ import test from "node:test";
 
 import { APP_JS, STYLES } from "./render.mjs";
 
-test("renderer theme styles follow canvas tokens with accessible light fallbacks", () => {
-  assert.match(STYLES, /--bg: var\(--bgColor-default, var\(--background-color-default, #ffffff\)\)/);
-  assert.match(STYLES, /--fg: var\(--fgColor-default, var\(--text-color-default, #1f2328\)\)/);
+test("renderer follows canvas theme tokens and falls back to the system color scheme", () => {
+  assert.match(STYLES, /--bg: var\(--background-color-default, var\(--fallback-bg\)\)/);
+  assert.match(STYLES, /--fg: var\(--text-color-default, var\(--fallback-fg\)\)/);
+  assert.match(STYLES, /--muted: var\(--text-color-muted, var\(--fallback-muted\)\)/);
+  assert.match(STYLES, /--border: var\(--border-color-default, var\(--fallback-border\)\)/);
+  assert.match(STYLES, /--focus: var\(--color-focus-outline, var\(--fallback-focus\)\)/);
+  assert.match(STYLES, /--white: var\(--color-white, #ffffff\)/);
+  assert.match(STYLES, /@media \(prefers-color-scheme: dark\) \{[\s\S]*?--fallback-bg: #0d1117/);
+  assert.match(STYLES, /:root\[data-color-mode="light"\] \{[\s\S]*?--fallback-bg: #ffffff/);
+  assert.match(STYLES, /:root\[data-color-mode="dark"\] \{[\s\S]*?--fallback-bg: #0d1117/);
   assert.match(STYLES, /--surface: color-mix\(in srgb, var\(--bg\), var\(--fg\) 5%\)/);
   assert.match(STYLES, /data-color-mode="light".*color-scheme: light/);
   assert.match(STYLES, /data-color-mode="dark".*color-scheme: dark/);
@@ -19,6 +26,10 @@ test("renderer theme styles follow canvas tokens with accessible light fallbacks
   assert.doesNotMatch(STYLES, /animation: paintfill/);
   assert.doesNotMatch(STYLES, /box-shadow: 0 0 8px/);
   assert.doesNotMatch(STYLES, /var\(--n-/);
+  assert.match(STYLES, /\.refresh-pref\.active \{/);
+  assert.match(STYLES, /\.update-ready\[hidden\] \{ display: none; \}/);
+  assert.match(STYLES, /\.live-tooltip::after \{[\s\S]*?content: attr\(data-tooltip\)/);
+  assert.match(STYLES, /\.live-tooltip:hover::after, \.live-tooltip:focus-visible::after/);
 });
 
 test("render keeps the current dashboard visible and surfaces later load errors", () => {
@@ -587,34 +598,180 @@ test("setProgress doesn't fade the bar from a terminal SSE tick while another re
   assert.equal(loadbar.style.width, "0");
 });
 
-test("onSseRefresh only re-pulls state while the queue is showing, so an off-queue nudge can't clobber an open form", async () => {
-  // Every mutation streams the fresh dashboard over the 'state' event (stashed off-queue by
-  // applyPushedState) and then fires the legacy 'refresh' nudge. Acting on that nudge off the queue
-  // would call load() -> render() and rebuild an open Accounts/Settings/Filters form, discarding the
-  // user's uncommitted text. fetch hands back a strictly-increasing seq so each real load applies.
-  let seq = 0;
-  const fetchSeq = async () => {
-    seq += 1;
-    return jsonResponse({ dashboard: { seq, marker: "s" + seq, authenticated: false, accounts: [], message: "" }, prefs: {} });
+test("an available background update leaves the board unchanged until it is applied", async () => {
+  let stateReads = 0;
+  const next = {
+    dashboard: { seq: 8, marker: "complete", authenticated: false, accounts: [], message: "" },
+    prefs: { autoApplyUpdates: false },
   };
-  const flush = () => new Promise((r) => setTimeout(r, 0));
-  const { api } = createRendererHarness({ fetch: fetchSeq });
-  await flush();
-  assert.equal(api.getState().marker, "s1", "module-init load applies the first snapshot");
+  const { api } = createRendererHarness({
+    fetch: async (url) => {
+      if (String(url) !== "api/state") return new Promise(() => {});
+      stateReads++;
+      return stateReads === 1 ? new Promise(() => {}) : jsonResponse(next);
+    },
+  });
+  api.setState({ seq: 4, marker: "visible", authenticated: false, accounts: [], message: "" });
+  api.setPrefs({ autoApplyUpdates: false });
+  api.onUpdateAvailable({ seq: 8, fetchedAt: "2026-08-06T00:00:00Z" });
 
-  // Off the queue (a form view): the nudge is a no-op, so fetch isn't called and state is untouched.
-  api.setView("accounts");
-  api.onSseRefresh();
-  await flush();
-  assert.equal(seq, 1, "an off-queue refresh nudge must not re-pull /api/state");
-  assert.equal(api.getState().marker, "s1");
+  assert.equal(api.getState().marker, "visible");
+  assert.equal(api.getUpdateAvailable().seq, 8);
 
-  // On the queue: the nudge re-pulls /api/state and applies the newer snapshot.
-  api.setView("queue");
-  api.onSseRefresh();
-  await flush();
-  assert.equal(seq, 2, "a queue refresh nudge re-pulls /api/state");
-  assert.equal(api.getState().marker, "s2");
+  await api.applyAvailableUpdate();
+
+  assert.equal(api.getState().marker, "complete");
+  assert.equal(api.getAppliedSeq(), 8);
+  assert.equal(api.getUpdateAvailable(), null);
+});
+
+test("the toolbar Auto switch persists without refreshing the board", async () => {
+  let posted;
+  const { api } = createRendererHarness({
+    fetch: async (url, options) => {
+      if (String(url) === "api/auto-apply") {
+        posted = JSON.parse(options.body);
+        return jsonResponse({ prefs: { autoApplyUpdates: false } });
+      }
+      return new Promise(() => {});
+    },
+  });
+  api.setState({ seq: 3, marker: "visible", authenticated: false, accounts: [], message: "" });
+  api.setPrefs({ autoApplyUpdates: true });
+
+  await api.toggleAutoApply();
+
+  assert.deepEqual(posted, { enabled: false });
+  assert.equal(api.autoApplyEnabled(), false);
+  assert.equal(api.getState().marker, "visible");
+});
+
+test("enabling Auto applies an update that was already waiting", async () => {
+  let stateReads = 0;
+  const { api } = createRendererHarness({
+    fetch: async (url) => {
+      if (String(url) === "api/auto-apply") {
+        return jsonResponse({ prefs: { autoApplyUpdates: true } });
+      }
+      if (String(url) === "api/state") {
+        stateReads++;
+        if (stateReads === 1) return new Promise(() => {});
+        return jsonResponse({
+          dashboard: { seq: 9, marker: "applied", authenticated: false, accounts: [], message: "" },
+          prefs: { autoApplyUpdates: true },
+        });
+      }
+      return new Promise(() => {});
+    },
+  });
+  api.setState({ seq: 5, marker: "visible", authenticated: false, accounts: [], message: "" });
+  api.setPrefs({ autoApplyUpdates: false });
+  api.onUpdateAvailable({ seq: 9 });
+
+  await api.toggleAutoApply();
+
+  assert.equal(api.autoApplyEnabled(), true);
+  assert.equal(api.getState().marker, "applied");
+  assert.equal(api.getUpdateAvailable(), null);
+});
+
+test("snapshot replay restores the pending indicator without replacing the board when Auto is off", () => {
+  const { api } = createRendererHarness({ fetch: () => new Promise(() => {}) });
+  api.setState({ seq: 5, marker: "visible", authenticated: false, accounts: [], message: "" });
+  api.setPrefs({ autoApplyUpdates: true });
+
+  api.onSnapshot({ seq: 9, prefs: { autoApplyUpdates: false } });
+
+  assert.equal(api.getState().marker, "visible");
+  assert.equal(api.autoApplyEnabled(), false);
+  assert.equal(api.getUpdateAvailable().seq, 9);
+});
+
+test("refresh tooltip counts down to the server's next background poll", () => {
+  const attributes = {};
+  const refreshButton = {
+    dataset: {},
+    classList: classList(),
+    setAttribute(name, value) { attributes[name] = value; },
+  };
+  let intervalMs;
+  const { api } = createRendererHarness({
+    elements: { "refresh-btn": refreshButton },
+    setInterval(_handler, milliseconds) { intervalMs = milliseconds; return 1; },
+  });
+
+  api.onPollSchedule({ nextPollAt: Date.now() + 34_000 });
+
+  assert.match(refreshButton.dataset.tooltip, /^Refresh now \(data will auto-update in 3[34]s\)$/);
+  assert.equal(attributes["aria-label"], refreshButton.dataset.tooltip);
+  assert.equal(intervalMs, 1000);
+});
+
+test("issueCard renders linked pull requests as separate safe new-tab links below the pills", () => {
+  const { api } = createRendererHarness();
+  const html = api.issueCard({
+    issue: {
+      repository: "microsoft/aspire",
+      number: 42,
+      title: "Issue title",
+      url: "https://github.com/microsoft/aspire/issues/42",
+      author: "octo",
+      authorAvatarUrl: null,
+      linkedPullRequests: [{
+        repository: "microsoft/aspire",
+        number: 99,
+        title: "Cover single-file AppHost re-search fallback",
+        url: "https://github.com/microsoft/aspire/pull/99",
+        state: "OPEN",
+      }, {
+        repository: "microsoft/aspire",
+        number: 100,
+        title: "Merged implementation",
+        url: "https://github.com/microsoft/aspire/pull/100",
+        state: "MERGED",
+      }, {
+        repository: "microsoft/aspire",
+        number: 101,
+        title: "Closed implementation",
+        url: "https://github.com/microsoft/aspire/pull/101",
+        state: "CLOSED",
+      }],
+    },
+    signals: [{ label: "Regression", tone: "danger" }],
+  });
+
+  assert.match(html, /class="card-main" href="https:\/\/github\.com\/microsoft\/aspire\/issues\/42" target="_blank" rel="noopener noreferrer"/);
+  assert.match(html, /class="card-main linked-pr" href="https:\/\/github\.com\/microsoft\/aspire\/pull\/99" target="_blank" rel="noopener noreferrer"/);
+  assert.match(html, /aria-label="Open pull request: Cover single-file AppHost re-search fallback"[\s\S]*linked-pr-icon open/);
+  assert.match(html, /href="https:\/\/github\.com\/microsoft\/aspire\/pull\/100"[\s\S]*aria-label="Merged pull request: Merged implementation"[\s\S]*linked-pr-icon merged/);
+  assert.doesNotMatch(html, /pull\/101|Closed implementation/);
+  assert.doesNotMatch(html, /class="linked-prs"/);
+  assert.ok(html.indexOf('class="pills"') < html.indexOf('class="card-main linked-pr"'));
+});
+
+test("openLinkedPr routes the canonical link through the in-app browser endpoint", async () => {
+  let request;
+  const { api } = createRendererHarness({
+    fetch: async (url, options) => {
+      if (String(url) === "api/open-pr") {
+        request = { url: String(url), body: JSON.parse(options.body) };
+        return jsonResponse({ ok: true, instanceId: "aspire-team-app-pr-microsoft-aspire-99" });
+      }
+      return new Promise(() => {});
+    },
+  });
+  const link = {
+    href: "https://github.com/microsoft/aspire/pull/99",
+    classList: classList(),
+  };
+
+  await api.openLinkedPr(link);
+
+  assert.deepEqual(request, {
+    url: "api/open-pr",
+    body: { url: "https://github.com/microsoft/aspire/pull/99" },
+  });
+  assert.equal(link.classList.contains("busy"), false);
 });
 
 test("signalActions detects review debt from the serialized flag when the pill is truncated", () => {
@@ -657,7 +814,11 @@ function createRendererHarness(overrides = {}) {
     classList: classList(),
   };
   const document = {
-    getElementById(id) { return id === "app" ? app : (id === "loadbar" ? (overrides.loadbar ?? null) : null); },
+    getElementById(id) {
+      if (id === "app") return app;
+      if (id === "loadbar") return overrides.loadbar ?? null;
+      return overrides.elements?.[id] ?? null;
+    },
     querySelector: overrides.querySelector ?? (() => null),
     querySelectorAll: () => [],
     addEventListener() {},
@@ -672,10 +833,12 @@ function createRendererHarness(overrides = {}) {
     fetch: overrides.fetch ?? (async () => jsonResponse({ dashboard: null, prefs: null })),
     setTimeout: overrides.setTimeout ?? ((handler) => { handler(); return 1; }),
     clearTimeout: overrides.clearTimeout ?? (() => {}),
+    setInterval: overrides.setInterval ?? (() => 1),
+    clearInterval: overrides.clearInterval ?? (() => {}),
     console,
   };
 
-  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  withRefresh,\n  load,\n  rescanAccounts,\n  onCardAction,\n  onSseRefresh,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  focusCardActions,\n  laneCardActions,\n  signalActions,\n  mergeActions,\n  queuePanel,\n  cardActionBtn,\n  actionKey,\n  inflightActions,\n  setProgress,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  setPrefs(value) { prefs = value; },\n  setView(value) { view = value; },\n  setRefreshing(value) { refreshing = !!value; },\n  setRefreshInFlight(value) { refreshInFlight = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
+  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  withRefresh,\n  load,\n  rescanAccounts,\n  onCardAction,\n  onUpdateAvailable,\n  onPreferences,\n  onSnapshot,\n  onPollSchedule,\n  applyAvailableUpdate,\n  toggleAutoApply,\n  autoApplyEnabled,\n  openLinkedPr,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  focusCardActions,\n  laneCardActions,\n  signalActions,\n  mergeActions,\n  queuePanel,\n  cardActionBtn,\n  issueCard,\n  actionKey,\n  inflightActions,\n  setProgress,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  getUpdateAvailable() { return updateAvailable; },\n  setPrefs(value) { prefs = value; },\n  setView(value) { view = value; },\n  setRefreshing(value) { refreshing = !!value; },\n  setRefreshInFlight(value) { refreshInFlight = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
 
   return { app, api: sandbox.__test };
 }

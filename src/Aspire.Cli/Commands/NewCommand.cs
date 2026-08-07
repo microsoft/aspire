@@ -19,11 +19,13 @@ using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Commands;
 
-internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
+internal sealed class NewCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
 
     protected override bool UpdateNotificationsEnabled => true;
+
+    internal override bool PrefetchesTemplatePackageMetadata => true;
 
     private readonly INewCommandPrompter _prompter;
     private readonly ITemplateProvider _templateProvider;
@@ -62,16 +64,6 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
     private readonly Option<string?> _channelOption;
     private readonly Option<string?> _languageOption;
-
-    /// <summary>
-    /// NewCommand prefetches both template and CLI package metadata.
-    /// </summary>
-    public bool PrefetchesTemplatePackageMetadata => true;
-
-    /// <summary>
-    /// NewCommand prefetches CLI package metadata for update notifications.
-    /// </summary>
-    public bool PrefetchesCliPackageMetadata => true;
 
     public NewCommand(
         INewCommandPrompter prompter,

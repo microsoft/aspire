@@ -226,7 +226,7 @@
         matching Fluent DesignTokens in app-theme.js so the whole system can be tuned
         from one place. Fluent consumes these purely as CSS custom properties (there is
         no JS height-number recipe in Fluent Blazor 4.14), so the var() indirection is
-        safe. All default to Fluent 4.14's values, so the default render is unchanged:
+        safe. All default to Fluent 4.14's values:
 
           - height-multiplier + density + design-unit set control height:
             (8 + -1) * 4 = 28px (density is set above).

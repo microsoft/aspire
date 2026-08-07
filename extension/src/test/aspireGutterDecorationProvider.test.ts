@@ -5,7 +5,8 @@ import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import waitForExpect from 'wait-for-expect';
-import { AspireGutterDecorationProvider } from '../editor/AspireGutterDecorationProvider';
+import { AspireGutterDecorationProvider, classifyState } from '../editor/AspireGutterDecorationProvider';
+import { ResourceState } from '../editor/resourceConstants';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
 import { AppHostDisplayInfo, ResourceJson } from '../views/AppHostDataRepository';
 
@@ -122,6 +123,30 @@ suite('AspireGutterDecorationProvider', () => {
 
     teardown(() => {
         sandbox.restore();
+    });
+
+    test('RuntimeUnhealthy uses the warning decoration category', () => {
+        assert.strictEqual(classifyState(ResourceState.RuntimeUnhealthy, '', ''), 'warning');
+    });
+
+    test('FailedToStart uses the warning decoration category', () => {
+        assert.strictEqual(classifyState(ResourceState.FailedToStart, '', ''), 'warning');
+    });
+
+    test('FailedToStart with a null exit code uses the warning decoration category', () => {
+        assert.strictEqual(classifyState(ResourceState.FailedToStart, '', '', null), 'warning');
+    });
+
+    test('FailedToStart with exit code 0 uses the warning decoration category', () => {
+        assert.strictEqual(classifyState(ResourceState.FailedToStart, '', '', 0), 'warning');
+    });
+
+    test('FailedToStart with exit code -1 uses the error decoration category', () => {
+        assert.strictEqual(classifyState(ResourceState.FailedToStart, '', '', -1), 'error');
+    });
+
+    test('FailedToStart with a non-zero exit code uses the error decoration category', () => {
+        assert.strictEqual(classifyState(ResourceState.FailedToStart, '', '', 1), 'error');
     });
 
     test('does not emit resource decorations from a different running AppHost', () => {

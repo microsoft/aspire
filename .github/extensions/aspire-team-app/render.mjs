@@ -51,22 +51,28 @@ export const HTML = `<!doctype html>
 export const STYLES = `
 :root {
   color-scheme: light dark;
-  /* Primer primitive first, then the canvas host's older vars, then a hex floor.
-     https://primer.style/foundations/primitives/color */
-  --bg: var(--bgColor-default, var(--background-color-default, #ffffff));
+  --fallback-bg: #ffffff;
+  --fallback-fg: #1f2328;
+  --fallback-muted: #656d76;
+  --fallback-border: #d0d7de;
+  --fallback-focus: #0969da;
+
+  /* The canvas runtime normally mirrors these documented semantic tokens for the active host
+     theme. The fallbacks cover standalone rendering and hosts that omit the theme payload. */
+  --bg: var(--background-color-default, var(--fallback-bg));
   --surface: color-mix(in srgb, var(--bg), var(--fg) 5%);
   --surface-2: color-mix(in srgb, var(--bg), var(--fg) 7%);
   --surface-3: color-mix(in srgb, var(--bg), var(--fg) 10%);
   --card: color-mix(in srgb, var(--bg), var(--fg) 4%);
   --card-hover: color-mix(in srgb, var(--bg), var(--fg) 8%);
   --head-hover: color-mix(in srgb, var(--fg) 8%, transparent);
-  --fg: var(--fgColor-default, var(--text-color-default, #1f2328));
-  --muted: var(--fgColor-muted, var(--text-color-muted, #656d76));
-  --border: var(--borderColor-default, var(--border-color-default, #d0d7de));
+  --fg: var(--text-color-default, var(--fallback-fg));
+  --muted: var(--text-color-muted, var(--fallback-muted));
+  --border: var(--border-color-default, var(--fallback-border));
   --border-soft: color-mix(in srgb, var(--border), transparent 35%);
   --border-strong: color-mix(in srgb, var(--border), var(--fg) 22%);
-  --focus: var(--focus-outlineColor, var(--color-focus-outline, #0969da));
-  --white: var(--fgColor-onEmphasis, var(--color-white, #fff));
+  --focus: var(--color-focus-outline, var(--fallback-focus));
+  --white: var(--color-white, #ffffff);
 
   /* Brand purple - reserved for the brand mark, PR identity, and the loading accent.
      Maps to Primer's "done" (purple) role. */
@@ -99,8 +105,34 @@ export const STYLES = `
   --radius: 6px;
 }
 
-:root[data-color-mode="light"], body[data-color-mode="light"] { color-scheme: light; }
-:root[data-color-mode="dark"], body[data-color-mode="dark"] { color-scheme: dark; }
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fallback-bg: #0d1117;
+    --fallback-fg: #f0f6fc;
+    --fallback-muted: #8c959f;
+    --fallback-border: #30363d;
+    --fallback-focus: #58a6ff;
+  }
+}
+
+:root[data-color-mode="light"] {
+  color-scheme: light;
+  --fallback-bg: #ffffff;
+  --fallback-fg: #1f2328;
+  --fallback-muted: #656d76;
+  --fallback-border: #d0d7de;
+  --fallback-focus: #0969da;
+}
+body[data-color-mode="light"] { color-scheme: light; }
+:root[data-color-mode="dark"] {
+  color-scheme: dark;
+  --fallback-bg: #0d1117;
+  --fallback-fg: #f0f6fc;
+  --fallback-muted: #8c959f;
+  --fallback-border: #30363d;
+  --fallback-focus: #58a6ff;
+}
+body[data-color-mode="dark"] { color-scheme: dark; }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
@@ -157,6 +189,29 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 .tab.active { color: var(--fg); background: var(--surface-3); box-shadow: inset 0 0 0 1px var(--border); }
 .spacer { flex: 1; }
 .tb-actions { display: inline-flex; align-items: center; gap: 6px; }
+.refresh-pref {
+  height: 30px; display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
+  color: var(--muted); padding: 0 10px; font-size: 11.5px; font-weight: 600;
+  transition: color .15s, border-color .15s, background .15s, opacity .15s;
+}
+.refresh-pref:hover { color: var(--fg); border-color: var(--border-strong); background: var(--surface-2); }
+.refresh-pref[disabled] { cursor: default; opacity: .65; }
+.refresh-pref .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); transition: background .15s, box-shadow .15s; }
+.refresh-pref.active { color: var(--fg); background: var(--surface-3); border-color: var(--border-strong); }
+.refresh-pref.active .status-dot { background: var(--success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 16%, transparent); }
+.update-ready {
+  height: 30px; display: inline-flex; align-items: center; gap: 7px;
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--border));
+  border-radius: 999px; padding: 0 11px; background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  color: var(--accent-strong); font-size: 11.5px; font-weight: 650;
+  transition: border-color .15s, background .15s, opacity .15s;
+}
+.update-ready:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--surface)); }
+.update-ready[hidden] { display: none; }
+.update-ready[disabled] { cursor: wait; opacity: .7; }
+.update-ready .update-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+.update-ready.busy .update-dot { background: transparent; border: 1.5px solid var(--accent); border-right-color: transparent; animation: spin .8s linear infinite; }
 
 .backbtn {
   display: inline-flex; align-items: center; gap: 6px; margin-left: 4px;
@@ -175,6 +230,16 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 .iconbtn:hover { color: var(--fg); border-color: var(--border-strong); background: var(--surface-2); }
 .iconbtn.active { color: var(--fg); border-color: var(--border-strong); background: var(--surface-3); box-shadow: inset 0 0 0 1px var(--border-soft); }
 .iconbtn.spin svg { animation: spin 1s linear infinite; }
+.live-tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 80;
+  width: max-content; max-width: min(360px, calc(100vw - 24px)); padding: 6px 9px;
+  border: 1px solid var(--border); border-radius: 6px; background: var(--surface-3);
+  color: var(--fg); box-shadow: var(--shadow-floating); font-size: 11.5px; font-weight: 500;
+  line-height: 1.35; white-space: nowrap; pointer-events: none;
+  opacity: 0; transform: translateY(-2px); transition: opacity .12s ease, transform .12s ease;
+}
+.live-tooltip:hover::after, .live-tooltip:focus-visible::after { opacity: 1; transform: none; }
 .badge {
   position: absolute; top: -6px; right: -6px; min-width: 16px; height: 16px; padding: 0 4px;
   border-radius: 999px; background: var(--danger); color: var(--white); font-size: 10px; font-weight: 700;
@@ -387,6 +452,16 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 .reason { color: var(--muted); font-size: 12px; }
 .pills { display: flex; flex-wrap: wrap; gap: 5px; }
 .pills:empty { display: none; }
+.linked-pr {
+  display: flex; flex-direction: row; align-items: flex-start; gap: 7px; min-width: 0; padding: 2px 0;
+  border-radius: 5px; color: var(--fg); font-size: 11.5px; font-weight: 600; line-height: 1.35;
+}
+.linked-pr:hover .linked-pr-title { color: var(--blue); text-decoration: underline; text-underline-offset: 2px; }
+.linked-pr-icon { display: inline-flex; flex: none; margin-top: 1px; color: var(--muted); }
+.linked-pr-icon.open { color: var(--success); }
+.linked-pr-icon.merged { color: var(--purple); }
+.linked-pr-icon svg { width: 14px; height: 14px; }
+.linked-pr-title { min-width: 0; overflow-wrap: anywhere; }
 .pill {
   --pill-tone: var(--muted);
   display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; line-height: 1;
@@ -698,6 +773,9 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
   .brand-text { display: none; }
   .tabs { margin-left: 0; }
   .tab { padding: 5px 11px; }
+  .refresh-pref { width: 30px; padding: 0; justify-content: center; }
+  .refresh-pref .refresh-label { display: none; }
+  .update-ready .update-detail { display: none; }
   .acct-chip { max-width: 150px; }
   .acct-chip .name { max-width: 70px; }
   .page { padding: 14px; }
@@ -740,16 +818,40 @@ let loadError = null;
 // settings, etc.) is stashed here and applied when they return to the queue, so a
 // background refresh never clobbers an in-progress edit.
 let pendingState = null;
+// Completed background snapshots wait here when automatic application is disabled. The SSE event
+// carries metadata only; clicking Apply reads the already-computed complete snapshot from the server.
+let updateAvailable = null;
+let applyingUpdate = false;
+let savingAutoApply = false;
+let nextPollAt = null;
+let pollCountdownTimer = null;
 // Monotonic revision of the snapshot currently applied. fetchedAt is a wall-clock display
-// timestamp and is unsafe as a stream key: a partial and the final can share a millisecond,
-// and snapshots can arrive out of order. The server stamps a strictly increasing seq on
-// every partial/final; we apply only strictly-newer ones. -1 so the first real snapshot (0+)
-// always applies.
+// timestamp and is unsafe as a stream key because overlapping requests can settle out of order.
+// The server stamps a strictly increasing seq whenever semantic content changes; we apply only
+// strictly-newer snapshots. -1 lets the first real snapshot (0+) always apply.
 let lastAppliedSeq = -1;
 // Record the revision of whatever snapshot was just assigned to state. Call at every point
 // that adopts a server snapshot so later SSE pushes are ordered against it.
 function adoptAppliedRev() {
   if (state && typeof state.seq === "number") lastAppliedSeq = state.seq;
+}
+function adoptState(payload) {
+  state = payload.dashboard;
+  prefs = payload.prefs;
+  loadError = null;
+  adoptAppliedRev();
+  const appliedSeq = state && state.seq;
+  if (!updateAvailable || typeof appliedSeq !== "number" || appliedSeq >= updateAvailable.seq) {
+    updateAvailable = null;
+  }
+}
+function autoApplyEnabled() {
+  return !prefs || prefs.autoApplyUpdates !== false;
+}
+function refreshTooltip() {
+  if (typeof nextPollAt !== "number") return "Refresh now";
+  const seconds = Math.max(0, Math.ceil((nextPollAt - Date.now()) / 1000));
+  return "Refresh now (data will auto-update in " + seconds + "s)";
 }
 const expanded = new Set(); // account ids whose detail (sources + repos) is expanded
 const collapsedLanes = new Set(); // lane ids the user collapsed (survives re-render + SSE)
@@ -866,6 +968,7 @@ async function load() {
   // that newer valid state. Suppress the failure when a newer revision was applied after this
   // request started (the withRefresh catch gates the same class of race with its refreshGen id).
   const startSeq = lastAppliedSeq;
+  let changed = false;
   try {
     const res = await fetch("api/state");
     const data = await readJson(res);
@@ -875,31 +978,23 @@ async function load() {
     // state/lastAppliedSeq backward. Mirrors the withRefresh/applyPushedState gate.
     const seq = data.dashboard && data.dashboard.seq;
     if (typeof seq !== "number" || seq > lastAppliedSeq) {
-      state = data.dashboard; prefs = data.prefs; loadError = null;
-      adoptAppliedRev();
+      adoptState(data);
+      changed = true;
     }
   } catch (e) {
     // Only publish this failure if no newer revision was applied while the GET was pending. A late
     // failure from a superseded request must not clobber the newer valid state (or its banner).
     if (lastAppliedSeq === startSeq) {
       loadError = String((e && e.message) || e);
+      changed = true;
     }
   }
-  render();
-}
-
-// Handle the SSE 'refresh' nudge. Every mutation streams the fresh dashboard over the 'state' event
-// (which applyPushedState stashes into pendingState while off the queue) and then fires this legacy
-// 'refresh'. Re-pulling here unconditionally would call load() -> render() even while a form-bearing
-// view (Accounts/Settings/Filters) is open, discarding the user's uncommitted text. Mirror
-// applyPushedState's guard and only act on the nudge while the queue is showing; the paired 'state'
-// push already stashed the latest snapshot, which goView() applies on return to the queue.
-function onSseRefresh() {
-  if (view === "queue") { load(); }
+  if (changed) render(); else updateRefreshControls();
 }
 
 async function withRefresh(fn) {
   const myGen = ++refreshGen;
+  let changed = false;
   refreshInFlight++;
   refreshing = true; setLoading(true); beginProgress();
   try {
@@ -911,8 +1006,8 @@ async function withRefresh(fn) {
       // (which would show stale data and corrupt later seq gates). Mirrors applyPushedState's gate.
       const seq = data.dashboard.seq;
       if (typeof seq !== "number" || seq > lastAppliedSeq) {
-        state = data.dashboard; prefs = data.prefs; loadError = null;
-        adoptAppliedRev();
+        adoptState(data);
+        changed = true;
       }
     }
   } catch (e) {
@@ -921,6 +1016,7 @@ async function withRefresh(fn) {
     // path is seq-gated for the same reason, but rejections carry no seq, so gate on refreshGen.
     if (myGen === refreshGen) {
       loadError = String((e && e.message) || e);
+      changed = true;
     }
   } finally {
     refreshInFlight--;
@@ -932,13 +1028,41 @@ async function withRefresh(fn) {
     // (SSE disconnected, or this refresh joined a background compute started with
     // progress:false, which emits no progress events).
     if (refreshInFlight === 0) { refreshing = false; endProgress(); }
-    render();
+    if (changed) render(); else updateRefreshControls();
   }
 }
 
 function setLoading(on) {
   const rb = document.getElementById("refresh-btn");
   if (rb) rb.classList.toggle("spin", on);
+}
+
+function updateRefreshControls() {
+  const rb = document.getElementById("refresh-btn");
+  if (rb) {
+    rb.classList.toggle("spin", refreshing);
+    const tooltip = refreshTooltip();
+    rb.dataset.tooltip = tooltip;
+    rb.setAttribute("aria-label", tooltip);
+  }
+
+  const auto = document.getElementById("auto-apply-btn");
+  const enabled = autoApplyEnabled();
+  if (auto) {
+    auto.classList.toggle("active", enabled);
+    auto.setAttribute("aria-checked", enabled ? "true" : "false");
+    auto.title = enabled
+      ? "Background updates apply automatically"
+      : "Background updates wait until you apply them";
+    auto.disabled = savingAutoApply;
+  }
+
+  const apply = document.getElementById("apply-update-btn");
+  if (apply) {
+    apply.hidden = !updateAvailable || enabled;
+    apply.disabled = applyingUpdate;
+    apply.classList.toggle("busy", applyingUpdate);
+  }
 }
 
 /* ---- deterministic progress bar ----
@@ -992,9 +1116,8 @@ function applyPushedState(payload) {
   if (view !== "queue") { pendingState = payload; return; }
   const seq = payload.dashboard.seq;
   if (typeof seq === "number" && seq <= lastAppliedSeq) {
-    // Stale or duplicate: an older/out-of-order partial, or the final we already applied via
-    // the triggering request's response. Reject outright — do not overwrite the newer state
-    // we already show (a duplicate carries identical content, a stale one carries older data).
+    // Stale or duplicate: the request response may have already applied this snapshot, or an older
+    // overlapping request settled late. Never overwrite the newer state already on screen.
     return;
   }
   applyState(payload);
@@ -1002,8 +1125,7 @@ function applyPushedState(payload) {
 function applyState(payload) {
   const scroller = document.scrollingElement;
   const top = scroller ? scroller.scrollTop : 0;
-  state = payload.dashboard; prefs = payload.prefs; loadError = null;
-  adoptAppliedRev();
+  adoptState(payload);
   render();
   if (top && scroller) scroller.scrollTop = top;
 }
@@ -1011,6 +1133,103 @@ function applyState(payload) {
 async function postJSON(path, body) {
   const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
   return readJson(res);
+}
+
+function onUpdateAvailable(payload) {
+  if (!payload || typeof payload.seq !== "number" || payload.seq <= lastAppliedSeq) return;
+  if (!updateAvailable || payload.seq > updateAvailable.seq) updateAvailable = payload;
+  updateRefreshControls();
+}
+
+function onPreferences(nextPrefs) {
+  if (!nextPrefs || typeof nextPrefs !== "object") return;
+  const wasEnabled = autoApplyEnabled();
+  prefs = nextPrefs;
+  updateRefreshControls();
+  if (!wasEnabled && autoApplyEnabled() && updateAvailable) {
+    applyAvailableUpdate();
+  }
+}
+
+function onSnapshot(payload) {
+  onPollSchedule(payload);
+  if (!payload || typeof payload.seq !== "number" || payload.seq <= lastAppliedSeq) return;
+  if (payload.prefs && typeof payload.prefs === "object") prefs = payload.prefs;
+  // Initial load already reads the complete cache. On reconnect, replay either applies the missed
+  // state automatically or restores the pending-update affordance without touching the board.
+  if (!state) return;
+  if (autoApplyEnabled()) load(); else onUpdateAvailable(payload);
+}
+
+function onPollSchedule(payload) {
+  const value = Number(payload && payload.nextPollAt);
+  if (!Number.isFinite(value) || value <= 0) return;
+  nextPollAt = value;
+  if (!pollCountdownTimer) {
+    pollCountdownTimer = setInterval(updateRefreshControls, 1000);
+  }
+  updateRefreshControls();
+}
+
+async function applyAvailableUpdate() {
+  if (!updateAvailable || applyingUpdate) return;
+  applyingUpdate = true;
+  updateRefreshControls();
+  try {
+    const res = await fetch("api/state");
+    const data = await readJson(res);
+    const seq = data.dashboard && data.dashboard.seq;
+    if (view !== "queue") {
+      pendingState = data;
+      prefs = data.prefs;
+      updateAvailable = null;
+    } else if (typeof seq !== "number" || seq > lastAppliedSeq) {
+      applyState(data);
+    } else {
+      prefs = data.prefs;
+      updateAvailable = null;
+    }
+  } catch (e) {
+    loadError = String((e && e.message) || e);
+    if (view === "queue") render();
+  } finally {
+    applyingUpdate = false;
+    updateRefreshControls();
+  }
+}
+
+async function toggleAutoApply() {
+  if (savingAutoApply) return;
+  const previous = autoApplyEnabled();
+  const enabled = !previous;
+  prefs = { ...(prefs || {}), autoApplyUpdates: enabled };
+  savingAutoApply = true;
+  updateRefreshControls();
+  try {
+    const data = await postJSON("api/auto-apply", { enabled });
+    if (data && data.prefs) prefs = data.prefs;
+    if (enabled && updateAvailable) await applyAvailableUpdate();
+  } catch (e) {
+    prefs = { ...(prefs || {}), autoApplyUpdates: previous };
+    loadError = String((e && e.message) || e);
+    render();
+  } finally {
+    savingAutoApply = false;
+    updateRefreshControls();
+  }
+}
+
+async function openLinkedPr(link) {
+  if (!link || link.classList.contains("busy")) return;
+  link.classList.add("busy");
+  try {
+    await postJSON("api/open-pr", { url: link.href });
+  } catch (e) {
+    loadError = String((e && e.message) || e);
+    render();
+  } finally {
+    link.classList.remove("busy");
+  }
 }
 
 const refresh = () => withRefresh(() => postJSON("api/refresh"));
@@ -1188,7 +1407,7 @@ function persistAccountRepos(id, previousRepos) {
     // orders saves for this account against each other, not against those lastAppliedSeq-keyed paths.
     if (data && data.dashboard) {
       const dseq = data.dashboard.seq;
-      if (typeof dseq !== "number" || dseq > lastAppliedSeq) { state = data.dashboard; prefs = data.prefs; adoptAppliedRev(); }
+      if (typeof dseq !== "number" || dseq > lastAppliedSeq) adoptState(data);
     }
     repoErr(id, "");
     return data;
@@ -1226,12 +1445,11 @@ async function rescanAccounts() {
     const data = await readJson(res);
     // Gate on seq like every other response path: if a newer refresh/SSE snapshot applied while this
     // rescan was in flight, adopting it would roll state (and lastAppliedSeq) backward. When it is the
-    // newest, adoptAppliedRev() also advances the revision so a delayed lower-seq SSE partial from an
-    // earlier recompute can't be accepted after this /api/accounts response and roll the queue back.
+    // newest, adoptState() also advances the revision so a delayed lower-seq response cannot roll
+    // the queue back.
     const dseq = data.dashboard && data.dashboard.seq;
     if (typeof dseq !== "number" || dseq > lastAppliedSeq) {
-      state = data.dashboard; prefs = data.prefs; loadError = null;
-      adoptAppliedRev();
+      adoptState(data);
     }
   } catch (e) {
     loadError = String((e && e.message) || e);
@@ -1261,8 +1479,7 @@ function goView(next, forward) {
     // already show, mirroring applyPushedState's gate. (No seq → legacy payload, apply as before.)
     const seq = payload.dashboard && payload.dashboard.seq;
     if (typeof seq !== "number" || seq > lastAppliedSeq) {
-      state = payload.dashboard; prefs = payload.prefs;
-      adoptAppliedRev();
+      adoptState(payload);
     }
   }
   render(forward === undefined ? undefined : forward);
@@ -1290,9 +1507,8 @@ function cardActionBtn(pr, a) {
   // If a click's POST is still in flight when this card re-renders (e.g. from a streamed
   // 'state' event), keep the replacement split disabled so it can't re-queue the same action.
   const inflight = inflightActions.has(actionKey(a.kind, pr.url || "", pr.repository || "", pr.number));
-  // While a forced refresh is finalizing, cards can be visible from a streamed partial before the
-  // final snapshot (which action resolution trusts) arrives. Grey out actions during that window
-  // and show a spinner so users get immediate feedback instead of a transient "no longer in view".
+  // While a forced refresh is finalizing, keep actions disabled so a click cannot race a user-driven
+  // mode/account change whose replacement snapshot has not committed yet.
   const finalizing = refreshing && !inflight;
   const busyCls = (inflight || finalizing) ? " busy" : "";
   const spinCls = finalizing ? " spin" : "";
@@ -1515,7 +1731,7 @@ function prCard(item, actions) {
 
 function issueCard(item) {
   const is = item.issue;
-  return '<a class="card" href="' + esc(is.url) + '" target="_blank" rel="noreferrer">' +
+  const main = '<a class="card-main" href="' + esc(is.url) + '" target="_blank" rel="noopener noreferrer">' +
     '<div class="card-top"><div class="card-title">' + esc(is.title) + "</div></div>" +
     '<div class="card-sub">' +
       avatarTag(is.authorAvatarUrl, is.author, "avatar", 36) +
@@ -1524,6 +1740,20 @@ function issueCard(item) {
     "</div>" +
     ((item.signals && item.signals.length) ? '<div class="pills">' + item.signals.map(pill).join("") + "</div>" : "") +
   "</a>";
+  const linkedPullRequests = (is.linkedPullRequests || []).filter((pr) => pr.state !== "CLOSED");
+  const linked = linkedPullRequests.length
+    ? linkedPullRequests.map((pr) => {
+        const state = pr.state === "MERGED" ? "merged" : (pr.state === "OPEN" ? "open" : "unknown");
+        const stateLabel = state === "merged" ? "Merged" : (state === "open" ? "Open" : "Linked");
+        const stateIcon = state === "merged" ? ICONS.merge : ICONS.pr;
+        return (
+        '<a class="card-main linked-pr" href="' + esc(pr.url) + '" target="_blank" rel="noopener noreferrer" title="' + stateLabel + " pull request " +
+          esc(shortRepo(pr.repository)) + " #" + pr.number + '" aria-label="' + stateLabel + " pull request: " + esc(pr.title) + '">' +
+          '<span class="linked-pr-icon ' + state + '">' + stateIcon + '</span><span class="linked-pr-title">' + esc(pr.title) + "</span></a>"
+        );
+      }).join("")
+    : "";
+  return '<div class="card">' + main + linked + "</div>";
 }
 
 function laneIcon(lane) {
@@ -1768,13 +1998,23 @@ function accountChip() {
 
 function topbarHtml() {
   const notifCount = (state && state.notifications || []).length;
+  const autoApply = autoApplyEnabled();
+  const showUpdate = !!updateAvailable && !autoApply;
   const left = view === "queue"
     ? tabs()
     : '<button class="backbtn" id="back-btn">' + ICONS.back + "Back</button>";
   const right =
     (state ? accountChip() : "") +
     '<div class="tb-actions">' +
-    '<button class="iconbtn ' + (refreshing ? "spin" : "") + '" id="refresh-btn" title="Refresh">' + ICONS.refresh + "</button>" +
+    '<button class="iconbtn live-tooltip ' + (refreshing ? "spin" : "") + '" id="refresh-btn" aria-label="' + refreshTooltip() +
+      '" data-tooltip="' + refreshTooltip() + '">' + ICONS.refresh + "</button>" +
+    '<button class="update-ready ' + (applyingUpdate ? "busy" : "") + '" id="apply-update-btn" type="button" ' +
+      (showUpdate ? "" : "hidden ") + (applyingUpdate ? "disabled " : "") +
+      'title="Apply the latest completed background update"><span class="update-dot"></span>Apply<span class="update-detail"> update</span></button>' +
+    '<button class="refresh-pref ' + (autoApply ? "active" : "") + '" id="auto-apply-btn" type="button" role="switch" aria-checked="' +
+      (autoApply ? "true" : "false") + '" title="' +
+      (autoApply ? "Background updates apply automatically" : "Background updates wait until you apply them") +
+      '"><span class="status-dot"></span><span class="refresh-label">Auto</span></button>' +
     '<button class="iconbtn ' + (view === "filters" ? "active" : "") + '" id="filters-btn" title="What\u2019s filtered">' + ICONS.funnel + "</button>" +
     '<button class="iconbtn ' + (view === "notifications" ? "active" : "") + '" id="bell-btn" title="Notifications">' + ICONS.bell +
       (notifCount ? '<span class="badge">' + notifCount + "</span>" : "") + "</button>" +
@@ -2087,6 +2327,7 @@ function render(forward) {
     if (bx) bx.addEventListener("click", function () { loadError = null; render(); });
   }
   wire();
+  updateRefreshControls();
   layoutGrids();
 }
 
@@ -2325,6 +2566,14 @@ function wireRepoEditor(id) {
 function wire() {
   document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
   const rb = document.getElementById("refresh-btn"); if (rb) rb.addEventListener("click", refresh);
+  const applyUpdate = document.getElementById("apply-update-btn"); if (applyUpdate) applyUpdate.addEventListener("click", applyAvailableUpdate);
+  const autoApply = document.getElementById("auto-apply-btn"); if (autoApply) autoApply.addEventListener("click", toggleAutoApply);
+  document.querySelectorAll(".linked-pr").forEach((link) =>
+    link.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openLinkedPr(link);
+    }));
   const back = document.getElementById("back-btn"); if (back) back.addEventListener("click", () => goView("queue", false));
   const bell = document.getElementById("bell-btn"); if (bell) bell.addEventListener("click", () => goView(view === "notifications" ? "queue" : "notifications"));
   const gear = document.getElementById("gear-btn"); if (gear) gear.addEventListener("click", () => goView(view === "settings" ? "queue" : "settings"));
@@ -2477,11 +2726,9 @@ function wireAccounts() {
   });
 }
 
-// Live updates over Server-Sent Events. 'progress' drives the deterministic top bar as
-// repos are fetched; 'state' streams partial and final dashboards (applied straight into
-// the UI, guarded against clobbering an active edit); 'refresh' is a legacy nudge kept for
-// back-compat that re-pulls /api/state, guarded (via onSseRefresh) to the queue view so it
-// can't rebuild an open form and discard uncommitted text.
+// Live updates over Server-Sent Events. Progress drives the deterministic top bar. State events
+// contain complete dashboards and apply atomically; when auto-apply is disabled, update-available
+// changes only the toolbar until the user chooses to swap to the completed snapshot.
 try {
   const es = new EventSource("events");
   es.addEventListener("progress", (e) => {
@@ -2490,7 +2737,18 @@ try {
   es.addEventListener("state", (e) => {
     try { applyPushedState(JSON.parse(e.data)); } catch {}
   });
-  es.addEventListener("refresh", onSseRefresh);
+  es.addEventListener("update-available", (e) => {
+    try { onUpdateAvailable(JSON.parse(e.data)); } catch {}
+  });
+  es.addEventListener("preferences", (e) => {
+    try { onPreferences(JSON.parse(e.data)); } catch {}
+  });
+  es.addEventListener("snapshot", (e) => {
+    try { onSnapshot(JSON.parse(e.data)); } catch {}
+  });
+  es.addEventListener("poll-schedule", (e) => {
+    try { onPollSchedule(JSON.parse(e.data)); } catch {}
+  });
 } catch {}
 
 load();

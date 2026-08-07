@@ -91,7 +91,7 @@ public static class KubernetesPersistentVolumeExtensions
     /// <param name="storageClassName">A parameter resource builder for the storage
     /// class name.</param>
     /// <returns>The same builder for chaining.</returns>
-    [AspireExport("withPvStorageClassParam")]
+    [AspireExport("withStorageClassParam")]
     public static IResourceBuilder<KubernetesPersistentVolumeResource> WithStorageClass(
         this IResourceBuilder<KubernetesPersistentVolumeResource> builder,
         IResourceBuilder<ParameterResource> storageClassName)
@@ -132,7 +132,7 @@ public static class KubernetesPersistentVolumeExtensions
     /// <param name="capacity">A parameter resource builder for the capacity quantity
     /// string.</param>
     /// <returns>The same builder for chaining.</returns>
-    [AspireExport("withPvCapacityParam")]
+    [AspireExport("withCapacityParam")]
     public static IResourceBuilder<KubernetesPersistentVolumeResource> WithCapacity(
         this IResourceBuilder<KubernetesPersistentVolumeResource> builder,
         IResourceBuilder<ParameterResource> capacity)

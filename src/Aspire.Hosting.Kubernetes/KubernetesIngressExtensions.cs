@@ -54,6 +54,7 @@ public static class KubernetesIngressExtensions
         }
 
         return builder.ApplicationBuilder.AddResource(ingress)
+            .WithIconName("GlobeArrowForward")
             .ExcludeFromManifest();
     }
 

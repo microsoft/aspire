@@ -124,6 +124,7 @@ public static class AzureSignalRExtensions
 
         var resource = new AzureSignalRResource(name, configureInfrastructure);
         return builder.AddResource(resource)
+            .WithIconName("MailMultiple")
             .WithDefaultRoleAssignments(SignalRBuiltInRole.GetBuiltInRoleName, defaultRoles.ToArray());
     }
 

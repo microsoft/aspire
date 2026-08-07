@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Aspire.Templates.Tests;
 
-[RequiresFeature(TestFeature.Docker)]
+[RequiresFeature(TestFeature.ContainerRuntime)]
 [RequiresFeature(TestFeature.SSLCertificate)]
 public class StarterTemplateWithRedisCacheTests_PreviousTFM : StarterTemplateRunTestsBase<StarterTemplateWithRedisCacheFixture_PreviousTFM>
 {

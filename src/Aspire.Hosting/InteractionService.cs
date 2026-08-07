@@ -318,8 +318,13 @@ internal class InteractionService : IInteractionService
                     await work(new ProgressContext { CancellationToken = interactionCts.Token }).ConfigureAwait(false);
 
                     // Work completed successfully. Complete the interaction.
+                    if (!newState.CompletionTcs.TrySetResult(new InteractionCompletionState { Complete = true, State = true }))
+                    {
+                        var completion = await newState.CompletionTcs.Task.ConfigureAwait(false);
+                        return CreateProgressResult(completion);
+                    }
+
                     newState.State = Interaction.InteractionState.Complete;
-                    newState.CompletionTcs.TrySetResult(new InteractionCompletionState { Complete = true, State = true });
                     AddInteractionUpdate(newState);
 
                     return InteractionResult.Ok(true);
@@ -350,24 +355,29 @@ internal class InteractionService : IInteractionService
                 // - The user clicking the button (sends response from dashboard)
                 // - External cancellation via cancellationToken (handled by OnInteractionCancellation registration)
                 var completion = await newState.CompletionTcs.Task.ConfigureAwait(false);
-                var promptState = completion.State as bool?;
-
-                // When the cancel button is clicked, the dashboard sends State = false.
-                // Treat this as a canceled result to be consistent with the work path.
-                if (promptState == false)
-                {
-                    return InteractionResult.Cancel<bool>();
-                }
-
-                return promptState == null
-                    ? InteractionResult.Cancel<bool>()
-                    : InteractionResult.Ok(promptState.Value);
+                return CreateProgressResult(completion);
             }
         }
         finally
         {
             interactionCts.Cancel();
         }
+    }
+
+    private static InteractionResult<bool> CreateProgressResult(InteractionCompletionState completion)
+    {
+        var promptState = completion.State as bool?;
+
+        // When the cancel button is clicked, the dashboard sends State = false.
+        // Treat this as a canceled result to be consistent with the work path.
+        if (promptState == false)
+        {
+            return InteractionResult.Cancel<bool>();
+        }
+
+        return promptState == null
+            ? InteractionResult.Cancel<bool>()
+            : InteractionResult.Ok(promptState.Value);
     }
 
     // For testing.

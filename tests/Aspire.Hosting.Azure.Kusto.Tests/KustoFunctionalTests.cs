@@ -39,7 +39,7 @@ public class KustoFunctionalTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public async Task KustoEmulator_Starts()
     {
@@ -89,7 +89,7 @@ public class KustoFunctionalTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/15509", typeof(PlatformDetection), nameof(PlatformDetection.IsLinux))]
     public async Task KustoEmulator_WithDatabase_CanReadIngestedData()
@@ -168,7 +168,7 @@ public class KustoFunctionalTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public async Task KustoEmulator_WithDatabaseThatAlreadyExists_ErrorIsIgnored()
     {
@@ -195,7 +195,7 @@ public class KustoFunctionalTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/15509", typeof(PlatformDetection), nameof(PlatformDetection.IsLinux))]
     public async Task KustoEmulator_WithInvalidDatabase_LogsErrorAndContinues()
@@ -228,7 +228,7 @@ public class KustoFunctionalTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/15509", typeof(PlatformDetection), nameof(PlatformDetection.IsLinux))]
     public async Task KustoEmulator_WithBindMount_IsUsedForPersistence()

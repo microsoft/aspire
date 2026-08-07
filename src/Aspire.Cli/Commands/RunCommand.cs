@@ -103,6 +103,13 @@ internal sealed class RunCommand : BaseCommand
 
     protected override TimeSpan GracefulShutdownBudget => s_gracefulShutdownBudget;
 
+    internal override void PrepareForExecution(ParseResult parseResult)
+    {
+        // The spawned child runs without --detach, so its environment marker preserves detach-only
+        // behavior such as suppressing update notifications and package metadata prefetching.
+        _isDetachMode = parseResult.GetValue(s_detachOption) || IsDetachedStartChild();
+    }
+
     private static readonly Option<bool> s_detachOption = new("--detach")
     {
         Description = RunCommandStrings.DetachArgumentDescription
@@ -153,7 +160,6 @@ internal sealed class RunCommand : BaseCommand
     {
         var passedAppHostProjectFile = parseResult.GetValue(AppHostLauncher.s_appHostOption);
         var detach = parseResult.GetValue(s_detachOption);
-        _isDetachMode = detach;
         var noBuild = parseResult.GetValue(s_noBuildOption);
         var format = parseResult.GetValue(AppHostLauncher.s_formatOption);
         var isolated = parseResult.GetValue(AppHostLauncher.s_isolatedOption);

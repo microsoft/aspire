@@ -279,21 +279,27 @@ Since AzDO tests don't run on PRs, changes can silently break the pipeline. The 
 
 **What to watch for**: Changes to `DOTNET_ROOT`, `PATH`, or SDK version settings in `BuildAndTest.yml`, `tests/Directory.Build.targets`, or helix targets. If a change works by relying on the system dotnet or GitHub Actions' pre-installed SDK, it will likely break AzDO/Helix.
 
-### 3. Docker/Buildx Availability Differences
+### 3. Container Runtime Availability Differences
 
-**Pattern**: Tests that require Docker or Docker Buildx pass on GitHub Actions but fail on AzDO/Helix agents where Docker capabilities differ. The `RequiresFeatureAttribute` and `TestFeature` enum (`tests/Aspire.TestUtilities/TestFeature.cs`) provide the mechanism to declare these dependencies:
+**Pattern**: Tests that require a container runtime or image-building support pass on GitHub Actions but fail on AzDO/Helix agents where those capabilities differ. The `RequiresFeatureAttribute` and `TestFeature` enum (`tests/Aspire.TestUtilities/TestFeature.cs`) provide the mechanism to declare these dependencies:
 
-- **`[RequiresFeature(TestFeature.Docker)]`** — test needs Docker. Supported on Linux (local + CI) but **not on Windows CI** (AzDO/Helix Windows agents don't have Docker).
-- **`[RequiresFeature(TestFeature.DockerPluginBuildx)]`** — test needs `docker buildx`. **Not available on any AzDO/Helix agent** (`IsDockerPluginBuildxSupported()` returns `false` when `PlatformDetection.IsRunningFromAzdo`).
+- **`[RequiresFeature(TestFeature.ContainerRuntime)]`** — test needs a container runtime, satisfied by either Docker or Podman. Supported on Linux (local + CI) but **not on Windows CI** (AzDO/Helix Windows agents don't have a container runtime). This is the right choice for most container tests.
+- **`[RequiresFeature(TestFeature.ContainerImageBuild)]`** — test builds an image from a Dockerfile. Under Docker this needs the buildx plugin, which is **not available on any AzDO/Helix agent** (`IsContainerImageBuildSupported()` returns `false` when `PlatformDetection.IsRunningFromAzdo`). Podman builds natively and needs no plugin.
+- **`[RequiresFeature(TestFeature.Testcontainers)]`** — test is backed by a Testcontainers fixture. Stricter than `ContainerRuntime`: see below.
+- **`[RequiresFeature(TestFeature.Docker)]`** — test needs Docker *specifically* rather than containers in general, e.g. it bind-mounts `/var/run/docker.sock` or shells out to the `docker` CLI. Use this only when Podman genuinely cannot satisfy the test.
 
-If a test depends on a Docker capability not covered by these (e.g., a new Docker plugin or compose feature), a new `TestFeature` flag must be added to the enum and the detection logic added to `RequiresFeatureAttribute.IsSupported()`.
+On CI these are hard-coded *expected* values, so a container-dependent test **fails** rather than silently skipping in an environment where the runtime is expected to work. On local runs the attribute instead probes `PATH` for the `docker`/`podman` executables, so a developer machine with only one of them (or neither) skips the tests it cannot run.
+
+If a test depends on a capability not covered by these (e.g., a new plugin or compose feature), a new `TestFeature` flag must be added to the enum and the detection logic added to `RequiresFeatureAttribute.IsFeatureSupported()`.
+
+**Testcontainers-backed suites**: Testcontainers talks to a Docker-compatible HTTP API rather than driving a CLI, and it cannot discover Podman on its own — its endpoint discovery only probes `docker.sock` paths — so on a Podman-only machine those fixtures would fail with `DockerUnavailableException`. This is handled by calling into `TestcontainersPodmanConfiguration` helper, which points Testcontainers at the Podman socket and disables Ryuk (which cannot work against rootless Podman). Docker is preferred on machines with Windows and Podman. Windows, Podman-only machines are not supported because Testcontainers 4.x cannot drive Podman over a Windows named pipe.
 
 **Real incidents**:
 - `62d71279`: 51 tests had to be disabled with `ActiveIssue` because they required Docker buildx (not installed on AzDO), testcontainers with specific images, or Azure deployment infrastructure
 - `6832752429`: `VerifyPnpmDockerfileBuildSucceeds` test skipped on AzDO due to missing buildx
 - `8692e43b`: Docker runtime detection (`docker info`) behaved differently on AzDO
 
-**What to watch for**: New tests that use `WithDockerfile`, Docker buildx, testcontainers, or `DOCKER_BUILDKIT`. Every such test **must** have `[RequiresFeature(TestFeature.Docker)]` or `[RequiresFeature(TestFeature.DockerPluginBuildx)]` as appropriate. Without this attribute, the test will attempt to run on environments where Docker is unavailable and fail. If the test depends on a Docker capability not covered by existing `TestFeature` values, add a new flag.
+**What to watch for**: New tests that use `WithDockerfile`, buildx, testcontainers, or `DOCKER_BUILDKIT`. Every such test **must** have `[RequiresFeature(TestFeature.ContainerRuntime)]`, `[RequiresFeature(TestFeature.ContainerImageBuild)]`, or `[RequiresFeature(TestFeature.Testcontainers)]` as appropriate. Without these attributes, the test will attempt to run on environments where no container runtime is available and fail. Reach for `TestFeature.Docker` only when the test truly cannot run under Podman. If the test depends on a capability not covered by existing `TestFeature` values, add a new flag.
 
 ### 4. Incorrect RunOnAzdoHelix* Overrides
 

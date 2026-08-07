@@ -1362,19 +1362,33 @@ public static class ResourceExtensions
     }
 
     /// <summary>
-    /// Gets the archive file path for a container image.
+    /// Gets the archive file path for a container image. This is the single calculation shared by the
+    /// container runtimes that write the archive and by <see cref="ContainerImageReference"/>, which hands
+    /// the path to consumers.
     /// </summary>
     /// <param name="outputPath">The output directory path.</param>
-    /// <param name="imageName">The image name.</param>
-    /// <param name="imageTag">The image tag (optional, defaults to "latest" if provided).</param>
+    /// <param name="imageName">The image name. May be registry-qualified and may include the tag.</param>
+    /// <param name="imageTag">The image tag, when it is not already part of <paramref name="imageName"/>.</param>
     /// <returns>The full path to the archive file with .tar extension.</returns>
+    /// <remarks>
+    /// Producers and consumers must agree on this path, otherwise the archive is written to one location
+    /// and looked up at another. Callers supply the image name in one of two shapes — combined
+    /// (<c>myapp:latest</c>) or split (<c>myapp</c> + <c>latest</c>) — and both must resolve identically,
+    /// which they do because <c>:</c> flattens to the same separator the split form joins with.
+    /// </remarks>
     internal static string GetContainerImageArchivePath(string outputPath, string imageName, string? imageTag = null)
     {
         var fileName = string.IsNullOrEmpty(imageTag)
-            ? $"{imageName}.tar"
-            : $"{imageName}-{imageTag}.tar";
+            ? $"{FlattenContainerImageName(imageName)}.tar"
+            : $"{FlattenContainerImageName(imageName)}-{FlattenContainerImageName(imageTag)}.tar";
         return Path.Combine(outputPath, fileName);
     }
+
+    /// <summary>
+    /// Flattens a <c>&lt;registry&gt;/&lt;repository&gt;:&lt;tag&gt;</c> image name into a single
+    /// file-name-safe segment, so that neither a repository segment nor the tag turns into a directory.
+    /// </summary>
+    internal static string FlattenContainerImageName(string imageName) => imageName.Replace('/', '-').Replace(':', '-');
 
     /// <summary>
     /// Gets a logger for the specified resource using the provided service provider.

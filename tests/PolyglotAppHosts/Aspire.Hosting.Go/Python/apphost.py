@@ -26,6 +26,6 @@ with create_builder() as builder:
 
     # Go app with headless Delve server for remote debugging
     debug_service = builder.add_go_app("debug-service", "../go-debug-service")
-    debug_service.with_delve_server()
+    debug_service.with_delve_server({"Port": 2345})
 
     builder.run()
