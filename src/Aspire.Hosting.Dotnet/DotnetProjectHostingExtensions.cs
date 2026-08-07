@@ -127,16 +127,14 @@ public static class DotnetProjectHostingExtensions
                               .WithIconName("CodeCsRectangle")
                               .WithProjectDefaults(options);
 
-        // Build the `dotnet run` command line for a non-debug launch of a DotnetProjectResource:
+        // Declare the default `dotnet run` invocation separately from the program arguments so a later
+        // WithLaunchToolArgs call replaces it instead of being prepended to it:
         //   dotnet run --project <proj> [--no-build] [--configuration <cfg>] --no-launch-profile OR
         //   dotnet run --file <app.cs> --no-cache [--no-build] [--configuration <cfg>] --no-launch-profile
-        resource.WithArgs(ctx =>
+        resource.WithLaunchToolArgs(ctx =>
         {
-            // The active launch configuration supplies the project launch when it is "project" or performs a custom
-            // tool invocation. In those cases adding `dotnet run` would duplicate the tool invocation instead of
-            // contributing the process command.
             if (ctx.Resource.SupportsDebugging(builder.Configuration, out var debugAnnotation)
-                && (debugAnnotation.LaunchConfigurationType is KnownLaunchConfigurationTypes.Project || ctx.Resource.HasLaunchToolArgsOwnedBy(debugAnnotation)))
+                && debugAnnotation.LaunchConfigurationType is KnownLaunchConfigurationTypes.Project)
             {
                 return;
             }
@@ -168,25 +166,37 @@ public static class DotnetProjectHostingExtensions
             // and must take priority. WithProjectDefaults materializes the profile's environment manually.
             ctx.Args.Add("--no-launch-profile");
 
-            // The launch profile's command line args are still applied here (run mode), after a `--`
-            // separator so they're passed to the app, matching the ProjectResource launch behavior.
-            if (builder.ExecutionContext.IsRunMode && !options.ExcludeLaunchProfile)
+            if (GetLaunchProfileArguments(ctx.Resource).Count > 0)
             {
-                var launchProfile = ctx.Resource.GetEffectiveLaunchProfile()?.LaunchProfile;
-                if (launchProfile is not null && !string.IsNullOrWhiteSpace(launchProfile.CommandLineArgs))
-                {
-                    var launchProfileArgs = CommandLineArgsParser.Parse(launchProfile.CommandLineArgs);
-                    if (launchProfileArgs.Count > 0)
-                    {
-                        ctx.Args.Add("--");
-                        foreach (var arg in launchProfileArgs)
-                        {
-                            ctx.Args.Add(arg);
-                        }
-                    }
-                }
+                ctx.Args.Add("--");
+            }
+        }, ownedByLaunchConfigurationType: KnownLaunchConfigurationTypes.Project);
+
+        // Launch-profile command-line arguments belong to the program, not the replaceable tool invocation.
+        // Keeping them in the ordinary segment preserves them when a caller supplies a custom launch tool.
+        resource.WithArgs(ctx =>
+        {
+            foreach (var arg in GetLaunchProfileArguments(ctx.Resource))
+            {
+                ctx.Args.Add(arg);
             }
         });
+
+        List<string> GetLaunchProfileArguments(IResource resource)
+        {
+            if (!builder.ExecutionContext.IsRunMode
+                || options.ExcludeLaunchProfile
+                || (resource.SupportsDebugging(builder.Configuration, out var debugAnnotation)
+                    && (debugAnnotation.LaunchConfigurationType is KnownLaunchConfigurationTypes.Project || resource.HasLaunchToolArgsOwnedBy(debugAnnotation))))
+            {
+                return [];
+            }
+
+            var launchProfile = resource.GetEffectiveLaunchProfile()?.LaunchProfile;
+            return launchProfile is not null && !string.IsNullOrWhiteSpace(launchProfile.CommandLineArgs)
+                ? CommandLineArgsParser.Parse(launchProfile.CommandLineArgs)
+                : [];
+        }
 
         resource.OnBeforeResourceStarted((r, e, ct) =>
         {
