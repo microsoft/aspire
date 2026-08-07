@@ -11,11 +11,13 @@ namespace Aspire.Cli.Agents.AspireSkills;
 internal sealed class AspireSkillsBundle
 {
     private readonly string _version;
+    private readonly string _archiveSha256;
     private readonly IReadOnlyList<ValidatedAspireSkill> _skills;
 
-    internal AspireSkillsBundle(string version, IReadOnlyList<ValidatedAspireSkill> skills)
+    internal AspireSkillsBundle(string version, string archiveSha256, IReadOnlyList<ValidatedAspireSkill> skills)
     {
         _version = version;
+        _archiveSha256 = archiveSha256;
         _skills = skills;
     }
 
@@ -23,6 +25,11 @@ internal sealed class AspireSkillsBundle
     /// Gets the bundle version.
     /// </summary>
     public string Version => _version;
+
+    /// <summary>
+    /// Gets the source archive SHA-256 hash.
+    /// </summary>
+    public string ArchiveSha256 => _archiveSha256;
 
     /// <summary>
     /// Gets installable files for the specified skill.

@@ -19,6 +19,8 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 {
+    private const string SyntheticBundleArchiveSha256 = "0000000000000000000000000000000000000000000000000000000000000000";
+
     [Fact]
     public async Task AgentInitCommand_SummarizesNormalizedDisplayPath_WhenInstallingUserLevelSkill()
     {
@@ -883,8 +885,12 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         };
 
         var manifestJson = JsonSerializer.Serialize(manifest, AspireSkillsJsonSerializerContext.Default.SkillBundleManifest);
-        await File.WriteAllTextAsync(Path.Combine(bundleDirectory.FullName, "skill-manifest.json"), manifestJson);
-        return await new AspireSkillsBundleProvider().LoadAsync(bundleDirectory, CancellationToken.None);
+        var manifestPath = Path.Combine(bundleDirectory.FullName, "skill-manifest.json");
+        await File.WriteAllTextAsync(manifestPath, manifestJson);
+        return await new AspireSkillsBundleProvider().LoadAsync(
+            bundleDirectory,
+            SyntheticBundleArchiveSha256,
+            CancellationToken.None);
     }
 
     private static string ComputeSha256(string path)

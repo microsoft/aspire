@@ -30,9 +30,9 @@ internal interface IAspireSkillsBundleProvider
         bool skipCompatibilityCheck = false);
 
     /// <summary>
-    /// Loads an Aspire skills bundle from disk.
+    /// Loads an Aspire skills bundle from disk with its source archive identity.
     /// </summary>
-    Task<AspireSkillsBundle> LoadAsync(DirectoryInfo bundleDirectory, CancellationToken cancellationToken, bool skipCompatibilityCheck = false);
+    Task<AspireSkillsBundle> LoadAsync(DirectoryInfo bundleDirectory, string archiveSha256, CancellationToken cancellationToken, bool skipCompatibilityCheck = false);
 }
 
 internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
@@ -94,7 +94,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
             cancellationToken.ThrowIfCancellationRequested();
 
             var bundleRoot = FindBundleRoot(extractionDirectory);
-            var bundle = await LoadAsync(bundleRoot, cancellationToken, skipCompatibilityCheck).ConfigureAwait(false);
+            var bundle = await LoadAsync(bundleRoot, expectedArchiveSha256, cancellationToken, skipCompatibilityCheck).ConfigureAwait(false);
 
             CopyDirectory(bundleRoot.FullName, bundleDirectory.FullName);
             Directory.Delete(extractionDirectory, recursive: true);
@@ -109,10 +109,20 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
 
     public async Task<AspireSkillsBundle> LoadAsync(
         DirectoryInfo bundleDirectory,
+        string archiveSha256,
         CancellationToken cancellationToken,
         bool skipCompatibilityCheck = false)
     {
         ArgumentNullException.ThrowIfNull(bundleDirectory);
+        ArgumentException.ThrowIfNullOrWhiteSpace(archiveSha256);
+
+        var normalizedArchiveSha256 = NormalizeSha256(archiveSha256);
+        if (normalizedArchiveSha256.Length != 64 || !normalizedArchiveSha256.All(Uri.IsHexDigit))
+        {
+            throw new ArgumentException("Archive SHA-256 must contain exactly 64 hexadecimal characters.", nameof(archiveSha256));
+        }
+
+        archiveSha256 = normalizedArchiveSha256.ToLowerInvariant();
 
         var manifestPath = Path.Combine(bundleDirectory.FullName, ManifestFileName);
         if (!File.Exists(manifestPath))
@@ -140,12 +150,13 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        return CreateBundle(bundleDirectory, manifest, _currentCliVersion, _currentSdkVersion, skipCompatibilityCheck);
+        return CreateBundle(bundleDirectory, manifest, archiveSha256, _currentCliVersion, _currentSdkVersion, skipCompatibilityCheck);
     }
 
     private static AspireSkillsBundle CreateBundle(
         DirectoryInfo bundleDirectory,
         SkillBundleManifest manifest,
+        string archiveSha256,
         string currentCliVersion,
         string currentSdkVersion,
         bool skipCompatibilityCheck)
@@ -250,7 +261,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
             validatedSkills.Add(new ValidatedAspireSkill(definition, files));
         }
 
-        return new AspireSkillsBundle(version, validatedSkills);
+        return new AspireSkillsBundle(version, archiveSha256, validatedSkills);
     }
 
     private static void ValidateSkillName(string skillName)
