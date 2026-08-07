@@ -433,6 +433,13 @@ jobs:
             fi
           done <<< "$QUOTA_TARGETS"
 
+          # The AKS managed-cluster count is exposed by the AKS RP rather than Microsoft.Quota.
+          # Print the effective regional limit so a zero/default entitlement is visible before
+          # deployments collapse it into the generic AKS BadRequest response.
+          echo "AKS resource usage in westus3:"
+          az aks list-usage --location westus3 -o json ||
+             echo "⚠ Could not read Microsoft.ContainerService usage in westus3."
+
   # Run each test class in parallel
   deploy-test:
     name: Deploy (${{ matrix.shortname }})
@@ -613,6 +620,10 @@ jobs:
             az aks list \
              --query "[].{name:name, resourceGroup:resourceGroup, location:location, provisioningState:provisioningState, sku:sku}" \
              -o json
+
+            echo "=== AKS resource usage in West US 3 ==="
+            az aks list-usage --location westus3 -o json ||
+              echo "Could not read Microsoft.ContainerService usage in westus3."
 
             echo "=== Supported AKS versions in West US 3 ==="
             az aks get-versions --location westus3 \
