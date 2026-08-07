@@ -293,7 +293,9 @@ jobs:
             local registered p
             registered="$(cat)"
             for p in "${providers[@]}"; do
-              grep -qxF "$p" <<<"$registered" || echo "$p"
+              # Azure canonicalizes some namespaces with different casing (for example,
+              # microsoft.insights), but provider namespace matching is case-insensitive.
+              grep -qxiF "$p" <<<"$registered" || echo "$p"
             done
           }
 
