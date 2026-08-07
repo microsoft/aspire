@@ -353,13 +353,12 @@ jobs:
       # QuotaExceeded error in the test that needs it.
       #
       # Scope: this self-heals only the quotas configured in QUOTA_TARGETS (currently the westus3
-      # AKS node-pool compute vCPUs — both the StandardDASv5Family quota and the Total Regional vCPUs
-      # quota, which Azure enforces independently, so a node pool needs headroom in each). Other
-      # quotas the suite depends on are NOT covered here — westus3 Container Apps / App Service and
-      # the AKS managed-cluster count
-      # (Microsoft.ContainerService is not exposed through the Microsoft.Quota API used here) remain
-      # documented manual quota requests (see the E2E README's quota section). Requests are submitted
-      # asynchronously (--no-wait, below), so extending QUOTA_TARGETS does not lengthen this step.
+      # AKS node-pool compute vCPUs and managed-cluster count). Azure enforces both the
+      # StandardDASv5Family quota and Total Regional vCPUs independently, so a node pool needs
+      # headroom in each. Other quotas the suite depends on, such as westus3 Container Apps and
+      # App Service, remain documented manual quota requests (see the E2E README's quota section).
+      # Requests are submitted asynchronously (--no-wait, below), so extending QUOTA_TARGETS does
+      # not lengthen this step.
       - name: Ensure Azure quotas
         env:
           # Quotas to ensure, one per line: "provider location resourceName desiredLimit [resourceType]".
@@ -372,6 +371,7 @@ jobs:
           QUOTA_TARGETS: |
             Microsoft.Compute westus3 StandardDASv5Family 200 dedicated
             Microsoft.Compute westus3 cores 200 dedicated
+            Microsoft.ContainerService westus3 ManagedClusters 20
         run: |
           sub="$ASPIRE_DEPLOYMENT_TEST_SUBSCRIPTION"
 
@@ -432,22 +432,6 @@ jobs:
               echo "⚠ Quota request for $provider/$name in $location was not accepted (may need manual approval); continuing."
             fi
           done <<< "$QUOTA_TARGETS"
-
-          # AKS managed-cluster count has its own regional quota scope. Print it so a
-          # zero/default entitlement is visible before deployments collapse it into the
-          # generic AKS BadRequest response.
-          echo "AKS managed-cluster quota in westus3:"
-          az quota list \
-             --scope "/subscriptions/$sub/providers/Microsoft.ContainerService/locations/westus3" \
-             --only-show-errors -o json ||
-             echo "⚠ Could not read Microsoft.ContainerService quota in westus3."
-
-          echo "AKS-specific Standard_D2as_v5 availability in westus3:"
-          az rest --method get \
-             --uri "https://management.azure.com/subscriptions/$sub/providers/Microsoft.ContainerService/locations/westus3/vmSkus?api-version=2026-05-02-preview" \
-             --query "value[?name=='Standard_D2as_v5'].{name:name, family:family, locations:locations, restrictions:restrictions}" \
-             -o json ||
-             echo "⚠ Could not read AKS VM SKU availability in westus3."
 
   # Run each test class in parallel
   deploy-test:
@@ -592,191 +576,6 @@ jobs:
             --ignore-exit-code 8 \
             ${{ matrix.extraTestArgs }} \
             || echo "test_failed=true" >> $GITHUB_OUTPUT
-
-      - name: Collect AKS subscription diagnostics
-        if: ${{ always() && inputs.test_filter == 'AksStarterDeploymentTests' }}
-        run: |
-          diagnostics="${{ github.workspace }}/testresults/aks-subscription-diagnostics.txt"
-          mkdir -p "$(dirname "$diagnostics")"
-          {
-            echo "=== Azure account ==="
-            az account show --query "{subscriptionId:id, tenantId:tenantId, state:state, user:user.name}" -o json
-
-            echo "=== Azure subscription policies ==="
-            subscription_id=$(az account show --query id -o tsv)
-            az rest --method get \
-             --uri "https://management.azure.com/subscriptions/${subscription_id}?api-version=2022-12-01" \
-             --query "{state:state, subscriptionPolicies:subscriptionPolicies}" -o json
-
-            echo "=== Required provider states ==="
-            for provider in \
-             Microsoft.ContainerService \
-             Microsoft.Compute \
-             Microsoft.Network \
-             Microsoft.ManagedIdentity \
-             Microsoft.OperationsManagement \
-             Microsoft.OperationalInsights \
-             Microsoft.Insights; do
-             az provider show --namespace "$provider" \
-               --query "{namespace:namespace, registrationState:registrationState}" -o json
-            done
-
-            echo "=== West US 3 compute usage ==="
-            az vm list-usage --location westus3 \
-             --query "[?name.value=='standardDASv5Family' || name.value=='cores'].{name:name.value, localizedName:name.localizedValue, currentValue:currentValue, limit:limit}" \
-             -o json
-
-            echo "=== Standard_D2as_v5 restrictions in West US 3 ==="
-            az vm list-skus --location westus3 --size Standard_D2as_v5 --all \
-             --query "[?name=='Standard_D2as_v5'].{name:name, locations:locations, restrictions:restrictions}" \
-             -o json
-
-            echo "=== East US comparison compute usage ==="
-            az vm list-usage --location eastus \
-             --query "[?name.value=='standardDASv5Family' || name.value=='cores'].{name:name.value, localizedName:name.localizedValue, currentValue:currentValue, limit:limit}" \
-             -o json
-
-            echo "=== Standard_D2as_v5 restrictions in East US ==="
-            az vm list-skus --location eastus --size Standard_D2as_v5 --all \
-             --query "[?name=='Standard_D2as_v5'].{name:name, locations:locations, restrictions:restrictions}" \
-             -o json
-
-            echo "=== Existing AKS clusters ==="
-            az aks list \
-             --query "[].{name:name, resourceGroup:resourceGroup, location:location, provisioningState:provisioningState, sku:sku}" \
-             -o json
-
-            echo "=== Supported AKS versions in West US 3 ==="
-            az aks get-versions --location westus3 \
-             --query "values[].{version:version, isDefault:isDefault}" -o json
-
-            echo "=== Supported Microsoft.ContainerService managedClusters API versions ==="
-            managed_cluster_api_versions=$(az provider show --namespace Microsoft.ContainerService \
-             --query "resourceTypes[?resourceType=='managedClusters'].apiVersions[]" -o tsv)
-            printf '%s\n' "$managed_cluster_api_versions"
-
-            echo "=== Isolated AKS request-shape diagnostics ==="
-            diagnostic_resource_group="e2e-aksdiag-${GITHUB_RUN_ID}"
-            az group create --name "$diagnostic_resource_group" --location westus3 --output none
-
-            cleanup_diagnostic_resource_group() {
-              az group delete --name "$diagnostic_resource_group" --yes --no-wait --output none || true
-            }
-            trap cleanup_diagnostic_resource_group EXIT
-
-            try_aks_create() {
-              local variant="$1"
-              local location="$2"
-              shift 2
-              local cluster_name="diag-${variant}-${GITHUB_RUN_ATTEMPT}"
-
-              echo "--- az aks create variant: $variant ($location) ---"
-              set +e
-              az aks create \
-               --resource-group "$diagnostic_resource_group" \
-               --name "$cluster_name" \
-               --location "$location" \
-               --node-count 1 \
-               --node-vm-size Standard_D2as_v5 \
-               --enable-managed-identity \
-               --no-ssh-key \
-               --no-wait \
-               --only-show-errors \
-               "$@"
-              local exit_code=$?
-              set -e
-              echo "Exit code: $exit_code"
-              return "$exit_code"
-            }
-
-            accepted_variant=""
-            if try_aks_create "free" westus3; then
-              accepted_variant="free"
-            elif try_aks_create "standard" westus3 --tier standard; then
-              accepted_variant="standard"
-            else
-              default_kubernetes_version=$(az aks get-versions --location westus3 \
-               --query "values[?isDefault].version | [0]" -o tsv)
-
-              if [ -n "$default_kubernetes_version" ] &&
-                 try_aks_create "version" westus3 --tier standard --kubernetes-version "$default_kubernetes_version"; then
-                accepted_variant="explicit Kubernetes version"
-              elif try_aks_create "azurecni" westus3 --tier standard --network-plugin azure; then
-                accepted_variant="Azure CNI"
-              elif try_aks_create "eastus" eastus --tier standard; then
-                accepted_variant="East US"
-              fi
-            fi
-
-            if [ -n "$accepted_variant" ]; then
-              echo "Accepted AKS CLI variant: $accepted_variant"
-            else
-              echo "--- Minimal managedClusters PUT using an older stable API ---"
-              stable_api_version=$(printf '%s\n' "$managed_cluster_api_versions" |
-               tr '\t' '\n' |
-               awk '/^2025-[0-9][0-9]-[0-9][0-9]$/ { print; exit }')
-
-              if [ -z "$stable_api_version" ]; then
-                stable_api_version=$(printf '%s\n' "$managed_cluster_api_versions" |
-                 tr '\t' '\n' |
-                 awk '!/preview/ { print; exit }')
-              fi
-
-              rest_cluster_name="diag-rest-${GITHUB_RUN_ATTEMPT}"
-              request_body="$RUNNER_TEMP/aks-managed-cluster-request.json"
-              cat > "$request_body" <<JSON
-          {
-            "location": "westus3",
-            "identity": {
-              "type": "SystemAssigned"
-            },
-            "sku": {
-              "name": "Base",
-              "tier": "Standard"
-            },
-            "properties": {
-              "dnsPrefix": "$rest_cluster_name",
-              "enableRBAC": true,
-              "servicePrincipalProfile": {
-                "clientId": "msi"
-              },
-              "agentPoolProfiles": [
-                {
-                  "name": "systempool",
-                  "count": 1,
-                  "vmSize": "Standard_D2as_v5",
-                  "osType": "Linux",
-                  "mode": "System",
-                  "type": "VirtualMachineScaleSets"
-                }
-              ],
-              "networkProfile": {
-                "networkPlugin": "kubenet",
-                "loadBalancerSku": "standard",
-                "outboundType": "loadBalancer"
-              }
-            }
-          }
-          JSON
-
-              set +e
-              az rest --method put --debug \
-               --uri "https://management.azure.com/subscriptions/${subscription_id}/resourceGroups/${diagnostic_resource_group}/providers/Microsoft.ContainerService/managedClusters/${rest_cluster_name}?api-version=${stable_api_version}" \
-               --headers "Content-Type=application/json" \
-               --body "@$request_body"
-              rest_exit_code=$?
-              set -e
-              echo "API version: $stable_api_version"
-              echo "Exit code: $rest_exit_code"
-            fi
-
-            echo "=== Recent failed Microsoft.ContainerService activity ==="
-            sleep 60
-            az monitor activity-log list --offset 3h --status Failed \
-             --namespace Microsoft.ContainerService --max-events 100 \
-             --query "[].{time:eventTimestamp, operation:operationName.localizedValue, resourceGroup:resourceGroupName, resourceId:resourceId, status:status.localizedValue, subStatus:subStatus.localizedValue, correlationId:correlationId, statusMessage:properties.statusMessage}" \
-             -o json
-          } 2>&1 | tee "$diagnostics"
 
       - name: Collect Aspire CLI logs
         if: always()
