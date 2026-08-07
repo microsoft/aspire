@@ -1791,7 +1791,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ResourceLogging_CompletedFollowStreamIsDisposedAndCanRestart()
+    public async Task ResourceLogging_CompletedFollowStreamIsRemovedAndCanRestartWithExistingSubscriber()
     {
         var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
         {
@@ -1800,21 +1800,24 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         builder.AddContainer("database", "image");
 
+        const string restartedLogMessage = "log after restart";
+        var restartedLogLine = "2024-08-19T06:10:33.473275911Z " + restartedLogMessage + Environment.NewLine;
         var firstFollowStream = new GatedReadStream();
         var secondFollowStreamStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var systemFollowStreamCount = 0;
+        var stdoutFollowStreamCount = 0;
         var kubernetesService = new TestKubernetesService(startStreamWithFollow: (obj, logStreamType, follow) =>
         {
             if (obj is Container { Status.State: ContainerState.Running } &&
-                logStreamType == Logs.StreamTypeSystem &&
+                logStreamType == Logs.StreamTypeStdOut &&
                 follow == true)
             {
-                if (Interlocked.Increment(ref systemFollowStreamCount) == 1)
+                if (Interlocked.Increment(ref stdoutFollowStreamCount) == 1)
                 {
                     return firstFollowStream;
                 }
 
                 secondFollowStreamStarted.TrySetResult();
+                return new MemoryStream(Encoding.UTF8.GetBytes(restartedLogLine));
             }
 
             return new MemoryStream();
@@ -1822,6 +1825,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
         var resourceLoggerService = new ResourceLoggerService();
+        var logLines = new ConcurrentQueue<LogLine>();
         var appExecutor = CreateAppExecutor(
             distributedAppModel,
             kubernetesService: kubernetesService,
@@ -1829,7 +1833,13 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         await appExecutor.RunApplicationAsync().DefaultTimeout();
 
         var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
-        IDisposable? firstSubscription = resourceLoggerService.Subscribe(container.Metadata.Name, _ => { });
+        using var subscription = resourceLoggerService.Subscribe(container.Metadata.Name, batch =>
+        {
+            foreach (var logLine in batch)
+            {
+                logLines.Enqueue(logLine);
+            }
+        });
 
         try
         {
@@ -1845,20 +1855,20 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
             firstFollowStream.Release();
             await firstLogStreamTask.DefaultTimeout();
-            Assert.True(appExecutor.ResourceWatcher.IsLogStreamDisposed(container.Metadata.Name));
+            Assert.Null(appExecutor.ResourceWatcher.GetLogStreamTask(container.Metadata.Name));
 
-            firstSubscription.Dispose();
-            firstSubscription = null;
-
-            using var secondSubscription = resourceLoggerService.Subscribe(container.Metadata.Name, _ => { });
+            kubernetesService.PushResourceModified(container);
             await secondFollowStreamStarted.Task.DefaultTimeout();
+            await AsyncTestHelpers.AssertIsTrueRetryAsync(
+                () => logLines.Any(line => line.Content.Contains(restartedLogMessage, StringComparison.Ordinal)),
+                "The follow stream started after the restart should deliver logs to the existing subscriber.");
 
-            Assert.Equal(2, Volatile.Read(ref systemFollowStreamCount));
+            Assert.Equal(2, Volatile.Read(ref stdoutFollowStreamCount));
+            Assert.Single(logLines, line => line.Content.Contains(restartedLogMessage, StringComparison.Ordinal));
         }
         finally
         {
             firstFollowStream.TryRelease();
-            firstSubscription?.Dispose();
         }
     }
 
@@ -1996,6 +2006,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             previousFollowStream.Release();
             logger.Release();
             await previousLogStreamTask.DefaultTimeout();
+            Assert.Same(currentLogStreamTask, appExecutor.ResourceWatcher.GetLogStreamTask(dcpResourceName));
 
             currentFollowStream.Release(secondTerminalLogLine);
             await currentLogStreamTask.DefaultTimeout();
