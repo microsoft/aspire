@@ -126,8 +126,8 @@ var albSubnet = vnet.AddSubnet("alb-public", "10.100.4.0/24");
 
 var aks = builder.AddAzureKubernetesEnvironment("aks")
     .WithSubnet(aksSubnet)
-    .WithSystemNodePool("Standard_D2s_v5");
-aks.AddNodePool("workload", "Standard_D2s_v5", minCount: 1, maxCount: 3);
+    .WithSystemNodePool("Standard_D2as_v5");
+aks.AddNodePool("workload", "Standard_D2as_v5", minCount: 1, maxCount: 3);
 
 var publicLb = aks.AddLoadBalancer("public", albSubnet);
 
@@ -184,7 +184,7 @@ builder.Build().Run();
             // with AZURE__LOCATION (case-sensitive env) and .NET config may bind the inherited westus3 instead.
             await auto.TypeAsync(
                 $"unset ASPIRE_PLAYGROUND && unset Azure__Location && " +
-                $"export AZURE__LOCATION=centralus && " +
+                $"export AZURE__LOCATION=westus3 && " +
                 $"export AZURE__RESOURCEGROUP={resourceGroupName} && " +
                 $"export Parameters__acmeemail={acmeEmail}");
             await auto.EnterAsync();
