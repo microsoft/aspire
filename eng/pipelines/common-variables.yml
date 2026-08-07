@@ -47,7 +47,6 @@ variables:
     # a branch the ACLs accept so manual / non-PR builds on ankj/* etc. can
     # still validate the rest of the pipeline (including signing).
     - ${{ if or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'), startsWith(variables['Build.SourceBranch'], 'refs/heads/internal/release/')) }}:
-      - group: Publish-Build-Assets
       - group: DotNet-HelixApi-Access
       - group: SDL_Settings
     - name: _InternalBuildArgs
