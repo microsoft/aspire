@@ -14,7 +14,7 @@ This playground demonstrates hosting a Godot 4 dedicated game server as an Aspir
 
 ## Run mode only
 
-The `godot-server` resource is added **only in run mode** (`builder.ExecutionContext.IsRunMode`). `WithExplicitStart()` means "do not launch this until a user starts it from the dashboard", which has no meaning during publish or deploy. Emitting the executable into a published manifest would produce a resource nothing can start, plus a matchmaker service-discovery binding to a port that is never allocated. In publish mode this playground therefore contains only `matchmaker`, and the matchmaker has no `godot-server` reference at all.
+The `godot-server` resource is added **only in run mode** (`builder.ExecutionContext.IsRunMode`). `WithExplicitStart()` means "do not launch this until a user starts it from the dashboard", which has no meaning during publish or deploy. Emitting the executable into a published manifest would produce a resource nothing can start, plus a matchmaker service-discovery binding to a port that is never allocated. In publish mode, `godot-server` is therefore omitted and the matchmaker has no `godot-server` reference. Local in-repo builds can still include the dashboard project resource; CI, out-of-repo builds, and `/p:SkipDashboardProjectReference=true` omit it.
 
 ## Manual Run
 
