@@ -576,6 +576,51 @@ jobs:
             ${{ matrix.extraTestArgs }} \
             || echo "test_failed=true" >> $GITHUB_OUTPUT
 
+      - name: Collect AKS subscription diagnostics
+        if: ${{ always() && inputs.test_filter == 'AksStarterDeploymentTests' }}
+        run: |
+          diagnostics="${{ github.workspace }}/testresults/aks-subscription-diagnostics.txt"
+          mkdir -p "$(dirname "$diagnostics")"
+          {
+            echo "=== Azure account ==="
+            az account show --query "{subscriptionId:id, tenantId:tenantId, user:user.name}" -o json
+
+            echo "=== Required provider states ==="
+            for provider in \
+             Microsoft.ContainerService \
+             Microsoft.Compute \
+             Microsoft.Network \
+             Microsoft.ManagedIdentity \
+             Microsoft.OperationsManagement \
+             Microsoft.OperationalInsights \
+             Microsoft.Insights; do
+             az provider show --namespace "$provider" \
+               --query "{namespace:namespace, registrationState:registrationState}" -o json
+            done
+
+            echo "=== West US 3 compute usage ==="
+            az vm list-usage --location westus3 \
+             --query "[?name.value=='standardDASv5Family' || name.value=='cores'].{name:name.value, localizedName:name.localizedValue, currentValue:currentValue, limit:limit}" \
+             -o json
+
+            echo "=== Standard_D2as_v5 restrictions in West US 3 ==="
+            az vm list-skus --location westus3 --size Standard_D2as_v5 --all \
+             --query "[?name=='Standard_D2as_v5'].{name:name, locations:locations, restrictions:restrictions}" \
+             -o json
+
+            echo "=== Existing AKS clusters ==="
+            az aks list \
+             --query "[].{name:name, resourceGroup:resourceGroup, location:location, provisioningState:provisioningState, sku:sku}" \
+             -o json
+
+            echo "=== Recent failed Microsoft.ContainerService activity ==="
+            sleep 60
+            az monitor activity-log list --offset 3h --status Failed \
+             --namespace Microsoft.ContainerService --max-events 100 \
+             --query "[].{time:eventTimestamp, operation:operationName.localizedValue, resourceGroup:resourceGroupName, resourceId:resourceId, status:status.localizedValue, subStatus:subStatus.localizedValue, correlationId:correlationId, statusMessage:properties.statusMessage}" \
+             -o json
+          } 2>&1 | tee "$diagnostics"
+
       - name: Collect Aspire CLI logs
         if: always()
         run: |

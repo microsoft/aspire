@@ -123,7 +123,8 @@ public sealed class AksStarterDeploymentTests(ITestOutputHelper output)
                   $"--generate-ssh-keys " +
                   $"--attach-acr {acrName} " +
                   $"--enable-managed-identity " +
-                  $"--output table");
+                  $"--output table " +
+                  $"--debug");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(20));
 
