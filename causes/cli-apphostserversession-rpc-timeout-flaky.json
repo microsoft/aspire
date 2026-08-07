@@ -1,0 +1,17 @@
+{
+  "id": "cli-apphostserversession-rpc-timeout-flaky",
+  "type": "flaky-test",
+  "title": "Flaky: AppHostServerSessionTests.GetRpcClientAsync_WhenServerExitsBeforeSocketIsAvailable_FailsWithoutWaitingForConnectionTimeout takes longer than expected on Windows runner",
+  "test_name": "Aspire.Cli.Tests.Projects.AppHostServerSessionTests.GetRpcClientAsync_WhenServerExitsBeforeSocketIsAvailable_FailsWithoutWaitingForConnectionTimeout",
+  "error_pattern": "Expected RPC connection to fail promptly after the server process exited, but it took 00:00:14.9996920. Timing-sensitive assertion on process exit detection under CI load; test file (Aspire.Cli.Tests) not touched by this PR.",
+  "occurrences": [
+    {
+      "run_id": 31203621605,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/31203621605",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (windows-latest)",
+      "pr_number": 19090,
+      "observed_at": "2026-08-07T18:37:45Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19150"
+}

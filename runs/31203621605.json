@@ -1,0 +1,74 @@
+{
+  "run_id": 31203621605,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/31203621605",
+  "analyzed_at": "2026-08-07T18:37:45Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19090,
+    "title": "Mark ResourceUrlAnnotation.DisplayOrder as obsolete",
+    "author": "Copilot",
+    "state": "closed",
+    "head_branch": "copilot/mark-displayorder-as-obsolete",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19090"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.Azure / Hosting.Azure (windows-latest)",
+      "id": 92954204418,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31203621605/job/92954204418",
+      "classification": "flaky-test",
+      "reason": "Build failure caused by tests/Aspire.Hosting.Azure.Tests/AzureBicepResourceScopeTests.cs referencing 'ForSubscription'/'ForTenant' which no longer exist on AzureBicepResourceScope (current src has CreateForSubscription/CreateForTenant). This file is not in the PR's changed files list, so the PR branch is simply stale relative to main; not caused by this PR's changes.",
+      "failed_steps": ["Build test project"]
+    },
+    {
+      "name": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "id": 92954204473,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31203621605/job/92954204473",
+      "classification": "flaky-test",
+      "reason": "Same AzureBicepResourceScopeTests.cs compile error as the Windows job; unrelated to PR-changed files (ResourceUrlAnnotation.cs, DashboardEventHandlers.cs, ResourceSnapshotBuilder.cs, ApplicationOrchestrator.cs, WithUrlsTests.cs).",
+      "failed_steps": ["Build test project"]
+    },
+    {
+      "name": "Tests / Hosting.Azure.Kubernetes / Hosting.Azure.Kubernetes (ubuntu-latest)",
+      "id": 92954204807,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31203621605/job/92954204807",
+      "classification": "flaky-test",
+      "reason": "Same AzureBicepResourceScopeTests.cs compile error, shared build error across all jobs building Aspire.Hosting.Azure.Tests; unrelated to PR changes.",
+      "failed_steps": ["Build test project"]
+    },
+    {
+      "name": "Tests / Hosting.Azure.Kubernetes / Hosting.Azure.Kubernetes (windows-latest)",
+      "id": 92954205729,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31203621605/job/92954205729",
+      "classification": "flaky-test",
+      "reason": "Same AzureBicepResourceScopeTests.cs compile error, unrelated to PR changes.",
+      "failed_steps": ["Build test project"]
+    },
+    {
+      "name": "Tests / Cli / Cli (windows-latest)",
+      "id": 92954205111,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31203621605/job/92954205111",
+      "classification": "flaky-test",
+      "reason": "Single test failure in Aspire.Cli.Tests.Projects.AppHostServerSessionTests, a timing-sensitive assertion (expected prompt RPC failure but observed ~15s) not related to files changed by this PR.",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Projects.AppHostServerSessionTests.GetRpcClientAsync_WhenServerExitsBeforeSocketIsAvailable_FailsWithoutWaitingForConnectionTimeout",
+      "job": "Tests / Cli / Cli (windows-latest)",
+      "error": "Expected RPC connection to fail promptly after the server process exited, but it took 00:00:14.9996920.",
+      "stack_trace": "at Aspire.Cli.Tests.Projects.AppHostServerSessionTests.GetRpcClientAsync_WhenServerExitsBeforeSocketIsAvailable_FailsWithoutWaitingForConnectionTimeout() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Projects\\AppHostServerSessionTests.cs:line 153",
+      "classification": "flaky",
+      "reason": "Timing-sensitive assertion about how quickly an RPC connection fails after process exit; observed duration is right at the ~15s boundary, indicating CI runner scheduling contention rather than a defect in PR-changed code (Aspire.Cli.Tests is not in the PR's changed files)."
+    }
+  ],
+  "causes": ["azurebicepresourcescope-tests-stale-compile-error", "cli-apphostserversession-rpc-timeout-flaky"]
+}

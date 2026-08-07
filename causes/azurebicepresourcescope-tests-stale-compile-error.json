@@ -1,0 +1,16 @@
+{
+  "id": "azurebicepresourcescope-tests-stale-compile-error",
+  "type": "infra-failure",
+  "title": "AzureBicepResourceScopeTests.cs fails to compile against main (stale PR branch, unrelated to PR changes)",
+  "error_pattern": "error CS0117: 'AzureBicepResourceScope' does not contain a definition for 'ForSubscription' / 'ForTenant'; error CS0619: 'Assert.Throws<T>(Func<Task>)' is obsolete. Test file expects a since-renamed/refactored AzureBicepResourceScope API (CreateForSubscription/CreateForTenant in current src), indicating the PR branch is stale relative to main rather than a defect introduced by the PR's own changed files.",
+  "occurrences": [
+    {
+      "run_id": 31203621605,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/31203621605",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (windows-latest)",
+      "pr_number": 19090,
+      "observed_at": "2026-08-07T18:37:45Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19149"
+}
