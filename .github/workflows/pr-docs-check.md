@@ -485,7 +485,6 @@ pre-agent-steps:
     id: resolve-target
     env:
       GH_TOKEN: ${{ steps.resolve-target-app-token.outputs.token }}
-      RESTORE_BASE_AGENT_CONFIG: "${{ steps.checkout-pr.outcome == 'success' }}"
       # event.pull_request.number is set on `pull_request: closed` triggers;
       # inputs.pr_number is set when a maintainer manually re-runs via
       # workflow_dispatch. The activation `if:` already guarantees one of
@@ -830,17 +829,15 @@ pre-agent-steps:
         fi
       fi
 
-      # gh-aw restores trusted agent configuration before custom pre-agent
-      # steps. Discard the current branch's tracked files during the switch,
-      # then immediately reapply the same trusted base and inline snapshots
-      # before any agent code runs.
+      # The activation job saves a trusted agent-configuration snapshot on every
+      # run. Discard tracked files during the switch, then always restore that
+      # snapshot (and remove any branch-provided .mcp.json) before overlaying the
+      # trusted inline agents and skills.
       git checkout --force -B "${EFFECTIVE}" "origin/${EFFECTIVE}"
 
-      if [ "${RESTORE_BASE_AGENT_CONFIG}" = "true" ]; then
-        GH_AW_AGENT_FOLDERS=".agents .github" \
-        GH_AW_AGENT_FILES="AGENTS.md" \
-          bash "${RUNNER_TEMP}/gh-aw/actions/restore_base_github_folders.sh"
-      fi
+      GH_AW_AGENT_FOLDERS=".agents .github" \
+      GH_AW_AGENT_FILES="AGENTS.md" \
+        bash "${RUNNER_TEMP}/gh-aw/actions/restore_base_github_folders.sh"
 
       GH_AW_SUB_AGENT_DIR=".github/agents" \
       GH_AW_SUB_AGENT_EXT=".agent.md" \
