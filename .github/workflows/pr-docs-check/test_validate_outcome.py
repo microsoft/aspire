@@ -9,6 +9,7 @@ from pathlib import Path
 
 from validate_outcome import (
     OutcomeValidationError,
+    encode_workflow_command_data,
     load_payload,
     main,
     validate_outcome,
@@ -251,6 +252,36 @@ class ValidatorCliTests(unittest.TestCase):
             )
 
         self.assertNotEqual(0, completed.returncode)
+
+    def test_process_encodes_workflow_command_data(self) -> None:
+        malicious_result = "invalid%\r\n::warning::injected"
+        with tempfile.TemporaryDirectory() as directory:
+            output_path = self._write_payload(directory, payload(malicious_result))
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(VALIDATOR_PATH),
+                    "--agent-output",
+                    str(output_path),
+                    "--expected-source-pr-number",
+                    str(EXPECTED_SOURCE_PR_NUMBER),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+        self.assertNotEqual(0, completed.returncode)
+        self.assertEqual(
+            "::error::Agent returned unsupported documentation result: "
+            "invalid%25%0D%0A::warning::injected.\n",
+            completed.stdout,
+        )
+        self.assertEqual("", completed.stderr)
+        self.assertEqual(
+            "invalid%25%0D%0Avalue",
+            encode_workflow_command_data("invalid%\r\nvalue"),
+        )
 
 
 if __name__ == "__main__":

@@ -382,7 +382,7 @@ safe-outputs:
                   '',
                   summary
                 ].join('\n');
-              } else if (notifications.length === 1 && result === 'draft_failed') {
+              } else if (notifications.length === 1 && result === 'draft_failed' && !draftUrl) {
                 // Step 5 determined docs WERE required, but Step 10 could not
                 // produce a docs PR (e.g. a base-branch/validation error, a
                 // protected-file rejection, or an empty/invalid patch). This is

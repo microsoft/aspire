@@ -10,6 +10,10 @@ class OutcomeValidationError(ValueError):
     pass
 
 
+def encode_workflow_command_data(value: object) -> str:
+    return str(value).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
 def _require_pr_number(value: object, field_name: str) -> int:
     if (
         not isinstance(value, int)
@@ -105,7 +109,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.expected_source_pr_number,
         )
     except OutcomeValidationError as error:
-        print(f"::error::{error}")
+        print(f"::error::{encode_workflow_command_data(error)}")
         return 1
 
     print(message)
