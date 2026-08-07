@@ -157,7 +157,7 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
                     continue;
                 }
 
-                var healthCheckGeneration = state.BeginHealthCheck();
+                var healthCheckGeneration = state.BeginHealthCheck(resourceNotificationService);
 
                 HealthReport report;
                 try
@@ -180,7 +180,7 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
 
                 logger.LogTrace("Health report status for '{ResourceName}' is {HealthReportStatus}.", resource.Name, report.Status);
 
-                if (!state.IsHealthCheckGenerationCurrent(healthCheckGeneration))
+                if (!state.IsHealthCheckGenerationCurrent(healthCheckGeneration, resourceNotificationService))
                 {
                     logger.LogTrace("Discarding stale health report for an earlier generation of resource '{ResourceName}'.", resource.Name);
                     lastHealthCheckTimestamp = timeProvider.GetTimestamp();
@@ -190,7 +190,7 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
 
                 if (report.Status == HealthStatus.Healthy)
                 {
-                    FireResourceReadyEvent(state);
+                    FireResourceReadyEvent(state, healthCheckGeneration);
                     nonHealthyReportCount = 0;
                 }
                 else
@@ -264,10 +264,10 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
         return false;
     }
 
-    private void FireResourceReadyEvent(ResourceMonitorState state)
+    private void FireResourceReadyEvent(ResourceMonitorState state, long? healthCheckGeneration = null)
     {
         var resource = state.Resource;
-        var resourceGenerations = state.CaptureResourceReadyEventTargets(resourceNotificationService);
+        var resourceGenerations = state.CaptureResourceReadyEventTargets(resourceNotificationService, healthCheckGeneration);
         if (resourceGenerations.Count == 0)
         {
             return;
@@ -439,10 +439,12 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
             }
         }
 
-        public long BeginHealthCheck()
+        public long BeginHealthCheck(ResourceNotificationService resourceNotificationService)
         {
             lock (_lock)
             {
+                SynchronizeRunningGenerations(CaptureResourceEvents(resourceNotificationService));
+
                 // A generation that arrives during this health check increments the signal again,
                 // ensuring the next delay is interrupted if this check did not cover it.
                 _handledReadyGenerationSignalVersion = _readyGenerationSignalVersion;
@@ -450,25 +452,38 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
             }
         }
 
-        public bool IsHealthCheckGenerationCurrent(long healthCheckGeneration)
+        public bool IsHealthCheckGenerationCurrent(long healthCheckGeneration, ResourceNotificationService resourceNotificationService)
         {
             lock (_lock)
             {
+                SynchronizeRunningGenerations(CaptureResourceEvents(resourceNotificationService));
                 return _readyGenerationSignalVersion == healthCheckGeneration;
             }
         }
 
         public IReadOnlyList<(string ResourceId, long Generation)> CaptureResourceReadyEventTargets(
-            ResourceNotificationService resourceNotificationService)
+            ResourceNotificationService resourceNotificationService,
+            long? healthCheckGeneration = null)
         {
             lock (_lock)
             {
+                // PublishUpdateAsync updates the notification store before this service's watcher
+                // necessarily consumes the event. Reconcile and select targets from the same captured
+                // state so a queued generation cannot be covered by an earlier health check.
+                var resourceEvents = CaptureResourceEvents(resourceNotificationService);
+                SynchronizeRunningGenerations(resourceEvents);
+                if (healthCheckGeneration is not null &&
+                    _readyGenerationSignalVersion != healthCheckGeneration)
+                {
+                    return [];
+                }
+
                 var targets = new List<(string ResourceId, long Generation)>();
                 var hasUntrackedRunningGeneration = false;
 
-                foreach (var resourceId in Resource.GetResolvedResourceNames())
+                foreach (var (resourceId, resourceEvent) in resourceEvents)
                 {
-                    if (!resourceNotificationService.TryGetCurrentState(resourceId, out var resourceEvent))
+                    if (resourceEvent is null)
                     {
                         if (!_resourceReadyGenerations.ContainsKey(resourceId))
                         {
@@ -513,6 +528,32 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
                 }
 
                 return targets;
+            }
+        }
+
+        private List<(string ResourceId, ResourceEvent? ResourceEvent)> CaptureResourceEvents(
+            ResourceNotificationService resourceNotificationService)
+        {
+            var resourceEvents = new List<(string ResourceId, ResourceEvent? ResourceEvent)>();
+
+            foreach (var resourceId in Resource.GetResolvedResourceNames())
+            {
+                resourceNotificationService.TryGetCurrentState(resourceId, out var resourceEvent);
+                resourceEvents.Add((resourceId, resourceEvent));
+            }
+
+            return resourceEvents;
+        }
+
+        private void SynchronizeRunningGenerations(
+            IReadOnlyList<(string ResourceId, ResourceEvent? ResourceEvent)> resourceEvents)
+        {
+            foreach (var (_, resourceEvent) in resourceEvents)
+            {
+                if (resourceEvent is not null && TrySignalRunningGeneration(resourceEvent))
+                {
+                    _readyGenerationSignalVersion++;
+                }
             }
         }
 

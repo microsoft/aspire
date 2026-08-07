@@ -3,6 +3,7 @@
 
 using System.Threading.Channels;
 using Aspire.Hosting.Health;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -710,6 +711,55 @@ public class ResourceHealthCheckServiceTests(ITestOutputHelper testOutputHelper)
         await app.StopAsync().DefaultTimeout();
     }
 
+    [Fact]
+    public async Task QueuedRunningGenerationInvalidatesHealthCheckBeforeWatcherProcessesEvent()
+    {
+        var resource = new ParentResource("resource");
+        resource.Annotations.Add(new DcpInstancesAnnotation([
+            new("resource-one", "one", 0),
+            new("resource-two", "two", 1)
+        ]));
+
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+        await notifications.PublishUpdateAsync(resource, "resource-one", snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+        Assert.True(notifications.TryGetCurrentState("resource-one", out var initialEvent));
+
+        var completionState = new ResourceHealthCheckService.ResourceMonitorState(
+            NullLogger.Instance,
+            initialEvent,
+            CancellationToken.None);
+        var captureState = new ResourceHealthCheckService.ResourceMonitorState(
+            NullLogger.Instance,
+            initialEvent,
+            CancellationToken.None);
+        var completionGeneration = completionState.BeginHealthCheck(notifications);
+        var captureGeneration = captureState.BeginHealthCheck(notifications);
+
+        // Do not call SetLatestEvent. This models the notification store being updated before
+        // ResourceHealthCheckService's background watcher consumes the queued notifications.
+        await notifications.PublishUpdateAsync(resource, "resource-two", snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+        await notifications.PublishUpdateAsync(resource, "resource-two", snapshot => snapshot with
+        {
+            State = KnownResourceStates.Exited
+        }).DefaultTimeout();
+        await notifications.PublishUpdateAsync(resource, "resource-two", snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+
+        Assert.False(completionState.IsHealthCheckGenerationCurrent(completionGeneration, notifications));
+        Assert.Empty(captureState.CaptureResourceReadyEventTargets(notifications, captureGeneration));
+
+        completionState.StopResourceMonitor();
+        captureState.StopResourceMonitor();
+    }
+
     [Theory]
     [InlineData(1, false)]
     [InlineData(2, true)]
@@ -732,7 +782,7 @@ public class ResourceHealthCheckServiceTests(ITestOutputHelper testOutputHelper)
             initialEvent,
             CancellationToken.None);
 
-        monitorState.BeginHealthCheck();
+        monitorState.BeginHealthCheck(ResourceNotificationServiceTestHelpers.Create());
         monitorState.SetLatestEvent(new ResourceEvent(
             resource,
             resource.Name,
