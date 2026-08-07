@@ -87,7 +87,7 @@ public class ExecutableResourceBuilderExtensionTests
     }
 
     [Fact]
-    public void WithDebugSupportAddsAnnotationInRunMode()
+    public async Task WithDebugSupportAddsAnnotationInRunMode()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         var launchConfig = new ExecutableLaunchConfiguration("python");
@@ -97,7 +97,7 @@ public class ExecutableResourceBuilderExtensionTests
         var annotation = executable.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
         var exe = new Executable(new ExecutableSpec());
-        annotation.LaunchConfigurationAnnotator(exe, "NoDebug");
+        await annotation.LaunchConfigurationAnnotator(exe, "NoDebug", CancellationToken.None);
         Assert.Equal("ms-python.python", annotation.LaunchConfigurationType);
 
         Assert.True(exe.TryGetAnnotationAsObjectList<ExecutableLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var annotations));
@@ -114,6 +114,54 @@ public class ExecutableResourceBuilderExtensionTests
 
         var annotation = executable.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
         Assert.Null(annotation);
+    }
+
+    [Fact]
+    public async Task WithDebugSupportAsynchronousProducerProducesTheSameAnnotationAsTheSynchronousOne()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var syncExecutable = builder.AddExecutable("sync", "command", "workingdirectory")
+            .WithDebugSupport(mode => new ExecutableLaunchConfiguration("go") { Mode = mode }, "go");
+        var asyncExecutable = builder.AddExecutable("async", "command", "workingdirectory")
+            .WithDebugSupport(async (mode, ct) =>
+            {
+                await Task.Yield();
+                return new ExecutableLaunchConfiguration("go") { Mode = mode };
+            }, "go");
+
+        var syncConfiguration = Assert.IsType<ExecutableLaunchConfiguration>(await syncExecutable.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.Debug));
+        var asyncConfiguration = Assert.IsType<ExecutableLaunchConfiguration>(await asyncExecutable.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.Debug));
+
+        Assert.Equal(asyncConfiguration.Type, syncConfiguration.Type);
+        Assert.Equal(asyncConfiguration.Mode, syncConfiguration.Mode);
+    }
+
+    [Fact]
+    public void WithDebugSupportRejectsATaskReturningSynchronousProducer()
+    {
+        // `mode => Task.FromResult(...)` binds to the synchronous overload (overload resolution only
+        // looks at the lambda's parameter count) with TLaunchConfiguration inferred as Task<T>, so the
+        // task itself would be serialized as the launch configuration. It must be rejected up front.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var executable = builder.AddExecutable("myexe", "command", "workingdirectory");
+
+        var exception = Assert.Throws<ArgumentException>(
+            () => executable.WithDebugSupport(mode => Task.FromResult(new ExecutableLaunchConfiguration("go") { Mode = mode }), "go"));
+
+        Assert.Equal("launchConfigurationProducer", exception.ParamName);
+        Assert.Contains(nameof(CancellationToken), exception.Message);
+    }
+
+    [Fact]
+    public void WithDebugSupportRejectsAValueTaskReturningSynchronousProducer()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var executable = builder.AddExecutable("myexe", "command", "workingdirectory");
+
+        var exception = Assert.Throws<ArgumentException>(
+            () => executable.WithDebugSupport(mode => ValueTask.FromResult(new ExecutableLaunchConfiguration("go") { Mode = mode }), "go"));
+
+        Assert.Equal("launchConfigurationProducer", exception.ParamName);
     }
 
     [Fact]

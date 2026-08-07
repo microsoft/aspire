@@ -25,6 +25,7 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 public partial class ConsoleLogsTests : DashboardTestContext
 {
     private readonly ITestOutputHelper _testOutputHelper;
+    private IRenderedComponent<FluentMenuProvider>? _menuProvider;
 
     public ConsoleLogsTests(ITestOutputHelper testOutputHelper)
     {
@@ -229,6 +230,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         var settingsMenu = cut.FindComponents<AspireMenu>().Single(m => m.Instance.Items.Any(i => i.Text == Resources.ControlsStrings.ShowHiddenResources));
         var showHiddenMenuItem = settingsMenu.Instance.Items.Single(i => i.Text == Resources.ControlsStrings.ShowHiddenResources);
         Assert.NotNull(showHiddenMenuItem.OnClick);
+        await cut.InvokeAsync(() => settingsMenu.Instance.OpenChanged.InvokeAsync(false));
         await cut.InvokeAsync(showHiddenMenuItem.OnClick);
         cut.Render();
 
@@ -247,9 +249,12 @@ public partial class ConsoleLogsTests : DashboardTestContext
 
         // Act & Assert 3: Click "Hide hidden resources" to hide them again
         // Note: We stay on "All" view to test the hide functionality
+        cut.WaitForAssertion(() => Assert.False(settingsMenu.Instance.Open));
+        settingsMenuButton.Click();
         settingsMenu = cut.FindComponents<AspireMenu>().Single(m => m.Instance.Items.Any(i => i.Text == Resources.ControlsStrings.HideHiddenResources));
         var hideHiddenMenuItem = settingsMenu.Instance.Items.Single(i => i.Text == Resources.ControlsStrings.HideHiddenResources);
         Assert.NotNull(hideHiddenMenuItem.OnClick);
+        await cut.InvokeAsync(() => settingsMenu.Instance.OpenChanged.InvokeAsync(false));
         await cut.InvokeAsync(hideHiddenMenuItem.OnClick);
         cut.Render();
 
@@ -308,7 +313,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         // Assert: The "Show hidden resources" / "Hide hidden resources" menu item should NOT be present
         cut.WaitForAssertion(() =>
         {
-            var menuItems = cut.FindAll("fluent-menu-item");
+            var menuItems = _menuProvider!.FindAll("fluent-menu-item");
             var hiddenResourcesMenuItems = menuItems.Where(item =>
             {
                 var text = item.TextContent;
@@ -582,7 +587,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         logger.LogInformation("Clear current entries.");
         cut.Find(".clear-button").Click();
 
-        cut.WaitForElement("#clear-menu-all");
+        _menuProvider!.WaitForElement("#clear-menu-all");
         var clearMenu = cut.FindComponents<AspireMenu>().Single(m => m.Instance.Items.Any(i => i.Id == "clear-menu-all"));
         var clearAllMenuItem = clearMenu.Instance.Items.Single(i => i.Id == "clear-menu-all");
         Assert.NotNull(clearAllMenuItem.OnClick);
@@ -926,6 +931,9 @@ public partial class ConsoleLogsTests : DashboardTestContext
         Services.AddSingleton<IDashboardClient>(dashboardClient ?? new TestDashboardClient());
         Services.AddScoped<DashboardCommandExecutor>();
         Services.AddSingleton<ConsoleLogsManager>();
+
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        _menuProvider = RenderComponent<FluentMenuProvider>();
     }
 
     private IRenderedComponent<Components.Pages.ConsoleLogs> RenderConsoleLogsPage(ViewportInformation viewport, string resourceName)

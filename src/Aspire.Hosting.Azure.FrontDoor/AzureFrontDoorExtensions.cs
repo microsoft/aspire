@@ -155,7 +155,7 @@ public static class AzureFrontDoorExtensions
         var resource = new AzureFrontDoorResource(name, configureInfrastructure);
 
         return builder.ExecutionContext.IsPublishMode
-            ? builder.AddResource(resource)
+            ? builder.AddResource(resource).WithIconName("GlobeArrowForward")
             : builder.CreateResourceBuilder(resource);
     }
 

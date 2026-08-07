@@ -19,7 +19,7 @@ public class ConformanceTests : ConformanceTests<IConnectionMultiplexer, StackEx
 
     protected override ServiceLifetime ServiceLifetime => ServiceLifetime.Singleton;
 
-    protected override bool CanConnectToServer => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker);
+    protected override bool CanConnectToServer => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers);
 
     protected override bool SupportsKeyedRegistrations => true;
 
@@ -66,7 +66,7 @@ public class ConformanceTests : ConformanceTests<IConnectionMultiplexer, StackEx
 
     protected override void PopulateConfiguration(ConfigurationManager configuration, string? key = null)
     {
-        string connectionString = RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker)
+        string connectionString = RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers)
                                     ? _containerFixture.GetConnectionString()
                                     : "localhost";
         configuration.AddInMemoryCollection([

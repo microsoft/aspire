@@ -260,7 +260,7 @@ public class YarpConfigGeneratorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
     public async Task GenerateEnvVariablesConfigurationDockerCompose()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

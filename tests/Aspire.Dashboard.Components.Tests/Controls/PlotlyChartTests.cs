@@ -7,6 +7,7 @@ using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Model.MetricValues;
+using Aspire.Dashboard.Utils;
 using Bunit;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenTelemetry.Proto.Metrics.V1;
@@ -46,11 +47,15 @@ public class PlotlyChartTests : DashboardTestContext
             });
     }
 
-    [Fact]
-    public async Task Render_HasInstrument_InitializeChartInvocation()
+    [Theory]
+    [InlineData(TimeFormat.System, "12:59:57 AM", "%-I:%M:%S %p")]
+    [InlineData(TimeFormat.TwelveHour, "12:59:57 AM", "%-I:%M:%S %p")]
+    [InlineData(TimeFormat.TwentyFourHour, "0:59:57", "%H:%M:%S")]
+    public async Task Render_HasInstrument_InitializeChartInvocation(TimeFormat timeFormat, string expectedTooltipTime, string expectedPlotlyTimeFormat)
     {
         // Arrange
-        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        var timeProvider = new TestTimeProvider { ConfiguredTimeFormat = timeFormat };
+        FluentUISetupHelpers.AddCommonDashboardServices(this, browserTimeProvider: timeProvider);
         MetricsSetupHelpers.SetupPlotlyChart(this);
 
         var options = new TelemetryLimitOptions();
@@ -105,8 +110,9 @@ public class PlotlyChartTests : DashboardTestContext
                 Assert.Collection((IEnumerable<PlotlyTrace>)i.Arguments[1]!, trace =>
                 {
                     Assert.Equal("Unit-&lt;b&gt;Bold&lt;/b&gt;", trace.Name);
-                    Assert.Equal("<b>Name-&lt;b&gt;Bold&lt;/b&gt;</b><br />Unit-&lt;b&gt;Bold&lt;/b&gt;: 1<br />Time: 12:59:57 AM", trace.Tooltips[0], ignoreWhiteSpaceDifferences: true);
+                    Assert.Equal($"<b>Name-&lt;b&gt;Bold&lt;/b&gt;</b><br />Unit-&lt;b&gt;Bold&lt;/b&gt;: 1<br />Time: {expectedTooltipTime}", trace.Tooltips[0], ignoreWhiteSpaceDifferences: true);
                 });
+                Assert.Equal(expectedPlotlyTimeFormat, Assert.IsType<PlotlyUserLocale>(i.Arguments[5]).Time);
             });
     }
 }

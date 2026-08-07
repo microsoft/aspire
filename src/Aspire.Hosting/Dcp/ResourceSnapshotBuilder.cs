@@ -142,7 +142,7 @@ internal class ResourceSnapshotBuilder
                 projectPath = projectResource.GetProjectMetadata().ProjectPath;
                 launchProfileName = projectResource.GetEffectiveLaunchProfile()?.Name;
             }
-            else if (appModelResource.TryGetLastAnnotation<IProjectMetadata>(out var projectMetadata))
+            else if (appModelResource.TryGetProjectMetadata(out var projectMetadata))
             {
                 // New-style, annotation-based C# service (DotnetProjectResource)
                 projectPath = projectMetadata.ProjectPath;

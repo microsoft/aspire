@@ -242,6 +242,7 @@ Write-JsonFile (Join-Path $pointerPackageBin 'aspire-package-map.json') $ridPack
 $pointerReadmeTemplate = Read-TemplateFile (Join-Path $PSScriptRoot 'pack-cli-npm-package.pointer.README.md')
 $pointerReadme = Expand-Template $pointerReadmeTemplate @{
   PACKAGE_NAME = $PackageName
+  VERSION = $Version
 }
 
 Write-TextFile (Join-Path $pointerPackageRoot 'README.md') $pointerReadme

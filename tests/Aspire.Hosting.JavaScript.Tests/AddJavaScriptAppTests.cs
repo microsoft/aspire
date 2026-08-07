@@ -531,7 +531,7 @@ public class AddJavaScriptAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+	[RequiresFeature(TestFeature.Docker | TestFeature.ContainerImageBuild)]
     [OuterloopTest("Builds a Docker image to verify the generated pnpm Dockerfile works")]
     public async Task VerifyPnpmDockerfileBuildSucceeds()
     {
@@ -627,7 +627,7 @@ public class AddJavaScriptAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.Docker | TestFeature.ContainerImageBuild)]
     [OuterloopTest("Builds and runs a Docker image to verify the generated pnpm PublishAsPackageScript Dockerfile works")]
     public async Task VerifyPnpmDockerfileWhenPublishedAsPackageScriptRunsWithoutNetwork()
     {

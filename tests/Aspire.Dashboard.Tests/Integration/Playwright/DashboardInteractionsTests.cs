@@ -126,6 +126,45 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
         });
     }
 
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ScrollButtons_RemainInactiveWhenRegionHasNoRoomForControl()
+    {
+        await RunTestAsync(async page =>
+        {
+            await GoToResourcesAndWaitAsync(page);
+
+            await page.EvaluateAsync("""
+                () => {
+                    const region = document.createElement('div');
+                    region.className = 'continuous-scroll-overflow';
+                    region.id = 'partially-visible-scroll-region';
+                    region.style.cssText = 'position:fixed;left:0;top:-280px;width:400px;height:300px;overflow:auto;';
+                    const tall = document.createElement('div');
+                    tall.style.height = '2000px';
+                    region.appendChild(tall);
+                    document.body.appendChild(region);
+                }
+                """);
+
+            var buttons = page.Locator(".scroll-buttons");
+            await Assertions.Expect(buttons).ToHaveCountAsync(1);
+            await page.EvaluateAsync("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))").DefaultTimeout();
+
+            Assert.Equal("scroll-buttons", await buttons.GetAttributeAsync("class"));
+
+            await page.EvaluateAsync("""
+                () => {
+                    document.getElementById('partially-visible-scroll-region').style.top = '0';
+                    window.dispatchEvent(new Event('resize'));
+                }
+                """);
+            await page.EvaluateAsync("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))").DefaultTimeout();
+
+            Assert.Equal("scroll-buttons is-active", await buttons.GetAttributeAsync("class"));
+        });
+    }
+
     private static async Task GoToResourcesAndWaitAsync(IPage page)
     {
         await page.GotoAsync("/");

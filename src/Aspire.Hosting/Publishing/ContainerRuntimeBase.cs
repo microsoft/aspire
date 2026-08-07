@@ -33,7 +33,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime, ICont
     protected ILogger<TLogger> Logger => _logger;
 
     /// <summary>
-    /// Gets the process runner instance for use in derived classes.
+    /// Gets the process runner used for container runtime commands.
     /// </summary>
     protected IProcessRunner ProcessRunner => _processRunner;
 

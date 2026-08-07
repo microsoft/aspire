@@ -90,7 +90,8 @@ public static class OracleDatabaseBuilderExtensions
 
         builder.Resource.AddDatabase(name, databaseName);
         var oracleDatabase = new OracleDatabaseResource(name, databaseName, builder.Resource);
-        return builder.ApplicationBuilder.AddResource(oracleDatabase);
+        return builder.ApplicationBuilder.AddResource(oracleDatabase)
+            .WithIconName("Database");
     }
 
     /// <summary>

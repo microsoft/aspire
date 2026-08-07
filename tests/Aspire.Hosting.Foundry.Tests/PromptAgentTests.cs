@@ -82,6 +82,42 @@ public class PromptAgentTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task AddPromptAgent_SendMessageCommand_WhenCanceled_ReturnsCanceled()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
+        var agent = project.AddPromptAgent("my-agent", model);
+        project.Resource.Outputs["endpoint"] = "https://account.services.ai.azure.com/api/projects/my-project";
+
+        using var serviceProvider = builder.Services.BuildServiceProvider();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var command = Assert.Single(agent.Resource.Annotations.OfType<ResourceCommandAnnotation>());
+        var result = await command.ExecuteCommand(new ExecuteCommandContext
+        {
+            Services = serviceProvider,
+            ResourceName = agent.Resource.Name,
+            CancellationToken = cts.Token,
+            Logger = NullLogger.Instance,
+            Arguments = new InteractionInputCollection(
+            [
+                new InteractionInput
+                {
+                    Name = "message",
+                    InputType = InputType.Text,
+                    Value = "Hello"
+                }
+            ])
+        }).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.False(result.Success);
+        Assert.True(result.Canceled, result.Message);
+    }
+
+    [Fact]
     public void AddPromptAgent_WithNullName_Throws()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

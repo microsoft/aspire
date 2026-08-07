@@ -6,7 +6,7 @@ import { createSelfSignedCertAsync, generateToken } from '../utils/security';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { AspireResourceDebugSession, DcpServerConnectionInfo, ErrorDetails, ErrorResponse, ProcessRestartedNotification, RunSessionNotification, RunSessionPayload, ServiceLogsNotification, SessionMessageNotification, SessionTerminatedNotification } from './types';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
-import { createDebugSessionConfiguration, getResourceDebuggerExtensions } from '../debugger/debuggerExtensions';
+import { getResourceDebuggerExtensions, prepareDebugSession } from '../debugger/debuggerExtensions';
 import { cleanupRun } from '../debugger/runCleanupRegistry';
 import { timingSafeEqual, randomBytes } from 'crypto';
 import { getRunSessionInfo, getSupportedCapabilities } from '../capabilities';
@@ -373,7 +373,7 @@ export default class AspireDcpServer {
                 }
 
                 try {
-                    const config = await createDebugSessionConfiguration(
+                    const preparedSession = await prepareDebugSession(
                         aspireDebugSession.configuration,
                         launchConfig,
                         payload.args,
@@ -382,7 +382,9 @@ export default class AspireDcpServer {
                         foundDebuggerExtension
                     );
 
-                    const resourceDebugSession = await aspireDebugSession.startAndGetDebugSession(config);
+                    const resourceDebugSession = preparedSession.alreadyStartedSession
+                        ? aspireDebugSession.trackAlreadyStartedResourceSession(preparedSession.debugConfiguration, preparedSession.alreadyStartedSession)
+                        : await aspireDebugSession.startAndGetDebugSession(preparedSession.debugConfiguration);
 
                     if (!resourceDebugSession) {
                         emitRunSessionFailureEnd('debugger_did_not_start');

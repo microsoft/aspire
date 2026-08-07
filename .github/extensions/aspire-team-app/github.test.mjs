@@ -68,9 +68,28 @@ test("loadDashboard paginates open issues for each watched repo", async () => {
     const body = JSON.parse(options.body);
     seenAfter.push(body.variables.after ?? null);
     if (body.query.includes("issues")) {
+      assert.match(body.query, /closedByPullRequestsReferences\(first:5, includeClosedPrs:true\)/);
       return jsonResponse({ data: { repository: { issues: page(
         body.variables.after,
-        issueNode(1, "2026-07-01T10:00:00Z"),
+        issueNode(1, "2026-07-01T10:00:00Z", [{
+          number: 10,
+          title: "Fix issue 1",
+          url: "https://github.com/microsoft/aspire/pull/10",
+          state: "OPEN",
+          repository: { nameWithOwner: "microsoft/aspire" },
+        }, {
+          number: 11,
+          title: "Merged fix for issue 1",
+          url: "https://github.com/microsoft/aspire/pull/11",
+          state: "MERGED",
+          repository: { nameWithOwner: "microsoft/aspire" },
+        }, {
+          number: 12,
+          title: "Abandoned fix for issue 1",
+          url: "https://github.com/microsoft/aspire/pull/12",
+          state: "CLOSED",
+          repository: { nameWithOwner: "microsoft/aspire" },
+        }]),
         issueNode(2, "2026-07-01T11:00:00Z"),
       ) } } });
     }
@@ -88,9 +107,23 @@ test("loadDashboard paginates open issues for each watched repo", async () => {
   assert.deepEqual(seenAfter, [null, "cursor-1"]);
   assert.equal(dashboard.counts.issues, 2);
   assert.deepEqual(dashboard.lanes.flatMap((lane) => lane.items.map((item) => item.issue.number)).sort((a, b) => a - b), [1, 2]);
+  const issue = dashboard.lanes.flatMap((lane) => lane.items).find((item) => item.issue.number === 1).issue;
+  assert.deepEqual(issue.linkedPullRequests, [{
+    repository: "microsoft/aspire",
+    number: 10,
+    title: "Fix issue 1",
+    url: "https://github.com/microsoft/aspire/pull/10",
+    state: "OPEN",
+  }, {
+    repository: "microsoft/aspire",
+    number: 11,
+    title: "Merged fix for issue 1",
+    url: "https://github.com/microsoft/aspire/pull/11",
+    state: "MERGED",
+  }]);
 });
 
-test("loadDashboard reports fetch progress and streams a partial snapshot", async () => {
+test("loadDashboard reports fetch progress and returns one complete snapshot", async () => {
   globalThis.fetch = async (_url, options = {}) => {
     const body = JSON.parse(options.body);
     return jsonResponse({ data: { repository: { isPrivate: false, pullRequests: {
@@ -100,7 +133,6 @@ test("loadDashboard reports fetch progress and streams a partial snapshot", asyn
   };
 
   const progress = [];
-  const partials = [];
   const dashboard = await loadDashboard({
     accounts: [{ token: "token", login: "octo", repos: ["microsoft/aspire", "microsoft/aspire.dev"] }],
     mode: "ship",
@@ -109,7 +141,6 @@ test("loadDashboard reports fetch progress and streams a partial snapshot", asyn
     dismissed: [],
     showDrafts: true,
     onProgress: (p) => progress.push(p),
-    onPartial: (snap) => partials.push(snap),
   });
 
   // Two (account, repo) jobs → total of 2, ending with an authoritative done tick.
@@ -117,9 +148,6 @@ test("loadDashboard reports fetch progress and streams a partial snapshot", asyn
   assert.equal(progress.at(-1).done, 2);
   assert.equal(progress.at(-1).phase, "done");
   assert.ok(progress.some((p) => p.phase === "fetch"), "expected at least one fetch-phase tick");
-  // The first partial is never throttled (lastPartialAt starts at 0), so we always get one.
-  assert.ok(partials.length >= 1, "expected at least one partial snapshot");
-  assert.equal(partials[0].authenticated, true);
   assert.equal(dashboard.counts.total, 1);
 });
 
@@ -192,7 +220,7 @@ function prNode(number, updatedAt) {
   };
 }
 
-function issueNode(number, updatedAt) {
+function issueNode(number, updatedAt, linkedPullRequests = []) {
   return {
     number,
     title: `Issue ${number}`,
@@ -203,6 +231,7 @@ function issueNode(number, updatedAt) {
     milestone: null,
     labels: { nodes: [] },
     assignees: { nodes: [] },
+    closedByPullRequestsReferences: { nodes: linkedPullRequests },
   };
 }
 

@@ -62,6 +62,7 @@ public static class OpenAIExtensions
             tags: ["openai", "healthcheck"]));
 
         return builder.AddResource(resource)
+            .WithIconName("BrainCircuit")
             .WithInitialState(new()
             {
                 ResourceType = "OpenAI",
@@ -110,6 +111,7 @@ public static class OpenAIExtensions
         var resource = new OpenAIModelResource(name, model, builder.Resource);
 
         return builder.ApplicationBuilder.AddResource(resource)
+            .WithIconName("BrainCircuit")
             .WithInitialState(new()
             {
                 ResourceType = "OpenAI Model",

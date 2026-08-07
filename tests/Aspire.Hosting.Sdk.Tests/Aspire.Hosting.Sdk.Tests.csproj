@@ -20,11 +20,28 @@
                       SkipGetTargetFrameworkProperties="true"
                       Private="false"
                       ExcludeAssets="all" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Tasks\Aspire.Hosting.Tasks.csproj"
+                      ReferenceOutputAssembly="false"
+                      SkipGetTargetFrameworkProperties="true"
+                      Private="false"
+                      ExcludeAssets="all" />
+    <ProjectReference Include="..\Aspire.Hosting.Sdk.Tests.FakeCommand\Aspire.Hosting.Sdk.Tests.FakeCommand.csproj"
+                      ReferenceOutputAssembly="false"
+                      SkipGetTargetFrameworkProperties="true"
+                      Private="false"
+                      ExcludeAssets="all" />
   </ItemGroup>
+
+  <PropertyGroup>
+    <FakeCommandHostFileName Condition="'$(OS)' == 'Windows_NT'">dotnet.exe</FakeCommandHostFileName>
+    <FakeCommandHostFileName Condition="'$(OS)' != 'Windows_NT'">dotnet</FakeCommandHostFileName>
+  </PropertyGroup>
 
   <ItemGroup>
     <!-- Expose the built RID tool path to tests via assembly metadata so the older-SDK fallback can be exercised. -->
     <AssemblyMetadata Include="AspireRuntimeIdentifierToolPath" Value="$(ArtifactsBinDir)Aspire.RuntimeIdentifier.Tool\$(Configuration)\$(DefaultTargetFramework)\Aspire.RuntimeIdentifier.Tool.dll" />
+    <AssemblyMetadata Include="AspireHostingTasksAssemblyPath" Value="$(ArtifactsBinDir)Aspire.Hosting.Tasks\$(Configuration)\net8.0\Aspire.Hosting.Tasks.dll" />
+    <AssemblyMetadata Include="FakeCommandHostPath" Value="$(ArtifactsBinDir)Aspire.Hosting.Sdk.Tests.FakeCommand\$(Configuration)\$(DefaultTargetFramework)\$(FakeCommandHostFileName)" />
   </ItemGroup>
 
   <ItemGroup>

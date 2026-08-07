@@ -14,7 +14,7 @@ import { resolveAccounts } from "./accounts.mjs";
 import { buildAgentActionPrompt, buildAgentActionLog, resolveActionTarget, toActionPrNumber } from "./agent.mjs";
 import {
   loadPrefs,
-  savePrefs,
+  updatePrefs,
   parseRepos,
   accountConfig,
   setAccountRepos,
@@ -29,21 +29,19 @@ const sseClients = new Set();
 // iframes), but shutdown must be per-instance: closing one canvas must not end another
 // still-open canvas's stream. A WeakMap avoids leaking entries once a response is GC'd.
 const clientInstance = new WeakMap();
-let cache = null;    // { dashboard, prefs, at } — freshest snapshot; may be a partial mid-stream
-// The last COMPLETE dashboard, used ONLY to resolve card-action PRs (resolveActionPr/findCachedPr).
-// During SSE streaming `cache` is transiently overwritten with partials (see computeDashboard's
-// onPartial) that omit PRs whose repos haven't finished loading this compute. A stale-but-still-
-// visible card clicked in that window would miss in the partial, and a miss is now rejected
-// (resolveActionPr returns null, so the action route answers 400 rather than trusting the client's
-// descriptor). Resolving actions against the last complete snapshot keeps every watched PR findable
-// for the whole refresh, so a still-visible card isn't spuriously rejected mid-stream.
+// The snapshot each iframe is currently expected to display. Background candidates do not advance
+// this map when Auto is off, so card actions continue resolving against the cards the user can see.
+const displayedSnapshots = new Map();
+// The cache contains only complete dashboards. A refresh builds privately and swaps this reference
+// after every watched repository settles, so open canvases and card actions keep using the previous
+// complete snapshot for the entire load.
+let cache = null;    // { dashboard, prefs, at }
 let resolveSnapshot = null;
 let inflight = null;
 let bgTimer = null;
-// Monotonic snapshot revision stamped on every dashboard we cache/broadcast (partial and
-// final, across every compute). The client applies snapshots strictly in seq order so a
-// wall-clock fetchedAt collision can't drop the final snapshot and an out-of-order partial
-// can't overwrite a newer one. Never reset — it only ever increments for the process.
+let nextPollAt = null;
+// Monotonic semantic revision. It advances only when dashboard content changes, so a no-op poll
+// cannot manufacture an update on reconnect merely because fetchedAt changed.
 let stateSeq = 0;
 // Logger captured from the most recent startInstance so background (non-request) work —
 // the poller and stale-while-revalidate refreshes — has somewhere to report failures.
@@ -62,12 +60,17 @@ const POLL_INTERVAL = 90 * 1000;
 // sub-sessions or does interactive work. Null until wired, so a click that races
 // startup fails cleanly instead of throwing an undefined-call.
 let agentSend = null;
+let browserOpen = null;
 
 // Called from extension.mjs. The injected fn receives { prompt, log } and returns
 // { messageId, queued } — queued is true when the agent was already mid-turn, so the
 // prompt waits behind the current task rather than starting immediately.
 export function setAgentSend(fn) {
   agentSend = typeof fn === "function" ? fn : null;
+}
+
+export function setBrowserOpen(fn) {
+  browserOpen = typeof fn === "function" ? fn : null;
 }
 
 // Account resolution probes every candidate credential against its account's
@@ -98,7 +101,12 @@ async function resolveAuth(prefs, { reprobe = false } = {}) {
     if (best) {
       best.active = true;
       setAccountActive(prefs, best.id, true);
-      await savePrefs(prefs);
+      const saved = await updatePrefs((latest) => {
+        if (activeIds(latest).length === 0 && Object.keys(latest.accounts || {}).length === 0) {
+          setAccountActive(latest, best.id, true);
+        }
+      });
+      Object.assign(prefs, saved);
     }
   }
 
@@ -121,13 +129,33 @@ function decorateDashboard(dashboard, auth, active, prefs) {
   dashboard.dismissedCount = (prefs.dismissedNotifications || []).length;
 }
 
-// Compute a fresh dashboard. When at least one iframe is connected we stream results:
-// `progress` ticks drive the deterministic client bar, and throttled `partial` snapshots
-// let cards fill in as each repo's PRs arrive, ending with a final authoritative `state`
-// push. Background polls pass progress:false so the bar doesn't flash every cycle while
-// the silent partial/final state pushes still refresh the UI.
-async function computeDashboard({ progress = true } = {}) {
+function dashboardContent(dashboard) {
+  if (!dashboard) return null;
+  const { seq: _seq, fetchedAt: _fetchedAt, ...content } = dashboard;
+  return JSON.stringify(content);
+}
+
+export function dashboardChanged(previous, next) {
+  return dashboardContent(previous) !== dashboardContent(next);
+}
+
+function dashboardInputKey(prefs) {
+  return JSON.stringify({
+    mode: prefs.mode,
+    release: prefs.release,
+    showDrafts: prefs.showDrafts,
+    notifications: prefs.notifications,
+    dismissedNotifications: prefs.dismissedNotifications,
+    accounts: prefs.accounts,
+  });
+}
+
+// Compute a complete dashboard privately. Progress events can update the top bar, but dashboard
+// state is published only once all repositories finish. Background checks either atomically apply
+// the completed snapshot or announce that one is ready, depending on the persisted user preference.
+async function computeDashboard({ progress = true, background = false } = {}) {
   const stream = sseClients.size > 0;
+  const previous = cache?.dashboard ?? null;
   const prefs = await loadPrefs();
   const auth = await resolveAuth(prefs);
   const active = auth.accounts.filter((a) => a.active && a.status !== "failed");
@@ -158,36 +186,31 @@ async function computeDashboard({ progress = true } = {}) {
       dismissed: prefs.dismissedNotifications,
       showDrafts: prefs.showDrafts,
       onProgress: stream && progress ? broadcastProgress : undefined,
-      onPartial: stream
-        ? (partial) => {
-            decorateDashboard(partial, auth, active, prefs);
-            // Stamp a strictly increasing revision so the client can order/ignore snapshots.
-            partial.seq = ++stateSeq;
-            // Publish the partial as the current cache so a canvas opening mid-load gets
-            // the freshest data-so-far, and push it to already-open iframes. Deliberately does
-            // NOT touch resolveSnapshot: a partial omits not-yet-loaded PRs, so using it to
-            // resolve a card action could strip a watched PR's host (see resolveSnapshot above).
-            cache = { dashboard: partial, prefs, at: Date.now() };
-            broadcastState(partial, prefs);
-          }
-        : undefined,
     });
     decorateDashboard(dashboard, auth, active, prefs);
   }
-  // Stamp the final (or unauthenticated) snapshot after any partials so it always carries the
-  // highest seq of this compute; the POST response returns this same cached object.
-  dashboard.seq = ++stateSeq;
-  cache = { dashboard, prefs, at: Date.now() };
-  // Only a COMPLETE compute advances the action-resolution snapshot; partials (above) never do,
-  // so mid-stream cache churn can't drop a watched PR's host and misroute its card action.
+  // A preference mutation can finish while GitHub requests are in flight. Auto is a publish choice,
+  // so use its latest committed value. If an input that shaped the dashboard changed, discard this
+  // stale candidate when a prior complete cache exists; the forced mutation compute queued behind it
+  // will publish the correctly-shaped replacement.
+  const latestPrefs = await loadPrefs();
+  if (cache && dashboardInputKey(prefs) !== dashboardInputKey(latestPrefs)) return cache;
+
+  const changed = dashboardChanged(previous, dashboard);
+  dashboard.seq = !previous || changed ? ++stateSeq : previous.seq;
+  cache = { dashboard, prefs: latestPrefs, at: Date.now() };
   resolveSnapshot = dashboard;
-  // Re-check the live SSE client set here instead of reusing the `stream` snapshot captured at the
-  // top of this compute. The browser constructs its EventSource and immediately GETs /api/state, and
-  // a stale-cache revalidation can begin before that stream registers — so `stream` may be false even
-  // though a client connects during this compute's GitHub fetch. Gating the final broadcast on the
-  // stale snapshot would suppress it for that just-connected client, leaving the canvas stale until
-  // the ~90s poll. The live set is authoritative at completion time.
-  if (sseClients.size > 0) { broadcastState(dashboard, prefs); }
+
+  // Re-check the live client set at completion: an iframe can connect after the compute begins.
+  // Explicit operations always publish. Silent polls publish only when data changed, and honor the
+  // user's choice to review a completed update before applying it.
+  if (sseClients.size > 0 && (!background || changed)) {
+    if (!background || latestPrefs.autoApplyUpdates) {
+      broadcastState(dashboard, latestPrefs);
+    } else {
+      broadcastUpdateAvailable(dashboard);
+    }
+  }
   return cache;
 }
 
@@ -217,9 +240,9 @@ function startCompute(opts, force = false) {
 // credential/GitHub failure; without a handler that rejection would surface as an
 // unhandledRejection and could terminate the extension host instead of merely leaving the
 // stale cache in place. Swallow + log it so the next tick (poller or TTL) can retry safely.
-function backgroundRefresh(opts) {
+function backgroundRefresh() {
   Promise.resolve()
-    .then(() => startCompute(opts))
+    .then(() => refreshInBackground())
     .catch((e) => {
       // bgLog wraps the async session logger (session.log). If the session has disconnected the
       // log call itself can reject, and returning that rejected promise from this handler would
@@ -238,7 +261,7 @@ async function getDashboard(force = false) {
     // canvas is instant, and kick a silent background refresh once it's aged past the TTL.
     // progress:false so this passive revalidation doesn't flash the top bar — only the very
     // first load and explicit user refreshes drive it. New data still streams via `state`.
-    if (Date.now() - (cache.at || 0) > STATE_TTL) backgroundRefresh({ progress: false });
+    if (Date.now() - (cache.at || 0) > STATE_TTL) backgroundRefresh();
     return cache;
   }
   return startCompute(undefined, force);
@@ -249,28 +272,42 @@ async function getDashboard(force = false) {
 // count so it never keeps the process alive or works when nobody is watching.
 function ensurePoller() {
   if (bgTimer) return;
+  nextPollAt = Date.now() + POLL_INTERVAL;
   bgTimer = setInterval(() => {
+    nextPollAt = Date.now() + POLL_INTERVAL;
+    writeSse("poll-schedule", JSON.stringify({ nextPollAt }));
     if (sseClients.size === 0) return;
     // Route through backgroundRefresh so a rejected poll can't become an unhandled rejection
     // on the timer path (which has no caller to await it) and crash the extension.
-    backgroundRefresh({ progress: false });
+    backgroundRefresh();
   }, POLL_INTERVAL);
   if (typeof bgTimer.unref === "function") bgTimer.unref();
 }
 
 function writeSse(event, data) {
   for (const res of sseClients) {
-    try {
-      res.write(`event: ${event}\ndata: ${data}\n\n`);
-    } catch {
+    if (!writeSseResponse(res, event, data)) {
       sseClients.delete(res);
     }
+  }
+}
+
+function writeSseResponse(res, event, data) {
+  try {
+    res.write(`event: ${event}\ndata: ${data}\n\n`);
+    return true;
+  } catch {
+    return false;
   }
 }
 
 // SSE data lines must be single-line; JSON.stringify escapes any newlines inside strings,
 // so the whole dashboard/prefs payload is safe to emit as one `data:` line.
 function broadcastState(dashboard, prefs) {
+  for (const res of sseClients) {
+    const instanceId = clientInstance.get(res);
+    if (instanceId) displayedSnapshots.set(instanceId, dashboard);
+  }
   writeSse("state", JSON.stringify({ dashboard, prefs }));
 }
 
@@ -278,11 +315,16 @@ function broadcastProgress(p) {
   writeSse("progress", JSON.stringify(p));
 }
 
-// Legacy nudge kept for resilience: tells clients to re-pull /api/state. The streaming
-// `state` push above is the primary path; this is a harmless fallback for any client that
-// only listens for `refresh`.
-function broadcastRefresh() {
-  writeSse("refresh", "1");
+function broadcastUpdateAvailable(dashboard) {
+  writeSse("update-available", JSON.stringify({
+    seq: dashboard.seq,
+    fetchedAt: dashboard.fetchedAt ?? null,
+    counts: dashboard.counts ?? null,
+  }));
+}
+
+function broadcastPreferences(prefs) {
+  writeSse("preferences", JSON.stringify(prefs));
 }
 
 // Resolve a client-supplied card-action PR descriptor against the server's own cached
@@ -295,11 +337,11 @@ function broadcastRefresh() {
 // back to the client's owner/repo/number would let a tampered or stale descriptor retarget a
 // tool-enabled action at an arbitrary github.com PR, and would misroute a GHES/EMU card to the
 // same-slug repo on dotcom — exactly the cache trust boundary this resolution exists to enforce.
-function resolveActionPr(pr) {
+function resolveActionPr(pr, instanceId) {
   const repository = String(pr?.repository ?? "").trim();
   const number = toActionPrNumber(pr?.number);
   const canonical = Number.isInteger(number)
-    ? findCachedPr(repository, number, pr?.url)
+    ? findCachedPr(repository, number, pr?.url, instanceId)
     : undefined;
   if (canonical) {
     return { repository: canonical.repository, number: canonical.number, url: canonical.url, title: canonical.title, author: canonical.author };
@@ -329,15 +371,13 @@ function hostOf(url) {
 // (undefined) rather than silently targeting whichever host the scan reached first.
 //
 // We match PR records ONLY. Normalized PRs carry a `review` object (normalizePr in github.mjs);
-// issues and PRs' linkedIssues share repository/number/url but have no `review`. Without that
-// discriminator a tampered descriptor could resolve a cached ISSUE, and since an issue url is
-// /issues/N (never /pull/N) safePrUrl would fail its host/path check and fall back to rewriting
-// it as a github.com /pull/N target — retargeting a tool-enabled action at an unrelated PR.
-function findCachedPr(repository, number, urlHint) {
-  // Resolve against the last COMPLETE dashboard, not `cache`, which can hold a partial mid-stream
-  // that omits not-yet-loaded PRs (see resolveSnapshot). Fall back to `cache` only before the first
-  // complete compute, when there are no prior host-qualified cards to misroute anyway.
-  const dashboard = resolveSnapshot ?? cache?.dashboard;
+// issues, PRs' linkedIssues, and issues' linkedPullRequests share repository/number/url but have no
+// `review`. Without that discriminator a tampered descriptor could resolve one of those nested
+// records and retarget a tool-enabled action at a PR that is not a visible actionable card.
+function findCachedPr(repository, number, urlHint, instanceId) {
+  // Refreshes keep the previous complete snapshot available until the replacement is complete, so
+  // card actions remain resolvable throughout an in-flight load.
+  const dashboard = displayedSnapshots.get(instanceId) ?? resolveSnapshot ?? cache?.dashboard;
   if (!dashboard || !repository) return undefined;
   const target = `${repository}#${number}`.toLowerCase();
   const byUrl = new Map();
@@ -371,6 +411,37 @@ function findCachedPr(repository, number, urlHint) {
   const wantHost = hostOf(urlHint);
   const onHost = wantHost ? matches.filter((m) => hostOf(m.url) === wantHost) : [];
   return onHost.length === 1 ? onHost[0] : undefined;
+}
+
+// Linked-PR URLs are client-supplied when clicked. Resolve them against the snapshot this canvas is
+// displaying before asking the host to open a browser canvas, so a modified DOM/request cannot turn
+// the loopback route into an arbitrary in-app URL opener.
+function findCachedLinkedPullRequest(url, instanceId) {
+  const dashboard = displayedSnapshots.get(instanceId) ?? resolveSnapshot ?? cache?.dashboard;
+  if (!dashboard || typeof url !== "string") return undefined;
+  let match;
+  const visit = (node) => {
+    if (match || !node || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      for (const value of node) visit(value);
+      return;
+    }
+    if (!node.review && (node.state === "OPEN" || node.state === "MERGED")
+      && typeof node.repository === "string" && Number.isInteger(node.number)
+      && typeof node.title === "string" && node.url === url) {
+      match = {
+        repository: node.repository,
+        number: node.number,
+        title: node.title,
+        url: node.url,
+        state: node.state,
+      };
+      return;
+    }
+    for (const value of Object.values(node)) visit(value);
+  };
+  visit(dashboard);
+  return match;
 }
 
 function send(res, status, body, type = "application/json") {
@@ -492,43 +563,55 @@ async function handle(req, res, log, instanceId) {
       return send(res, 200, APP_JS, "text/javascript");
     }
     if (req.method === "GET" && path === "/api/state") {
-      return send(res, 200, await getDashboard(false));
+      const next = await getDashboard(false);
+      displayedSnapshots.set(instanceId, next.dashboard);
+      return send(res, 200, next);
     }
     if (req.method === "POST" && path === "/api/refresh") {
-      return send(res, 200, await getDashboard(true));
+      const next = await getDashboard(true);
+      displayedSnapshots.set(instanceId, next.dashboard);
+      return send(res, 200, next);
+    }
+    if (req.method === "POST" && path === "/api/auto-apply") {
+      const { enabled } = await readBody(req);
+      if (typeof enabled !== "boolean") {
+        return send(res, 400, { error: "enabled must be a boolean" });
+      }
+      const prefs = await updatePrefs((latest) => { latest.autoApplyUpdates = enabled; });
+      if (cache) cache = { ...cache, prefs };
+      broadcastPreferences(prefs);
+      return send(res, 200, { prefs });
     }
     if (req.method === "POST" && path === "/api/mode") {
       const { mode } = await readBody(req);
-      const prefs = await loadPrefs();
-      if (["review", "issues", "ship"].includes(mode)) prefs.mode = mode;
-      await savePrefs(prefs);
+      await updatePrefs((prefs) => {
+        if (["review", "issues", "ship"].includes(mode)) prefs.mode = mode;
+      });
       const next = await getDashboard(true);
-      broadcastRefresh();
+      displayedSnapshots.set(instanceId, next.dashboard);
       return send(res, 200, next);
     }
     if (req.method === "POST" && path === "/api/prefs") {
       // Release milestone + notification preferences + draft visibility. Watched
       // repos are configured per account via /api/account/repos.
       const body = await readBody(req);
-      const prefs = await loadPrefs();
-      if (typeof body.release === "string" && body.release.trim()) prefs.release = body.release.trim();
-      if (typeof body.showDrafts === "boolean") prefs.showDrafts = body.showDrafts;
-      if (body.notifications) prefs.notifications = { ...prefs.notifications, ...body.notifications };
-      await savePrefs(prefs);
+      await updatePrefs((prefs) => {
+        if (typeof body.release === "string" && body.release.trim()) prefs.release = body.release.trim();
+        if (typeof body.showDrafts === "boolean") prefs.showDrafts = body.showDrafts;
+        if (body.notifications) prefs.notifications = { ...prefs.notifications, ...body.notifications };
+      });
       const next = await getDashboard(true);
-      broadcastRefresh();
+      displayedSnapshots.set(instanceId, next.dashboard);
       return send(res, 200, next);
     }
     if (req.method === "POST" && path === "/api/account/toggle") {
       const { id, active } = await readBody(req);
       if (typeof id === "string" && id) {
-        const prefs = await loadPrefs();
-        setAccountActive(prefs, id, !!active);
-        await savePrefs(prefs);
+        await updatePrefs((prefs) => { setAccountActive(prefs, id, !!active); });
         invalidateAuth();
       }
       const next = await getDashboard(true);
-      broadcastRefresh();
+      displayedSnapshots.set(instanceId, next.dashboard);
       return send(res, 200, next);
     }
     if (req.method === "POST" && path === "/api/account/repos") {
@@ -537,15 +620,14 @@ async function handle(req, res, log, instanceId) {
       // clobber its local draft. The dashboard cache is still recomputed.
       const { id, repos } = await readBody(req);
       if (typeof id === "string" && id) {
-        const prefs = await loadPrefs();
         // Pass an empty fallback so a cleared submission resets to the account's own
         // default (public vs EMU) inside setAccountRepos, rather than parseRepos
         // pre-filling the public default here.
-        setAccountRepos(prefs, id, parseRepos(repos, []));
-        await savePrefs(prefs);
+        await updatePrefs((prefs) => { setAccountRepos(prefs, id, parseRepos(repos, [])); });
         invalidateAuth();
       }
       const next = await getDashboard(true);
+      displayedSnapshots.set(instanceId, next.dashboard);
       return send(res, 200, next);
     }
     if (req.method === "POST" && path === "/api/agent/action") {
@@ -565,7 +647,7 @@ async function handle(req, res, log, instanceId) {
       // that doesn't resolve to a unique cached PR is rejected outright: we never reconstruct a
       // target from the client's owner/repo/number, so a tampered or aged-out card can't retarget
       // a tool-enabled action at an arbitrary github.com PR (or a same-slug dotcom repo).
-      const resolvedPr = resolveActionPr(pr);
+      const resolvedPr = resolveActionPr(pr, instanceId);
       if (!resolvedPr) {
         return send(res, 400, { error: "This pull request is no longer in view. Refresh and try again." });
       }
@@ -586,37 +668,45 @@ async function handle(req, res, log, instanceId) {
       const effectiveTarget = resolveActionTarget(resolvedPr, target);
       return send(res, 200, { ok: true, kind, target: effectiveTarget, messageId, queued });
     }
+    if (req.method === "POST" && path === "/api/open-pr") {
+      if (!browserOpen) {
+        return send(res, 503, { error: "The in-app browser is not ready yet. Try again in a moment." });
+      }
+      const { url } = await readBody(req);
+      const pr = findCachedLinkedPullRequest(url, instanceId);
+      if (!pr) {
+        return send(res, 400, { error: "This pull request is no longer linked to a visible issue. Refresh and try again." });
+      }
+      const opened = await browserOpen(pr);
+      return send(res, 200, { ok: true, instanceId: opened?.instanceId ?? null });
+    }
     if (req.method === "POST" && path === "/api/notifications/dismiss") {
       const { id } = await readBody(req);
       if (typeof id === "string" && id) {
-        const prefs = await loadPrefs();
-        if (!prefs.dismissedNotifications.includes(id)) {
-          prefs.dismissedNotifications.push(id);
-          await savePrefs(prefs);
-        }
+        await updatePrefs((prefs) => {
+          if (!prefs.dismissedNotifications.includes(id)) prefs.dismissedNotifications.push(id);
+        });
       }
       const next = await getDashboard(true);
-      broadcastRefresh();
+      displayedSnapshots.set(instanceId, next.dashboard);
       return send(res, 200, next);
     }
     if (req.method === "POST" && path === "/api/notifications/dismiss-all") {
-      const prefs = await loadPrefs();
       const current = await getDashboard(false);
       const ids = (current.dashboard.notifications || []).map((n) => n.id).filter(Boolean);
-      const set = new Set(prefs.dismissedNotifications);
-      for (const id of ids) set.add(id);
-      prefs.dismissedNotifications = [...set];
-      await savePrefs(prefs);
+      await updatePrefs((prefs) => {
+        const set = new Set(prefs.dismissedNotifications);
+        for (const id of ids) set.add(id);
+        prefs.dismissedNotifications = [...set];
+      });
       const next = await getDashboard(true);
-      broadcastRefresh();
+      displayedSnapshots.set(instanceId, next.dashboard);
       return send(res, 200, next);
     }
     if (req.method === "POST" && path === "/api/notifications/restore") {
-      const prefs = await loadPrefs();
-      prefs.dismissedNotifications = [];
-      await savePrefs(prefs);
+      await updatePrefs((prefs) => { prefs.dismissedNotifications = []; });
       const next = await getDashboard(true);
-      broadcastRefresh();
+      displayedSnapshots.set(instanceId, next.dashboard);
       return send(res, 200, next);
     }
     if (req.method === "GET" && path === "/api/accounts") {
@@ -624,7 +714,7 @@ async function handle(req, res, log, instanceId) {
       const prefs = await loadPrefs();
       const auth = await resolveAuth(prefs, { reprobe: true });
       const next = await getDashboard(true);
-      broadcastRefresh();
+      displayedSnapshots.set(instanceId, next.dashboard);
       return send(res, 200, { accounts: auth.accounts, ...next });
     }
     if (req.method === "GET" && path === "/events") {
@@ -637,9 +727,18 @@ async function handle(req, res, log, instanceId) {
       sseClients.add(res);
       // Remember which instance owns this stream so stopInstance ends only its own clients.
       clientInstance.set(res, instanceId);
-      // A canvas is now watching — make sure the background monitor is running so its
-      // queue keeps refreshing without a manual reload.
+      // Start the shared cadence before replaying metadata so this client gets an exact deadline even
+      // when it is the first canvas to connect after the extension process starts.
       ensurePoller();
+      writeSseResponse(res, "poll-schedule", JSON.stringify({ nextPollAt }));
+      if (cache) {
+        writeSseResponse(res, "snapshot", JSON.stringify({
+          seq: cache.dashboard.seq,
+          fetchedAt: cache.dashboard.fetchedAt ?? null,
+          prefs: cache.prefs,
+          nextPollAt,
+        }));
+      }
       req.on("close", () => { sseClients.delete(res); clientInstance.delete(res); });
       return;
     }
@@ -674,6 +773,7 @@ export async function stopInstance(instanceId) {
   const entry = servers.get(instanceId);
   if (!entry) return;
   servers.delete(instanceId);
+  displayedSnapshots.delete(instanceId);
   // SSE responses are long-lived, so server.close() would hang forever waiting for them
   // to drain. End the open event streams first, then force any lingering sockets closed so
   // shutdown completes promptly (e.g. when the canvas iframe is still connected). sseClients
@@ -693,39 +793,32 @@ export async function stopInstance(instanceId) {
 }
 
 export async function forceRefresh() {
-  const next = await getDashboard(true);
-  broadcastRefresh();
-  return next;
+  return getDashboard(true);
+}
+
+export async function refreshInBackground() {
+  return startCompute({ progress: false, background: true });
 }
 
 export async function rescanAccounts() {
   const prefs = await loadPrefs();
   const auth = await resolveAuth(prefs, { reprobe: true });
   const next = await getDashboard(true);
-  broadcastRefresh();
   return { accounts: auth.accounts, activeAccounts: next.dashboard.activeAccounts ?? [], dashboard: next.dashboard };
 }
 
 export async function toggleAccount(id, active) {
-  const prefs = await loadPrefs();
-  setAccountActive(prefs, id, !!active);
-  await savePrefs(prefs);
+  await updatePrefs((prefs) => { setAccountActive(prefs, id, !!active); });
   invalidateAuth();
-  const next = await getDashboard(true);
-  broadcastRefresh();
-  return next;
+  return getDashboard(true);
 }
 
 export async function setReposFor(id, repos) {
-  const prefs = await loadPrefs();
   // Empty fallback: a cleared list resets to the account's own default in
   // setAccountRepos (public vs EMU) instead of parseRepos forcing the public one.
-  setAccountRepos(prefs, id, parseRepos(repos, []));
-  await savePrefs(prefs);
+  await updatePrefs((prefs) => { setAccountRepos(prefs, id, parseRepos(repos, [])); });
   invalidateAuth();
-  const next = await getDashboard(true);
-  broadcastRefresh();
-  return next;
+  return getDashboard(true);
 }
 
 export { getDashboard };

@@ -88,6 +88,42 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void AddDotnetProject_DirectoryContainingSingleProjectFile_ResolvesToThatProjectFile()
+    {
+        // DotnetProjectMetadata defers path resolution to ProjectPathResolver, which resolves a directory
+        // containing exactly one .csproj to that project file. Verify AddDotnetProject preserves that
+        // contract end-to-end (it used to be exercised only through the core AddProject<T> path).
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectDir = Directory.CreateDirectory(Path.Combine(workspace.Path, "MyService"));
+        var projectPath = Path.Combine(projectDir.FullName, "MyService.csproj");
+        File.WriteAllText(projectPath, "<Project />");
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var app = builder.AddDotnetProject("svc", projectDir.FullName, o => o.ExcludeLaunchProfile = true);
+
+        Assert.True(app.Resource.TryGetLastAnnotation<IProjectMetadata>(out var metadata));
+        Assert.Equal(projectPath, metadata.ProjectPath);
+    }
+
+    [Fact]
+    public void AddDotnetProject_AmbiguousDirectory_PassesPathThroughUnchanged()
+    {
+        // When a directory contains zero or multiple .csproj files, ProjectPathResolver deliberately passes
+        // the directory path through unchanged rather than throwing, so the failure surfaces later as a
+        // resource start error naming the resource.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectDir = Directory.CreateDirectory(Path.Combine(workspace.Path, "AmbiguousService"));
+        File.WriteAllText(Path.Combine(projectDir.FullName, "First.csproj"), "<Project />");
+        File.WriteAllText(Path.Combine(projectDir.FullName, "Second.csproj"), "<Project />");
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var app = builder.AddDotnetProject("svc", projectDir.FullName, o => o.ExcludeLaunchProfile = true);
+
+        Assert.True(app.Resource.TryGetLastAnnotation<IProjectMetadata>(out var metadata));
+        Assert.Equal(projectDir.FullName, metadata.ProjectPath);
+    }
+
+    [Fact]
     public void AddDotnetProject_AddsSupportsDebuggingAnnotationInRunMode()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
@@ -130,8 +166,12 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     public void AddLifeCycleCommands_DotnetProjectResource_RestartHasDetailedProjectDescription()
     {
         // A DotnetProjectResource is a .NET app launched via the SDK, so it should receive the same
-        // detailed "rebuild is required" restart description that ProjectResource gets.
-        var resource = new DotnetProjectResource("testapp", AppContext.BaseDirectory);
+        // detailed "rebuild is required" restart description that ProjectResource gets. The marker for
+        // that is the project-defaults annotation applied by AddDotnetProject.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var projectPath = Path.Combine(builder.AppHostDirectory, "MyService", "MyService.csproj");
+        var resource = builder.AddDotnetProject("testapp", projectPath, o => o.ExcludeLaunchProfile = true).Resource;
         resource.AddLifeCycleCommands();
 
         var restartCommand = resource.Annotations.OfType<ResourceCommandAnnotation>().Single(a => a.Name == KnownResourceCommands.RestartCommand);
@@ -140,25 +180,70 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void AddDotnetProject_DebugAnnotator_ProducesProjectLaunchConfiguration()
+    public void AddLifeCycleCommands_DirectlyConstructedDotnetProjectResource_RestartHasDetailedProjectDescription()
+    {
+        // The type has a public constructor, so it can be added with AddResource instead of
+        // AddDotnetProject. It is still a .NET app launched via the SDK, so the constructor carries the
+        // project-defaults annotation and the resource gets the same treatment as ProjectResource.
+        var resource = new DotnetProjectResource("testapp", AppContext.BaseDirectory);
+        resource.AddLifeCycleCommands();
+
+        var restartCommand = resource.Annotations.OfType<ResourceCommandAnnotation>().Single(a => a.Name == KnownResourceCommands.RestartCommand);
+
+        Assert.Equal(CommandStrings.RestartProjectDescription, restartCommand.DisplayDescription);
+        Assert.Contains(resource.Annotations.OfType<ResourceCommandAnnotation>(), a => a.Name == KnownResourceCommands.RebuildCommand);
+    }
+
+    [Fact]
+    public async Task AddDotnetProject_DebugAnnotator_ProducesProjectLaunchConfiguration()
     {
         // The "project" SupportsDebuggingAnnotation must produce a ProjectLaunchConfiguration carrying the
-        // project path so the IDE (and DCP) can launch/debug it exactly like AddProject.
+        // project path so the IDE (and DCP) can launch/debug it exactly like AddProject. The producer also
+        // resolves the launch profile selection, so an out-of-assembly integration gets the complete
+        // configuration without doing any of that work itself.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         var projectPath = Path.Combine(builder.AppHostDirectory, "MyService", "MyService.csproj");
         var app = builder.AddDotnetProject("svc", projectPath, o => o.ExcludeLaunchProfile = true);
 
         Assert.True(app.Resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
-        Assert.Equal("project", supportsDebugging.LaunchConfigurationType);
+        Assert.Equal(KnownLaunchConfigurationTypes.Project, supportsDebugging.LaunchConfigurationType);
 
-        var exe = Executable.Create("svc", "dotnet");
-        supportsDebugging.LaunchConfigurationAnnotator(exe, ExecutableLaunchMode.Debug);
-
-        Assert.True(exe.TryGetProjectLaunchConfiguration(out var launchConfig));
-        Assert.Equal("project", launchConfig.Type);
+        var launchConfig = Assert.IsType<ProjectLaunchConfiguration>(await app.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.Debug));
+        Assert.Equal(KnownLaunchConfigurationTypes.Project, launchConfig.Type);
         Assert.Equal(ExecutableLaunchMode.Debug, launchConfig.Mode);
         Assert.Equal(projectPath, launchConfig.ProjectPath);
+        Assert.True(launchConfig.DisableLaunchProfile);
+        Assert.Equal(string.Empty, launchConfig.LaunchProfile);
+    }
+
+    [Fact]
+    public async Task AddDotnetProject_LaunchConfiguration_ResolvesEffectiveLaunchProfile()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectDir = Directory.CreateDirectory(Path.Combine(workspace.Path, "MyService"));
+        var projectPath = Path.Combine(projectDir.FullName, "MyService.csproj");
+        await File.WriteAllTextAsync(projectPath, "<Project />");
+
+        var propertiesDir = Directory.CreateDirectory(Path.Combine(projectDir.FullName, "Properties"));
+        await File.WriteAllTextAsync(Path.Combine(propertiesDir.FullName, "launchSettings.json"), """
+            {
+              "profiles": {
+                "http": {
+                  "commandName": "Project",
+                  "applicationUrl": "http://localhost:5111"
+                }
+              }
+            }
+            """);
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var app = builder.AddDotnetProject("svc", projectPath);
+
+        var launchConfig = Assert.IsType<ProjectLaunchConfiguration>(await app.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.Debug));
+
+        Assert.False(launchConfig.DisableLaunchProfile);
+        Assert.Equal("http", launchConfig.LaunchProfile);
     }
 
     [Fact]

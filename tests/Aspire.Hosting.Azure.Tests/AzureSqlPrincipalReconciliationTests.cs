@@ -26,7 +26,7 @@ public class AzureSqlPrincipalReconciliationTests(SqlServerContainerFixture fixt
     private const string HarnessPassword = "Pa55w0rd!Harness";
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.Testcontainers)]
     public async Task ReconciliationCreatesThePrincipalWithTheIdentityObjectIdAsItsSid()
     {
         var principalName = NewPrincipalName();
@@ -42,7 +42,7 @@ public class AzureSqlPrincipalReconciliationTests(SqlServerContainerFixture fixt
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.Testcontainers)]
     public async Task ReconciliationHandlesPrincipalNamesRequiringEscaping()
     {
         // A user principal is a UPN and can contain an apostrophe, which has to survive the T-SQL
@@ -61,7 +61,7 @@ public class AzureSqlPrincipalReconciliationTests(SqlServerContainerFixture fixt
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.Testcontainers)]
     public async Task ReconciliationIsANoOpWhenTheScriptRunsAgain()
     {
         // Changing the script content changes the deploymentScripts resource definition, so ARM
@@ -81,7 +81,7 @@ public class AzureSqlPrincipalReconciliationTests(SqlServerContainerFixture fixt
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.Testcontainers)]
     public async Task ReconciliationReplacesThePrincipalWhenTheIdentityObjectIdChanges()
     {
         var principalName = NewPrincipalName();
@@ -105,7 +105,7 @@ public class AzureSqlPrincipalReconciliationTests(SqlServerContainerFixture fixt
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.Testcontainers)]
     public async Task ReconciliationLeavesPrincipalsItDidNotCreateIntact()
     {
         var principalName = NewPrincipalName();
@@ -134,7 +134,7 @@ public class AzureSqlPrincipalReconciliationTests(SqlServerContainerFixture fixt
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.Testcontainers)]
     public async Task ReconciliationRollsBackWhenTheUserCannotBeRecreated()
     {
         var principalName = NewPrincipalName();
@@ -157,7 +157,7 @@ public class AzureSqlPrincipalReconciliationTests(SqlServerContainerFixture fixt
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.Testcontainers)]
     public async Task ReconciliationFailsWithoutDamageWhenThePrincipalOwnsASchema()
     {
         var principalName = NewPrincipalName();

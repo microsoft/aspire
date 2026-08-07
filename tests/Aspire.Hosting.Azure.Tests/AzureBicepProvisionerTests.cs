@@ -161,7 +161,7 @@ public class AzureBicepProvisionerTests
             targetScope = 'subscription'
             output result string = 'ok'
             """);
-        resource.Scope = AzureBicepResourceScope.ForSubscription(subscription.Id.Name);
+        resource.Scope = AzureBicepResourceScope.CreateForSubscription(subscription.Id.Name);
 
         var provisioner = CreateProvisioner(services);
         var context = ProvisioningTestHelpers.CreateTestProvisioningContext(
@@ -196,7 +196,7 @@ public class AzureBicepProvisionerTests
             targetScope = 'tenant'
             output result string = 'ok'
             """);
-        resource.Scope = AzureBicepResourceScope.ForTenant();
+        resource.Scope = AzureBicepResourceScope.CreateForTenant();
 
         var provisioner = CreateProvisioner(services);
         var context = ProvisioningTestHelpers.CreateTestProvisioningContext(
@@ -294,7 +294,7 @@ public class AzureBicepProvisionerTests
             targetScope = 'subscription'
             output result string = 'ok'
             """);
-        resource.Scope = AzureBicepResourceScope.ForSubscription(subscription.Id.Name);
+        resource.Scope = AzureBicepResourceScope.CreateForSubscription(subscription.Id.Name);
 
         var provisioner = CreateProvisioner(services, DistributedApplicationOperation.Run);
         var context = ProvisioningTestHelpers.CreateTestProvisioningContext(
@@ -672,7 +672,7 @@ public class AzureBicepProvisionerTests
         var tenant = new TestTenantResource();
         var resource = new AzureBicepResource("subscriptionDeployment", templateString: "output name string = 'subscriptionDeployment'")
         {
-            Scope = AzureBicepResourceScope.ForSubscription(subscription.Id.Name)
+            Scope = AzureBicepResourceScope.CreateForSubscription(subscription.Id.Name)
         };
 
         var provisioner = new BicepProvisioner(

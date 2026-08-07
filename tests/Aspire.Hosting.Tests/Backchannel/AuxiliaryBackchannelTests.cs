@@ -303,7 +303,7 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task CallResourceMcpToolAsyncThrowsWhenResourceNotFound()
     {
         // This test verifies that CallResourceMcpToolAsync throws when resource is not found
@@ -344,7 +344,7 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task CallResourceMcpToolAsyncThrowsWhenResourceHasNoMcpAnnotation()
     {
         // This test verifies that CallResourceMcpToolAsync throws when resource has no MCP annotation

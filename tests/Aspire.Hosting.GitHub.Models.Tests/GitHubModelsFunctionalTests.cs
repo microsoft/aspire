@@ -13,7 +13,7 @@ namespace Aspire.Hosting.GitHub.Models.Tests;
 public class GitHubModelsFunctionalTests
 {
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task DependentResourceWaitsForGitHubModelResourceWithHealthCheckToBeHealthy()
     {
         using var cts = new CancellationTokenSource(TestConstants.LongTimeoutDuration);

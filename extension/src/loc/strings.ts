@@ -28,6 +28,9 @@ export const installCliDailyBuild = vscode.l10n.t('Daily build (dev)');
 export const installCliDailyBuildDescription = vscode.l10n.t('Latest build from main via the install script');
 export const terminalCommandArgumentControlCharacters = vscode.l10n.t('Aspire terminal command arguments cannot contain control characters.');
 export const terminalCommandUnsafeLiteral = vscode.l10n.t('Aspire terminal command syntax can only contain command names and flags.');
+export const azureFunctionsUnsupportedTaskShell = vscode.l10n.t('The configured VS Code task shell is not supported for Azure Functions launch arguments. Configure terminal.integrated.automationProfile to use PowerShell, Command Prompt, bash, zsh, fish, or WSL.');
+export const azureFunctionsCmdPercentArgument = vscode.l10n.t('Azure Functions launch arguments containing "%" are not supported by cmd.exe. Configure terminal.integrated.automationProfile.windows to use PowerShell and try again.');
+export const azureFunctionsCmdDelayedExpansion = vscode.l10n.t('Azure Functions launch arguments containing "!" are not supported by cmd.exe because delayed environment variable expansion may change them. Configure terminal.integrated.automationProfile.windows to use PowerShell and try again.');
 export const aspireOutputChannelName = vscode.l10n.t('Aspire Extension');
 export const fieldRequired = vscode.l10n.t('This field is required.');
 export const runProject = (projectName: string) => vscode.l10n.t('Run {0}', projectName);
@@ -43,8 +46,12 @@ export const rpcServerNotInitialized = vscode.l10n.t('RPC server is not initiali
 export const extensionContextNotInitialized = vscode.l10n.t('Extension context is not initialized.');
 export const aspireDebugSessionNotInitialized = vscode.l10n.t('Aspire debug session is not initialized');
 export const errorRetrievingAppHosts = vscode.l10n.t('Error retrieving AppHosts in the current workspace. Debug options may be incomplete.');
-export const launchingWithDirectory = (appHostPath: string) => vscode.l10n.t('Launching Aspire debug session using directory {0}: attempting to determine effective AppHost...', appHostPath);
-export const launchingWithAppHost = (appHostPath: string) => vscode.l10n.t('Launching Aspire debug session for AppHost {0}...', appHostPath);
+export const launchingWithDirectory = (sessionType: 'run' | 'debug', appHostPath: string) => sessionType === 'run'
+    ? vscode.l10n.t('Launching Aspire run session using directory {0}: attempting to determine effective AppHost...', appHostPath)
+    : vscode.l10n.t('Launching Aspire debug session using directory {0}: attempting to determine effective AppHost...', appHostPath);
+export const launchingWithAppHost = (sessionType: 'run' | 'debug', appHostPath: string) => sessionType === 'run'
+    ? vscode.l10n.t('Launching Aspire run session for AppHost {0}...', appHostPath)
+    : vscode.l10n.t('Launching Aspire debug session for AppHost {0}...', appHostPath);
 export const disconnectingFromSession = vscode.l10n.t('Disconnecting from Aspire debug session... Child processes will be stopped.');
 export const processExitedWithCode = (code: number | string) => vscode.l10n.t('Process exited with code {0}.', code);
 export const failedToStartPythonProgram = (errorMessage: string) => vscode.l10n.t('Failed to start Python program: {0}.', errorMessage);
@@ -126,6 +133,7 @@ export const appHostPathCopiedToClipboard = vscode.l10n.t('AppHost path copied t
 export const appHostPathInvalid = vscode.l10n.t('Could not determine the AppHost path to copy.');
 export const appHostStartingDescription = vscode.l10n.t('Starting...');
 export const appHostStoppingDescription = vscode.l10n.t('Stopping...');
+export const appHostDiscoveryProgress = vscode.l10n.t('Discovering AppHosts...');
 export const resourceCountDescription = (count: number) => vscode.l10n.t('({0} resources)', count);
 export const appHostCandidateDescription = (language: string, status: string) => vscode.l10n.t('{0} · {1}', language, status);
 export const workspaceViewSelectedSingleAppHost = (language?: string) => language
@@ -145,6 +153,7 @@ export const failedToStartDebugSession = vscode.l10n.t('Failed to start debug se
 export const failedToGetConfigInfo = (exitCode: number) => vscode.l10n.t('Failed to get Aspire config info (exit code: {0}). Try updating the Aspire CLI with: aspire update', exitCode);
 export const failedToParseConfigInfo = (error: any) => vscode.l10n.t('Failed to parse Aspire config info: {0}. Try updating the Aspire CLI with: aspire update', error);
 export const errorGettingConfigInfo = (error: any) => vscode.l10n.t('Error getting Aspire config info: {0}. Try updating the Aspire CLI with: aspire update', error);
+export const configInfoTimedOut = (seconds: number) => vscode.l10n.t('Aspire config info timed out after {0} seconds.', seconds);
 export const invalidLaunchConfiguration = (projectPath: string) => vscode.l10n.t('Invalid launch configuration for {0}.', projectPath);
 export const browserDisplayName = (url: string) => vscode.l10n.t('Browser: {0}', url);
 export const browserLabel = vscode.l10n.t('Browser');
@@ -212,7 +221,9 @@ export const codeLensResourceStopped = vscode.l10n.t('$(circle-outline)\u200A St
 export const codeLensResourceStoppedWithExitCode = (exitCode: number) => vscode.l10n.t('$(circle-outline)\u200A Stopped (Exit Code: {0})', exitCode);
 export const codeLensResourceStoppedError = vscode.l10n.t('$(error)\u200A Stopped');
 export const codeLensResourceStoppedErrorWithExitCode = (exitCode: number) => vscode.l10n.t('$(error)\u200A Stopped (Exit Code: {0})', exitCode);
-export const codeLensResourceError = vscode.l10n.t('$(error)\u200A Error');
+export const codeLensResourceFailedToStart = vscode.l10n.t('$(warning)\u200A Failed to start');
+export const codeLensResourceFailedToStartError = vscode.l10n.t('$(error)\u200A Failed to start');
+export const codeLensResourceRuntimeUnhealthy = vscode.l10n.t('$(warning)\u200A Runtime unhealthy');
 export const codeLensResourceValueMissing = vscode.l10n.t('$(warning)\u200A Value missing');
 export const codeLensRestart = vscode.l10n.t('$(debug-restart)\u200A Restart');
 export const codeLensStop = vscode.l10n.t('$(debug-stop)\u200A Stop');

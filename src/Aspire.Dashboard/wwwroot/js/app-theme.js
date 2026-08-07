@@ -33,6 +33,8 @@ import {
     designUnit,
     strokeWidth,
     focusStrokeWidth,
+    focusStrokeOuter,
+    focusStrokeInner,
     disabledOpacity,
     PaletteRGB
 } from "/_content/Microsoft.FluentUI.AspNetCore.Components/Microsoft.FluentUI.AspNetCore.Components.lib.module.js";
@@ -350,6 +352,8 @@ function wireAspireDesignTokens() {
     designUnit.withDefault("var(--aspire-design-unit)");
     strokeWidth.withDefault("var(--aspire-stroke-width)");
     focusStrokeWidth.withDefault("var(--aspire-focus-stroke-width)");
+    focusStrokeOuter.withDefault("var(--dash-focus-ring-color)");
+    focusStrokeInner.withDefault("var(--dash-focus-ring-color)");
     disabledOpacity.withDefault("var(--aspire-disabled-opacity)");
 }
 

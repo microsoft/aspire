@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Utils;
@@ -23,7 +24,9 @@ internal sealed class NuGetPackagePrefetcher(ILogger<NuGetPackagePrefetcher> log
         }
 
         var shouldPrefetchTemplates = ShouldPrefetchTemplatePackages(command);
-        var shouldPrefetchCli = ShouldPrefetchCliPackages(command);
+        var shouldPrefetchCli = ShouldPrefetchCliPackages(
+            command,
+            features.IsFeatureEnabled(KnownFeatures.UpdateNotificationsEnabled, true));
 
         var prefetchTasks = new List<Task>(capacity: 2);
 
@@ -61,23 +64,20 @@ internal sealed class NuGetPackagePrefetcher(ILogger<NuGetPackagePrefetcher> log
         {
             prefetchTasks.Add(Task.Run(async () =>
             {
-                if (features.IsFeatureEnabled(KnownFeatures.UpdateNotificationsEnabled, true))
+                try
                 {
-                    try
-                    {
-                        await cliUpdateNotifier.CheckForCliUpdatesAsync(
-                            workingDirectory: executionContext.WorkingDirectory,
-                            cancellationToken: stoppingToken
-                            );
-                    }
-                    catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-                    {
-                        logger.LogTrace("CLI package prefetching was cancelled because the CLI is shutting down.");
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogDebug(ex, "Non-fatal error while prefetching CLI packages. This is not critical to the operation of the CLI.");
-                    }
+                    await cliUpdateNotifier.CheckForCliUpdatesAsync(
+                        workingDirectory: executionContext.WorkingDirectory,
+                        cancellationToken: stoppingToken
+                        );
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    logger.LogTrace("CLI package prefetching was cancelled because the CLI is shutting down.");
+                }
+                catch (Exception ex)
+                {
+                    logger.LogDebug(ex, "Non-fatal error while prefetching CLI packages. This is not critical to the operation of the CLI.");
                 }
             }, stoppingToken));
         }
@@ -117,33 +117,8 @@ internal sealed class NuGetPackagePrefetcher(ILogger<NuGetPackagePrefetcher> log
     }
 
     private static bool ShouldPrefetchTemplatePackages(SystemCommand? command)
-    {
-        // If the command implements IPackageMetaPrefetchingCommand, use its setting
-        if (command is IPackageMetaPrefetchingCommand prefetchingCommand)
-        {
-            return prefetchingCommand.PrefetchesTemplatePackageMetadata;
-        }
+        => command is BaseCommand { PrefetchesTemplatePackageMetadata: true };
 
-        // Default behavior: prefetch templates for all commands except run, publish, deploy
-        // Because of this: https://github.com/microsoft/aspire/issues/6956
-        return command is null || !IsRuntimeOnlyCommand(command);
-    }
-
-    private static bool ShouldPrefetchCliPackages(SystemCommand? command)
-    {
-        // If the command implements IPackageMetaPrefetchingCommand, use its setting
-        if (command is IPackageMetaPrefetchingCommand prefetchingCommand)
-        {
-            return prefetchingCommand.PrefetchesCliPackageMetadata;
-        }
-
-        // Default behavior: always prefetch CLI packages for update notifications
-        return true;
-    }
-
-    private static bool IsRuntimeOnlyCommand(SystemCommand command)
-    {
-        var commandName = command.Name;
-        return commandName is "run" or "publish" or "deploy" or "do";
-    }
+    private static bool ShouldPrefetchCliPackages(SystemCommand? command, bool updateNotificationsEnabled)
+        => command is BaseCommand baseCommand && baseCommand.ShouldPrefetchCliPackageMetadata(updateNotificationsEnabled);
 }

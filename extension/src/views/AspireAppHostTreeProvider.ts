@@ -488,8 +488,12 @@ export function getResourceIcon(resource: ResourceJson): vscode.ThemeIcon {
             // as a green check, just in slightly different greens).
             return new vscode.ThemeIcon('circle-outline', new vscode.ThemeColor('descriptionForeground'));
         case ResourceState.FailedToStart:
+            if (resource.exitCode != null && resource.exitCode !== 0) {
+                return new vscode.ThemeIcon('error', new vscode.ThemeColor('list.errorForeground'));
+            }
+            return new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.warningForeground'));
         case ResourceState.RuntimeUnhealthy:
-            return new vscode.ThemeIcon('error', new vscode.ThemeColor('list.errorForeground'));
+            return new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.warningForeground'));
         case ResourceState.Starting:
         case ResourceState.Stopping:
         case ResourceState.Building:
@@ -1000,6 +1004,10 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     }
 
     getChildren(element?: TreeElement): TreeElement[] {
+        if (!element && this._repository.isLoading) {
+            return [];
+        }
+
         if (this._repository.viewMode === 'workspace') {
             return this._getWorkspaceChildren(element);
         }
