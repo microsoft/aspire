@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Documents App Service virtual network integration support (#18738)",
+  "mergedAt": "2026-08-07T06:40:21Z",
+  "number": 1441,
+  "runDate": "2026-08-07T12:17:29Z",
+  "status": "included",
+  "title": "App Service delegated subnet support"
+}

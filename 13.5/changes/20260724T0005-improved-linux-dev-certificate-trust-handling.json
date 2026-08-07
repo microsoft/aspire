@@ -1,14 +1,16 @@
 {
   "area": "CLI",
-  "areaEmoji": "💻",
+  "areaEmoji": "\ud83d\udcbb",
   "backport": false,
   "breaking": false,
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "On Linux, Aspire now preserves system certificate roots when configuring SSL_CERT_DIR for local project and executable resources. Previously, Aspire could overwrite SSL_CERT_DIR with only its own generated certificate directory, causing outbound HTTPS requests to fail by losing OpenSSL's implicit system trust anchors.",
-  "docsPrs": [],
+  "docsPrs": [
+    1446
+  ],
   "docsRequired": false,
-  "emoji": "🔒",
+  "emoji": "\ud83d\udd12",
   "firstMergedAt": "2026-07-24T00:05:36Z",
   "lastMergedAt": "2026-07-24T00:05:36Z",
   "name": "Improved Linux dev certificate trust handling",

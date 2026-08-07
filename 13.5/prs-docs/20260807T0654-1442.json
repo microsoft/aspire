@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Documents AI Assistant chat removal from dashboard (#18726)",
+  "mergedAt": "2026-08-07T06:54:11Z",
+  "number": 1442,
+  "runDate": "2026-08-07T12:17:29Z",
+  "status": "included",
+  "title": "Remove stale Dashboard:AI:Disabled config entry, document AI Assistant removal"
+}

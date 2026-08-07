@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Documents fix for duplicate shutdown message (#18827)",
+  "mergedAt": "2026-08-07T07:33:12Z",
+  "number": 1445,
+  "runDate": "2026-08-07T12:17:29Z",
+  "status": "included",
+  "title": "Document dashboard run Ctrl+C stop message"
+}

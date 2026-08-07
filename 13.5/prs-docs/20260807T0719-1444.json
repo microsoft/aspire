@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Documents fix for removing resources without telemetry (#18829)",
+  "mergedAt": "2026-08-07T07:19:07Z",
+  "number": 1444,
+  "runDate": "2026-08-07T12:17:29Z",
+  "status": "included",
+  "title": "Document removing resources without remaining telemetry data"
+}
