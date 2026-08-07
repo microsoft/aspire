@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents product PR #18566",
+  "mergedAt": "2026-08-07T05:55:55Z",
+  "number": 1439,
+  "runDate": "2026-08-07T06:26:17Z",
+  "status": "included",
+  "title": "[docs] Document orphaned AppHost cleanup in aspire ps and aspire stop"
+}

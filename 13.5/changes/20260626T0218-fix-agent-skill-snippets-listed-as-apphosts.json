@@ -1,14 +1,16 @@
 {
   "area": "CLI",
-  "areaEmoji": "💻",
+  "areaEmoji": "\ud83d\udcbb",
   "backport": false,
   "breaking": false,
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "The CLI's aspire ls command and the VS Code extension no longer mistakenly list .agents/skills/** code snippets as runnable AppHosts. The CLI now skips the .agents directory during default discovery, and the extension applies the same exclusion across all AppHost candidate sources.",
-  "docsPrs": [],
+  "docsPrs": [
+    1433
+  ],
   "docsRequired": false,
-  "emoji": "🔍",
+  "emoji": "\ud83d\udd0d",
   "firstMergedAt": "2026-06-26T02:18:12Z",
   "lastMergedAt": "2026-06-26T02:18:12Z",
   "name": "Fix agent skill snippets incorrectly listed as AppHosts",

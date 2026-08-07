@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Internal gh-aw workflow engineering fix (Copilot path workaround); no user-facing impact",
+  "mergedAt": "2026-08-07T04:12:15Z",
+  "number": 19109,
+  "runDate": "2026-08-07T06:24:00Z",
+  "status": "excluded",
+  "title": "Work around gh-aw cached Copilot path"
+}

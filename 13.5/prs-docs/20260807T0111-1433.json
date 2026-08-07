@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents product PR #18407",
+  "mergedAt": "2026-08-07T01:11:58Z",
+  "number": 1433,
+  "runDate": "2026-08-07T06:26:17Z",
+  "status": "included",
+  "title": "[docs] Clarify `aspire ls --all` excludes agent-skill AppHost snippets"
+}

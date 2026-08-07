@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents product PR #18539",
+  "mergedAt": "2026-08-07T04:35:55Z",
+  "number": 1435,
+  "runDate": "2026-08-07T06:26:17Z",
+  "status": "included",
+  "title": "[docs] Note that resource logs flush before terminal notifications"
+}

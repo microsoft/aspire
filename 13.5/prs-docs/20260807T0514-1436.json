@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents product PR #18580",
+  "mergedAt": "2026-08-07T05:14:16Z",
+  "number": 1436,
+  "runDate": "2026-08-07T06:26:17Z",
+  "status": "included",
+  "title": "[docs] Document certutil-missing warning in aspire doctor and certs clean"
+}
