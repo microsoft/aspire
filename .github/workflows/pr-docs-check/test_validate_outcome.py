@@ -92,6 +92,22 @@ class ValidateOutcomeTests(unittest.TestCase):
                 EXPECTED_SOURCE_PR_NUMBER,
             )
 
+    def test_draft_failed_with_created_pr_reports_contradiction(self) -> None:
+        created_pr_url = "https://github.com/microsoft/aspire.dev/pull/1447"
+
+        with self.assertRaises(OutcomeValidationError) as context:
+            validate_outcome(
+                payload("draft_failed"),
+                created_pr_url,
+                EXPECTED_SOURCE_PR_NUMBER,
+            )
+
+        self.assertEqual(
+            "The agent reported documentation drafting failed, but safe outputs "
+            f"created {created_pr_url}.",
+            str(context.exception),
+        )
+
     def test_drafted_without_created_pr_fails(self) -> None:
         with self.assertRaisesRegex(
             OutcomeValidationError,
