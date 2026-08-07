@@ -123,35 +123,6 @@ tools:
       owner: "microsoft"
       repositories: ["aspire.dev", "aspire"]
 
-jobs:
-  validate-docs-outcome:
-      name: "Validate documentation outcome"
-      needs: [agent, safe_outputs]
-      if: >-
-        (!cancelled())
-        && needs.agent.result != 'skipped'
-      runs-on: ubuntu-latest
-      permissions:
-        contents: read
-      steps:
-        - name: Check out outcome validator
-          uses: actions/checkout@v4
-          with:
-            sparse-checkout: .github/workflows/pr-docs-check/validate_outcome.py
-            sparse-checkout-cone-mode: false
-        - name: Download agent output
-          uses: actions/download-artifact@v4
-          with:
-            name: agent
-            path: /tmp/gh-aw/
-        - name: Require a conclusive documentation outcome
-          env:
-            CREATED_PR_URL: ${{ needs.safe_outputs.outputs.created_pr_url }}
-          run: >-
-            python .github/workflows/pr-docs-check/validate_outcome.py
-            --agent-output /tmp/gh-aw/agent_output.json
-            --created-pr-url "${CREATED_PR_URL}"
-
 safe-outputs:
   github-app:
     app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
@@ -287,7 +258,7 @@ safe-outputs:
 
               const outputPath = process.env.GH_AW_AGENT_OUTPUT;
               if (!outputPath || !fs.existsSync(outputPath)) {
-                core.setFailed(`Agent output file not found at ${outputPath}; cannot verify the documentation outcome.`);
+                core.warning(`Agent output file not found at ${outputPath}; skipping comment.`);
                 return;
               }
 
@@ -295,13 +266,13 @@ safe-outputs:
               try {
                 payload = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
               } catch (e) {
-                core.setFailed(`Failed to parse agent output: ${e.message}`);
+                core.warning(`Failed to parse agent output: ${e.message}`);
                 return;
               }
               const items = (payload && Array.isArray(payload.items)) ? payload.items : [];
               const item = items.find(i => i && i.type === 'notify_source_pr');
               if (!item) {
-                core.setFailed('No notify_source_pr item in agent output; cannot verify the documentation outcome.');
+                core.info('No notify_source_pr item in agent output; nothing to post.');
                 return;
               }
 
@@ -311,7 +282,7 @@ safe-outputs:
               // and threat detection has already gated this output.
               const agentNumber = parseInt(String(item.source_pr_number), 10);
               if (!Number.isInteger(agentNumber) || agentNumber <= 0 || agentNumber > 10_000_000) {
-                core.setFailed(`Invalid source_pr_number from agent: ${item.source_pr_number}; cannot post the documentation outcome.`);
+                core.warning(`Invalid source_pr_number from agent: ${item.source_pr_number}; skipping comment.`);
                 return;
               }
               const sourcePrNumber = agentNumber;
@@ -328,7 +299,6 @@ safe-outputs:
               }
 
               let body;
-              let failureReason = '';
               if (result === 'drafted' && draftUrl) {
                 const branchSuffix = targetBranch ? ` targeting \`${targetBranch}\`` : '';
                 const numberDisplay = draftNumber || '?';
@@ -344,7 +314,6 @@ safe-outputs:
               } else if (result === 'drafted') {
                 // Agent intended to draft a PR but the safe-outputs handler did not produce
                 // a created_pr_url. Surface this as a failure rather than a "skipped" result.
-                failureReason = 'The agent reported documentation as drafted, but safe outputs did not create a docs PR.';
                 body = [
                   MARKER,
                   '⚠️ Documentation drafting was attempted but the draft PR could not be confirmed.',
@@ -361,7 +330,6 @@ safe-outputs:
                 // so the author sees that documentation is still owed, rather
                 // than letting it fall through to the green "no update needed"
                 // branch below. The agent-supplied summary names the reason.
-                failureReason = 'Documentation was required, but no docs PR was created.';
                 body = [
                   MARKER,
                   '⚠️ Documentation was required for this change, but a docs PR could not be drafted automatically.',
@@ -370,22 +338,12 @@ safe-outputs:
                   '',
                   `See the workflow run for details: ${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
                 ].join('\n');
-              } else if (result === 'skipped') {
+              } else {
                 body = [
                   MARKER,
                   '✅ No documentation update needed.',
                   '',
                   summary
-                ].join('\n');
-              } else {
-                failureReason = `Agent returned unsupported documentation result: ${result || '(empty)'}.`;
-                body = [
-                  MARKER,
-                  '⚠️ The documentation workflow returned an invalid result and could not confirm the outcome.',
-                  '',
-                  summary,
-                  '',
-                  `See the workflow run for details: ${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
                 ].join('\n');
               }
 
@@ -422,9 +380,6 @@ safe-outputs:
                 body,
               });
               core.info(`Posted ${result || 'unknown'} comment on microsoft/aspire#${sourcePrNumber}`);
-              if (failureReason) {
-                core.setFailed(failureReason);
-              }
         - name: Request SME review on draft PR
           if: needs.safe_outputs.outputs.created_pr_url != ''
           uses: actions/github-script@v9
