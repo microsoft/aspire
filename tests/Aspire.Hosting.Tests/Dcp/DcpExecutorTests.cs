@@ -3773,6 +3773,103 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ProjectResource_EmptyOwnedLaunchToolArgs_DoesNotOfferBrokenProcessFallback()
+    {
+        // An owned launch-tool declaration suppresses the process scaffold even when its callback resolves empty.
+        // The remaining `dotnet <app-args>` command is only meaningful to the IDE and cannot be used as a fallback.
+        var builder = DistributedApplication.CreateBuilder();
+        var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
+
+        var defaultAnnotation = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (defaultAnnotation is not null)
+        {
+            projectBuilder.Resource.Annotations.Remove(defaultAnnotation);
+        }
+
+        projectBuilder
+            .WithArgs("app-arg")
+            .WithLaunchToolArgs(static _ => { }, ownedByLaunchConfigurationType: "test")
+            .WithDebugSupport(
+                mode => new ExecutableLaunchConfiguration("test") { Mode = mode },
+                "test");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var kubernetes = new TestKubernetesService();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [DcpExecutor.DebugSessionPortVar] = "12345",
+                [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo { ProtocolsSupported = ["test"], SupportedLaunchConfigurations = ["test"] })
+            })
+            .Build();
+
+        var executor = CreateAppExecutor(model, configuration: configuration, kubernetesService: kubernetes);
+
+        await executor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetes, "proj");
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        Assert.Equal(["app-arg"], exe.Spec.Args);
+        Assert.Null(exe.Spec.FallbackExecutionTypes);
+    }
+
+    [Fact]
+    public async Task ProjectResource_EmptyOwnedLaunchToolArgs_LaunchConfigurationFailureDoesNotRunBrokenProcessCommand()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
+
+        var defaultAnnotation = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (defaultAnnotation is not null)
+        {
+            projectBuilder.Resource.Annotations.Remove(defaultAnnotation);
+        }
+
+        projectBuilder
+            .WithArgs("app-arg")
+            .WithLaunchToolArgs(static _ => { }, ownedByLaunchConfigurationType: "test")
+            .WithDebugSupport(ThrowingLaunchConfiguration, "test");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var kubernetes = new TestKubernetesService();
+        var failedResources = new List<IResource>();
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceFailedToStartContext>(context =>
+        {
+            failedResources.Add(context.Resource);
+            return Task.CompletedTask;
+        });
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [DcpExecutor.DebugSessionPortVar] = "12345",
+                [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo { ProtocolsSupported = ["test"], SupportedLaunchConfigurations = ["test"] })
+            })
+            .Build();
+
+        var executor = CreateAppExecutor(
+            model,
+            configuration: configuration,
+            kubernetesService: kubernetes,
+            events: events);
+
+        await executor.RunApplicationAsync();
+
+        Assert.Empty(GetCreatedExecutablesForResource(kubernetes, "proj"));
+        Assert.Same(projectBuilder.Resource, Assert.Single(failedResources));
+
+        static ExecutableLaunchConfiguration ThrowingLaunchConfiguration(string mode)
+        {
+            throw new InvalidOperationException("Launch configuration failed.");
+        }
+    }
+
+    [Fact]
     public async Task ProjectResource_WithoutLaunchToolArgs_OffersProcessFallback_InDebugSession()
     {
         // The common case: a default AddProject ("project" launch type, no launch tool arguments) keeps the

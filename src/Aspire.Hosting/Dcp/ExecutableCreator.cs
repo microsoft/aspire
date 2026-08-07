@@ -289,27 +289,26 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             return false;
         }
 
-        if (modelResource is ProjectResource)
+        if (!modelResource.SupportsDebugging(_configuration, out var annotation))
         {
-            return true;
+            return modelResource is ProjectResource;
         }
 
-        if (!modelResource.SupportsDebugging(_configuration, out var annotation)
-            || annotation.LaunchConfigurationType is KnownLaunchConfigurationTypes.Project)
+        // Project-backed resources suppress their process scaffold when the active launch configuration owns the
+        // tool invocation. If that prefix resolves empty, the remaining command line is IDE-only and cannot be used
+        // as a Process fallback.
+        if (HasIncompleteProcessCommand(modelResource, annotation, resolvedLaunchToolArgumentCount))
         {
             return false;
         }
 
-        // A project-backed plain executable suppresses its `dotnet run` process scaffold when the active launch
-        // configuration performs the tool invocation. Even when that prefix resolves empty, the remaining command
-        // line is IDE-only and cannot be reused as a Process fallback.
-        return !HasIncompleteProcessCommand(modelResource, annotation, resolvedLaunchToolArgumentCount);
+        return modelResource is ProjectResource
+            || annotation.LaunchConfigurationType is not KnownLaunchConfigurationTypes.Project;
     }
 
     private static bool HasIncompleteProcessCommand(IResource modelResource, SupportsDebuggingAnnotation annotation, int resolvedLaunchToolArgumentCount)
     {
         return resolvedLaunchToolArgumentCount == 0
-            && modelResource is not ProjectResource
             && modelResource.HasAnnotationOfType<IProjectMetadata>()
             && modelResource.HasLaunchToolArgsOwnedBy(annotation);
     }
