@@ -14,7 +14,6 @@
 
   <ItemGroup>
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
-    <ProjectReference Include="..\Godot.Matchmaker\Godot.Matchmaker.csproj" />
   </ItemGroup>
 
 </Project>

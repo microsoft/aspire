@@ -1,7 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.Json;
+using System.Globalization;
+using System.Net.Sockets;
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Configuration;
@@ -18,36 +19,40 @@ public class GodotPlaygroundTests(ITestOutputHelper testOutput)
     private const string WhitespaceGodotBin = "   ";
 
     [Fact]
-    public async Task AppHostStartsWithoutGodotAndExposesMatchmakerEndpointConfiguration()
+    public async Task AppHostStartsWithoutGodotAndKeepsGodotServerExplicitlyStopped()
     {
         var appHost = await DistributedApplicationTestFactory.CreateAsync(typeof(Projects.Godot_AppHost), testOutput);
         await using var app = await appHost.BuildAsync();
 
         await app.StartAsync();
 
-        await Task.WhenAll(
-            app.WaitForResource("matchmaker", KnownResourceStates.Running),
-            app.WaitForResource("godot-server", KnownResourceStates.NotStarted)).WaitAsync(TimeSpan.FromMinutes(5));
+        await app.WaitForResource("godot-server", KnownResourceStates.NotStarted).WaitAsync(TimeSpan.FromMinutes(5));
 
-        using var client = AppHostTests.CreateHttpClientWithResilience(app, "matchmaker");
-        using var response = await client.GetAsync("/configuration");
-        response.EnsureSuccessStatusCode();
+        var applicationModel = app.Services.GetRequiredService<DistributedApplicationModel>();
 
-        using var payload = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
-        var root = payload.RootElement;
+        Assert.DoesNotContain(applicationModel.Resources, r => r.Name == "matchmaker");
 
-        Assert.Equal("godot-server", root.GetProperty("resourceName").GetString());
-        Assert.True(root.GetProperty("endpointConfigured").GetBoolean());
+        var godotServer = Assert.Single(applicationModel.Resources.OfType<ExecutableResource>(), r => r.Name == "godot-server");
+        var gameEndpoint = Assert.Single(godotServer.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "game");
 
-        var port = root.GetProperty("configuredPort").GetInt32();
-        var endpoint = root.GetProperty("configuredEndpoint").GetString();
+        Assert.Equal(ProtocolType.Udp, gameEndpoint.Protocol);
+        Assert.False(gameEndpoint.IsProxied);
+        Assert.Equal("udp", gameEndpoint.UriScheme);
+        var allocatedEndpoint = gameEndpoint.AllocatedEndpoint;
+        Assert.NotNull(allocatedEndpoint);
 
-        Assert.InRange(port, 10000, 32767);
-        Assert.True(Uri.TryCreate(endpoint, UriKind.Absolute, out var endpointUri), $"Expected a valid endpoint URI, got '{endpoint}'.");
-        Assert.NotNull(endpointUri);
-        Assert.Equal("udp", endpointUri.Scheme);
-        Assert.Equal("localhost", endpointUri.Host);
-        Assert.Equal(port, endpointUri.Port);
+        var executionContext = app.Services.GetRequiredService<DistributedApplicationExecutionContext>();
+        var executionConfiguration = await ExecutionConfigurationBuilder.Create(godotServer)
+            .WithEnvironmentVariablesConfig()
+            .BuildAsync(executionContext);
+
+        Assert.Null(executionConfiguration.Exception);
+
+        var environmentVariables = executionConfiguration.EnvironmentVariables.ToDictionary();
+        Assert.True(
+            environmentVariables.TryGetValue("GODOT_SERVER_PORT", out var configuredPort),
+            "Expected the game endpoint to flow its allocated port through GODOT_SERVER_PORT.");
+        Assert.Equal(allocatedEndpoint.Port.ToString(CultureInfo.InvariantCulture), configuredPort);
 
         app.EnsureNoErrorsLogged();
         await app.StopAsync();
@@ -118,24 +123,7 @@ public class GodotPlaygroundTests(ITestOutputHelper testOutput)
         Assert.True(executionContext.IsPublishMode);
 
         // godot-server is explicit-start, which only means anything in run mode, so it must not leak
-        // into the publish model at all — neither as a resource nor as a matchmaker reference.
+        // into the publish model at all.
         Assert.DoesNotContain(applicationModel.Resources, r => r.Name == "godot-server");
-
-        // Resolve the execution context from the app rather than constructing one: only the
-        // DI-registered instance carries the AppHost's IServiceProvider, which
-        // ExecutionConfigurationBuilder needs to resolve value providers.
-        var matchmaker = Assert.Single(applicationModel.Resources.OfType<IResourceWithEnvironment>(), r => r.Name == "matchmaker");
-        var executionConfiguration = await ExecutionConfigurationBuilder.Create(matchmaker)
-            .WithEnvironmentVariablesConfig()
-            .BuildAsync(executionContext);
-
-        // A resolution failure is reported here rather than thrown, and it yields an empty collection, which
-        // would make the negative assertion below pass without proving anything.
-        Assert.Null(executionConfiguration.Exception);
-
-        Assert.DoesNotContain(
-            executionConfiguration.EnvironmentVariables,
-            kvp => kvp.Key.Contains("godot-server", StringComparison.OrdinalIgnoreCase)
-                || kvp.Value.Contains("godot-server", StringComparison.OrdinalIgnoreCase));
     }
 }

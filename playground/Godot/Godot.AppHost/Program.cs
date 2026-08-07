@@ -3,19 +3,12 @@
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-var matchmaker = builder.AddProject<Projects.Godot_Matchmaker>("matchmaker")
-    .WithHttpEndpoint()
-    .WithExternalHttpEndpoints();
-
 // The Godot game server is a run-mode-only resource.
 //
 // `WithExplicitStart` only has meaning in run mode: it tells the orchestrator not to launch the
 // process until a user triggers it from the dashboard. Publish/deploy has no notion of "start this
-// later by hand", so emitting the executable (and the matchmaker's reference to its endpoint) into a
-// published manifest would produce a resource that nothing can ever start, plus a service-discovery
-// binding to a port that is never allocated. This playground exists to exercise the local
-// `AddExecutable` + `WithExplicitStart` path, so the honest model is to omit the resource entirely
-// outside run mode rather than invent a publish representation for a manually launched game server.
+// later by hand", so this playground omits the executable outside run mode rather than inventing a
+// publish representation for a manually launched game server.
 if (builder.ExecutionContext.IsRunMode)
 {
     // Read the Godot binary path from configuration; fall back to a platform-appropriate default.
@@ -35,8 +28,6 @@ if (builder.ExecutionContext.IsRunMode)
     // WithExplicitStart prevents the AppHost from failing on machines without Godot installed.
     // Start this resource manually from the dashboard after setting GODOT_BIN or installing Godot on PATH.
     godotServer.WithExplicitStart();
-
-    matchmaker.WithReference(godotServer.GetEndpoint("game"));
 }
 
 #if !SKIP_DASHBOARD_REFERENCE

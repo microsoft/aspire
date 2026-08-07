@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="GodotDedicatedServer"
-config/description="Internal Aspire playground dedicated game-server scaffold. Not a public sample."
+config/description="Internal Aspire playground executable scaffold. Not a public sample."
 config/run/main_scene=""
 config/features=PackedStringArray("4.3")
 
