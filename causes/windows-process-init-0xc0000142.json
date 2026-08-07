@@ -1,0 +1,16 @@
+{
+  "id": "windows-process-init-0xc0000142",
+  "type": "infra-failure",
+  "title": "Windows test host process crashes with exit code 0xC0000142 after tests complete",
+  "error_pattern": "Process completed with exit code -1073741502 (0xC0000142) on windows-latest runner, occurring after all tests in the assembly passed (e.g. Aspire.Microsoft.Azure.StackExchangeRedis.Tests: total 9, failed 0, succeeded 9)",
+  "occurrences": [
+    {
+      "run_id": 31200870870,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/31200870870",
+      "job": "Tests / Microsoft.Azure.StackExchangeRedis / Microsoft.Azure.StackExchangeRedis (windows-latest)",
+      "pr_number": 19084,
+      "observed_at": "2026-08-07T18:03:31Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19144"
+}

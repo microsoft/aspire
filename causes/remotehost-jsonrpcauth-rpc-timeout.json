@@ -1,0 +1,17 @@
+{
+  "id": "remotehost-jsonrpcauth-rpc-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: JsonRpcAuthenticationTests.FailedAuthentication_ClosesConnection_AndPreventsFurtherCalls times out connecting to test RPC server on Windows",
+  "test_name": "Aspire.Hosting.RemoteHost.Tests.JsonRpcAuthenticationTests.FailedAuthentication_ClosesConnection_AndPreventsFurtherCalls",
+  "error_pattern": "System.TimeoutException : Timed out connecting to test RPC server 'aspire-remotehost-test-...'.\n---- System.OperationCanceledException : The operation was canceled.\n   at Aspire.Hosting.RemoteHost.Tests.JsonRpcAuthenticationTests.RemoteHostTestServer.ConnectToServerAsync(String socketPath, CancellationToken cancellationToken)",
+  "occurrences": [
+    {
+      "run_id": 31200870870,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/31200870870",
+      "job": "Tests / Microsoft.Azure.StackExchangeRedis / Microsoft.Azure.StackExchangeRedis (windows-latest)",
+      "pr_number": 19084,
+      "observed_at": "2026-08-07T18:03:31Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19143"
+}

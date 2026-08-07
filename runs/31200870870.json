@@ -1,0 +1,47 @@
+{
+  "run_id": 31200870870,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/31200870870",
+  "analyzed_at": "2026-08-07T18:03:31Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19084,
+    "title": "Preserve Azure Bicep scope API compatibility",
+    "author": "sebastienros",
+    "state": "closed",
+    "head_branch": "sebros/fix-bicep-scope-api",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19084"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Microsoft.Azure.StackExchangeRedis / Microsoft.Azure.StackExchangeRedis (windows-latest)",
+      "id": 92940822487,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31200870870/job/92940822487",
+      "classification": "transient-infra",
+      "reason": "All 9 tests in the assembly passed (failed: 0, succeeded: 9), but the test host process then crashed with exit code -1073741502 (0xC0000142), a known Windows process initialization/runner infrastructure failure unrelated to the PR's Bicep scope changes.",
+      "failed_steps": ["Check for hang dump files", "Upload logs, and test results", "Copy CLI E2E recordings for upload", "Upload CLI E2E recordings", "Generate test results summary", "Post Checkout code"]
+    },
+    {
+      "name": "Tests / Hosting.RemoteHost / Hosting.RemoteHost (windows-latest)",
+      "id": 92940834211,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31200870870/job/92940834211",
+      "classification": "flaky-test",
+      "reason": "Single test failure (1 of 456) in JsonRpcAuthenticationTests due to a named-pipe RPC connection timeout, unrelated to the PR's Azure Bicep scope changes (PR only touches Aspire.Hosting.Azure files).",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.RemoteHost.Tests.JsonRpcAuthenticationTests.FailedAuthentication_ClosesConnection_AndPreventsFurtherCalls",
+      "job": "Tests / Hosting.RemoteHost / Hosting.RemoteHost (windows-latest)",
+      "error": "System.TimeoutException : Timed out connecting to test RPC server 'aspire-remotehost-test-b6151cb061ad419f94c5d400e8f1db4d'.\n---- System.OperationCanceledException : The operation was canceled.",
+      "stack_trace": "at Aspire.Hosting.RemoteHost.Tests.JsonRpcAuthenticationTests.RemoteHostTestServer.ConnectToServerAsync(String socketPath, CancellationToken cancellationToken) in /_/tests/Aspire.Hosting.RemoteHost.Tests/JsonRpcAuthenticationTests.cs:line 220\n   at Aspire.Hosting.RemoteHost.Tests.JsonRpcAuthenticationTests.RemoteHostTestServer.ConnectAsync() in /_/tests/Aspire.Hosting.RemoteHost.Tests/JsonRpcAuthenticationTests.cs:line 129\n   at Aspire.Hosting.RemoteHost.Tests.JsonRpcAuthenticationTests.FailedAuthentication_ClosesConnection_AndPreventsFurtherCalls() in /_/tests/Aspire.Hosting.RemoteHost.Tests/JsonRpcAuthenticationTests.cs:line 58",
+      "classification": "flaky",
+      "reason": "Named-pipe RPC connection timeout in test infrastructure, unrelated to the PR's Azure Bicep scope changes (PR only modifies Aspire.Hosting.Azure files); the RemoteHost project is not touched by this PR."
+    }
+  ],
+  "causes": ["windows-process-init-0xc0000142", "remotehost-jsonrpcauth-rpc-timeout"]
+}
