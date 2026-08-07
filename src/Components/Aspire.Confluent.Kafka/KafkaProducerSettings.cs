@@ -51,7 +51,7 @@ public sealed class KafkaProducerSettings
 
         if (ConnectionString is not null)
         {
-            Config.BootstrapServers = ConnectionString;
+            KafkaConnectionString.Apply(ConnectionString, Config);
         }
 
         if (!DisableMetrics)

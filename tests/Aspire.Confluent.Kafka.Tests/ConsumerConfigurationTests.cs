@@ -262,5 +262,41 @@ public class ConsumerConfigurationTests
         Assert.Equal(SecurityProtocol.Plaintext, config.SecurityProtocol);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ReadsSaslCredentialsFromConnectionString(bool useKeyed)
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+
+        var key = useKeyed ? "messaging" : null;
+        builder.Configuration.AddInMemoryCollection([
+            new KeyValuePair<string, string?>("ConnectionStrings:messaging", CommonHelpers.TestingSaslConnectionString),
+            new KeyValuePair<string, string?>(ConsumerConformanceTests.CreateConfigKey("Aspire:Confluent:Kafka:Consumer", key, "Config:GroupId"), "unused")
+        ]);
+
+        if (useKeyed)
+        {
+            builder.AddKeyedKafkaConsumer<string, string>("messaging");
+        }
+        else
+        {
+            builder.AddKafkaConsumer<string, string>("messaging");
+        }
+
+        using var host = builder.Build();
+        var connectionFactory = useKeyed ?
+            host.Services.GetRequiredKeyedService(ReflectionHelpers.ConsumerConnectionFactoryStringKeyStringValueType.Value, "messaging") :
+            host.Services.GetRequiredService(ReflectionHelpers.ConsumerConnectionFactoryStringKeyStringValueType.Value);
+
+        var config = GetConsumerConfig(connectionFactory)!;
+
+        Assert.Equal(CommonHelpers.TestingEndpoint, config.BootstrapServers);
+        Assert.Equal(SecurityProtocol.SaslPlaintext, config.SecurityProtocol);
+        Assert.Equal(SaslMechanism.Plain, config.SaslMechanism);
+        Assert.Equal("kafka", config.SaslUsername);
+        Assert.Equal(CommonHelpers.TestingPassword, config.SaslPassword);
+    }
+
     private static ConsumerConfig? GetConsumerConfig(object o) => ReflectionHelpers.ConsumerConnectionFactoryStringKeyStringValueType.Value.GetProperty("Config")!.GetValue(o) as ConsumerConfig;
 }
