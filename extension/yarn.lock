@@ -3949,10 +3949,10 @@ js-tokens@^4.0.0:
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/js-tokens/-/js-tokens-4.0.0.tgz"
   integrity sha1-GSA/tZmR35jjoocFDUZHzerzJJk=
 
-js-yaml@5.2.2, js-yaml@^4.1.0, js-yaml@^4.1.1:
-  version "5.2.2"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/js-yaml/-/js-yaml-5.2.2.tgz#497bfe63f0b0db11c7bbc5ce8bc568e836c8b08c"
-  integrity sha1-SXv+Y/Cw2xHHu8XOi8Vo6DbIsIw=
+js-yaml@4.3.0, js-yaml@^4.1.0, js-yaml@^4.1.1:
+  version "4.3.0"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/js-yaml/-/js-yaml-4.3.0.tgz#d1900572a7f7cf0b5f540c83673e60bad3436592"
+  integrity sha1-0ZAFcqf3zwtfVAyDZz5gutNDZZI=
   dependencies:
     argparse "^2.0.1"
 
