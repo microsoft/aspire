@@ -371,7 +371,7 @@ safe-outputs:
                   '> [!NOTE]',
                   '> This draft PR needs human review before merging.'
                 ].join('\n');
-              } else if (result === 'drafted') {
+              } else if (notifications.length === 1 && result === 'drafted') {
                 // Agent intended to draft a PR but the safe-outputs handler did not produce
                 // a created_pr_url. Surface this as a failure rather than a "skipped" result.
                 body = [
@@ -382,7 +382,7 @@ safe-outputs:
                   '',
                   summary
                 ].join('\n');
-              } else if (result === 'draft_failed') {
+              } else if (notifications.length === 1 && result === 'draft_failed') {
                 // Step 5 determined docs WERE required, but Step 10 could not
                 // produce a docs PR (e.g. a base-branch/validation error, a
                 // protected-file rejection, or an empty/invalid patch). This is
