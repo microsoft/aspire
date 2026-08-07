@@ -17,8 +17,10 @@ package** as the unit that owns how a language's services are launched (run *and
    by a hidden **watch `server`** system resource; the app host itself runs under the tool's **`host`**
    command (delivered as its own session). C# services **hot-reload**; other languages run in watch mode
    or normally depending on their own integration package's watch support.
-3. The Aspire app model performs a single **coordinated initial build** (temp `.slnx`) of all `DotnetProjectResource`
-   services itself — identically for watch and non-watch — because the watch tool only does *incremental* builds.
+3. The Aspire app model performs a **coordinated initial build** of every `DotnetProjectResource` itself —
+   identically for watch and non-watch — because the watch tool only does *incremental* builds. Project
+   entrypoints build together through a temp `.slnx`; file-based `.cs` entrypoints build serially so their
+   SDK-evaluated `#:project` graphs cannot race on shared `bin`/`obj` outputs.
 
 The design must not preclude the full Project v2 vision (partial runs, persistent execution, container
 execution, debugging-under-watch, programmatic build config, events/callbacks redesign), and must
@@ -36,7 +38,7 @@ generalize cleanly so Go/Python/JavaScript can add watch support later.
 | **D4** | **Only C# watch is implemented now.** Design a **general per-language-package watch seam** so Go/Python/JavaScript can adopt watch later, but do not implement them in this plan. Non-C# services run normally under watch until their package adds support. |
 | **D5** | **Core exposes run configuration as state** on `DistributedApplicationExecutionContext` (a `RunConfiguration` with a `WatchEnabled` property); language packages query it. **All watch mechanics** (server, `host`/`resource`/`server` commands, pipes, builds) live in the language package. Core is **not** involved in watch details. |
 | **D6** | **Watch tool referenced from `Aspire.Hosting.Dotnet`** via a NuGet `PackageReference` (`GeneratePathProperty=true`) + a `.targets` file that injects the tool dll path as **app-host assembly metadata** (the DCP/dashboard/terminal-host pattern); the running app host invokes it with `dotnet exec`. **Not bundled in the CLI.** The CLI obtains the tool for the `host` command by resolving it from the **restored app host project** (handled in the app-host-watch session). |
-| **D7** | **Coordinated INITIAL build is in scope**, owned by `Aspire.Hosting.Dotnet`: generate a temp `.slnx` of all `DotnetProjectResource` `.csproj`s and run **one coordinated `dotnet build`** before services start — **identically for watch and non-watch**. The watch tool's `server`/`host`/`resource` perform only **incremental** builds, never the initial one. Library: `Microsoft.VisualStudio.SolutionPersistence`. |
+| **D7** | **Coordinated INITIAL build is in scope**, owned by `Aspire.Hosting.Dotnet`, for **both project and file-based entrypoints** ([#19037](https://github.com/microsoft/aspire/issues/19037)). Before any service starts, generate a temp `.slnx` of all `.csproj` entrypoints and run one `dotnet build`, then run `dotnet build <app.cs>` for each file-based entrypoint **serially**. As an optional incremental improvement, when the active SDK supports file apps in `dotnet reference` (.NET SDK `10.0.400` or `11.0.100-preview.7` and later), run `dotnet reference list --file <app.cs>` for each file entrypoint and include the discovered `#:project` references in the initial `.slnx`. The serial file builds remain the correctness fallback for older SDKs and still prevent two file apps, or a file app and the `.slnx` build, from writing a shared dependency's outputs concurrently. Launches consume those outputs without another initial build. This is identical for watch and non-watch; the watch tool performs only later **incremental** builds. Library: `Microsoft.VisualStudio.SolutionPersistence`. |
 | **D8** | **App-host watch via the tool's `host` command is a separate implementation session.** The earlier service-watch sessions run the app host normally; the host-command session layers app-host hot reload on top and reconciles/replaces today's whole-app-host `dotnet watch`. |
 | **D9** | **Non-watch debugging/F5 parity is required** for `DotnetProjectResource`. Because it is an `ExecutableResource` (not a `ProjectResource`), this requires generalizing the DCP project-launch/debug path (§6, R1). |
 
@@ -48,8 +50,8 @@ generalize cleanly so Go/Python/JavaScript can add watch support later.
   must be available on an **approved internal feed mirror** (per `NuGet.config`) before use; mirror them if not.
 - **A3.** The watch tool's `--sdk <dir>` must match the active SDK; resolve the SDK directory at runtime
   (e.g. via `dotnet --info`) rather than assuming the bundled/pinned version.
-- **A4.** The watch tool does **not** perform the initial build (confirmed by the requester); the coordinated
-  `.slnx` build (D7) is always required.
+- **A4.** The watch tool does **not** perform the initial build (confirmed by the requester); both phases of
+  the coordinated build (the `.slnx` build and serial file-app builds in D7) are always required.
 
 ---
 
@@ -61,14 +63,16 @@ Tool = `Microsoft.DotNet.HotReload.Watch.Aspire` (a `PackAsTool` dotnet tool, .N
 
 ```
 server   --sdk <sdkDir> --server <pipe> --status-pipe <pipe> --control-pipe <pipe> --verbose \
-         --resource <projA.csproj> --resource <projB.csproj> …
-resource --server <serverPipe> --entrypoint <proj.csproj> --no-launch-profile --verbose -e KEY=VALUE …
+         --resource <entrypoint.csproj|app.cs> …
+resource --server <serverPipe> --entrypoint <entrypoint.csproj|app.cs> --no-launch-profile --verbose -e KEY=VALUE …
 host     --sdk <sdkDir> --entrypoint <apphost.csproj> --verbose [-- forwardedArgs]
 ```
 
 Model: a hidden **`server`** holds the status/control pipes and owns incremental builds (service +
 shared-library change handling); each service runs as a **`resource`** that connects to the server pipe
-and `WaitForStart`s it; the **`host`** wraps the app host process itself under hot reload.
+and `WaitForStart`s it; the **`host`** wraps the app host process itself under hot reload. Session 4 must
+verify that the shipped tool accepts both `.csproj` and file-based `.cs` entrypoints; file-app service watch
+cannot ship until that path is confirmed or an equivalent graph-aware watch path is provided.
 
 ### 3.2 Language integration packages are the established pattern (the template for `Aspire.Hosting.Dotnet`)
 `Aspire.Hosting.Go`, `Aspire.Hosting.Python`, `Aspire.Hosting.JavaScript` already demonstrate everything
@@ -139,10 +143,12 @@ flowchart TD
     HOST --> AH["App host process (C# or polyglot)"]
     AH --> Model["Aspire app model (Aspire.Hosting, core)"]
     Model -->|"ExecutionContext.RunConfiguration.WatchEnabled == true"| Pkg["Aspire.Hosting.Dotnet (language integration)"]
-    Pkg -->|"coordinated INITIAL build (always)"| SLNX["temp .slnx → dotnet build<br/>(vs-solutionpersistence)"]
-    Pkg -->|"adds hidden system resource"| WS["watch server (ExecutableResource, hidden)<br/>dotnet exec tool server --resource projA --resource projB …"]
-    Pkg -->|"launch each C# service via tool"| P1["csharp svc A<br/>dotnet exec tool resource --entrypoint projA --server pipe"]
-    Pkg -->|"launch each C# service via tool"| P2["csharp svc B<br/>dotnet exec tool resource --entrypoint projB --server pipe"]
+    Pkg -->|"phase 1: coordinated INITIAL build (always)"| SLNX["temp .slnx → dotnet build<br/>(all project entrypoints)"]
+    SLNX -->|"phase 2: after solution build"| FILES["serial dotnet build app.cs<br/>(SDK evaluates each #:project graph)"]
+    Pkg -->|"adds hidden system resource"| WS["watch server (ExecutableResource, hidden)<br/>dotnet exec tool server --resource entrypointA --resource entrypointB …"]
+    FILES -. "initial-build barrier" .-> WS
+    Pkg -->|"launch each C# service via tool"| P1["csharp svc A<br/>dotnet exec tool resource --entrypoint entrypointA --server pipe"]
+    Pkg -->|"launch each C# service via tool"| P2["csharp svc B<br/>dotnet exec tool resource --entrypoint entrypointB --server pipe"]
     P1 -. "WaitForStart" .-> WS
     P2 -. "WaitForStart" .-> WS
     WS <-->|named pipes| P1
@@ -150,9 +156,11 @@ flowchart TD
     WS -->|"INCREMENTAL rebuild on change<br/>(service + shared library)"| P1
     WS --> P2
 ```
-Non-watch run is identical minus the watch `server`/`host`/`resource` wrapping: the coordinated initial
-build still runs, then each `DotnetProjectResource` launches as `dotnet run --project …` (with `"project"`
-debug launch config for F5).
+No service starts until both initial-build phases succeed. Non-watch run is identical minus the watch
+`server`/`host`/`resource` wrapping: each `DotnetProjectResource` launches from the coordinated outputs
+without rebuilding (`dotnet run --project … --no-build` or `dotnet run --file … --no-build`, with the
+`"project"` debug launch config for F5). Coordinator-owned file-app launches must not pass `--no-cache`,
+which requests an unconditional build and would defeat coordination.
 
 ### 4.2 The core/package boundary (D5)
 - **Core `Aspire.Hosting`** gains exactly one watch-aware concept: **run configuration as state** on
@@ -196,11 +204,31 @@ exclusion (mirrors `AddRebuilderResource`). One per app run (MVP). Includes a sm
 (ported from POC) and, optionally, a status-pipe monitor surfacing watch status into resource logs/state.
 
 ### 5.3 Coordinated build orchestrator (new, internal)
-`internal sealed class DotnetProjectBuildOrchestrator` (name TBD): collects all `DotnetProjectResource` `.csproj`
-paths → generates a temp `.slnx` (`Microsoft.VisualStudio.SolutionPersistence`) → runs one coordinated
-`dotnet build` as a run-sequence step **before** services start, for **both** run modes. File-based `.cs`
-apps are excluded (built/run individually). Reuses `IAspireStore`/temp-dir abstractions and the
-`ProjectRebuilderResource`-style DCP-build-executable approach for log capture + cleanup.
+`internal sealed class DotnetProjectBuildOrchestrator` (name TBD) owns the complete initial-build barrier
+for **both** run modes:
+
+1. Collect and de-duplicate all project-based `DotnetProjectResource` `.csproj` entrypoints. As an optional
+   optimization, when the active SDK is `10.0.400` or `11.0.100-preview.7` and later, run
+   `dotnet reference list --file <app.cs>` for each file-based entrypoint and add its discovered `#:project`
+   references to the same set. Generate a temp `.slnx` (`Microsoft.VisualStudio.SolutionPersistence`) from
+   that set and run one coordinated `dotnet build`. Older SDKs skip discovery and rely on the serialized
+   file-app phase for correctness.
+2. After the `.slnx` build succeeds, build each file-based `.cs` entrypoint with `dotnet build <app.cs>`,
+   one at a time in deterministic resource order and with the same configuration/build-affecting inputs used
+   for launch. Do not hand-parse `#:project`; the .NET SDK's generated file-app project is the authoritative
+   evaluator for directive syntax and project-reference discovery. Because these builds are serialized after
+   the `.slnx` build, shared project references never have concurrent writers, including references shared by
+   file apps and traditional project resources.
+3. Start no `DotnetProjectResource` until the entire barrier succeeds. Once this always-on coordinator is
+   installed, mark each resource's `IProjectMetadata.SuppressBuild` as `true` so both plain process launches
+   and the `"project"` IDE/debug path consume the coordinated outputs. Update both argument-generation paths
+   so file-app launches select `--no-build` **instead of** `--no-cache`; passing both is not acceptable because
+   `--no-cache` requests an unconditional build. Watch launches hand the already-built entrypoints to the
+   watch tool, which owns only subsequent incremental builds.
+
+The orchestrator streams each phase's logs with the resource/entrypoint identified, fails fast, and reuses
+`IAspireStore`/temp-dir abstractions plus the `ProjectRebuilderResource`-style DCP-build-executable approach
+for log capture and cleanup. Empty project or file-app phases are skipped.
 
 ### 5.4 Generalized project-defaults wiring (core ↔ package)
 Today `WithProjectDefaults` / `SetAspNetCoreUrls` / rebuilder / launchSettings-endpoint logic are
@@ -286,7 +314,9 @@ file-based `.cs` service (`worker/worker.cs`). The four C# projects are in `Aspi
 `DotnetProjectResource` launches via `dotnet run --project/--file … --no-launch-profile`, and HTTP calls confirm
 the shared library and service discovery (`workerservice`/`worker` → `apiservice`). Running the **TypeScript**
 app host in-repo follows the standard polyglot package workflow (pack `Aspire.Hosting.Dotnet` to a local source
-+ `npm install`; see A2/A1).
++ `npm install`; see A2/A1). Both app hosts temporarily chain `WaitFor`/`waitFor` across the three services
+to serialize their independent `dotnet run` builds; Session 5 removes that workaround only after project and
+file-app initial builds both participate in the coordinated barrier.
 
 ### Session 2 — Non-watch **debug/F5 parity** (DCP project-launch generalization)
 Generalize the DCP path so a non-`ProjectResource` carrying `IProjectMetadata` + a `"project"`
@@ -332,25 +362,36 @@ Pin + mirror `Microsoft.DotNet.HotReload.Watch.Aspire` (A2); add the `PackageRef
 `GeneratePathProperty` + `.targets` assembly-metadata injection + runtime resolver; invoke via `dotnet exec`.
 
 **Verify:** from a built app host that references `Aspire.Hosting.Dotnet`, `dotnet exec <resolved tool> --help`
-runs; re-verify the `server`/`resource`/`host` flag surface (A1). *Depends on: 1.*
+runs; re-verify the `server`/`resource`/`host` flag surface (A1), including `.cs` entrypoints and incremental
+changes to their `#:project` dependencies. If the shipped tool does not support file-based entrypoints, resolve
+that gap before Session 6 rather than launching file apps through an uncoordinated build path. *Depends on: 1.*
 
-### Session 5 — Coordinated initial `.slnx` build (vs-solutionpersistence)
-Add/mirror `Microsoft.VisualStudio.SolutionPersistence` (A2). Implement `DotnetProjectBuildOrchestrator` (§5.3):
-temp `.slnx` of all `DotnetProjectResource` `.csproj`s → one coordinated `dotnet build` before services start,
-**identically for watch and non-watch**; exclude `.cs` apps; stream logs; fail fast. 
+### Session 5 — Coordinated initial build (`.slnx` + file apps)
+Add/mirror `Microsoft.VisualStudio.SolutionPersistence` (A2). Implement `DotnetProjectBuildOrchestrator`
+(§5.3): build a temp `.slnx` containing all project entrypoints and, on supported SDKs, the references returned
+by `dotnet reference list --file <app.cs>`; then serially `dotnet build` every file-based entrypoint so the SDK
+discovers and builds its complete `#:project` graph without overlapping another build. Treat both phases as one
+startup barrier **identically for watch and non-watch**; stream logs; fail fast; launch from the result with
+build suppression. The reference-list optimization must be SDK-gated and must not replace the serial fallback.
 
-**Verify:** a multi-project app **with a shared library** builds once, no write races, from a TS app host then a C# app host.
+**Verify:** from a TS app host then a C# app host: (1) multiple `.csproj` resources share a library; (2) two
+file-based apps share the same `#:project` class-library reference; and (3) a file-based app and a `.csproj`
+resource share a dependency. Start all resources concurrently and prove no overlapping builds/write races.
+Confirm both watch and non-watch execute the initial barrier, non-watch launches do not rebuild, and removing
+the playground's temporary `WaitFor`/`waitFor` chain is safe.
 *Depends on: 1. Parallelizable with 2–4.*
 
 ### Session 6 — C# **service** watch: watch `server` + `resource` launch
 Add `DotnetWatchServerResource` (§5.2). When `ExecutionContext.RunConfiguration.WatchEnabled`, the package (a) adds the hidden
-watch server with all `DotnetProjectResource` project paths, (b) rewrites each `DotnetProjectResource` to
-`dotnet exec <tool> resource --entrypoint <proj> --server <pipe> --no-launch-profile -e K=V …`, (c)
-`WaitForStart(server)`. Coordinated initial build (session 5) runs first; the server owns incremental builds.
+watch server with all `DotnetProjectResource` entrypoint paths (`.csproj` and `.cs`), (b) rewrites each `DotnetProjectResource` to
+`dotnet exec <tool> resource --entrypoint <entrypoint> --server <pipe> --no-launch-profile -e K=V …`, (c)
+`WaitForStart(server)`. The complete coordinated initial-build barrier (session 5) runs first; the server owns
+incremental builds, including shared dependencies reached through a file app's `#:project` graph.
 Optional status-pipe monitor. **App host still runs normally in this session.** 
 
 **Verify (TS app host first,
-then C#):** edit a service file → that service hot-reloads; edit the shared library → both services reload.
+then C#):** edit a project or file-based service → that service hot-reloads; edit a shared library referenced
+by two file apps and a project resource → all affected services reload without concurrent build-output writes.
 *Depends on: 3, 4, 5 (and 1).*
 
 ### Session 7 — `aspire run --watch` CLI wiring
@@ -371,9 +412,12 @@ app-host-server case).
 
 ### Session 9 — Tests, playground & docs
 **Extend the Session 1b playground** to exercise `aspire run --watch` (C# services hot-reload; a shared-library
-edit reloads both) from the TS and C# app hosts; CLI e2e for `aspire run --watch` (hex1b /
+edit reloads all affected project and file-based services) from the TS and C# app hosts. Add a second file-based
+app with the same `#:project` dependency, remove the temporary `WaitFor`/`waitFor` serialization, and use this
+as the regression scenario for [#19037](https://github.com/microsoft/aspire/issues/19037). Add CLI e2e for
+`aspire run --watch` (hex1b /
 `cli-e2e-testing`); hosting tests for the package, watch-server wiring, watch switch, and the `.slnx`
-build; Verify-snapshot updates. Docs for experimental `Aspire.Hosting.Dotnet` + `aspire run --watch`,
+plus serial file-app build barrier; Verify-snapshot updates. Docs for experimental `Aspire.Hosting.Dotnet` + `aspire run --watch`,
 limitations (no watch-debug, no partial runs yet), `ASPIREDOTNETPROJECT001`. *Depends on: 7 (and 8).*
 
 ### Dependency graph
@@ -427,6 +471,11 @@ callbacks may need to run for build/closure even when a resource isn't "running"
 - **R9 — Blazor gateway variant (Session 1).** The new `DotnetProjectResource`-backed gateway shares one
   generalized helper implementation with the unchanged `ProjectResource` gateway; publish on the new variant
   fails fast until `DotnetProjectResource` gains container-files support.
+- **R10 — File-app build graph coordination ([#19037](https://github.com/microsoft/aspire/issues/19037)).**
+  File apps can share `#:project` dependencies with one another and with `.csproj` resources. They must not
+  fall back to independent startup builds. Session 5 serializes SDK-evaluated file-app builds behind the
+  `.slnx` build and suppresses launch-time rebuilds; Session 6 verifies the watch tool preserves graph-aware
+  incremental behavior. Do not remove the playground's temporary waits until those guarantees have tests.
 - **O1 — Watch signal shape.** ✅ **Resolved (Session 3):** a `RunConfiguration` object with a
   `bool WatchEnabled` property, exposed read-only as `DistributedApplicationExecutionContext.RunConfiguration`.
   Additional run behaviors are added as further properties rather than as mutually exclusive modes.
@@ -455,4 +504,5 @@ callbacks may need to run for build/closure even when a resource isn't "running"
 | Watch tool package | https://www.nuget.org/packages/Microsoft.DotNet.HotReload.Watch.Aspire/ |
 | Hot reload & watch docs | https://aspire.dev/app-host/hot-reload-and-watch/ |
 | Solution file editing library | https://github.com/microsoft/vs-solutionpersistence |
+| File-app coordinated-build requirement | https://github.com/microsoft/aspire/issues/19037 |
 | Annotation-based resource flavoring proposal | https://github.com/microsoft/aspire/issues/8984 |
