@@ -614,6 +614,128 @@ jobs:
              --query "[].{name:name, resourceGroup:resourceGroup, location:location, provisioningState:provisioningState, sku:sku}" \
              -o json
 
+            echo "=== Supported AKS versions in West US 3 ==="
+            az aks get-versions --location westus3 \
+             --query "values[].{version:version, isDefault:isDefault}" -o json
+
+            echo "=== Supported Microsoft.ContainerService managedClusters API versions ==="
+            managed_cluster_api_versions=$(az provider show --namespace Microsoft.ContainerService \
+             --query "resourceTypes[?resourceType=='managedClusters'].apiVersions[]" -o tsv)
+            printf '%s\n' "$managed_cluster_api_versions"
+
+            echo "=== Isolated AKS request-shape diagnostics ==="
+            diagnostic_resource_group="e2e-aksdiag-${GITHUB_RUN_ID}"
+            az group create --name "$diagnostic_resource_group" --location westus3 --output none
+
+            cleanup_diagnostic_resource_group() {
+              az group delete --name "$diagnostic_resource_group" --yes --no-wait --output none || true
+            }
+            trap cleanup_diagnostic_resource_group EXIT
+
+            try_aks_create() {
+              local variant="$1"
+              shift
+              local cluster_name="diag-${variant}-${GITHUB_RUN_ATTEMPT}"
+
+              echo "--- az aks create variant: $variant ---"
+              set +e
+              az aks create \
+               --resource-group "$diagnostic_resource_group" \
+               --name "$cluster_name" \
+               --location westus3 \
+               --node-count 1 \
+               --node-vm-size Standard_D2as_v5 \
+               --enable-managed-identity \
+               --no-ssh-key \
+               --no-wait \
+               --only-show-errors \
+               "$@"
+              local exit_code=$?
+              set -e
+              echo "Exit code: $exit_code"
+              return "$exit_code"
+            }
+
+            accepted_variant=""
+            if try_aks_create "free"; then
+              accepted_variant="free"
+            elif try_aks_create "standard" --tier standard; then
+              accepted_variant="standard"
+            else
+              default_kubernetes_version=$(az aks get-versions --location westus3 \
+               --query "values[?isDefault].version | [0]" -o tsv)
+
+              if [ -n "$default_kubernetes_version" ] &&
+                 try_aks_create "version" --tier standard --kubernetes-version "$default_kubernetes_version"; then
+                accepted_variant="explicit Kubernetes version"
+              elif try_aks_create "azurecni" --tier standard --network-plugin azure; then
+                accepted_variant="Azure CNI"
+              fi
+            fi
+
+            if [ -n "$accepted_variant" ]; then
+              echo "Accepted AKS CLI variant: $accepted_variant"
+            else
+              echo "--- Minimal managedClusters PUT using an older stable API ---"
+              stable_api_version=$(printf '%s\n' "$managed_cluster_api_versions" |
+               tr '\t' '\n' |
+               awk '/^2025-[0-9][0-9]-[0-9][0-9]$/ { print; exit }')
+
+              if [ -z "$stable_api_version" ]; then
+                stable_api_version=$(printf '%s\n' "$managed_cluster_api_versions" |
+                 tr '\t' '\n' |
+                 awk '!/preview/ { print; exit }')
+              fi
+
+              subscription_id=$(az account show --query id -o tsv)
+              rest_cluster_name="diag-rest-${GITHUB_RUN_ATTEMPT}"
+              request_body="$RUNNER_TEMP/aks-managed-cluster-request.json"
+              cat > "$request_body" <<JSON
+          {
+            "location": "westus3",
+            "identity": {
+              "type": "SystemAssigned"
+            },
+            "sku": {
+              "name": "Base",
+              "tier": "Standard"
+            },
+            "properties": {
+              "dnsPrefix": "$rest_cluster_name",
+              "enableRBAC": true,
+              "servicePrincipalProfile": {
+                "clientId": "msi"
+              },
+              "agentPoolProfiles": [
+                {
+                  "name": "systempool",
+                  "count": 1,
+                  "vmSize": "Standard_D2as_v5",
+                  "osType": "Linux",
+                  "mode": "System",
+                  "type": "VirtualMachineScaleSets"
+                }
+              ],
+              "networkProfile": {
+                "networkPlugin": "kubenet",
+                "loadBalancerSku": "standard",
+                "outboundType": "loadBalancer"
+              }
+            }
+          }
+          JSON
+
+              set +e
+              az rest --method put --debug \
+               --uri "https://management.azure.com/subscriptions/${subscription_id}/resourceGroups/${diagnostic_resource_group}/providers/Microsoft.ContainerService/managedClusters/${rest_cluster_name}?api-version=${stable_api_version}" \
+               --headers "Content-Type=application/json" \
+               --body "@$request_body"
+              rest_exit_code=$?
+              set -e
+              echo "API version: $stable_api_version"
+              echo "Exit code: $rest_exit_code"
+            fi
+
             echo "=== Recent failed Microsoft.ContainerService activity ==="
             sleep 60
             az monitor activity-log list --offset 3h --status Failed \
