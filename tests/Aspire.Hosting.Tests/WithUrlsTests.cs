@@ -338,6 +338,7 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+#pragma warning disable CS0618 // This test intentionally verifies the obsolete DisplayOrder behavior.
         var projectA = builder.AddProject<ProjectA>("projecta")
             .WithHttpEndpoint(name: "test")
             .WithUrlForEndpoint("test", u =>
@@ -362,6 +363,7 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
             && u.DisplayText == "Link Text"
             && u.Endpoint?.EndpointName == "test"
             && u.DisplayOrder == 1000);
+#pragma warning restore CS0618
 
         await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutDuration);
     }
