@@ -53,6 +53,24 @@ const myService = await builder.addNodeApp("myService", "../my-service", "server
                        .withReference(cosmosdb);
 ```
 
+## Local emulator
+
+Call `RunAsEmulator` to run the resource against the [Azure Cosmos DB emulator](https://learn.microsoft.com/azure/cosmos-db/emulator-linux) during local development. In publish mode the call is a no-op and the real Azure resource is provisioned.
+
+```csharp
+var cosmosdb = builder.AddAzureCosmosDB("cdb")
+                      .RunAsEmulator(emulator => emulator.WithDataExplorer());
+```
+
+The emulator container runs the vNext (Linux-native) emulator image, which supports x64 and ARM64 hosts. A few things to be aware of:
+
+- It serves the NoSQL API in gateway mode only. Stored procedures, triggers, user-defined functions, request-unit enforcement, and the MongoDB API are not supported.
+- Aspire configures the container with a development certificate, so the emulator is reached over HTTPS without disabling certificate validation.
+- `WithDataVolume` persists emulator state across runs by mounting a volume at `/data`.
+- The Data Explorer UI is disabled by default; enable it with `WithDataExplorer`.
+
+`RunAsPreviewEmulator` and `WithPartitionCount` are obsolete. `RunAsPreviewEmulator` is now an alias for `RunAsEmulator`, and `WithPartitionCount` has no effect because the emulator does not expose a partition-count setting.
+
 ## Connection Properties
 
 When you reference Azure Cosmos DB resources using `WithReference`, the following connection properties are made available to the consuming project:

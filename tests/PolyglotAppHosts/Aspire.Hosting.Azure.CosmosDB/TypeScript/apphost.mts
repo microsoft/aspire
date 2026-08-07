@@ -32,15 +32,7 @@ await cosmosEmulator.runAsEmulator({
     configureContainer: async (emulator) => {
         await emulator.withDataVolume({ name: "cosmos-emulator-data" }); // 9) withDataVolume
         await emulator.withGatewayPort({ port: 18081 }); // 10) withGatewayPort
-        await emulator.withPartitionCount(25); // 11) withPartitionCount
-    },
-});
-
-// 12) runAsPreviewEmulator + 13) withDataExplorer
-const cosmosPreview = await builder.addAzureCosmosDB("cosmos-preview-emulator");
-await cosmosPreview.runAsPreviewEmulator({
-    configureContainer: async (emulator) => {
-        await emulator.withDataExplorer({ port: 11234 });
+        await emulator.withDataExplorer({ port: 11234 }); // 11) withDataExplorer
     },
 });
 

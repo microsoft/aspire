@@ -75,7 +75,7 @@ public class AzureCosmosDBConnectionPropertiesTests
             property =>
             {
                 Assert.Equal("ConnectionString", property.Key);
-                Assert.Equal("AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==;AccountEndpoint=https://{cosmos.bindings.emulator.host}:{cosmos.bindings.emulator.port};DisableServerCertificateValidation=True;", property.Value.ValueExpression);
+                Assert.Equal("AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==;AccountEndpoint={cosmos.bindings.emulator.url}", property.Value.ValueExpression);
             });
     }
 }

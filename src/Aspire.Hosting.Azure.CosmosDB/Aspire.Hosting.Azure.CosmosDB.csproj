@@ -21,7 +21,6 @@
     <ProjectReference Include="..\Aspire.Hosting.Azure.KeyVault\Aspire.Hosting.Azure.KeyVault.csproj" />
     <PackageReference Include="Azure.Identity" />
     <PackageReference Include="Microsoft.Azure.Cosmos" />
-    <PackageReference Include="AspNetCore.HealthChecks.CosmosDb" />
     <PackageReference Include="Newtonsoft.Json" /> <!-- Required by Microsoft.Azure.Cosmos -->
     <PackageReference Include="Azure.Provisioning" />
     <PackageReference Include="Azure.Provisioning.CosmosDB" />

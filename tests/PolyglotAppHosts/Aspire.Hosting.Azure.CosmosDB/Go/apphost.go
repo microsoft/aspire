@@ -59,24 +59,13 @@ func main() {
 				Name: aspire.StringPtr("cosmos-emulator-data"),
 			}) // 9) WithDataVolume
 			emulator.WithGatewayPort(18081) // 10) WithGatewayPort
-			emulator.WithPartitionCount(25) // 11) WithPartitionCount
+			emulator.WithDataExplorer(&aspire.WithDataExplorerOptions{
+				Port: aspire.Float64Ptr(11234),
+			}) // 11) WithDataExplorer
 		},
 	})
 	if cosmosEmulator.Err() != nil {
 		log.Fatalf(aspire.FormatError(cosmosEmulator.Err()))
-	}
-
-	// 12) RunAsPreviewEmulator + 13) WithDataExplorer
-	cosmosPreview := builder.AddAzureCosmosDB("cosmos-preview-emulator")
-	cosmosPreview.RunAsPreviewEmulator(&aspire.RunAsPreviewEmulatorOptions{
-		ConfigureContainer: func(emulator aspire.AzureCosmosDBEmulatorResource) {
-			emulator.WithDataExplorer(&aspire.WithDataExplorerOptions{
-				Port: aspire.Float64Ptr(11234),
-			})
-		},
-	})
-	if cosmosPreview.Err() != nil {
-		log.Fatalf(aspire.FormatError(cosmosPreview.Err()))
 	}
 
 	app, err := builder.Build()
