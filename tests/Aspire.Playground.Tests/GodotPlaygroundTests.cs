@@ -15,6 +15,7 @@ namespace Aspire.Playground.Tests;
 public class GodotPlaygroundTests(ITestOutputHelper testOutput)
 {
     private const string SentinelGodotBin = "custom-godot-sentinel";
+    private const string WhitespaceGodotBin = "   ";
 
     [Fact]
     public async Task AppHostStartsWithoutGodotAndExposesMatchmakerEndpointConfiguration()
@@ -74,7 +75,10 @@ public class GodotPlaygroundTests(ITestOutputHelper testOutput)
         var configuration = app.Services.GetRequiredService<IConfiguration>();
         Assert.Equal("true", configuration["DcpPublisher:RandomizePorts"]);
         Assert.Equal("true", configuration["DcpPublisher:WaitForResourceCleanup"]);
-        Assert.Equal("00:00:30", configuration["DcpPublisher:ContainerRuntimeInitializationTimeout"]);
+
+        // Only assert the key survived. Pinning the literal duration would couple this playground test to a
+        // testing-builder default that is free to change without affecting anything this test cares about.
+        Assert.NotNull(configuration["DcpPublisher:ContainerRuntimeInitializationTimeout"]);
     }
 
     [Fact]
@@ -83,8 +87,14 @@ public class GodotPlaygroundTests(ITestOutputHelper testOutput)
         var appHost = await DistributedApplicationTestFactory.CreateWithArgsAsync(
             typeof(Projects.Godot_AppHost),
             testOutput,
-            ["--GODOT_BIN=   "]);
+            [$"--GODOT_BIN={WhitespaceGodotBin}"]);
         await using var app = await appHost.BuildAsync();
+
+        // Prove the whitespace actually reached the AppHost's configuration first. Without this, a regression
+        // in arg plumbing would leave GODOT_BIN unset and the fallback assertion below would still pass while
+        // testing nothing.
+        var configuration = app.Services.GetRequiredService<IConfiguration>();
+        Assert.Equal(WhitespaceGodotBin, configuration["GODOT_BIN"]);
 
         var applicationModel = app.Services.GetRequiredService<DistributedApplicationModel>();
         var godotServer = Assert.Single(applicationModel.Resources.OfType<ExecutableResource>(), r => r.Name == "godot-server");
@@ -118,6 +128,14 @@ public class GodotPlaygroundTests(ITestOutputHelper testOutput)
         var executionConfiguration = await ExecutionConfigurationBuilder.Create(matchmaker)
             .WithEnvironmentVariablesConfig()
             .BuildAsync(executionContext);
-        Assert.DoesNotContain(executionConfiguration.EnvironmentVariables, kvp => kvp.Key.Contains("godot-server", StringComparison.OrdinalIgnoreCase));
+
+        // A resolution failure is reported here rather than thrown, and it yields an empty collection, which
+        // would make the negative assertion below pass without proving anything.
+        Assert.Null(executionConfiguration.Exception);
+
+        Assert.DoesNotContain(
+            executionConfiguration.EnvironmentVariables,
+            kvp => kvp.Key.Contains("godot-server", StringComparison.OrdinalIgnoreCase)
+                || kvp.Value.Contains("godot-server", StringComparison.OrdinalIgnoreCase));
     }
 }
