@@ -51,7 +51,7 @@ public static class GoHostingExtensions
     /// Use <see cref="WithModTidy{T}"/>, <see cref="WithModVendor{T}"/>, or <see cref="WithModDownload{T}"/>
     /// to manage module dependencies before startup, and <see cref="WithVetTool{T}"/> to run static analysis.
     /// Use <see cref="WithAppArgs{T}"/> to pass runtime program arguments, and
-    /// <see cref="WithDelveServer{T}"/> to enable remote debugging via a headless Delve server.
+    /// <see cref="WithDelveServer{T}(IResourceBuilder{T}, DelveServerOptions)"/> to enable remote debugging via a headless Delve server.
     /// </para>
     /// </remarks>
     /// <example>
@@ -108,7 +108,7 @@ public static class GoHostingExtensions
                     ctx.Args.Add("--headless=true");
                     ctx.Args.Add($"--listen=127.0.0.1:{delveAnnotation!.Port}");
                     ctx.Args.Add("--api-version=2");
-                    if (delveAnnotation.AcceptMulticlient)
+                    if (delveAnnotation.AcceptMultiClient)
                     {
                         ctx.Args.Add("--accept-multiclient");
                     }
@@ -619,21 +619,13 @@ public static class GoHostingExtensions
     }
 
     /// <summary>
-    /// Starts a headless Delve debug server so that any DAP-compatible client can attach remotely.
-    /// The application is launched as
-    /// <c>dlv --headless=true --listen=127.0.0.1:&lt;port&gt; --api-version=2 --accept-multiclient debug .</c>
-    /// instead of <c>go run .</c>. Delve must be available on the PATH.
+    /// Starts a headless Delve debug server so that a DAP-compatible client can attach remotely.
+    /// The application is launched with <c>dlv debug</c> instead of <c>go run</c>.
+    /// Delve must be available on the PATH.
     /// </summary>
     /// <typeparam name="T">The type of the Go application resource.</typeparam>
     /// <param name="builder">The resource builder for the Go application.</param>
-    /// <param name="port">The TCP port Delve listens on. Defaults to <c>2345</c>.</param>
-    /// <param name="acceptMulticlient">Whether Delve accepts multiple debugger clients with <c>--accept-multiclient</c>. Defaults to <see langword="true"/>.</param>
-    /// <param name="onlySameUser">Whether Delve allows connections only from the same operating system user. When <see langword="null"/>, the <c>--only-same-user</c> flag is not passed.</param>
-    /// <param name="continueOnStart">Whether Delve passes <c>--continue</c> to continue the debuggee immediately after startup. Defaults to <see langword="false"/>.</param>
-    /// <param name="log">Whether Delve debug server logging is enabled with <c>--log</c>. Defaults to <see langword="false"/>.</param>
-    /// <param name="logOutput">The Delve logging components passed with <c>--log-output</c> when <paramref name="log"/> is <see langword="true"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// Delve is the only Go debugger; both GoLand and VS Code use it under the hood, just in
@@ -661,21 +653,73 @@ public static class GoHostingExtensions
     /// <example>
     /// <code lang="csharp">
     /// builder.AddGoApp("api", "../go-api")
-    ///        .WithDelveServer(port: 2345);
+    ///        .WithDelveServer();
+    /// </code>
+    /// </example>
+    [AspireExportIgnore(Reason = "This C# convenience overload uses default options. Polyglot AppHosts use the DelveServerOptions overload.")]
+    public static IResourceBuilder<T> WithDelveServer<T>(this IResourceBuilder<T> builder)
+        where T : GoAppResource
+        => builder.WithDelveServer(new DelveServerOptions());
+
+    /// <summary>
+    /// Starts a headless Delve debug server on the specified port.
+    /// </summary>
+    /// <typeparam name="T">The type of the Go application resource.</typeparam>
+    /// <param name="builder">The resource builder for the Go application.</param>
+    /// <param name="port">The TCP port Delve listens on. Defaults to <c>2345</c>.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// This overload is retained for binary compatibility. Use <see cref="WithDelveServer{T}(IResourceBuilder{T})"/>
+    /// for the default port or <see cref="WithDelveServer{T}(IResourceBuilder{T}, DelveServerOptions)"/>
+    /// to configure the port and other Delve server options.
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// builder.AddGoApp("api", "../go-api")
+    ///        .WithDelveServer(new DelveServerOptions { Port = 3456 });
+    /// </code>
+    /// </example>
+    [Obsolete("Use WithDelveServer() or WithDelveServer(DelveServerOptions) instead.")]
+    [AspireExportIgnore(Reason = "This obsolete compatibility overload is C#-only. Polyglot AppHosts use the DelveServerOptions overload.")]
+    public static IResourceBuilder<T> WithDelveServer<T>(this IResourceBuilder<T> builder, int port = 2345)
+        where T : GoAppResource
+        => builder.WithDelveServer(new DelveServerOptions { Port = port });
+
+    /// <summary>
+    /// Starts a configurable headless Delve debug server so that DAP-compatible clients can attach remotely.
+    /// The application is launched with <c>dlv debug</c> instead of <c>go run</c>.
+    /// Delve must be available on the PATH.
+    /// </summary>
+    /// <typeparam name="T">The type of the Go application resource.</typeparam>
+    /// <param name="builder">The resource builder for the Go application.</param>
+    /// <param name="options">The options that configure the Delve server. When <see langword="null"/>, the default options are used.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>
+    /// The server listens on <c>127.0.0.1</c> and accepts a single debugger client by default.
+    /// Set <see cref="DelveServerOptions.AcceptMultiClient"/> to <see langword="true"/> only when
+    /// multiple clients or reconnections are required.
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// builder.AddGoApp("api", "../go-api")
+    ///        .WithDelveServer(new DelveServerOptions
+    ///        {
+    ///            Port = 2345,
+    ///            ContinueOnStart = true,
+    ///            Log = true,
+    ///            LogOutput = "rpc,dap,debugger"
+    ///        });
     /// </code>
     /// </example>
     [AspireExport]
     public static IResourceBuilder<T> WithDelveServer<T>(
         this IResourceBuilder<T> builder,
-        int port = 2345,
-        bool acceptMulticlient = true,
-        bool? onlySameUser = null,
-        bool continueOnStart = false,
-        bool log = false,
-        string logOutput = "")
+        DelveServerOptions? options = null)
         where T : GoAppResource
     {
         ArgumentNullException.ThrowIfNull(builder);
+        options ??= new DelveServerOptions();
 
         // WithDelveServer changes the resource into a headless Delve process that IDEs attach to
         // manually. Leaving the VS Code launch annotation in place would make DCP hand execution to
@@ -692,7 +736,15 @@ public static class GoHostingExtensions
             .WithAnnotation(
                 new ExecutableAnnotation { Command = "dlv", WorkingDirectory = builder.Resource.WorkingDirectory },
                 ResourceAnnotationMutationBehavior.Replace)
-            .WithAnnotation(new GoDelveServerAnnotation(port, acceptMulticlient, onlySameUser, continueOnStart, log, logOutput), ResourceAnnotationMutationBehavior.Replace)
+            .WithAnnotation(
+                new GoDelveServerAnnotation(
+                    options.Port,
+                    options.AcceptMultiClient,
+                    options.OnlySameUser,
+                    options.ContinueOnStart,
+                    options.Log,
+                    options.LogOutput),
+                ResourceAnnotationMutationBehavior.Replace)
             .WithRequiredCommand("dlv", "https://github.com/go-delve/delve");
     }
 

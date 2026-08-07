@@ -213,6 +213,28 @@ suite('E2E launch profile', () => {
         assert.ok(!workflow.includes('VS Code extension E2E matrix skipped'));
     });
 
+    test('pins the real Azure Functions toolchain for the offline E2E shard', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml'), 'utf8');
+        const resourceGroupsInstallIndex = runner.indexOf("displayName: 'Azure Resource Groups'");
+        const functionsInstallIndex = runner.indexOf("displayName: 'Azure Functions'");
+
+        assert.ok(workflow.includes('shardName: azure-functions'));
+        assert.ok(workflow.includes('installAzureFunctions: true'));
+        assert.ok(workflow.includes("core_tools_version='4.12.1'"));
+        assert.ok(workflow.includes('faf8fb8d50b5293df338bec70594b12f45730e9fe251805298859b2238cf627e'));
+        assert.ok(workflow.includes('vscode-azureresourcegroups/0.12.7/vspackage'));
+        assert.ok(workflow.includes('e4a2e7ab012de3777e1ac1781e2c25d65f150ad6f3770e8cfcc5a3d3658df35a'));
+        assert.ok(workflow.includes('vscode-azurefunctions/1.22.0/vspackage'));
+        assert.ok(workflow.includes('146aede06f941b07a55c5aebd28c5e3df684d57b07cf6f9ebf90d7bb8ecd41a2'));
+        assert.ok(workflow.includes('ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS=true'));
+        assert.ok(resourceGroupsInstallIndex >= 0);
+        assert.ok(functionsInstallIndex > resourceGroupsInstallIndex);
+        assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX')"));
+        assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX')"));
+    });
+
     test('keeps Linux E2E recordings for successful runs by default', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml'), 'utf8');

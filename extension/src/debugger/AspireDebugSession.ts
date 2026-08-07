@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { EventEmitter } from "vscode";
 import { promises as fs } from "fs";
 import { createDebugAdapterTracker, AppHostOutputHandler, AppHostRestartHandler } from "./adapterTracker";
-import { AspireResourceExtendedDebugConfiguration, AspireResourceDebugSession, EnvVar, AspireExtendedDebugConfiguration, NodeLaunchConfiguration, ProjectLaunchConfiguration, StartAppHostOptions } from "../dcp/types";
+import { AspireResourceExtendedDebugConfiguration, AspireResourceDebugSession, EnvVar, AspireExtendedDebugConfiguration, NodeLaunchConfiguration, ProcessRestartedNotification, ProjectLaunchConfiguration, SessionTerminatedNotification, StartAppHostOptions } from "../dcp/types";
 import { extensionLogOutputChannel } from "../utils/logging";
 import AspireDcpServer, { generateDcpIdPrefix } from "../dcp/AspireDcpServer";
 import { spawnCliProcess } from "./languages/cli";
@@ -14,7 +14,7 @@ import { nodeDebuggerExtension } from "./languages/node";
 import { cleanupRun } from "./runCleanupRegistry";
 import { runWithRunStartWrappers } from "./runStartRegistry";
 import AspireRpcServer from "../server/AspireRpcServer";
-import { createDebugSessionConfiguration } from "./debuggerExtensions";
+import { AlreadyStartedResourceDebugSession, createDebugSessionConfiguration } from "./debuggerExtensions";
 import { AspireTerminalProvider } from "../utils/AspireTerminalProvider";
 import { ICliRpcClient } from "../server/rpcClient";
 import path from "path";
@@ -570,6 +570,50 @@ export class AspireDebugSession implements vscode.DebugAdapter {
       vscode.window.showErrorMessage(errorMessage);
       this.dispose();
     }
+  }
+
+  trackAlreadyStartedResourceSession(debugConfig: AspireResourceExtendedDebugConfiguration, resourceDebugSession: AlreadyStartedResourceDebugSession): AspireResourceDebugSession | undefined {
+    if (this._disposed) {
+      resourceDebugSession.stopSession();
+      return undefined;
+    }
+
+    if (debugConfig.debugSessionId === null) {
+      extensionLogOutputChannel.warn(`Unable to report process start for run ${debugConfig.runId} because the DCP session ID is missing.`);
+    }
+    else {
+      const notification: ProcessRestartedNotification = {
+        notification_type: 'processRestarted',
+        session_id: debugConfig.runId,
+        dcp_id: debugConfig.debugSessionId,
+        pid: resourceDebugSession.processId
+      };
+
+      this._dcpServer.sendNotification(notification);
+    }
+
+    void resourceDebugSession.termination.then(exitCode => {
+      if (debugConfig.debugSessionId === null) {
+        extensionLogOutputChannel.warn(`Unable to report termination for run ${debugConfig.runId} because the DCP session ID is missing.`);
+        return;
+      }
+
+      const notification: SessionTerminatedNotification = {
+        notification_type: 'sessionTerminated',
+        session_id: debugConfig.runId,
+        dcp_id: debugConfig.debugSessionId,
+        exit_code: exitCode
+      };
+
+      this._dcpServer.sendNotification(notification);
+    });
+
+    this._resourceDebugSessions.push(resourceDebugSession);
+    this._disposables.push({
+      dispose: resourceDebugSession.stopSession
+    });
+
+    return resourceDebugSession;
   }
 
   async startAndGetDebugSession(debugConfig: AspireResourceExtendedDebugConfiguration): Promise<AspireResourceDebugSession | undefined> {

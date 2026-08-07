@@ -118,7 +118,7 @@ function buildCmdWrapperCommand(command: string, args: string[]): string {
     return `"${[quoteCmdArgument(command), ...args.map(quoteCmdArgument)].join(' ')}"`;
 }
 
-function quoteCmdArgument(value: string): string {
+export function quoteCmdArgument(value: string): string {
     // The wrapper command is executed as:
     //   cmd.exe /d /v:off /s /c ""aspire.cmd" "<arg>" ..."
     // Many .cmd shims then forward arguments to a native executable with `%*`, for example:

@@ -94,6 +94,12 @@
     <trans-unit id="configuration.aspire.enableAutoRestore">
       <source xml:lang="en">Automatically run &apos;aspire restore&apos; when the workspace opens and whenever aspire.config.json changes (e.g. after switching git branches). Keeps integration packages in sync and prevents editor errors.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.azureFunctionsCmdDelayedExpansion">
+      <source xml:lang="en">Azure Functions launch arguments containing &quot;!&quot; are not supported by cmd.exe because delayed environment variable expansion may change them. Configure terminal.integrated.automationProfile.windows to use PowerShell and try again.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.azureFunctionsCmdPercentArgument">
+      <source xml:lang="en">Azure Functions launch arguments containing &quot;%&quot; are not supported by cmd.exe. Configure terminal.integrated.automationProfile.windows to use PowerShell and try again.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.buildFailedForProjectWithError">
       <source xml:lang="en">Build failed for project {0} with error: {1}.</source>
     </trans-unit>
@@ -705,6 +711,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.resourceCommandOutputOpenFailed">
       <source xml:lang="en">The command completed, but its output could not be opened: {0}</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.azureFunctionsUnsupportedTaskShell">
+      <source xml:lang="en">The configured VS Code task shell is not supported for Azure Functions launch arguments. Configure terminal.integrated.automationProfile to use PowerShell, Command Prompt, bash, zsh, fish, or WSL.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.dashboardLaunchNoneDescription">
       <source xml:lang="en">The dashboard URL is still printed in the terminal and available from the Aspire panel.</source>

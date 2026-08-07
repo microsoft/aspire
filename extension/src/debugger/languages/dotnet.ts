@@ -32,7 +32,7 @@ interface IDotNetService {
     getDotNetRunApiOutput(projectFile: string, environment?: NodeJS.ProcessEnv): Promise<string>;
 }
 
-class DotNetService implements IDotNetService {
+export class DotNetService implements IDotNetService {
     private _debugSession: AspireDebugSession;
 
     constructor(debugSession: AspireDebugSession) {
