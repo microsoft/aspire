@@ -123,18 +123,8 @@ public static class GoHostingExtensions
                 {
                     ctx.Args.Add("--accept-multiclient");
                 }
-                else
                 if (delveAnnotation.OnlySameUser.HasValue)
                 {
-                    // Normal run mode: go run [-race] [-tags=...] [-ldflags=...] [-gcflags=...] <pkg> [args]
-                    ctx.Args.Add("run");
-
-                    if (ctx.Resource.TryGetLastAnnotation<GoRaceDetectorAnnotation>(out _))
-                    {
-                        ctx.Args.Add("-race");
-                    }
-
-                    if (ctx.Resource.TryGetLastAnnotation<GoBuildTagsAnnotation>(out var tagsAnnotation))
                     ctx.Args.Add($"--only-same-user={delveAnnotation.OnlySameUser.Value.ToString().ToLowerInvariant()}");
                 }
                 if (delveAnnotation.Log)
