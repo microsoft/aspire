@@ -266,6 +266,63 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         AssertEffectiveArgumentIndexesMatchSpecArgs(argAnnotations, exe.Spec.Args);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task DotnetToolResource_ExtensionMode_OwnedLaunchToolArgsAreWithheldAndRespectCommandLineVisibility(bool showInCommandLine)
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+#pragma warning disable ASPIREDOTNETTOOL // DotnetToolResource is experimental.
+        var resource = new DotnetToolResource("tool", "package");
+#pragma warning restore ASPIREDOTNETTOOL
+        builder.AddResource(resource)
+            .WithArgs("app-arg")
+            .WithLaunchToolArgs(
+                static context =>
+                {
+                    context.Args.Add("tool");
+                    context.Args.Add("exec");
+                    context.Args.Add("package");
+                    context.Args.Add("--yes");
+                    context.Args.Add("--");
+                },
+                ownedByLaunchConfigurationType: "test",
+                showInCommandLine: showInCommandLine)
+            .WithDebugSupport(
+                mode => new ExecutableLaunchConfiguration("test") { Mode = mode },
+                "test");
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo { ProtocolsSupported = ["test"], SupportedLaunchConfigurations = ["test"] }),
+            [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234",
+            [KnownConfigNames.DebugSessionRunMode] = "Debug"
+        };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "tool");
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        Assert.Equal(["app-arg"], exe.Spec.Args);
+        Assert.Null(exe.Spec.FallbackExecutionTypes);
+
+        Assert.True(exe.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var displayArgs));
+        string[] launchToolArgs = ["tool", "exec", "package", "--yes", "--"];
+        string[] expectedDisplayArgs = showInCommandLine ? [.. launchToolArgs, "app-arg"] : ["app-arg"];
+        Assert.Equal(expectedDisplayArgs, displayArgs.Select(a => a.Argument));
+        Assert.All(displayArgs.Take(displayArgs.Count - 1), argument => Assert.Null(argument.EffectiveArgumentIndex));
+        Assert.Equal(0, displayArgs[^1].EffectiveArgumentIndex);
+        AssertEffectiveArgumentIndexesMatchSpecArgs(displayArgs, exe.Spec.Args);
+    }
+
     [Fact]
     public async Task CreateExecutable_ProjectArgsResolvedInSnapshot_UsesEffectiveArgsFromCreatorIndexes()
     {

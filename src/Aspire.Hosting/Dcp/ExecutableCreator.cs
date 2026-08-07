@@ -734,6 +734,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
         var launchArgs = new List<LaunchArgument>();
         var nextExecutableArgumentIndex = executableArgumentStartIndex;
+        var firstVisibleAppHostArgumentIndex = 0;
 
         LaunchArgument CreateLaunchArgument(string value, bool isSensitive, bool executable, bool display)
         {
@@ -765,12 +766,12 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         }
         else if (er.ModelResource is DotnetToolResource)
         {
+            // Dotnet tools compose args as `tool exec <package> ... -- <app args>`. Keep hiding the invocation
+            // through `--`, but let the shared loop below apply launch-tool omission and visibility.
             var argSeparator = appHostArgList.Select((a, i) => (index: i, value: a.Value))
                 .FirstOrDefault(x => x.value == DotnetToolResourceExtensions.ArgumentSeparator);
 
-            var args = appHostArgList.Select((a, i) => (arg: a, display: i > argSeparator.index));
-            launchArgs.AddRange(args.Select(x => CreateLaunchArgument(x.arg.Value, x.arg.IsSensitive, executable: true, x.display)));
-            return launchArgs;
+            firstVisibleAppHostArgumentIndex = argSeparator.index + 1;
         }
 
         // In the situation where args are combined (process execution) the app host args are added after the launch
@@ -790,7 +791,9 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 a.Value,
                 a.IsSensitive,
                 executable: i >= omittedLaunchToolArgumentCount,
-                display: showLaunchToolArgsInCommandLine || !isLaunchToolArg);
+                display: isLaunchToolArg
+                    ? showLaunchToolArgsInCommandLine
+                    : i >= firstVisibleAppHostArgumentIndex);
         }));
 
         return launchArgs;
