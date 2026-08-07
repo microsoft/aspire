@@ -301,11 +301,8 @@ safe-outputs:
                 return;
               }
               const items = (payload && Array.isArray(payload.items)) ? payload.items : [];
-              const item = items.find(i => i && i.type === 'notify_source_pr');
-              if (!item) {
-                core.info('No notify_source_pr item in agent output; nothing to post.');
-                return;
-              }
+              const notifications = items.filter(i => i && i.type === 'notify_source_pr');
+              const item = notifications[0] || {};
 
               // GITHUB_EVENT_PATH contains a trusted event payload in one of these shapes:
               //   pull_request:     { "pull_request": { "number": 18868 } }
@@ -335,16 +332,18 @@ safe-outputs:
                 return;
               }
 
-              const agentNumber = item.source_pr_number;
-              if (!Number.isInteger(agentNumber) || agentNumber <= 0 || agentNumber > 10_000_000) {
-                core.warning(`Invalid source_pr_number from agent: ${item.source_pr_number}; skipping comment.`);
-                return;
-              }
-              if (agentNumber !== expectedNumber) {
-                core.warning(
-                  `Agent source_pr_number ${agentNumber} does not match triggering source PR ${expectedNumber}; skipping comment.`
-                );
-                return;
+              if (notifications.length === 1) {
+                const agentNumber = item.source_pr_number;
+                if (!Number.isInteger(agentNumber) || agentNumber <= 0 || agentNumber > 10_000_000) {
+                  core.warning(`Invalid source_pr_number from agent: ${item.source_pr_number}; skipping comment.`);
+                  return;
+                }
+                if (agentNumber !== expectedNumber) {
+                  core.warning(
+                    `Agent source_pr_number ${agentNumber} does not match triggering source PR ${expectedNumber}; skipping comment.`
+                  );
+                  return;
+                }
               }
               const sourcePrNumber = expectedNumber;
 
@@ -360,7 +359,7 @@ safe-outputs:
               }
 
               let body;
-              if (result === 'drafted' && draftUrl) {
+              if (notifications.length === 1 && result === 'drafted' && draftUrl) {
                 const branchSuffix = targetBranch ? ` targeting \`${targetBranch}\`` : '';
                 const numberDisplay = draftNumber || '?';
                 body = [
@@ -399,7 +398,7 @@ safe-outputs:
                   '',
                   `See the workflow run for details: ${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
                 ].join('\n');
-              } else if (result === 'skipped' && !draftUrl) {
+              } else if (notifications.length === 1 && result === 'skipped' && !draftUrl) {
                 body = [
                   MARKER,
                   '✅ No documentation update needed.',
