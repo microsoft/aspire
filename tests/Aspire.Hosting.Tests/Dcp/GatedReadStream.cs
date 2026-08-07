@@ -8,13 +8,10 @@ namespace Aspire.Hosting.Tests.Dcp;
 internal sealed class GatedReadStream : Stream
 {
     private readonly TaskCompletionSource _readStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private readonly TaskCompletionSource _disposed = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource<ReadOnlyMemory<byte>> _content = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _offset;
 
     public Task ReadStarted => _readStarted.Task;
-
-    public Task Disposed => _disposed.Task;
 
     public override bool CanRead => true;
 
@@ -88,15 +85,5 @@ internal sealed class GatedReadStream : Stream
     public override void Write(byte[] buffer, int offset, int count)
     {
         throw new NotSupportedException();
-    }
-
-    protected override void Dispose(bool disposing)
-    {
-        if (disposing)
-        {
-            _disposed.TrySetResult();
-        }
-
-        base.Dispose(disposing);
     }
 }
