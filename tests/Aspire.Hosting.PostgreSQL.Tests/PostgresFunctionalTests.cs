@@ -73,6 +73,58 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
 
     [Fact]
     [RequiresFeature(TestFeature.Docker)]
+    public async Task FreshVolume_CreatesAllDatabasesAndGatesWaitForPastInitdbRestart()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/18540.
+        // On a fresh data volume the Postgres image runs initdb and then restarts to the real listener.
+        // Native database creation must survive that restart window (no "Failed to create database"),
+        // and the server must not release WaitFor dependents until it is durably past the restart.
+        var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+        var pipeline = new ResiliencePipelineBuilder()
+            .AddRetry(new() { MaxRetryAttempts = 10, Delay = TimeSpan.FromSeconds(1), ShouldHandle = new PredicateBuilder().Handle<NpgsqlException>() })
+            .Build();
+
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+
+        // No data volume => a fresh PGDATA (and therefore an initdb restart) on every start.
+        var postgres = builder.AddPostgres("pg");
+        var db1 = postgres.AddDatabase("db1");
+        var db2 = postgres.AddDatabase("db2");
+        var db3 = postgres.AddDatabase("db3");
+
+        // A dependent that must only be released once db1 is durably healthy (i.e. past the restart).
+        var dependent = builder.AddPostgres("dependent").WaitFor(db1);
+
+        using var app = builder.Build();
+
+        await app.StartAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+
+        // Every declared database must be created and become healthy: proof creation survived the restart.
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(db1.Resource.Name, cts.Token);
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(db2.Resource.Name, cts.Token);
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(db3.Resource.Name, cts.Token);
+
+        // The WaitFor dependent is released only after db1 is healthy.
+        await app.ResourceNotifications.WaitForResourceAsync(dependent.Resource.Name, KnownResourceStates.Running).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+
+        // Sanity check: each database is actually reachable.
+        foreach (var db in new[] { db1, db2, db3 })
+        {
+            var connectionString = await db.Resource.ConnectionStringExpression.GetValueAsync(cts.Token);
+
+            await pipeline.ExecuteAsync(async token =>
+            {
+                using var connection = new NpgsqlConnection(connectionString);
+                await connection.OpenAsync(token);
+                Assert.Equal(ConnectionState.Open, connection.State);
+            }, cts.Token);
+        }
+
+        await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task VerifyPgAdminResource()
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
