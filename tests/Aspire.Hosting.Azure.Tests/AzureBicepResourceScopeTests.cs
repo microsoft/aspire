@@ -16,7 +16,7 @@ public class AzureBicepResourceScopeTests
     [Fact]
     public void ResourceGroupThrowsForSubscriptionScope()
     {
-        var scope = AzureBicepResourceScope.ForSubscription("12345678-1234-1234-1234-123456789012");
+        var scope = AzureBicepResourceScope.CreateForSubscription("12345678-1234-1234-1234-123456789012");
 
         var exception = Assert.Throws<InvalidOperationException>(() => scope.ResourceGroup);
 
@@ -26,7 +26,7 @@ public class AzureBicepResourceScopeTests
     [Fact]
     public void ResourceGroupThrowsForTenantScope()
     {
-        var scope = AzureBicepResourceScope.ForTenant();
+        var scope = AzureBicepResourceScope.CreateForTenant();
 
         var exception = Assert.Throws<InvalidOperationException>(() => scope.ResourceGroup);
 
