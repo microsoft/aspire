@@ -4,9 +4,9 @@
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <RootNamespace>Aspire.Hosting.Azure</RootNamespace>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting azure container apps sandboxes cloud</PackageTags>
-    <Description>Azure Container Apps Sandboxes deployment target support for Aspire.</Description>
-    <!-- In preview while Azure Container Apps Sandboxes is in preview. -->
+    <PackageTags>aspire integration hosting azure container apps sandboxes connector namespace mcp cloud</PackageTags>
+    <Description>Azure Container Apps Sandboxes and Connector Namespace support for Aspire.</Description>
+    <!-- In preview while Azure Container Apps Sandboxes and Connector Namespace are in preview. -->
     <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
     <!-- This package has no previously shipped baseline package. -->
     <EnablePackageValidation>false</EnablePackageValidation>

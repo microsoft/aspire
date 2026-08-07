@@ -9,9 +9,36 @@ import {
 
 const builder = await createBuilder();
 
+const connectorNamespace = await builder.addAzureConnectorGateway("connectors");
+const outlook = await connectorNamespace.addConnection("outlook", "office365", {
+    connectionName: "office365-outlook",
+    displayName: "Office 365 Outlook"
+});
+await outlook.withAccessPolicy("worker-access", {
+    policyName: "worker-acl",
+    objectId: "11111111-1111-1111-1111-111111111111",
+    tenantId: "22222222-2222-2222-2222-222222222222"
+});
+const sandboxIdentity = await builder.addAzureUserAssignedIdentity("sandbox-identity");
+await outlook.withIdentityAccessPolicy(
+    "sandbox-identity-access",
+    sandboxIdentity,
+    { policyName: "sandbox-identity-acl" });
+const outlookMcp = await connectorNamespace.addMcpServerConfig("outlook-mcp", {
+    description: "Allow-listed Outlook tools."
+});
+await outlookMcp.withConnector("office365", outlook, {
+    displayName: "Office 365 Outlook",
+    operations: [
+        {
+            name: "GetEmailsV3",
+            displayName: "Get emails"
+        }
+    ]
+});
+
 const sandboxes = await builder.addAzureSandboxGroup("sandboxes");
-await sandboxes.withUserAssignedIdentity(
-    await builder.addAzureUserAssignedIdentity("sandbox-identity"));
+await sandboxes.withUserAssignedIdentity(sandboxIdentity);
 
 const api = await builder
     .addContainer("api", "mcr.microsoft.com/dotnet/runtime-deps:10.0")
@@ -30,10 +57,24 @@ const publishedApi = await api.publishAsAzureSandbox(sandboxes, {
     endpoints: [
         {
             name: "http",
-            anonymous: true
+            anonymous: false
         }
     ]
 });
 await publishedApi.withRemoteImageTag("validated-compute-handle");
+
+await outlook.addTriggerConfig(
+    "new-email",
+    "OnNewEmailV3",
+    await api.getEndpoint("http"),
+    {
+        callbackPath: "/webhook",
+        parameters: [
+            {
+                name: "folderPath",
+                value: "Inbox"
+            }
+        ]
+    });
 
 await builder.build().run();

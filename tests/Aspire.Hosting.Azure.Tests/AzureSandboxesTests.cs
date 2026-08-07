@@ -28,6 +28,335 @@ namespace Aspire.Hosting.Azure.Tests;
 public class AzureSandboxesTests
 {
     [Fact]
+    public async Task AddAzureConnectorGatewayResourcesGeneratesBicep()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var gateway = builder.AddAzureConnectorGateway("gateway");
+        var connection = gateway.AddConnection(
+            "office365",
+            "office365",
+            new AzureConnectorGatewayConnectionOptions
+            {
+                ConnectionName = "office365-outlook",
+                DisplayName = "Office 365 Outlook"
+            });
+        connection.WithAccessPolicy(
+            "worker-access",
+            new AzureConnectorGatewayAccessPolicyOptions
+            {
+                PolicyName = "worker-acl",
+                ObjectId = "11111111-1111-1111-1111-111111111111",
+                TenantId = "22222222-2222-2222-2222-222222222222"
+            });
+        connection.WithIdentityAccessPolicy(
+            "worker-identity-access",
+            builder.AddAzureUserAssignedIdentity("worker-identity"),
+            policyName: "worker-identity-acl");
+        var mcp = gateway.AddMcpServerConfig(
+            "outlook-mcp",
+            new AzureConnectorGatewayMcpServerConfigOptions
+            {
+                ConfigName = "outlook-tools",
+                Description = "Allow-listed Outlook tools."
+            });
+        mcp.WithConnector(
+            "office365",
+            connection,
+            new AzureConnectorGatewayMcpConnectorOptions
+            {
+                DisplayName = "Office 365 Outlook",
+                Description = "Read-only Outlook operations.",
+                Operations =
+                [
+                    new AzureConnectorGatewayMcpOperationOptions
+                    {
+                        Name = "GetEmailsV3",
+                        DisplayName = "Get emails",
+                        Description = "Reads recent emails."
+                    }
+                ]
+            });
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        Assert.Same(gateway.Resource, connection.Resource.Parent);
+        Assert.Same(gateway.Resource, mcp.Resource.Parent);
+        var (manifest, bicep) = await AzureManifestUtils.GetManifestWithBicep(model, gateway.Resource);
+
+        await Verify(manifest.ToString(), "json")
+            .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task ExistingConnectorGatewayChildrenGenerateExistingBicep()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var gateway = builder.AddAzureConnectorGateway("gateway")
+            .PublishAsExisting("existing-gateway", "existing-rg");
+        gateway.AddConnection("office365", "office365", new AzureConnectorGatewayConnectionOptions
+        {
+            ConnectionName = "existing-connection"
+        }).AsExisting();
+        gateway.AddMcpServerConfig("mcp", new AzureConnectorGatewayMcpServerConfigOptions
+        {
+            ConfigName = "existing-mcp"
+        }).AsExisting();
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var (manifest, bicep) = await AzureManifestUtils.GetManifestWithBicep(model, gateway.Resource);
+
+        await Verify(manifest.ToString(), "json")
+            .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task AddConnectorTriggerConfigSecuresSandboxCallback()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var gateway = builder.AddAzureConnectorGateway("gateway");
+        var connection = gateway.AddConnection("sharepoint", "sharepointonline");
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        var listener = builder.AddContainer("listener", "mcr.microsoft.com/dotnet/runtime-deps", "10.0")
+            .WithHttpEndpoint(name: "http", targetPort: 8080)
+            .WithExternalHttpEndpoints()
+            .PublishAsAzureSandbox(sandboxGroup);
+        var trigger = connection.AddTriggerConfig(
+            "new-file",
+            "GetOnNewFileItems",
+            listener.GetEndpoint("http"),
+            new AzureConnectorGatewayTriggerOptions
+            {
+                TriggerName = "sharepoint-new-file",
+                CallbackPath = "/webhook",
+                Description = "Posts new SharePoint files to the sandbox.",
+                Parameters =
+                [
+                    new AzureConnectorGatewayTriggerParameter
+                    {
+                        Name = "dataset",
+                        Value = "https://contoso.sharepoint.com/sites/demo"
+                    },
+                    new AzureConnectorGatewayTriggerParameter
+                    {
+                        Name = "table",
+                        Value = "Documents"
+                    }
+                ]
+            });
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var accessPolicy = Assert.Single(connection.Resource.AccessPolicies);
+        Assert.True(accessPolicy.UsesGatewayManagedIdentity);
+        Assert.Equal("gateway-acl", accessPolicy.PolicyName);
+        Assert.Equal("webhook", trigger.Resource.CallbackPath);
+
+        var sandboxContainer = Assert.IsType<AzureSandboxContainerResource>(
+            listener.Resource.GetDeploymentTargetAnnotation(sandboxGroup.Resource)?.DeploymentTarget);
+        var endpoint = Assert.Single(AzureSandboxContainerDeployment.ResolveSandboxEndpoints(sandboxContainer));
+        Assert.False(endpoint.Anonymous);
+        Assert.Equal(gateway.Resource, Assert.Single(endpoint.AuthorizedConnectorGateways));
+        var authorizedFingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
+            [endpoint],
+            "example/image@sha256:one");
+        var unauthorizedFingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
+            [endpoint with { AuthorizedConnectorGateways = [] }],
+            "example/image@sha256:one");
+        Assert.NotEqual(authorizedFingerprint, unauthorizedFingerprint);
+
+        var triggerSteps = await CreateStepsAsync(app, trigger.Resource);
+        var triggerStep = Assert.Single(triggerSteps);
+        Assert.Equal("provision-new-file", triggerStep.Name);
+        Assert.Contains("deploy-listener-sandbox-container", triggerStep.DependsOnSteps);
+        Assert.Contains(WellKnownPipelineSteps.Deploy, triggerStep.RequiredBySteps);
+
+        var (gatewayManifest, gatewayBicep) = await AzureManifestUtils.GetManifestWithBicep(model, gateway.Resource);
+        var triggerBicep = trigger.Resource.GetBicepTemplateString();
+
+        await Verify(gatewayManifest.ToString(), "json")
+            .AppendContentAsFile(gatewayBicep, "bicep")
+            .AppendContentAsFile(triggerBicep, "bicep");
+    }
+
+    [Fact]
+    public async Task ConnectorTriggerDoesNotCreateDeployStepInRunMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var gateway = builder.AddAzureConnectorGateway("gateway");
+        var connection = gateway.AddConnection("office365", "office365");
+        var listener = builder.AddContainer("listener", "image")
+            .WithHttpEndpoint(name: "http", targetPort: 8080)
+            .WithExternalHttpEndpoints();
+        var trigger = connection.AddTriggerConfig("new-email", "OnNewEmailV3", listener.GetEndpoint("http"));
+
+        using var app = builder.Build();
+
+        Assert.Empty(await CreateStepsAsync(app, trigger.Resource, DistributedApplicationOperation.Run));
+    }
+
+    [Fact]
+    public void ConnectorTriggerRejectsAnonymousSandboxEndpoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var gateway = builder.AddAzureConnectorGateway("gateway");
+        var connection = gateway.AddConnection("office365", "office365");
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        var listener = builder.AddContainer("listener", "image")
+            .WithHttpEndpoint(name: "http", targetPort: 8080)
+            .WithExternalHttpEndpoints()
+            .PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
+            {
+                Endpoints =
+                [
+                    new AzureSandboxEndpointOptions
+                    {
+                        Name = "http",
+                        Anonymous = true
+                    }
+                ]
+            });
+        connection.AddTriggerConfig("new-email", "OnNewEmailV3", listener.GetEndpoint("http"));
+
+        using var app = builder.Build();
+        var sandboxContainer = new AzureSandboxContainerResource(
+            "listener-sandbox-container",
+            listener.Resource,
+            sandboxGroup.Resource);
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => AzureSandboxContainerDeployment.ResolveSandboxEndpoints(sandboxContainer));
+        Assert.Equal(
+            "Endpoint 'http' on resource 'listener' is a Connector Namespace trigger callback and cannot allow anonymous access.",
+            exception.Message);
+    }
+
+    [Fact]
+    public void ManagedMcpServerRequiresExplicitOperationAllowList()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var gateway = builder.AddAzureConnectorGateway("gateway");
+        var connection = gateway.AddConnection("office365", "office365");
+        var mcp = gateway.AddMcpServerConfig("outlook-mcp");
+
+        var exception = Assert.Throws<ArgumentException>(() => mcp.WithConnector(
+            "office365",
+            connection,
+            new AzureConnectorGatewayMcpConnectorOptions()));
+
+        Assert.Equal("At least one connector operation must be explicitly allow-listed. (Parameter 'options')", exception.Message);
+    }
+
+    [Fact]
+    public void ConnectorTriggerRequiresExternalEndpoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var connection = builder.AddAzureConnectorGateway("gateway")
+            .AddConnection("office365", "office365");
+        var listener = builder.AddContainer("listener", "image")
+            .WithHttpEndpoint(name: "http", targetPort: 8080);
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => connection.AddTriggerConfig("new-email", "OnNewEmailV3", listener.GetEndpoint("http")));
+
+        Assert.Equal(
+            "Connector trigger callback endpoint 'http' on resource 'listener' must be external.",
+            exception.Message);
+    }
+
+    [Fact]
+    public void ConnectorTriggerRejectsDuplicateParameters()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var connection = builder.AddAzureConnectorGateway("gateway")
+            .AddConnection("office365", "office365");
+        var listener = builder.AddContainer("listener", "image")
+            .WithHttpEndpoint(name: "http", targetPort: 8080)
+            .WithExternalHttpEndpoints();
+
+        var exception = Assert.Throws<ArgumentException>(() => connection.AddTriggerConfig(
+            "new-email",
+            "OnNewEmailV3",
+            listener.GetEndpoint("http"),
+            new AzureConnectorGatewayTriggerOptions
+            {
+                Parameters =
+                [
+                    new AzureConnectorGatewayTriggerParameter { Name = "folderPath", Value = "Inbox" },
+                    new AzureConnectorGatewayTriggerParameter { Name = "folderPath", Value = "Archive" }
+                ]
+            }));
+
+        Assert.Equal(
+            "Trigger parameter 'folderPath' is configured more than once. (Parameter 'parameters')",
+            exception.Message);
+    }
+
+    [Fact]
+    public void ConnectorTriggerRequiresUniquePhysicalNameWithinNamespace()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var gateway = builder.AddAzureConnectorGateway("gateway");
+        var outlook = gateway.AddConnection("outlook", "office365");
+        var sharepoint = gateway.AddConnection("sharepoint", "sharepointonline");
+        var listener = builder.AddContainer("listener", "image")
+            .WithHttpEndpoint(name: "http", targetPort: 8080)
+            .WithExternalHttpEndpoints();
+        outlook.AddTriggerConfig(
+            "new-email",
+            "OnNewEmailV3",
+            listener.GetEndpoint("http"),
+            new AzureConnectorGatewayTriggerOptions { TriggerName = "shared-trigger" });
+
+        var exception = Assert.Throws<InvalidOperationException>(() => sharepoint.AddTriggerConfig(
+            "new-file",
+            "GetOnNewFileItems",
+            listener.GetEndpoint("http"),
+            new AzureConnectorGatewayTriggerOptions { TriggerName = "shared-trigger" }));
+
+        Assert.Equal(
+            "Trigger configuration 'shared-trigger' is already registered on Connector Namespace 'gateway'.",
+            exception.Message);
+        Assert.Equal("new-email", Assert.Single(gateway.Resource.TriggerConfigs).Name);
+        Assert.Empty(sharepoint.Resource.AccessPolicies);
+    }
+
+    [Fact]
+    public void ExistingConnectorConnectionRejectsImplicitTriggerAccessPolicy()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var connection = builder.AddAzureConnectorGateway("gateway")
+            .AddConnection("office365", "office365")
+            .AsExisting();
+        var listener = builder.AddContainer("listener", "image")
+            .WithHttpEndpoint(name: "http", targetPort: 8080)
+            .WithExternalHttpEndpoints();
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => connection.AddTriggerConfig("new-email", "OnNewEmailV3", listener.GetEndpoint("http")));
+
+        Assert.Equal(
+            "Existing connector connection 'office365' is read-only and cannot create a trigger because trigger provisioning requires a new connection access policy.",
+            exception.Message);
+        Assert.Empty(connection.Resource.AccessPolicies);
+        Assert.Empty(listener.Resource.Annotations.OfType<AzureConnectorGatewayEndpointAuthorizationAnnotation>());
+        Assert.Empty(connection.Resource.Parent.TriggerConfigs);
+    }
+
+    [Fact]
     public void AzureSandboxGroupUsesExplicitOutputReferenceNames()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -579,7 +908,8 @@ public class AzureSandboxesTests
                 IsExternal: true,
                 IsHttp: true,
                 Protocol: "Http",
-                Anonymous: false)
+                Anonymous: false,
+                AuthorizedConnectorGateways: [])
         };
         var fingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
             endpoints,
@@ -1184,6 +1514,68 @@ public class AzureSandboxesTests
         var port = Assert.Single(ports);
         Assert.Equal(80, port.Port);
         Assert.Equal("https://sandbox.example.test/", port.Url.ToString());
+    }
+
+    [Fact]
+    public async Task AzureDevComputeClientAddsEntraAuthorizedPortWithoutSecrets()
+    {
+        var handler = new RecordingHandler(async request =>
+        {
+            var body = await request.Content!.ReadAsStringAsync();
+            using var document = JsonDocument.Parse(body);
+            var root = document.RootElement;
+            Assert.Equal(5, root.EnumerateObject().Count());
+            Assert.Equal("webhook", root.GetProperty("name").GetString());
+            Assert.Equal(8080, root.GetProperty("port").GetInt32());
+            Assert.Equal("OnDemand", root.GetProperty("activationMode").GetString());
+            Assert.Equal("Http", root.GetProperty("protocol").GetString());
+
+            var auth = root.GetProperty("auth");
+            Assert.Equal(2, auth.EnumerateObject().Count());
+            Assert.False(auth.GetProperty("anonymous").GetBoolean());
+            var entraId = auth.GetProperty("entraId");
+            Assert.True(entraId.GetProperty("enabled").GetBoolean());
+            Assert.Equal(
+                ["11111111-1111-1111-1111-111111111111"],
+                entraId.GetProperty("objectIds").EnumerateArray().Select(static item => item.GetString()!).ToArray());
+            Assert.Equal(
+                ["22222222-2222-2222-2222-222222222222"],
+                entraId.GetProperty("tenantIds").EnumerateArray().Select(static item => item.GetString()!).ToArray());
+
+            return JsonResponse(
+                """
+                {
+                  "ports": [
+                    { "name": "webhook", "port": 8080, "url": "https://sandbox.example.test" }
+                  ]
+                }
+                """);
+        });
+        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance);
+
+        var ports = await client.AddPortAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            "sandbox-1",
+            new AzureDevComputeAddPortRequest
+            {
+                Name = "webhook",
+                Port = 8080,
+                ActivationMode = "OnDemand",
+                Auth = new AzureDevComputePortAuthConfig
+                {
+                    Anonymous = false,
+                    EntraId = new AzureDevComputePortEntraIdAuthConfig
+                    {
+                        Enabled = true,
+                        ObjectIds = ["11111111-1111-1111-1111-111111111111"],
+                        TenantIds = ["22222222-2222-2222-2222-222222222222"]
+                    }
+                },
+                Protocol = "Http"
+            },
+            CancellationToken.None);
+
+        Assert.Equal(8080, Assert.Single(ports).Port);
     }
 
     [Fact]
@@ -1909,11 +2301,14 @@ public class AzureSandboxesTests
         Assert.Equal(["--mode", "worker"], command);
     }
 
-    private static async Task<List<PipelineStep>> CreateStepsAsync(DistributedApplication app, IResource resource)
+    private static async Task<List<PipelineStep>> CreateStepsAsync(
+        DistributedApplication app,
+        IResource resource,
+        DistributedApplicationOperation operation = DistributedApplicationOperation.Publish)
     {
         var pipelineContext = new PipelineContext(
             app.Services.GetRequiredService<DistributedApplicationModel>(),
-            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish),
+            new DistributedApplicationExecutionContext(operation),
             app.Services,
             NullLogger.Instance,
             CancellationToken.None);
