@@ -32,7 +32,7 @@
   },
   "overrides": {
     "postcss": "8.5.23",
-    "js-yaml": "4.3.0",
+    "js-yaml": "5.2.2",
     "esbuild": "0.28.1",
     "minimatch@3.1.5": {
       "brace-expansion": "2.1.3"
