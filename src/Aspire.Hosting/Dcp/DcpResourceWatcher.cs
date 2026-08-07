@@ -53,7 +53,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
     private readonly ConcurrentDictionary<string, bool> _allLogsFlushed = new();
     private Task? _resourceWatchTask;
 
-    private readonly record struct LogInformationEntry(string ResourceName, bool? LogsAvailable, bool? HasSubscribers);
+    private readonly record struct LogInformationEntry(string ResourceName, bool? LogsAvailable, bool? HasSubscribers, bool ShouldStartStream);
     private readonly Channel<LogInformationEntry> _logInformationChannel = Channel.CreateUnbounded<LogInformationEntry>(
         new UnboundedChannelOptions { SingleReader = true });
 
@@ -66,12 +66,6 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
     internal Task? GetLogStreamTask(string resourceName)
     {
         return _logStreams.TryGetValue(resourceName, out var logStream) ? logStream.Task : null;
-    }
-
-    // Internal for testing.
-    internal bool IsLogStreamDisposed(string resourceName)
-    {
-        return _logStreams.TryGetValue(resourceName, out var logStream) && logStream.IsDisposed;
     }
 
     public DcpResourceWatcher(
@@ -130,7 +124,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         {
             await foreach (var subscribers in _loggerService.WatchAnySubscribersAsync(cancellationToken).ConfigureAwait(false))
             {
-                _logInformationChannel.Writer.TryWrite(new(subscribers.Name, LogsAvailable: null, subscribers.AnySubscribers));
+                _logInformationChannel.Writer.TryWrite(new(subscribers.Name, LogsAvailable: null, subscribers.AnySubscribers, ShouldStartStream: true));
             }
         });
 
@@ -161,17 +155,20 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                 {
                     if (hasSubscribers)
                     {
-                        if (_resourceState.ContainersMap.TryGetValue(entry.ResourceName, out var container))
+                        if (entry.ShouldStartStream)
                         {
-                            StartLogStream(container);
-                        }
-                        else if (_resourceState.ExecutablesMap.TryGetValue(entry.ResourceName, out var executable))
-                        {
-                            StartLogStream(executable);
-                        }
-                        else if (_resourceState.ContainerExecsMap.TryGetValue(entry.ResourceName, out var containerExec))
-                        {
-                            StartLogStream(containerExec);
+                            if (_resourceState.ContainersMap.TryGetValue(entry.ResourceName, out var container))
+                            {
+                                StartLogStream(container);
+                            }
+                            else if (_resourceState.ExecutablesMap.TryGetValue(entry.ResourceName, out var executable))
+                            {
+                                StartLogStream(executable);
+                            }
+                            else if (_resourceState.ContainerExecsMap.TryGetValue(entry.ResourceName, out var containerExec))
+                            {
+                                StartLogStream(containerExec);
+                            }
                         }
                     }
                     else
@@ -322,10 +319,15 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                     // a completed flush would stall all resource watches. A later changed terminal notification
                     // can retry point-in-time FailedToStart reads and incomplete attempts because they are not
                     // recorded as complete. The marker is cleared below if the resource is restarted.
-                    if (status.State is not null && KnownResourceStates.TerminalStates.Contains(status.State))
+                    var isTerminal = status.State is not null && KnownResourceStates.TerminalStates.Contains(status.State);
+                    var terminalLogsHandledForActiveSubscribers = false;
+                    if (isTerminal)
                     {
-                        if (HasLogsAvailable(resource) &&
-                            _loggerService.HasActiveSubscribers(resource.Metadata.Name) &&
+                        terminalLogsHandledForActiveSubscribers =
+                            HasLogsAvailable(resource) &&
+                            _loggerService.HasActiveSubscribers(resource.Metadata.Name);
+
+                        if (terminalLogsHandledForActiveSubscribers &&
                             !_allLogsFlushed.ContainsKey(resource.Metadata.Name))
                         {
                             var completed = await FlushCurrentLogsAsync(resource, status, _shutdownToken).ConfigureAwait(false);
@@ -344,7 +346,14 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
 
                     if (HasLogsAvailable(resource))
                     {
-                        _logInformationChannel.Writer.TryWrite(new(resource.Metadata.Name, LogsAvailable: true, HasSubscribers: null));
+                        // Avoid opening a second follow stream when terminal handling already served the active
+                        // subscribers. A replacement still needs its own stream after its old registration was reset.
+                        // If no subscriber was active during the check above, keep this notification startable so a
+                        // concurrent subscriber notification cannot fall between the terminal check and this write.
+                        var shouldStartStream =
+                            resourceChange == ResourceChangeResult.Replaced ||
+                            !terminalLogsHandledForActiveSubscribers;
+                        _logInformationChannel.Writer.TryWrite(new(resource.Metadata.Name, LogsAvailable: true, HasSubscribers: null, ShouldStartStream: shouldStartStream));
                     }
                 }
             }
@@ -578,16 +587,22 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
             return;
         }
 
-        // This does not run concurrently for the same resource so we can safely use GetOrAdd without
-        // creating multiple log streams.
-        _logStreams.GetOrAdd(resource.Metadata.Name, resourceName =>
+        var resourceName = resource.Metadata.Name;
+        var logStream = new LogStreamState(resource.Metadata.Uid);
+        var cancellationToken = logStream.CancellationToken;
+
+        // Register before starting the worker so an immediately completing stream can remove itself.
+        if (!_logStreams.TryAdd(resourceName, logStream))
         {
-            var resourceUid = resource.Metadata.Uid;
-            var logStream = new LogStreamState(resourceUid);
-            var cancellationToken = logStream.CancellationToken;
+            logStream.Dispose();
+            return;
+        }
+
+        try
+        {
             ObservePendingFollowLogDeduplication(resourceName, logStream);
 
-            var task = Task.Run(async () =>
+            _ = Task.Run(async () =>
             {
                 try
                 {
@@ -621,7 +636,18 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                 {
                     try
                     {
-                        RemovePendingFollowLogDeduplication(resourceName, logStream);
+                        try
+                        {
+                            RemovePendingFollowLogDeduplication(resourceName, logStream);
+                        }
+                        finally
+                        {
+                            // Remove only this registration. A canceled stream can finish after a
+                            // replacement stream has registered under the same resource name.
+                            // LogStreamState intentionally retains reference equality so this
+                            // KeyValuePair overload performs an atomic identity-based removal.
+                            _logStreams.TryRemove(new(resourceName, logStream));
+                        }
                     }
                     finally
                     {
@@ -629,10 +655,13 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                     }
                 }
             });
-
-            logStream.SetTask(task);
-            return logStream;
-        });
+        }
+        catch
+        {
+            _logStreams.TryRemove(new(resourceName, logStream));
+            logStream.Dispose();
+            throw;
+        }
     }
 
     private void SetPendingFollowLogDeduplication(string resourceName, string? resourceUid, IReadOnlyList<LogEntry> flushedLogEntries)
@@ -934,6 +963,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
     {
         private readonly object _lock = new();
         private readonly CancellationTokenSource _cancellation = new();
+        private readonly TaskCompletionSource _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private bool _disposed;
 
         public CancellationToken CancellationToken
@@ -948,28 +978,12 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
             }
         }
 
-        public Task Task { get; private set; } = Task.CompletedTask;
+        public Task Task => _completion.Task;
 
         public string? ResourceUid { get; } = resourceUid;
 
         // Access is guarded by the owning DcpResourceWatcher's pending-deduplication lock.
         public PendingFollowLogDeduplication? PendingDeduplication { get; set; }
-
-        public bool IsDisposed
-        {
-            get
-            {
-                lock (_lock)
-                {
-                    return _disposed;
-                }
-            }
-        }
-
-        public void SetTask(Task task)
-        {
-            Task = task;
-        }
 
         public void Cancel()
         {
@@ -984,13 +998,20 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
 
         public void Dispose()
         {
-            lock (_lock)
+            try
             {
-                if (!_disposed)
+                lock (_lock)
                 {
-                    _cancellation.Dispose();
-                    _disposed = true;
+                    if (!_disposed)
+                    {
+                        _cancellation.Dispose();
+                        _disposed = true;
+                    }
                 }
+            }
+            finally
+            {
+                _completion.TrySetResult();
             }
         }
     }
