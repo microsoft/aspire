@@ -88,9 +88,9 @@ checkout:
       repositories: ["aspire.dev"]
     current: true
     # Fetch release/* refs in addition to the default branch so the
-    # `Resolve target aspire.dev branch` pre-agent step (and the agent
-    # itself, when it switches the workspace to the effective branch) can
-    # enumerate aspire.dev's release/* branches locally from
+    # `Resolve and check out target aspire.dev branch` pre-agent step can
+    # enumerate aspire.dev's release/* branches locally and switch the
+    # workspace to the selected branch before the agent starts. The refs live in
     # `refs/remotes/origin/release/*`. If this fetch silently produces
     # nothing (e.g., the action ignores the refspec), the resolver still
     # falls back to a `gh api /repos/microsoft/aspire.dev/branches` call
@@ -481,7 +481,7 @@ pre-agent-steps:
       repositories: |
         aspire
         aspire.dev
-  - name: Resolve target aspire.dev branch
+  - name: Resolve and check out target aspire.dev branch
     id: resolve-target
     env:
       GH_TOKEN: ${{ steps.resolve-target-app-token.outputs.token }}
@@ -804,6 +804,25 @@ pre-agent-steps:
 
       echo "--- ${OUT} ---"
       cat "${OUT}"
+
+      # --- 8. Check out the effective target branch -------------------------
+      # Patch generation compares the agent's eventual docs commit with this
+      # branch. Do the checkout deterministically before the agent starts rather
+      # than relying on prompt compliance; otherwise an agent that edits from
+      # main cannot produce a release/13.5 patch in this shallow checkout.
+      REMOTE_REF="refs/remotes/origin/${EFFECTIVE}"
+      if ! git rev-parse --verify --quiet "${REMOTE_REF}^{commit}" >/dev/null; then
+        echo "ERROR: Resolved target branch '${EFFECTIVE}' is missing from the local checkout." >&2
+        exit 1
+      fi
+
+      git checkout -B "${EFFECTIVE}" "origin/${EFFECTIVE}"
+      ACTUAL_BRANCH="$(git branch --show-current)"
+      if [ "${ACTUAL_BRANCH}" != "${EFFECTIVE}" ]; then
+        echo "ERROR: Expected '${EFFECTIVE}' after checkout, got '${ACTUAL_BRANCH}'." >&2
+        exit 1
+      fi
+      echo "Checked out   : ${ACTUAL_BRANCH}"
   # Compute deterministic "is this PR user-facing?" signals from the PR
   # diff and body before the agent starts. Historically the agent reasoned
   # about this directly from the prompt's prose ("is this a significant
@@ -1075,17 +1094,11 @@ Read `.pr-docs-check/target.json`. The fields you will use are:
 The remaining fields (`candidate_target_branch`, `available_release_branches`,
 `enumeration_source`) are context only — don't second-guess the resolution.
 
-The current workspace is `microsoft/aspire.dev`. Switch it to
-`effective_target_branch` before editing docs:
-
-- If `effective_target_branch` is `main`, you are already on the right branch
-  by default; no switch is required.
-- If `effective_target_branch` starts with `release/`, run
-  `git checkout <effective_target_branch>` (the workflow `checkout:` block has
-  already fetched `release/*` refs into `refs/remotes/origin/release/*`).
-
-Do **not** create new branches or modify the resolution. The
-`create_pull_request` safe output's `base` field must be set to exactly
+The current workspace is `microsoft/aspire.dev`. The resolver has already
+checked out `effective_target_branch` before you started. Do not switch to a
+different base branch or reset the workspace. If you create a short-lived docs
+branch for the commit, create it from this already-checked-out target branch.
+The `create_pull_request` safe output's `base` field must be set to exactly
 `effective_target_branch`.
 
 ## Step 4: Read the Pre-Computed User-Facing Signals
