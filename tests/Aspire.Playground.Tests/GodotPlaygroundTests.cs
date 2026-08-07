@@ -55,25 +55,35 @@ public class GodotPlaygroundTests(ITestOutputHelper testOutput)
     [Fact]
     public async Task GodotBinConfigurationOverridesDefaultExecutable()
     {
-        var appHost = await DistributedApplicationTestFactory.CreateWithHostSettingsAsync(
+        var appHost = await DistributedApplicationTestFactory.CreateWithArgsAsync(
             typeof(Projects.Godot_AppHost),
             testOutput,
-            (_, settings) => settings.Configuration = BuildConfiguration(("GODOT_BIN", SentinelGodotBin)));
+            [$"--GODOT_BIN={SentinelGodotBin}"]);
         await using var app = await appHost.BuildAsync();
 
         var applicationModel = app.Services.GetRequiredService<DistributedApplicationModel>();
         var godotServer = Assert.Single(applicationModel.Resources.OfType<ExecutableResource>(), r => r.Name == "godot-server");
 
+        // The command-line provider is added after the environment variable provider, so this value wins
+        // even when the test process was launched with an ambient GODOT_BIN.
         Assert.Equal(SentinelGodotBin, godotServer.Command);
+
+        // Passing args must not cost us the testing builder's defaults. DistributedApplicationFactory seeds
+        // these into HostApplicationBuilderSettings.Configuration; replacing that manager would silently drop
+        // random ports, resource cleanup waits and the dashboard/OTLP defaults.
+        var configuration = app.Services.GetRequiredService<IConfiguration>();
+        Assert.Equal("true", configuration["DcpPublisher:RandomizePorts"]);
+        Assert.Equal("true", configuration["DcpPublisher:WaitForResourceCleanup"]);
+        Assert.Equal("00:00:30", configuration["DcpPublisher:ContainerRuntimeInitializationTimeout"]);
     }
 
     [Fact]
     public async Task WhitespaceGodotBinFallsBackToDefaultExecutable()
     {
-        var appHost = await DistributedApplicationTestFactory.CreateWithHostSettingsAsync(
+        var appHost = await DistributedApplicationTestFactory.CreateWithArgsAsync(
             typeof(Projects.Godot_AppHost),
             testOutput,
-            (_, settings) => settings.Configuration = BuildConfiguration(("GODOT_BIN", "   ")));
+            ["--GODOT_BIN=   "]);
         await using var app = await appHost.BuildAsync();
 
         var applicationModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -85,12 +95,10 @@ public class GodotPlaygroundTests(ITestOutputHelper testOutput)
     [Fact]
     public async Task GodotServerIsNotPartOfThePublishModel()
     {
-        var appHost = await DistributedApplicationTestFactory.CreateWithHostSettingsAsync(
+        var appHost = await DistributedApplicationTestFactory.CreateWithArgsAsync(
             typeof(Projects.Godot_AppHost),
             testOutput,
-            (_, settings) => settings.Configuration = BuildConfiguration(
-                ("AppHost:Operation", "publish"),
-                ("Publishing:Publisher", "manifest")));
+            ["--AppHost:Operation=publish", "--Publishing:Publisher=manifest"]);
         await using var app = await appHost.BuildAsync();
 
         var applicationModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -111,19 +119,5 @@ public class GodotPlaygroundTests(ITestOutputHelper testOutput)
             .WithEnvironmentVariablesConfig()
             .BuildAsync(executionContext);
         Assert.DoesNotContain(executionConfiguration.EnvironmentVariables, kvp => kvp.Key.Contains("godot-server", StringComparison.OrdinalIgnoreCase));
-    }
-
-    /// <summary>
-    /// Seeds configuration the AppHost reads while it constructs resources. This has to be an in-memory
-    /// configuration source applied through <c>HostApplicationBuilderSettings</c> so it is visible
-    /// before Program.cs runs, and so it never mutates ambient process environment variables that other
-    /// concurrently executing tests would observe.
-    /// </summary>
-    private static ConfigurationManager BuildConfiguration(params (string Key, string Value)[] values)
-    {
-        var configuration = new ConfigurationManager();
-        configuration.AddInMemoryCollection(values.Select(v => new KeyValuePair<string, string?>(v.Key, v.Value)));
-
-        return configuration;
     }
 }

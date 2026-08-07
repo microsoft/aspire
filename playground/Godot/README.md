@@ -63,6 +63,18 @@ Running the AppHost with a live Godot server requires:
 
 This route is deliberately **not** called `/servers`. Aspire allocates the endpoint's port when the application model is built, but `godot-server` is explicit-start, so in practice the port is allocated while nothing is listening on it. An allocated port is not a live server. A real matchmaker would need genuine registration or a readiness probe before advertising a server to players; this playground only demonstrates that the endpoint reaches the matchmaker as configuration.
 
+Because `godot-server` only exists in run mode, the matchmaker can also run with no endpoint configured at all — when published, or when the project is started directly with `dotnet run`. The response then reports the absence rather than describing a port that was never allocated:
+
+```json
+{
+  "resourceName": "godot-server",
+  "endpointConfigured": false,
+  "configuredPort": null,
+  "configuredEndpoint": null,
+  "note": "No godot-server endpoint is configured. The resource is available only in AppHost run mode."
+}
+```
+
 ## Environment Variables
 
 | Variable | Description |

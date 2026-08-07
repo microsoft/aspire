@@ -34,8 +34,13 @@ app.MapGet("/configuration", (IConfiguration config) =>
         endpointConfigured = configuredEndpoint is not null,
         configuredPort,
         configuredEndpoint,
-        // Stated explicitly so no caller mistakes an allocated port for a running game server.
-        note = "Configured endpoint only. The godot-server resource is explicit-start, so this port may not be listening.",
+        // Stated explicitly so no caller mistakes an allocated port for a running game server. When no
+        // endpoint was injected at all there is nothing to qualify, and calling a non-existent endpoint
+        // "explicit-start" or "possibly not listening" would be a different lie: the resource simply is
+        // not part of the model outside AppHost run mode.
+        note = configuredEndpoint is not null
+            ? "Configured endpoint only. The godot-server resource is explicit-start, so this port may not be listening."
+            : "No godot-server endpoint is configured. The resource is available only in AppHost run mode.",
     });
 });
 
