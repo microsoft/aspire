@@ -257,6 +257,7 @@ jobs:
             Microsoft.Compute
             Microsoft.ContainerInstance
             Microsoft.OperationalInsights
+            Microsoft.OperationsManagement
             Microsoft.Insights
             Microsoft.App
             Microsoft.ContainerRegistry
