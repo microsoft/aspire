@@ -156,13 +156,11 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
             throw new InvalidOperationException("Aspire skills bundle manifest must specify a version.");
         }
 
-        // The bundle's `supports` range gates whether a bundle pulled fresh from GitHub
-        // is allowed at runtime. For bundles we already trust locally - the snapshot
-        // embedded in the CLI binary, and bundles already written to our own cache -
-        // we skip the range check because the CLI's effective version may have moved
-        // past the snapshot's stamped range (e.g., a dogfood build of 13.5.x using a
-        // bundle whose supports declares ">=13.4.0 <13.5.0"). The bundle's `version`
-        // field plus the version-keyed cache directory still gate matching content.
+        // The bundle's `supports` range gates remotely acquired bundles, including cache
+        // entries that another CLI version may have written. The exact snapshot embedded
+        // in the current CLI may skip this check because its stamped range can lag the
+        // binary version (e.g., a dogfood build of 13.5.x using a snapshot stamped
+        // ">=13.4.0 <13.5.0").
         if (!skipCompatibilityCheck)
         {
             ValidateCompatibility(manifest.Supports, currentCliVersion, currentSdkVersion);
