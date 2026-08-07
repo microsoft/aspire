@@ -466,10 +466,9 @@ pre-agent-steps:
     # tested checkout helper can switch branches and restore trusted runtime
     # configuration deterministically.
     #
-    # Default `ref` resolves to the trigger ref (refs/pull/<N>/merge for
-    # pull_request: closed, or the dispatcher-selected branch for
-    # workflow_dispatch). That's the correct script version for the merged state
-    # being analyzed.
+    # For a merged pull_request:closed event, the default `ref` is the updated
+    # base branch; for workflow_dispatch, it is the dispatcher-selected ref.
+    # Both select the helper version associated with the workflow being run.
     uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
     with:
       repository: microsoft/aspire
