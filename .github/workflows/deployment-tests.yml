@@ -593,7 +593,13 @@ jobs:
           mkdir -p "$(dirname "$diagnostics")"
           {
             echo "=== Azure account ==="
-            az account show --query "{subscriptionId:id, tenantId:tenantId, user:user.name}" -o json
+            az account show --query "{subscriptionId:id, tenantId:tenantId, state:state, user:user.name}" -o json
+
+            echo "=== Azure subscription policies ==="
+            subscription_id=$(az account show --query id -o tsv)
+            az rest --method get \
+             --uri "https://management.azure.com/subscriptions/${subscription_id}?api-version=2022-12-01" \
+             --query "{state:state, subscriptionPolicies:subscriptionPolicies}" -o json
 
             echo "=== Required provider states ==="
             for provider in \
@@ -615,6 +621,16 @@ jobs:
 
             echo "=== Standard_D2as_v5 restrictions in West US 3 ==="
             az vm list-skus --location westus3 --size Standard_D2as_v5 --all \
+             --query "[?name=='Standard_D2as_v5'].{name:name, locations:locations, restrictions:restrictions}" \
+             -o json
+
+            echo "=== East US comparison compute usage ==="
+            az vm list-usage --location eastus \
+             --query "[?name.value=='standardDASv5Family' || name.value=='cores'].{name:name.value, localizedName:name.localizedValue, currentValue:currentValue, limit:limit}" \
+             -o json
+
+            echo "=== Standard_D2as_v5 restrictions in East US ==="
+            az vm list-skus --location eastus --size Standard_D2as_v5 --all \
              --query "[?name=='Standard_D2as_v5'].{name:name, locations:locations, restrictions:restrictions}" \
              -o json
 
@@ -643,15 +659,16 @@ jobs:
 
             try_aks_create() {
               local variant="$1"
-              shift
+              local location="$2"
+              shift 2
               local cluster_name="diag-${variant}-${GITHUB_RUN_ATTEMPT}"
 
-              echo "--- az aks create variant: $variant ---"
+              echo "--- az aks create variant: $variant ($location) ---"
               set +e
               az aks create \
                --resource-group "$diagnostic_resource_group" \
                --name "$cluster_name" \
-               --location westus3 \
+               --location "$location" \
                --node-count 1 \
                --node-vm-size Standard_D2as_v5 \
                --enable-managed-identity \
@@ -666,19 +683,21 @@ jobs:
             }
 
             accepted_variant=""
-            if try_aks_create "free"; then
+            if try_aks_create "free" westus3; then
               accepted_variant="free"
-            elif try_aks_create "standard" --tier standard; then
+            elif try_aks_create "standard" westus3 --tier standard; then
               accepted_variant="standard"
             else
               default_kubernetes_version=$(az aks get-versions --location westus3 \
                --query "values[?isDefault].version | [0]" -o tsv)
 
               if [ -n "$default_kubernetes_version" ] &&
-                 try_aks_create "version" --tier standard --kubernetes-version "$default_kubernetes_version"; then
+                 try_aks_create "version" westus3 --tier standard --kubernetes-version "$default_kubernetes_version"; then
                 accepted_variant="explicit Kubernetes version"
-              elif try_aks_create "azurecni" --tier standard --network-plugin azure; then
+              elif try_aks_create "azurecni" westus3 --tier standard --network-plugin azure; then
                 accepted_variant="Azure CNI"
+              elif try_aks_create "eastus" eastus --tier standard; then
+                accepted_variant="East US"
               fi
             fi
 
@@ -696,7 +715,6 @@ jobs:
                  awk '!/preview/ { print; exit }')
               fi
 
-              subscription_id=$(az account show --query id -o tsv)
               rest_cluster_name="diag-rest-${GITHUB_RUN_ATTEMPT}"
               request_body="$RUNNER_TEMP/aks-managed-cluster-request.json"
               cat > "$request_body" <<JSON
