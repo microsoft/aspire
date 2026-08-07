@@ -813,8 +813,15 @@ pre-agent-steps:
       # main cannot produce a release/13.5 patch in this shallow checkout.
       REMOTE_REF="refs/remotes/origin/${EFFECTIVE}"
       if ! git rev-parse --verify --quiet "${REMOTE_REF}^{commit}" >/dev/null; then
-        echo "ERROR: Resolved target branch '${EFFECTIVE}' is missing from the local checkout." >&2
-        exit 1
+        # The resolver can enumerate branches through the GitHub API when the
+        # checkout action's additional fetch silently produces no local refs.
+        # Fetch only the resolved tip so patch generation remains safely shallow.
+        git fetch --no-tags --depth=1 origin \
+          "+refs/heads/${EFFECTIVE}:${REMOTE_REF}"
+        if ! git rev-parse --verify --quiet "${REMOTE_REF}^{commit}" >/dev/null; then
+          echo "ERROR: Resolved target branch '${EFFECTIVE}' is missing from the local checkout." >&2
+          exit 1
+        fi
       fi
 
       # gh-aw restores trusted agent configuration before custom pre-agent
