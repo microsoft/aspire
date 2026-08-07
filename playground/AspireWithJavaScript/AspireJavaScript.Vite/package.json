@@ -34,7 +34,7 @@
     "postcss": "8.5.23",
     "esbuild": "0.28.1",
     "@babel/core": "7.29.6",
-    "js-yaml": "4.3.0",
+    "js-yaml": "5.2.2",
     "minimatch@3.1.5": {
       "brace-expansion": "2.1.3"
     }
