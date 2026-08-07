@@ -317,9 +317,14 @@ type ResourceLoggerServiceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Applica
 type ResourceNotificationServiceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceNotificationService'>;
 
 /**
- * Event that is raised when a resource initially transitions to a ready state.
+ * Event that is raised when a resource transitions to a ready state after starting.
  *
- * This event is only fired the first time a resource transitions to a ready state after starting.
+ * This event is fired once for the resource's initial ready transition and again after a full
+ * resource restart or when a restarted resource instance transitions to ready while other replicas
+ * remain running.
+ * A handler that does not observe cancellation can outlive the resource instance that triggered it,
+ * so handlers for different generations can overlap. Handlers should be idempotent and safe to
+ * execute concurrently.
  */
 type ResourceReadyEventHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceReadyEvent'>;
 
@@ -9368,9 +9373,14 @@ class ResourceNotificationServicePromiseImpl implements ResourceNotificationServ
 // ============================================================================
 
 /**
- * Event that is raised when a resource initially transitions to a ready state.
+ * Event that is raised when a resource transitions to a ready state after starting.
  *
- * This event is only fired the first time a resource transitions to a ready state after starting.
+ * This event is fired once for the resource's initial ready transition and again after a full
+ * resource restart or when a restarted resource instance transitions to ready while other replicas
+ * remain running.
+ * A handler that does not observe cancellation can outlive the resource instance that triggered it,
+ * so handlers for different generations can overlap. Handlers should be idempotent and safe to
+ * execute concurrently.
  */
 export interface ResourceReadyEvent {
     toJSON(): MarshalledHandle;
@@ -9392,9 +9402,14 @@ export interface ResourceReadyEventPromise extends PromiseLike<ResourceReadyEven
 // ============================================================================
 
 /**
- * Event that is raised when a resource initially transitions to a ready state.
+ * Event that is raised when a resource transitions to a ready state after starting.
  *
- * This event is only fired the first time a resource transitions to a ready state after starting.
+ * This event is fired once for the resource's initial ready transition and again after a full
+ * resource restart or when a restarted resource instance transitions to ready while other replicas
+ * remain running.
+ * A handler that does not observe cancellation can outlive the resource instance that triggered it,
+ * so handlers for different generations can overlap. Handlers should be idempotent and safe to
+ * execute concurrently.
  */
 class ResourceReadyEventImpl implements ResourceReadyEvent {
     constructor(private _handle: ResourceReadyEventHandle, private _client: AspireClientRpc) {}
