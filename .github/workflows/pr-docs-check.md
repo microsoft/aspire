@@ -816,7 +816,13 @@ pre-agent-steps:
         # The resolver can enumerate branches through the GitHub API when the
         # checkout action's additional fetch silently produces no local refs.
         # Fetch only the resolved tip so patch generation remains safely shallow.
-        git fetch --no-tags --depth=1 origin \
+        # gh-aw rewrites origin to the source repository before pre-agent steps,
+        # so fetch from aspire.dev explicitly and use this step's app token
+        # through gh's credential helper.
+        git -c credential.helper= \
+          -c "credential.helper=!gh auth git-credential" \
+          fetch --no-tags --depth=1 \
+          "${GITHUB_SERVER_URL}/microsoft/aspire.dev.git" \
           "+refs/heads/${EFFECTIVE}:${REMOTE_REF}"
         if ! git rev-parse --verify --quiet "${REMOTE_REF}^{commit}" >/dev/null; then
           echo "ERROR: Resolved target branch '${EFFECTIVE}' is missing from the local checkout." >&2
