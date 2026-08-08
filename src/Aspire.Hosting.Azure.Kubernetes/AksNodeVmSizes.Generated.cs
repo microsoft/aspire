@@ -9907,12 +9907,6 @@ public static partial class AksNodeVmSizes
         public const string StandardNV24adsV710V5 = "Standard_NV24ads_V710_v5";
 
         /// <summary>
-        /// Standard_NV28adms_V710_v5 — 28 vCPUs — 160 GB RAM — Premium SSD
-        /// </summary>
-        [AspireValue("AksNodeVmSizes")]
-        public const string StandardNV28admsV710V5 = "Standard_NV28adms_V710_v5";
-
-        /// <summary>
         /// Standard_NV4ads_V710_v5 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
         [AspireValue("AksNodeVmSizes")]
