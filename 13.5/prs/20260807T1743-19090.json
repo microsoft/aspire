@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Internal API compatibility cleanup marking a not-yet-shipped field obsolete before release; no observable user-facing behavior",
+  "mergedAt": "2026-08-07T17:43:24Z",
+  "number": 19090,
+  "runDate": "2026-08-08T06:15:44Z",
+  "status": "excluded",
+  "title": "Mark ResourceUrlAnnotation.DisplayOrder as obsolete"
+}

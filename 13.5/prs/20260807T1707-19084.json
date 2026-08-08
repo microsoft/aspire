@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Pre-release API compatibility refinement for the not-yet-shipped Azure resource scope feature (PR #17988); folded into that existing entry, no separate changelog entry needed",
+  "mergedAt": "2026-08-07T17:07:50Z",
+  "number": 19084,
+  "runDate": "2026-08-08T06:15:44Z",
+  "status": "excluded",
+  "title": "Preserve Azure Bicep scope API compatibility"
+}

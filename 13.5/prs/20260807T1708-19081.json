@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Pre-release API compatibility fix for the not-yet-shipped Go Delve server feature (PR #18611); folded into that existing entry",
+  "mergedAt": "2026-08-07T17:07:58Z",
+  "number": 19081,
+  "runDate": "2026-08-08T06:15:44Z",
+  "status": "excluded",
+  "title": "Fix Delve server API compatibility"
+}

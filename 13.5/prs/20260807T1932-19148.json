@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Test-only build break fix after a semantic merge conflict between #19084 and #18976; no product code changes",
+  "mergedAt": "2026-08-07T19:32:27Z",
+  "number": 19148,
+  "runDate": "2026-08-08T06:15:44Z",
+  "status": "excluded",
+  "title": "Fix build break in AzureBicepResourceScopeTests"
+}

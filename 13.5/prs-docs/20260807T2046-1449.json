@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents new Go Delve server API shape; matched to the 'Improved Go Delve debugger attach workflow' changelog entry (#18611)",
+  "mergedAt": "2026-08-07T20:46:20Z",
+  "number": 1449,
+  "runDate": "2026-08-08T06:15:44Z",
+  "status": "included",
+  "title": "[docs] Update Go Delve server docs for new WithDelveServer API shape"
+}

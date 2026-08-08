@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Fixed Azure Functions HTTPS debugging launch path in VS Code extension",
+  "mergedAt": "2026-08-07T13:22:45Z",
+  "number": 19001,
+  "runDate": "2026-08-08T06:15:44Z",
+  "status": "included",
+  "title": "Fix Azure Functions HTTPS launches in VS Code"
+}

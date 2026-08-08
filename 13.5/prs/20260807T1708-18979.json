@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Pre-release ATS export rename for the not-yet-shipped Kubernetes persistent volume feature (PR #16929); folded into that existing entry",
+  "mergedAt": "2026-08-07T17:08:07Z",
+  "number": 18979,
+  "runDate": "2026-08-08T06:15:44Z",
+  "status": "excluded",
+  "title": "Fix Kubernetes persistent volume ATS export names"
+}

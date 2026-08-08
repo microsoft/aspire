@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Pre-release API naming fix for the not-yet-shipped Azure resource scope feature (PR #17988); folded into that existing entry",
+  "mergedAt": "2026-08-07T17:08:16Z",
+  "number": 18976,
+  "runDate": "2026-08-08T06:15:44Z",
+  "status": "excluded",
+  "title": "Rename Azure scope factories"
+}

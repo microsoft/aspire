@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The VS Code extension no longer misroutes .NET Azure Functions HTTPS resources through the normal .NET launch path, which incorrectly passed --cert and --password arguments to dotnet. Functions apps now build and start func host from the compiled output directory, with HTTPS arguments correctly forwarded across PowerShell, cmd, and POSIX shells.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔐",
+  "firstMergedAt": "2026-08-07T13:22:45Z",
+  "lastMergedAt": "2026-08-07T13:22:45Z",
+  "name": "Fixed Azure Functions HTTPS debugging in VS Code",
+  "owner": "ellahathaway",
+  "prs": [
+    19001
+  ]
+}

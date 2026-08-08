@@ -8,7 +8,9 @@
     "@air-hand"
   ],
   "description": "Go resources now default to multi-client Delve mode, so the debugger session persists when a debugger detaches instead of exiting. Typed options for common Delve server flags (including --continue for services that should start running immediately under Delve) are exposed via GoDelveServerAnnotation for C# AppHost configuration.",
-  "docsPrs": [],
+  "docsPrs": [
+    1449
+  ],
   "docsRequired": true,
   "emoji": "🐞",
   "firstMergedAt": "2026-07-06T05:18:26Z",
