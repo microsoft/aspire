@@ -128,6 +128,20 @@
                       "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
                       "default": false
                     },
+                    "HealthCheckOptions": {
+                      "type": "object",
+                      "properties": {
+                        "CreateWhenNotFound": {
+                          "type": "boolean",
+                          "description": "A boolean value that indicates whether the secret should be created when it's not found. false by default."
+                        },
+                        "SecretName": {
+                          "type": "string",
+                          "description": "The name of the secret that will be fetched from Azure Key Vault. The default value is \"AzureKeyVaultSecretsHealthCheck\"."
+                        }
+                      },
+                      "description": "Gets or sets the 'HealthChecks.Azure.KeyVault.Secrets.AzureKeyVaultSecretsHealthCheckOptions' used to configure the Key Vault health check."
+                    },
                     "VaultUri": {
                       "type": "string",
                       "format": "uri",

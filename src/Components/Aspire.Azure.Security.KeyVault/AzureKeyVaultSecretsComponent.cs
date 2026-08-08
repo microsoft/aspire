@@ -23,7 +23,7 @@ internal sealed class AzureKeyVaultSecretsComponent : AbstractAzureKeyVaultCompo
         => configuration.Bind(settings);
 
     protected override IHealthCheck CreateHealthCheck(SecretClient client, AzureSecurityKeyVaultSettings settings)
-        => new AzureKeyVaultSecretsHealthCheck(client, new AzureKeyVaultSecretsHealthCheckOptions());
+        => new AzureKeyVaultSecretsHealthCheck(client, settings.HealthCheckOptions);
 
     internal override SecretClient CreateComponentClient(Uri vaultUri, SecretClientOptions options, TokenCredential cred)
         => new(vaultUri, cred, options);
