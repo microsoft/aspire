@@ -399,7 +399,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         assert.strictEqual(spawnStub.called, false);
     });
 
-    test('stopDebugging stops the AppHost debug session before the Aspire parent session', async () => {
+    test('stopDebugging stops resource sessions before the AppHost and Aspire parent sessions', async () => {
         const parentDebugSession = {
             id: 'aspire-session',
             type: 'aspire',
@@ -425,22 +425,144 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
                 name: 'AppHost',
             },
         };
+        const resourceDebugSession = {
+            id: 'resource-session',
+            type: 'pwa-node',
+            name: 'Node.js: app.js',
+            configuration: {
+                type: 'pwa-node',
+                request: 'launch',
+                name: 'Node.js: app.js',
+            },
+        };
         const terminalProvider = {
             isCliDebugLoggingEnabled: () => false,
         };
         const stopDebuggingStub = sinon.stub(vscode.debug, 'stopDebugging').resolves();
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, {} as any, terminalProvider as any, () => { });
+        const appHostSession = {
+            id: appHostDebugSession.id,
+            session: appHostDebugSession as unknown as vscode.DebugSession,
+            stopSession: () => vscode.debug.stopDebugging(appHostDebugSession as unknown as vscode.DebugSession),
+        };
+        (aspireDebugSession as any)._appHostDebugSession = appHostSession;
+        (aspireDebugSession as any)._resourceDebugSessions = [
+            appHostSession,
+            {
+                id: resourceDebugSession.id,
+                session: resourceDebugSession as unknown as vscode.DebugSession,
+                stopSession: () => vscode.debug.stopDebugging(resourceDebugSession as unknown as vscode.DebugSession),
+            },
+        ];
+
+        await aspireDebugSession.stopDebugging();
+
+        assert.strictEqual(stopDebuggingStub.callCount, 3);
+        assert.strictEqual(stopDebuggingStub.firstCall.args[0], resourceDebugSession);
+        assert.strictEqual(stopDebuggingStub.secondCall.args[0], appHostDebugSession);
+        assert.strictEqual(stopDebuggingStub.thirdCall.args[0], parentDebugSession);
+    });
+
+    test('stopDebugging waits for every resource stop to settle before stopping the AppHost', async () => {
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/apphost.cs',
+                command: 'run',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const appHostDebugSession = {
+            id: 'apphost-session',
+            type: 'coreclr',
+            name: 'AppHost',
+            configuration: { type: 'coreclr', request: 'launch', name: 'AppHost' },
+        };
+        const failingResourceDebugSession = {
+            id: 'failing-resource-session',
+            type: 'pwa-node',
+            name: 'Node.js: broken.js',
+            configuration: { type: 'pwa-node', request: 'launch', name: 'Node.js: broken.js' },
+        };
+        const slowResourceDebugSession = {
+            id: 'slow-resource-session',
+            type: 'pwa-chrome',
+            name: 'Browser: http://localhost:5173',
+            configuration: { type: 'pwa-chrome', request: 'launch', name: 'Browser: http://localhost:5173' },
+        };
+        const terminalProvider = {
+            isCliDebugLoggingEnabled: () => false,
+        };
+
+        // The slow resource models an adapter that has acknowledged the stop but has not finished
+        // tearing its process down yet. It is released on a timer rather than from inside the
+        // AppHost stop so the ordering is a property of stopDebugging, not of the fake.
+        let releaseSlowResourceStop!: () => void;
+        const slowResourceStopGate = new Promise<void>(resolve => { releaseSlowResourceStop = resolve; });
+        const stopOrder: string[] = [];
+
+        const stopDebuggingStub = sinon.stub(vscode.debug, 'stopDebugging').callsFake(async session => {
+            stopOrder.push((session as unknown as { id: string }).id);
+            if (session === (failingResourceDebugSession as unknown as vscode.DebugSession)) {
+                throw new Error('Resource stop failed');
+            }
+
+            if (session === (slowResourceDebugSession as unknown as vscode.DebugSession)) {
+                await slowResourceStopGate;
+                stopOrder.push('slow-resource-session-settled');
+            }
+        });
+
         const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, {} as any, terminalProvider as any, () => { });
         (aspireDebugSession as any)._appHostDebugSession = {
             id: appHostDebugSession.id,
             session: appHostDebugSession as unknown as vscode.DebugSession,
             stopSession: () => vscode.debug.stopDebugging(appHostDebugSession as unknown as vscode.DebugSession),
         };
+        (aspireDebugSession as any)._resourceDebugSessions = [
+            {
+                id: failingResourceDebugSession.id,
+                session: failingResourceDebugSession as unknown as vscode.DebugSession,
+                stopSession: () => vscode.debug.stopDebugging(failingResourceDebugSession as unknown as vscode.DebugSession),
+            },
+            {
+                id: slowResourceDebugSession.id,
+                session: slowResourceDebugSession as unknown as vscode.DebugSession,
+                stopSession: () => vscode.debug.stopDebugging(slowResourceDebugSession as unknown as vscode.DebugSession),
+            },
+        ];
 
-        await aspireDebugSession.stopDebugging();
+        const stopPromise = aspireDebugSession.stopDebugging();
+        const releaseTimer = setTimeout(releaseSlowResourceStop, 25);
 
-        assert.strictEqual(stopDebuggingStub.callCount, 2);
-        assert.strictEqual(stopDebuggingStub.firstCall.args[0], appHostDebugSession);
-        assert.strictEqual(stopDebuggingStub.secondCall.args[0], parentDebugSession);
+        try {
+            // The rejection from the first resource must still reach the caller. Losing it would
+            // report a clean shutdown for a session that left a debugger attached.
+            await assert.rejects(() => stopPromise, /Resource stop failed/);
+        }
+        finally {
+            clearTimeout(releaseTimer);
+            releaseSlowResourceStop();
+        }
+
+        // Promise.all settles on the first rejection, so the AppHost stop used to start while the
+        // slow resource was still tearing down - the exact ordering this method exists to enforce,
+        // broken on the path where orphaned resources are most likely.
+        assert.deepStrictEqual(stopOrder, [
+            'failing-resource-session',
+            'slow-resource-session',
+            'slow-resource-session-settled',
+            'apphost-session',
+            'aspire-session',
+        ]);
+        assert.strictEqual(stopDebuggingStub.callCount, 4);
     });
 
     test('stopDebugging still stops the Aspire parent session when AppHost stop fails', async () => {

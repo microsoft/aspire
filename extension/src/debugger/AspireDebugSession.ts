@@ -124,14 +124,40 @@ export class AspireDebugSession implements vscode.DebugAdapter {
   }
 
   async stopDebugging(): Promise<void> {
-    // Global/E2E stop requests target the synthetic Aspire session. Stop the real
-    // AppHost session explicitly first so we do not rely on VS Code cascading
-    // termination from the parent session before the AppHost registry refresh runs.
+    // A resource launched under a debugger can keep the AppHost shutdown in flight until its debug
+    // session exits. Stop those sessions before the AppHost to avoid waiting on a process whose
+    // debugger would otherwise only be stopped later by dispose().
+    const resourceDebugSessions = this._resourceDebugSessions.filter(session => session.id !== this._appHostDebugSession?.id);
+    // Deliberately allSettled rather than Promise.all. Promise.all settles on the first rejection,
+    // which would start the AppHost stop while the remaining resource stops were still in flight
+    // and reintroduce the orphaned-resource behavior this ordering exists to prevent - on exactly
+    // the path where a resource is most likely to be left behind. The rejection is kept and
+    // rethrown after the AppHost and the synthetic Aspire parent have been stopped.
+    const resourceStopResults = await Promise.allSettled(resourceDebugSessions.map(session => session.stopSession()));
+    const resourceStopFailures = resourceStopResults
+      .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+      .map(result => result.reason);
+
+    // Global/E2E stop requests target the synthetic Aspire session. Stop the real AppHost session
+    // explicitly before the parent so we do not rely on VS Code cascading termination before the
+    // AppHost registry refresh runs.
     try {
       await this._appHostDebugSession?.stopSession();
     }
     finally {
       await this.stopParentDebugSessionOnce();
+    }
+
+    if (resourceStopFailures.length === 1) {
+      throw resourceStopFailures[0];
+    }
+
+    if (resourceStopFailures.length > 1) {
+      // More than one adapter failed, so no single reason describes the shutdown. AggregateError
+      // keeps every reason instead of picking one and discarding the rest. The message is a
+      // diagnostic rather than UI text: stopDebugging() is reached from the E2E state-file bridge,
+      // not from a user-facing command, so it is intentionally not localized.
+      throw new AggregateError(resourceStopFailures, `${resourceStopFailures.length} resource debug sessions failed to stop.`);
     }
   }
 
