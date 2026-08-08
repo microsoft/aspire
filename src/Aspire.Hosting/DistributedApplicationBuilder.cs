@@ -297,6 +297,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         // - PathSha: For disambiguating projects with the same name in different locations (deployment state)
         // - ProjectNameSha: For stable naming across deployments regardless of path (Azure Functions, Azure environments)
         string appHostPathSha;
+        string? legacyAppHostPathSha = null;
         string appHostProjectNameSha;
         string appHostSha; // Legacy value, computed based on mode
 
@@ -311,9 +312,21 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         }
         else
         {
-            // Normalize the casing of AppHostPath and compute PathSha
-            var appHostPathShaBytes = SHA256.HashData(Encoding.UTF8.GetBytes(AppHostPath.ToLowerInvariant()));
+            var legacyAppHostPathShaBytes = SHA256.HashData(Encoding.UTF8.GetBytes(AppHostPath.ToLowerInvariant()));
+            legacyAppHostPathSha = Convert.ToHexString(legacyAppHostPathShaBytes);
+
+            // Source-file and polyglot AppHosts can share a host process and project directory,
+            // so use the actual source file to keep their deployment state isolated.
+            var appHostIdentityPath = !string.IsNullOrEmpty(appHostFilePath) &&
+                !string.Equals(Path.GetExtension(appHostFilePath), ".csproj", StringComparison.OrdinalIgnoreCase)
+                    ? Path.GetFullPath(appHostFilePath)
+                    : AppHostPath;
+            var appHostPathShaBytes = SHA256.HashData(Encoding.UTF8.GetBytes(appHostIdentityPath.ToLowerInvariant()));
             appHostPathSha = Convert.ToHexString(appHostPathShaBytes);
+            if (string.Equals(appHostPathSha, legacyAppHostPathSha, StringComparison.Ordinal))
+            {
+                legacyAppHostPathSha = null;
+            }
 
             // Compute ProjectNameSha
             var appHostProjectNameShaBytes = SHA256.HashData(Encoding.UTF8.GetBytes(appHostName));
@@ -336,6 +349,8 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         {
             // PathSha for deployment state (path-based disambiguation)
             ["AppHost:PathSha256"] = appHostPathSha,
+            // Previous path identity used to migrate source-file deployment state.
+            ["AppHost:LegacyPathSha256"] = legacyAppHostPathSha,
             // ProjectNameSha for Azure Functions and Azure environments (stable naming)
             ["AppHost:ProjectNameSha256"] = appHostProjectNameSha,
             // Legacy Sha256 for backward compatibility (mode-dependent)
@@ -346,7 +361,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         // This must happen before command line args are added so they can override saved state
         if (ExecutionContext.IsPublishMode)
         {
-            LoadDeploymentState(appHostPathSha);
+            LoadDeploymentState(appHostPathSha, legacyAppHostPathSha);
         }
 
         // Core things
@@ -981,8 +996,9 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
     /// Loads deployment state from the filesystem based on the app host SHA and environment name.
     /// Only loads if ClearCache is false.
     /// </summary>
-    /// <param name="appHostSha">The SHA hash of the app host.</param>
-    private void LoadDeploymentState(string appHostSha)
+    /// <param name="appHostSha">The current SHA hash of the app host.</param>
+    /// <param name="legacyAppHostSha">The previous SHA hash used for source-file AppHosts.</param>
+    private void LoadDeploymentState(string appHostSha, string? legacyAppHostSha)
     {
         // Only load if ClearCache is false
         var clearCache = _innerBuilder.Configuration.GetValue<bool>("Pipeline:ClearCache");
@@ -992,13 +1008,16 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         }
 
         var environment = _innerBuilder.Environment.EnvironmentName.ToLowerInvariant();
-        var deploymentStatePath = Path.Combine(
-            System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile),
-            ".aspire",
-            "deployments",
-            appHostSha,
-            $"{environment}.json"
-        );
+        var deploymentStatePath = GetDeploymentStatePath(appHostSha, environment);
+        if (!File.Exists(deploymentStatePath) &&
+            !string.IsNullOrEmpty(legacyAppHostSha))
+        {
+            var legacyDeploymentStatePath = GetDeploymentStatePath(legacyAppHostSha, environment);
+            if (File.Exists(legacyDeploymentStatePath))
+            {
+                deploymentStatePath = legacyDeploymentStatePath;
+            }
+        }
 
         if (!File.Exists(deploymentStatePath))
         {
@@ -1011,6 +1030,15 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         }
         catch { }
     }
+
+    private static string GetDeploymentStatePath(string appHostSha, string environment) =>
+        Path.Combine(
+            System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile),
+            ".aspire",
+            "deployments",
+            appHostSha,
+            $"{environment}.json"
+        );
 
     /// <summary>
     /// Gets the metadata value for the specified key from the assembly metadata.

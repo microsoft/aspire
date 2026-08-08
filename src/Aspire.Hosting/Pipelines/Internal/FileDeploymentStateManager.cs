@@ -51,20 +51,39 @@ internal sealed partial class FileDeploymentStateManager(
     /// <inheritdoc/>
     protected override string? GetStatePath()
     {
-        // Use PathSha256 for deployment state to disambiguate projects with the same name in different locations
-        var appHostSha = configuration["AppHost:PathSha256"];
+        var currentStatePath = GetStatePath(configuration["AppHost:PathSha256"], hostEnvironment.EnvironmentName);
+        if (currentStatePath is null || File.Exists(currentStatePath))
+        {
+            return currentStatePath;
+        }
+
+        if (pipelineOptions.Value.ClearCache)
+        {
+            return currentStatePath;
+        }
+
+        var legacyStatePath = GetStatePath(configuration["AppHost:LegacyPathSha256"], hostEnvironment.EnvironmentName);
+        return legacyStatePath is not null && File.Exists(legacyStatePath)
+            ? legacyStatePath
+            : currentStatePath;
+    }
+
+    private string? GetCanonicalStatePath() => GetStatePath(configuration["AppHost:PathSha256"], hostEnvironment.EnvironmentName);
+
+    private static string? GetStatePath(string? appHostSha, string environmentName)
+    {
         if (string.IsNullOrEmpty(appHostSha))
         {
             return null;
         }
 
-        var environment = hostEnvironment.EnvironmentName.ToLowerInvariant();
+        var environment = environmentName.ToLowerInvariant();
 
         // Validate the environment name to ensure it only contains safe characters
         // and guard against path traversal attacks
         if (!IsValidEnvironmentName(environment))
         {
-            throw new ArgumentException($"The environment name '{environment}' contains invalid characters. Environment names must only contain alphanumeric characters, underscores, and hyphens ([a-zA-Z0-9_-]+).", "EnvironmentName");
+            throw new ArgumentException($"The environment name '{environment}' contains invalid characters. Environment names must only contain alphanumeric characters, underscores, and hyphens ([a-zA-Z0-9_-]+).", nameof(environmentName));
         }
 
         var aspireDir = Path.Combine(
@@ -88,7 +107,7 @@ internal sealed partial class FileDeploymentStateManager(
                 return;
             }
 
-            var deploymentStatePath = GetStatePath();
+            var deploymentStatePath = GetCanonicalStatePath();
             if (deploymentStatePath is null)
             {
                 logger.LogWarning("Cannot save deployment state: AppHostSha is not configured");
@@ -130,6 +149,14 @@ internal sealed partial class FileDeploymentStateManager(
                 deploymentStatePath,
                 flattenedSecrets.ToJsonString(UserSecretsJsonOptions.s_instance),
                 cancellationToken).ConfigureAwait(false);
+
+            var legacyStatePath = GetStatePath(configuration["AppHost:LegacyPathSha256"], hostEnvironment.EnvironmentName);
+            if (legacyStatePath is not null &&
+                !string.Equals(legacyStatePath, deploymentStatePath, StringComparison.Ordinal) &&
+                File.Exists(legacyStatePath))
+            {
+                File.Delete(legacyStatePath);
+            }
 
             logger.LogDebug("Deployment state saved to {Path}", deploymentStatePath);
         }

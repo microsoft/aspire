@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
+using System.Text.Json;
 using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Publishing;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -26,8 +27,94 @@ public class ContainerRuntimeBaseTests
         Assert.Contains("stderr-final-line", exception.Message);
     }
 
-    private sealed class TestContainerRuntime(string? runtimeExecutable = null)
-        : ContainerRuntimeBase<TestContainerRuntime>(NullLogger<TestContainerRuntime>.Instance, new DefaultProcessRunner())
+    [Fact]
+    public async Task ExecuteContainerCommandForOutputAsync_ReturnsStdoutOnly()
+    {
+        var runtime = new TestContainerRuntime();
+
+        var output = await runtime.RunCommandForOutputAsync().WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal("stdout-only", output);
+    }
+
+    [Fact]
+    public async Task InspectImageCommandsPreserveUntrustedImageNameAsSingleArgument()
+    {
+        var processRunner = new CapturingProcessRunner();
+        var runtime = new TestContainerRuntime(processRunner);
+        const string imageName = "registry/image\\\" --help";
+
+        await runtime.InspectImageConfigAsync(imageName, TestContext.Current.CancellationToken);
+        await runtime.InspectImageManifestAsync(imageName, TestContext.Current.CancellationToken);
+
+        Assert.Collection(
+            processRunner.ArgumentLists,
+            arguments =>
+            {
+                Assert.Equal(
+                    [
+                        "image",
+                        "inspect",
+                        imageName,
+                        "--format",
+                        """{"Entrypoint":{{json .Config.Entrypoint}},"Cmd":{{json .Config.Cmd}},"WorkingDir":{{json .Config.WorkingDir}}}"""
+                    ],
+                    arguments);
+            },
+            arguments => Assert.Equal(["manifest", "inspect", "--verbose", imageName], arguments));
+    }
+
+    [Fact]
+    public async Task PodmanInspectsRemoteImageManifestsUsingRegistryTransport()
+    {
+        var processRunner = new CapturingProcessRunner();
+        var runtime = new PodmanContainerRuntime(NullLogger<PodmanContainerRuntime>.Instance, processRunner);
+        const string maliciousImageName = "registry/image\\\" --help";
+
+        await runtime.InspectImageManifestAsync(maliciousImageName, TestContext.Current.CancellationToken);
+        await runtime.InspectImageManifestAsync("docker://registry/image:tag", TestContext.Current.CancellationToken);
+
+        Assert.Collection(
+            processRunner.ArgumentLists,
+            arguments => Assert.Equal(["manifest", "inspect", $"docker://{maliciousImageName}"], arguments),
+            arguments => Assert.Equal(["manifest", "inspect", "docker://registry/image:tag"], arguments));
+    }
+
+    [Fact]
+    public async Task PodmanResolvesDigestForPlainSingleImageManifest()
+    {
+        var processRunner = new CapturingProcessRunner(
+        [
+            new ProcessResult(0,
+            [
+                """{ "schemaVersion": 2, "config": { "digest": "sha256:config" }, "layers": [] }"""
+            ]),
+            new ProcessResult(0),
+            new ProcessResult(0,
+            [
+                """{ "Digest": "sha256:linux-amd64", "Os": "linux", "Architecture": "amd64" }"""
+            ])
+        ]);
+        var runtime = new PodmanContainerRuntime(NullLogger<PodmanContainerRuntime>.Instance, processRunner);
+        const string maliciousImageName = "registry/image\\\" --help:tag";
+
+        var manifest = await runtime.InspectImageManifestAsync(
+            $"docker://{maliciousImageName}",
+            TestContext.Current.CancellationToken);
+
+        using var document = JsonDocument.Parse(manifest);
+        var descriptor = document.RootElement.GetProperty("Descriptor");
+        Assert.Equal("sha256:linux-amd64", descriptor.GetProperty("digest").GetString());
+        Assert.Equal("linux", descriptor.GetProperty("platform").GetProperty("os").GetString());
+        Assert.Equal("amd64", descriptor.GetProperty("platform").GetProperty("architecture").GetString());
+        Assert.Collection(
+            processRunner.ArgumentLists,
+            arguments => Assert.Equal(["manifest", "inspect", $"docker://{maliciousImageName}"], arguments),
+            arguments => Assert.Equal(["pull", $"docker://{maliciousImageName}"], arguments),
+            arguments => Assert.Equal(["image", "inspect", "--format", "{{json .}}", maliciousImageName], arguments));
+    }
+
+    private sealed class TestContainerRuntime(IProcessRunner? processRunner = null, string? runtimeExecutable = null) : ContainerRuntimeBase<TestContainerRuntime>(NullLogger<TestContainerRuntime>.Instance, processRunner ?? new DefaultProcessRunner())
     {
         protected override string RuntimeExecutable => runtimeExecutable ?? (OperatingSystem.IsWindows() ? "cmd" : "sh");
 
@@ -53,6 +140,40 @@ public class ContainerRuntimeBaseTests
                 "Test command succeeded.",
                 "Test command failed with exit code {0}.",
                 cancellationToken);
+        }
+
+        public Task<string> RunCommandForOutputAsync(CancellationToken cancellationToken = default)
+        {
+            return ExecuteContainerCommandForOutputAsync(
+                OperatingSystem.IsWindows()
+                    ? "/c \"echo stdout-only& echo stderr-line 1>&2\""
+                    : "-c \"echo stdout-only; echo stderr-line 1>&2\"",
+                "test output",
+                "test-image",
+                cancellationToken);
+        }
+    }
+
+    private sealed class CapturingProcessRunner(IEnumerable<ProcessResult>? results = null) : IProcessRunner
+    {
+        private readonly Queue<ProcessResult> _results = new(results ?? []);
+
+        public List<IReadOnlyList<string>?> ArgumentLists { get; } = [];
+
+        public (Task<ProcessResult>, IAsyncDisposable) Run(ProcessSpec processSpec)
+        {
+            ArgumentLists.Add(processSpec.ArgumentList);
+            var result = _results.Count > 0 ? _results.Dequeue() : new ProcessResult(0);
+            foreach (var output in result.ProcessOutput)
+            {
+                processSpec.OnOutputData?.Invoke(output);
+            }
+            return (Task.FromResult(result), new NoOpAsyncDisposable());
+        }
+
+        private sealed class NoOpAsyncDisposable : IAsyncDisposable
+        {
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
         }
     }
 }

@@ -16,7 +16,7 @@ namespace Aspire.Hosting.Publishing;
 /// Base class for container runtime implementations that provides common process execution,
 /// logging, and error handling patterns.
 /// </summary>
-internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where TLogger : class
+internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime, IContainerImageInspector where TLogger : class
 {
     private readonly ILogger<TLogger> _logger;
     private readonly IProcessRunner _processRunner;
@@ -95,11 +95,39 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
             remoteImageName).ConfigureAwait(false);
     }
 
+    public virtual Task<string> InspectImageConfigAsync(string imageName, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(imageName);
+
+        return ExecuteContainerCommandForOutputAsync(
+            [
+                "image",
+                "inspect",
+                imageName,
+                "--format",
+                """{"Entrypoint":{{json .Config.Entrypoint}},"Cmd":{{json .Config.Cmd}},"WorkingDir":{{json .Config.WorkingDir}}}"""
+            ],
+            "inspect image config",
+            imageName,
+            cancellationToken);
+    }
+
+    public virtual Task<string> InspectImageManifestAsync(string imageName, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(imageName);
+
+        return ExecuteContainerCommandForOutputAsync(
+            ["manifest", "inspect", "--verbose", imageName],
+            "inspect image manifest",
+            imageName,
+            cancellationToken);
+    }
+
     public virtual async Task LoginToRegistryAsync(string registryServer, string username, string password, CancellationToken cancellationToken)
     {
         // Escape quotes in arguments to prevent command injection
-        var escapedRegistryServer = registryServer.Replace("\"", "\\\"");
-        var escapedUsername = username.Replace("\"", "\\\"");
+        var escapedRegistryServer = EscapeArgument(registryServer);
+        var escapedUsername = EscapeArgument(username);
         var arguments = $"login --username \"{escapedUsername}\" --password-stdin \"{escapedRegistryServer}\"";
 
         var spec = new ProcessSpec(RuntimeExecutable)
@@ -320,16 +348,89 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
         }
     }
 
-    private ProcessSpec CreateProcessSpec(string arguments, bool retainOutput = false)
+    protected async Task<string> ExecuteContainerCommandForOutputAsync(
+        string arguments,
+        string operationName,
+        string imageName,
+        CancellationToken cancellationToken)
+    {
+        var stdout = new List<string>();
+        var spec = CreateProcessSpec(arguments, retainOutput: true, onOutputData: output =>
+        {
+            stdout.Add(output);
+            _logger.LogDebug("{RuntimeName} (stdout): {Output}", RuntimeExecutable, output);
+        });
+        return await ExecuteContainerCommandForOutputAsync(spec, stdout, operationName, imageName, cancellationToken).ConfigureAwait(false);
+    }
+
+    protected async Task<string> ExecuteContainerCommandForOutputAsync(
+        IReadOnlyList<string> argumentList,
+        string operationName,
+        string imageName,
+        CancellationToken cancellationToken)
+    {
+        var stdout = new List<string>();
+        var spec = CreateProcessSpec(argumentList, retainOutput: true, onOutputData: output =>
+        {
+            stdout.Add(output);
+            _logger.LogDebug("{RuntimeName} (stdout): {Output}", RuntimeExecutable, output);
+        });
+        return await ExecuteContainerCommandForOutputAsync(spec, stdout, operationName, imageName, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<string> ExecuteContainerCommandForOutputAsync(
+        ProcessSpec spec,
+        List<string> stdout,
+        string operationName,
+        string imageName,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogDebug("Running {RuntimeName} with arguments: {ArgumentList}", Name, spec.ArgumentList ?? (object?)spec.Arguments);
+        var (pendingProcessResult, processDisposable) = _processRunner.Run(spec);
+
+        ProcessResult processResult;
+        await using (processDisposable)
+        {
+            processResult = await pendingProcessResult
+                .WaitAsync(cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        if (processResult.ExitCode != 0)
+        {
+            _logger.LogError("{RuntimeName} {OperationName} for {ImageName} failed with exit code {ExitCode}.", Name, operationName, imageName, processResult.ExitCode);
+            throw new DistributedApplicationException($"{Name} {operationName} for '{imageName}' failed with exit code {processResult.ExitCode}.{Environment.NewLine}{processResult.GetFormattedOutput()}");
+        }
+
+        _logger.LogDebug("{RuntimeName} {OperationName} for {ImageName} succeeded.", Name, operationName, imageName);
+        return string.Join(Environment.NewLine, stdout);
+    }
+
+    private ProcessSpec CreateProcessSpec(string arguments, bool retainOutput = false, Action<string>? onOutputData = null)
+    {
+        return CreateProcessSpecCore(arguments, argumentList: null, retainOutput, onOutputData);
+    }
+
+    private ProcessSpec CreateProcessSpec(IReadOnlyList<string> argumentList, bool retainOutput = false, Action<string>? onOutputData = null)
+    {
+        return CreateProcessSpecCore(arguments: null, argumentList, retainOutput, onOutputData);
+    }
+
+    private ProcessSpec CreateProcessSpecCore(
+        string? arguments,
+        IReadOnlyList<string>? argumentList,
+        bool retainOutput,
+        Action<string>? onOutputData)
     {
         return new ProcessSpec(RuntimeExecutable)
         {
             Arguments = arguments,
+            ArgumentList = argumentList,
             RetainedOutputLineCount = retainOutput ? ProcessSpec.DefaultRetainedOutputLineCount : null,
-            OnOutputData = output =>
+            OnOutputData = onOutputData ?? (output =>
             {
                 _logger.LogDebug("{RuntimeName} (stdout): {Output}", RuntimeExecutable, output);
-            },
+            }),
             OnErrorData = error =>
             {
                 _logger.LogDebug("{RuntimeName} (stderr): {Error}", RuntimeExecutable, error);
@@ -338,6 +439,8 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
             InheritEnv = true
         };
     }
+
+    protected static string EscapeArgument(string value) => value.Replace("\"", "\\\"", StringComparison.Ordinal);
 
     public virtual async Task ComposeUpAsync(ComposeOperationContext context, CancellationToken cancellationToken)
     {
