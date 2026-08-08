@@ -128,6 +128,25 @@ public class DevCertsCheckFixRecommendationTests
     }
 
     [Fact]
+    public void EvaluateCertificateResults_PartiallyTrustedCert_WithBlankSslCertDir_RecommendsSystemCertificateDirectories()
+    {
+        var environment = TestEnvironment.CreateLinux(new Dictionary<string, string?> { ["SSL_CERT_DIR"] = "   " });
+        var certInfos = new List<DevCertInfo>
+        {
+            CreateDevCertInfo(CertificateManager.TrustLevel.Partial, "AABB1234", MinVersion)
+        };
+        var devCertsTrustPath = CertificateHelpers.GetDevCertsTrustPath(environment);
+        var systemCertDirs = CertificateHelpers.GetSystemCertificateDirectories();
+        systemCertDirs.Add(devCertsTrustPath);
+        var expectedCommand = $"export SSL_CERT_DIR=\"$SSL_CERT_DIR:{string.Join(':', systemCertDirs)}\"";
+
+        var results = DevCertsCheck.EvaluateCertificateResults(certInfos, environment);
+
+        var result = Assert.Single(results);
+        Assert.Contains(expectedCommand, result.Fix);
+    }
+
+    [Fact]
     public void EvaluateCertificateResults_MultipleAllTrusted_ReportsPass()
     {
         var certInfos = new List<DevCertInfo>

@@ -1,12 +1,30 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Utils.EnvironmentChecker;
 using Aspire.Shared;
 
 namespace Aspire.Cli.Tests.Utils;
 
 public class ContainerRuntimeCheckTests
 {
+    public static TheoryData<IReadOnlyDictionary<string, string?>, string?> ConfiguredRuntimeCases => new()
+    {
+        { new Dictionary<string, string?>(), null },
+        { new Dictionary<string, string?> { ["ASPIRE_CONTAINER_RUNTIME"] = "" }, null },
+        { new Dictionary<string, string?> { ["ASPIRE_CONTAINER_RUNTIME"] = "   " }, null },
+        { new Dictionary<string, string?> { ["ASPIRE_CONTAINER_RUNTIME"] = "", ["DOTNET_ASPIRE_CONTAINER_RUNTIME"] = "podman" }, "podman" },
+        { new Dictionary<string, string?> { ["ASPIRE_CONTAINER_RUNTIME"] = "   ", ["DOTNET_ASPIRE_CONTAINER_RUNTIME"] = "podman" }, "podman" },
+        { new Dictionary<string, string?> { ["ASPIRE_CONTAINER_RUNTIME"] = "docker", ["DOTNET_ASPIRE_CONTAINER_RUNTIME"] = "podman" }, "docker" },
+    };
+
+    [Theory]
+    [MemberData(nameof(ConfiguredRuntimeCases))]
+    public void GetConfiguredRuntime_TreatsBlankVariablesAsUnset(IReadOnlyDictionary<string, string?> variables, string? expectedRuntime)
+    {
+        Assert.Equal(expectedRuntime, ContainerRuntimeCheck.GetConfiguredRuntime(new TestEnvironment(variables)));
+    }
+
     [Fact]
     public void ParseVersionFromJsonOutput_WithDockerJsonOutput_ReturnsBothVersions()
     {

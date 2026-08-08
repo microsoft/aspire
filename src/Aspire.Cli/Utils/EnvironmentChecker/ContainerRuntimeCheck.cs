@@ -34,8 +34,7 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
             var podmanTask = ContainerRuntimeDetector.CheckRuntimeAsync(KnownContainerRuntimes.Podman, "Podman", isDefault: false, logger, cancellationToken);
             var runtimes = await Task.WhenAll(dockerTask, podmanTask);
 
-            var configuredRuntime = environment.GetEnvironmentVariable("ASPIRE_CONTAINER_RUNTIME")
-                ?? environment.GetEnvironmentVariable("DOTNET_ASPIRE_CONTAINER_RUNTIME");
+            var configuredRuntime = GetConfiguredRuntime(environment);
 
             // Select best from already-probed results (no re-probing)
             ContainerRuntimeInfo? selected;
@@ -94,6 +93,18 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
                 Details = ex.Message
             }];
         }
+    }
+
+    internal static string? GetConfiguredRuntime(IEnvironment environment)
+    {
+        var configuredRuntime = environment.GetEnvironmentVariable("ASPIRE_CONTAINER_RUNTIME");
+        if (!string.IsNullOrWhiteSpace(configuredRuntime))
+        {
+            return configuredRuntime;
+        }
+
+        configuredRuntime = environment.GetEnvironmentVariable("DOTNET_ASPIRE_CONTAINER_RUNTIME");
+        return string.IsNullOrWhiteSpace(configuredRuntime) ? null : configuredRuntime;
     }
 
     /// <summary>

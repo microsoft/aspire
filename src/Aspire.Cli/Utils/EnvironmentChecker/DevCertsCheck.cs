@@ -562,7 +562,7 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
     {
         var currentSslCertDir = environment.GetEnvironmentVariable("SSL_CERT_DIR");
 
-        if (!string.IsNullOrEmpty(currentSslCertDir))
+        if (!string.IsNullOrWhiteSpace(currentSslCertDir))
         {
             // SSL_CERT_DIR is already set — just append the dev-certs trust path.
             // Preserve the existing value via $SSL_CERT_DIR shell expansion.
