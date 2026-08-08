@@ -15,7 +15,7 @@ The deployment tests require an Azure subscription with sufficient quota for the
 | Resource | Quota Required | Current Setting | Notes |
 |----------|---------------|-----------------|-------|
 | Managed Environments | 150+ | 150 | Each test run creates a new environment. High quota allows concurrent runs and handles cleanup delays. |
-| Managed Environment Public IPs | 150+ | 150 | Public Container Apps environments consume this regional quota. Self-healed by the workflow in `westus3`. |
+| Standard Public IP Addresses (`Microsoft.Network`) | 150+ | 150 | Public Container Apps environments consume this regional quota. Self-healed by the workflow in `westus3`. |
 | Container App Instances | Default | - | Standard quota is typically sufficient |
 
 ### App Service
@@ -68,7 +68,7 @@ To request quota increases:
 
 Common quota increase requests:
 - **Container Apps Managed Environments**: Request 150+ in westus3
-- **Container Apps Managed Environment Public IPs**: Request 150+ in westus3
+- **Standard Public IP Addresses**: Request 150+ in westus3
 - **App Service PremiumV3 vCPUs**: Request 10+ in westus3
 - **AKS `StandardDASv5Family` vCPUs**: Request 200 (dedicated) in westus3
 - **AKS Managed Clusters**: Request 20 in westus3
