@@ -41,7 +41,7 @@ if (!extesterVersion) {
 // The feed preflight must not touch the shared cache: it runs before any download and only
 // verifies package availability, so resolving the cache root there would be wasted Git discovery.
 const downloadCacheRoot = verifyExtesterFeedOnly ? '' : resolveDownloadCacheRoot(repoRoot);
-const vscodeVersion = resolveCachedVsCodeVersion(process.env.ASPIRE_EXTENSION_E2E_VSCODE_VERSION || '1.122.1');
+const vscodeVersion = resolveCachedVsCodeVersion(process.env.ASPIRE_EXTENSION_E2E_VSCODE_VERSION || 'max');
 if (!verifyExtesterFeedOnly) {
   fs.mkdirSync(requestedTempRoot, { recursive: true });
 }
@@ -198,7 +198,7 @@ function getRunTestsTimeoutMs() {
  * Returns a path ExTester can be given for its storage folder that the platform's command
  * interpreter will not reinterpret.
  *
- * ExTester 8.23 builds shell command strings out of this path and interpolates it unquoted into
+ * ExTester builds shell command strings out of this path and interpolates it unquoted into
  * each of them:
  *
  * - `exec(`unzip -qo ${input}`, { cwd: target })` unpacks `.zip` archives on macOS and Linux --
@@ -913,7 +913,7 @@ function verifyExtesterFeed() {
   ensureExtester();
 }
 
-// ExTester 8.23.0 does not expose a supported way to open VS Code with a workspace
+// ExTester does not expose a supported way to open VS Code with a workspace
 // folder. Starting with the workspace already open avoids a slower control-bridge
 // reload path and removes a startup race where discovery begins in an empty window.
 // Remove this patch when ExTester exposes a stable launch option for a folder/workspace.
@@ -937,7 +937,7 @@ function patchExtesterLaunchLocale() {
   const target = targets.find(candidate => source.includes(candidate));
   const argsDeclarationPattern = /const args = \[[^\n]*`--user-data-dir=\$\{path\.join\(this\.storagePath, 'settings'\)\}`(?:, [^\n]+?)?\];/;
   if (target) {
-    console.log('Patching ExTester VS Code launch arguments by exact 8.23.0 argument match.');
+    console.log('Patching ExTester VS Code launch arguments by exact argument match.');
     fs.writeFileSync(browserPath, source.replace(target, () => replacement));
   } else if (argsDeclarationPattern.test(source)) {
     console.log('Patching ExTester VS Code launch arguments by fallback argument-line match.');
@@ -1263,7 +1263,7 @@ function resolveCachedVsCodeVersion(requestedVersion) {
     return normalizedVersion;
   }
 
-  throw new Error(`ASPIRE_EXTENSION_E2E_VSCODE_VERSION must be a concrete version such as '1.122.1', or 'min'/'max', but was '${requestedVersion}'. Moving aliases cannot be cached because the cache key would never change when the alias does.`);
+  throw new Error(`ASPIRE_EXTENSION_E2E_VSCODE_VERSION must be a concrete version such as '1.130.0', or 'min'/'max', but was '${requestedVersion}'. Moving aliases cannot be cached because the cache key would never change when the alias does.`);
 }
 
 function getAspireCliEnvironment(extraEnv = {}) {

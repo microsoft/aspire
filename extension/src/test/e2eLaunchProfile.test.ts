@@ -181,9 +181,9 @@ suite('E2E launch profile', () => {
         const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml'), 'utf8');
         const internalFeed = 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/';
 
-        assert.strictEqual(packageJson.devDependencies['vscode-extension-tester'], '8.23.0');
+        assert.strictEqual(packageJson.devDependencies['vscode-extension-tester'], '8.24.0');
         assert.strictEqual(packageJson.resolutions.undici, '7.29.0');
-        assert.ok(lockfile.includes('vscode-extension-tester@8.23.0'));
+        assert.ok(lockfile.includes('vscode-extension-tester@8.24.0'));
         assert.ok(lockfile.includes('undici@7.29.0'));
         assert.ok(lockfile.split(/\r?\n/).filter(l => /^\s*resolved\s+"/.test(l)).every(l => l.includes(internalFeed)));
         assert.ok(workflow.includes('NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/'));
@@ -192,6 +192,33 @@ suite('E2E launch profile', () => {
         assert.ok(workflow.includes('corepack yarn install --frozen-lockfile --non-interactive'));
         assert.ok(!workflow.includes('ASPIRE_EXTENSION_E2E_EXTESTER_NPM_REGISTRY'));
         assert.ok(!workflow.includes('registry=https://'));
+    });
+
+    test('defaults to the maximum VS Code version supported by pinned ExTester', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const installedPackageJson = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'node_modules', 'vscode-extension-tester', 'package.json'), 'utf8'));
+        const extester = require(path.join(extensionRoot, 'node_modules', 'vscode-extension-tester', 'out', 'extester.js')) as {
+            loadCodeVersion(version: string): string;
+        };
+        const previousCodeVersion = process.env.CODE_VERSION;
+
+        assert.ok(runner.includes("process.env.ASPIRE_EXTENSION_E2E_VSCODE_VERSION || 'max'"));
+        assert.strictEqual(installedPackageJson.version, '8.24.0');
+        assert.strictEqual(installedPackageJson.supportedVersions['vscode-max'], '1.131.0');
+
+        try {
+            delete process.env.CODE_VERSION;
+            assert.strictEqual(extester.loadCodeVersion('max'), installedPackageJson.supportedVersions['vscode-max']);
+        }
+        finally {
+            if (previousCodeVersion === undefined) {
+                delete process.env.CODE_VERSION;
+            }
+            else {
+                process.env.CODE_VERSION = previousCodeVersion;
+            }
+        }
     });
 
     test('preflights locked ExTester dependency graph before starting the E2E matrix', () => {
@@ -496,12 +523,17 @@ suite('E2E launch profile', () => {
         assert.ok(!debugDashboard.includes("file => file.state.stoppingPaths.some(stoppingPath => isSamePath(stoppingPath, appHostPath))"));
     });
 
-    test('patches ExTester launch arguments without replacement-token expansion', () => {
+    test('patches ExTester launch arguments without version-specific assumptions or replacement-token expansion', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const browser = fs.readFileSync(path.join(extensionRoot, 'node_modules', 'vscode-extension-tester', 'out', 'browser.js'), 'utf8');
+        const argsDeclaration = /const args = \[[^\n]*`--user-data-dir=\$\{path\.join\(this\.storagePath, 'settings'\)\}`(?:, [^\n]+?)?\];/.exec(browser);
+        const cleanArgsDeclaration = "const args = ['--no-sandbox', '--disable-dev-shm-usage', `--user-data-dir=${path.join(this.storagePath, 'settings')}`];";
 
-        assert.ok(runner.includes('ExTester 8.23.0 does not expose a supported way to open VS Code with a workspace'));
-        assert.ok(runner.includes('Patching ExTester VS Code launch arguments by exact 8.23.0 argument match.'));
+        assert.ok(argsDeclaration);
+        assert.ok(runner.includes(cleanArgsDeclaration));
+        assert.ok(runner.includes('ExTester does not expose a supported way to open VS Code with a workspace'));
+        assert.ok(runner.includes('Patching ExTester VS Code launch arguments by exact argument match.'));
         assert.ok(runner.includes('source.replace(target, () => replacement)'));
         assert.ok(runner.includes('source.replace(argsDeclarationPattern, () => replacement)'));
     });
@@ -756,6 +788,7 @@ suite('E2E launch profile', () => {
         // reusing the wrong install offline.
         assert.ok(runner.includes('CODE_VERSION: vscodeVersion,'));
         assert.ok(runner.includes('const vscodeVersion = resolveCachedVsCodeVersion('));
+        assert.ok(runner.includes('vscodeVersion,\n      extesterVersion,'));
 
         // ExTester's codeStream falls back to CODE_TYPE when --type is absent, and an Insiders
         // build unpacks into directory names this cache does not discover.
@@ -788,6 +821,7 @@ suite('E2E launch profile', () => {
         assert.ok(resolverStart >= 0);
         assert.ok(resolverBody.includes("normalizedVersion === 'min' || normalizedVersion === 'max'"));
         assert.ok(resolverBody.includes('/^\\d+\\.\\d+(\\.\\d+)?$/.test(normalizedVersion)'));
+        assert.ok(resolverBody.includes("a concrete version such as '1.130.0'"));
         assert.ok(resolverBody.includes('throw new Error('));
     });
 

@@ -655,7 +655,7 @@ function normalizeEnsureDownloadCacheOptions(options) {
   // Validate the VS Code layout up front so unsupported combinations fail before
   // populate() starts an expensive download into a staging directory.
   getVsCodeDirectoryName(platform, architecture);
-  getVsCodeExecutableRelativePath(platform, architecture);
+  getVsCodeExecutableRelativePaths(platform, architecture);
 
   return {
     cacheRoot: path.resolve(options.cacheRoot),
@@ -1012,10 +1012,9 @@ function assertOrdinaryRelativePath(rootDirectory, realRootDirectory, relativePa
 
     const candidateRelativePath = path.join(...segments.slice(0, index + 1));
     if (candidateStats.isSymbolicLink()) {
-      // Genuine VS Code macOS bundles contain internal symlinks: ExTester creates
-      // `Visual Studio Code.app/Contents/MacOS/Electron -> Code` while unpacking the archive
-      // because its launcher resolves the executable as `Electron`. Rejecting every symlink
-      // outright rejects the real artifact, so follow links that stay inside the cache entry
+      // Older cached VS Code macOS bundles can contain internal symlinks such as
+      // `Visual Studio Code.app/Contents/MacOS/Electron -> Code`. Rejecting every symlink
+      // outright rejects a valid artifact, so follow links that stay inside the cache entry
       // and reject only those that redirect outside it.
       let linkTargetRealPath;
       try {
@@ -1118,10 +1117,16 @@ function isPathContainedWithin(rootPath, candidatePath) {
 
 function discoverCacheArtifacts(rootDirectory, platform, architecture, realRootDirectory = resolveRealPath(rootDirectory)) {
   const vscodeDirectory = getVsCodeDirectoryName(platform, architecture);
-  const vscodeExecutableRelativePath = getVsCodeExecutableRelativePath(platform, architecture);
+  const vscodeExecutableRelativePaths = getVsCodeExecutableRelativePaths(platform, architecture);
+  const vscodeExecutableRelativePath = vscodeExecutableRelativePaths.find(
+    relativePath => pathExistsWithoutFollowingLinks(path.join(rootDirectory, relativePath)));
   const chromeDriverBinaryName = getChromeDriverBinaryName(platform);
 
   assertOrdinaryRelativePath(rootDirectory, realRootDirectory, vscodeDirectory, 'vscodeDirectory', 'directory');
+  if (!vscodeExecutableRelativePath) {
+    const expectedPaths = vscodeExecutableRelativePaths.map(relativePath => `'${relativePath}'`).join(', ');
+    throw new Error(`vscodeExecutable points to missing paths: ${expectedPaths}.`);
+  }
   assertOrdinaryRelativePath(rootDirectory, realRootDirectory, vscodeExecutableRelativePath, 'vscodeExecutable', 'file');
 
   const legacyChromeDriverPath = path.join(rootDirectory, chromeDriverBinaryName);
@@ -1175,16 +1180,21 @@ function getVsCodeDirectoryName(platform, architecture) {
   }
 }
 
-function getVsCodeExecutableRelativePath(platform, architecture) {
+function getVsCodeExecutableRelativePaths(platform, architecture) {
   const vscodeDirectory = getVsCodeDirectoryName(platform, architecture);
 
   switch (platform) {
     case 'darwin':
-      return path.join(vscodeDirectory, 'Contents', 'MacOS', 'Electron');
+      // VS Code 1.131 renamed the macOS executable from Electron to Code. ExTester 8.24 supports
+      // both names so `max` can advance while explicit older supported versions remain cacheable.
+      return [
+        path.join(vscodeDirectory, 'Contents', 'MacOS', 'Code'),
+        path.join(vscodeDirectory, 'Contents', 'MacOS', 'Electron'),
+      ];
     case 'linux':
-      return path.join(vscodeDirectory, 'code');
+      return [path.join(vscodeDirectory, 'code')];
     case 'win32':
-      return path.join(vscodeDirectory, 'Code.exe');
+      return [path.join(vscodeDirectory, 'Code.exe')];
     default:
       throw new Error(`Unsupported VS Code platform/architecture combination: ${platform}/${architecture}.`);
   }
@@ -1213,6 +1223,19 @@ function isPublishRaceError(error) {
 function isFile(filePath) {
   try {
     return fs.statSync(filePath).isFile();
+  } catch (error) {
+    if (error && error.code === 'ENOENT') {
+      return false;
+    }
+
+    throw error;
+  }
+}
+
+function pathExistsWithoutFollowingLinks(candidatePath) {
+  try {
+    fs.lstatSync(candidatePath);
+    return true;
   } catch (error) {
     if (error && error.code === 'ENOENT') {
       return false;
