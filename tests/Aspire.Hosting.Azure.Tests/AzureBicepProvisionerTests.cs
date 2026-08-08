@@ -147,6 +147,30 @@ public class AzureBicepProvisionerTests
     }
 
     [Fact]
+    public async Task GetOrCreateResourceAsync_InPublishMode_PopulatesUserPrincipalId()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.Services.AddSingleton<IDeploymentStateManager>(new MockDeploymentStateManager());
+        using var services = builder.Services.BuildServiceProvider();
+
+        var resource = new AzureBicepResource("storage-roles", templateString: """
+            param userPrincipalId string
+            output id string = userPrincipalId
+            """);
+        resource.Parameters[AzureBicepResource.KnownParameters.UserPrincipalId] = null;
+
+        var principalId = Guid.Parse("00000000-0000-0000-0000-000000000042");
+        var context = ProvisioningTestHelpers.CreateTestProvisioningContext(
+            principal: new UserPrincipal(principalId, "test@example.com"),
+            executionContext: new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish));
+
+        var provisioner = CreateProvisioner(services);
+        await provisioner.GetOrCreateResourceAsync(resource, context, CancellationToken.None);
+
+        Assert.Equal(principalId, resource.Parameters[AzureBicepResource.KnownParameters.UserPrincipalId]);
+    }
+
+    [Fact]
     public async Task GetOrCreateResourceAsync_WithSubscriptionScope_UsesSubscriptionDeploymentCollection()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

@@ -1,0 +1,9 @@
+﻿{
+  "type": "azure.bicep.v0",
+  "path": "aspire.hosting.azure.compute.azurevirtualmachinescalesetfoundation.bicep",
+  "params": {
+    "resourceName": "compute",
+    "provisionPackageStorage": "True",
+    "userPrincipalId": ""
+  }
+}

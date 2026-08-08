@@ -60,6 +60,158 @@ public class ComputeEnvironmentValidationTests
         Assert.Same(env.Resource, api.Resource.GetComputeEnvironment());
     }
 
+    [Fact]
+    public async Task ExplicitOnlyEnvironment_DoesNotDisableAnotherEnvironmentsImplicitBinding()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var defaultEnvironment = builder.AddResource(new TestComputeEnvironmentResource("default"));
+        var explicitEnvironment = builder.AddResource(new TestComputeEnvironmentResource(
+            "explicit",
+            allowsImplicitBinding: false));
+        var explicitlyBoundResource = builder.AddResource(new TestComputeResource("api"))
+            .WithComputeEnvironment(explicitEnvironment);
+        var implicitlyBoundResource = builder.AddResource(new TestComputeResource("worker"));
+
+        using var app = builder.Build();
+
+        await app.ExecuteBeforeStartHooksAsync(default).DefaultTimeout();
+
+        Assert.Same(explicitEnvironment.Resource, explicitlyBoundResource.Resource.GetComputeEnvironment());
+        Assert.Same(defaultEnvironment.Resource, implicitlyBoundResource.Resource.GetComputeEnvironment());
+    }
+
+    [Fact]
+    public async Task ExplicitOnlyComputeEnvironment_RejectsUnboundResources()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var env = builder.AddResource(new TestComputeEnvironmentResource("env1", allowsImplicitBinding: false));
+        var api = builder.AddResource(new TestComputeResource("api"))
+            .WithComputeEnvironment(env);
+        var worker = builder.AddResource(new TestComputeResource("worker"));
+
+        using var app = builder.Build();
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => app.ExecuteBeforeStartHooksAsync(default)).DefaultTimeout();
+
+        Assert.Same(env.Resource, api.Resource.GetComputeEnvironment());
+        Assert.Null(worker.Resource.GetComputeEnvironment());
+        Assert.Equal(
+            "Compute environment 'env1' does not allow implicit binding, but compute resource(s) 'worker' are not bound to an environment. " +
+            "Bind each resource by calling 'WithComputeEnvironment' on its resource builder.",
+            ex.Message);
+    }
+
+    [Fact]
+    public async Task ExplicitOnlyComputeEnvironment_IgnoresPublishExcludedUnboundResources()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var env = builder.AddResource(new TestComputeEnvironmentResource(
+            "env",
+            allowsImplicitBinding: false,
+            minimumResourceCount: 1,
+            maximumResourceCount: 1));
+        builder.AddResource(new TestComputeResource("api")).WithComputeEnvironment(env);
+        builder.AddResource(new TestComputeResource("worker")).ExcludeFromManifest();
+
+        using var app = builder.Build();
+
+        await app.ExecuteBeforeStartHooksAsync(default).DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ComputeEnvironment_WithTooFewBoundResources_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        builder.AddResource(new TestComputeEnvironmentResource(
+            "env",
+            allowsImplicitBinding: false,
+            minimumResourceCount: 1,
+            maximumResourceCount: 1));
+
+        using var app = builder.Build();
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => app.ExecuteBeforeStartHooksAsync(default)).DefaultTimeout();
+
+        Assert.Equal(
+            "Compute environment 'env' requires at least 1 bound compute resource(s), but 0 were found. " +
+            "Bind a resource by calling 'WithComputeEnvironment' on its resource builder.",
+            ex.Message);
+    }
+
+    [Fact]
+    public async Task ComputeEnvironment_WithTooManyBoundResources_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var env = builder.AddResource(new TestComputeEnvironmentResource(
+            "env",
+            allowsImplicitBinding: false,
+            minimumResourceCount: 1,
+            maximumResourceCount: 1));
+        builder.AddResource(new TestComputeResource("api")).WithComputeEnvironment(env);
+        builder.AddResource(new TestComputeResource("worker")).WithComputeEnvironment(env);
+
+        using var app = builder.Build();
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => app.ExecuteBeforeStartHooksAsync(default)).DefaultTimeout();
+
+        Assert.Equal(
+            "Compute environment 'env' supports at most 1 bound compute resource(s), but 2 were found.",
+            ex.Message);
+    }
+
+    [Fact]
+    public async Task ComputeEnvironment_WithUnsupportedBoundResource_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var env = builder.AddResource(new TestComputeEnvironmentResource(
+            "env",
+            allowsImplicitBinding: false,
+            supportsResource: _ => false));
+        builder.AddResource(new TestComputeResource("api")).WithComputeEnvironment(env);
+
+        using var app = builder.Build();
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => app.ExecuteBeforeStartHooksAsync(default)).DefaultTimeout();
+
+        Assert.Equal(
+            "Compute environment 'env' does not support compute resource(s) 'api (TestComputeResource)'.",
+            ex.Message);
+    }
+
+    [Theory]
+    [InlineData(-1, null)]
+    [InlineData(0, -1)]
+    [InlineData(2, 1)]
+    public async Task ComputeEnvironment_WithInvalidResourceCountPolicy_Throws(int minimumResourceCount, int? maximumResourceCount)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        builder.AddResource(new TestComputeEnvironmentResource(
+            "env",
+            minimumResourceCount: minimumResourceCount,
+            maximumResourceCount: maximumResourceCount));
+
+        using var app = builder.Build();
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => app.ExecuteBeforeStartHooksAsync(default)).DefaultTimeout();
+
+        Assert.Equal(
+            "Compute environment 'env' has an invalid resource count policy. " +
+            "The minimum count must be non-negative and cannot exceed the maximum count.",
+            ex.Message);
+    }
+
     [Theory]
     [InlineData(EndpointProperty.Url, "http://api.example.com:8080")]
     [InlineData(EndpointProperty.Host, "api.example.com")]
@@ -103,9 +255,22 @@ public class ComputeEnvironmentValidationTests
         return new EndpointReference(resource, endpoint);
     }
 
-    private sealed class TestComputeEnvironmentResource(string name) : Resource(name), IComputeEnvironmentResource
+    private sealed class TestComputeEnvironmentResource(
+        string name,
+        bool allowsImplicitBinding = true,
+        int minimumResourceCount = 0,
+        int? maximumResourceCount = null,
+        Func<IComputeResource, bool>? supportsResource = null) : Resource(name), IComputeEnvironmentResource
     {
 #pragma warning disable ASPIRECOMPUTE002
+        public bool AllowsImplicitBinding => allowsImplicitBinding;
+
+        public int MinimumResourceCount => minimumResourceCount;
+
+        public int? MaximumResourceCount => maximumResourceCount;
+
+        public bool SupportsResource(IComputeResource resource) => supportsResource?.Invoke(resource) ?? true;
+
         public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference) =>
             ReferenceExpression.Create($"{endpointReference.Resource.Name}.example.com");
 #pragma warning restore ASPIRECOMPUTE002

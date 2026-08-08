@@ -353,7 +353,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             Description = "Validates compute resource bindings before startup.",
             Action = static context =>
             {
-                ValidateComputeEnvironmentBindings(context.Model);
+                ValidateComputeEnvironmentBindings(context.Model, context.ExecutionContext);
                 return Task.CompletedTask;
             },
             RequiredBySteps = [WellKnownPipelineSteps.BeforeStart],
@@ -381,21 +381,66 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         });
     }
 
-    private static void ValidateComputeEnvironmentBindings(DistributedApplicationModel model)
+    private static void ValidateComputeEnvironmentBindings(
+        DistributedApplicationModel model,
+        DistributedApplicationExecutionContext executionContext)
     {
-        // With multiple compute environments there is no unambiguous default. Surface a clear
-        // error for any compute resource that hasn't been explicitly bound, rather than letting
-        // the environments' steps silently skip it (which would result in the resource
-        // never being deployed).
+        var computeResources = model.Resources
+            .OfType<IComputeResource>()
+            .Where(resource => !executionContext.IsPublishMode || !resource.IsExcludedFromPublish())
+            .ToList();
+        var computeEnvironments = model.Resources
+            .OfType<IComputeEnvironmentResource>()
+            .Where(environment => !executionContext.IsPublishMode || !environment.IsExcludedFromPublish())
+            .ToList();
 
-        var computeEnvironments = model.Resources.OfType<IComputeEnvironmentResource>().ToList();
-        if (computeEnvironments.Count <= 1)
+        foreach (var environment in computeEnvironments)
         {
-            return;
+#pragma warning disable ASPIRECOMPUTE002
+            var minimumResourceCount = environment.MinimumResourceCount;
+            var maximumResourceCount = environment.MaximumResourceCount;
+#pragma warning restore ASPIRECOMPUTE002
+
+            if (minimumResourceCount < 0 ||
+                maximumResourceCount is < 0 ||
+                maximumResourceCount < minimumResourceCount)
+            {
+                throw new DistributedApplicationException(
+                    $"Compute environment '{environment.Name}' has an invalid resource count policy. " +
+                    $"The minimum count must be non-negative and cannot exceed the maximum count.");
+            }
+
+            var boundResources = computeResources
+                .Where(resource => ReferenceEquals(resource.GetComputeEnvironment(), environment))
+                .ToList();
+            var boundResourceCount = boundResources.Count;
+            if (boundResourceCount < minimumResourceCount)
+            {
+                throw new DistributedApplicationException(
+                    $"Compute environment '{environment.Name}' requires at least {minimumResourceCount} bound compute resource(s), but {boundResourceCount} were found. " +
+                    $"Bind a resource by calling 'WithComputeEnvironment' on its resource builder.");
+            }
+
+            if (maximumResourceCount is int maximum && boundResourceCount > maximum)
+            {
+                throw new DistributedApplicationException(
+                    $"Compute environment '{environment.Name}' supports at most {maximum} bound compute resource(s), but {boundResourceCount} were found.");
+            }
+
+#pragma warning disable ASPIRECOMPUTE002
+            var unsupportedResources = boundResources.Where(resource => !environment.SupportsResource(resource)).ToList();
+#pragma warning restore ASPIRECOMPUTE002
+            if (unsupportedResources.Count > 0)
+            {
+                var unsupportedResourceNames = string.Join(
+                    "', '",
+                    unsupportedResources.Select(resource => $"{resource.Name} ({resource.GetType().Name})"));
+                throw new DistributedApplicationException(
+                    $"Compute environment '{environment.Name}' does not support compute resource(s) '{unsupportedResourceNames}'.");
+            }
         }
 
-        var unboundResources = model.Resources
-            .OfType<IComputeResource>()
+        var unboundResources = computeResources
             .Where(resource => resource.GetComputeEnvironment() is null)
             .ToList();
 
@@ -404,10 +449,47 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             return;
         }
 
+        var implicitBindingEnvironments = computeEnvironments
+            .Where(static environment =>
+            {
+#pragma warning disable ASPIRECOMPUTE002
+                return environment.AllowsImplicitBinding;
+#pragma warning restore ASPIRECOMPUTE002
+            })
+            .ToList();
+
+        if (implicitBindingEnvironments.Count == 1)
+        {
+            return;
+        }
+
+        if (implicitBindingEnvironments.Count == 0)
+        {
+            if (computeEnvironments.Count == 1)
+            {
+                var unboundResourceNames = string.Join("', '", unboundResources.Select(resource => resource.Name));
+                throw new DistributedApplicationException(
+                    $"Compute environment '{computeEnvironments[0].Name}' does not allow implicit binding, but compute resource(s) '{unboundResourceNames}' are not bound to an environment. " +
+                    $"Bind each resource by calling 'WithComputeEnvironment' on its resource builder.");
+            }
+
+            if (computeEnvironments.Count > 1)
+            {
+                var unboundResourceNames = string.Join("', '", unboundResources.Select(resource => resource.Name));
+                var explicitOnlyEnvironmentNames = string.Join("', '", computeEnvironments.Select(environment => environment.Name));
+                throw new DistributedApplicationException(
+                    $"Compute resource(s) '{unboundResourceNames}' are not assigned to a compute environment, and none of the compute environments ('{explicitOnlyEnvironmentNames}') allow implicit binding. " +
+                    $"Bind each resource by calling 'WithComputeEnvironment' on its resource builder.");
+            }
+
+            return;
+        }
+
+        // With multiple implicit-binding compute environments there is no unambiguous default.
         var resourceNames = string.Join("', '", unboundResources.Select(resource => resource.Name));
-        var environmentNames = string.Join("', '", computeEnvironments.Select(environment => environment.Name));
+        var environmentNames = string.Join("', '", implicitBindingEnvironments.Select(environment => environment.Name));
         throw new InvalidOperationException(
-            $"Compute resource(s) '{resourceNames}' are not assigned to a compute environment, but the model contains multiple compute environments ('{environmentNames}'). " +
+            $"Compute resource(s) '{resourceNames}' are not assigned to a compute environment, but the model contains multiple implicit-binding compute environments ('{environmentNames}'). " +
             $"Specify which environment each resource should target by calling 'WithComputeEnvironment' on the resource builder.");
     }
 

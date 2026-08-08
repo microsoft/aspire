@@ -203,16 +203,63 @@ internal sealed class AzureResourcePreparer(
             // - if in PublishMode
             //   - if a compute resource has RoleAssignmentAnnotations, use them
             //   - if the resource doesn't, copy the DefaultRoleAssignments to RoleAssignmentAnnotations to apply the defaults
+#pragma warning disable ASPIRECOMPUTE002
             var resourceSnapshot = appModel.GetComputeResources()
+                .Concat(appModel.Resources
+                    .OfType<IComputeResource>()
+                    .Where(r => !r.IsExcludedFromPublish() &&
+                        !r.IsContainer() &&
+                        !r.IsEmulator() &&
+                        r.GetComputeEnvironment() is IAzureComputeEnvironmentResource environment &&
+                        environment.SupportsResource(r)))
                 .Concat(appModel.Resources
                     .OfType<AzureUserAssignedIdentityResource>()
                     .Where(r => !r.IsExcludedFromPublish()))
+                .Distinct()
                 .ToArray(); // avoid modifying the collection while iterating
+#pragma warning restore ASPIRECOMPUTE002
             foreach (var resource in resourceSnapshot)
             {
+                if (executionContext.IsPublishMode &&
+                    resource.GetComputeEnvironment() is IAzureComputeEnvironmentResource environment &&
+                    environment.TryGetLastAnnotation<AzureComputeEnvironmentIdentityAnnotation>(out var environmentIdentity))
+                {
+                    if (resource.TryGetLastAnnotation<AppIdentityAnnotation>(out var existingAppIdentity))
+                    {
+                        if (existingAppIdentity.IdentityResource != environmentIdentity.IdentityResource)
+                        {
+                            var existingIdentityName = (existingAppIdentity.IdentityResource as IResource)?.Name ??
+                                existingAppIdentity.IdentityResource.GetType().Name;
+                            var environmentIdentityName = (environmentIdentity.IdentityResource as IResource)?.Name ??
+                                environmentIdentity.IdentityResource.GetType().Name;
+                            throw new DistributedApplicationException(
+                                $"Compute resource '{resource.Name}' uses identity '{existingIdentityName}', " +
+                                $"but compute environment '{environment.Name}' requires identity '{environmentIdentityName}'.");
+                        }
+                    }
+                    else
+                    {
+                        resource.Annotations.Add(new AppIdentityAnnotation(environmentIdentity.IdentityResource));
+                    }
+                }
+
                 var prerequisiteResources = new HashSet<AzureBicepResource>();
                 var directDependencies = await resource.GetResourceDependenciesAsync(executionContext, ResourceDependencyDiscoveryMode.DirectOnly, cancellationToken).ConfigureAwait(false);
                 var azureReferences = new HashSet<IAzureResource>(directDependencies.OfType<IAzureResource>());
+
+                if (executionContext.IsPublishMode &&
+                    resource is IComputeResource computeResource &&
+                    resource.GetComputeEnvironment() is IAzureComputeEnvironmentResource computeEnvironment)
+                {
+#pragma warning disable ASPIRECOMPUTE002
+                    if (!computeEnvironment.UsesContainerImages(computeResource))
+                    {
+                        // Direct-deploy publishers resolve Azure outputs before packaging rather than
+                        // passing output expressions into a container deployment template.
+                        prerequisiteResources.UnionWith(azureReferences.OfType<AzureBicepResource>());
+                    }
+#pragma warning restore ASPIRECOMPUTE002
+                }
 
                 var azureReferencesWithRoleAssignments =
                     (resource.TryGetAnnotationsOfType<RoleAssignmentAnnotation>(out var annotations)

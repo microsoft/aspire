@@ -955,6 +955,17 @@ public static class ResourceExtensions
             return false;
         }
 
+        if (resource is IComputeResource computeResource &&
+            resource.GetComputeEnvironment() is { } computeEnvironment)
+        {
+#pragma warning disable ASPIRECOMPUTE002
+            if (!computeEnvironment.UsesContainerImages(computeResource))
+            {
+                return false;
+            }
+#pragma warning restore ASPIRECOMPUTE002
+        }
+
         return resource is ProjectResource || resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _);
     }
 
