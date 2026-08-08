@@ -11,6 +11,11 @@ var db1 = sql1.AddDatabase("db1");
 var sql2 = builder.AddAzureSqlServer("sql2");
 var db2 = sql2.AddDatabase("db2");
 
+#pragma warning disable ASPIRECERTIFICATES001
+_ = builder.AddSqlServer("sqlNoTls")
+    .WithoutHttpsCertificate();
+#pragma warning restore ASPIRECERTIFICATES001
+
 var api = builder.AddProject<Projects.SqlServerEndToEnd_ApiService>("api")
        .WithReference(db1)
        .WithReference(db2)
