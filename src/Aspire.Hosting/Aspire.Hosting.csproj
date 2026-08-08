@@ -137,6 +137,12 @@
     <InternalsVisibleTo Include="Aspire.Hosting.Go.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.JavaScript.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Python.Tests" />
+    <!-- Aspire.Hosting.Testing is a shipping package, not a test project. It needs internals so the testing
+         builder can reuse the product's dashboard configuration keys, token generation, and login URL resolution
+         rather than duplicating them. Granting this required dropping the $(SharedDir) file links that
+         Aspire.Hosting.Testing previously compiled itself, because those types now arrive through the IVT and
+         compiling both copies produces CS0436. -->
+    <InternalsVisibleTo Include="Aspire.Hosting.Testing" />
     <InternalsVisibleTo Include="Aspire.Hosting.Testing.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Containers.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.DotnetTool.Tests" />

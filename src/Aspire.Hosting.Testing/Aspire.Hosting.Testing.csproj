@@ -12,13 +12,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="$(SharedDir)LaunchProfiles\LaunchSettingsReader.cs" Link="LaunchSettingsReader.cs" />
-    <Compile Include="$(SharedDir)LaunchProfiles\LaunchSettingsSerializerContext.cs" Link="LaunchSettingsSerializerContext.cs" />
-    <Compile Include="$(SharedDir)\KnownAspNetCoreConfigNames.cs" Link="KnownAspNetCoreConfigNames.cs" />
-    <Compile Include="$(SharedDir)\KnownConfigNames.cs" Link="KnownConfigNames.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\Aspire.Hosting.AppHost\Aspire.Hosting.AppHost.csproj" />
     <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />
   </ItemGroup>

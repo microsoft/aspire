@@ -17,7 +17,6 @@ namespace Aspire.Hosting.Backchannel;
 /// </summary>
 internal static class DashboardUrlsHelper
 {
-
     /// <summary>
     /// Gets all dashboard connection information in a single call.
     /// Waits for the dashboard to become healthy before returning.
@@ -30,6 +29,38 @@ internal static class DashboardUrlsHelper
         IServiceProvider serviceProvider,
         ILogger logger,
         CancellationToken cancellationToken = default)
+    {
+        return await GetDashboardConnectionInfoCoreAsync(
+            serviceProvider,
+            logger,
+            throwOnDashboardFailure: false,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Gets all dashboard connection information while preserving terminal dashboard failures.
+    /// </summary>
+    /// <param name="serviceProvider">The service provider.</param>
+    /// <param name="logger">The logger for diagnostic output.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>Complete dashboard connection information.</returns>
+    internal static async Task<DashboardConnectionInfo> GetDashboardConnectionInfoOrThrowAsync(
+        IServiceProvider serviceProvider,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        return await GetDashboardConnectionInfoCoreAsync(
+            serviceProvider,
+            logger,
+            throwOnDashboardFailure: true,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task<DashboardConnectionInfo> GetDashboardConnectionInfoCoreAsync(
+        IServiceProvider serviceProvider,
+        ILogger logger,
+        bool throwOnDashboardFailure,
+        CancellationToken cancellationToken)
     {
         // Check whether the dashboard resource is registered at all. If it isn't (e.g. the user
         // called DisableDashboard()), return immediately rather than waiting forever for a resource
@@ -67,6 +98,12 @@ internal static class DashboardUrlsHelper
                 waitActivity.SetError(ex);
                 activity.SetDashboardHealthy(false);
                 logger.LogWarning(ex, "An error occurred while waiting for the Aspire Dashboard to become healthy.");
+
+                if (throwOnDashboardFailure)
+                {
+                    throw;
+                }
+
                 return DashboardConnectionInfo.Unhealthy;
             }
         }
@@ -126,7 +163,7 @@ internal static class DashboardUrlsHelper
             if (!string.IsNullOrEmpty(apiBaseUrl))
             {
                 baseUrlWithLoginToken = !string.IsNullOrEmpty(dashboardOptions.DashboardToken)
-                    ? $"{apiBaseUrl.TrimEnd('/')}/login?t={dashboardOptions.DashboardToken}"
+                    ? $"{apiBaseUrl.TrimEnd('/')}/login?t={Uri.EscapeDataString(dashboardOptions.DashboardToken)}"
                     : apiBaseUrl;
 
                 var rewrittenUrl = codespacesUrlRewriter?.RewriteUrl(baseUrlWithLoginToken);
@@ -144,6 +181,7 @@ internal static class DashboardUrlsHelper
                 IsHealthy = true,
                 ApiBaseUrl = apiBaseUrl,
                 ApiToken = dashboardOptions.ApiKey,
+                HasBrowserToken = !string.IsNullOrEmpty(dashboardOptions.DashboardToken),
                 BaseUrlWithLoginToken = baseUrlWithLoginToken,
                 CodespacesUrlWithLoginToken = codespacesUrlWithLoginToken
             };
@@ -188,6 +226,7 @@ internal sealed class DashboardConnectionInfo
     public bool IsHealthy { get; init; }
     public string? ApiBaseUrl { get; init; }
     public string? ApiToken { get; init; }
+    public bool HasBrowserToken { get; init; }
     /// <summary>
     /// Gets the resolved dashboard URL.
     /// When browser token authentication is enabled, this value includes the login token.

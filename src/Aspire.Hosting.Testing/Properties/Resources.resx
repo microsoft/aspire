@@ -120,6 +120,24 @@
   <data name="ApplicationNotStartedExceptionMessage" xml:space="preserve">
     <value>The application must be started before resolving endpoints or connection strings.</value>
   </data>
+  <data name="DashboardDisabledExceptionMessage" xml:space="preserve">
+    <value>The dashboard is not enabled for this application.</value>
+  </data>
+  <data name="DashboardLoginUrlAnonymousExceptionMessage" xml:space="preserve">
+    <value>The dashboard login URL is not available because anonymous dashboard access is enabled.</value>
+  </data>
+  <data name="DashboardLoginUrlApplicationNotStartedExceptionMessage" xml:space="preserve">
+    <value>The application must be started before retrieving the dashboard login URL.</value>
+  </data>
+  <data name="DashboardLoginUrlPublishModeExceptionMessage" xml:space="preserve">
+    <value>The dashboard login URL is not available in publish mode.</value>
+  </data>
+  <data name="DashboardLoginUrlUnavailableExceptionMessage" xml:space="preserve">
+    <value>The dashboard login URL is not available.</value>
+  </data>
+  <data name="DashboardTestingPublishModeExceptionMessage" xml:space="preserve">
+    <value>Dashboard testing is not supported in publish mode.</value>
+  </data>
   <data name="EndpointForResourceNotFoundExceptionMessage" xml:space="preserve">
     <value>Endpoint '{0}' for resource '{1}' not found.</value>
   </data>

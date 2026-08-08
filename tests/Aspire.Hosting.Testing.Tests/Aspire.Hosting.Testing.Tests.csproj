@@ -36,6 +36,11 @@
     <!-- This ProjectReference is *only* to get this project built, but not referenced directly.
          It will be loaded dynamically by individual tests. -->
     <ProjectReference Include="..\testproject\TestProject.AppHost\TestProject.AppHost.csproj" ReferenceOutputAssembly="false" IsAspireProjectResource="false" Private="false" />
+
+    <!-- Tests here start a real dashboard. The AppHost launches it from the repo-wide AspireDashboardDir
+         set in Directory.Build.props, which is only populated when Aspire.Dashboard itself has been built,
+         so take a build-only dependency on it rather than relying on another test leg having built it. -->
+    <ProjectReference Include="..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj" ReferenceOutputAssembly="false" IsAspireProjectResource="false" Private="false" />
   </ItemGroup>
 
   <ItemGroup>

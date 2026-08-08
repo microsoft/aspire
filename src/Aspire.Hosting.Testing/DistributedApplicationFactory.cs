@@ -26,6 +26,11 @@ public class DistributedApplicationFactory(Type entryPoint, string[] args) : IDi
     private readonly TaskCompletionSource<DistributedApplicationBuilder> _builderTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource<DistributedApplication> _appTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly CancellationTokenSource _disposingCts = new();
+
+    // Disposal must be claimed atomically. Reading _disposingCts.IsCancellationRequested is not enough because
+    // OnDisposed() cancels it only after the guard, so two concurrent disposers could both run the teardown
+    // below and race on StopAsync()/DisposeAsync() of the same application.
+    private int _disposeClaimed;
     private TimeSpan _shutdownTimeout = TimeSpan.FromSeconds(10);
     private readonly object _lockObj = new();
     private bool _entryPointStarted;
@@ -166,10 +171,28 @@ public class DistributedApplicationFactory(Type entryPoint, string[] args) : IDi
         return args;
     }
 
-    private void OnBuiltCore(DistributedApplication application)
+    private async Task OnBuiltCoreAsync(DistributedApplication application)
     {
         _shutdownTimeout = application.Services.GetService<IOptions<HostOptions>>()?.Value.ShutdownTimeout ?? _shutdownTimeout;
-        _appTcs.TrySetResult(application);
+
+        if (!_appTcs.TrySetResult(application))
+        {
+            // The factory was disposed, or the entry point already faulted, while this application was still
+            // being built. No caller will ever receive it, so nothing else holds a reference that would tear
+            // down the host, its service provider, or the orchestrator processes it owns. Reclaim it here
+            // instead of leaving it running for the lifetime of the test process.
+            try
+            {
+                await application.DisposeAsync().ConfigureAwait(false);
+            }
+            catch
+            {
+                // No owner remains to observe a disposal failure for an application nobody asked for.
+            }
+
+            return;
+        }
+
         OnBuilt(application);
     }
 
@@ -409,7 +432,7 @@ public class DistributedApplicationFactory(Type entryPoint, string[] args) : IDi
             var app = await factory(_args, cts.Token).ConfigureAwait(false);
             _hostApplicationLifetime = app.Services.GetService<IHostApplicationLifetime>()
                 ?? throw new InvalidOperationException($"Application did not register an implementation of {typeof(IHostApplicationLifetime)}.");
-            OnBuiltCore(app);
+            await OnBuiltCoreAsync(app).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
@@ -481,7 +504,7 @@ public class DistributedApplicationFactory(Type entryPoint, string[] args) : IDi
     /// <inheritdoc/>
     public virtual async ValueTask DisposeAsync()
     {
-        if (_disposingCts.IsCancellationRequested)
+        if (Interlocked.Exchange(ref _disposeClaimed, 1) == 1)
         {
             // Dispose already called.
             return;

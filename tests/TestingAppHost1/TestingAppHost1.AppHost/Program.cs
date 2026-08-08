@@ -9,6 +9,40 @@ using Microsoft.Extensions.Hosting;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
+var buildProbeArgument = args.FirstOrDefault(
+    argument => argument.StartsWith("--block-apphost-build=", StringComparison.Ordinal));
+if (buildProbeArgument is not null)
+{
+    var buildProbeId = buildProbeArgument["--block-apphost-build=".Length..];
+    TestingAppHostBuildProbe.Configure(builder, buildProbeId);
+}
+
+if (args.Contains("--override-dashboard-testing-defaults"))
+{
+    builder.Configuration["DcpPublisher:RandomizePorts"] = "false";
+    builder.Configuration["ASPNETCORE_URLS"] = "http://127.0.0.1:12345";
+    builder.Configuration["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = "http://127.0.0.1:12346";
+    builder.Configuration["ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"] = "http://127.0.0.1:12347";
+    builder.Configuration["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = "http://127.0.0.1:12348";
+    builder.Configuration["ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS"] = "true";
+    builder.Configuration["ASPIRE_INTERACTIVITY_ENABLED"] = "true";
+}
+
+if (args.Contains("--clear-apphost-browser-token"))
+{
+    // The frozen token is the one dashboard setting an AppHost could still change after the testing builder had
+    // hardened things, because DashboardOptions does not read this key until the application starts. It is kept
+    // separate from --override-dashboard-testing-defaults so that flag keeps asserting on a token.
+    builder.Configuration["AppHost:BrowserToken"] = "";
+}
+
+if (args.Contains("--null-apphost-browser-token"))
+{
+    // Null and empty are distinct configuration values, but DashboardEventHandlers collapses both to Unsecured
+    // frontend authentication through string.IsNullOrEmpty, so both need coverage.
+    builder.Configuration["AppHost:BrowserToken"] = null;
+}
+
 builder.Configuration["ConnectionStrings:cs"] = "testconnection";
 
 builder.AddConnectionString("cs");
@@ -53,6 +87,12 @@ var app = builder.Build();
 
 if (args.Contains("--crash-after-build"))
 {
+    if (buildProbeArgument is not null)
+    {
+        var buildProbeId = buildProbeArgument["--block-apphost-build=".Length..];
+        TestingAppHostBuildProbe.SignalEntryPointFailure(buildProbeId);
+    }
+
     throw new InvalidOperationException("Crashing: after-build.");
 }
 

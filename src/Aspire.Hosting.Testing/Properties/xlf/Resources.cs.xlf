@@ -7,6 +7,36 @@
         <target state="translated">Aplikace musí být spuštěna před překladem koncových bodů nebo připojovacích řetězců.</target>
         <note />
       </trans-unit>
+      <trans-unit id="DashboardDisabledExceptionMessage">
+        <source>The dashboard is not enabled for this application.</source>
+        <target state="new">The dashboard is not enabled for this application.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardLoginUrlAnonymousExceptionMessage">
+        <source>The dashboard login URL is not available because anonymous dashboard access is enabled.</source>
+        <target state="new">The dashboard login URL is not available because anonymous dashboard access is enabled.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardLoginUrlApplicationNotStartedExceptionMessage">
+        <source>The application must be started before retrieving the dashboard login URL.</source>
+        <target state="new">The application must be started before retrieving the dashboard login URL.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardLoginUrlPublishModeExceptionMessage">
+        <source>The dashboard login URL is not available in publish mode.</source>
+        <target state="new">The dashboard login URL is not available in publish mode.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardLoginUrlUnavailableExceptionMessage">
+        <source>The dashboard login URL is not available.</source>
+        <target state="new">The dashboard login URL is not available.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardTestingPublishModeExceptionMessage">
+        <source>Dashboard testing is not supported in publish mode.</source>
+        <target state="new">Dashboard testing is not supported in publish mode.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="EndpointForResourceNotFoundExceptionMessage">
         <source>Endpoint '{0}' for resource '{1}' not found.</source>
         <target state="translated">Koncový bod {0} pro prostředek {1} se nenašel.</target>
