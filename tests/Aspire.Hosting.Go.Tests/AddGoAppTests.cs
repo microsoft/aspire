@@ -338,7 +338,34 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
 
         var app = builder.AddGoApp("api", AppContext.BaseDirectory)
-            .WithDelveServer(port: 2345);
+            .WithDelveServer();
+
+        var manifest = await ManifestUtils.GetManifest(app.Resource);
+
+        var expected = """
+            {
+              "type": "executable.v0",
+              "workingDirectory": ".",
+              "command": "dlv",
+              "args": [
+                "--headless=true",
+                "--listen=127.0.0.1:2345",
+                "--api-version=2",
+                "debug",
+                "."
+              ]
+            }
+            """;
+        Assert.Equal(expected, manifest.ToString());
+    }
+
+    [Fact]
+    public async Task VerifyManifest_WithDelveServer_EnableAcceptMultiClient()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory)
+            .WithDelveServer(new DelveServerOptions { AcceptMultiClient = true });
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
 
@@ -352,33 +379,6 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "--listen=127.0.0.1:2345",
                 "--api-version=2",
                 "--accept-multiclient",
-                "debug",
-                "."
-              ]
-            }
-            """;
-        Assert.Equal(expected, manifest.ToString());
-    }
-
-    [Fact]
-    public async Task VerifyManifest_WithDelveServer_DisableAcceptMulticlient()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
-
-        var app = builder.AddGoApp("api", AppContext.BaseDirectory)
-            .WithDelveServer(acceptMulticlient: false);
-
-        var manifest = await ManifestUtils.GetManifest(app.Resource);
-
-        var expected = """
-            {
-              "type": "executable.v0",
-              "workingDirectory": ".",
-              "command": "dlv",
-              "args": [
-                "--headless=true",
-                "--listen=127.0.0.1:2345",
-                "--api-version=2",
                 "debug",
                 "."
               ]
@@ -393,7 +393,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
 
         var app = builder.AddGoApp("api", AppContext.BaseDirectory)
-            .WithDelveServer(onlySameUser: false);
+            .WithDelveServer(new DelveServerOptions { OnlySameUser = false });
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
 
@@ -406,7 +406,6 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "--headless=true",
                 "--listen=127.0.0.1:2345",
                 "--api-version=2",
-                "--accept-multiclient",
                 "--only-same-user=false",
                 "debug",
                 "."
@@ -422,7 +421,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
 
         var app = builder.AddGoApp("api", AppContext.BaseDirectory)
-            .WithDelveServer(continueOnStart: true);
+            .WithDelveServer(new DelveServerOptions { ContinueOnStart = true });
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
 
@@ -435,7 +434,6 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "--headless=true",
                 "--listen=127.0.0.1:2345",
                 "--api-version=2",
-                "--accept-multiclient",
                 "debug",
                 "--continue",
                 "."
@@ -451,7 +449,11 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
 
         var app = builder.AddGoApp("api", AppContext.BaseDirectory)
-            .WithDelveServer(log: true, logOutput: "rpc,dap,debugger");
+            .WithDelveServer(new DelveServerOptions
+            {
+                Log = true,
+                LogOutput = "rpc,dap,debugger"
+            });
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
 
@@ -464,7 +466,6 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "--headless=true",
                 "--listen=127.0.0.1:2345",
                 "--api-version=2",
-                "--accept-multiclient",
                 "--log",
                 "--log-output=rpc,dap,debugger",
                 "debug",
@@ -476,14 +477,25 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void WithDelveServer_RemovesVSCodeDebuggingAnnotation()
+    public async Task WithDelveServer_UsesDelveCommandWhenGoLaunchConfigurationIsSupported()
     {
-        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var runSessionInfo = new RunSessionInfo
+        {
+            ProtocolsSupported = ["test"],
+            SupportedLaunchConfigurations = ["go"]
+        };
+        builder.Configuration["DEBUG_SESSION_INFO"] = JsonSerializer.Serialize(runSessionInfo);
+        builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
 
         var app = builder.AddGoApp("api", AppContext.BaseDirectory)
-            .WithDelveServer(port: 2345);
+            .WithDelveServer();
+        var application = builder.Build();
 
-        Assert.DoesNotContain(app.Resource.Annotations, annotation => annotation is SupportsDebuggingAnnotation);
+        var commandArguments = await ArgumentEvaluator.GetArgumentListAsync(app.Resource, application.Services);
+
+        Assert.Equal("dlv", app.Resource.Command);
+        Assert.Equal(["--headless=true", "--listen=127.0.0.1:2345", "--api-version=2", "debug", "."], commandArguments);
     }
 
     // ---- VS Code debugging --------------------------------------------------
@@ -603,7 +615,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
         var app = builder.AddGoApp("api", AppContext.BaseDirectory,
                 buildTags: ["netgo"],
                 ldFlags: "-s -w")
-            .WithDelveServer(port: 2345);
+            .WithDelveServer();
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
 
@@ -616,7 +628,6 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "--headless=true",
                 "--listen=127.0.0.1:2345",
                 "--api-version=2",
-                "--accept-multiclient",
                 "debug",
                 "--build-flags=-tags=\u0027netgo\u0027 -ldflags=\u0027-s -w\u0027",
                 "."
@@ -634,7 +645,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
 
         var app = builder.AddGoApp("api", AppContext.BaseDirectory, raceDetector: true)
-            .WithDelveServer(port: 2345);
+            .WithDelveServer();
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
 
@@ -647,7 +658,6 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "--headless=true",
                 "--listen=127.0.0.1:2345",
                 "--api-version=2",
-                "--accept-multiclient",
                 "debug",
                 "--build-flags=-race",
                 "."
@@ -665,7 +675,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
 
         var app = builder.AddGoApp("api", AppContext.BaseDirectory, gcFlags: "all=-N -l")
-            .WithDelveServer(port: 2345);
+            .WithDelveServer();
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
 
@@ -678,7 +688,6 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "--headless=true",
                 "--listen=127.0.0.1:2345",
                 "--api-version=2",
-                "--accept-multiclient",
                 "debug",
                 "--build-flags=-gcflags=\u0027all=-N -l\u0027",
                 "."
@@ -697,7 +706,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
 
         var app = builder.AddGoApp("api", AppContext.BaseDirectory)
             .WithAppArgs("--port", "9090")
-            .WithDelveServer(port: 2345);
+            .WithDelveServer();
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
 
@@ -710,7 +719,6 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "--headless=true",
                 "--listen=127.0.0.1:2345",
                 "--api-version=2",
-                "--accept-multiclient",
                 "debug",
                 ".",
                 "--",

@@ -11,16 +11,16 @@ namespace Aspire.Hosting.Go;
 /// </summary>
 internal sealed class GoDelveServerAnnotation(
     int port,
-    bool acceptMulticlient,
+    bool acceptMultiClient,
     bool? onlySameUser,
     bool continueOnStart,
     bool log,
-    string logOutput) : IResourceAnnotation
+    string? logOutput) : IResourceAnnotation
 {
     public int Port { get; } = port;
-    public bool AcceptMulticlient { get; } = acceptMulticlient;
+    public bool AcceptMultiClient { get; } = acceptMultiClient;
     public bool? OnlySameUser { get; } = onlySameUser;
     public bool ContinueOnStart { get; } = continueOnStart;
     public bool Log { get; } = log;
-    public string LogOutput { get; } = logOutput;
+    public string? LogOutput { get; } = logOutput;
 }
