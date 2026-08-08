@@ -334,7 +334,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddTransient<OtlpMetricsService>();
 
         // Telemetry API.
-        builder.Services.AddSingleton<TelemetryApiService>();
+        builder.Services.AddScoped<TelemetryApiService>();
 
         builder.Services.AddTransient<TracesViewModel>();
         builder.Services.AddSingleton<IOutgoingPeerResolver, ResourceOutgoingPeerResolver>();
@@ -403,6 +403,12 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         _app.Lifetime.ApplicationStarted.Register(() =>
         {
+            var runStore = _app.Services.GetRequiredService<DashboardRunStore>();
+            if (runStore.SupportsRunSelection)
+            {
+                _logger.LogInformation("Dashboard run ID: {RunId}", runStore.RunId);
+            }
+
             ResolvedEndpointInfo? frontendEndpointInfo = null;
             if (_frontendEndPointAccessor.Count > 0)
             {

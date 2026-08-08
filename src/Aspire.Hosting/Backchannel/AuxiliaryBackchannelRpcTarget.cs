@@ -101,6 +101,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         return new GetDashboardInfoResponse
         {
+            RunId = info.RunId,
             ApiBaseUrl = info.ApiBaseUrl,
             ApiToken = info.ApiToken,
             DashboardUrls = urls.ToArray(),

@@ -547,8 +547,9 @@ public class AgentMcpCommandTests(ITestOutputHelper outputHelper)
         var tools = await ctx.Client.ListToolsAsync(cancellationToken: ctx.Cts.Token).DefaultTimeout();
 
         Assert.NotNull(tools);
-        Assert.Equal(3, tools.Count);
+        Assert.Equal(4, tools.Count);
         Assert.Collection(tools.OrderBy(t => t.Name),
+            tool => Assert.Equal(KnownMcpTools.ListConsoleLogs, tool.Name),
             tool => Assert.Equal(KnownMcpTools.ListStructuredLogs, tool.Name),
             tool => Assert.Equal(KnownMcpTools.ListTraceStructuredLogs, tool.Name),
             tool => Assert.Equal(KnownMcpTools.ListTraces, tool.Name));

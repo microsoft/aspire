@@ -404,6 +404,42 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         }
     }
 
+    [Fact]
+    public async Task OnBeforeStartAsync_RejectsExistingConfiguredRunId()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var applicationName = "My App";
+        var runId = "incident-42";
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [DashboardConfigNames.DashboardRunIdName.EnvVarName] = runId,
+                [DashboardConfigNames.DashboardApplicationName.EnvVarName] = applicationName,
+                [DashboardConfigNames.DashboardDataDirectoryName.EnvVarName] = workspace.Path,
+                [DashboardConfigNames.DashboardPersistenceModeName.EnvVarName] = "Run"
+            })
+            .Build();
+        var runDirectory = Path.Combine(
+            DashboardRunStorage.GetApplicationDirectory(workspace.Path, applicationName),
+            "runs",
+            runId);
+        Directory.CreateDirectory(runDirectory);
+        var hook = CreateHook(
+            new ResourceLoggerService(),
+            ResourceNotificationServiceTestHelpers.Create(),
+            configuration,
+            runIdentity: new DashboardRunIdentity { RunId = runId, IsUserSpecified = true });
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            hook.OnBeforeStartAsync(
+                new BeforeStartEvent(new TestServiceProvider(), new DistributedApplicationModel([])),
+                CancellationToken.None));
+
+        Assert.Equal(
+            "Dashboard run ID 'incident-42' already exists for application 'My App'. Choose a different run ID.",
+            exception.Message);
+    }
+
     [Theory]
     [InlineData("https://localhost:17131", "localhost", 9999, "https", "localhost")]
     [InlineData("https://aspire-dashboard.dev.localhost:17131", "aspire-dashboard.dev.localhost", 9999, "https", "aspire-dashboard.dev.localhost")]
@@ -855,7 +891,9 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         IOptions<CodespacesOptions>? codespacesOptions = null,
         IOptions<DashboardOptions>? dashboardOptions = null,
         Hosting.Eventing.DistributedApplicationEventing? eventing = null,
-        ILogger<DistributedApplication>? distributedApplicationLogger = null
+        ILogger<DistributedApplication>? distributedApplicationLogger = null,
+        DashboardRunIdentity? runIdentity = null,
+        TimeProvider? timeProvider = null
         )
     {
         codespacesOptions ??= Options.Create(new CodespacesOptions());
@@ -881,7 +919,9 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             new TestHostApplicationLifetime(),
             eventing ?? new Hosting.Eventing.DistributedApplicationEventing(),
             rewriter,
-            new FileSystemService(configuration)
+            new FileSystemService(configuration),
+            runIdentity ?? new DashboardRunIdentity(),
+            timeProvider ?? TimeProvider.System
             );
     }
 

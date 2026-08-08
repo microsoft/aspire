@@ -41,7 +41,7 @@ internal static class DashboardUrlsHelper
         if (dashboardResource is null)
         {
             logger.LogDebug("Dashboard resource is not present in the app model. Returning unavailable state.");
-            return DashboardConnectionInfo.Unhealthy;
+            return CreateUnhealthyConnectionInfo(serviceProvider);
         }
 
         var profilingTelemetry = serviceProvider.GetRequiredService<ProfilingTelemetry>();
@@ -67,7 +67,7 @@ internal static class DashboardUrlsHelper
                 waitActivity.SetError(ex);
                 activity.SetDashboardHealthy(false);
                 logger.LogWarning(ex, "An error occurred while waiting for the Aspire Dashboard to become healthy.");
-                return DashboardConnectionInfo.Unhealthy;
+                return CreateUnhealthyConnectionInfo(serviceProvider);
             }
         }
 
@@ -79,7 +79,7 @@ internal static class DashboardUrlsHelper
                 activity.SetDashboardHealthy(false);
                 activity.SetDashboardUrlSource(ProfilingTelemetry.Values.DashboardUrlSourceNone);
                 logger.LogWarning("Dashboard options not found.");
-                return DashboardConnectionInfo.Unhealthy;
+                return CreateUnhealthyConnectionInfo(serviceProvider);
             }
 
             string? apiBaseUrl = null;
@@ -142,6 +142,7 @@ internal static class DashboardUrlsHelper
             return new DashboardConnectionInfo
             {
                 IsHealthy = true,
+                RunId = serviceProvider.GetService<DashboardRunIdentity>()?.RunId,
                 ApiBaseUrl = apiBaseUrl,
                 ApiToken = dashboardOptions.ApiKey,
                 BaseUrlWithLoginToken = baseUrlWithLoginToken,
@@ -154,6 +155,12 @@ internal static class DashboardUrlsHelper
             throw;
         }
     }
+
+    private static DashboardConnectionInfo CreateUnhealthyConnectionInfo(IServiceProvider serviceProvider) => new()
+    {
+        IsHealthy = false,
+        RunId = serviceProvider.GetService<DashboardRunIdentity>()?.RunId
+    };
 
     /// <summary>
     /// Gets the dashboard URLs for the running AppHost.
@@ -172,6 +179,7 @@ internal static class DashboardUrlsHelper
         return new DashboardUrlsState
         {
             DashboardHealthy = info.IsHealthy,
+            RunId = info.RunId,
             BaseUrlWithLoginToken = info.BaseUrlWithLoginToken,
             CodespacesUrlWithLoginToken = info.CodespacesUrlWithLoginToken
         };
@@ -183,9 +191,8 @@ internal static class DashboardUrlsHelper
 /// </summary>
 internal sealed class DashboardConnectionInfo
 {
-    public static readonly DashboardConnectionInfo Unhealthy = new() { IsHealthy = false };
-
     public bool IsHealthy { get; init; }
+    public string? RunId { get; init; }
     public string? ApiBaseUrl { get; init; }
     public string? ApiToken { get; init; }
     /// <summary>

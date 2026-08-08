@@ -28,3 +28,21 @@ internal sealed class TelemetryApiResponse
     [JsonPropertyName("returnedCount")]
     public int ReturnedCount { get; set; }
 }
+
+internal sealed class ConsoleLogsApiResponse
+{
+    public required ConsoleLogLineJson[] Logs { get; init; }
+
+    public required int TotalCount { get; init; }
+}
+
+internal sealed class ConsoleLogLineJson
+{
+    public required string ResourceName { get; init; }
+
+    public required int LineNumber { get; init; }
+
+    public required string Content { get; init; }
+
+    public required bool IsError { get; init; }
+}

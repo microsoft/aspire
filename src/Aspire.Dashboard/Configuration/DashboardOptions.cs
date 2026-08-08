@@ -28,6 +28,7 @@ public sealed class DashboardDataOptions
     public string? Directory { get; set; }
     public DashboardPersistenceMode PersistenceMode { get; set; }
 
+    internal string? RunId { get; set; }
     internal string? PersistenceModeParseError { get; set; }
 }
 

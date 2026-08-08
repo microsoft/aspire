@@ -176,6 +176,27 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SearchOptionDescription", resourceCulture);
             }
         }
+
+        internal static string RunIdOptionDescription {
+            get {
+                return ResourceManager.GetString("RunIdOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string HistoricalFollowNotSupported {
+            get {
+                return ResourceManager.GetString("HistoricalFollowNotSupported", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Dashboard run '{0}' was not found..
+        /// </summary>
+        internal static string HistoricalRunNotFound {
+            get {
+                return ResourceManager.GetString("HistoricalRunNotFound", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to The --limit value must be a positive number..
