@@ -8,14 +8,14 @@ These tests use the [Hex1b](https://github.com/hex1b/hex1b) terminal automation 
 
 ## Azure Subscription Quota Requirements
 
-The deployment tests require an Azure subscription with sufficient quota for the resources being deployed. Most scenarios, including the AKS (Azure Kubernetes Service) scenarios, deploy to `westus3`; a resource-specific test uses `eastus`. Ensure the quotas below are available in the region noted for each section.
+The deployment tests require an Azure subscription with sufficient quota for the resources being deployed. Most scenarios, including the AKS (Azure Kubernetes Service) scenarios, deploy to `westus3`; a resource-specific test uses `eastus2`. Ensure the quotas below are available in the region noted for each section.
 
 ### Container Apps
 
 | Resource | Quota Required | Current Setting | Notes |
 |----------|---------------|-----------------|-------|
 | Managed Environments | 150+ | 150 | Each test run creates a new environment. High quota allows concurrent runs and handles cleanup delays. |
-| Standard Public IP Addresses (`Microsoft.Network`) | 150+ | 20 | Public Container Apps environments consume this regional quota. Request manually in `westus3`; Microsoft.Quota exposes the limit but rejects CLI create/update requests. |
+| Standard Public IP Addresses (`Microsoft.Network`) | 150+ | 50 | Public Container Apps environments consume this regional quota. Request manually in `westus3`; Microsoft.Quota exposes the limit but rejects CLI create/update requests. |
 | Container App Instances | Default | - | Standard quota is typically sufficient |
 
 ### App Service
@@ -37,7 +37,7 @@ The AKS scenarios deploy to `westus3`, where the subscription holds `Standard_D2
 
 One test intentionally uses another region for a resource-specific requirement:
 
-- `AcaManagedRedisDeploymentTests` → `eastus` (Azure Managed Redis availability-zone support).
+- `AcaManagedRedisDeploymentTests` → `eastus2` (Azure Managed Redis availability-zone support).
 
 ### Container Registry
 
