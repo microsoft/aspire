@@ -88,9 +88,9 @@ checkout:
       repositories: ["aspire.dev"]
     current: true
     # Fetch release/* refs in addition to the default branch so the
-    # `Resolve target aspire.dev branch` pre-agent step (and the agent
-    # itself, when it switches the workspace to the effective branch) can
-    # enumerate aspire.dev's release/* branches locally from
+    # `Resolve and check out target aspire.dev branch` pre-agent step can
+    # enumerate aspire.dev's release/* branches locally and switch the
+    # workspace to the selected branch before the agent starts. The refs live in
     # `refs/remotes/origin/release/*`. If this fetch silently produces
     # nothing (e.g., the action ignores the refspec), the resolver still
     # falls back to a `gh api /repos/microsoft/aspire.dev/branches` call
@@ -459,6 +459,23 @@ pre-agent-steps:
         sudo chmod 755 /usr/local/bin/copilot
       fi
       /usr/local/bin/copilot --version
+  - name: Check out pre-agent scripts
+    # The `checkout:` block above made microsoft/aspire.dev the current
+    # workspace because that's where the doc PR is authored. We need a sparse,
+    # side-by-side checkout of microsoft/aspire before target resolution so the
+    # tested checkout helper can switch branches and restore trusted runtime
+    # configuration deterministically.
+    #
+    # For a merged pull_request:closed event, the default `ref` is the updated
+    # base branch; for workflow_dispatch, it is the dispatcher-selected ref.
+    # Both select the helper version associated with the workflow being run.
+    uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+    with:
+      repository: microsoft/aspire
+      path: _repos/aspire
+      sparse-checkout: |
+        .github/workflows/pr-docs-check
+      sparse-checkout-cone-mode: false
   # Mint a short-lived installation token from the aspire-bot GitHub App so
   # the resolver below can read PR/issue metadata from microsoft/aspire AND
   # list branches on microsoft/aspire.dev. The default GITHUB_TOKEN is scoped
@@ -481,7 +498,7 @@ pre-agent-steps:
       repositories: |
         aspire
         aspire.dev
-  - name: Resolve target aspire.dev branch
+  - name: Resolve and check out target aspire.dev branch
     id: resolve-target
     env:
       GH_TOKEN: ${{ steps.resolve-target-app-token.outputs.token }}
@@ -508,6 +525,10 @@ pre-agent-steps:
       # instead of an opaque parse failure.
       if ! [[ "${PR_NUMBER}" =~ ^[1-9][0-9]*$ ]]; then
         echo "ERROR: PR_NUMBER '${PR_NUMBER}' is not a positive integer." >&2
+        exit 1
+      fi
+      if ! git -C "${GITHUB_WORKSPACE}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        echo "ERROR: Aspire.dev workspace is not a Git work tree: ${GITHUB_WORKSPACE}" >&2
         exit 1
       fi
 
@@ -690,11 +711,9 @@ pre-agent-steps:
       RELEASE_BRANCHES_FILE="$(mktemp)"
       : > "${RELEASE_BRANCHES_FILE}"
 
-      if git -C "${GITHUB_WORKSPACE}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-        git -C "${GITHUB_WORKSPACE}" for-each-ref \
-          --format='%(refname:short)' 'refs/remotes/origin/release/*' \
-          | sed 's|^origin/||' > "${RELEASE_BRANCHES_FILE}" || true
-      fi
+      git -C "${GITHUB_WORKSPACE}" for-each-ref \
+        --format='%(refname:short)' 'refs/remotes/origin/release/*' \
+        | sed 's|^origin/||' > "${RELEASE_BRANCHES_FILE}" || true
 
       if [ -s "${RELEASE_BRANCHES_FILE}" ]; then
         ENUMERATION_SOURCE="git"
@@ -777,6 +796,8 @@ pre-agent-steps:
       echo "Effective     : ${EFFECTIVE} (resolution=${RESOLUTION})"
       echo "branch=${EFFECTIVE}" >> "${GITHUB_OUTPUT}"
 
+      DOCS_WORK_BRANCH="docs/pr-${PR_NUMBER}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+
       # --- 7. Emit target.json ---------------------------------------------
       jq -n \
         --argjson pr_number "${PR_NUMBER}" \
@@ -786,6 +807,7 @@ pre-agent-steps:
         --arg candidate_source_detail "${CANDIDATE_SOURCE_DETAIL}" \
         --arg effective "${EFFECTIVE}" \
         --arg resolution "${RESOLUTION}" \
+        --arg docs_work_branch "${DOCS_WORK_BRANCH}" \
         --argjson available "${AVAILABLE_BRANCHES_JSON}" \
         --arg enumeration_source "${ENUMERATION_SOURCE}" \
         --argjson linked_issues "${LINKED_ISSUES_JSON}" \
@@ -796,6 +818,7 @@ pre-agent-steps:
            candidate_source: $candidate_source,
            candidate_source_detail: $candidate_source_detail,
            effective_target_branch: $effective,
+           docs_work_branch: $docs_work_branch,
            target_resolution: $resolution,
            available_release_branches: $available,
            enumeration_source: $enumeration_source,
@@ -804,6 +827,16 @@ pre-agent-steps:
 
       echo "--- ${OUT} ---"
       cat "${OUT}"
+
+      # --- 8. Prepare the target-based documentation work branch ------------
+      # The helper fetches only a missing target ref (without shallowifying a
+      # full clone), creates a unique branch at the exact target tip, restores
+      # trusted agent configuration, and keeps those runtime-only files out of
+      # Git patches even if the agent uses broad staging.
+      python3 \
+        "${GITHUB_WORKSPACE}/_repos/aspire/.github/workflows/pr-docs-check/checkout_target.py" \
+        "${EFFECTIVE}" \
+        "${DOCS_WORK_BRANCH}"
   # Compute deterministic "is this PR user-facing?" signals from the PR
   # diff and body before the agent starts. Historically the agent reasoned
   # about this directly from the prompt's prose ("is this a significant
@@ -851,25 +884,6 @@ pre-agent-steps:
   # matching unittest suite (`test_compute_signals.py`), so it can be
   # reviewed with syntax highlighting and exercised locally with
   # `python3 -m unittest discover -s .github/workflows/pr-docs-check -v`.
-  - name: Check out pre-agent scripts
-    # The `checkout:` block above made microsoft/aspire.dev the current
-    # workspace because that's where the doc PR is authored. We need a
-    # sparse, side-by-side checkout of microsoft/aspire to bring the
-    # pre-agent scripts (signal computation + PR context) into the runner.
-    # A sparse checkout keeps this fast — only
-    # `.github/workflows/pr-docs-check` is fetched.
-    #
-    # Default `ref` resolves to the trigger ref (refs/pull/<N>/merge for
-    # pull_request: closed, or the dispatcher-selected branch for
-    # workflow_dispatch). That's the correct version of the script for
-    # the merged state being analyzed.
-    uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-    with:
-      repository: microsoft/aspire
-      path: _repos/aspire
-      sparse-checkout: |
-        .github/workflows/pr-docs-check
-      sparse-checkout-cone-mode: false
   - name: Compute user-facing signals and PR context
     env:
       GH_TOKEN: ${{ steps.resolve-target-app-token.outputs.token }}
@@ -1068,6 +1082,7 @@ Read `.pr-docs-check/target.json`. The fields you will use are:
 | Field | Purpose |
 | --- | --- |
 | `effective_target_branch` | The branch you must base all docs edits and the draft PR on (`main` or `release/X.Y[.Z]`). |
+| `docs_work_branch` | The unique local branch already created from `effective_target_branch`; use it unchanged as the draft PR head branch. |
 | `candidate_source` | Why the candidate was chosen: `pr_milestone`, `linked_issue_milestone`, `pr_base`, or `fallback_main`. Use it in the PR description. |
 | `candidate_source_detail` | The raw milestone title or base ref that drove the choice. Use it in the PR description. |
 | `target_resolution` | How `effective_target_branch` was chosen: `exact_match`, `latest_release_fallback`, or `main_fallback`. Use it in the PR description. |
@@ -1075,17 +1090,12 @@ Read `.pr-docs-check/target.json`. The fields you will use are:
 The remaining fields (`candidate_target_branch`, `available_release_branches`,
 `enumeration_source`) are context only — don't second-guess the resolution.
 
-The current workspace is `microsoft/aspire.dev`. Switch it to
-`effective_target_branch` before editing docs:
-
-- If `effective_target_branch` is `main`, you are already on the right branch
-  by default; no switch is required.
-- If `effective_target_branch` starts with `release/`, run
-  `git checkout <effective_target_branch>` (the workflow `checkout:` block has
-  already fetched `release/*` refs into `refs/remotes/origin/release/*`).
-
-Do **not** create new branches or modify the resolution. The
-`create_pull_request` safe output's `base` field must be set to exactly
+The current workspace is `microsoft/aspire.dev`. The resolver has already
+created and checked out `docs_work_branch` at the exact tip of
+`effective_target_branch` before you started. Do not create another branch,
+switch branches, or reset the workspace. Keep all docs edits and commits on
+`docs_work_branch`. The `create_pull_request` safe output's `branch` field must
+be set to exactly `docs_work_branch`, and its `base` field must be set to exactly
 `effective_target_branch`.
 
 ## Step 4: Read the Pre-Computed User-Facing Signals
@@ -1372,6 +1382,12 @@ Ensure all changes follow the doc-writer skill guidelines from Step 7. Include:
 >   documentation edit to make — **stop drafting** and emit a single
 >   `notify_source_pr` with `result: "skipped"` whose `summary` explains that the
 >   signal was a false positive and lists the triggered signals. Do not loop.
+>
+> Before emitting the safe output, stage only the documentation paths you
+> intentionally edited. Never use `git add -A`, `git commit -a`, or include
+> runtime-only `.agents`, `.github`, `AGENTS.md`, `.mcp.json`,
+> `.pr-docs-check`, or `_repos` changes. The deterministic checkout helper also
+> hides those runtime files from Git as defense in depth.
 
 Create a draft pull request on `microsoft/aspire.dev` with:
 
@@ -1380,6 +1396,10 @@ Create a draft pull request on `microsoft/aspire.dev` with:
 `create_pull_request` safe output, set its `base` field to that exact string
 (for example, `release/13.3`, `release/13.2.1`, or `main`). Do not derive or
 modify this value.
+
+**Head branch**: the `docs_work_branch` value from
+`.pr-docs-check/target.json`. Set the safe output's `branch` field to that exact
+string. Do not derive, rename, or replace it.
 
 **Title**: A clear, concise title describing the documentation work
 (the `[docs]` prefix will be added automatically)
