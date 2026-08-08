@@ -169,7 +169,11 @@ internal sealed class VersionCheckService : BackgroundService
                 ? $"{latestVersion.Major}.{latestVersion.Minor}.{latestVersion.Patch}-*"
                 : latestVersion.ToString();
 
-            if (!_userSecretsManager.TrySetSecret(IgnoreVersionKey, ignoredVersion))
+            if (_userSecretsManager.IsAvailable)
+            {
+                _userSecretsManager.TrySetSecret(IgnoreVersionKey, ignoredVersion);
+            }
+            else
             {
                 _logger.LogWarning("Could not ignore the version update notification to {Version} because user secrets are not configured correctly. See https://aka.ms/aspire/user-secrets for more information.", latestVersion);
             }

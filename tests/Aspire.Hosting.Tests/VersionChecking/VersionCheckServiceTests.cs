@@ -354,16 +354,19 @@ public class VersionCheckServiceTests
         Assert.Equal("100.0.0", mockSecretsManager.Secrets[VersionCheckService.IgnoreVersionKey]);
     }
 
-    [Fact]
-    public async Task ExecuteAsync_IgnoreVersionWithoutUserSecrets_LogsWarning()
+    [Theory]
+    [InlineData(false, false, true)]
+    [InlineData(true, false, false)]
+    public async Task ExecuteAsync_IgnoreVersion_LogsWarningOnlyWhenUserSecretsUnavailable(bool isAvailable, bool canSetSecret, bool expectWarning)
     {
         var interactionService = new TestInteractionService();
         var packagesTcs = new TaskCompletionSource<List<NuGetPackage>>();
         var logger = new FakeLogger<VersionCheckService>();
+        var userSecretsManager = new MockUserSecretsManager(canSetSecret, isAvailable);
         var service = CreateVersionCheckService(
             interactionService: interactionService,
             packageFetcher: new TestPackageFetcher(packagesTcs.Task),
-            userSecretsManager: new MockUserSecretsManager(canSetSecret: false),
+            userSecretsManager: userSecretsManager,
             logger: logger);
 
         _ = service.StartAsync(CancellationToken.None);
@@ -375,8 +378,14 @@ public class VersionCheckServiceTests
 
         await service.ExecuteTask!.DefaultTimeout();
 
-        var warning = Assert.Single(logger.Collector.GetSnapshot(), log => log.Level == LogLevel.Warning);
-        Assert.Equal("Could not ignore the version update notification to 100.0.0 because user secrets are not configured correctly. See https://aka.ms/aspire/user-secrets for more information.", warning.Message);
+        var warnings = logger.Collector.GetSnapshot().Where(log => log.Level == LogLevel.Warning).ToList();
+        Assert.Equal(expectWarning ? 1 : 0, warnings.Count);
+        Assert.Equal(isAvailable ? 1 : 0, userSecretsManager.SetSecretCalls.Count(name => name == VersionCheckService.IgnoreVersionKey));
+
+        if (expectWarning)
+        {
+            Assert.Equal("Could not ignore the version update notification to 100.0.0 because user secrets are not configured correctly. See https://aka.ms/aspire/user-secrets for more information.", warnings[0].Message);
+        }
     }
 
     private static VersionCheckService CreateVersionCheckService(
