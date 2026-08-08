@@ -3,6 +3,23 @@
 'use strict';
 
 const path = require('path');
+const webpack = require('webpack');
+
+/**
+ * `src/testing/e2eStateFileBridge.ts` is a test control channel: it registers a wildcard debug
+ * adapter tracker, mirrors extension state to a file, and executes commands read from a file path
+ * supplied in an environment variable. `extension.ts` imports it unconditionally, so without this
+ * replacement the whole channel is bundled into the published extension and gated only by a runtime
+ * environment variable - which anyone able to set environment variables on the VS Code process can
+ * satisfy.
+ *
+ * Production is the mode `vscode:prepublish` builds in (`yarn package`), and therefore the mode
+ * every shipped VSIX is built in, so swapping in a no-op module there keeps the bridge out of the
+ * artifact entirely. Development and E2E bundles build with `mode: 'none'` and keep the real
+ * implementation, which is what the E2E runner drives.
+ */
+const e2eBridgeRequestPattern = /[\\/]testing[\\/]e2eStateFileBridge$/;
+const e2eBridgeProductionStub = path.resolve(__dirname, 'src', 'testing', 'e2eStateFileBridge.production.ts');
 
 //@ts-check
 /** @typedef {import('webpack').Configuration} WebpackConfig **/
@@ -49,4 +66,18 @@ const extensionConfig = {
     level: "log", // enables logging required for problem matchers
   },
 };
-module.exports = [ extensionConfig ];
+/**
+ * Exported as a function so the build can react to `--mode`. webpack calls this with the parsed CLI
+ * arguments, so `argv.mode` is 'production' for `yarn package` and undefined for `yarn compile`.
+ */
+module.exports = (_env, argv) => {
+  // A fresh array per call so repeated invocations cannot accumulate plugins on the shared config.
+  const plugins = argv && argv.mode === 'production'
+    ? [new webpack.NormalModuleReplacementPlugin(e2eBridgeRequestPattern, e2eBridgeProductionStub)]
+    : [];
+
+  return [ { ...extensionConfig, plugins } ];
+};
+
+module.exports.e2eBridgeRequestPattern = e2eBridgeRequestPattern;
+module.exports.e2eBridgeProductionStub = e2eBridgeProductionStub;
