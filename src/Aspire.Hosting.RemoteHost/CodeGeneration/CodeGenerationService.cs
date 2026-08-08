@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Aspire.TypeSystem;
 using Aspire.Hosting.RemoteHost.Diagnostics;
 using Microsoft.Extensions.Logging;
@@ -15,6 +16,7 @@ internal sealed class CodeGenerationService
 {
     private const string GetCapabilitiesMethodName = "getCapabilities";
     private const string GenerateCodeMethodName = "generateCode";
+    private const string ExportApiMethodName = "exportApi";
 
     private readonly JsonRpcAuthenticationState _authenticationState;
     private readonly AtsContextFactory _atsContextFactory;
@@ -246,6 +248,9 @@ internal sealed class CodeGenerationService
             var context = _atsContextFactory.GetContext();
             if (!string.IsNullOrWhiteSpace(assemblyName))
             {
+                // Scoped source generation must not use the API-export filter: its synthetic
+                // supporting capabilities are projection-only metadata and would otherwise become
+                // executable members in the generated SDK.
                 context = AtsContextFilter.FilterByExportingAssembliesWithReferences(context, [assemblyName]);
             }
 
@@ -266,6 +271,130 @@ internal sealed class CodeGenerationService
             }
             throw;
         }
+    }
+
+    /// <summary>
+    /// Exports the canonical API reference for the specified language and package.
+    /// </summary>
+    /// <param name="language">The target language (e.g., "TypeScript").</param>
+    /// <param name="packageName">The package to export documentation for.</param>
+    /// <param name="packageVersion">
+    /// The version label to record for <paramref name="packageName"/>. The caller owns its accuracy;
+    /// see <see cref="ApiReferenceExportOptions.PackageVersion"/>.
+    /// </param>
+    /// <returns>The language provider's API reference document, verbatim.</returns>
+    [JsonRpcMethod(ExportApiMethodName)]
+    public JsonElement ExportApi(string language, string packageName, string packageVersion)
+    {
+        using var rpcActivity = _profilingTelemetry.StartJsonRpcServerCall(ExportApiMethodName);
+        using var activity = _profilingTelemetry.StartCodeGenerationExportApi(language);
+        try
+        {
+            _authenticationState.ThrowIfNotAuthenticated();
+            ArgumentException.ThrowIfNullOrWhiteSpace(packageName);
+            ArgumentException.ThrowIfNullOrWhiteSpace(packageVersion);
+
+            _logger.LogDebug(">> exportApi({Language}, {PackageName}, {PackageVersion})", language, packageName, packageVersion);
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+
+            var generator = _resolver.GetCodeGenerator(language);
+            if (generator is null)
+            {
+                throw new ArgumentException(BuildNoCodeGeneratorMessage(language));
+            }
+
+            if (generator is not IApiReferenceExporter exporter)
+            {
+                throw new NotSupportedException(
+                    $"The '{generator.Language}' code generator does not implement {nameof(IApiReferenceExporter)}, " +
+                    "so it cannot produce an API reference export. " +
+                    $"Supported languages for API export: {BuildApiExportLanguageList()}.");
+            }
+
+            // Referenced handle capabilities determine wrapper and resource-union signatures.
+            // Keep only their projection support shape without publishing their API as part of this
+            // package.
+            var fullContext = _atsContextFactory.GetContext();
+
+            var exportingAssemblyNames = ResolvePackageExportingAssemblyNames(fullContext, packageName, out var canonicalPackageName);
+
+            var context = AtsContextFilter.FilterForApiExport(
+                fullContext,
+                exportingAssemblyNames);
+
+            var export = exporter.ExportApi(context, new ApiReferenceExportOptions(canonicalPackageName, packageVersion, exportingAssemblyNames));
+
+            _logger.LogDebug("<< exportApi({Language}, {PackageName}) completed in {ElapsedMs}ms", language, packageName, sw.ElapsedMilliseconds);
+
+            // Returned verbatim: the payload schema belongs to the language provider, and reshaping
+            // it here would silently fork the contract documentation consumers bind to.
+            return export;
+        }
+        catch (Exception ex)
+        {
+            activity.SetError(ex);
+            _logger.LogError(ex, "<< exportApi({Language}, {PackageName}) failed", language, packageName);
+            var wrapped = CodeGenerationDiagnosticBuilder.TryCreateRpcException(ex, _assemblyLoader, _logger);
+            if (wrapped is not null)
+            {
+                throw wrapped;
+            }
+            throw;
+        }
+    }
+
+    private IReadOnlyList<string> ResolvePackageExportingAssemblyNames(
+        AtsContext fullContext,
+        string packageName,
+        out string canonicalPackageName)
+    {
+        if (_assemblyLoader.TryGetRuntimeAssemblyNamesForPackage(packageName, out var manifestPackageName, out var manifestAssemblyNames))
+        {
+            var exportingAssemblyNames = new List<string>(manifestAssemblyNames.Count);
+            foreach (var assemblyName in manifestAssemblyNames)
+            {
+                if (AtsContextFilter.TryResolveCanonicalAssemblyName(fullContext, assemblyName, out var canonicalAssemblyName))
+                {
+                    exportingAssemblyNames.Add(canonicalAssemblyName);
+                }
+            }
+
+            if (exportingAssemblyNames.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    $"'{packageName}' restored, but none of its runtime assemblies reached the scanned API surface, so there is no API to export under it.");
+            }
+
+            canonicalPackageName = manifestPackageName;
+            return exportingAssemblyNames;
+        }
+
+        // A NuGet package id is case-insensitive
+        // (https://learn.microsoft.com/nuget/consume-packages/finding-and-choosing-packages#package-identifiers)
+        // but the exported document records this string verbatim as the identity consumers key
+        // on, so `aspire.hosting.redis` would publish a document naming a package nobody looks
+        // up. For local project references and older probe manifests we do not have package-to-
+        // assembly metadata, so the loaded assembly settles the spelling as before.
+        if (!AtsContextFilter.TryResolveCanonicalAssemblyName(fullContext, packageName, out var canonicalAssemblyNameFromContext))
+        {
+            throw new InvalidOperationException(
+                $"'{packageName}' restored, but the scanned API surface contains nothing under that name, so there is no API to export under it. " +
+                "An API export is scoped by assembly name, so this is what a package whose assembly is named something other than " +
+                "its package id looks like from here.");
+        }
+
+        canonicalPackageName = canonicalAssemblyNameFromContext;
+        return [canonicalAssemblyNameFromContext];
+    }
+
+    private string BuildApiExportLanguageList()
+    {
+        var exportable = _resolver.GetSupportedLanguages()
+            .Where(language => _resolver.GetApiReferenceExporter(language) is not null)
+            .OrderBy(language => language, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return exportable.Length == 0 ? "(none)" : string.Join(", ", exportable);
     }
 
     private string BuildNoCodeGeneratorMessage(string language)

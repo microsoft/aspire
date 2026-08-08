@@ -563,6 +563,68 @@ public class AtsCapabilityScannerTests
             AtsCapabilityScanner.MapToAtsTypeId(typeof(AssemblyLevelExportedTestType)));
     }
 
+    /// <summary>
+    /// The ownership map is merged while assemblies are scanned, before the capability filters run.
+    /// An assembly whose every capability is filtered out must not stay in it: the map's values are
+    /// what <c>AtsContextFilter.TryResolveCanonicalAssemblyName</c> resolves a requested package
+    /// against, so a stale entry lets <c>sdk export</c> resolve the package, filter to nothing, and
+    /// report success while publishing an empty API document.
+    /// </summary>
+    /// <remarks>
+    /// A method name collision is the reachable way to lose a capability after the map is built.
+    /// A capability whose parameter types do not map is skipped during discovery, so it never enters
+    /// the map in the first place; collisions are only detected once every assembly has been scanned.
+    /// Ordinal capability id order decides the loser, so the two assembly names are chosen to sort.
+    /// </remarks>
+    [Fact]
+    public void ScanAssemblies_CapabilityLostToACollision_DropsItsAssemblyFromExportingAssemblyNames()
+    {
+        var hostingAssembly = typeof(IDistributedApplicationBuilder).Assembly;
+        var winningAssembly = CreateCollidingCapabilityAssembly("AaaCollisionWinner", "collidingExport");
+        var losingAssembly = CreateCollidingCapabilityAssembly("ZzzCollisionLoser", "collidingExport");
+
+        var result = AtsCapabilityScanner.ScanAssemblies([hostingAssembly, winningAssembly, losingAssembly]);
+
+        var losingAssemblyName = losingAssembly.GetName().Name!;
+        var winningAssemblyName = winningAssembly.GetName().Name!;
+
+        Assert.Equal(
+            [winningAssemblyName],
+            result.Capabilities
+                .Where(c => c.CapabilityId.EndsWith("/collidingExport", StringComparison.Ordinal))
+                .Select(c => c.CapabilityId.Split('/')[0])
+                .Order(StringComparer.Ordinal));
+        Assert.Equal(
+            new[] { hostingAssembly.GetName().Name!, winningAssemblyName }.Order(StringComparer.Ordinal),
+            result.CapabilityExportingAssemblyNames.Values.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
+        Assert.Equal(
+            result.Capabilities.Select(c => c.CapabilityId).Order(StringComparer.Ordinal),
+            result.CapabilityExportingAssemblyNames.Keys.Order(StringComparer.Ordinal));
+    }
+
+    /// <summary>
+    /// The single-assembly scan path builds the same registries ahead of the same filters and prunes
+    /// them for the same reason, so every registry must describe exactly the capabilities it kept.
+    /// </summary>
+    /// <remarks>
+    /// This is an invariant guard rather than a reproduction. A capability id is
+    /// <c>package/methodName</c>, so two capabilities in one assembly cannot share a method name
+    /// without sharing an id, which makes an intra-assembly collision unremovable. The pruning this
+    /// asserts is reachable through <c>FilterInvalidCapabilities</c>, which both scan paths share.
+    /// </remarks>
+    [Fact]
+    public void ScanAssembly_PerCapabilityRegistriesDescribeExactlyTheSurvivingCapabilities()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(IDistributedApplicationBuilder).Assembly);
+
+        var survivingCapabilityIds = result.Capabilities.Select(c => c.CapabilityId).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
+
+        Assert.NotEmpty(survivingCapabilityIds);
+        Assert.Equal(survivingCapabilityIds, result.CapabilityExportingAssemblyNames.Keys.Order(StringComparer.Ordinal));
+        Assert.Empty(result.Methods.Keys.Except(survivingCapabilityIds, StringComparer.Ordinal));
+        Assert.Empty(result.Properties.Keys.Except(survivingCapabilityIds, StringComparer.Ordinal));
+    }
+
     [Fact]
     public void ScanAssembly_YarpWithConfiguration_UsesBackgroundThreadOptIn()
     {
@@ -955,6 +1017,36 @@ public class AtsCapabilityScannerTests
             [AspireValue("ConflictingValues", Name = "Child")]
             public static string ChildValue { get; } = "child";
         }
+    }
+
+    /// <summary>
+    /// Builds a dynamic assembly exporting a single capability under a caller-chosen method name, so
+    /// two of them can be made to collide on the same target.
+    /// </summary>
+    private static Assembly CreateCollidingCapabilityAssembly(string assemblyNamePrefix, string methodName)
+    {
+        var assemblyName = new AssemblyName($"{assemblyNamePrefix}_{Guid.NewGuid():N}");
+        var assemblyBuilder = AssemblyBuilder.DefineDynamicAssembly(assemblyName, AssemblyBuilderAccess.Run);
+        var moduleBuilder = assemblyBuilder.DefineDynamicModule(assemblyName.Name!);
+        var exportsTypeBuilder = moduleBuilder.DefineType(
+            "Generated.CollidingExports",
+            TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed);
+        var methodBuilder = exportsTypeBuilder.DefineMethod(
+            "Collides",
+            MethodAttributes.Public | MethodAttributes.Static,
+            typeof(void),
+            [typeof(IDistributedApplicationBuilder), typeof(string)]);
+        methodBuilder.DefineParameter(1, ParameterAttributes.None, "builder");
+        methodBuilder.DefineParameter(2, ParameterAttributes.None, "value");
+        methodBuilder.SetCustomAttribute(
+            new CustomAttributeBuilder(
+                typeof(AspireExportAttribute).GetConstructor([typeof(string)])!,
+                [methodName]));
+        methodBuilder.GetILGenerator().Emit(OpCodes.Ret);
+
+        _ = exportsTypeBuilder.CreateType();
+
+        return assemblyBuilder;
     }
 
     private static Assembly CreateAssemblyLevelExportCapabilityAssembly(Type parameterType)

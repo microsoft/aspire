@@ -1,0 +1,990 @@
+﻿// Aspire.Hosting.CodeGeneration.TypeScript.Tests:augment:CSharpAppResource
+export interface CSharpAppResource {
+    withOptionalString(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalStringOptions): CSharpAppResourcePromise;
+    withConfig(config: TestConfigDto): CSharpAppResourcePromise;
+    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): CSharpAppResourcePromise;
+    withCreatedAt(createdAt: string): CSharpAppResourcePromise;
+    withModifiedAt(modifiedAt: string): CSharpAppResourcePromise;
+    withCorrelationId(correlationId: string): CSharpAppResourcePromise;
+    withOptionalCallback(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalCallbackOptions): CSharpAppResourcePromise;
+    withStatus(status: TestResourceStatus): CSharpAppResourcePromise;
+    withNestedConfig(config: TestNestedDto): CSharpAppResourcePromise;
+    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): CSharpAppResourcePromise;
+    testWaitFor(dependency: Awaitable<CSharpAppResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): CSharpAppResourcePromise;
+    withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): CSharpAppResourcePromise;
+    withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): CSharpAppResourcePromise;
+    withEndpoints(endpoints: string[]): CSharpAppResourcePromise;
+    withEnvironmentVariables(variables: Record<string, string>): CSharpAppResourcePromise;
+    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): CSharpAppResourcePromise;
+    withMergeLabel(label: string): CSharpAppResourcePromise;
+    withMergeLabelCategorized(label: string, category: string): CSharpAppResourcePromise;
+    withMergeEndpoint(endpointName: string, port: number): CSharpAppResourcePromise;
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): CSharpAppResourcePromise;
+    withMergeLogging(logLevel: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingOptions): CSharpAppResourcePromise;
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingPathOptions): CSharpAppResourcePromise;
+    withMergeRoute(path: string, method: string, handler: string, priority: number): CSharpAppResourcePromise;
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): CSharpAppResourcePromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:augment:CSharpAppResourcePromise
+export interface CSharpAppResourcePromise {
+    withOptionalString(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalStringOptions): CSharpAppResourcePromise;
+    withConfig(config: TestConfigDto): CSharpAppResourcePromise;
+    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): CSharpAppResourcePromise;
+    withCreatedAt(createdAt: string): CSharpAppResourcePromise;
+    withModifiedAt(modifiedAt: string): CSharpAppResourcePromise;
+    withCorrelationId(correlationId: string): CSharpAppResourcePromise;
+    withOptionalCallback(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalCallbackOptions): CSharpAppResourcePromise;
+    withStatus(status: TestResourceStatus): CSharpAppResourcePromise;
+    withNestedConfig(config: TestNestedDto): CSharpAppResourcePromise;
+    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): CSharpAppResourcePromise;
+    testWaitFor(dependency: Awaitable<CSharpAppResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): CSharpAppResourcePromise;
+    withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): CSharpAppResourcePromise;
+    withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): CSharpAppResourcePromise;
+    withEndpoints(endpoints: string[]): CSharpAppResourcePromise;
+    withEnvironmentVariables(variables: Record<string, string>): CSharpAppResourcePromise;
+    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): CSharpAppResourcePromise;
+    withMergeLabel(label: string): CSharpAppResourcePromise;
+    withMergeLabelCategorized(label: string, category: string): CSharpAppResourcePromise;
+    withMergeEndpoint(endpointName: string, port: number): CSharpAppResourcePromise;
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): CSharpAppResourcePromise;
+    withMergeLogging(logLevel: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingOptions): CSharpAppResourcePromise;
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingPathOptions): CSharpAppResourcePromise;
+    withMergeRoute(path: string, method: string, handler: string, priority: number): CSharpAppResourcePromise;
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): CSharpAppResourcePromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:augment:ContainerRegistryResource
+export interface ContainerRegistryResource {
+    withOptionalString(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalStringOptions): ContainerRegistryResourcePromise;
+    withConfig(config: TestConfigDto): ContainerRegistryResourcePromise;
+    withCreatedAt(createdAt: string): ContainerRegistryResourcePromise;
+    withModifiedAt(modifiedAt: string): ContainerRegistryResourcePromise;
+    withCorrelationId(correlationId: string): ContainerRegistryResourcePromise;
+    withOptionalCallback(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalCallbackOptions): ContainerRegistryResourcePromise;
+    withStatus(status: TestResourceStatus): ContainerRegistryResourcePromise;
+    withNestedConfig(config: TestNestedDto): ContainerRegistryResourcePromise;
+    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ContainerRegistryResourcePromise;
+    testWaitFor(dependency: Awaitable<CSharpAppResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ContainerRegistryResourcePromise;
+    withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): ContainerRegistryResourcePromise;
+    withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): ContainerRegistryResourcePromise;
+    withEndpoints(endpoints: string[]): ContainerRegistryResourcePromise;
+    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ContainerRegistryResourcePromise;
+    withMergeLabel(label: string): ContainerRegistryResourcePromise;
+    withMergeLabelCategorized(label: string, category: string): ContainerRegistryResourcePromise;
+    withMergeEndpoint(endpointName: string, port: number): ContainerRegistryResourcePromise;
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ContainerRegistryResourcePromise;
+    withMergeLogging(logLevel: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingOptions): ContainerRegistryResourcePromise;
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingPathOptions): ContainerRegistryResourcePromise;
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ContainerRegistryResourcePromise;
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ContainerRegistryResourcePromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:augment:ContainerRegistryResourcePromise
+export interface ContainerRegistryResourcePromise {
+    withOptionalString(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalStringOptions): ContainerRegistryResourcePromise;
+    withConfig(config: TestConfigDto): ContainerRegistryResourcePromise;
+    withCreatedAt(createdAt: string): ContainerRegistryResourcePromise;
+    withModifiedAt(modifiedAt: string): ContainerRegistryResourcePromise;
+    withCorrelationId(correlationId: string): ContainerRegistryResourcePromise;
+    withOptionalCallback(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalCallbackOptions): ContainerRegistryResourcePromise;
+    withStatus(status: TestResourceStatus): ContainerRegistryResourcePromise;
+    withNestedConfig(config: TestNestedDto): ContainerRegistryResourcePromise;
+    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ContainerRegistryResourcePromise;
+    testWaitFor(dependency: Awaitable<CSharpAppResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ContainerRegistryResourcePromise;
+    withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): ContainerRegistryResourcePromise;
+    withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): ContainerRegistryResourcePromise;
+    withEndpoints(endpoints: string[]): ContainerRegistryResourcePromise;
+    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ContainerRegistryResourcePromise;
+    withMergeLabel(label: string): ContainerRegistryResourcePromise;
+    withMergeLabelCategorized(label: string, category: string): ContainerRegistryResourcePromise;
+    withMergeEndpoint(endpointName: string, port: number): ContainerRegistryResourcePromise;
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ContainerRegistryResourcePromise;
+    withMergeLogging(logLevel: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingOptions): ContainerRegistryResourcePromise;
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingPathOptions): ContainerRegistryResourcePromise;
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ContainerRegistryResourcePromise;
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ContainerRegistryResourcePromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:augment:ContainerResource
+export interface ContainerResource {
+    withOptionalString(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalStringOptions): ContainerResourcePromise;
+    withConfig(config: TestConfigDto): ContainerResourcePromise;
+    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): ContainerResourcePromise;
+    withCreatedAt(createdAt: string): ContainerResourcePromise;
+    withModifiedAt(modifiedAt: string): ContainerResourcePromise;
+    withCorrelationId(correlationId: string): ContainerResourcePromise;
+    withOptionalCallback(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalCallbackOptions): ContainerResourcePromise;
+    withStatus(status: TestResourceStatus): ContainerResourcePromise;
+    withNestedConfig(config: TestNestedDto): ContainerResourcePromise;
+    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ContainerResourcePromise;
+    testWaitFor(dependency: Awaitable<CSharpAppResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ContainerResourcePromise;
+    withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): ContainerResourcePromise;
+    withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): ContainerResourcePromise;
+    withEndpoints(endpoints: string[]): ContainerResourcePromise;
+    withEnvironmentVariables(variables: Record<string, string>): ContainerResourcePromise;
+    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ContainerResourcePromise;
+    withMergeLabel(label: string): ContainerResourcePromise;
+    withMergeLabelCategorized(label: string, category: string): ContainerResourcePromise;
+    withMergeEndpoint(endpointName: string, port: number): ContainerResourcePromise;
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ContainerResourcePromise;
+    withMergeLogging(logLevel: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingOptions): ContainerResourcePromise;
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingPathOptions): ContainerResourcePromise;
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ContainerResourcePromise;
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ContainerResourcePromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:augment:ContainerResourcePromise
+export interface ContainerResourcePromise {
+    withOptionalString(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalStringOptions): ContainerResourcePromise;
+    withConfig(config: TestConfigDto): ContainerResourcePromise;
+    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): ContainerResourcePromise;
+    withCreatedAt(createdAt: string): ContainerResourcePromise;
+    withModifiedAt(modifiedAt: string): ContainerResourcePromise;
+    withCorrelationId(correlationId: string): ContainerResourcePromise;
+    withOptionalCallback(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalCallbackOptions): ContainerResourcePromise;
+    withStatus(status: TestResourceStatus): ContainerResourcePromise;
+    withNestedConfig(config: TestNestedDto): ContainerResourcePromise;
+    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ContainerResourcePromise;
+    testWaitFor(dependency: Awaitable<CSharpAppResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ContainerResourcePromise;
+    withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): ContainerResourcePromise;
+    withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): ContainerResourcePromise;
+    withEndpoints(endpoints: string[]): ContainerResourcePromise;
+    withEnvironmentVariables(variables: Record<string, string>): ContainerResourcePromise;
+    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ContainerResourcePromise;
+    withMergeLabel(label: string): ContainerResourcePromise;
+    withMergeLabelCategorized(label: string, category: string): ContainerResourcePromise;
+    withMergeEndpoint(endpointName: string, port: number): ContainerResourcePromise;
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ContainerResourcePromise;
+    withMergeLogging(logLevel: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingOptions): ContainerResourcePromise;
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingPathOptions): ContainerResourcePromise;
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ContainerResourcePromise;
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ContainerResourcePromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:augment:DistributedApplicationBuilder
+export interface DistributedApplicationBuilder {
+    addTestRedis(name: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsAddTestRedisOptions): TestRedisResourcePromise;
+    addTestVault(name: string): TestVaultResourcePromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:augment:DistributedApplicationBuilderPromise
+export interface DistributedApplicationBuilderPromise {
+    addTestRedis(name: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsAddTestRedisOptions): TestRedisResourcePromise;
+    addTestVault(name: string): TestVaultResourcePromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:augment:DotnetToolResource
+export interface DotnetToolResource {
+    withOptionalString(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalStringOptions): DotnetToolResourcePromise;
+    withConfig(config: TestConfigDto): DotnetToolResourcePromise;
+    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): DotnetToolResourcePromise;
+    withCreatedAt(createdAt: string): DotnetToolResourcePromise;
+    withModifiedAt(modifiedAt: string): DotnetToolResourcePromise;
+    withCorrelationId(correlationId: string): DotnetToolResourcePromise;
+    withOptionalCallback(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalCallbackOptions): DotnetToolResourcePromise;
+    withStatus(status: TestResourceStatus): DotnetToolResourcePromise;
+    withNestedConfig(config: TestNestedDto): DotnetToolResourcePromise;
+    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): DotnetToolResourcePromise;
+    testWaitFor(dependency: Awaitable<CSharpAppResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): DotnetToolResourcePromise;
+    withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): DotnetToolResourcePromise;
+    withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): DotnetToolResourcePromise;
+    withEndpoints(endpoints: string[]): DotnetToolResourcePromise;
+    withEnvironmentVariables(variables: Record<string, string>): DotnetToolResourcePromise;
+    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): DotnetToolResourcePromise;
+    withMergeLabel(label: string): DotnetToolResourcePromise;
+    withMergeLabelCategorized(label: string, category: string): DotnetToolResourcePromise;
+    withMergeEndpoint(endpointName: string, port: number): DotnetToolResourcePromise;
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): DotnetToolResourcePromise;
+    withMergeLogging(logLevel: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingOptions): DotnetToolResourcePromise;
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingPathOptions): DotnetToolResourcePromise;
+    withMergeRoute(path: string, method: string, handler: string, priority: number): DotnetToolResourcePromise;
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): DotnetToolResourcePromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:augment:DotnetToolResourcePromise
+export interface DotnetToolResourcePromise {
+    withOptionalString(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalStringOptions): DotnetToolResourcePromise;
+    withConfig(config: TestConfigDto): DotnetToolResourcePromise;
+    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): DotnetToolResourcePromise;
+    withCreatedAt(createdAt: string): DotnetToolResourcePromise;
+    withModifiedAt(modifiedAt: string): DotnetToolResourcePromise;
+    withCorrelationId(correlationId: string): DotnetToolResourcePromise;
+    withOptionalCallback(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalCallbackOptions): DotnetToolResourcePromise;
+    withStatus(status: TestResourceStatus): DotnetToolResourcePromise;
+    withNestedConfig(config: TestNestedDto): DotnetToolResourcePromise;
+    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): DotnetToolResourcePromise;
+    testWaitFor(dependency: Awaitable<CSharpAppResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): DotnetToolResourcePromise;
+    withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): DotnetToolResourcePromise;
+    withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): DotnetToolResourcePromise;
+    withEndpoints(endpoints: string[]): DotnetToolResourcePromise;
+    withEnvironmentVariables(variables: Record<string, string>): DotnetToolResourcePromise;
+    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): DotnetToolResourcePromise;
+    withMergeLabel(label: string): DotnetToolResourcePromise;
+    withMergeLabelCategorized(label: string, category: string): DotnetToolResourcePromise;
+    withMergeEndpoint(endpointName: string, port: number): DotnetToolResourcePromise;
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): DotnetToolResourcePromise;
+    withMergeLogging(logLevel: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingOptions): DotnetToolResourcePromise;
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingPathOptions): DotnetToolResourcePromise;
+    withMergeRoute(path: string, method: string, handler: string, priority: number): DotnetToolResourcePromise;
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): DotnetToolResourcePromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:augment:ExecutableResource
+export interface ExecutableResource {
+    withOptionalString(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalStringOptions): ExecutableResourcePromise;
+    withConfig(config: TestConfigDto): ExecutableResourcePromise;
+    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): ExecutableResourcePromise;
+    withCreatedAt(createdAt: string): ExecutableResourcePromise;
+    withModifiedAt(modifiedAt: string): ExecutableResourcePromise;
+    withCorrelationId(correlationId: string): ExecutableResourcePromise;
+    withOptionalCallback(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalCallbackOptions): ExecutableResourcePromise;
+    withStatus(status: TestResourceStatus): ExecutableResourcePromise;
+    withNestedConfig(config: TestNestedDto): ExecutableResourcePromise;
+    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ExecutableResourcePromise;
+    testWaitFor(dependency: Awaitable<CSharpAppResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ExecutableResourcePromise;
+    withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): ExecutableResourcePromise;
+    withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): ExecutableResourcePromise;
+    withEndpoints(endpoints: string[]): ExecutableResourcePromise;
+    withEnvironmentVariables(variables: Record<string, string>): ExecutableResourcePromise;
+    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ExecutableResourcePromise;
+    withMergeLabel(label: string): ExecutableResourcePromise;
+    withMergeLabelCategorized(label: string, category: string): ExecutableResourcePromise;
+    withMergeEndpoint(endpointName: string, port: number): ExecutableResourcePromise;
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ExecutableResourcePromise;
+    withMergeLogging(logLevel: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingOptions): ExecutableResourcePromise;
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingPathOptions): ExecutableResourcePromise;
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ExecutableResourcePromise;
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ExecutableResourcePromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:augment:ExecutableResourcePromise
+export interface ExecutableResourcePromise {
+    withOptionalString(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalStringOptions): ExecutableResourcePromise;
+    withConfig(config: TestConfigDto): ExecutableResourcePromise;
+    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): ExecutableResourcePromise;
+    withCreatedAt(createdAt: string): ExecutableResourcePromise;
+    withModifiedAt(modifiedAt: string): ExecutableResourcePromise;
+    withCorrelationId(correlationId: string): ExecutableResourcePromise;
+    withOptionalCallback(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalCallbackOptions): ExecutableResourcePromise;
+    withStatus(status: TestResourceStatus): ExecutableResourcePromise;
+    withNestedConfig(config: TestNestedDto): ExecutableResourcePromise;
+    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ExecutableResourcePromise;
+    testWaitFor(dependency: Awaitable<CSharpAppResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ExecutableResourcePromise;
+    withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): ExecutableResourcePromise;
+    withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): ExecutableResourcePromise;
+    withEndpoints(endpoints: string[]): ExecutableResourcePromise;
+    withEnvironmentVariables(variables: Record<string, string>): ExecutableResourcePromise;
+    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ExecutableResourcePromise;
+    withMergeLabel(label: string): ExecutableResourcePromise;
+    withMergeLabelCategorized(label: string, category: string): ExecutableResourcePromise;
+    withMergeEndpoint(endpointName: string, port: number): ExecutableResourcePromise;
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ExecutableResourcePromise;
+    withMergeLogging(logLevel: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingOptions): ExecutableResourcePromise;
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingPathOptions): ExecutableResourcePromise;
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ExecutableResourcePromise;
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ExecutableResourcePromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:augment:ExternalServiceResource
+export interface ExternalServiceResource {
+    withOptionalString(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalStringOptions): ExternalServiceResourcePromise;
+    withConfig(config: TestConfigDto): ExternalServiceResourcePromise;
+    withCreatedAt(createdAt: string): ExternalServiceResourcePromise;
+    withModifiedAt(modifiedAt: string): ExternalServiceResourcePromise;
+    withCorrelationId(correlationId: string): ExternalServiceResourcePromise;
+    withOptionalCallback(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalCallbackOptions): ExternalServiceResourcePromise;
+    withStatus(status: TestResourceStatus): ExternalServiceResourcePromise;
+    withNestedConfig(config: TestNestedDto): ExternalServiceResourcePromise;
+    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ExternalServiceResourcePromise;
+    testWaitFor(dependency: Awaitable<CSharpAppResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ExternalServiceResourcePromise;
+    withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): ExternalServiceResourcePromise;
+    withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): ExternalServiceResourcePromise;
+    withEndpoints(endpoints: string[]): ExternalServiceResourcePromise;
+    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ExternalServiceResourcePromise;
+    withMergeLabel(label: string): ExternalServiceResourcePromise;
+    withMergeLabelCategorized(label: string, category: string): ExternalServiceResourcePromise;
+    withMergeEndpoint(endpointName: string, port: number): ExternalServiceResourcePromise;
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ExternalServiceResourcePromise;
+    withMergeLogging(logLevel: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingOptions): ExternalServiceResourcePromise;
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingPathOptions): ExternalServiceResourcePromise;
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ExternalServiceResourcePromise;
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ExternalServiceResourcePromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:augment:ExternalServiceResourcePromise
+export interface ExternalServiceResourcePromise {
+    withOptionalString(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalStringOptions): ExternalServiceResourcePromise;
+    withConfig(config: TestConfigDto): ExternalServiceResourcePromise;
+    withCreatedAt(createdAt: string): ExternalServiceResourcePromise;
+    withModifiedAt(modifiedAt: string): ExternalServiceResourcePromise;
+    withCorrelationId(correlationId: string): ExternalServiceResourcePromise;
+    withOptionalCallback(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalCallbackOptions): ExternalServiceResourcePromise;
+    withStatus(status: TestResourceStatus): ExternalServiceResourcePromise;
+    withNestedConfig(config: TestNestedDto): ExternalServiceResourcePromise;
+    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ExternalServiceResourcePromise;
+    testWaitFor(dependency: Awaitable<CSharpAppResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ExternalServiceResourcePromise;
+    withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): ExternalServiceResourcePromise;
+    withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): ExternalServiceResourcePromise;
+    withEndpoints(endpoints: string[]): ExternalServiceResourcePromise;
+    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ExternalServiceResourcePromise;
+    withMergeLabel(label: string): ExternalServiceResourcePromise;
+    withMergeLabelCategorized(label: string, category: string): ExternalServiceResourcePromise;
+    withMergeEndpoint(endpointName: string, port: number): ExternalServiceResourcePromise;
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ExternalServiceResourcePromise;
+    withMergeLogging(logLevel: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingOptions): ExternalServiceResourcePromise;
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingPathOptions): ExternalServiceResourcePromise;
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ExternalServiceResourcePromise;
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ExternalServiceResourcePromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:augment:ParameterResource
+export interface ParameterResource {
+    withOptionalString(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalStringOptions): ParameterResourcePromise;
+    withConfig(config: TestConfigDto): ParameterResourcePromise;
+    withCreatedAt(createdAt: string): ParameterResourcePromise;
+    withModifiedAt(modifiedAt: string): ParameterResourcePromise;
+    withCorrelationId(correlationId: string): ParameterResourcePromise;
+    withOptionalCallback(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalCallbackOptions): ParameterResourcePromise;
+    withStatus(status: TestResourceStatus): ParameterResourcePromise;
+    withNestedConfig(config: TestNestedDto): ParameterResourcePromise;
+    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ParameterResourcePromise;
+    testWaitFor(dependency: Awaitable<CSharpAppResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ParameterResourcePromise;
+    withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): ParameterResourcePromise;
+    withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): ParameterResourcePromise;
+    withEndpoints(endpoints: string[]): ParameterResourcePromise;
+    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ParameterResourcePromise;
+    withMergeLabel(label: string): ParameterResourcePromise;
+    withMergeLabelCategorized(label: string, category: string): ParameterResourcePromise;
+    withMergeEndpoint(endpointName: string, port: number): ParameterResourcePromise;
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ParameterResourcePromise;
+    withMergeLogging(logLevel: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingOptions): ParameterResourcePromise;
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingPathOptions): ParameterResourcePromise;
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ParameterResourcePromise;
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ParameterResourcePromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:augment:ParameterResourcePromise
+export interface ParameterResourcePromise {
+    withOptionalString(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalStringOptions): ParameterResourcePromise;
+    withConfig(config: TestConfigDto): ParameterResourcePromise;
+    withCreatedAt(createdAt: string): ParameterResourcePromise;
+    withModifiedAt(modifiedAt: string): ParameterResourcePromise;
+    withCorrelationId(correlationId: string): ParameterResourcePromise;
+    withOptionalCallback(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalCallbackOptions): ParameterResourcePromise;
+    withStatus(status: TestResourceStatus): ParameterResourcePromise;
+    withNestedConfig(config: TestNestedDto): ParameterResourcePromise;
+    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ParameterResourcePromise;
+    testWaitFor(dependency: Awaitable<CSharpAppResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ParameterResourcePromise;
+    withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): ParameterResourcePromise;
+    withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): ParameterResourcePromise;
+    withEndpoints(endpoints: string[]): ParameterResourcePromise;
+    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ParameterResourcePromise;
+    withMergeLabel(label: string): ParameterResourcePromise;
+    withMergeLabelCategorized(label: string, category: string): ParameterResourcePromise;
+    withMergeEndpoint(endpointName: string, port: number): ParameterResourcePromise;
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ParameterResourcePromise;
+    withMergeLogging(logLevel: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingOptions): ParameterResourcePromise;
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingPathOptions): ParameterResourcePromise;
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ParameterResourcePromise;
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ParameterResourcePromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:augment:ProjectResource
+export interface ProjectResource {
+    withOptionalString(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalStringOptions): ProjectResourcePromise;
+    withConfig(config: TestConfigDto): ProjectResourcePromise;
+    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): ProjectResourcePromise;
+    withCreatedAt(createdAt: string): ProjectResourcePromise;
+    withModifiedAt(modifiedAt: string): ProjectResourcePromise;
+    withCorrelationId(correlationId: string): ProjectResourcePromise;
+    withOptionalCallback(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalCallbackOptions): ProjectResourcePromise;
+    withStatus(status: TestResourceStatus): ProjectResourcePromise;
+    withNestedConfig(config: TestNestedDto): ProjectResourcePromise;
+    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ProjectResourcePromise;
+    testWaitFor(dependency: Awaitable<CSharpAppResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ProjectResourcePromise;
+    withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): ProjectResourcePromise;
+    withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): ProjectResourcePromise;
+    withEndpoints(endpoints: string[]): ProjectResourcePromise;
+    withEnvironmentVariables(variables: Record<string, string>): ProjectResourcePromise;
+    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ProjectResourcePromise;
+    withMergeLabel(label: string): ProjectResourcePromise;
+    withMergeLabelCategorized(label: string, category: string): ProjectResourcePromise;
+    withMergeEndpoint(endpointName: string, port: number): ProjectResourcePromise;
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ProjectResourcePromise;
+    withMergeLogging(logLevel: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingOptions): ProjectResourcePromise;
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingPathOptions): ProjectResourcePromise;
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ProjectResourcePromise;
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ProjectResourcePromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:augment:ProjectResourcePromise
+export interface ProjectResourcePromise {
+    withOptionalString(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalStringOptions): ProjectResourcePromise;
+    withConfig(config: TestConfigDto): ProjectResourcePromise;
+    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): ProjectResourcePromise;
+    withCreatedAt(createdAt: string): ProjectResourcePromise;
+    withModifiedAt(modifiedAt: string): ProjectResourcePromise;
+    withCorrelationId(correlationId: string): ProjectResourcePromise;
+    withOptionalCallback(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalCallbackOptions): ProjectResourcePromise;
+    withStatus(status: TestResourceStatus): ProjectResourcePromise;
+    withNestedConfig(config: TestNestedDto): ProjectResourcePromise;
+    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ProjectResourcePromise;
+    testWaitFor(dependency: Awaitable<CSharpAppResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ProjectResourcePromise;
+    withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): ProjectResourcePromise;
+    withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): ProjectResourcePromise;
+    withEndpoints(endpoints: string[]): ProjectResourcePromise;
+    withEnvironmentVariables(variables: Record<string, string>): ProjectResourcePromise;
+    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ProjectResourcePromise;
+    withMergeLabel(label: string): ProjectResourcePromise;
+    withMergeLabelCategorized(label: string, category: string): ProjectResourcePromise;
+    withMergeEndpoint(endpointName: string, port: number): ProjectResourcePromise;
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ProjectResourcePromise;
+    withMergeLogging(logLevel: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingOptions): ProjectResourcePromise;
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingPathOptions): ProjectResourcePromise;
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ProjectResourcePromise;
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ProjectResourcePromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:augment:Resource
+export interface Resource {
+    withOptionalString(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalStringOptions): ResourcePromise;
+    withConfig(config: TestConfigDto): ResourcePromise;
+    withCreatedAt(createdAt: string): ResourcePromise;
+    withModifiedAt(modifiedAt: string): ResourcePromise;
+    withCorrelationId(correlationId: string): ResourcePromise;
+    withOptionalCallback(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalCallbackOptions): ResourcePromise;
+    withStatus(status: TestResourceStatus): ResourcePromise;
+    withNestedConfig(config: TestNestedDto): ResourcePromise;
+    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ResourcePromise;
+    testWaitFor(dependency: Awaitable<CSharpAppResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ResourcePromise;
+    withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): ResourcePromise;
+    withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): ResourcePromise;
+    withEndpoints(endpoints: string[]): ResourcePromise;
+    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ResourcePromise;
+    withMergeLabel(label: string): ResourcePromise;
+    withMergeLabelCategorized(label: string, category: string): ResourcePromise;
+    withMergeEndpoint(endpointName: string, port: number): ResourcePromise;
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ResourcePromise;
+    withMergeLogging(logLevel: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingOptions): ResourcePromise;
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingPathOptions): ResourcePromise;
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ResourcePromise;
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ResourcePromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:augment:ResourcePromise
+export interface ResourcePromise {
+    withOptionalString(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalStringOptions): ResourcePromise;
+    withConfig(config: TestConfigDto): ResourcePromise;
+    withCreatedAt(createdAt: string): ResourcePromise;
+    withModifiedAt(modifiedAt: string): ResourcePromise;
+    withCorrelationId(correlationId: string): ResourcePromise;
+    withOptionalCallback(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalCallbackOptions): ResourcePromise;
+    withStatus(status: TestResourceStatus): ResourcePromise;
+    withNestedConfig(config: TestNestedDto): ResourcePromise;
+    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ResourcePromise;
+    testWaitFor(dependency: Awaitable<CSharpAppResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ResourcePromise;
+    withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): ResourcePromise;
+    withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): ResourcePromise;
+    withEndpoints(endpoints: string[]): ResourcePromise;
+    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ResourcePromise;
+    withMergeLabel(label: string): ResourcePromise;
+    withMergeLabelCategorized(label: string, category: string): ResourcePromise;
+    withMergeEndpoint(endpointName: string, port: number): ResourcePromise;
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ResourcePromise;
+    withMergeLogging(logLevel: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingOptions): ResourcePromise;
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingPathOptions): ResourcePromise;
+    withMergeRoute(path: string, method: string, handler: string, priority: number): ResourcePromise;
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ResourcePromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:augment:ResourceWithConnectionString
+export interface ResourceWithConnectionString {
+    withConnectionString(connectionString: ReferenceExpression): ResourceWithConnectionStringPromise;
+    withConnectionStringDirect(connectionString: string): ResourceWithConnectionStringPromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:augment:ResourceWithConnectionStringPromise
+export interface ResourceWithConnectionStringPromise {
+    withConnectionString(connectionString: ReferenceExpression): ResourceWithConnectionStringPromise;
+    withConnectionStringDirect(connectionString: string): ResourceWithConnectionStringPromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:augment:ResourceWithEnvironment
+export interface ResourceWithEnvironment {
+    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): ResourceWithEnvironmentPromise;
+    withEnvironmentVariables(variables: Record<string, string>): ResourceWithEnvironmentPromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:augment:ResourceWithEnvironmentPromise
+export interface ResourceWithEnvironmentPromise {
+    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): ResourceWithEnvironmentPromise;
+    withEnvironmentVariables(variables: Record<string, string>): ResourceWithEnvironmentPromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:dto:TestConfigDto
+export interface TestConfigDto {
+    name?: string;
+    port?: number;
+    enabled?: boolean;
+    optionalField?: string | null;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:dto:TestDeeplyNestedDto
+export interface TestDeeplyNestedDto {
+    nestedData?: Record<string, TestConfigDto[]>;
+    metadataArray?: Record<string, string>[];
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:dto:TestNestedDto
+export interface TestNestedDto {
+    id?: string;
+    config?: TestConfigDto;
+    tags?: string[];
+    counts?: Record<string, number>;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:enum:TestPersistenceMode
+export enum TestPersistenceMode {
+    None = "None",
+    Volume = "Volume",
+    Bind = "Bind",
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:enum:TestResourceStatus
+export enum TestResourceStatus {
+    Pending = "Pending",
+    Running = "Running",
+    Stopped = "Stopped",
+    Failed = "Failed",
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:handle:ITestVaultResourceHandle
+export type ITestVaultResourceHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestVaultResource'>;
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:interface:TestCallbackContext
+export interface TestCallbackContext {
+    toJSON(): MarshalledHandle;
+    name: { get: () => Promise<string | null>; set: (value: string | null) => Promise<void> };
+    value: { get: () => Promise<number>; set: (value: number) => Promise<void> };
+    cancellationToken: { get: () => Promise<CancellationToken>; set: (value: AbortSignal | CancellationToken) => Promise<void> };
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:interface:TestCollectionContext
+export interface TestCollectionContext {
+    toJSON(): MarshalledHandle;
+    items(): Promise<AspireList<string>>;
+    metadata(): Promise<AspireDict<string, string>>;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:interface:TestCollectionContextPromise
+export interface TestCollectionContextPromise extends PromiseLike<TestCollectionContext> {
+    items(): Promise<AspireList<string>>;
+    metadata(): Promise<AspireDict<string, string>>;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:interface:TestDatabaseResource
+export interface TestDatabaseResource extends ResourceBuilderBase {
+    toJSON(): MarshalledHandle;
+    withOptionalString(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalStringOptions): TestDatabaseResourcePromise;
+    withConfig(config: TestConfigDto): TestDatabaseResourcePromise;
+    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestDatabaseResourcePromise;
+    withCreatedAt(createdAt: string): TestDatabaseResourcePromise;
+    withModifiedAt(modifiedAt: string): TestDatabaseResourcePromise;
+    withCorrelationId(correlationId: string): TestDatabaseResourcePromise;
+    withOptionalCallback(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalCallbackOptions): TestDatabaseResourcePromise;
+    withStatus(status: TestResourceStatus): TestDatabaseResourcePromise;
+    withNestedConfig(config: TestNestedDto): TestDatabaseResourcePromise;
+    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestDatabaseResourcePromise;
+    testWaitFor(dependency: Awaitable<CSharpAppResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
+    withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestDatabaseResourcePromise;
+    withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestDatabaseResourcePromise;
+    withEndpoints(endpoints: string[]): TestDatabaseResourcePromise;
+    withEnvironmentVariables(variables: Record<string, string>): TestDatabaseResourcePromise;
+    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestDatabaseResourcePromise;
+    withMergeLabel(label: string): TestDatabaseResourcePromise;
+    withMergeLabelCategorized(label: string, category: string): TestDatabaseResourcePromise;
+    withMergeEndpoint(endpointName: string, port: number): TestDatabaseResourcePromise;
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestDatabaseResourcePromise;
+    withMergeLogging(logLevel: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingOptions): TestDatabaseResourcePromise;
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingPathOptions): TestDatabaseResourcePromise;
+    withMergeRoute(path: string, method: string, handler: string, priority: number): TestDatabaseResourcePromise;
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestDatabaseResourcePromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:interface:TestDatabaseResourcePromise
+export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseResource> {
+    withOptionalString(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalStringOptions): TestDatabaseResourcePromise;
+    withConfig(config: TestConfigDto): TestDatabaseResourcePromise;
+    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestDatabaseResourcePromise;
+    withCreatedAt(createdAt: string): TestDatabaseResourcePromise;
+    withModifiedAt(modifiedAt: string): TestDatabaseResourcePromise;
+    withCorrelationId(correlationId: string): TestDatabaseResourcePromise;
+    withOptionalCallback(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalCallbackOptions): TestDatabaseResourcePromise;
+    withStatus(status: TestResourceStatus): TestDatabaseResourcePromise;
+    withNestedConfig(config: TestNestedDto): TestDatabaseResourcePromise;
+    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestDatabaseResourcePromise;
+    testWaitFor(dependency: Awaitable<CSharpAppResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
+    withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestDatabaseResourcePromise;
+    withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestDatabaseResourcePromise;
+    withEndpoints(endpoints: string[]): TestDatabaseResourcePromise;
+    withEnvironmentVariables(variables: Record<string, string>): TestDatabaseResourcePromise;
+    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestDatabaseResourcePromise;
+    withMergeLabel(label: string): TestDatabaseResourcePromise;
+    withMergeLabelCategorized(label: string, category: string): TestDatabaseResourcePromise;
+    withMergeEndpoint(endpointName: string, port: number): TestDatabaseResourcePromise;
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestDatabaseResourcePromise;
+    withMergeLogging(logLevel: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingOptions): TestDatabaseResourcePromise;
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingPathOptions): TestDatabaseResourcePromise;
+    withMergeRoute(path: string, method: string, handler: string, priority: number): TestDatabaseResourcePromise;
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestDatabaseResourcePromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:interface:TestEnvironmentContext
+export interface TestEnvironmentContext {
+    toJSON(): MarshalledHandle;
+    name: { get: () => Promise<string>; set: (value: string) => Promise<void> };
+    description: { get: () => Promise<string | null>; set: (value: string | null) => Promise<void> };
+    priority: { get: () => Promise<number>; set: (value: number) => Promise<void> };
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:interface:TestMutableCollectionContext
+export interface TestMutableCollectionContext {
+    toJSON(): MarshalledHandle;
+    readonly tags: AspireList<string>;
+    readonly counts: AspireDict<string, number>;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:interface:TestRedisResource
+export interface TestRedisResource extends ResourceBuilderBase {
+    toJSON(): MarshalledHandle;
+    addTestChildDatabase(name: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsAddTestChildDatabaseOptions): TestDatabaseResourcePromise;
+    withPersistence(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithPersistenceOptions): TestRedisResourcePromise;
+    withOptionalString(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalStringOptions): TestRedisResourcePromise;
+    withConfig(config: TestConfigDto): TestRedisResourcePromise;
+    getTags(): Promise<AspireList<string>>;
+    getMetadata(): Promise<AspireDict<string, string>>;
+    withConnectionString(connectionString: ReferenceExpression): TestRedisResourcePromise;
+    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestRedisResourcePromise;
+    withCreatedAt(createdAt: string): TestRedisResourcePromise;
+    withModifiedAt(modifiedAt: string): TestRedisResourcePromise;
+    withCorrelationId(correlationId: string): TestRedisResourcePromise;
+    withOptionalCallback(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalCallbackOptions): TestRedisResourcePromise;
+    withStatus(status: TestResourceStatus): TestRedisResourcePromise;
+    withNestedConfig(config: TestNestedDto): TestRedisResourcePromise;
+    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestRedisResourcePromise;
+    testWaitFor(dependency: Awaitable<CSharpAppResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
+    getEndpoints(): Promise<string[]>;
+    withConnectionStringDirect(connectionString: string): TestRedisResourcePromise;
+    withRedisSpecific(option: string): TestRedisResourcePromise;
+    withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestRedisResourcePromise;
+    withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestRedisResourcePromise;
+    withEndpoints(endpoints: string[]): TestRedisResourcePromise;
+    withEnvironmentVariables(variables: Record<string, string>): TestRedisResourcePromise;
+    getStatusAsync(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsGetStatusAsyncOptions): Promise<string>;
+    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestRedisResourcePromise;
+    waitForReadyAsync(timeout: number, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWaitForReadyAsyncOptions): Promise<boolean>;
+    withMultiParamHandleCallback(callback: (arg1: TestCallbackContext, arg2: TestEnvironmentContext) => Promise<void>): TestRedisResourcePromise;
+    withDataVolume(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithDataVolumeOptions): TestRedisResourcePromise;
+    withMergeLabel(label: string): TestRedisResourcePromise;
+    withMergeLabelCategorized(label: string, category: string): TestRedisResourcePromise;
+    withMergeEndpoint(endpointName: string, port: number): TestRedisResourcePromise;
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestRedisResourcePromise;
+    withMergeLogging(logLevel: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingOptions): TestRedisResourcePromise;
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingPathOptions): TestRedisResourcePromise;
+    withMergeRoute(path: string, method: string, handler: string, priority: number): TestRedisResourcePromise;
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestRedisResourcePromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:interface:TestRedisResourcePromise
+export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource> {
+    addTestChildDatabase(name: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsAddTestChildDatabaseOptions): TestDatabaseResourcePromise;
+    withPersistence(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithPersistenceOptions): TestRedisResourcePromise;
+    withOptionalString(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalStringOptions): TestRedisResourcePromise;
+    withConfig(config: TestConfigDto): TestRedisResourcePromise;
+    getTags(): Promise<AspireList<string>>;
+    getMetadata(): Promise<AspireDict<string, string>>;
+    withConnectionString(connectionString: ReferenceExpression): TestRedisResourcePromise;
+    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestRedisResourcePromise;
+    withCreatedAt(createdAt: string): TestRedisResourcePromise;
+    withModifiedAt(modifiedAt: string): TestRedisResourcePromise;
+    withCorrelationId(correlationId: string): TestRedisResourcePromise;
+    withOptionalCallback(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalCallbackOptions): TestRedisResourcePromise;
+    withStatus(status: TestResourceStatus): TestRedisResourcePromise;
+    withNestedConfig(config: TestNestedDto): TestRedisResourcePromise;
+    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestRedisResourcePromise;
+    testWaitFor(dependency: Awaitable<CSharpAppResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
+    getEndpoints(): Promise<string[]>;
+    withConnectionStringDirect(connectionString: string): TestRedisResourcePromise;
+    withRedisSpecific(option: string): TestRedisResourcePromise;
+    withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestRedisResourcePromise;
+    withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestRedisResourcePromise;
+    withEndpoints(endpoints: string[]): TestRedisResourcePromise;
+    withEnvironmentVariables(variables: Record<string, string>): TestRedisResourcePromise;
+    getStatusAsync(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsGetStatusAsyncOptions): Promise<string>;
+    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestRedisResourcePromise;
+    waitForReadyAsync(timeout: number, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWaitForReadyAsyncOptions): Promise<boolean>;
+    withMultiParamHandleCallback(callback: (arg1: TestCallbackContext, arg2: TestEnvironmentContext) => Promise<void>): TestRedisResourcePromise;
+    withDataVolume(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithDataVolumeOptions): TestRedisResourcePromise;
+    withMergeLabel(label: string): TestRedisResourcePromise;
+    withMergeLabelCategorized(label: string, category: string): TestRedisResourcePromise;
+    withMergeEndpoint(endpointName: string, port: number): TestRedisResourcePromise;
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestRedisResourcePromise;
+    withMergeLogging(logLevel: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingOptions): TestRedisResourcePromise;
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingPathOptions): TestRedisResourcePromise;
+    withMergeRoute(path: string, method: string, handler: string, priority: number): TestRedisResourcePromise;
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestRedisResourcePromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:interface:TestResourceContext
+export interface TestResourceContext {
+    toJSON(): MarshalledHandle;
+    name: { get: () => Promise<string>; set: (value: string) => Promise<void> };
+    value: { get: () => Promise<number>; set: (value: number) => Promise<void> };
+    getValueAsync(): Promise<string>;
+    setValueAsync(value: string): TestResourceContextPromise;
+    validateAsync(): Promise<boolean>;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:interface:TestResourceContextPromise
+export interface TestResourceContextPromise extends PromiseLike<TestResourceContext> {
+    name: { get: () => Promise<string>; set: (value: string) => Promise<void> };
+    value: { get: () => Promise<number>; set: (value: number) => Promise<void> };
+    getValueAsync(): Promise<string>;
+    setValueAsync(value: string): TestResourceContextPromise;
+    validateAsync(): Promise<boolean>;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:interface:TestVaultResource
+export interface TestVaultResource extends ResourceBuilderBase {
+    toJSON(): MarshalledHandle;
+    withOptionalString(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalStringOptions): TestVaultResourcePromise;
+    withConfig(config: TestConfigDto): TestVaultResourcePromise;
+    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestVaultResourcePromise;
+    withCreatedAt(createdAt: string): TestVaultResourcePromise;
+    withModifiedAt(modifiedAt: string): TestVaultResourcePromise;
+    withCorrelationId(correlationId: string): TestVaultResourcePromise;
+    withOptionalCallback(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalCallbackOptions): TestVaultResourcePromise;
+    withStatus(status: TestResourceStatus): TestVaultResourcePromise;
+    withNestedConfig(config: TestNestedDto): TestVaultResourcePromise;
+    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestVaultResourcePromise;
+    testWaitFor(dependency: Awaitable<CSharpAppResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
+    withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestVaultResourcePromise;
+    withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestVaultResourcePromise;
+    withEndpoints(endpoints: string[]): TestVaultResourcePromise;
+    withEnvironmentVariables(variables: Record<string, string>): TestVaultResourcePromise;
+    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestVaultResourcePromise;
+    withVaultDirect(option: string): TestVaultResourcePromise;
+    withMergeLabel(label: string): TestVaultResourcePromise;
+    withMergeLabelCategorized(label: string, category: string): TestVaultResourcePromise;
+    withMergeEndpoint(endpointName: string, port: number): TestVaultResourcePromise;
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestVaultResourcePromise;
+    withMergeLogging(logLevel: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingOptions): TestVaultResourcePromise;
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingPathOptions): TestVaultResourcePromise;
+    withMergeRoute(path: string, method: string, handler: string, priority: number): TestVaultResourcePromise;
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestVaultResourcePromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:interface:TestVaultResourcePromise
+export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource> {
+    withOptionalString(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalStringOptions): TestVaultResourcePromise;
+    withConfig(config: TestConfigDto): TestVaultResourcePromise;
+    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestVaultResourcePromise;
+    withCreatedAt(createdAt: string): TestVaultResourcePromise;
+    withModifiedAt(modifiedAt: string): TestVaultResourcePromise;
+    withCorrelationId(correlationId: string): TestVaultResourcePromise;
+    withOptionalCallback(options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalCallbackOptions): TestVaultResourcePromise;
+    withStatus(status: TestResourceStatus): TestVaultResourcePromise;
+    withNestedConfig(config: TestNestedDto): TestVaultResourcePromise;
+    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestVaultResourcePromise;
+    testWaitFor(dependency: Awaitable<CSharpAppResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
+    withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestVaultResourcePromise;
+    withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestVaultResourcePromise;
+    withEndpoints(endpoints: string[]): TestVaultResourcePromise;
+    withEnvironmentVariables(variables: Record<string, string>): TestVaultResourcePromise;
+    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestVaultResourcePromise;
+    withVaultDirect(option: string): TestVaultResourcePromise;
+    withMergeLabel(label: string): TestVaultResourcePromise;
+    withMergeLabelCategorized(label: string, category: string): TestVaultResourcePromise;
+    withMergeEndpoint(endpointName: string, port: number): TestVaultResourcePromise;
+    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestVaultResourcePromise;
+    withMergeLogging(logLevel: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingOptions): TestVaultResourcePromise;
+    withMergeLoggingPath(logLevel: string, logPath: string, options?: Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingPathOptions): TestVaultResourcePromise;
+    withMergeRoute(path: string, method: string, handler: string, priority: number): TestVaultResourcePromise;
+    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestVaultResourcePromise;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:options:Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsAddTestChildDatabaseOptions
+export interface Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsAddTestChildDatabaseOptions {
+    databaseName?: string;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:options:Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsAddTestRedisOptions
+export interface Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsAddTestRedisOptions {
+    port?: number;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:options:Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsGetStatusAsyncOptions
+export interface Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsGetStatusAsyncOptions {
+    cancellationToken?: AbortSignal | CancellationToken;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:options:Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWaitForReadyAsyncOptions
+export interface Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWaitForReadyAsyncOptions {
+    cancellationToken?: AbortSignal | CancellationToken;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:options:Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithDataVolumeOptions
+export interface Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithDataVolumeOptions {
+    name?: string;
+    isReadOnly?: boolean;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:options:Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingOptions
+export interface Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingOptions {
+    enableConsole?: boolean;
+    maxFiles?: number;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:options:Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingPathOptions
+export interface Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithMergeLoggingPathOptions {
+    enableConsole?: boolean;
+    maxFiles?: number;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:options:Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalCallbackOptions
+export interface Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalCallbackOptions {
+    callback?: (arg: TestCallbackContext) => Promise<void>;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:options:Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalStringOptions
+export interface Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithOptionalStringOptions {
+    value?: string;
+    enabled?: boolean;
+}
+
+// Aspire.Hosting.CodeGeneration.TypeScript.Tests:options:Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithPersistenceOptions
+export interface Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_TestsWithPersistenceOptions {
+    mode?: TestPersistenceMode;
+}
+
+// Aspire.Hosting:handle:CommandLineArgsCallbackContextHandle
+export type CommandLineArgsCallbackContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext'>;
+
+// Aspire.Hosting:handle:EndpointReferenceHandle
+export type EndpointReferenceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference'>;
+
+// Aspire.Hosting:handle:EndpointUpdateContextHandle
+export type EndpointUpdateContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext'>;
+
+// Aspire.Hosting:handle:ReferenceExpressionHandle
+export type ReferenceExpressionHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression'>;
+
+// Aspire.Hosting:handle:ResourceEndpointsAllocatedEventHandle
+export type ResourceEndpointsAllocatedEventHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceEndpointsAllocatedEvent'>;
+
+// Aspire.Hosting:opaque:CSharpAppResource
+export interface CSharpAppResource extends ResourceBuilderBase {}
+
+// Aspire.Hosting:opaque:CSharpAppResourcePromise
+export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource> {}
+
+// Aspire.Hosting:opaque:ContainerRegistryResource
+export interface ContainerRegistryResource extends ResourceBuilderBase {}
+
+// Aspire.Hosting:opaque:ContainerRegistryResourcePromise
+export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerRegistryResource> {}
+
+// Aspire.Hosting:opaque:ContainerResource
+export interface ContainerResource extends ResourceBuilderBase {}
+
+// Aspire.Hosting:opaque:ContainerResourcePromise
+export interface ContainerResourcePromise extends PromiseLike<ContainerResource> {}
+
+// Aspire.Hosting:opaque:DistributedApplicationBuilder
+export interface DistributedApplicationBuilder extends HandleReference {}
+
+// Aspire.Hosting:opaque:DistributedApplicationBuilderPromise
+export interface DistributedApplicationBuilderPromise extends PromiseLike<DistributedApplicationBuilder> {}
+
+// Aspire.Hosting:opaque:DotnetToolResource
+export interface DotnetToolResource extends ResourceBuilderBase {}
+
+// Aspire.Hosting:opaque:DotnetToolResourcePromise
+export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResource> {}
+
+// Aspire.Hosting:opaque:ExecutableResource
+export interface ExecutableResource extends ResourceBuilderBase {}
+
+// Aspire.Hosting:opaque:ExecutableResourcePromise
+export interface ExecutableResourcePromise extends PromiseLike<ExecutableResource> {}
+
+// Aspire.Hosting:opaque:ExternalServiceResource
+export interface ExternalServiceResource extends ResourceBuilderBase {}
+
+// Aspire.Hosting:opaque:ExternalServiceResourcePromise
+export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServiceResource> {}
+
+// Aspire.Hosting:opaque:ParameterResource
+export interface ParameterResource extends ResourceBuilderBase {}
+
+// Aspire.Hosting:opaque:ParameterResourcePromise
+export interface ParameterResourcePromise extends PromiseLike<ParameterResource> {}
+
+// Aspire.Hosting:opaque:ProjectResource
+export interface ProjectResource extends ResourceBuilderBase {}
+
+// Aspire.Hosting:opaque:ProjectResourcePromise
+export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {}
+
+// Aspire.Hosting:opaque:Resource
+export interface Resource extends ResourceBuilderBase {}
+
+// Aspire.Hosting:opaque:ResourcePromise
+export interface ResourcePromise extends PromiseLike<Resource> {}
+
+// Aspire.Hosting:opaque:ResourceWithArgs
+export interface ResourceWithArgs extends ResourceBuilderBase {}
+
+// Aspire.Hosting:opaque:ResourceWithArgsPromise
+export interface ResourceWithArgsPromise extends PromiseLike<ResourceWithArgs> {}
+
+// Aspire.Hosting:opaque:ResourceWithConnectionString
+export interface ResourceWithConnectionString extends ResourceBuilderBase {}
+
+// Aspire.Hosting:opaque:ResourceWithConnectionStringPromise
+export interface ResourceWithConnectionStringPromise extends PromiseLike<ResourceWithConnectionString> {}
+
+// Aspire.Hosting:opaque:ResourceWithEndpoints
+export interface ResourceWithEndpoints extends ResourceBuilderBase {}
+
+// Aspire.Hosting:opaque:ResourceWithEndpointsPromise
+export interface ResourceWithEndpointsPromise extends PromiseLike<ResourceWithEndpoints> {}
+
+// Aspire.Hosting:opaque:ResourceWithEnvironment
+export interface ResourceWithEnvironment extends ResourceBuilderBase {}
+
+// Aspire.Hosting:opaque:ResourceWithEnvironmentPromise
+export interface ResourceWithEnvironmentPromise extends PromiseLike<ResourceWithEnvironment> {}
+
+// Aspire.Hosting:opaque:ResourceWithWaitSupport
+export interface ResourceWithWaitSupport extends ResourceBuilderBase {}
+
+// Aspire.Hosting:opaque:ResourceWithWaitSupportPromise
+export interface ResourceWithWaitSupportPromise extends PromiseLike<ResourceWithWaitSupport> {}
+
+// aspire:runtime:base
+export type Awaitable<T> = T | PromiseLike<T>;
+export interface MarshalledHandle { $handle: string; $type: string; }
+export interface Handle<T extends string = string> { readonly $handle: string; readonly $type: T; toJSON(): MarshalledHandle; }
+export interface HandleReference { toJSON(): MarshalledHandle; }
+export interface AbortSignal { readonly aborted: boolean; }
+export interface CancellationToken { readonly aborted: boolean; }
+export enum InputType { Text = 'Text', SecretText = 'SecretText', Choice = 'Choice', Boolean = 'Boolean', Number = 'Number' }
+export interface ReferenceExpression { readonly value: Promise<string>; }
+export interface AspireList<T> extends HandleReference { get(index: number): Promise<T>; }
+export interface AspireDict<TKey, TValue> extends HandleReference { get(key: TKey): Promise<TValue>; }
+export interface ResourceBuilderBase extends HandleReference {}
+export interface InteractionInput { readonly name: string; }
+export interface InteractionInputCollection extends HandleReference {}
+export interface InteractionInputCollectionPromise extends PromiseLike<InteractionInputCollection> {}

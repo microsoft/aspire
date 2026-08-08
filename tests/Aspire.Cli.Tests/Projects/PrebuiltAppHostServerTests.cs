@@ -45,6 +45,99 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void GenerateIntegrationProjectFile_PinsExactPackagesToASingleVersionRange()
+    {
+        var packageRefs = new List<IntegrationReference>
+        {
+            IntegrationReference.FromExactPackage("Aspire.Hosting.Redis", "13.2.0"),
+            IntegrationReference.FromPackage("Aspire.Hosting", "13.2.0")
+        };
+
+        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile(packageRefs, [], "/tmp/libs");
+        var doc = XDocument.Parse(xml);
+
+        var versions = doc.Descendants("PackageReference")
+            .ToDictionary(e => e.Attribute("Include")!.Value, e => e.Attribute("Version")!.Value);
+
+        // `13.2.0` is a NuGet minimum, so only the bracketed form keeps an unavailable version from
+        // resolving upward and being documented under the requested number.
+        Assert.Equal("[13.2.0]", versions["Aspire.Hosting.Redis"]);
+        Assert.Equal("13.2.0", versions["Aspire.Hosting"]);
+    }
+
+    /// <summary>
+    /// The generated XML cannot show what NuGet does with it, and the package-only install path never
+    /// touches the repository scanner, so the pin has to be proven here too. This restores twice
+    /// against an offline feed that holds 13.4.1 but not the requested 13.4.0.
+    /// </summary>
+    [Fact]
+    public async Task GenerateIntegrationProjectFile_ExactPackageDoesNotFloatToALaterPackage()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var root = workspace.WorkspaceRoot.FullName;
+        var feedPath = Path.Combine(root, "feed");
+        Directory.CreateDirectory(feedPath);
+
+        const string IntegrationPackage = "Contoso.Aspire.Hosting.PrebuiltExactProbe";
+        OfflineNuGetFeed.CreateStubPackage(feedPath, IntegrationPackage, "13.4.1");
+
+        var floatingPath = await WriteIntegrationProjectAsync(
+            root,
+            "floating",
+            IntegrationReference.FromPackage(IntegrationPackage, "13.4.0"));
+        var (floatingExitCode, floatingOutput) = await OfflineNuGetFeed.RestoreAsync(floatingPath, feedPath);
+        outputHelper.WriteLine(floatingOutput);
+
+        // NU1603 is NuGet reporting that it resolved something other than what was asked for. The
+        // assets file records which version won, which the console output does not always spell out.
+        Assert.Equal(0, floatingExitCode);
+        Assert.Contains("NU1603", floatingOutput, StringComparison.Ordinal);
+        Assert.Contains(
+            $"{IntegrationPackage}/13.4.1",
+            await File.ReadAllTextAsync(Path.Combine(Path.GetDirectoryName(floatingPath)!, "obj", "project.assets.json")),
+            StringComparison.Ordinal);
+
+        var exactPath = await WriteIntegrationProjectAsync(
+            root,
+            "exact",
+            IntegrationReference.FromExactPackage(IntegrationPackage, "13.4.0"));
+        var (exactExitCode, exactOutput) = await OfflineNuGetFeed.RestoreAsync(exactPath, feedPath);
+        outputHelper.WriteLine(exactOutput);
+
+        // NU1102 is "package found but not at the requested version", which is the failure a caller
+        // needs instead of a document labelled 13.4.0 that describes 13.4.1.
+        Assert.NotEqual(0, exactExitCode);
+        Assert.Contains("NU1102", exactOutput, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Writes the prebuilt closure project the way <c>BuildIntegrationClosureManifestAsync</c> does,
+    /// including the surrounding files that keep the restore from importing the enclosing repository.
+    /// </summary>
+    private static async Task<string> WriteIntegrationProjectAsync(string root, string name, IntegrationReference reference)
+    {
+        var restoreDir = Path.Combine(root, $"integration-restore-{name}");
+        Directory.CreateDirectory(restoreDir);
+
+        var projectPath = Path.Combine(restoreDir, "IntegrationClosure.csproj");
+        await File.WriteAllTextAsync(
+            projectPath,
+            PrebuiltAppHostServer.GenerateIntegrationProjectFile([reference], [], restoreDir));
+
+        await File.WriteAllTextAsync(Path.Combine(restoreDir, "Directory.Packages.props"), """
+            <Project>
+              <PropertyGroup>
+                <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+              </PropertyGroup>
+            </Project>
+            """);
+        await File.WriteAllTextAsync(Path.Combine(restoreDir, "Directory.Build.props"), "<Project />");
+        await File.WriteAllTextAsync(Path.Combine(restoreDir, "Directory.Build.targets"), "<Project />");
+
+        return projectPath;
+    }
+
+    [Fact]
     public void GenerateIntegrationProjectFile_WithProjectRefsOnly_ProducesProjectReferences()
     {
         var packageRefs = new List<IntegrationReference>();
@@ -1152,6 +1245,48 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PrepareAsync_WithExactPackageReference_PinsBundledRestoreWithoutASourceOverride()
+    {
+        // `sdk export` restores through the bundled NuGet helper on an installed CLI, and that path
+        // never sees the generated closure project. Pin the argument it is actually handed.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        List<string>? restoreArgs = null;
+
+        var (server, executionFactory) = CreatePackageReferenceServer(workspace);
+        executionFactory.AssertionCallback = (args, _, _, _) =>
+        {
+            if (args is ["nuget", "restore", ..])
+            {
+                restoreArgs = [.. args];
+            }
+        };
+
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                "13.4.0",
+                [
+                    IntegrationReference.FromExactPackage("CommunityToolkit.Aspire.Hosting.Redis", "13.4.0"),
+                    IntegrationReference.FromPackage("CommunityToolkit.Aspire.Hosting.Dapr", "13.4.0")
+                ]);
+
+            Assert.True(result.Success);
+            Assert.NotNull(restoreArgs);
+
+            // No `--source`, so the historical Aspire*-only pinning does not apply and the exactness
+            // has to come from the reference itself.
+            Assert.Contains("CommunityToolkit.Aspire.Hosting.Redis,[13.4.0]", restoreArgs!);
+            Assert.Contains("CommunityToolkit.Aspire.Hosting.Dapr,13.4.0", restoreArgs!);
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
     public async Task PrepareAsync_WithPackageSourceOverride_AddsNuGetOrgFallbackSource()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -1608,7 +1743,11 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             var combined = string.Join('\n', result.Output!.GetLines().Select(static line => line.Line));
             Assert.Contains($"--source: {packageSourceOverride}", combined);
             Assert.Contains("channel:  daily", combined);
-            Assert.Contains("packages: Aspire.Hosting.CodeGeneration.TypeScript 13.4.0-pr.17141.gf142085f", combined);
+
+            // The footer has to show the range restore was actually given. `--source` pins Aspire
+            // packages, so printing the raw version would send a reader looking for a resolution
+            // failure that the bracketed form explains immediately.
+            Assert.Contains("packages: Aspire.Hosting.CodeGeneration.TypeScript [13.4.0-pr.17141.gf142085f]", combined);
         }
         finally
         {
@@ -1645,11 +1784,12 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.NotNull(result.Output);
 
             var combined = string.Join('\n', result.Output!.GetLines().Select(static line => line.Line));
-            // First five packages appear; later ones are collapsed into a count.
-            Assert.Contains("Aspire.Hosting.Pkg0 1.0.0", combined);
-            Assert.Contains("Aspire.Hosting.Pkg4 1.0.0", combined);
-            Assert.DoesNotContain("Aspire.Hosting.Pkg5 1.0.0", combined);
-            Assert.DoesNotContain("Aspire.Hosting.Pkg7 1.0.0", combined);
+            // First five packages appear; later ones are collapsed into a count. Versions show the
+            // effective restore range because `--source` pins Aspire packages exactly.
+            var packagesLine = Assert.Single(result.Output!.GetLines().Select(static line => line.Line), static line => line.Contains("packages:", StringComparison.Ordinal));
+            Assert.Equal(
+                "  packages: Aspire.Hosting.Pkg0 [1.0.0], Aspire.Hosting.Pkg1 [1.0.0], Aspire.Hosting.Pkg2 [1.0.0], Aspire.Hosting.Pkg3 [1.0.0], Aspire.Hosting.Pkg4 [1.0.0], … (+3 more)",
+                packagesLine);
             Assert.Contains("(+3 more)", combined);
         }
         finally

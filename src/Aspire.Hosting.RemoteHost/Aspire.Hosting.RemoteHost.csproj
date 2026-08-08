@@ -22,6 +22,10 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Aspire.Hosting.RemoteHost.Tests" />
+    <!-- The TypeScript code-generation tests build the same ownership-filtered ATS context the
+         canonical API exporter receives over RPC, so they reuse AtsContextFilter rather than
+         maintaining a second copy of the reference-closure rules. -->
+    <InternalsVisibleTo Include="Aspire.Hosting.CodeGeneration.TypeScript.Tests" />
   </ItemGroup>
 
   <ItemGroup>

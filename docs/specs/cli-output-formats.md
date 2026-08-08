@@ -573,7 +573,7 @@ The top-level arrays are:
 
 | Field | Description |
 | ----- | ----------- |
-| `packages` | Packages or projects scanned for capabilities. |
+| `packages` | Packages or projects scanned for capabilities. `version` is the version that was **requested**, not the one NuGet resolved: package restore uses a minimum-version reference, so the assembly actually scanned may be newer. Use `aspire sdk export` when the version label has to be exact. Project references are omitted because they have no version. |
 | `capabilities` | Builder methods and other callable capabilities. |
 | `handleTypes` | Resource or builder handle types. |
 | `dtoTypes` | DTO types used by capabilities. |

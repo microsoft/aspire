@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -30,6 +31,9 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     internal const string TargetFramework = "net10.0";
     public const string BuildFolder = "build";
     private const string AssemblyName = "AppHostServer";
+    private const string PackageProbeSourcesFileName = "package-probe-sources.txt";
+    private const string PackageProbeMetadataFileName = "package-probe-metadata.txt";
+    private const string PackageProbeTargetsFileName = "package-probe-targets.txt";
 
     private readonly string _projectModelPath;
     private readonly string _appPath;
@@ -42,6 +46,11 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     private readonly IEnvironment _environment;
     private readonly ILogger _logger;
     private readonly string? _logFilePath;
+    private string? _integrationProbeManifestPath;
+
+    // Boxed so "not read yet" and "read, and there is no answer" stay distinguishable without
+    // re-parsing eng/Versions.props on every lookup.
+    private StrongBox<string?>? _repositoryVersionPrefix;
 
     public DotNetBasedAppHostServerProject(
         string appPath,
@@ -167,7 +176,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         // Add project references for Aspire.Hosting.* packages, NuGet for others
         var projectRefGroup = new XElement("ItemGroup");
         var addedProjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var otherPackages = new List<(string Name, string Version)>();
+        var otherPackages = new List<IntegrationReference>();
 
         foreach (var integration in integrations)
         {
@@ -183,13 +192,35 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
             }
             else if (integration.Name.StartsWith("Aspire.Hosting", StringComparison.OrdinalIgnoreCase))
             {
-                var projectPath = Path.Combine(_repoRoot, "src", integration.Name, $"{integration.Name}.csproj");
-                if (File.Exists(projectPath) && addedProjects.Add(integration.Name))
+                if (GetLocalProjectSubstitution(integration.Name) is { } substitution)
                 {
-                    projectRefGroup.Add(new XElement("ProjectReference",
-                        new XAttribute("Include", projectPath),
-                        new XElement("IsAspireProjectResource", "false")));
+                    if (addedProjects.Add(integration.Name))
+                    {
+                        projectRefGroup.Add(new XElement("ProjectReference",
+                            new XAttribute("Include", substitution.ProjectPath),
+                            new XElement("IsAspireProjectResource", "false")));
+                    }
                 }
+                else if (integration.RequireExactVersion)
+                {
+                    // A first-party name does not mean this checkout can supply it. Dropping the
+                    // reference made `sdk export --package Aspire.Hosting.DoesNotExist@13.5.0-dev`
+                    // scan clean and publish an empty module under a package id that has never
+                    // existed, so a caller that demands an exact version gets a real package
+                    // reference instead and the restore fails (NU1101) as it should.
+                    if (integration.Version is null)
+                    {
+                        throw new InvalidOperationException($"Integration '{integration.Name}' is neither a project reference nor a package reference (both Version and ProjectPath are null).");
+                    }
+                    otherPackages.Add(integration);
+                }
+
+                // Everything else keeps dropping the reference. Only `sdk export` asks for exactness,
+                // and only it names the package explicitly; `aspire run`, `sdk dump`, and `sdk
+                // generate` take their integrations from aspire.config.json, where a version-less
+                // entry resolves to this CLI's identity (`13.5.0-dev` in a checkout). Restoring that
+                // as a package could never succeed, so failing here would turn one unavailable
+                // integration into a build failure for the whole AppHost.
             }
             else
             {
@@ -197,7 +228,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
                 {
                     throw new InvalidOperationException($"Integration '{integration.Name}' is neither a project reference nor a package reference (both Version and ProjectPath are null).");
                 }
-                otherPackages.Add((integration.Name, integration.Version));
+                otherPackages.Add(integration);
             }
         }
 
@@ -217,10 +248,14 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
 
         if (otherPackages.Count > 0)
         {
+            // This project always gets a generated Directory.Packages.props that turns central package
+            // management on, so an inline Version attribute is rejected with NU1008. VersionOverride is
+            // the CPM-sanctioned way to pin a single reference, and it lets us scan an integration that
+            // the repo's Directory.Packages.props has no PackageVersion entry for.
             doc.Root!.Add(new XElement("ItemGroup",
                 otherPackages.Select(p => new XElement("PackageReference",
                     new XAttribute("Include", p.Name),
-                    new XAttribute("Version", p.Version)))));
+                    new XAttribute("VersionOverride", p.GetRestoreVersionRange(forceExact: false))))));
         }
 
         // Add imports for in-repo AppHost building
@@ -254,6 +289,26 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         // Disable Aspire SDK code generation
         doc.Root!.Add(new XElement("Target", new XAttribute("Name", "_CSharpWriteHostProjectMetadataSources")));
         doc.Root!.Add(new XElement("Target", new XAttribute("Name", "_CSharpWriteProjectMetadataSources")));
+        doc.Root!.Add(
+            new XElement("Target",
+                new XAttribute("Name", "_WriteAspirePackageProbeManifestInputs"),
+                new XAttribute("AfterTargets", "Build"),
+                new XAttribute("DependsOnTargets", "ResolveLockFileCopyLocalFiles"),
+                new XElement("WriteLinesToFile",
+                    new XAttribute("File", Path.Combine(_projectModelPath, PackageProbeSourcesFileName)),
+                    new XAttribute("Lines", "@(ReferenceCopyLocalPaths->'%(FullPath)')"),
+                    new XAttribute("Overwrite", "true"),
+                    new XAttribute("WriteOnlyWhenDifferent", "true")),
+                new XElement("WriteLinesToFile",
+                    new XAttribute("File", Path.Combine(_projectModelPath, PackageProbeMetadataFileName)),
+                    new XAttribute("Lines", "@(ReferenceCopyLocalPaths->'%(NuGetPackageId)|%(NuGetPackageVersion)|%(AssetType)')"),
+                    new XAttribute("Overwrite", "true"),
+                    new XAttribute("WriteOnlyWhenDifferent", "true")),
+                new XElement("WriteLinesToFile",
+                    new XAttribute("File", Path.Combine(_projectModelPath, PackageProbeTargetsFileName)),
+                    new XAttribute("Lines", "@(ReferenceCopyLocalPaths->'%(DestinationSubDirectory)%(Filename)%(Extension)')"),
+                    new XAttribute("Overwrite", "true"),
+                    new XAttribute("WriteOnlyWhenDifferent", "true"))));
 
         return doc;
     }
@@ -459,6 +514,8 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
                 NeedsCodeGeneration: false);
         }
 
+        await WriteIntegrationProbeManifestAsync(cancellationToken).ConfigureAwait(false);
+
         return new AppHostServerPrepareResult(
             Success: true,
             Output: buildOutput,
@@ -468,6 +525,134 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
 
     /// <inheritdoc />
     public string GetInstanceIdentifier() => GetProjectFilePath();
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// <para>
+    /// This is the same decision <see cref="CreateProjectFile"/> makes, kept in one place so a
+    /// caller asking "will my requested version survive?" cannot drift from what the generated
+    /// project actually does. Only first-party <c>Aspire.Hosting.*</c> packages live under
+    /// <c>src/</c>, so a third-party integration is always restored from a feed even here.
+    /// </para>
+    /// <para>
+    /// The name is matched case-insensitively, because a NuGet package id is
+    /// (<see href="https://learn.microsoft.com/nuget/consume-packages/finding-and-choosing-packages#package-identifiers"/>)
+    /// while the filesystem this resolves through is not on Linux. Probing the caller's spelling
+    /// directly meant <c>aspire.hosting.redis</c> found nothing there and <c>src/Aspire.Hosting.Redis</c>
+    /// on macOS and Windows, so how a package was spelled decided whether the checkout was used at
+    /// all — and callers that publish version-keyed artifacts saw no substitution to guard against.
+    /// The returned path is always the on-disk spelling so the generated project reference and the
+    /// caller's check name the same project.
+    /// </para>
+    /// </remarks>
+    public LocalProjectSubstitution? GetLocalProjectSubstitution(string packageName)
+    {
+        if (!packageName.StartsWith("Aspire.Hosting", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var srcPath = Path.Combine(_repoRoot, "src");
+        if (!Directory.Exists(srcPath))
+        {
+            return null;
+        }
+
+        // The directory listing settles the spelling on every platform. Probing
+        // Path.Combine(src, packageName) instead would hand back the caller's spelling wherever
+        // File.Exists is case-insensitive, so the same request produced two different project paths
+        // depending on the filesystem. Enumerate and compare rather than passing the caller's name
+        // as a search pattern, so a package id that happens to contain a wildcard cannot match a
+        // directory it does not name.
+        //
+        // Enumerating can throw where the old File.Exists probe could not, and this runs on the
+        // `aspire run` path via CreateProjectFile, so an unreadable or concurrently removed src/
+        // reports "no substitution" the same way GetRepositoryVersionPrefix does rather than
+        // costing the caller its scanner.
+        try
+        {
+            foreach (var directory in Directory.EnumerateDirectories(srcPath))
+            {
+                var canonicalName = Path.GetFileName(directory);
+                if (!string.Equals(canonicalName, packageName, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var projectPath = Path.Combine(directory, $"{canonicalName}.csproj");
+                return File.Exists(projectPath)
+                    ? new LocalProjectSubstitution(projectPath, GetRepositoryVersionPrefix())
+                    : null;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Reads the <c>Major.Minor.Patch</c> this checkout builds from <c>eng/Versions.props</c>, or
+    /// <see langword="null"/> when it cannot be established.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The repository states its version line as three properties that <c>VersionPrefix</c> is
+    /// composed from:
+    /// <code>
+    /// &lt;MajorVersion&gt;13&lt;/MajorVersion&gt;
+    /// &lt;MinorVersion&gt;5&lt;/MinorVersion&gt;
+    /// &lt;PatchVersion&gt;0&lt;/PatchVersion&gt;
+    /// &lt;VersionPrefix&gt;$(MajorVersion).$(MinorVersion).$(PatchVersion)&lt;/VersionPrefix&gt;
+    /// </code>
+    /// <c>VersionPrefix</c> itself is read as the unexpanded MSBuild expression, so the three parts
+    /// are read directly. The prerelease suffix (<c>-preview.1.25366.3</c>) is assigned by Arcade at
+    /// build time and is not in the checkout, which is why only the prefix can be established here.
+    /// </para>
+    /// <para>
+    /// Any failure returns <see langword="null"/> rather than throwing: this only informs callers
+    /// that need provenance, and no other caller should lose a scanner over an unreadable file.
+    /// </para>
+    /// </remarks>
+    private string? GetRepositoryVersionPrefix()
+    {
+        if (_repositoryVersionPrefix is { } cached)
+        {
+            return cached.Value;
+        }
+
+        _repositoryVersionPrefix = ReadRepositoryVersionPrefix(_repoRoot);
+        return _repositoryVersionPrefix.Value;
+    }
+
+    private static StrongBox<string?> ReadRepositoryVersionPrefix(string repoRoot)
+    {
+        try
+        {
+            var versionsPropsPath = Path.Combine(repoRoot, "eng", "Versions.props");
+            if (!File.Exists(versionsPropsPath))
+            {
+                return new StrongBox<string?>(null);
+            }
+
+            var doc = XDocument.Load(versionsPropsPath);
+
+            var major = doc.Descendants("MajorVersion").FirstOrDefault()?.Value;
+            var minor = doc.Descendants("MinorVersion").FirstOrDefault()?.Value;
+            var patch = doc.Descendants("PatchVersion").FirstOrDefault()?.Value;
+
+            return new StrongBox<string?>(
+                string.IsNullOrWhiteSpace(major) || string.IsNullOrWhiteSpace(minor) || string.IsNullOrWhiteSpace(patch)
+                    ? null
+                    : $"{major.Trim()}.{minor.Trim()}.{patch.Trim()}");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Xml.XmlException)
+        {
+            return new StrongBox<string?>(null);
+        }
+    }
 
     /// <inheritdoc />
     public async Task<AppHostServerRunResult> RunAsync(
@@ -515,6 +700,19 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         // Dev mode uses debug builds which require Development environment
         // for the dashboard to resolve static web assets correctly
         startInfo.Environment[KnownAspNetCoreConfigNames.Environment] = "Development";
+
+        if (_integrationProbeManifestPath is not null)
+        {
+            _logger.LogDebug(
+                "Setting {EnvironmentVariable} to {Path}",
+                KnownConfigNames.IntegrationProbeManifestPath,
+                _integrationProbeManifestPath);
+            startInfo.Environment[KnownConfigNames.IntegrationProbeManifestPath] = _integrationProbeManifestPath;
+        }
+        else
+        {
+            startInfo.Environment.Remove(KnownConfigNames.IntegrationProbeManifestPath);
+        }
 
         // Wire WithTerminal() for guest/polyglot AppHosts running from the repo. The
         // generated AppHostServer references Aspire.Hosting from the repo and DCP resolves
@@ -599,6 +797,130 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
 
         return new AppHostServerRunResult(_socketPath, outputCollector, execution);
     }
+
+    private async Task WriteIntegrationProbeManifestAsync(CancellationToken cancellationToken)
+    {
+        var sourcesPath = Path.Combine(_projectModelPath, PackageProbeSourcesFileName);
+        var metadataPath = Path.Combine(_projectModelPath, PackageProbeMetadataFileName);
+        var targetsPath = Path.Combine(_projectModelPath, PackageProbeTargetsFileName);
+
+        if (!File.Exists(sourcesPath) || !File.Exists(metadataPath) || !File.Exists(targetsPath))
+        {
+            _integrationProbeManifestPath = null;
+            return;
+        }
+
+        var sourcePaths = await File.ReadAllLinesAsync(sourcesPath, cancellationToken).ConfigureAwait(false);
+        var metadataLines = await File.ReadAllLinesAsync(metadataPath, cancellationToken).ConfigureAwait(false);
+        var targetPaths = await File.ReadAllLinesAsync(targetsPath, cancellationToken).ConfigureAwait(false);
+        if (sourcePaths.Length != metadataLines.Length || sourcePaths.Length != targetPaths.Length)
+        {
+            throw new InvalidOperationException(
+                $"Package probe manifest inputs are inconsistent. Sources: {sourcePaths.Length}, metadata: {metadataLines.Length}, targets: {targetPaths.Length}.");
+        }
+
+        var managedAssemblies = new List<IntegrationPackageManagedAssembly>();
+        var nativeLibraries = new List<IntegrationPackageNativeLibrary>();
+
+        for (var i = 0; i < sourcePaths.Length; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var metadata = ParsePackageProbeMetadata(metadataLines[i]);
+            if (string.IsNullOrWhiteSpace(metadata.PackageId) ||
+                string.IsNullOrWhiteSpace(metadata.PackageVersion))
+            {
+                continue;
+            }
+
+            var sourcePath = sourcePaths[i];
+            var targetPath = NormalizePackageProbeTargetPath(targetPaths[i], sourcePath);
+            if (string.Equals(metadata.AssetType, "native", StringComparison.OrdinalIgnoreCase))
+            {
+                nativeLibraries.Add(new IntegrationPackageNativeLibrary
+                {
+                    FileName = Path.GetFileName(targetPath),
+                    Path = sourcePath
+                });
+                continue;
+            }
+
+            if (!sourcePath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            managedAssemblies.Add(new IntegrationPackageManagedAssembly
+            {
+                Name = Path.GetFileNameWithoutExtension(targetPath),
+                Culture = TryGetSatelliteCulture(targetPath, metadata.AssetType),
+                Path = sourcePath,
+                PackageId = metadata.PackageId,
+                PackageVersion = metadata.PackageVersion
+            });
+        }
+
+        if (managedAssemblies.Count == 0 && nativeLibraries.Count == 0)
+        {
+            _integrationProbeManifestPath = null;
+            return;
+        }
+
+        _integrationProbeManifestPath = Path.Combine(_projectModelPath, IntegrationPackageProbeManifest.FileName);
+        await IntegrationPackageProbeManifest.WriteAsync(
+            _integrationProbeManifestPath,
+            IntegrationPackageProbeManifest.Create(managedAssemblies, nativeLibraries),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private static PackageProbeMetadata ParsePackageProbeMetadata(string line)
+    {
+        // Written from ReferenceCopyLocalPaths as:
+        //   Contoso.Aspire.MetaPackage|1.2.3|runtime
+        // Empty fields are possible for project references; those entries are intentionally
+        // ignored because the probe manifest only preserves NuGet package ownership.
+        var parts = line.Split('|');
+        if (parts.Length != 3)
+        {
+            throw new InvalidOperationException($"Package probe manifest metadata line has an unexpected format: '{line}'.");
+        }
+
+        return new PackageProbeMetadata(
+            NormalizeOptionalValue(parts[0]),
+            NormalizeOptionalValue(parts[1]),
+            NormalizeOptionalValue(parts[2]));
+    }
+
+    private static string NormalizePackageProbeTargetPath(string targetPath, string sourcePath)
+    {
+        if (string.IsNullOrWhiteSpace(targetPath))
+        {
+            return Path.GetFileName(sourcePath);
+        }
+
+        return targetPath.Replace('\\', '/').TrimStart('/');
+    }
+
+    private static string? TryGetSatelliteCulture(string relativePath, string? assetType)
+    {
+        if (!string.Equals(assetType, "resources", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var directoryName = Path.GetDirectoryName(relativePath.Replace('/', Path.DirectorySeparatorChar));
+        if (string.IsNullOrWhiteSpace(directoryName))
+        {
+            return null;
+        }
+
+        return directoryName.Replace('\\', '/').Trim('/');
+    }
+
+    private static string? NormalizeOptionalValue(string value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private sealed record PackageProbeMetadata(string? PackageId, string? PackageVersion, string? AssetType);
 
     private static string? FindNuGetConfig(string workingDirectory)
     {

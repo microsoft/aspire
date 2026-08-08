@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
 
 using System.Reflection;
+using System.Text.RegularExpressions;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RemoteHost;
@@ -14,7 +15,7 @@ using Azure.Provisioning.AppService;
 
 namespace Aspire.Hosting.CodeGeneration.TypeScript.Tests;
 
-public class AtsTypeScriptCodeGeneratorTests
+public partial class AtsTypeScriptCodeGeneratorTests
 {
     private readonly AtsTypeScriptCodeGenerator _generator = new();
 
@@ -776,8 +777,7 @@ public class AtsTypeScriptCodeGeneratorTests
     [Fact]
     public void MapInputUnionTypeToTypeScript_ThrowsOnEmptyUnion()
     {
-        var method = typeof(AtsTypeScriptCodeGenerator).GetMethod("MapInputUnionTypeToTypeScript", BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.NotNull(method);
+        var projector = new TypeScriptApiProjector(CreateContextFromTestAssembly());
 
         var typeRef = new AtsTypeRef
         {
@@ -786,9 +786,8 @@ public class AtsTypeScriptCodeGeneratorTests
             UnionTypes = [],
         };
 
-        var ex = Assert.Throws<TargetInvocationException>(() => method.Invoke(_generator, [typeRef]));
-        Assert.IsType<InvalidOperationException>(ex.InnerException);
-        Assert.Equal("Union input types must define at least one member type.", ex.InnerException.Message);
+        var ex = Assert.Throws<InvalidOperationException>(() => projector.MapInputUnionTypeToTypeScript(typeRef));
+        Assert.Equal("Union input types must define at least one member type.", ex.Message);
     }
 
     [Fact]
@@ -1129,15 +1128,29 @@ public class AtsTypeScriptCodeGeneratorTests
 
     private static AtsContext WithAdditionalCapabilities(AtsContext context, params AtsCapabilityInfo[] capabilities)
     {
-        return new AtsContext
+        var result = new AtsContext
         {
             Capabilities = [.. context.Capabilities, .. capabilities],
             HandleTypes = context.HandleTypes,
             DtoTypes = context.DtoTypes,
             EnumTypes = context.EnumTypes,
             ExportedValues = context.ExportedValues,
-            Diagnostics = context.Diagnostics
+            Diagnostics = context.Diagnostics,
+            CapabilityExportingAssemblyNames = context.CapabilityExportingAssemblyNames
+                .Concat(capabilities.Select(capability =>
+                    new KeyValuePair<string, string>(capability.CapabilityId, TestPackageName)))
+                .ToDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal)
         };
+
+        foreach (var (id, method) in context.Methods)
+        {
+            result.Methods[id] = method;
+        }
+        foreach (var (id, property) in context.Properties)
+        {
+            result.Properties[id] = property;
+        }
+        return result;
     }
 
     private static AtsCapabilityInfo CreateDistributedApplicationBuilderCapability(
@@ -1803,9 +1816,12 @@ public class AtsTypeScriptCodeGeneratorTests
         // only included parameters from whichever overload was registered first.
         var code = GenerateTwoPassCode();
 
-        // Extract just the WithDataVolumeOptions interface for snapshot verification.
-        var interfaceStart = code.IndexOf("export interface WithDataVolumeOptions", StringComparison.Ordinal);
-        Assert.True(interfaceStart >= 0, "WithDataVolumeOptions interface not found in generated code");
+        // Extract just the merged options interface for snapshot verification. The fixture's
+        // withDataVolume overloads are owned by the test assembly, so they merge into that
+        // assembly's interface rather than into the core one of the same base name.
+        var interfaceName = $"{TestOptionsPrefix}WithDataVolumeOptions";
+        var interfaceStart = code.IndexOf($"export interface {interfaceName}", StringComparison.Ordinal);
+        Assert.True(interfaceStart >= 0, $"{interfaceName} interface not found in generated code");
 
         var interfaceEnd = code.IndexOf("}", interfaceStart, StringComparison.Ordinal);
         var interfaceBody = code[interfaceStart..(interfaceEnd + 1)];
@@ -1883,5 +1899,1293 @@ public class AtsTypeScriptCodeGeneratorTests
                && !id.Contains("ViteApp", StringComparison.Ordinal));
         Assert.Contains(expandedTypeIds, id => id.Contains(nameof(JavaScript.NodeAppResource), StringComparison.Ordinal));
         Assert.Contains(expandedTypeIds, id => id.Contains(nameof(JavaScript.ViteAppResource), StringComparison.Ordinal));
+    }
+
+    // ===== Canonical API export =====
+    //
+    // The canonical export is the contract aspire.dev consumes to render TypeScript API
+    // documentation. It must be produced from the same resolved projection the source
+    // emitter uses, because documentation that reconstructs signatures from raw ATS
+    // drifts from the SDK that actually ships (microsoft/aspire#17608).
+
+    /// <summary>
+    /// The exporting package for the canonical export tests. The test assembly owns the
+    /// documented symbols; Aspire.Hosting contributes referenced types through the closure.
+    /// </summary>
+    private const string TestPackageName = "Aspire.Hosting.CodeGeneration.TypeScript.Tests";
+    private const string TestPackageVersion = "13.5.0";
+
+    /// <summary>
+    /// The qualifier the projector derives from <see cref="TestPackageName"/> for options
+    /// interfaces it owns.
+    /// </summary>
+    /// <remarks>
+    /// Options interfaces are named after the assembly that exports the capability, so that a
+    /// package's export names an interface the same way whether it was projected on its own or
+    /// alongside every other package. Only <c>Aspire.Hosting</c> keeps unqualified names, so the
+    /// fixture's own interfaces carry this prefix.
+    /// </remarks>
+    private const string TestOptionsPrefix = "Aspire_x002E_Hosting_x002E_CodeGeneration_x002E_TypeScript_x002E_Tests";
+
+    [Fact]
+    public async Task ApiExportUsesTheSameResolvedSignaturesAsGeneratedSource()
+    {
+        var atsContext = CreateOwnershipFilteredContext();
+
+        var projector = new TypeScriptApiProjector(atsContext);
+        var model = projector.BuildApiModel(
+            new TypeScriptApiPackageIdentity(TestPackageName, TestPackageVersion),
+            [TestPackageName]);
+
+        var exportJson = TypeScriptApiExportWriter.WriteToJson(model, indented: true);
+
+        await Verify(exportJson, extension: "json")
+            .UseFileName("AtsTypeScriptCodeGeneratorTests.ApiExport");
+
+        // Declaration fragments are snapshotted separately: aspire.dev concatenates them in
+        // stable-ID order and type-checks the result, so their exact text is a contract.
+        var declarations = string.Join(
+            "\n\n",
+            model.Declarations.Select(declaration => $"// {declaration.Id}\n{declaration.Content}"));
+
+        await Verify(declarations, extension: "txt")
+            .UseFileName("AtsTypeScriptCodeGeneratorTests.ApiDeclarations");
+    }
+
+    [Fact]
+    public void ApiExportMethodParametersMatchResolvedPublicSignatures()
+    {
+        var atsContext = CreateOwnershipFilteredContext();
+        var template = atsContext.Capabilities.Single(c =>
+            c.CapabilityId == "Aspire.Hosting.CodeGeneration.TypeScript.Tests/waitForReadyAsync");
+        var stringParameter = atsContext.Capabilities
+            .Single(c => c.CapabilityId == "Aspire.Hosting.CodeGeneration.TypeScript.Tests/withMergeLogging")
+            .Parameters.Single(p => p.Name == "logLevel");
+        var boolParameter = atsContext.Capabilities
+            .Single(c => c.CapabilityId == "Aspire.Hosting.CodeGeneration.TypeScript.Tests/withOptionalString")
+            .Parameters.Single(p => p.Name == "enabled");
+        var dtoParameter = atsContext.Capabilities
+            .Single(c => c.CapabilityId == "Aspire.Hosting.CodeGeneration.TypeScript.Tests/withConfig")
+            .Parameters.Single(p => p.Name == "config");
+        var cancellationTokenParameter = template.Parameters.Single(p => p.Name == "cancellationToken");
+
+        AtsCapabilityInfo CreateCapability(string methodName, params AtsParameterInfo[] parameters)
+            => new()
+            {
+                CapabilityId = $"{TestPackageName}/{methodName}",
+                MethodName = methodName,
+                Parameters = parameters,
+                ReturnType = template.ReturnType,
+                TargetTypeId = template.TargetTypeId,
+                TargetType = template.TargetType,
+                TargetParameterName = template.TargetParameterName,
+                ExpandedTargetTypes = template.ExpandedTargetTypes,
+                ReturnsBuilder = template.ReturnsBuilder,
+                CapabilityKind = template.CapabilityKind
+            };
+
+        var contextWithEdgeCases = WithAdditionalCapabilities(
+            atsContext,
+            CreateCapability(
+                "withOptionsCollision",
+                new AtsParameterInfo
+                {
+                    Name = "options",
+                    Type = stringParameter.Type,
+                    Documentation = new AtsDocumentationInfo { Summary = "Required options value." }
+                },
+                new AtsParameterInfo
+                {
+                    Name = "optionsBag",
+                    Type = stringParameter.Type,
+                    Documentation = new AtsDocumentationInfo { Summary = "Required options bag value." }
+                },
+                new AtsParameterInfo
+                {
+                    Name = "enabled",
+                    Type = boolParameter.Type,
+                    IsOptional = true,
+                    Documentation = new AtsDocumentationInfo { Summary = "Whether the behavior is enabled." }
+                }),
+            CreateCapability(
+                "withOptionalOptionsField",
+                new AtsParameterInfo
+                {
+                    Name = "options",
+                    Type = stringParameter.Type,
+                    IsOptional = true,
+                    Documentation = new AtsDocumentationInfo { Summary = "An optional value stored in the generated options bag." }
+                },
+                new AtsParameterInfo
+                {
+                    Name = "enabled",
+                    Type = boolParameter.Type,
+                    IsOptional = true,
+                    Documentation = new AtsDocumentationInfo { Summary = "Whether the behavior is enabled." }
+                }),
+            CreateCapability(
+                "withDirectOptionsAndCancellation",
+                new AtsParameterInfo
+                {
+                    Name = "options",
+                    Type = dtoParameter.Type,
+                    IsOptional = true,
+                    Documentation = new AtsDocumentationInfo { Summary = "Direct options." }
+                },
+                new AtsParameterInfo
+                {
+                    Name = "cancellationToken",
+                    Type = cancellationTokenParameter.Type,
+                    IsOptional = true,
+                    Documentation = new AtsDocumentationInfo { Summary = "Cancellation token." }
+                }));
+
+        var projector = new TypeScriptApiProjector(contextWithEdgeCases);
+        var model = projector.BuildApiModel(
+            new TypeScriptApiPackageIdentity(TestPackageName, TestPackageVersion),
+            [TestPackageName]);
+        var testRedisResource = Assert.Single(
+            model.Modules.SelectMany(module => module.Items),
+            item => item.Name == nameof(TestRedisResource));
+
+        var withOptionalString = Assert.Single(
+            testRedisResource.Members,
+            member => member.Name == "withOptionalString");
+        Assert.Collection(
+            withOptionalString.Parameters,
+            parameter => AssertParameter(parameter, "options", $"{TestOptionsPrefix}WithOptionalStringOptions", isOptional: true));
+
+        var withOptionsCollision = Assert.Single(
+            testRedisResource.Members,
+            member => member.Name == "withOptionsCollision");
+        Assert.Equal(
+            $"withOptionsCollision(options: string, optionsBag: string, _optionsBag?: {TestOptionsPrefix}WithOptionsCollisionOptions): Promise<boolean>",
+            withOptionsCollision.Declaration);
+        Assert.Collection(
+            withOptionsCollision.Parameters,
+            parameter => AssertParameter(parameter, "options", "string", isOptional: false, "Required options value."),
+            parameter => AssertParameter(parameter, "optionsBag", "string", isOptional: false, "Required options bag value."),
+            parameter => AssertParameter(parameter, "_optionsBag", $"{TestOptionsPrefix}WithOptionsCollisionOptions", isOptional: true));
+
+        var withOptionalOptionsField = Assert.Single(
+            testRedisResource.Members,
+            member => member.Name == "withOptionalOptionsField");
+        Assert.Equal(
+            $"withOptionalOptionsField(options?: {TestOptionsPrefix}WithOptionalOptionsFieldOptions): Promise<boolean>",
+            withOptionalOptionsField.Declaration);
+        Assert.Collection(
+            withOptionalOptionsField.Parameters,
+            parameter => AssertParameter(parameter, "options", $"{TestOptionsPrefix}WithOptionalOptionsFieldOptions", isOptional: true));
+
+        var withDirectOptionsAndCancellation = Assert.Single(
+            testRedisResource.Members,
+            member => member.Name == "withDirectOptionsAndCancellation");
+        Assert.Equal(
+            "withDirectOptionsAndCancellation(options?: TestConfigDto, cancellationToken?: AbortSignal | CancellationToken): Promise<boolean>",
+            withDirectOptionsAndCancellation.Declaration);
+        Assert.Collection(
+            withDirectOptionsAndCancellation.Parameters,
+            parameter => AssertParameter(parameter, "options", "TestConfigDto", isOptional: true, "Direct options."),
+            parameter => AssertParameter(parameter, "cancellationToken", "AbortSignal | CancellationToken", isOptional: true, "Cancellation token."));
+
+        var generatedSource = new AtsTypeScriptCodeGenerator()
+            .GenerateDistributedApplication(contextWithEdgeCases)["aspire.mts"];
+        var generatedInterfaceMembers = ParsePublicInterfaceMembers(generatedSource);
+        var testRedisResourceMembers = generatedInterfaceMembers[nameof(TestRedisResource)];
+
+        Assert.Contains(withOptionsCollision.Declaration, testRedisResourceMembers);
+        Assert.Contains(withOptionalOptionsField.Declaration, testRedisResourceMembers);
+        Assert.Contains(withDirectOptionsAndCancellation.Declaration, testRedisResourceMembers);
+        Assert.Contains(
+            $$"""async withOptionalOptionsField(optionsBag?: {{TestOptionsPrefix}}WithOptionalOptionsFieldOptions): Promise<boolean> {""",
+            generatedSource);
+        Assert.Contains("const options = optionsBag?.options;", generatedSource);
+        Assert.DoesNotContain("const options = options?.options;", generatedSource);
+
+        static void AssertParameter(
+            TypeScriptApiParameter parameter,
+            string name,
+            string declaredType,
+            bool isOptional,
+            string? summary = null)
+        {
+            Assert.Equal(name, parameter.Name);
+            Assert.Equal(declaredType, parameter.DeclaredType);
+            Assert.Equal(isOptional, parameter.IsOptional);
+            Assert.Equal(summary, parameter.Summary);
+        }
+    }
+
+    /// <summary>
+    /// The export contract promises that concatenating a manifest's declaration fragments type-checks
+    /// without site-authored shims, so every symbol a fragment names must be declared by some fragment.
+    /// This caught a real gap: handle types with no wrapper class surface in signatures under their raw
+    /// <c>XHandle</c> alias, but the fragment pass derived a different name and declared nothing.
+    /// </summary>
+    [Fact]
+    public void ApiExportDeclarationFragmentsReferenceOnlyDeclaredOrBuiltInSymbols()
+    {
+        var atsContext = CreateOwnershipFilteredContext();
+
+        var projector = new TypeScriptApiProjector(atsContext);
+        var model = projector.BuildApiModel(
+            new TypeScriptApiPackageIdentity(TestPackageName, TestPackageVersion),
+            [TestPackageName]);
+
+        var declaredNames = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var declaration in model.Declarations)
+        {
+            foreach (Match match in DeclaredNameRegex().Matches(declaration.Content))
+            {
+                declaredNames.Add(match.Groups[1].Value);
+            }
+        }
+
+        var referenced = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var declaration in model.Declarations)
+        {
+            foreach (var name in ExtractReferencedTypeNames(declaration.Content))
+            {
+                referenced.Add(name);
+            }
+        }
+
+        // Rendered item and member signatures are scanned too: they name the same symbols the
+        // fragments must supply, and they are where an alias the fragments never declared shows up.
+        // Enum items are excluded: their members are value names declared by the enum itself, not
+        // references to other symbols.
+        foreach (var item in model.Modules
+            .SelectMany(module => module.Items)
+            .Where(item => item.Kind != TypeScriptApiItemKind.Enum))
+        {
+            var signatures = item.Members
+                .Select(member => member.Declaration)
+                .Append(item.Declaration)
+                .Concat(item.Extends);
+
+            foreach (var name in signatures.SelectMany(ExtractReferencedTypeNames))
+            {
+                referenced.Add(name);
+            }
+        }
+
+        referenced.ExceptWith(declaredNames);
+        referenced.ExceptWith(s_typeScriptBuiltInNames);
+
+        Assert.True(
+            referenced.Count == 0,
+            $"Declaration fragments reference undeclared symbols: {string.Join(", ", referenced.OrderBy(name => name, StringComparer.Ordinal))}");
+    }
+
+    /// <summary>
+    /// TypeScript symbols the language itself provides, so fragments may reference them without
+    /// declaring them.
+    /// </summary>
+    private static readonly HashSet<string> s_typeScriptBuiltInNames = new(StringComparer.Ordinal)
+    {
+        "Promise", "PromiseLike", "Record", "Partial", "Readonly", "Array", "Function", "Date", "Error"
+    };
+
+    /// <summary>
+    /// Collects the type names a declaration fragment references. Enum bodies are dropped first because
+    /// their members are declared by the enum itself, then string literals are removed so that handle
+    /// aliases such as <c>export type XHandle = Handle&lt;'Assembly/Namespace.Type'&gt;;</c> do not look
+    /// like type references.
+    /// </summary>
+    private static IEnumerable<string> ExtractReferencedTypeNames(string content)
+    {
+        var withoutEnums = EnumDeclarationRegex().Replace(content, string.Empty);
+        var withoutLiterals = StringLiteralRegex().Replace(withoutEnums, "\"\"");
+
+        foreach (Match match in IdentifierRegex().Matches(withoutLiterals))
+        {
+            var name = match.Value;
+
+            // Conventional generic parameter names (T, TKey, TValue) are introduced by the
+            // declaration that uses them, so they are never resolved against other fragments.
+            if (name is "T" || (name.Length > 1 && name[0] == 'T' && char.IsUpper(name[1])))
+            {
+                continue;
+            }
+
+            yield return name;
+        }
+    }
+
+    [GeneratedRegex(@"^export (?:interface|enum|type) (\w+)", RegexOptions.Multiline)]
+    private static partial Regex DeclaredNameRegex();
+
+    [GeneratedRegex(@"enum \w+ \{[^}]*\}")]
+    private static partial Regex EnumDeclarationRegex();
+
+    [GeneratedRegex(@"'[^']*'|""[^""]*""")]
+    private static partial Regex StringLiteralRegex();
+
+    [GeneratedRegex(@"\b[A-Z][A-Za-z0-9_]*\b")]
+    private static partial Regex IdentifierRegex();
+
+    [Fact]
+    public void ApiExportDeclarationsAppearInGeneratedPublicInterfaces()
+    {
+        var atsContext = CreateOwnershipFilteredContext();
+
+        var projector = new TypeScriptApiProjector(atsContext);
+        var model = projector.BuildApiModel(
+            new TypeScriptApiPackageIdentity(TestPackageName, TestPackageVersion),
+            [TestPackageName]);
+
+        var generatedSource = new AtsTypeScriptCodeGenerator()
+            .GenerateDistributedApplication(atsContext)["aspire.mts"];
+
+        // Keep this assertion narrow. It proves both emitters consume the same resolved
+        // projection without snapshotting all runtime implementation code: every method
+        // signature the export publishes must be present verbatim in the generated public
+        // interface for the type that owns it.
+        var generatedInterfaceMembers = ParsePublicInterfaceMembers(generatedSource);
+
+        var checkedDeclarations = 0;
+        foreach (var module in model.Modules)
+        {
+            foreach (var item in module.Items)
+            {
+                foreach (var member in item.Members.Where(m => m.Kind == TypeScriptApiItemKind.Method))
+                {
+                    Assert.True(
+                        generatedInterfaceMembers.TryGetValue(item.Name, out var members),
+                        $"Exported type '{item.Name}' has no generated public interface.");
+
+                    Assert.True(
+                        members.Contains(member.Declaration),
+                        $"Exported declaration '{member.Declaration}' on '{item.Name}' does not appear in the generated public interface. " +
+                        $"Generated members: {string.Join(", ", members)}");
+
+                    checkedDeclarations++;
+                }
+            }
+        }
+
+        Assert.True(checkedDeclarations > 0, "The canonical export produced no method declarations to compare.");
+    }
+
+    [Fact]
+    public void ApiExportUsesPromiseWrappersFromReferencedHandleCapabilities()
+    {
+        var fullContext = CreateReferencedHandleContext();
+        var exportContext = AtsContextFilter.FilterForApiExport(
+            fullContext,
+            [TestPackageName]);
+
+        var projector = new TypeScriptApiProjector(exportContext);
+        var model = projector.BuildApiModel(
+            new TypeScriptApiPackageIdentity(TestPackageName, TestPackageVersion),
+            [TestPackageName]);
+
+        var ownedContext = Assert.Single(
+            model.Modules.SelectMany(module => module.Items),
+            item => item.Name == "OwnedContext");
+        var exportedMethod = Assert.Single(
+            ownedContext.Members,
+            member => member.Name == "getForeign");
+
+        var generatedSource = new AtsTypeScriptCodeGenerator()
+            .GenerateDistributedApplication(fullContext)["aspire.mts"];
+        var generatedInterfaceMembers = ParsePublicInterfaceMembers(generatedSource);
+
+        Assert.Contains(exportedMethod.Declaration, generatedInterfaceMembers["OwnedContext"]);
+    }
+
+    [Fact]
+    public void ApiExportUsesResourceWrappersReferencedOnlyBySupportingCapabilities()
+    {
+        var fullContext = CreateReferencedHandleContext();
+        var exportContext = AtsContextFilter.FilterForApiExport(
+            fullContext,
+            [TestPackageName]);
+
+        var projector = new TypeScriptApiProjector(exportContext);
+        var model = projector.BuildApiModel(
+            new TypeScriptApiPackageIdentity(TestPackageName, TestPackageVersion),
+            [TestPackageName]);
+
+        var ownedContext = Assert.Single(
+            model.Modules.SelectMany(module => module.Items),
+            item => item.Name == "OwnedContext");
+        var exportedMethod = Assert.Single(
+            ownedContext.Members,
+            member => member.Name == "waitFor");
+
+        var generatedSource = new AtsTypeScriptCodeGenerator()
+            .GenerateDistributedApplication(fullContext)["aspire.mts"];
+        var generatedInterfaceMembers = ParsePublicInterfaceMembers(generatedSource);
+
+        Assert.Contains(exportedMethod.Declaration, generatedInterfaceMembers["OwnedContext"]);
+    }
+
+    [Fact]
+    public void ApiExportRetainsExpandedTargetsFromSupportingCapabilities()
+    {
+        var fullContext = CreateReferencedHandleContext();
+        var exportContext = AtsContextFilter.FilterForApiExport(
+            fullContext,
+            [TestPackageName]);
+
+        var projector = new TypeScriptApiProjector(exportContext);
+        var model = projector.BuildApiModel(
+            new TypeScriptApiPackageIdentity(TestPackageName, TestPackageVersion),
+            [TestPackageName]);
+
+        var ownedContext = Assert.Single(
+            model.Modules.SelectMany(module => module.Items),
+            item => item.Name == "OwnedContext");
+        var exportedMethod = Assert.Single(
+            ownedContext.Members,
+            member => member.Name == "waitForForeign");
+
+        var generatedSource = new AtsTypeScriptCodeGenerator()
+            .GenerateDistributedApplication(fullContext)["aspire.mts"];
+        var generatedInterfaceMembers = ParsePublicInterfaceMembers(generatedSource);
+
+        Assert.Contains(exportedMethod.Declaration, generatedInterfaceMembers["OwnedContext"]);
+        Assert.Equal(
+            exportContext.Capabilities.Count,
+            exportContext.Capabilities.Select(capability => capability.CapabilityId).Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
+    public void ApiExportRetainsAssemblyOwnedMembersOnExternalTypes()
+    {
+        var fullContext = CreateContextFromBothAssemblies();
+        var exportContext = AtsContextFilter.FilterForApiExport(
+            fullContext,
+            ["Aspire.Hosting"]);
+
+        var projector = new TypeScriptApiProjector(exportContext);
+        var model = projector.BuildApiModel(
+            new TypeScriptApiPackageIdentity("Aspire.Hosting", TestPackageVersion),
+            ["Aspire.Hosting"]);
+        var items = model.Modules.SelectMany(module => module.Items).ToList();
+
+        var configurationSection = Assert.Single(items, item => item.Name == "ConfigurationSection");
+        Assert.Contains(configurationSection.Members, member => member.Name == "key");
+        Assert.Contains(configurationSection.Members, member => member.Name == "path");
+        Assert.Contains(configurationSection.Members, member => member.Name == "value");
+
+        var hostEnvironment = Assert.Single(items, item => item.Name == "HostEnvironment");
+        Assert.Contains(hostEnvironment.Members, member => member.Name == "applicationName");
+        Assert.Contains(hostEnvironment.Members, member => member.Name == "environmentName");
+        Assert.Contains(hostEnvironment.Members, member => member.Name == "contentRootPath");
+    }
+
+    /// <summary>
+    /// DTO interfaces carry properties that have no C# counterpart, such as the client-only
+    /// <c>throwOnPendingRejections</c> on <c>CreateBuilderOptions</c>. Those used to be appended by the
+    /// module emitter alone, so the exported interface described fewer properties than the module we
+    /// ship and aspire.dev documented a DTO nobody could actually pass.
+    /// </summary>
+    [Fact]
+    public void ApiExportDtoPropertiesMatchTheGeneratedDtoInterfaces()
+    {
+        var atsContext = CreateOwnershipFilteredContext();
+
+        var projector = new TypeScriptApiProjector(atsContext);
+        var model = projector.BuildApiModel(
+            new TypeScriptApiPackageIdentity(TestPackageName, TestPackageVersion),
+            [TestPackageName]);
+
+        var generatedSource = new AtsTypeScriptCodeGenerator()
+            .GenerateDistributedApplication(atsContext)["aspire.mts"];
+
+        var checkedDtos = 0;
+        foreach (var item in model.Modules.SelectMany(module => module.Items).Where(item => item.Kind == TypeScriptApiItemKind.Dto))
+        {
+            var body = ExtractExportedInterfaceBody(generatedSource, item.Name);
+            Assert.NotNull(body);
+
+            var generatedProperties = body!
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => line.Trim())
+                .Where(line => line.EndsWith(';') && !line.StartsWith("//", StringComparison.Ordinal) && !line.StartsWith("*", StringComparison.Ordinal) && !line.StartsWith("/*", StringComparison.Ordinal))
+                .Select(line => line[..^1])
+                .ToList();
+
+            Assert.Equal(generatedProperties, item.Members.Select(member => member.Declaration).ToList());
+            checkedDtos++;
+        }
+
+        Assert.True(checkedDtos > 0, "The canonical export produced no DTO items to compare.");
+    }
+
+    /// <summary>
+    /// Returns the body of <c>export interface {name} { ... }</c> from generated module source, or
+    /// <see langword="null" /> when the generated source declares no such interface.
+    /// </summary>
+    private static string? ExtractExportedInterfaceBody(string generatedSource, string interfaceName)
+    {
+        var header = $"export interface {interfaceName} {{";
+        var start = generatedSource.IndexOf(header, StringComparison.Ordinal);
+        if (start < 0)
+        {
+            return null;
+        }
+
+        var bodyStart = start + header.Length;
+        var end = generatedSource.IndexOf("\n}", bodyStart, StringComparison.Ordinal);
+        return end < 0 ? null : generatedSource[bodyStart..end];
+    }
+
+    /// <summary>
+    /// Consumers deduplicate declaration fragments by comparing content for the same ID across packages,
+    /// so the text has to be byte-identical no matter which OS produced the export. Some fragments come
+    /// from raw string literals, which pick up CRLF when the repository is checked out on Windows.
+    /// </summary>
+    [Fact]
+    public void ApiExportDeclarationContentUsesPlatformIndependentLineEndings()
+    {
+        var atsContext = CreateOwnershipFilteredContext();
+
+        var projector = new TypeScriptApiProjector(atsContext);
+        var model = projector.BuildApiModel(
+            new TypeScriptApiPackageIdentity(TestPackageName, TestPackageVersion),
+            [TestPackageName]);
+
+        Assert.All(model.Declarations, declaration =>
+            Assert.DoesNotContain('\r', declaration.Content));
+    }
+
+    [Fact]
+    public void ApiExportSeparatesReferencedTypesFromPackageOwnedItems()
+    {
+        var atsContext = CreateOwnershipFilteredContext();
+
+        var projector = new TypeScriptApiProjector(atsContext);
+        var model = projector.BuildApiModel(
+            new TypeScriptApiPackageIdentity(TestPackageName, TestPackageVersion),
+            [TestPackageName]);
+
+        var documentedItems = model.Modules.SelectMany(module => module.Items).ToList();
+
+        // Every documented item must be something this package published: either it owns the type,
+        // or it contributes members to a type another package owns. Anything else would republish
+        // another package's surface under this package's version.
+        Assert.All(documentedItems, item =>
+            Assert.True(
+                item.TypeId.StartsWith($"{TestPackageName}/", StringComparison.Ordinal) ||
+                item.OwningAssemblyName == TestPackageName ||
+                item.Kind == TypeScriptApiItemKind.Augmentation,
+                $"Item '{item.Id}' ({item.TypeId}) is neither package-owned nor a package contribution."));
+
+        // A package that extends another package's type must not publish a second page for it. The
+        // owning package's export uses "interface:{name}" for that type, so an augmentation reusing
+        // that ID would collide across a manifest and claim ownership it does not have. The
+        // contributing package is part of the ID as well, because every integration that extends
+        // DistributedApplicationBuilder augments the same interface name.
+        Assert.All(
+            documentedItems.Where(item => item.Kind == TypeScriptApiItemKind.Augmentation),
+            item =>
+            {
+                Assert.StartsWith($"augmentation:{TestPackageName}:", item.Id, StringComparison.Ordinal);
+                Assert.NotEqual(TestPackageName, item.OwningAssemblyName);
+            });
+
+        // Item IDs are what aspire.dev deduplicates a manifest on, so a repeat would silently drop a page.
+        var itemIds = documentedItems.Select(item => item.Id).ToList();
+        Assert.Equal(itemIds.Count, itemIds.Distinct(StringComparer.Ordinal).Count());
+
+        // Members are owned per capability, so no documented member may come from another assembly.
+        Assert.All(
+            documentedItems.SelectMany(item => item.Members),
+            member => Assert.Equal(TestPackageName, member.OwningAssemblyName));
+
+        // The closure must reach types this package does not own; otherwise the fixture would not
+        // exercise cross-package references at all.
+        var referencedTypeIds = atsContext.HandleTypes
+            .Select(type => type.AtsTypeId)
+            .Where(typeId => !typeId.StartsWith($"{TestPackageName}/", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.NotEmpty(referencedTypeIds);
+
+        var declarationIds = model.Declarations.Select(declaration => declaration.Id).ToList();
+        Assert.Equal(declarationIds.Count, declarationIds.Distinct(StringComparer.Ordinal).Count());
+
+        // Referenced types must reach the declaration fragments under their real owner, otherwise
+        // the concatenated declarations would not type-check.
+        Assert.Contains(model.Declarations, declaration => declaration.OwningAssemblyName == "Aspire.Hosting");
+
+        // Every type name the declarations reference must also be declared by the declarations.
+        var declaredNames = model.Declarations
+            .SelectMany(declaration => Regex.Matches(declaration.Content, @"export (?:interface|enum|type) (\w+)"))
+            .Select(match => match.Groups[1].Value)
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.Contains("ResourceBuilderBase", declaredNames);
+        Assert.Contains("ContainerResource", declaredNames);
+    }
+
+    /// <summary>
+    /// Two packages that expose the same capability name with incompatible parameter types must
+    /// name their options interfaces the same way whether they are scanned together or apart.
+    /// </summary>
+    /// <remarks>
+    /// <c>sdk export</c> runs one app host per package, so the projector only ever sees the
+    /// requested package plus core, while <c>sdk generate</c> sees whatever the user's app host
+    /// references. Deriving the name from the exporting assembly is what makes those two views
+    /// agree: naming by method alone gave both packages <c>RunAsEmulatorOptions</c> when projected
+    /// apart, which is a duplicate declaration with conflicting members once aspire.dev
+    /// concatenates their fragments.
+    /// </remarks>
+    [Fact]
+    public void OptionsInterfaceNamesDoNotDependOnWhichOtherPackagesWereScanned()
+    {
+        var scannedTogether = new TypeScriptApiProjector(CreateEmulatorCollisionContext());
+        var hubsAlone = new TypeScriptApiProjector(CreateEmulatorCollisionContext(includeServiceBus: false));
+        var busAlone = new TypeScriptApiProjector(CreateEmulatorCollisionContext(includeEventHubs: false));
+
+        static string EmulatorInterfaceName(TypeScriptApiProjector projector, string packageName)
+            => projector.ResolveOptionsInterfaceName(
+                projector.Resolved.Context.Capabilities.Single(c => c.CapabilityId == $"{packageName}/runAsEmulator"));
+
+        Assert.Equal("Aspire_x002E_Hosting_x002E_Azure_x002E_EventHubsRunAsEmulatorOptions", EmulatorInterfaceName(hubsAlone, CollisionPackageA));
+        Assert.Equal("Aspire_x002E_Hosting_x002E_Azure_x002E_ServiceBusRunAsEmulatorOptions", EmulatorInterfaceName(busAlone, CollisionPackageB));
+
+        Assert.Equal(
+            EmulatorInterfaceName(hubsAlone, CollisionPackageA),
+            EmulatorInterfaceName(scannedTogether, CollisionPackageA));
+        Assert.Equal(
+            EmulatorInterfaceName(busAlone, CollisionPackageB),
+            EmulatorInterfaceName(scannedTogether, CollisionPackageB));
+    }
+
+    /// <summary>
+    /// An entry point's exported declaration describes the function the generator actually emits.
+    /// </summary>
+    /// <remarks>
+    /// Entry points are free functions, so the generator emits them taking the client explicitly and
+    /// keeping optional arguments positional. The exporter used to route them through the member
+    /// signature resolver instead, which dropped <c>client</c> and folded the optionals into an
+    /// options bag, so the published declaration described a call that does not exist. Consumers
+    /// type-check against these declarations, so the disagreement surfaces as a compile error in
+    /// their code rather than anywhere near this repository.
+    /// </remarks>
+    [Fact]
+    public void ApiExportDeclaresEntryPointsWithTheSignatureTheGeneratorEmits()
+    {
+        var context = CreateEntryPointContext();
+
+        var projector = new TypeScriptApiProjector(context);
+        var model = projector.BuildApiModel(
+            new TypeScriptApiPackageIdentity(EntryPointPackage, TestPackageVersion),
+            [EntryPointPackage]);
+
+        var exported = Assert.Single(
+            model.Modules.SelectMany(module => module.Items),
+            item => item.Name == "startThing");
+
+        Assert.Equal(
+            "function startThing(client: AspireClientRpc, name: string, retries?: number): Promise<void>",
+            exported.Declaration);
+
+        var generatedSource = new AtsTypeScriptCodeGenerator()
+            .GenerateDistributedApplication(context)["aspire.mts"];
+
+        Assert.Contains(
+            $"export async {exported.Declaration} {{",
+            generatedSource,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Two assemblies whose names differ only in where their separators fall must not collapse to
+    /// the same options-interface qualifier.
+    /// </summary>
+    /// <remarks>
+    /// The qualifier used to keep only letters and digits, so <c>Contoso.Foo.Bar</c> and
+    /// <c>Contoso.FooBar</c> both produced <c>ContosoFooBar</c>. A per-package export cannot see
+    /// that some other package would land on the same qualifier, so it has no opportunity to
+    /// disambiguate the way full generation could; the two packages would each emit a
+    /// <c>ContosoFooBarRunAsEmulatorOptions</c> with different members and aspire.dev would
+    /// concatenate them into a duplicate declaration that does not compile. Encoding the separator
+    /// instead of dropping it makes the qualifier injective, which is what removes the possibility.
+    /// </remarks>
+    [Fact]
+    public void OptionsInterfaceQualifiersDistinguishAssembliesThatDifferOnlyBySeparatorPlacement()
+    {
+        var dotted = TypeScriptApiProjector.GetOptionsInterfaceName("runAsEmulator", "Contoso.Foo.Bar");
+        var joined = TypeScriptApiProjector.GetOptionsInterfaceName("runAsEmulator", "Contoso.FooBar");
+
+        Assert.NotEqual(dotted, joined);
+        Assert.Equal("Contoso_x002E_Foo_x002E_BarRunAsEmulatorOptions", dotted);
+        Assert.Equal("Contoso_x002E_FooBarRunAsEmulatorOptions", joined);
+    }
+
+    /// <summary>
+    /// Escape sequences are terminated so characters after the escaped code unit cannot become part
+    /// of the escape itself.
+    /// </summary>
+    [Fact]
+    public void OptionsInterfaceQualifiersUseTerminatedEscapes()
+    {
+        Assert.NotEqual(
+            TypeScriptApiProjector.GetOptionsInterfaceName("runAsEmulator", "Contoso.Foo-Bar"),
+            TypeScriptApiProjector.GetOptionsInterfaceName("runAsEmulator", "Contoso.Foo.x2DBar"));
+
+        Assert.NotEqual(
+            TypeScriptApiProjector.GetOptionsInterfaceName("runAsEmulator", "Contoso.\u01234"),
+            TypeScriptApiProjector.GetOptionsInterfaceName("runAsEmulator", "Contoso.\u1234"));
+    }
+
+    /// <summary>
+    /// An assembly name that starts with a digit still yields a parseable TypeScript identifier.
+    /// </summary>
+    /// <remarks>
+    /// Assembly names may begin with a digit -- <c>3rdParty.Aspire</c> is legal -- but TypeScript
+    /// identifiers may not, so the unguarded qualifier emitted
+    /// <c>interface 3rdPartyAspireRunAsEmulatorOptions</c>, which is a syntax error rather than a
+    /// naming inconvenience. The escape cannot alias a name that already begins with an underscore
+    /// because a literal underscore encodes as a doubled one.
+    /// </remarks>
+    [Fact]
+    public void OptionsInterfaceQualifiersEscapeAssemblyNamesThatStartWithADigit()
+    {
+        var name = TypeScriptApiProjector.GetOptionsInterfaceName("runAsEmulator", "3rdParty.Aspire");
+
+        Assert.Equal("_x0033_rdParty_x002E_AspireRunAsEmulatorOptions", name);
+        Assert.True(name[0] is '_' or '$' || char.IsLetter(name[0]), $"'{name}' is not a valid TypeScript identifier.");
+        Assert.NotEqual(name, TypeScriptApiProjector.GetOptionsInterfaceName("runAsEmulator", "_3rdParty.Aspire"));
+    }
+
+    /// <summary>
+    /// Non-core assemblies are qualified by their complete names, not by a shortened suffix that can
+    /// overlap other assemblies.
+    /// </summary>
+    [Fact]
+    public void OptionsInterfaceQualifiersUseTheFullAssemblyName()
+    {
+        var hostingRedis = TypeScriptApiProjector.GetOptionsInterfaceName("runAsEmulator", "Aspire.Hosting.Redis");
+        var aspireRedis = TypeScriptApiProjector.GetOptionsInterfaceName("runAsEmulator", "Aspire.Redis");
+        var bareRedis = TypeScriptApiProjector.GetOptionsInterfaceName("runAsEmulator", "Redis");
+
+        Assert.Equal("Aspire_x002E_Hosting_x002E_RedisRunAsEmulatorOptions", hostingRedis);
+        Assert.Equal("Aspire_x002E_RedisRunAsEmulatorOptions", aspireRedis);
+        Assert.Equal("RedisRunAsEmulatorOptions", bareRedis);
+        Assert.Equal(3, new[] { hostingRedis, aspireRedis, bareRedis }.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    /// <summary>
+    /// An options interface is documented by, and keyed to, the assembly whose capability produced
+    /// it rather than the package the export was requested for.
+    /// </summary>
+    /// <remarks>
+    /// The projector's context reaches beyond the requested package, so an unscoped emission would
+    /// let one package publish its dependencies' options interfaces under its own version. Keying
+    /// the declaration by the requesting package instead of the owner is the same bug from the
+    /// other side: the same interface would carry a different fragment id in every export that
+    /// reached it, so concatenation would redeclare it rather than deduplicate it.
+    /// </remarks>
+    [Fact]
+    public void ApiExportAttributesOptionsInterfacesToTheAssemblyThatOwnsThem()
+    {
+        var projector = new TypeScriptApiProjector(CreateEmulatorCollisionContext());
+        var model = projector.BuildApiModel(
+            new TypeScriptApiPackageIdentity(CollisionPackageA, TestPackageVersion),
+            [CollisionPackageA]);
+
+        var documentedOptions = model.Modules
+            .SelectMany(module => module.Items)
+            .Where(item => item.Kind == TypeScriptApiItemKind.Options)
+            .ToList();
+
+        Assert.Collection(
+            documentedOptions,
+            item =>
+            {
+                Assert.Equal("Aspire_x002E_Hosting_x002E_Azure_x002E_EventHubsRunAsEmulatorOptions", item.Name);
+                Assert.Equal(CollisionPackageA, item.OwningAssemblyName);
+            });
+
+        var serviceBusDeclaration = Assert.Single(
+            model.Declarations,
+            declaration => declaration.Content.Contains("Aspire_x002E_Hosting_x002E_Azure_x002E_ServiceBusRunAsEmulatorOptions", StringComparison.Ordinal));
+
+        Assert.Equal($"{CollisionPackageB}:options:Aspire_x002E_Hosting_x002E_Azure_x002E_ServiceBusRunAsEmulatorOptions", serviceBusDeclaration.Id);
+        Assert.Equal(CollisionPackageB, serviceBusDeclaration.OwningAssemblyName);
+    }
+
+    /// <summary>
+    /// A per-package export names a colliding options interface the way full generation names it,
+    /// on the context the export path actually produces rather than on a raw scan.
+    /// </summary>
+    /// <remarks>
+    /// The determinism test above compares projectors built directly over hand-made contexts, but
+    /// <c>sdk export</c> never hands the projector a raw scan: <see cref="AtsContextFilter.FilterForApiExport"/>
+    /// narrows it to the requested package first. That difference is the whole bug — naming used to
+    /// be decided by collision detection over whatever the context happened to hold, so the narrowed
+    /// view and the full scan reached different answers for the same package.
+    /// <para>
+    /// Both directions fail under the old scheme, but at different assertions, and that asymmetry
+    /// is why the body comparison is here. Event Hubs was scanned first and kept the unsuffixed
+    /// base name, so it fails only on the name: it produced <c>RunAsEmulatorOptions</c> rather than
+    /// the Event Hubs assembly-qualified name. Service Bus lost that draw during full generation
+    /// and was suffixed there while its own single-package export was not, so it disagreed about
+    /// the interface itself. Checking only that the exported name appears among the generated names
+    /// would have missed it, because the name did appear -- it just belonged to Event Hubs. The old
+    /// scheme had Service Bus export <c>RunAsEmulatorOptions</c> as <c>configureContainer?: boolean</c>
+    /// while the SDK gave that same name to Event Hubs as <c>configureContainer?: string</c>, so a
+    /// consumer concatenating the export silently got the wrong callback type rather than a
+    /// redeclaration error.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(CollisionPackageA, "Aspire_x002E_Hosting_x002E_Azure_x002E_EventHubsRunAsEmulatorOptions")]
+    [InlineData(CollisionPackageB, "Aspire_x002E_Hosting_x002E_Azure_x002E_ServiceBusRunAsEmulatorOptions")]
+    public void ApiExportNamesACollidingOptionsInterfaceTheWayGenerationDoes(string packageName, string expectedInterfaceName)
+    {
+        var fullContext = CreateEmulatorCollisionContext();
+        var exportContext = AtsContextFilter.FilterForApiExport(fullContext, [packageName]);
+
+        var model = new TypeScriptApiProjector(exportContext).BuildApiModel(
+            new TypeScriptApiPackageIdentity(packageName, TestPackageVersion),
+            [packageName]);
+
+        var exportedOptions = Assert.Single(
+            model.Modules.SelectMany(module => module.Items),
+            item => item.Kind == TypeScriptApiItemKind.Options);
+
+        Assert.Equal(expectedInterfaceName, exportedOptions.Name);
+        Assert.Equal(packageName, exportedOptions.OwningAssemblyName);
+
+        var generatedSource = new AtsTypeScriptCodeGenerator()
+            .GenerateDistributedApplication(fullContext)["aspire.mts"];
+
+        var generatedInterfaces = ParsePublicInterfaceMembers(generatedSource);
+        Assert.Contains(exportedOptions.Name, generatedInterfaces.Keys);
+        Assert.Equal(
+            exportedOptions.Members.Select(member => member.Declaration).OrderBy(d => d, StringComparer.Ordinal),
+            generatedInterfaces[exportedOptions.Name].OrderBy(d => d, StringComparer.Ordinal));
+    }
+
+    private const string CollisionPackageA = "Aspire.Hosting.Azure.EventHubs";
+    private const string CollisionPackageB = "Aspire.Hosting.Azure.ServiceBus";
+
+    /// <summary>
+    /// Builds a manifest where both packages expose <c>runAsEmulator</c> with an optional parameter
+    /// of the same name but an incompatible type, which is what forced generation to suffix one of
+    /// the two options interfaces when names were derived from the method alone.
+    /// </summary>
+    /// <remarks>
+    /// The two package names are the real ones: <c>AzureEventHubsExtensions.RunAsEmulator</c> and
+    /// <c>AzureServiceBusExtensions.RunAsEmulator</c> both take an optional
+    /// <c>Action&lt;IResourceBuilder&lt;T&gt;&gt;</c> for different <c>T</c>, so their options
+    /// interfaces cannot be merged. The capabilities here are synthetic; only the shape matters.
+    /// </remarks>
+    private const string EntryPointPackage = "Aspire.Hosting.Contoso.EntryPoints";
+
+    /// <summary>
+    /// Builds a context holding a single entry-point capability: one with no target type, so it is
+    /// emitted as a free function rather than as a member of a builder interface.
+    /// </summary>
+    private static AtsContext CreateEntryPointContext()
+    {
+        var capability = new AtsCapabilityInfo
+        {
+            CapabilityId = $"{EntryPointPackage}/startThing",
+            MethodName = "startThing",
+            Parameters =
+            [
+                new AtsParameterInfo
+                {
+                    Name = "name",
+                    Type = new AtsTypeRef { TypeId = AtsConstants.String, Category = AtsTypeCategory.Primitive }
+                },
+                new AtsParameterInfo
+                {
+                    Name = "retries",
+                    Type = new AtsTypeRef { TypeId = AtsConstants.Number, Category = AtsTypeCategory.Primitive },
+                    IsOptional = true
+                }
+            ],
+            ReturnType = new AtsTypeRef { TypeId = AtsConstants.Void, Category = AtsTypeCategory.Primitive },
+            ExpandedTargetTypes = [],
+            CapabilityKind = AtsCapabilityKind.Method
+        };
+
+        return new AtsContext
+        {
+            Capabilities = [capability],
+            HandleTypes = [],
+            DtoTypes = [],
+            EnumTypes = [],
+            ExportedValues = [],
+            Diagnostics = [],
+            CapabilityExportingAssemblyNames = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [capability.CapabilityId] = EntryPointPackage
+            }
+        };
+    }
+
+    private static AtsContext CreateEmulatorCollisionContext(bool includeEventHubs = true, bool includeServiceBus = true)
+    {
+        static AtsTypeInfo Resource(string packageName, string typeName) => new()
+        {
+            AtsTypeId = $"{packageName}/{typeName}",
+            IsInterface = false,
+            HasExposeMethods = true,
+            HasExposeProperties = false,
+            BaseTypeHierarchy = [],
+            ImplementedInterfaces = []
+        };
+
+        static AtsCapabilityInfo Emulator(string packageName, AtsTypeInfo target, string optionalTypeId) => new()
+        {
+            CapabilityId = $"{packageName}/runAsEmulator",
+            MethodName = "runAsEmulator",
+            Parameters =
+            [
+                new AtsParameterInfo
+                {
+                    Name = "configureContainer",
+                    Type = new AtsTypeRef { TypeId = optionalTypeId, Category = AtsTypeCategory.Primitive },
+                    IsOptional = true
+                }
+            ],
+            ReturnType = new AtsTypeRef { TypeId = target.AtsTypeId, Category = AtsTypeCategory.Handle },
+            TargetTypeId = target.AtsTypeId,
+            TargetType = new AtsTypeRef { TypeId = target.AtsTypeId, Category = AtsTypeCategory.Handle },
+            TargetParameterName = "builder",
+            ExpandedTargetTypes = [],
+            ReturnsBuilder = true,
+            CapabilityKind = AtsCapabilityKind.Method
+        };
+
+        var hubsResource = Resource(CollisionPackageA, "EventHubsResource");
+        var busResource = Resource(CollisionPackageB, "ServiceBusResource");
+
+        // The two differ in the type of their shared optional parameter, so the interfaces are not
+        // mergeable and one of them had to be renamed to make room for the other.
+        var hubsEmulator = Emulator(CollisionPackageA, hubsResource, AtsConstants.String);
+        var busEmulator = Emulator(CollisionPackageB, busResource, AtsConstants.Boolean);
+
+        List<AtsCapabilityInfo> capabilities = [];
+        List<AtsTypeInfo> handleTypes = [];
+        var exportingAssemblyNames = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        if (includeEventHubs)
+        {
+            capabilities.Add(hubsEmulator);
+            handleTypes.Add(hubsResource);
+            exportingAssemblyNames[hubsEmulator.CapabilityId] = CollisionPackageA;
+        }
+
+        if (includeServiceBus)
+        {
+            capabilities.Add(busEmulator);
+            handleTypes.Add(busResource);
+            exportingAssemblyNames[busEmulator.CapabilityId] = CollisionPackageB;
+        }
+
+        return new AtsContext
+        {
+            Capabilities = capabilities,
+            HandleTypes = handleTypes,
+            DtoTypes = [],
+            EnumTypes = [],
+            ExportedValues = [],
+            Diagnostics = [],
+            CapabilityExportingAssemblyNames = exportingAssemblyNames
+        };
+    }
+
+    /// <summary>
+    /// Builds the context the canonical exporter sees for a single package: the package's own
+    /// capabilities plus the transitive closure of types they reference from other assemblies.
+    /// This mirrors what RemoteHost passes to the exporter for one <c>Name@Version</c> request.
+    /// </summary>
+    private static AtsContext CreateOwnershipFilteredContext()
+    {
+        return AtsContextFilter.FilterForApiExport(
+            CreateContextFromBothAssemblies(),
+            [TestPackageName]);
+    }
+
+    private static AtsContext CreateReferencedHandleContext()
+    {
+        const string ownedTypeId = TestPackageName + "/IOwnedContext";
+        const string foreignTypeId = "Foreign.Dependency/IForeignHandle";
+        const string resourceTypeId = "Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource";
+        const string foreignResourceTypeId = "Foreign.Dependency/ForeignResource";
+        const string secondForeignResourceTypeId = "Foreign.Dependency/SecondForeignResource";
+        const string parameterResourceTypeId = "Foreign.Dependency/ParameterResource";
+        const string callbackParameterResourceTypeId = "Foreign.Dependency/CallbackParameterResource";
+        const string callbackReturnResourceTypeId = "Foreign.Dependency/CallbackReturnResource";
+        const string returnResourceTypeId = "Foreign.Dependency/ReturnResource";
+
+        var ownedType = new AtsTypeRef
+        {
+            TypeId = ownedTypeId,
+            Category = AtsTypeCategory.Handle,
+            IsInterface = true
+        };
+        var foreignType = new AtsTypeRef
+        {
+            TypeId = foreignTypeId,
+            Category = AtsTypeCategory.Handle,
+            IsInterface = true
+        };
+        var resourceType = new AtsTypeRef
+        {
+            TypeId = resourceTypeId,
+            Category = AtsTypeCategory.Handle,
+            ClrType = typeof(IResource),
+            IsInterface = true
+        };
+        var foreignResourceType = new AtsTypeRef
+        {
+            TypeId = foreignResourceTypeId,
+            Category = AtsTypeCategory.Handle,
+            ClrType = typeof(TestRedisResource),
+            ImplementedInterfaces = [resourceType, foreignType]
+        };
+        var secondForeignResourceType = CreateResourceType(secondForeignResourceTypeId, resourceType, foreignType);
+        var parameterResourceType = CreateResourceType(parameterResourceTypeId, resourceType);
+        var callbackParameterResourceType = CreateResourceType(callbackParameterResourceTypeId, resourceType);
+        var callbackReturnResourceType = CreateResourceType(callbackReturnResourceTypeId, resourceType);
+        var returnResourceType = CreateResourceType(returnResourceTypeId, resourceType);
+
+        return new AtsContext
+        {
+            Capabilities =
+            [
+                new AtsCapabilityInfo
+                {
+                    CapabilityId = TestPackageName + "/getForeign",
+                    MethodName = "getForeign",
+                    OwningTypeName = "IOwnedContext",
+                    Parameters = [],
+                    ReturnType = foreignType,
+                    TargetTypeId = ownedTypeId,
+                    TargetType = ownedType,
+                    ReturnsBuilder = false,
+                    CapabilityKind = AtsCapabilityKind.InstanceMethod
+                },
+                new AtsCapabilityInfo
+                {
+                    CapabilityId = TestPackageName + "/getConcrete",
+                    MethodName = "getConcrete",
+                    OwningTypeName = "IOwnedContext",
+                    Parameters = [],
+                    ReturnType = foreignResourceType,
+                    TargetTypeId = ownedTypeId,
+                    TargetType = ownedType,
+                    ReturnsBuilder = false,
+                    CapabilityKind = AtsCapabilityKind.InstanceMethod
+                },
+                new AtsCapabilityInfo
+                {
+                    CapabilityId = TestPackageName + "/waitFor",
+                    MethodName = "waitFor",
+                    OwningTypeName = "IOwnedContext",
+                    Parameters =
+                    [
+                        new AtsParameterInfo
+                        {
+                            Name = "dependency",
+                            Type = resourceType
+                        }
+                    ],
+                    ReturnType = new AtsTypeRef
+                    {
+                        TypeId = AtsConstants.Void,
+                        Category = AtsTypeCategory.Primitive
+                    },
+                    TargetTypeId = ownedTypeId,
+                    TargetType = ownedType,
+                    ReturnsBuilder = false,
+                    CapabilityKind = AtsCapabilityKind.InstanceMethod
+                },
+                new AtsCapabilityInfo
+                {
+                    CapabilityId = TestPackageName + "/waitForForeign",
+                    MethodName = "waitForForeign",
+                    OwningTypeName = "IOwnedContext",
+                    Parameters =
+                    [
+                        new AtsParameterInfo
+                        {
+                            Name = "dependency",
+                            Type = foreignType
+                        }
+                    ],
+                    ReturnType = new AtsTypeRef
+                    {
+                        TypeId = AtsConstants.Void,
+                        Category = AtsTypeCategory.Primitive
+                    },
+                    TargetTypeId = ownedTypeId,
+                    TargetType = ownedType,
+                    ReturnsBuilder = false,
+                    CapabilityKind = AtsCapabilityKind.InstanceMethod
+                },
+                new AtsCapabilityInfo
+                {
+                    CapabilityId = "Foreign.Dependency/getName",
+                    MethodName = "getName",
+                    OwningTypeName = "IForeignHandle",
+                    Parameters =
+                    [
+                        new AtsParameterInfo
+                        {
+                            Name = "resource",
+                            Type = parameterResourceType
+                        },
+                        new AtsParameterInfo
+                        {
+                            Name = "configure",
+                            IsCallback = true,
+                            CallbackParameters =
+                            [
+                                new AtsCallbackParameterInfo
+                                {
+                                    Name = "resource",
+                                    Type = callbackParameterResourceType
+                                }
+                            ],
+                            CallbackReturnType = callbackReturnResourceType
+                        }
+                    ],
+                    ReturnType = returnResourceType,
+                    TargetTypeId = foreignTypeId,
+                    TargetType = foreignType,
+                    ExpandedTargetTypes = [foreignResourceType, secondForeignResourceType],
+                    ReturnsBuilder = false,
+                    CapabilityKind = AtsCapabilityKind.InstanceMethod
+                }
+            ],
+            HandleTypes =
+            [
+                new AtsTypeInfo
+                {
+                    AtsTypeId = ownedTypeId,
+                    IsInterface = true
+                },
+                new AtsTypeInfo
+                {
+                    AtsTypeId = foreignTypeId,
+                    IsInterface = true
+                },
+                new AtsTypeInfo
+                {
+                    AtsTypeId = foreignResourceTypeId,
+                    ClrType = typeof(TestRedisResource),
+                    ImplementedInterfaces = [resourceType, foreignType]
+                },
+                new AtsTypeInfo
+                {
+                    AtsTypeId = secondForeignResourceTypeId,
+                    ClrType = typeof(TestRedisResource),
+                    ImplementedInterfaces = [resourceType, foreignType]
+                },
+                new AtsTypeInfo
+                {
+                    AtsTypeId = parameterResourceTypeId,
+                    ClrType = typeof(TestRedisResource),
+                    ImplementedInterfaces = [resourceType]
+                },
+                new AtsTypeInfo
+                {
+                    AtsTypeId = callbackParameterResourceTypeId,
+                    ClrType = typeof(TestRedisResource),
+                    ImplementedInterfaces = [resourceType]
+                },
+                new AtsTypeInfo
+                {
+                    AtsTypeId = callbackReturnResourceTypeId,
+                    ClrType = typeof(TestRedisResource),
+                    ImplementedInterfaces = [resourceType]
+                },
+                new AtsTypeInfo
+                {
+                    AtsTypeId = returnResourceTypeId,
+                    ClrType = typeof(TestRedisResource),
+                    ImplementedInterfaces = [resourceType]
+                }
+            ],
+            DtoTypes = [],
+            EnumTypes = []
+        };
+
+        static AtsTypeRef CreateResourceType(string typeId, AtsTypeRef resourceType, AtsTypeRef? additionalInterface = null)
+        {
+            return new AtsTypeRef
+            {
+                TypeId = typeId,
+                Category = AtsTypeCategory.Handle,
+                ClrType = typeof(TestRedisResource),
+                ImplementedInterfaces = additionalInterface is null
+                    ? [resourceType]
+                    : [resourceType, additionalInterface]
+            };
+        }
+    }
+
+    /// <summary>
+    /// Extracts the member signature lines of every generated <c>export interface</c> block.
+    /// </summary>
+    /// <remarks>
+    /// The generated source declares public surface as interfaces, for example:
+    /// <code>
+    /// export interface TestRedisResourceBuilder extends ResourceBuilderBase {
+    ///     /** doc comment */
+    ///     withPersistence(options?: WithPersistenceOptions): TestRedisResourceBuilderPromise;
+    /// }
+    /// </code>
+    /// Only lines that terminate with <c>;</c> at brace depth 1 are member signatures; doc
+    /// comments, blank lines, and nested object literals are skipped. Signatures are stored
+    /// without the trailing semicolon so they compare directly against exported declarations.
+    /// </remarks>
+    private static Dictionary<string, HashSet<string>> ParsePublicInterfaceMembers(string generatedSource)
+    {
+        var membersByInterface = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+
+        string? currentInterface = null;
+        var depth = 0;
+
+        foreach (var rawLine in generatedSource.Split('\n'))
+        {
+            var line = rawLine.Trim();
+
+            if (currentInterface is null)
+            {
+                // Matches "export interface Name {" and "export interface Name extends Base {".
+                if (!line.StartsWith("export interface ", StringComparison.Ordinal) || !line.EndsWith('{'))
+                {
+                    continue;
+                }
+
+                var header = line["export interface ".Length..^1].Trim();
+                var extendsIndex = header.IndexOf(" extends ", StringComparison.Ordinal);
+                currentInterface = (extendsIndex >= 0 ? header[..extendsIndex] : header).Trim();
+                membersByInterface.TryAdd(currentInterface, new HashSet<string>(StringComparer.Ordinal));
+                depth = 1;
+                continue;
+            }
+
+            depth += line.Count(c => c == '{') - line.Count(c => c == '}');
+
+            if (depth <= 0)
+            {
+                currentInterface = null;
+                continue;
+            }
+
+            if (depth == 1 && line.EndsWith(';') && !line.StartsWith('*') && !line.StartsWith("//", StringComparison.Ordinal))
+            {
+                membersByInterface[currentInterface].Add(line[..^1].Trim());
+            }
+        }
+
+        return membersByInterface;
     }
 }

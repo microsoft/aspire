@@ -46,6 +46,7 @@ internal sealed class RemoteHostProfilingTelemetry(IConfiguration configuration)
         public const string CapabilityInvoke = "aspire.hosting.remotehost.capability.invoke";
         public const string CodeGenerationGetCapabilities = "aspire.hosting.remotehost.codegen.get_capabilities";
         public const string CodeGenerationGenerate = "aspire.hosting.remotehost.codegen.generate";
+        public const string CodeGenerationExportApi = "aspire.hosting.remotehost.codegen.export_api";
         public const string LanguageDetect = "aspire.hosting.remotehost.language.detect";
         public const string LanguageGetRuntimeSpec = "aspire.hosting.remotehost.language.get_runtime_spec";
         public const string LanguageScaffold = "aspire.hosting.remotehost.language.scaffold";
@@ -190,6 +191,13 @@ internal sealed class RemoteHostProfilingTelemetry(IConfiguration configuration)
     public ActivityScope StartCodeGenerationGenerate(string language)
     {
         var activity = StartActivity(Activities.CodeGenerationGenerate, ActivityKind.Server);
+        activity.SetLanguage(language);
+        return activity;
+    }
+
+    public ActivityScope StartCodeGenerationExportApi(string language)
+    {
+        var activity = StartActivity(Activities.CodeGenerationExportApi, ActivityKind.Server);
         activity.SetLanguage(language);
         return activity;
     }

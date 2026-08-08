@@ -117,6 +117,51 @@ public class AssemblyLoaderTests
     }
 
     [Fact]
+    public void GetAssemblyNamesToLoad_AddsAssembliesOwnedByConfiguredPackageFromProbeManifest()
+    {
+        using var manifestDirectory = new TemporaryDirectory();
+        using var packageAssemblyDirectory = new TemporaryDirectory();
+
+        var primaryAssemblyPath = System.IO.Path.Combine(packageAssemblyDirectory.Path, "Contoso.Hosting.dll");
+        var secondaryAssemblyPath = System.IO.Path.Combine(packageAssemblyDirectory.Path, "Contoso.Hosting.Extras.dll");
+        var dependencyAssemblyPath = System.IO.Path.Combine(packageAssemblyDirectory.Path, "Dependency.Hosting.dll");
+        File.WriteAllText(primaryAssemblyPath, string.Empty);
+        File.WriteAllText(secondaryAssemblyPath, string.Empty);
+        File.WriteAllText(dependencyAssemblyPath, string.Empty);
+
+        var manifestPath = System.IO.Path.Combine(manifestDirectory.Path, "integration-package-probe-manifest.json");
+        WriteProbeManifest(
+            manifestPath,
+            managedAssemblies:
+            [
+                new { Name = "Contoso.Hosting", Path = primaryAssemblyPath, PackageId = "Contoso.Aspire.MetaPackage", PackageVersion = "1.2.3" },
+                new { Name = "Contoso.Hosting.Extras", Path = secondaryAssemblyPath, PackageId = "Contoso.Aspire.MetaPackage", PackageVersion = "1.2.3" },
+                new { Name = "Dependency.Hosting", Path = dependencyAssemblyPath, PackageId = "Dependency.Hosting", PackageVersion = "4.5.6" }
+            ]);
+
+        var probeManifest = IntegrationPackageProbeManifest.Load(manifestPath);
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AtsAssemblies:0"] = "contoso.aspire.metapackage"
+            })
+            .Build();
+
+        var assemblyNames = AssemblyLoader.GetAssemblyNamesToLoad(
+            configuration,
+            integrationLibsPath: null,
+            applicationBasePath: System.IO.Path.Combine(manifestDirectory.Path, "missing"),
+            packageProbeManifest: probeManifest);
+
+        Assert.Equal(
+        [
+            "Contoso.Hosting",
+            "Contoso.Hosting.Extras"
+        ],
+        assemblyNames);
+    }
+
+    [Fact]
     public void GetAssemblyNamesToLoad_CombinesPackageProbeManifestAndProjectLibs()
     {
         using var integrationLibs = new TemporaryDirectory();

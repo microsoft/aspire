@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.Loader;
 using Aspire.Hosting.RemoteHost.CodeGeneration;
@@ -69,6 +70,13 @@ internal sealed class AssemblyLoader
         }
     }
 
+    public bool TryGetRuntimeAssemblyNamesForPackage(
+        string packageId,
+        [NotNullWhen(true)]
+        out string? canonicalPackageId,
+        out IReadOnlyList<string> assemblyNames)
+        => _packageProbeManifest.TryGetRuntimeAssemblyNamesForPackage(packageId, out canonicalPackageId, out assemblyNames);
+
     /// <summary>
     /// Snapshots the currently loaded ATS integration assemblies as
     /// <see cref="CodeGenerationLoadedAssemblyInfo"/> records suitable for inclusion in a
@@ -126,9 +134,33 @@ internal sealed class AssemblyLoader
         var assemblyNames = new List<string>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var name in configuration.GetSection("AtsAssemblies").Get<string[]>() ?? [])
+        var configuredAssemblyNames = configuration.GetSection("AtsAssemblies").Get<string[]>() ?? [];
+        foreach (var name in configuredAssemblyNames)
         {
-            if (!string.IsNullOrWhiteSpace(name) && seen.Add(name))
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                continue;
+            }
+
+            // For package-backed polyglot AppHosts, AtsAssemblies can name the NuGet package the
+            // user requested rather than every assembly inside that package. The probe manifest is
+            // the only data RemoteHost receives that preserves that package-to-assembly
+            // relationship, so expand configured package ids before auto-discovering transitive
+            // Aspire.Hosting assemblies.
+            if (packageProbeManifest?.TryGetRuntimeAssemblyNamesForPackage(name, out _, out var packageAssemblyNames) == true)
+            {
+                foreach (var packageAssemblyName in packageAssemblyNames)
+                {
+                    if (seen.Add(packageAssemblyName))
+                    {
+                        assemblyNames.Add(packageAssemblyName);
+                    }
+                }
+
+                continue;
+            }
+
+            if (seen.Add(name))
             {
                 assemblyNames.Add(name);
             }

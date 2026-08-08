@@ -99,6 +99,17 @@ public sealed class AtsContext
     public Dictionary<string, PropertyInfo> Properties { get; } = new();
 
     /// <summary>
+    /// Gets the assemblies that exported each capability, keyed by capability ID.
+    /// </summary>
+    /// <remarks>
+    /// The declaring CLR type can belong to another assembly when an assembly-level
+    /// <c>AspireExport</c> exposes an external type, so reflection alone cannot determine
+    /// which package owns the exported capability.
+    /// </remarks>
+    public IReadOnlyDictionary<string, string> CapabilityExportingAssemblyNames { get; init; } =
+        new Dictionary<string, string>();
+
+    /// <summary>
     /// Gets the type category for a CLR type based on scanned data.
     /// Used at runtime for marshalling.
     /// </summary>

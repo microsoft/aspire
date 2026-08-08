@@ -7,7 +7,7 @@ using Aspire.Shared;
 
 namespace Aspire.Cli;
 
-internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, DirectoryInfo logsDirectory, string logFilePath, string identityChannel, bool debugMode = false, DirectoryInfo? homeDirectory = null, DirectoryInfo? packagesDirectory = null, DirectoryInfo? aspireHomeDirectory = null, string? identityVersion = null, string? identityCommit = null, string? nugetServiceIndexOverride = null, bool identityOverridden = false, DirectoryInfo? identityPackagesDirectory = null)
+internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, DirectoryInfo logsDirectory, string logFilePath, string identityChannel, bool debugMode = false, DirectoryInfo? homeDirectory = null, DirectoryInfo? packagesDirectory = null, DirectoryInfo? aspireHomeDirectory = null, string? identityVersion = null, string? identityCommit = null, string? nugetServiceIndexOverride = null, bool identityOverridden = false, DirectoryInfo? identityPackagesDirectory = null, bool identityVersionForged = false)
 {
     public DirectoryInfo WorkingDirectory { get; } = workingDirectory;
     public DirectoryInfo HivesDirectory { get; } = hivesDirectory;
@@ -102,6 +102,21 @@ internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, Direct
     /// flag the run as diagnostic. See <c>docs/specs/cli-identity-sidecar.md</c>.
     /// </summary>
     public bool IdentityOverridden { get; } = identityOverridden;
+
+    /// <summary>
+    /// Gets a value indicating whether <see cref="IdentityVersion"/> specifically was supplied by an
+    /// <c>ASPIRE_CLI_VERSION</c> environment variable.
+    /// </summary>
+    /// <remarks>
+    /// This is deliberately narrower than <see cref="IdentityOverridden"/>, which is an aggregate
+    /// over every identity field and counts the install sidecar as an override. Every install route
+    /// writes a sidecar carrying channel and version (see
+    /// <c>docs/specs/cli-identity-sidecar.md</c>), so <see cref="IdentityOverridden"/> is
+    /// <see langword="true"/> for a perfectly ordinary installed CLI and cannot be used to decide
+    /// whether a version label is trustworthy. The sidecar records what was actually installed; only
+    /// an environment variable makes the version a per-run claim the CLI cannot stand behind.
+    /// </remarks>
+    public bool IdentityVersionForged { get; } = identityVersionForged;
 
     /// <summary>
     /// Optional replacement for the canonical

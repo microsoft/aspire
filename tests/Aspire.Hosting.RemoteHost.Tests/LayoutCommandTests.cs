@@ -188,11 +188,15 @@ public class LayoutCommandTests
             Assert.Contains(
                 managedAssemblies,
                 assembly => assembly.GetProperty("name").GetString() == "Test.Package" &&
+                    assembly.GetProperty("packageId").GetString() == "Test.Package" &&
+                    assembly.GetProperty("packageVersion").GetString() == "1.0.0" &&
                     assembly.GetProperty("path").GetString() == Path.Combine(packageRoot, GetExpectedRuntimeAssemblyPath().Replace('/', Path.DirectorySeparatorChar)));
             Assert.Contains(
                 managedAssemblies,
                 assembly => assembly.GetProperty("name").GetString() == "Test.Package.resources" &&
                     assembly.GetProperty("culture").GetString() == "fr" &&
+                    assembly.GetProperty("packageId").GetString() == "Test.Package" &&
+                    assembly.GetProperty("packageVersion").GetString() == "1.0.0" &&
                     assembly.GetProperty("path").GetString() == Path.Combine(packageRoot, "lib", "net10.0", "fr", "Test.Package.resources.dll"));
 
             var nativeLibraries = manifest.RootElement.GetProperty("nativeLibraries").EnumerateArray().ToList();
@@ -261,6 +265,8 @@ public class LayoutCommandTests
             Assert.Contains(
                 managedAssemblies,
                 assembly => assembly.GetProperty("name").GetString() == "Test.Package" &&
+                    assembly.GetProperty("packageId").GetString() == "Test.Package" &&
+                    assembly.GetProperty("packageVersion").GetString() == "1.0.0" &&
                     assembly.GetProperty("path").GetString() == expectedAssemblyPath);
             Assert.DoesNotContain(
                 managedAssemblies,

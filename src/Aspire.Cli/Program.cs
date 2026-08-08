@@ -666,6 +666,7 @@ public class Program
         builder.Services.AddTransient<SdkCommand>();
         builder.Services.AddTransient<SdkGenerateCommand>();
         builder.Services.AddTransient<SdkDumpCommand>();
+        builder.Services.AddTransient<SdkExportCommand>();
         builder.Services.AddTransient<RestoreCommand>();
         builder.Services.AddSingleton<IMigration, TypeScriptAppHostMigration>();
         builder.Services.AddTransient<SetupCommand>();
@@ -718,6 +719,12 @@ public class Program
         static bool IsOverride(IdentitySource source) => source is IdentitySource.Environment or IdentitySource.Sidecar;
         var identityOverridden = IsOverride(channel.Source) || IsOverride(version.Source) || IsOverride(commit.Source) || IsOverride(nugetServiceIndexOverride.Source) || IsOverride(packagesOverride.Source);
 
+        // Tracked separately from the aggregate above because callers that need to trust the version
+        // label cannot use the aggregate: the sidecar is written by every install route, so the
+        // aggregate is true for an ordinary installed CLI. Only the environment variable makes the
+        // version a claim this run invented.
+        var identityVersionForged = version.Source is IdentitySource.Environment;
+
         // A null/whitespace value means "no override"; only materialize a DirectoryInfo when a real
         // path was supplied. PackagingService validates existence + uniqueness when it consumes this.
         var identityPackagesDirectory = string.IsNullOrWhiteSpace(packagesOverride.Value)
@@ -737,6 +744,7 @@ public class Program
             nugetServiceIndexOverride: nugetServiceIndexOverride.Value,
             identityOverridden: identityOverridden,
             identityPackagesDirectory: identityPackagesDirectory,
+            identityVersionForged: identityVersionForged,
             debugMode: debugMode,
             packagesDirectory: packagesDirectory,
             aspireHomeDirectory: aspireHomeDirectory);

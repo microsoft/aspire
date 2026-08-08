@@ -136,4 +136,17 @@ internal interface IAppHostServerProject
     /// </summary>
     /// <returns>A path that uniquely identifies this AppHost.</returns>
     string GetInstanceIdentifier();
+
+    /// <summary>
+    /// Gets the local project this server builds in place of <paramref name="packageName"/>, or
+    /// <see langword="null"/> when the package is restored from a feed at the requested version.
+    /// </summary>
+    /// <remarks>
+    /// Only the repository development server substitutes projects for packages, so every other
+    /// implementation keeps this default. Callers that publish artifacts keyed on a package version
+    /// need to know the difference: a substituted project carries the checkout's API surface rather
+    /// than the surface of the version that was asked for.
+    /// </remarks>
+    /// <param name="packageName">The package name the caller asked to restore.</param>
+    LocalProjectSubstitution? GetLocalProjectSubstitution(string packageName) => null;
 }

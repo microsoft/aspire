@@ -48,6 +48,23 @@ internal sealed class CodeGeneratorResolver
     }
 
     /// <summary>
+    /// Gets the API reference exporter for the specified language, if the language's code generator
+    /// also supports API export.
+    /// </summary>
+    /// <param name="language">The target language (e.g., "TypeScript", "Python").</param>
+    /// <returns>
+    /// The exporter, or <see langword="null"/> when no generator is registered for the language or
+    /// the registered generator does not implement <see cref="IApiReferenceExporter"/>.
+    /// </returns>
+    /// <remarks>
+    /// This resolves through <see cref="GetCodeGenerator"/> rather than discovering exporters
+    /// separately, so an exporter can never be reachable for a language whose code generator is not.
+    /// A documented API that no generator produces would be worse than no documentation at all.
+    /// </remarks>
+    public IApiReferenceExporter? GetApiReferenceExporter(string language)
+        => GetCodeGenerator(language) as IApiReferenceExporter;
+
+    /// <summary>
     /// Gets the languages of all discovered code generators.
     /// </summary>
     /// <returns>The set of supported language identifiers.</returns>

@@ -29,6 +29,43 @@ public class IntegrationReferenceTests
         Assert.Equal("/path/to/MyIntegration.csproj", reference.ProjectPath);
     }
 
+    /// <summary>
+    /// A caller can write a NuGet range directly. Pinning it again would produce <c>[[13.2.0]]</c>,
+    /// which NuGet rejects, so an already-bracketed version has to pass through untouched no matter
+    /// which side asked for exactness.
+    /// </summary>
+    [Theory]
+    [InlineData("[13.2.0]")]
+    [InlineData("[13.2.0,13.3.0)")]
+    [InlineData("(13.2.0,)")]
+    public void GetRestoreVersionRange_LeavesAnExplicitRangeAlone(string version)
+    {
+        Assert.Equal(version, IntegrationReference.FromPackage("Aspire.Hosting.Redis", version).GetRestoreVersionRange(forceExact: false));
+        Assert.Equal(version, IntegrationReference.FromPackage("Aspire.Hosting.Redis", version).GetRestoreVersionRange(forceExact: true));
+        Assert.Equal(version, IntegrationReference.FromExactPackage("Aspire.Hosting.Redis", version).GetRestoreVersionRange(forceExact: false));
+        Assert.Equal(version, IntegrationReference.FromExactPackage("Aspire.Hosting.Redis", version).GetRestoreVersionRange(forceExact: true));
+    }
+
+    [Fact]
+    public void GetRestoreVersionRange_PinsOnlyWhenExactnessIsAskedFor()
+    {
+        var floating = IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.2.0");
+        var exact = IntegrationReference.FromExactPackage("Aspire.Hosting.Redis", "13.2.0");
+
+        Assert.Equal("13.2.0", floating.GetRestoreVersionRange(forceExact: false));
+        Assert.Equal("[13.2.0]", floating.GetRestoreVersionRange(forceExact: true));
+        Assert.Equal("[13.2.0]", exact.GetRestoreVersionRange(forceExact: false));
+        Assert.Equal("[13.2.0]", exact.GetRestoreVersionRange(forceExact: true));
+    }
+
+    [Fact]
+    public void GetRestoreVersionRange_ThrowsForAProjectReference()
+    {
+        var reference = IntegrationReference.FromProject("MyIntegration", "/path/to/MyIntegration.csproj");
+
+        Assert.Throws<InvalidOperationException>(() => reference.GetRestoreVersionRange(forceExact: false));
+    }
+
     [Fact]
     public void GetIntegrationReferences_DetectsCsprojAsProjectReference()
     {
