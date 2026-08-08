@@ -504,12 +504,19 @@ export class AspireDebugSession implements vscode.DebugAdapter {
         // The CLI prepends the runtime command (e.g., "npx") as args[0].
         // Extract it as the runtimeExecutable and use the rest as the actual args.
         const runtimeExecutable = args.length > 0 ? args[0] : undefined;
-        appHostArgs = args.slice(1);
+        const remainingArgs = args.slice(1);
+
+        // A direct node launch receives the emitted AppHost first. Keep projectFile as the source
+        // identity while launching the emitted JavaScript as the debugger program.
+        const programPath = runtimeExecutable === 'node' ? remainingArgs[0] : undefined;
+        appHostArgs = programPath !== undefined ? remainingArgs.slice(1) : remainingArgs;
+
         launchConfig = {
           script_path: projectFile,
           working_directory: path.dirname(projectFile),
           type: 'node',
-          ...(runtimeExecutable ? { runtime_executable: runtimeExecutable } : {})
+          ...(runtimeExecutable ? { runtime_executable: runtimeExecutable } : {}),
+          ...(programPath !== undefined ? { program_path: programPath } : {})
         } as NodeLaunchConfiguration;
       }
       else {

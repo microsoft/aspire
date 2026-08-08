@@ -6,12 +6,13 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
-    "outDir": "./dist/apphost",
+    "outDir": "./node_modules/.tmp/aspire-apphost",
     "rootDir": ".",
     "strict": true
   },
   "include": [
     "apphost.mts",
+    "apphost.ts",
     ".aspire/modules/aspire.mts",
     ".aspire/modules/base.mts",
     ".aspire/modules/transport.mts"

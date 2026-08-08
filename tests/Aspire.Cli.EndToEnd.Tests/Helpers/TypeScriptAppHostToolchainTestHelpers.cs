@@ -71,17 +71,19 @@ internal static class TypeScriptAppHostToolchainTestHelpers
         $"{GetCommandName(toolchain)} install";
 
     /// <summary>
-    /// Gets the no-emit type-check command for a toolchain.
+    /// Gets the incremental AppHost build command for a toolchain.
     /// </summary>
-    internal static string GetTypeCheckCommand(string toolchain, string tsConfigFileName) =>
-        NormalizeToolchain(toolchain) switch
+    internal static string GetBuildCommand(string toolchain, string tsConfigFileName)
+    {
+        return NormalizeToolchain(toolchain) switch
         {
-            "bun" => $"bun run tsc --noEmit -p {tsConfigFileName}",
-            "yarn" => $"yarn run tsc --noEmit -p {tsConfigFileName}",
-            "pnpm" => $"pnpm exec tsc --noEmit -p {tsConfigFileName}",
-            "npm" => $"npx --no-install tsc --noEmit -p {tsConfigFileName}",
+            "bun" => $"bun run tsc --incremental --tsBuildInfoFile ./node_modules/.tmp/aspire-apphost.tsbuildinfo --outDir ./node_modules/.tmp/aspire-apphost --rootDir . --noEmit false -p {tsConfigFileName}",
+            "yarn" => $"yarn run tsc --incremental --tsBuildInfoFile ./node_modules/.tmp/aspire-apphost.tsbuildinfo --outDir ./node_modules/.tmp/aspire-apphost --rootDir . --noEmit false -p {tsConfigFileName}",
+            "pnpm" => $"pnpm exec tsc --incremental --tsBuildInfoFile ./node_modules/.tmp/aspire-apphost.tsbuildinfo --outDir ./node_modules/.tmp/aspire-apphost --rootDir . --noEmit false -p {tsConfigFileName}",
+            "npm" => $"npx --no-install tsc --incremental --tsBuildInfoFile ./node_modules/.tmp/aspire-apphost.tsbuildinfo --outDir ./node_modules/.tmp/aspire-apphost --rootDir . --noEmit false -p {tsConfigFileName}",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, "Unsupported TypeScript AppHost toolchain.")
         };
+    }
 
     /// <summary>
     /// Gets the script runner command for a toolchain.
@@ -111,7 +113,7 @@ internal static class TypeScriptAppHostToolchainTestHelpers
         NormalizeToolchain(toolchain) switch
         {
             "bun" => "bun@1.2.0",
-            "yarn" => "yarn@4.14.1",
+            "yarn" => "yarn@4.18.0",
             "pnpm" => "pnpm@10.0.0",
             "npm" => "npm@10.0.0",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, "Unsupported TypeScript AppHost toolchain.")

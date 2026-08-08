@@ -782,6 +782,84 @@ public class PackageJsonMergerTests
     }
 
     [Fact]
+    public void Dependencies_ExistingPackageIsReplacedByScaffoldAlias()
+    {
+        var existing = """
+            {
+              "name": "my-app",
+              "devDependencies": {
+                "typescript": "^7.0.0"
+              }
+            }
+            """;
+
+        var scaffold = """
+            {
+              "devDependencies": {
+                "typescript": "npm:@typescript/typescript6@^6.0.2"
+              }
+            }
+            """;
+
+        var result = MergeJson(existing, scaffold);
+
+        Assert.Equal("npm:@typescript/typescript6@^6.0.2", GetDep(result, "devDependencies", "typescript"));
+    }
+
+    [Theory]
+    [InlineData("workspace:*")]
+    [InlineData("file:../typescript")]
+    [InlineData("link:../typescript")]
+    public void Dependencies_LocalReferenceIsPreservedWhenScaffoldUsesAlias(string existingVersion)
+    {
+        var existing = $$"""
+            {
+              "devDependencies": {
+                "typescript": "{{existingVersion}}"
+              }
+            }
+            """;
+
+        var scaffold = """
+            {
+              "devDependencies": {
+                "typescript": "npm:@typescript/typescript6@^6.0.2"
+              }
+            }
+            """;
+
+        var result = MergeJson(existing, scaffold);
+
+        Assert.Equal(existingVersion, GetDep(result, "devDependencies", "typescript"));
+    }
+
+    [Theory]
+    [InlineData("^6.0.0 || ^7.0.0")]
+    [InlineData("*")]
+    public void Dependencies_RegistryRangeIsReplacedWhenScaffoldUsesAlias(string existingVersion)
+    {
+        var existing = $$"""
+            {
+              "devDependencies": {
+                "typescript": "{{existingVersion}}"
+              }
+            }
+            """;
+
+        var scaffold = """
+            {
+              "devDependencies": {
+                "typescript": "npm:@typescript/typescript6@^6.0.2"
+              }
+            }
+            """;
+
+        var result = MergeJson(existing, scaffold);
+
+        Assert.Equal("npm:@typescript/typescript6@^6.0.2", GetDep(result, "devDependencies", "typescript"));
+    }
+
+    [Fact]
     public void Dependencies_TildeRange_Compared()
     {
         var existing = """

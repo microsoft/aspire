@@ -11,6 +11,9 @@ namespace Aspire.Cli.Tests.Projects;
 
 public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper outputHelper)
 {
+    private const string BuildOutputDirectory = "./node_modules/.tmp/aspire-apphost";
+    private const string BuildTsBuildInfoFileName = "./node_modules/.tmp/aspire-apphost.tsbuildinfo";
+
     [Fact]
     public void Resolve_WhenPackageManagerIsBun_ReturnsBun()
     {
@@ -41,18 +44,78 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
         var packageJsonPath = Path.Combine(workspace.WorkspaceRoot.FullName, "package.json");
         File.WriteAllText(packageJsonPath, "{ \"packageManager\": \"yarn@1.22.22\" }");
 
-        var exception = Assert.Throws<YarnClassicNotSupportedException>(() => TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, new TestEnvironment(), logger: null));
+        var exception = Assert.Throws<YarnVersionNotSupportedException>(() => TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, new TestEnvironment(), logger: null));
 
-        Assert.Equal($"Yarn Classic is not supported for TypeScript AppHosts. Upgrade 'yarn@1.22.22' in {packageJsonPath} to Yarn 4 or later, or use npm, pnpm, or Bun.", exception.Message);
+        Assert.Equal($"Yarn 4.18.0 or later is required for TypeScript AppHosts. Upgrade 'yarn@1.22.22' in {packageJsonPath}, or use npm, pnpm, or Bun.", exception.Message);
     }
 
     [Fact]
     public void Resolve_WhenPackageManagerIsModernYarn_ReturnsYarn()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"packageManager\": \"yarn@4.14.1\" }");
+        File.WriteAllText(
+            Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"),
+            """{ "packageManager": "yarn@4.18.0", "devDependencies": { "@typescript/native": "npm:typescript@^7.0.2" } }""");
 
         var toolchain = TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, new TestEnvironment(), logger: null);
+
+        Assert.Equal(TypeScriptAppHostToolchain.Yarn, toolchain);
+    }
+
+    [Fact]
+    public void Resolve_WhenLegacyAppHostUsesOlderModernYarn_ReturnsYarn()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        File.WriteAllText(
+            Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"),
+            """{ "packageManager": "yarn@4.14.1", "devDependencies": { "typescript": "^5.9.3" } }""");
+
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, new TestEnvironment(), logger: null);
+
+        Assert.Equal(TypeScriptAppHostToolchain.Yarn, toolchain);
+    }
+
+    [Fact]
+    public void Resolve_WhenPackageManagerPredatesTypeScriptAliasFixes_Throws()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var packageJsonPath = Path.Combine(workspace.WorkspaceRoot.FullName, "package.json");
+        File.WriteAllText(
+            packageJsonPath,
+            """{ "packageManager": "yarn@4.17.1", "devDependencies": { "@typescript/native": "npm:typescript@^7.0.2" } }""");
+
+        var exception = Assert.Throws<YarnVersionNotSupportedException>(() => TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, new TestEnvironment(), logger: null));
+
+        Assert.Equal($"Yarn 4.18.0 or later is required for TypeScript AppHosts. Upgrade 'yarn@4.17.1' in {packageJsonPath}, or use npm, pnpm, or Bun.", exception.Message);
+    }
+
+    [Fact]
+    public void Resolve_WhenParentPackageManagerPredatesTypeScriptAliasFixes_Throws()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("apps").CreateSubdirectory("apphost");
+        File.WriteAllText(
+            Path.Combine(appHostDirectory.FullName, "package.json"),
+            """{ "devDependencies": { "@typescript/native": "npm:typescript@^7.0.2" } }""");
+        var parentPackageJsonPath = Path.Combine(appHostDirectory.Parent!.FullName, "package.json");
+        File.WriteAllText(parentPackageJsonPath, """{ "packageManager": "yarn@4.17.1" }""");
+
+        var exception = Assert.Throws<YarnVersionNotSupportedException>(() => TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, new TestEnvironment(), logger: null));
+
+        Assert.Equal($"Yarn 4.18.0 or later is required for TypeScript AppHosts. Upgrade 'yarn@4.17.1' in {parentPackageJsonPath}, or use npm, pnpm, or Bun.", exception.Message);
+    }
+
+    [Fact]
+    public void Resolve_WhenLegacyAppHostUsesOlderModernYarnFromParent_ReturnsYarn()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("apps").CreateSubdirectory("apphost");
+        File.WriteAllText(
+            Path.Combine(appHostDirectory.FullName, "package.json"),
+            """{ "devDependencies": { "typescript": "^5.9.3" } }""");
+        File.WriteAllText(Path.Combine(appHostDirectory.Parent!.FullName, "package.json"), """{ "packageManager": "yarn@4.14.1" }""");
+
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, new TestEnvironment(), logger: null);
 
         Assert.Equal(TypeScriptAppHostToolchain.Yarn, toolchain);
     }
@@ -65,9 +128,9 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
         var yarnLockPath = Path.Combine(workspace.WorkspaceRoot.FullName, "yarn.lock");
         File.WriteAllText(yarnLockPath, "# THIS IS AN AUTOGENERATED FILE. DO NOT EDIT THIS FILE DIRECTLY.\n# yarn lockfile v1\n");
 
-        var exception = Assert.Throws<YarnClassicNotSupportedException>(() => TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, new TestEnvironment(), logger: null));
+        var exception = Assert.Throws<YarnVersionNotSupportedException>(() => TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, new TestEnvironment(), logger: null));
 
-        Assert.Equal($"Yarn Classic is not supported for TypeScript AppHosts. Upgrade the Yarn lockfile at {yarnLockPath} to Yarn 4 or later, or use npm, pnpm, or Bun.", exception.Message);
+        Assert.Equal($"Yarn 4.18.0 or later is required for TypeScript AppHosts. Upgrade the Yarn lockfile at {yarnLockPath}, or use npm, pnpm, or Bun.", exception.Message);
     }
 
     [Fact]
@@ -81,9 +144,9 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
         var yarnLockPath = Path.Combine(parentDirectory.FullName, "yarn.lock");
         File.WriteAllText(yarnLockPath, "# THIS IS AN AUTOGENERATED FILE. DO NOT EDIT THIS FILE DIRECTLY.\n# yarn lockfile v1\n");
 
-        var exception = Assert.Throws<YarnClassicNotSupportedException>(() => TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, new TestEnvironment(), logger: null));
+        var exception = Assert.Throws<YarnVersionNotSupportedException>(() => TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, new TestEnvironment(), logger: null));
 
-        Assert.Equal($"Yarn Classic is not supported for TypeScript AppHosts. Upgrade the Yarn lockfile at {yarnLockPath} to Yarn 4 or later, or use npm, pnpm, or Bun.", exception.Message);
+        Assert.Equal($"Yarn 4.18.0 or later is required for TypeScript AppHosts. Upgrade the Yarn lockfile at {yarnLockPath}, or use npm, pnpm, or Bun.", exception.Message);
     }
 
     [Fact]
@@ -115,6 +178,64 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
 
         Assert.Equal(TypeScriptAppHostToolchain.Yarn, resolution.Toolchain);
         Assert.Equal($"yarn.lock found in {workspace.WorkspaceRoot.FullName}", resolution.Reason);
+    }
+
+    [Fact]
+    public void Resolve_WhenNativeTypeScriptUsesYarnLockWithoutVersionMetadata_Throws()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var packageJsonPath = Path.Combine(workspace.WorkspaceRoot.FullName, "package.json");
+        File.WriteAllText(
+            packageJsonPath,
+            """{ "devDependencies": { "@typescript/native": "npm:typescript@^7.0.2" } }""");
+        var yarnLockPath = Path.Combine(workspace.WorkspaceRoot.FullName, "yarn.lock");
+        File.WriteAllText(yarnLockPath, string.Empty);
+
+        var exception = Assert.Throws<YarnVersionNotSupportedException>(() => TypeScriptAppHostToolchainResolver.ResolveWithReason(workspace.WorkspaceRoot, new TestEnvironment()));
+
+        Assert.Equal(
+            $"Yarn 4.18.0 or later is required for TypeScript AppHosts. Set \"packageManager\": \"yarn@4.18.0\" in {packageJsonPath} " +
+            $"so Aspire can verify the Yarn version selected for {yarnLockPath}, or use npm, pnpm, or Bun.",
+            exception.Message);
+    }
+
+    [Fact]
+    public void Resolve_WhenNativeTypeScriptUsesParentYarnLockWithoutVersionMetadata_Throws()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("apps").CreateSubdirectory("apphost");
+        File.WriteAllText(
+            Path.Combine(appHostDirectory.FullName, "package.json"),
+            """{ "devDependencies": { "@typescript/native": "npm:typescript@^7.0.2" } }""");
+        var parentDirectory = appHostDirectory.Parent!;
+        var parentPackageJsonPath = Path.Combine(parentDirectory.FullName, "package.json");
+        File.WriteAllText(parentPackageJsonPath, """{ "name": "workspace" }""");
+        var yarnLockPath = Path.Combine(parentDirectory.FullName, "yarn.lock");
+        File.WriteAllText(yarnLockPath, string.Empty);
+
+        var exception = Assert.Throws<YarnVersionNotSupportedException>(() => TypeScriptAppHostToolchainResolver.ResolveWithReason(appHostDirectory, new TestEnvironment()));
+
+        Assert.Equal(
+            $"Yarn 4.18.0 or later is required for TypeScript AppHosts. Set \"packageManager\": \"yarn@4.18.0\" in {parentPackageJsonPath} " +
+            $"so Aspire can verify the Yarn version selected for {yarnLockPath}, or use npm, pnpm, or Bun.",
+            exception.Message);
+    }
+
+    [Fact]
+    public void Resolve_WhenLegacyAppHostUsesParentYarnLockWithoutVersionMetadata_ReturnsYarn()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("apps").CreateSubdirectory("apphost");
+        File.WriteAllText(
+            Path.Combine(appHostDirectory.FullName, "package.json"),
+            """{ "devDependencies": { "typescript": "^5.9.3" } }""");
+        var parentDirectory = appHostDirectory.Parent!;
+        File.WriteAllText(Path.Combine(parentDirectory.FullName, "package.json"), """{ "name": "workspace" }""");
+        File.WriteAllText(Path.Combine(parentDirectory.FullName, "yarn.lock"), string.Empty);
+
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, new TestEnvironment(), logger: null);
+
+        Assert.Equal(TypeScriptAppHostToolchain.Yarn, toolchain);
     }
 
     [Fact]
@@ -193,7 +314,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("apps").CreateSubdirectory("apphost");
-        File.WriteAllText(Path.Combine(appHostDirectory.Parent!.FullName, "package.json"), "{ \"packageManager\": \"yarn@4.14.1\" }");
+        File.WriteAllText(Path.Combine(appHostDirectory.Parent!.FullName, "package.json"), "{ \"packageManager\": \"yarn@4.18.0\" }");
         File.WriteAllText(Path.Combine(appHostDirectory.FullName, "package.json"), "{ \"name\": \"apphost\" }");
         File.WriteAllText(Path.Combine(appHostDirectory.FullName, "pnpm-lock.yaml"), "lockfileVersion: '9.0'");
 
@@ -291,9 +412,11 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
         Assert.Equal(["install"], runtimeSpec.InstallDependencies!.Args);
         var preExecute = Assert.Single(runtimeSpec.PreExecute!);
         Assert.Equal("bun", preExecute.Command);
-        Assert.Equal(["run", "tsc", "--noEmit", "-p", "tsconfig.apphost.json"], preExecute.Args);
+        Assert.Equal(
+            ["run", "tsc", "--incremental", "--tsBuildInfoFile", BuildTsBuildInfoFileName, "--outDir", BuildOutputDirectory, "--rootDir", ".", "--noEmit", "false", "-p", "tsconfig.apphost.json"],
+            preExecute.Args);
         Assert.Equal("bun", runtimeSpec.Execute.Command);
-        Assert.Equal(["run", "{appHostFile}"], runtimeSpec.Execute.Args);
+        Assert.Equal(["run", "{compiledAppHostFile}"], runtimeSpec.Execute.Args);
         Assert.NotNull(runtimeSpec.WatchExecute);
         Assert.Equal("bun", runtimeSpec.WatchExecute?.Command);
         Assert.Equal(
@@ -305,14 +428,14 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
                 "--ext", "ts,mts",
                 "--ignore", "node_modules/",
                 "--ignore", ".aspire/modules/",
-                "--exec", "bun run tsc --noEmit -p tsconfig.apphost.json && bun run \"{appHostFile}\""
+                "--exec", $"bun run tsc --incremental --tsBuildInfoFile {BuildTsBuildInfoFileName} --outDir {BuildOutputDirectory} --rootDir . --noEmit false -p tsconfig.apphost.json && bun run \"{{compiledAppHostFile}}\""
             ],
             runtimeSpec.WatchExecute!.Args);
         Assert.Equal("node", runtimeSpec.ExtensionLaunchCapability);
     }
 
     [Fact]
-    public void ApplyToRuntimeSpec_WhenYarnSelected_UsesYarnExecCommands()
+    public void ApplyToRuntimeSpec_WhenYarnSelected_UsesYarnBuildAndNodeExecution()
     {
         var baseRuntimeSpec = CreateBaseRuntimeSpec();
 
@@ -320,15 +443,17 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
 
         var preExecute = Assert.Single(runtimeSpec.PreExecute!);
         Assert.Equal("yarn", preExecute.Command);
-        Assert.Equal(["run", "tsc", "--noEmit", "-p", "tsconfig.apphost.json"], preExecute.Args);
-        Assert.Equal("yarn", runtimeSpec.Execute.Command);
-        Assert.Equal(["run", "tsx", "--tsconfig", "tsconfig.apphost.json", "{appHostFile}"], runtimeSpec.Execute.Args);
+        Assert.Equal(
+            ["run", "tsc", "--incremental", "--tsBuildInfoFile", BuildTsBuildInfoFileName, "--outDir", BuildOutputDirectory, "--rootDir", ".", "--noEmit", "false", "-p", "tsconfig.apphost.json"],
+            preExecute.Args);
+        Assert.Equal("node", runtimeSpec.Execute.Command);
+        Assert.Equal(["{compiledAppHostFile}"], runtimeSpec.Execute.Args);
         Assert.Equal("yarn", runtimeSpec.WatchExecute?.Command);
-        Assert.Contains("yarn run tsc --noEmit -p tsconfig.apphost.json && yarn run tsx --tsconfig tsconfig.apphost.json \"{appHostFile}\"", runtimeSpec.WatchExecute?.Args ?? []);
+        Assert.Contains($"yarn run tsc --incremental --tsBuildInfoFile {BuildTsBuildInfoFileName} --outDir {BuildOutputDirectory} --rootDir . --noEmit false -p tsconfig.apphost.json && node \"{{compiledAppHostFile}}\"", runtimeSpec.WatchExecute?.Args ?? []);
     }
 
     [Fact]
-    public void ApplyToRuntimeSpec_WhenPnpmSelected_UsesPnpmTypeCheckCommands()
+    public void ApplyToRuntimeSpec_WhenPnpmSelected_UsesPnpmBuildAndNodeExecution()
     {
         var baseRuntimeSpec = CreateBaseRuntimeSpec();
 
@@ -339,11 +464,31 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
         Assert.Equal(["install", "--ignore-workspace"], installDependencies.Args);
         var preExecute = Assert.Single(runtimeSpec.PreExecute!);
         Assert.Equal("pnpm", preExecute.Command);
-        Assert.Equal(["exec", "tsc", "--noEmit", "-p", "tsconfig.apphost.json"], preExecute.Args);
-        Assert.Equal("pnpm", runtimeSpec.Execute.Command);
-        Assert.Equal(["exec", "tsx", "--tsconfig", "tsconfig.apphost.json", "{appHostFile}"], runtimeSpec.Execute.Args);
+        Assert.Equal(
+            ["exec", "tsc", "--incremental", "--tsBuildInfoFile", BuildTsBuildInfoFileName, "--outDir", BuildOutputDirectory, "--rootDir", ".", "--noEmit", "false", "-p", "tsconfig.apphost.json"],
+            preExecute.Args);
+        Assert.Equal("node", runtimeSpec.Execute.Command);
+        Assert.Equal(["{compiledAppHostFile}"], runtimeSpec.Execute.Args);
         Assert.Equal("pnpm", runtimeSpec.WatchExecute?.Command);
-        Assert.Contains("pnpm exec tsc --noEmit -p tsconfig.apphost.json && pnpm exec tsx --tsconfig tsconfig.apphost.json \"{appHostFile}\"", runtimeSpec.WatchExecute?.Args ?? []);
+        Assert.Contains($"pnpm exec tsc --incremental --tsBuildInfoFile {BuildTsBuildInfoFileName} --outDir {BuildOutputDirectory} --rootDir . --noEmit false -p tsconfig.apphost.json && node \"{{compiledAppHostFile}}\"", runtimeSpec.WatchExecute?.Args ?? []);
+    }
+
+    [Fact]
+    public void ApplyToRuntimeSpec_WhenNpmSelected_PreservesBaseCommands()
+    {
+        var baseRuntimeSpec = CreateBaseRuntimeSpec();
+
+        var runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(baseRuntimeSpec, TypeScriptAppHostToolchain.Npm);
+
+        var preExecute = Assert.Single(runtimeSpec.PreExecute!);
+        Assert.Equal("npx", preExecute.Command);
+        Assert.Equal(
+            ["--no-install", "tsc", "--incremental", "--tsBuildInfoFile", BuildTsBuildInfoFileName, "--outDir", BuildOutputDirectory, "--rootDir", ".", "--noEmit", "false", "-p", "tsconfig.apphost.json"],
+            preExecute.Args);
+        Assert.Equal("node", runtimeSpec.Execute.Command);
+        Assert.Equal(["{compiledAppHostFile}"], runtimeSpec.Execute.Args);
+        Assert.Equal("npx", runtimeSpec.WatchExecute?.Command);
+        Assert.Contains($"npx --no-install tsc --incremental --tsBuildInfoFile {BuildTsBuildInfoFileName} --outDir {BuildOutputDirectory} --rootDir . --noEmit false -p tsconfig.apphost.json && node \"{{compiledAppHostFile}}\"", runtimeSpec.WatchExecute?.Args ?? []);
     }
 
     private static RuntimeSpec CreateBaseRuntimeSpec()
@@ -364,18 +509,18 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
                 new CommandSpec
                 {
                     Command = "npx",
-                    Args = ["--no-install", "tsc", "--noEmit", "-p", "tsconfig.apphost.json"]
+                    Args = ["--no-install", "tsc", "--incremental", "--tsBuildInfoFile", BuildTsBuildInfoFileName, "--outDir", BuildOutputDirectory, "--rootDir", ".", "--noEmit", "false", "-p", "tsconfig.apphost.json"]
                 }
             ],
             Execute = new CommandSpec
             {
-                Command = "npx",
-                Args = ["--no-install", "tsx", "--tsconfig", "tsconfig.apphost.json", "{appHostFile}"]
+                Command = "node",
+                Args = ["{compiledAppHostFile}"]
             },
             WatchExecute = new CommandSpec
             {
                 Command = "npx",
-                Args = ["--no-install", "nodemon", "--exec", "npx --no-install tsx --tsconfig tsconfig.apphost.json {appHostFile}"]
+                Args = ["--no-install", "nodemon", "--exec", $"npx --no-install tsc --incremental --tsBuildInfoFile {BuildTsBuildInfoFileName} --outDir {BuildOutputDirectory} --rootDir . --noEmit false -p tsconfig.apphost.json && node \"{{compiledAppHostFile}}\""]
             },
             ExtensionLaunchCapability = "node"
         };

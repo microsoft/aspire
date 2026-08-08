@@ -660,7 +660,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             }
 
             // A non-zero exit code at this point means either:
-            //  - The in-CLI portion of the guest run (e.g. a TypeScript PreExecute `tsc --noEmit` step)
+            //  - The in-CLI portion of the guest run (e.g. a TypeScript PreExecute build)
             //    failed before the actual AppHost was launched.
             //  - The guest AppHost itself failed (syntax error, unhandled exception, etc).
             //  - The AppHost system escalation killed the guest because the server backchannel never

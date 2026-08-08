@@ -45,10 +45,10 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
         Assert.Equal("npm run aspire:lint", scripts["prebuild"]?.GetValue<string>());
         Assert.Equal("npm run aspire:build", scripts["build"]?.GetValue<string>());
         Assert.Equal("npm run aspire:dev", scripts["watch"]?.GetValue<string>());
-        Assert.Equal("^4.21.0", devDependencies["tsx"]?.GetValue<string>());
-        Assert.Equal("^5.9.3", devDependencies["typescript"]?.GetValue<string>());
+        Assert.Equal("npm:typescript@^7.0.2", devDependencies["@typescript/native"]?.GetValue<string>());
+        Assert.Equal("npm:@typescript/typescript6@^6.0.2", devDependencies["typescript"]?.GetValue<string>());
         Assert.Equal("^10.0.3", devDependencies["eslint"]?.GetValue<string>());
-        Assert.Equal("^8.57.1", devDependencies["typescript-eslint"]?.GetValue<string>());
+        Assert.Equal("^8.65.0", devDependencies["typescript-eslint"]?.GetValue<string>());
 
         var engines = packageJson["engines"]!.AsObject();
         Assert.Equal("^20.19.0 || ^22.13.0 || >=24", engines["node"]?.GetValue<string>());
@@ -60,7 +60,8 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
         Assert.Contains("project: './tsconfig.apphost.json'", files["eslint.config.mjs"]);
 
         var tsConfig = ParseJson(files["tsconfig.apphost.json"]);
-        Assert.Equal("./dist/apphost", tsConfig["compilerOptions"]?["outDir"]?.GetValue<string>());
+        Assert.Equal("./node_modules/.tmp/aspire-apphost", tsConfig["compilerOptions"]?["outDir"]?.GetValue<string>());
+        Assert.Contains("apphost.ts", tsConfig["include"]!.AsArray().Select(node => node?.GetValue<string>()));
     }
 
     [Fact]
@@ -83,7 +84,6 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
                 "vscode-jsonrpc": "^9.9.9"
               },
               "devDependencies": {
-                "tsx": "^9.9.9",
                 "vite": "^7.0.0"
               }
             }
@@ -118,10 +118,10 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
 
         // Scaffold should only contain Aspire-desired dependencies (at Aspire's versions)
         Assert.Equal("^8.2.0", dependencies["vscode-jsonrpc"]?.GetValue<string>());
-        Assert.Equal("^4.21.0", devDependencies["tsx"]?.GetValue<string>());
         Assert.Equal("^22.0.0", devDependencies["@types/node"]?.GetValue<string>());
+        Assert.Equal("npm:typescript@^7.0.2", devDependencies["@typescript/native"]?.GetValue<string>());
         Assert.Equal("^3.1.14", devDependencies["nodemon"]?.GetValue<string>());
-        Assert.Equal("^5.9.3", devDependencies["typescript"]?.GetValue<string>());
+        Assert.Equal("npm:@typescript/typescript6@^6.0.2", devDependencies["typescript"]?.GetValue<string>());
         Assert.False(devDependencies.ContainsKey("vite"));
 
         // engines.node is always set
@@ -163,7 +163,6 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
               "devDependencies": {
                 "@types/node": "^18.0.0",
                 "nodemon": "^3.1.0",
-                "tsx": "^4.18.0",
                 "typescript": "^5.2.0"
               }
             }
@@ -183,9 +182,9 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
         // PackageJsonMerger handles semver comparison with existing on-disk versions.
         Assert.Equal("^8.2.0", dependencies["vscode-jsonrpc"]?.GetValue<string>());
         Assert.Equal("^22.0.0", devDependencies["@types/node"]?.GetValue<string>());
+        Assert.Equal("npm:typescript@^7.0.2", devDependencies["@typescript/native"]?.GetValue<string>());
         Assert.Equal("^3.1.14", devDependencies["nodemon"]?.GetValue<string>());
-        Assert.Equal("^4.21.0", devDependencies["tsx"]?.GetValue<string>());
-        Assert.Equal("^5.9.3", devDependencies["typescript"]?.GetValue<string>());
+        Assert.Equal("npm:@typescript/typescript6@^6.0.2", devDependencies["typescript"]?.GetValue<string>());
     }
 
     [Fact]
@@ -257,9 +256,24 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
         var watchExecute = Assert.IsType<CommandSpec>(runtimeSpec.WatchExecute);
 
         Assert.Equal("npx", preExecute.Command);
-        Assert.Equal(new[] { "--no-install", "tsc", "--noEmit", "-p", "tsconfig.apphost.json" }, preExecute.Args);
-        Assert.Equal(new[] { "--no-install", "tsx", "--tsconfig", "tsconfig.apphost.json", "{appHostFile}" }, runtimeSpec.Execute.Args);
-        Assert.Contains("npx --no-install tsc --noEmit -p tsconfig.apphost.json && npx --no-install tsx --tsconfig tsconfig.apphost.json \"{appHostFile}\"", watchExecute.Args);
+        Assert.Equal(
+            new[]
+            {
+                "--no-install",
+                "tsc",
+                "--incremental",
+                "--tsBuildInfoFile", "./node_modules/.tmp/aspire-apphost.tsbuildinfo",
+                "--outDir", "./node_modules/.tmp/aspire-apphost",
+                "--rootDir", ".",
+                "--noEmit", "false",
+                "-p", "tsconfig.apphost.json"
+            },
+            preExecute.Args);
+        Assert.Equal("node", runtimeSpec.Execute.Command);
+        Assert.Equal(["{compiledAppHostFile}"], runtimeSpec.Execute.Args);
+        Assert.Contains(
+            "npx --no-install tsc --incremental --tsBuildInfoFile ./node_modules/.tmp/aspire-apphost.tsbuildinfo --outDir ./node_modules/.tmp/aspire-apphost --rootDir . --noEmit false -p tsconfig.apphost.json && node \"{compiledAppHostFile}\"",
+            watchExecute.Args);
     }
 
     [Fact]

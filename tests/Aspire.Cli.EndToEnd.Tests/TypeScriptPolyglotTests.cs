@@ -110,7 +110,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 
         File.WriteAllText(appHostPath, newContent);
 
-        // Step 6: Restore and type-check with the configured package manager before running.
+        // Step 6: Restore and build with the configured package manager before running.
         await auto.TypeAsync("aspire restore");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
@@ -130,7 +130,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
             File.Exists(viteLockFilePath),
             $"Expected {TypeScriptAppHostToolchainTestHelpers.GetDisplayName(toolchain)} install to create '{viteLockFilePath}'.");
 
-        await auto.TypeAsync(TypeScriptAppHostToolchainTestHelpers.GetTypeCheckCommand(toolchain, "tsconfig.apphost.json"));
+        await auto.TypeAsync(TypeScriptAppHostToolchainTestHelpers.GetBuildCommand(toolchain, "tsconfig.apphost.json"));
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
@@ -236,7 +236,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
             File.Exists(guestLockFilePath),
             $"Expected {TypeScriptAppHostToolchainTestHelpers.GetDisplayName(guestToolchain)} install to create '{guestLockFilePath}'.");
 
-        await auto.TypeAsync(TypeScriptAppHostToolchainTestHelpers.GetTypeCheckCommand(appHostToolchain, "tsconfig.apphost.json"));
+        await auto.TypeAsync(TypeScriptAppHostToolchainTestHelpers.GetBuildCommand(appHostToolchain, "tsconfig.apphost.json"));
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
     }
@@ -416,7 +416,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         Assert.NotNull(appHostDependencies["vscode-jsonrpc"]);
         Assert.NotNull(appHostDevDependencies["@types/node"]);
         Assert.NotNull(appHostDevDependencies["nodemon"]);
-        Assert.NotNull(appHostDevDependencies["tsx"]);
+        Assert.NotNull(appHostDevDependencies["@typescript/native"]);
         Assert.NotNull(appHostDevDependencies["typescript"]);
         Assert.True(File.Exists(Path.Combine(appHostDirectory, "tsconfig.apphost.json")));
 

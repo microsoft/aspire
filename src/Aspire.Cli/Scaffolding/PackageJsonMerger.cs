@@ -211,8 +211,9 @@ internal static class PackageJsonMerger
     /// <summary>
     /// Merges a dependency section (e.g., "dependencies", "devDependencies") from scaffold into existing
     /// using semver-aware comparison. New packages are added; existing packages are upgraded only when
-    /// the scaffold specifies a newer version. Unparseable version ranges (union ranges, workspace
-    /// references, etc.) are preserved as-is.
+    /// the scaffold specifies a newer version or replaced when the scaffold specifies a different package
+    /// through an npm alias. Unparseable version ranges (union ranges, workspace references, etc.) are
+    /// preserved as-is.
     /// </summary>
     private static void MergeDependencySection(JsonObject existing, JsonObject scaffold, string sectionName, ILogger logger)
     {
@@ -248,7 +249,7 @@ internal static class PackageJsonMerger
             {
                 if (existingVersionNode is JsonValue existingValue
                     && existingValue.TryGetValue<string>(out var existingVersion)
-                    && NpmVersionHelper.ShouldUpgrade(existingVersion, desiredVersion))
+                    && NpmVersionHelper.ShouldReplace(existingVersion, desiredVersion))
                 {
                     existingDeps[packageName] = desiredVersion;
                 }
@@ -271,7 +272,7 @@ internal static class PackageJsonMerger
 
         if (existingVersionNode is JsonValue existingValue
             && existingValue.TryGetValue<string>(out var existingVersion)
-            && NpmVersionHelper.ShouldUpgrade(existingVersion, desiredVersion))
+            && NpmVersionHelper.ShouldReplace(existingVersion, desiredVersion))
         {
             existingDeps[packageName] = desiredVersion;
         }

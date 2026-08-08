@@ -3,6 +3,6 @@
 
 namespace Aspire.Cli.Projects;
 
-internal sealed class YarnClassicNotSupportedException(string message) : InvalidOperationException(message)
+internal sealed class YarnVersionNotSupportedException(string message) : InvalidOperationException(message)
 {
 }
