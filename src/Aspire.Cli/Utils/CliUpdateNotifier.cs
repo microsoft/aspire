@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Npm;
 using Aspire.Cli.NuGet;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging;
@@ -31,10 +32,12 @@ internal sealed record CliVersionStatus(
 /// pulled from. <see cref="PackageUpdateHelpers.GetNewerVersion"/> picks
 /// between <c>newestStable</c> and <c>newestPrerelease</c> when computing
 /// the recommendation, so labelling by stable vs prerelease is faithful to
-/// the underlying decision rule. We deliberately don't try to distinguish
-/// staging from daily here — the version string alone can't reliably do so,
-/// and the user-visible doctor message only needs to convey "where to
-/// look", not the specific feed identity.
+/// the underlying decision rule. The npm path resolves the single version
+/// behind the <c>latest</c> dist-tag and classifies it by the same rule.
+/// We deliberately don't try to distinguish staging from daily here — the
+/// version string alone can't reliably do so, and the user-visible doctor
+/// message only needs to convey "where to look", not the specific feed
+/// identity.
 /// </summary>
 internal static class PackageUpdateRecommendationChannels
 {
@@ -45,14 +48,29 @@ internal static class PackageUpdateRecommendationChannels
 internal class CliUpdateNotifier(
     ILogger<CliUpdateNotifier> logger,
     INuGetPackageCache nuGetPackageCache,
+    INpmRegistryClient npmRegistryClient,
     IInteractionService interactionService,
     IProcessPathProvider processPathProvider,
     CliExecutionContext executionContext) : ICliUpdateNotifier
 {
     private IEnumerable<Shared.NuGetPackageCli>? _availablePackages;
+    private SemVersion? _availableNpmVersion;
 
     public async Task CheckForCliUpdatesAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
+        // An npm-installed CLI updates with "npm install -g @microsoft/aspire-cli@latest", so the
+        // recommendation has to come from the same dist-tag that command resolves. Querying NuGet
+        // here would advertise a version npm cannot install.
+        if (NpmInstallDetection.IsRunningFromNpm())
+        {
+            _availablePackages = null;
+            _availableNpmVersion = await npmRegistryClient.GetLatestVersionAsync(
+                NpmInstallDetection.ExpectedPackageName,
+                cancellationToken);
+            return;
+        }
+
+        _availableNpmVersion = null;
         _availablePackages = await GetCliPackagesAsync(workingDirectory, cancellationToken);
     }
 
@@ -125,7 +143,7 @@ internal class CliUpdateNotifier(
             return new CliVersionStatus(currentVersionString, null, null, updateCheckError);
         }
 
-        if (_availablePackages is null)
+        if (_availablePackages is null && _availableNpmVersion is null)
         {
             return new CliVersionStatus(currentVersionString, null, null);
         }
@@ -136,7 +154,9 @@ internal class CliUpdateNotifier(
             return new CliVersionStatus(currentVersionString, null, null);
         }
 
-        var newerVersion = PackageUpdateHelpers.GetNewerVersion(logger, currentVersion, _availablePackages);
+        var newerVersion = _availableNpmVersion is { } latestNpmVersion
+            ? GetNewerNpmVersion(currentVersion, latestNpmVersion)
+            : PackageUpdateHelpers.GetNewerVersion(logger, currentVersion, _availablePackages!);
         var updateCommand = newerVersion is null
             ? null
             : DotNetToolDetection.GetDotNetToolUpdateCommand(processPathProvider.ProcessPath)
@@ -152,6 +172,22 @@ internal class CliUpdateNotifier(
             ? null
             : (newerVersion.IsPrerelease ? PackageUpdateRecommendationChannels.Prerelease : PackageUpdateRecommendationChannels.Stable);
         return new CliVersionStatus(currentVersionString, newerVersion?.ToString(), updateCommand, UpdateCheckError: null, LatestVersionChannel: latestChannel);
+    }
+
+    private SemVersion? GetNewerNpmVersion(SemVersion currentVersion, SemVersion latestVersion)
+    {
+        // npm's "latest" dist-tag names one concrete version rather than a candidate set, so there
+        // is no stable/prerelease selection to make here — only a precedence comparison. Precedence
+        // ordering means a prerelease of the running version (9.4.0-preview.1 against 9.4.0) sorts
+        // lower and is correctly not offered as an update.
+        if (SemVersion.PrecedenceComparer.Compare(currentVersion, latestVersion) >= 0)
+        {
+            logger.LogDebug("No newer CLI version is available from npm. Current: {CurrentVersion}, latest: {LatestVersion}.", currentVersion, latestVersion);
+            return null;
+        }
+
+        logger.LogDebug("Newer CLI version available from npm: {CurrentVersion} -> {LatestVersion}.", currentVersion, latestVersion);
+        return latestVersion;
     }
 
     private async Task<IEnumerable<Shared.NuGetPackageCli>> GetCliPackagesAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)

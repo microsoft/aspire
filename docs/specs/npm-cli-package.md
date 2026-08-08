@@ -6,6 +6,27 @@ The Aspire CLI is distributed through npm using the same signed native binary ar
 
 The published package is `@microsoft/aspire-cli`. It supports global installation (`npm install -g @microsoft/aspire-cli`) on Windows, macOS, and Linux (glibc and musl). The CLI detects npm installs at runtime and routes `aspire update --self` and update notifications through the npm package manager rather than the GitHub-binary downloader.
 
+The CLI checks how it was installed before selecting an update source. NuGet-installed or standalone launches retain the existing NuGet package lookup. npm-installed launches skip NuGet entirely and read the `latest` dist-tag for `@microsoft/aspire-cli` from an npm registry over anonymous HTTPS.
+
+The registry is the one npm itself would use, because that is the source the advertised remedy resolves against: the notification tells the user to run `npm install -g @microsoft/aspire-cli@latest`, and npm resolves that specifier through the user's own registry configuration. Reading the same dist-tag the install will resolve makes the check a direct test of the thing being recommended rather than a proxy for it. A hardcoded `https://registry.npmjs.org` read would instead fail for every user whose network blocks public npm and whose `.npmrc` points at an internal proxy — exactly the users whose install would have succeeded.
+
+Registry selection follows npm's own precedence, highest first:
+
+1. `npm_config_registry` / `npm_config_@scope:registry` environment variables, which npm also injects when it runs the CLI through `npm exec` or `npx`.
+2. The project `.npmrc` at npm's local prefix — the nearest ancestor of the working directory holding a `package.json` or `node_modules`, falling back to the working directory. This layer applies even to `-g` installs, because npm loads configuration before it interprets the command.
+3. The user `.npmrc`, at `npm_config_userconfig` when set and `~/.npmrc` otherwise.
+4. npm's built-in default, `https://registry.npmjs.org`.
+
+A scoped `@microsoft:registry` outranks the global `registry` for this package, matching npm's scope-to-registry association. npm's global (`$PREFIX/etc/npmrc`) and builtin layers are not read: locating them requires npm's install prefix, which is only discoverable by running npm — the process launch this lookup exists to avoid. Registry pinning lives in the environment or user layer in practice.
+
+Configuration is parsed directly rather than by shelling out to `npm config get registry`, so the check costs no process launch on the command startup path and does not require npm or Node to be installed. Only `registry`, `<scope>:registry`, and `userconfig` keys are retained; credential entries such as `//registry.example.com/:_authToken` are skipped while parsing, so no token is ever held in memory. Registry values are normalized with a trailing slash before use, because a value written as `https://host/npm/registry` would otherwise compose to `https://host/npm/<package>` and silently drop the feed path. Credentials embedded directly in a `registry` value are redacted from every log and error message.
+
+Because the registry comes from configuration, a user pinned to the dnceng `dotnet-public-npm` mirror is checked against that mirror rather than public npm. That is the correct answer for them, since it is also where their install resolves — but it only holds if the mirror actually carries the package. Azure Artifacts serves only what has already been saved into a feed; an anonymous request for a package it has never cached returns HTTP 401 instead of proxying the upstream. The release pipeline therefore seeds `@microsoft/aspire-cli` and its RID dependencies into `dotnet-public-npm` after the public npm smoke test and verifies the mirrored `@latest` anonymously before channel promotion, as described in [the release process](../release-process.md). Without that seeding a mirror-pinned CLI would report the last seeded version indefinitely.
+
+The check is a plain `GET` of the package document with the abbreviated `application/vnd.npm.install-v1+json` media type, and it sends no credentials — a private registry that requires authentication reports an update-check warning rather than being queried with tokens. Requests carry a private timeout and a bounded response read, so a slow or oversized registry response cannot stall command startup or CLI shutdown.
+
+When the `latest` version is newer than the running CLI by semantic-version precedence, the notification shows `npm install -g @microsoft/aspire-cli@latest`. If `latest` is equal to or older than the running CLI, no update is reported. Failed lookups are not cached, so `aspire doctor` retries after a transient failure during a background check. Routine commands suppress lookup failures, while `aspire doctor` reports a specific update-check warning. Explicit `aspire update --self` behavior is unchanged.
+
 ## Research and prior art
 
 This design follows the native npm package pattern used by established packages rather than introducing a custom installer.

@@ -9,6 +9,37 @@ public sealed class ReleasePublishNugetPipelineTests
 {
     private readonly string _repoRoot = RepoRoot.Path;
 
+    /// <summary>
+    /// The public registry smoke test runs whenever the release publishes npm packages or performs
+    /// a mirror-only rerun. It is never gated on <c>NpmInternalMirrorAction</c> being enabled, so a
+    /// run that publishes npm packages always proves the public package installs.
+    /// </summary>
+    private const string PublicNpmSmokeCondition =
+        "condition: and(succeeded(), or(eq('${{ parameters.SkipNpmRidPublish }}', 'false'), eq('${{ parameters.SkipNpmPointerPublish }}', 'false'), eq('${{ parameters.NpmInternalMirrorAction }}', 'only')))";
+
+    /// <summary>
+    /// Internal mirror seeding and validation is its own release action: it runs when
+    /// <c>NpmInternalMirrorAction</c> is <c>auto</c> and this run publishes npm packages, or when it
+    /// is <c>only</c> (an intentional mirror-only rerun).
+    /// </summary>
+    private const string InternalMirrorCondition =
+        "condition: and(succeeded(), or(and(eq('${{ parameters.NpmInternalMirrorAction }}', 'auto'), or(eq('${{ parameters.SkipNpmRidPublish }}', 'false'), eq('${{ parameters.SkipNpmPointerPublish }}', 'false'))), eq('${{ parameters.NpmInternalMirrorAction }}', 'only')))";
+
+    /// <summary>
+    /// Compile-time gate for every stable npm step in the release job. A release rerun that is
+    /// unrelated to npm (both publish skips set, <c>NpmInternalMirrorAction</c> left at
+    /// <c>auto</c>) emits none of these steps.
+    /// </summary>
+    private const string StableNpmWorkGate =
+        "- ${{ if and(eq(parameters.DryRun, false), eq(parameters.IsPrerelease, false), or(eq(parameters.SkipNpmRidPublish, false), eq(parameters.SkipNpmPointerPublish, false), eq(parameters.NpmInternalMirrorAction, 'only'))) }}:";
+
+    /// <summary>
+    /// Compile-time gate for staging npm artifacts. npm artifacts are staged when the run publishes
+    /// npm packages, or for a stable mirror-only rerun that validates already-published packages.
+    /// </summary>
+    private const string StableNpmStagingGate =
+        "- ${{ if or(eq(parameters.SkipNpmRidPublish, false), eq(parameters.SkipNpmPointerPublish, false), and(eq(parameters.DryRun, false), eq(parameters.IsPrerelease, false), eq(parameters.NpmInternalMirrorAction, 'only'))) }}:";
+
     [Fact]
     public async Task ValidatesNpmPublishPreconditionsBeforeNuGetPublish()
     {
@@ -104,7 +135,7 @@ public sealed class ReleasePublishNugetPipelineTests
     }
 
     [Fact]
-    public async Task NpmPublishUsesOnlyRidAndPointerSkipParameters()
+    public async Task NpmPublishAndMirrorValidationUseDedicatedSkipParameters()
     {
         var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
         var spec = await ReadRepoFileAsync("docs/specs/npm-cli-package.md");
@@ -114,8 +145,109 @@ public sealed class ReleasePublishNugetPipelineTests
         Assert.DoesNotContain("SkipNpmPublish", spec);
         Assert.Contains("displayName: '[Advanced] Skip npm RID Package Publishing", pipeline);
         Assert.Contains("displayName: '[Advanced] Skip npm Pointer Package Publishing", pipeline);
-        Assert.Contains("or(eq(parameters.SkipNpmRidPublish, false), eq(parameters.SkipNpmPointerPublish, false))", pipeline);
-        Assert.Contains("and(eq(parameters.SkipNpmRidPublish, true), eq(parameters.SkipNpmPointerPublish, true))", pipeline);
+        Assert.DoesNotContain("SkipNpmMirrorValidation", pipeline);
+        Assert.DoesNotContain("SkipNpmMirrorValidation", spec);
+        Assert.Contains("displayName: '[Advanced] npm Internal Mirror Seeding and Validation", pipeline);
+        Assert.Equal("auto", FindYamlParameterDefault(pipeline, "NpmInternalMirrorAction"));
+        Assert.Contains(
+            "or(eq(parameters.SkipNpmRidPublish, false), eq(parameters.SkipNpmPointerPublish, false), and(eq(parameters.DryRun, false), eq(parameters.IsPrerelease, false), eq(parameters.NpmInternalMirrorAction, 'only')))",
+            pipeline);
+        Assert.Contains(
+            "and(eq(parameters.SkipNpmRidPublish, true), eq(parameters.SkipNpmPointerPublish, true), or(eq(parameters.DryRun, true), eq(parameters.IsPrerelease, true), ne(parameters.NpmInternalMirrorAction, 'only')))",
+            pipeline);
+    }
+
+    /// <summary>
+    /// Evaluates the npm gates against the operator recipes documented in
+    /// <c>docs/release-process.md</c>. The decisive case is the recovery rerun that is unrelated to
+    /// npm (both publish skips set, <c>NpmInternalMirrorAction</c> left at its <c>auto</c> default):
+    /// it must emit no npm steps at all, so it cannot fail on a source build whose npm pointer
+    /// package was never published.
+    /// </summary>
+    [Theory]
+    // ridSkip, pointerSkip, mirrorAction, dryRun, prerelease, stagesNpmArtifacts, runsStableNpmSteps, seedsMirror, runsPublicSmoke
+    [InlineData(false, false, "auto", false, false, true, true, true, true)]
+    [InlineData(true, true, "only", false, false, true, true, true, true)]
+    [InlineData(false, true, "auto", false, false, true, true, true, true)]
+    [InlineData(false, false, "skip", false, false, true, true, false, true)]
+    [InlineData(true, true, "auto", false, false, false, false, false, false)]
+    [InlineData(true, true, "skip", false, false, false, false, false, false)]
+    [InlineData(false, false, "auto", true, false, true, false, false, false)]
+    [InlineData(true, true, "auto", false, true, false, false, false, false)]
+    public async Task NpmGatesFollowDocumentedReleaseRecipes(
+        bool ridSkip,
+        bool pointerSkip,
+        string mirrorAction,
+        bool dryRun,
+        bool prerelease,
+        bool stagesNpmArtifacts,
+        bool runsStableNpmSteps,
+        bool seedsMirror,
+        bool runsPublicSmoke)
+    {
+        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
+        const string placeholderGate =
+            "- ${{ if and(eq(parameters.SkipNpmRidPublish, true), eq(parameters.SkipNpmPointerPublish, true), or(eq(parameters.DryRun, true), eq(parameters.IsPrerelease, true), ne(parameters.NpmInternalMirrorAction, 'only'))) }}:";
+
+        foreach (var gate in new[] { StableNpmStagingGate, StableNpmWorkGate, placeholderGate })
+        {
+            Assert.Contains(gate, pipeline, StringComparison.Ordinal);
+        }
+
+        foreach (var condition in new[] { PublicNpmSmokeCondition, InternalMirrorCondition })
+        {
+            Assert.Contains(condition, pipeline, StringComparison.Ordinal);
+        }
+
+        var parameters = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["SkipNpmRidPublish"] = ridSkip ? "true" : "false",
+            ["SkipNpmPointerPublish"] = pointerSkip ? "true" : "false",
+            ["NpmInternalMirrorAction"] = mirrorAction,
+            ["DryRun"] = dryRun ? "true" : "false",
+            ["IsPrerelease"] = prerelease ? "true" : "false"
+        };
+
+        var stages = EvaluateGate(StableNpmStagingGate, parameters);
+        var stableSteps = EvaluateGate(StableNpmWorkGate, parameters);
+
+        Assert.Equal(stagesNpmArtifacts, stages);
+        Assert.Equal(runsStableNpmSteps, stableSteps);
+
+        // The empty-placeholder gate must stay the exact negation of the staging gate, otherwise a
+        // release either stages nothing and fails on missing artifacts, or double-declares them.
+        Assert.Equal(!stages, EvaluateGate(placeholderGate, parameters));
+
+        // Mirror and smoke steps live inside the stable gate, so their effective behavior is the
+        // gate combined with the step condition.
+        Assert.Equal(seedsMirror, stableSteps && EvaluateCondition(InternalMirrorCondition, parameters));
+        Assert.Equal(runsPublicSmoke, stableSteps && EvaluateCondition(PublicNpmSmokeCondition, parameters));
+
+        // Comment 5 regression guard: the public install smoke never depends on mirror seeding.
+        if (stableSteps && mirrorAction == "skip")
+        {
+            Assert.True(EvaluateCondition(PublicNpmSmokeCondition, parameters));
+        }
+    }
+
+    private static bool EvaluateGate(string gate, IReadOnlyDictionary<string, string> parameters)
+    {
+        const string prefix = "- ${{ if ";
+        const string suffix = " }}:";
+
+        Assert.StartsWith(prefix, gate, StringComparison.Ordinal);
+        Assert.EndsWith(suffix, gate, StringComparison.Ordinal);
+
+        return AzurePipelinesExpression.Evaluate(gate[prefix.Length..^suffix.Length], parameters);
+    }
+
+    private static bool EvaluateCondition(string condition, IReadOnlyDictionary<string, string> parameters)
+    {
+        const string prefix = "condition: ";
+
+        Assert.StartsWith(prefix, condition, StringComparison.Ordinal);
+
+        return AzurePipelinesExpression.Evaluate(condition[prefix.Length..], parameters);
     }
 
     [Fact]
@@ -202,8 +334,23 @@ public sealed class ReleasePublishNugetPipelineTests
         // template expression evaluates to a non-string object. Keep the composed boolean
         // calculation in PowerShell and substitute only the primitive parameter values.
         Assert.DoesNotContain("Installer-only mode: ${{ and(", pipeline);
-        Assert.Contains("$installerOnlyMode = (", pipeline);
-        Assert.Contains("Write-Host \"Installer-only mode: $installerOnlyMode\"", pipeline);
+        var installerOnlyModeBlocks = System.Text.RegularExpressions.Regex.Matches(
+            pipeline,
+            @"\$installerOnlyMode = \((?<body>.*?)\)",
+            System.Text.RegularExpressions.RegexOptions.Singleline);
+        Assert.Equal(2, installerOnlyModeBlocks.Count);
+        Assert.All(
+            installerOnlyModeBlocks.Cast<System.Text.RegularExpressions.Match>(),
+            block => Assert.Contains(
+                "\"${{ parameters.NpmInternalMirrorAction }}\" -ne \"only\"",
+                block.Groups["body"].Value,
+                StringComparison.Ordinal));
+        Assert.Equal(
+            2,
+            System.Text.RegularExpressions.Regex.Matches(
+                pipeline,
+                System.Text.RegularExpressions.Regex.Escape(
+                    "Write-Host \"Installer-only mode: $installerOnlyMode\"")).Count);
     }
 
     [Fact]
@@ -307,7 +454,529 @@ public sealed class ReleasePublishNugetPipelineTests
 
         Assert.Contains("aspire --version output matched the published npm package version", pipeline);
         Assert.Contains("npm view $packageSpec version --registry=https://registry.npmjs.org/", pipeline);
-        Assert.Contains("Registry validation will still install the selected source build's pointer package version from npm.", pipeline);
+        Assert.Contains(
+            "Registry validation still runs unless this run neither publishes npm packages nor sets NpmInternalMirrorAction=only.",
+            pipeline);
+
+        // The public smoke test must not be gated on the internal mirror action. A run that
+        // publishes npm packages has to prove the package installs from registry.npmjs.org before
+        // channel promotion, even when the operator opted out of internal mirror seeding.
+        Assert.Contains(
+            PublicNpmSmokeCondition,
+            ExtractYamlStep(pipeline, "displayName: 'Validate Published npm Package from Registry'"),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task NpmMirrorSeedingPinsLocalPrefixBeforeEveryWorkingDirectoryChange()
+    {
+        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
+
+        // npm resolves its project config by walking up from the working directory to the nearest
+        // package.json/node_modules and reading that directory's .npmrc. --userconfig/--globalconfig
+        // do not cover that layer, so an ancestor .npmrc on the release agent could inject a scoped
+        // registry or credentials and make the "anonymous" verification prove nothing. Both
+        // directories the seed script cds into must be pinned before the Push-Location.
+        var markerIndex = FindRequiredText(pipeline, "function Set-NpmLocalPrefixMarker {");
+        var seedPinIndex = FindRequiredText(pipeline, "Set-NpmLocalPrefixMarker -Directory $seedDirectory");
+        var anonymousPinIndex = FindRequiredText(pipeline, "Set-NpmLocalPrefixMarker -Directory $anonymousDirectory");
+        var seedPushIndex = FindRequiredText(pipeline, "Push-Location $seedDirectory");
+        var anonymousPushIndex = FindRequiredText(pipeline, "Push-Location $anonymousDirectory");
+
+        Assert.True(markerIndex < seedPinIndex);
+        Assert.True(seedPinIndex < seedPushIndex);
+        Assert.True(anonymousPinIndex < anonymousPushIndex);
+
+        // The marker must match the CLI's PinNpmLocalPrefixAsync so both isolation paths stay
+        // recognizably the same mechanism.
+        Assert.Contains(
+            """'{"name":"aspire-npm-isolated","version":"0.0.0","private":true}'""",
+            pipeline);
+
+        // Every directory the seed script enters has to be pinned; a new Push-Location without a
+        // matching marker would silently reopen the ancestor-.npmrc hole.
+        var pushLocations = System.Text.RegularExpressions.Regex.Matches(
+            pipeline[FindRequiredText(pipeline, "$packageName = '@microsoft/aspire-cli'")..],
+            @"Push-Location \$(\w+)");
+        Assert.Equal(
+            new[] { "seedDirectory", "anonymousDirectory" },
+            pushLocations.Select(match => match.Groups[1].Value).Distinct().ToArray());
+    }
+
+    [Fact]
+    public async Task SeedsAndAnonymouslyValidatesNpmInternalMirrorBeforePromotion()
+    {
+        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
+
+        var stableRealGate = StableNpmWorkGate;
+        const string mirrorCondition = InternalMirrorCondition;
+        const string anonymousViewCommand =
+            "$viewOutput = npm view \"$packageName@latest\" version --prefer-online --registry=$internalRegistry --userconfig=$anonymousNpmrc --globalconfig=$anonymousGlobalNpmrc --cache=$attemptCache --json=false --loglevel=warn 2>&1";
+        var stableRealGateIndex = FindRequiredText(pipeline, stableRealGate);
+        var stableRealGateEndIndex = FindYamlIndentedBlockEnd(pipeline, stableRealGate);
+        var publicValidationIndex = FindRequiredText(
+            pipeline,
+            "displayName: 'Validate Published npm Package from Registry'");
+        var prepareAuthenticationIndex = FindRequiredText(
+            pipeline,
+            "displayName: 'Prepare npm Internal Mirror Authentication'");
+        var authenticateTaskIndex = FindRequiredText(pipeline, "task: npmAuthenticate@0");
+        var authenticateIndex = FindRequiredText(
+            pipeline,
+            "displayName: 'Authenticate to npm Internal Mirror'");
+        var seedScriptIndex = FindRequiredText(pipeline, "$packageName = '@microsoft/aspire-cli'");
+        var anonymousViewIndex = FindRequiredText(pipeline, anonymousViewCommand);
+        var seedIndex = FindRequiredText(
+            pipeline,
+            "displayName: 'Seed and Validate npm Internal Mirror'");
+        var promotionIndex = FindRequiredText(
+            pipeline,
+            "# ===== PROMOTE TO CHANNEL =====");
+
+        Assert.Equal(promotionIndex, stableRealGateEndIndex);
+        Assert.True(stableRealGateIndex < publicValidationIndex);
+        Assert.True(publicValidationIndex < prepareAuthenticationIndex);
+        Assert.True(prepareAuthenticationIndex < authenticateTaskIndex);
+        Assert.True(authenticateTaskIndex < authenticateIndex);
+        Assert.True(authenticateIndex < seedScriptIndex);
+        Assert.True(seedScriptIndex < anonymousViewIndex);
+        Assert.True(anonymousViewIndex < seedIndex);
+        Assert.True(seedIndex < promotionIndex);
+        Assert.Equal(
+            3,
+            System.Text.RegularExpressions.Regex.Matches(
+                pipeline,
+                System.Text.RegularExpressions.Regex.Escape(mirrorCondition)).Count);
+
+        foreach (var displayName in new[]
+        {
+            "displayName: 'Prepare npm Internal Mirror Authentication'",
+            "displayName: 'Authenticate to npm Internal Mirror'",
+            "displayName: 'Seed and Validate npm Internal Mirror'"
+        })
+        {
+            var step = ExtractYamlStep(pipeline, displayName);
+            Assert.Contains(mirrorCondition, step, StringComparison.Ordinal);
+        }
+
+        var seedScript = ExtractSection(
+            pipeline,
+            "function Invoke-NpmPack",
+            "displayName: 'Seed and Validate npm Internal Mirror'");
+
+        Assert.Contains(
+            "workingFile: '$(Agent.TempDirectory)\\aspire-cli-internal-mirror.npmrc'",
+            pipeline,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "$authenticatedNpmrc = \"$(Agent.TempDirectory)\\aspire-cli-internal-mirror.npmrc\"",
+            seedScript,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "$anonymousNpmrc = Join-Path $workRoot 'anonymous.npmrc'",
+            seedScript,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "$authenticatedCache = Join-Path $workRoot 'authenticated-cache'",
+            seedScript,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "$anonymousCache = Join-Path $workRoot 'anonymous-cache'",
+            seedScript,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "$stagedPointerPackagePath = \"$(Pipeline.Workspace)/npm/pointer-package\"",
+            seedScript,
+            StringComparison.Ordinal);
+
+        var protectedTryIndex = FindRequiredText(seedScript, "try {");
+        var workRootDeleteIndex = FindRequiredText(seedScript, "if (Test-Path -LiteralPath $workRoot)");
+        var seedDirectoryCreateIndex = FindRequiredText(
+            seedScript,
+            "New-Item -ItemType Directory -Path $seedDirectory -Force | Out-Null");
+        var authenticatedCacheCreateIndex = FindRequiredText(
+            seedScript,
+            "New-Item -ItemType Directory -Path $authenticatedCache -Force | Out-Null");
+        var anonymousCacheCreateIndex = FindRequiredText(
+            seedScript,
+            "New-Item -ItemType Directory -Path $anonymousCache -Force | Out-Null");
+        var anonymousNpmrcWriteIndex = FindRequiredText(
+            seedScript,
+            "Set-Content -LiteralPath $anonymousNpmrc -Encoding utf8NoBOM");
+
+        Assert.True(protectedTryIndex < workRootDeleteIndex);
+        Assert.True(protectedTryIndex < seedDirectoryCreateIndex);
+        Assert.True(protectedTryIndex < authenticatedCacheCreateIndex);
+        Assert.True(protectedTryIndex < anonymousCacheCreateIndex);
+        Assert.True(protectedTryIndex < anonymousNpmrcWriteIndex);
+
+        var stagedDependencyExtractionIndex = FindRequiredText(
+            seedScript,
+            "foreach ($dependency in $stagedOptionalDependencies.PSObject.Properties)");
+        var authenticatedPackIndex = FindRequiredText(
+            seedScript,
+            "Invoke-AuthenticatedNpmPack -PackageSpec $authenticatedPackageSpec");
+        var anonymousViewScriptIndex = FindRequiredText(seedScript, anonymousViewCommand);
+        var anonymousPointerPackIndex = FindRequiredText(
+            seedScript,
+            "Invoke-AnonymousNpmPack -PackageSpec \"$packageName@$mirroredVersion\"");
+        var anonymousDependencyExtractionIndex = FindRequiredText(
+            seedScript,
+            "foreach ($dependency in $anonymousOptionalDependencies.PSObject.Properties)");
+        var anonymousDependencyPackIndex = FindRequiredText(
+            seedScript,
+            "Invoke-AnonymousNpmPack -PackageSpec $dependencySpec");
+
+        Assert.True(stagedDependencyExtractionIndex < authenticatedPackIndex);
+        Assert.True(authenticatedPackIndex < anonymousViewScriptIndex);
+        Assert.True(anonymousViewScriptIndex < anonymousPointerPackIndex);
+        Assert.True(anonymousPointerPackIndex < anonymousDependencyExtractionIndex);
+        Assert.True(anonymousDependencyExtractionIndex < anonymousDependencyPackIndex);
+        Assert.Equal(
+            anonymousViewScriptIndex,
+            seedScript.LastIndexOf(anonymousViewCommand, StringComparison.Ordinal));
+
+        Assert.DoesNotContain("npm install --ignore-scripts", seedScript, StringComparison.Ordinal);
+        Assert.Contains(
+            "npm pack $PackageSpec --ignore-scripts --pack-destination $Destination",
+            seedScript,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "[version]$mirroredVersion -ge [version]$packageVersion",
+            seedScript,
+            StringComparison.Ordinal);
+        Assert.Contains("$maxAttempts = 10", seedScript, StringComparison.Ordinal);
+        Assert.Contains("Start-Sleep -Seconds 30", seedScript, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task NpmMirrorValidationIsExplicitlyGatedWhenBothPublishFlagsAreSkipped()
+    {
+        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
+
+        var nodeSetupGate = StableNpmStagingGate;
+        var stableRealGate = StableNpmWorkGate;
+        var bothSkippedMessageIndex = FindRequiredText(
+            pipeline,
+            "displayName: 'Skip npm Packages (flagged)'");
+        var nodeSetupGateIndex = FindRequiredText(pipeline, nodeSetupGate);
+        var stableRealGateIndex = FindRequiredText(pipeline, stableRealGate);
+        var publicValidationIndex = FindRequiredText(
+            pipeline,
+            "displayName: 'Validate Published npm Package from Registry'");
+        var mirrorValidationIndex = FindRequiredText(
+            pipeline,
+            "displayName: 'Seed and Validate npm Internal Mirror'");
+
+        Assert.True(nodeSetupGateIndex < bothSkippedMessageIndex);
+        Assert.True(bothSkippedMessageIndex < stableRealGateIndex);
+        Assert.True(stableRealGateIndex < publicValidationIndex);
+        Assert.True(publicValidationIndex < mirrorValidationIndex);
+        Assert.Contains(
+            "##vso[task.setvariable variable=NpmPublishedPointerVersion]$packageVersion",
+            pipeline,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "$packageVersion = '$(NpmPublishedPointerVersion)'",
+            pipeline,
+            StringComparison.Ordinal);
+
+        Assert.Contains(
+            "displayName: 'Skip npm Internal Mirror Validation (flagged)'",
+            pipeline,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "condition: and(succeeded(), eq('${{ parameters.NpmInternalMirrorAction }}', 'skip'))",
+            ExtractYamlStep(pipeline, "displayName: 'Skip npm Internal Mirror Validation (flagged)'"),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task StableNpmMirrorRerunStagesPointerArtifactAndValidationSummaries()
+    {
+        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
+        var prepareStage = ExtractSection(
+            pipeline,
+            "displayName: 'Download and Re-publish Artifacts'",
+            "displayName: 'Validate, Publish, and Promote'");
+        var stableNpmGate = StableNpmStagingGate;
+
+        var downloadGateIndex = FindRequiredText(prepareStage, stableNpmGate);
+        var downloadIndex = FindRequiredText(
+            prepareStage,
+            "displayName: 'Download npm packages from Source Build'");
+        var prepareGateIndex = prepareStage.IndexOf(
+            stableNpmGate,
+            downloadGateIndex + stableNpmGate.Length,
+            StringComparison.Ordinal);
+        var prepareIndex = FindRequiredText(
+            prepareStage,
+            "displayName: 'Prepare npm Artifacts for Publishing'");
+
+        Assert.True(downloadGateIndex < downloadIndex);
+        Assert.True(prepareGateIndex > downloadIndex);
+        Assert.True(prepareGateIndex < prepareIndex);
+        Assert.Contains(
+            "- ${{ if and(eq(parameters.SkipNpmRidPublish, true), eq(parameters.SkipNpmPointerPublish, true), or(eq(parameters.DryRun, true), eq(parameters.IsPrerelease, true), ne(parameters.NpmInternalMirrorAction, 'only'))) }}:",
+            prepareStage,
+            StringComparison.Ordinal);
+
+        var stagedValidationIndex = FindRequiredText(
+            pipeline,
+            "displayName: 'Verify Staged npm Package Versions'");
+        var stableStagedValidationGateIndex = pipeline.LastIndexOf(
+            stableNpmGate,
+            stagedValidationIndex,
+            StringComparison.Ordinal);
+        var publicationOnlyGateIndex = pipeline.LastIndexOf(
+            "- ${{ if or(eq(parameters.SkipNpmRidPublish, false), eq(parameters.SkipNpmPointerPublish, false)) }}:",
+            stagedValidationIndex,
+            StringComparison.Ordinal);
+
+        Assert.True(stableStagedValidationGateIndex > publicationOnlyGateIndex);
+    }
+
+    [Fact]
+    public async Task NpmMirrorAnonymousValidationUsesOnlyFreshCredentialFreeConfiguration()
+    {
+        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
+        var seedScript = ExtractSection(
+            pipeline,
+            "function Invoke-NpmPack",
+            "displayName: 'Seed and Validate npm Internal Mirror'");
+
+        Assert.Contains(
+            "$anonymousGlobalNpmrc = Join-Path $workRoot 'anonymous-global.npmrc'",
+            seedScript,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "$anonymousDirectory = Join-Path $workRoot 'anonymous'",
+            seedScript,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "$env:NPM_CONFIG_GLOBALCONFIG = $anonymousGlobalNpmrc",
+            seedScript,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "npm view \"$packageName@latest\" version --prefer-online --registry=$internalRegistry --userconfig=$anonymousNpmrc --globalconfig=$anonymousGlobalNpmrc --cache=$attemptCache --json=false",
+            seedScript,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Remove-Item Env:NPM_CONFIG_GLOBALCONFIG -ErrorAction SilentlyContinue",
+            seedScript,
+            StringComparison.Ordinal);
+
+        var anonymousDirectoryCreateIndex = FindRequiredText(
+            seedScript,
+            "New-Item -ItemType Directory -Path $anonymousDirectory -Force | Out-Null");
+        var anonymousGlobalConfigCreateIndex = FindRequiredText(
+            seedScript,
+            "New-Item -ItemType File -Path $anonymousGlobalNpmrc -Force | Out-Null");
+        var anonymousLocationIndex = FindRequiredText(
+            seedScript,
+            "Push-Location $anonymousDirectory");
+        var anonymousViewIndex = FindRequiredText(
+            seedScript,
+            "npm view \"$packageName@latest\" version --prefer-online --registry=$internalRegistry --userconfig=$anonymousNpmrc --globalconfig=$anonymousGlobalNpmrc --cache=$attemptCache --json=false");
+
+        Assert.True(anonymousDirectoryCreateIndex < anonymousLocationIndex);
+        Assert.True(anonymousGlobalConfigCreateIndex < anonymousLocationIndex);
+        Assert.True(anonymousLocationIndex < anonymousViewIndex);
+    }
+
+    [Fact]
+    public async Task NpmMirrorSeedingAndAnonymousValidationDownloadEveryTarballWithoutScripts()
+    {
+        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
+        var seedScript = ExtractSection(
+            pipeline,
+            "function Invoke-NpmPack",
+            "displayName: 'Seed and Validate npm Internal Mirror'");
+
+        Assert.DoesNotContain("npm install --ignore-scripts", seedScript, StringComparison.Ordinal);
+        Assert.Contains(
+            "foreach ($dependency in $stagedOptionalDependencies.PSObject.Properties)",
+            seedScript,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Invoke-AuthenticatedNpmPack -PackageSpec $authenticatedPackageSpec",
+            seedScript,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Invoke-AnonymousNpmPack -PackageSpec \"$packageName@$mirroredVersion\"",
+            seedScript,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "foreach ($dependency in $anonymousOptionalDependencies.PSObject.Properties)",
+            seedScript,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Invoke-AnonymousNpmPack -PackageSpec $dependencySpec",
+            seedScript,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "\"$($anonymousPackageJson.name)\" -eq $packageName",
+            seedScript,
+            StringComparison.Ordinal);
+        Assert.Equal(
+            2,
+            System.Text.RegularExpressions.Regex.Matches(
+                seedScript,
+                System.Text.RegularExpressions.Regex.Escape(
+                    "$dependencyVersion -notmatch '^\\d+\\.\\d+\\.\\d+$'")).Count);
+        Assert.Contains(
+            "npm pack $PackageSpec --ignore-scripts --pack-destination $Destination",
+            seedScript,
+            StringComparison.Ordinal);
+
+        var authenticatedLocationIndex = FindRequiredText(seedScript, "Push-Location $seedDirectory");
+        var authenticatedPackIndex = FindRequiredText(
+            seedScript,
+            "Invoke-AuthenticatedNpmPack -PackageSpec $authenticatedPackageSpec");
+        Assert.True(authenticatedLocationIndex < authenticatedPackIndex);
+    }
+
+    [Fact]
+    public async Task NpmMirrorCleanupDoesNotMaskSuccessfulValidation()
+    {
+        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
+        var seedScript = ExtractSection(
+            pipeline,
+            "$packageName = '@microsoft/aspire-cli'",
+            "displayName: 'Seed and Validate npm Internal Mirror'");
+
+        Assert.Contains(
+            "Best-effort cleanup of '$workRoot' failed:",
+            seedScript,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Remove-Item -LiteralPath $workRoot -Recurse -Force -ErrorAction Stop",
+            seedScript,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task NpmMirrorOnlyRerunDocumentationSkipsEveryUnrelatedReleaseAction()
+    {
+        var releaseProcess = await ReadRepoFileAsync("docs/release-process.md");
+        var mirrorRecovery = ExtractSection(
+            releaseProcess,
+            "### npm internal mirror seeding or anonymous validation fails",
+            "### Tag already exists but points to different commit");
+
+        foreach (var parameterName in new[]
+        {
+            "SkipNuGetPublish",
+            "SkipNpmRidPublish",
+            "SkipNpmPointerPublish",
+            "SkipChannelPromotion",
+            "SkipWinGetPublish",
+            "SkipGitHubTasks",
+            "SkipReleaseAssets",
+            "SkipHomebrewValidation",
+            "SkipNixPackageUpdate",
+            "SkipVSCodeExtensionPublish"
+        })
+        {
+            Assert.Contains($"{parameterName}=true", mirrorRecovery, StringComparison.Ordinal);
+        }
+
+        // The mirror-only rerun is expressed by the dedicated action, not by an extra skip flag.
+        Assert.Contains("NpmInternalMirrorAction=only", mirrorRecovery, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task NpmMirrorMacroGuardsUseLiteralAssignments()
+    {
+        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
+
+        Assert.Equal(
+            2,
+            System.Text.RegularExpressions.Regex.Matches(
+                pipeline,
+                @"\$validatedVersion = '\$\(NpmValidatedExpectedVersion\)'").Count);
+        Assert.Contains("$packageVersion = '$(NpmPublishedPointerVersion)'", pipeline);
+        Assert.Contains("$internalRegistry = '$(NPM_REGISTRY)'", pipeline);
+        Assert.DoesNotContain("$validatedVersion = \"$(NpmValidatedExpectedVersion)\"", pipeline);
+        Assert.DoesNotContain("$packageVersion = \"$(NpmPublishedPointerVersion)\"", pipeline);
+        Assert.DoesNotContain("$internalRegistry = \"$(NPM_REGISTRY)\"", pipeline);
+    }
+
+    [Fact]
+    public async Task NpmPublishSkipMessageAndSummaryDistinguishMirrorValidation()
+    {
+        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
+
+        Assert.DoesNotContain("=== Skipping npm Publishing", pipeline);
+        Assert.Contains(
+            "=== Skipping npm Package Publishing (SkipNpmRidPublish=true and SkipNpmPointerPublish=true); internal mirror handling follows NpmInternalMirrorAction=${{ parameters.NpmInternalMirrorAction }} ===",
+            pipeline);
+        Assert.DoesNotContain(
+            "Registry validation will still install the selected source build's pointer package version from npm.",
+            pipeline);
+        Assert.Contains(
+            "Registry validation still runs unless this run neither publishes npm packages nor sets NpmInternalMirrorAction=only.",
+            pipeline);
+        Assert.Contains(
+            "Write-Host \" (PARTIAL - pointer publish skipped; registry smoke still ran)\"",
+            pipeline);
+
+        // Reaching the pointer-skip summary branch means RID publishing ran, so the public smoke
+        // test ran too. A "registry smoke skipped" summary there would contradict the step's
+        // condition, which never skips the smoke test for a run that publishes npm packages.
+        Assert.DoesNotContain(
+            "Write-Host \" (PARTIAL - pointer publish skipped; registry smoke skipped)\"",
+            pipeline);
+        var partialPointerSummaryIndex = FindRequiredText(
+            pipeline,
+            "} elseif (\"${{ parameters.SkipNpmPointerPublish }}\" -eq \"true\") {");
+        var ranSmokeSummaryIndex = FindRequiredText(
+            pipeline,
+            "Write-Host \" (PARTIAL - pointer publish skipped; registry smoke still ran)\"");
+        var mirrorSummaryConditionIndex = pipeline.IndexOf(
+            "} elseif (\"${{ parameters.NpmInternalMirrorAction }}\" -eq \"skip\") {",
+            partialPointerSummaryIndex,
+            StringComparison.Ordinal);
+        Assert.True(partialPointerSummaryIndex < ranSmokeSummaryIndex);
+        Assert.True(ranSmokeSummaryIndex < mirrorSummaryConditionIndex);
+        Assert.Contains("║ npm Mirror:     ${{ parameters.NpmInternalMirrorAction }}", pipeline);
+
+        // 'auto' with both publish skips set is a release that did no npm work at all. The summary
+        // must not report the mirror as EXECUTED for those runs.
+        Assert.Contains(
+            "Write-Host \" (NOT RUN - this release published no npm packages)\"",
+            pipeline);
+    }
+
+    [Fact]
+    public async Task PublicNpmRegistrySmokeTestIsNotGatedOnMirrorValidationAlone()
+    {
+        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
+        var smokeStep = ExtractYamlStep(
+            pipeline,
+            "displayName: 'Validate Published npm Package from Registry'");
+
+        // Regression guard: gating this pre-existing step on the internal mirror flag let a run
+        // publish @microsoft/aspire-cli to npm and promote the channel without ever proving
+        // `npm install -g @microsoft/aspire-cli@<version>` works.
+        Assert.Contains(PublicNpmSmokeCondition, smokeStep, StringComparison.Ordinal);
+
+        Assert.DoesNotContain(InternalMirrorCondition, smokeStep);
+        Assert.DoesNotContain("NpmInternalMirrorAction }}', 'skip'", smokeStep);
+
+        // The mirror seed step reads NpmPublishedPointerVersion from the smoke test, so the smoke
+        // test must run in every configuration where the mirror steps run.
+        var mirrorStep = ExtractYamlStep(
+            pipeline,
+            "displayName: 'Seed and Validate npm Internal Mirror'");
+        Assert.Contains(
+            InternalMirrorCondition,
+            mirrorStep,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "$packageVersion = '$(NpmPublishedPointerVersion)'",
+            mirrorStep,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -580,6 +1249,12 @@ public sealed class ReleasePublishNugetPipelineTests
         Assert.Contains("| \\`SkipNpmRidPublish\\` | \\`true\\` |", instructions);
         Assert.Contains("| \\`SkipNpmPointerPublish\\` | \\`true\\` |", instructions);
         Assert.Contains("| \\`SkipChannelPromotion\\` | \\`true\\` |", instructions);
+
+        // The extension-only recipe must not have to opt out of npm mirror work. Leaving
+        // NpmInternalMirrorAction at its 'auto' default already emits no npm steps for a run that
+        // publishes no npm packages, so listing a mirror flag here would be a regression.
+        Assert.DoesNotContain("NpmInternalMirrorAction", instructions);
+        Assert.DoesNotContain("SkipNpmMirrorValidation", instructions);
         Assert.Contains("| \\`SkipWinGetPublish\\` | \\`true\\` |", instructions);
         Assert.Contains("| \\`SkipHomebrewValidation\\` | \\`true\\` |", instructions);
         Assert.Contains("| \\`SkipGitHubTasks\\` | \\`true\\` |", instructions);
@@ -627,6 +1302,54 @@ public sealed class ReleasePublishNugetPipelineTests
         return contents[beginIndex..endIndex];
     }
 
+    private static string ExtractYamlStep(string contents, string displayName)
+    {
+        var displayNameIndex = FindRequiredText(contents, displayName);
+        var displayLineStart = contents.LastIndexOf('\n', displayNameIndex) + 1;
+        var displayLineEnd = contents.IndexOf('\n', displayNameIndex);
+        var displayIndent = CountLeadingWhitespace(contents[displayLineStart..displayLineEnd]);
+        var stepIndent = displayIndent - 2;
+        var stepStart = displayLineStart;
+
+        while (stepStart > 0)
+        {
+            var previousLineEnd = stepStart - 1;
+            var previousLineStart = contents.LastIndexOf('\n', previousLineEnd - 1) + 1;
+            var line = contents[previousLineStart..previousLineEnd].TrimEnd('\r');
+            if (CountLeadingWhitespace(line) == stepIndent &&
+                line.TrimStart().StartsWith("- ", StringComparison.Ordinal))
+            {
+                stepStart = previousLineStart;
+                break;
+            }
+
+            stepStart = previousLineStart;
+        }
+
+        var stepEnd = contents.Length;
+        var lineStart = contents.IndexOf('\n', stepStart) + 1;
+        while (lineStart > 0 && lineStart < contents.Length)
+        {
+            var lineEnd = contents.IndexOf('\n', lineStart);
+            if (lineEnd < 0)
+            {
+                lineEnd = contents.Length;
+            }
+
+            var line = contents[lineStart..lineEnd].TrimEnd('\r');
+            if (line.Trim().Length > 0 &&
+                CountLeadingWhitespace(line) <= stepIndent)
+            {
+                stepEnd = lineStart;
+                break;
+            }
+
+            lineStart = lineEnd + 1;
+        }
+
+        return contents[stepStart..stepEnd];
+    }
+
     private static void AssertBefore(string contents, string text, int boundaryIndex)
     {
         var textIndex = FindRequiredText(contents, text);
@@ -643,6 +1366,43 @@ public sealed class ReleasePublishNugetPipelineTests
         Assert.True(index >= 0, $"Expected to find '{text}'.");
 
         return index;
+    }
+
+    private static int FindYamlIndentedBlockEnd(string contents, string marker)
+    {
+        var markerIndex = FindRequiredText(contents, marker);
+        var markerLineStart = contents.LastIndexOf('\n', markerIndex) + 1;
+        var markerLineEnd = contents.IndexOf('\n', markerIndex);
+        if (markerLineEnd < 0)
+        {
+            return contents.Length;
+        }
+
+        var markerIndent = CountLeadingWhitespace(contents[markerLineStart..markerLineEnd]);
+        var lineStart = markerLineEnd + 1;
+
+        while (lineStart < contents.Length)
+        {
+            var lineEnd = contents.IndexOf('\n', lineStart);
+            if (lineEnd < 0)
+            {
+                lineEnd = contents.Length;
+            }
+
+            var line = contents[lineStart..lineEnd].TrimEnd('\r');
+            if (line.Trim().Length > 0)
+            {
+                var indent = CountLeadingWhitespace(line);
+                if (indent <= markerIndent)
+                {
+                    return lineStart + indent;
+                }
+            }
+
+            lineStart = lineEnd + 1;
+        }
+
+        return contents.Length;
     }
 
     private static void AssertOwnerDefaultIsSingleRequiredAlias(string requiredAliasesValue, string actualAliasesValue, string parameterName)

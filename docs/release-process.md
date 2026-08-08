@@ -99,7 +99,8 @@ Before starting a release:
    |-----------|-------------|---------|
    | `SkipNuGetPublish` | Set `true` if re-running after NuGet success. | `false` |
    | `SkipNpmRidPublish` | Set `true` if npm RID packages published but the pointer package did not. | `false` |
-   | `SkipNpmPointerPublish` | Set `true` if the pointer package published but a later validation or promotion step failed. Registry validation still runs. | `false` |
+   | `SkipNpmPointerPublish` | Set `true` if the pointer package published but a later validation or promotion step failed. | `false` |
+   | `NpmInternalMirrorAction` | Controls internal `dotnet-public-npm` mirror seeding and anonymous tarball validation only. `auto` runs it when the release publishes npm packages and does nothing when it does not, so recovery runs unrelated to npm need no change here. `only` is an intentional mirror-only rerun: it seeds and validates the mirror with both npm publish skips set to `true`. `skip` turns the mirror steps off even while publishing npm. The public npm install smoke test is never gated on this parameter. | `auto` |
    | `SkipChannelPromotion` | Set `true` if re-running after darc success. | `false` |
    | `SkipWinGetPublish` | Set `true` if re-running after WinGet success. | `true` |
    | `SkipGitHubTasks` | Set `true` to skip dispatching the GH workflow. | `false` |
@@ -140,7 +141,7 @@ To publish only the VS Code extension after merging an extension release PR, run
 
 For a full Aspire release that should also publish the extension, keep the normal NuGet/channel/GitHub task settings and set `SkipVSCodeExtensionPublish` to `false`. `IsPrerelease` also controls whether extension publishing passes `--pre-release` to `vsce`; for a pre-release extension, the selected source build must also have been queued with `Package VS Code Extension as Pre-Release=true`.
 
-The npm release path validates Windows, Linux, and macOS install summaries, publishes the seven RID packages first, waits for ESRP completion, waits for the configured propagation delay, and then publishes the top-level `@microsoft/aspire-cli` pointer package. After the pointer package publishes, the pipeline installs it from the live npm registry and runs `aspire --version` before channel promotion. This avoids installing a pointer package whose optional RID dependencies are not visible yet and catches registry propagation issues before the release is promoted. For prereleases, set `SkipNpmRidPublish=true` and `SkipNpmPointerPublish=true` unless the npm publishing path has gained explicit non-`latest` dist-tag support.
+The npm release path validates Windows, Linux, and macOS install summaries, publishes the seven RID packages first, waits for ESRP completion, waits for the configured propagation delay, and then publishes the top-level `@microsoft/aspire-cli` pointer package. After the pointer package publishes, the pipeline installs it from the live npm registry and runs `aspire --version`. It then uses authenticated `npm pack --ignore-scripts` requests to seed the pointer and every exact RID dependency into `dotnet-public-npm`, followed by credential-free `npm pack` verification of the mirrored `@latest` pointer and all optional dependency tarballs before channel promotion. `NpmInternalMirrorAction=auto` (the default) enables this for any stable release that publishes npm packages; dry runs and prereleases never perform real mirror work. For prereleases, set `SkipNpmRidPublish=true` and `SkipNpmPointerPublish=true` unless the npm publishing path has gained explicit non-`latest` dist-tag support.
 
 `commit_sha` and `release_branch` for the GitHub workflow are derived automatically from the source build resource, so there is no need to copy them by hand.
 
@@ -167,7 +168,7 @@ Run this step only when releasing the VS Code extension independently of the nor
 
 The GitHub workflow is normally dispatched by the AzDO pipeline as the `aspire-repo-bot` GitHub App, with its `authorize` job bypassed for the bot. If a GitHub-side step fails partway through and you need to re-run only the GitHub work, you can:
 
-1. Re-run the AzDO pipeline with completed AzDO-side work skipped, such as `SkipNuGetPublish`, `SkipNpmRidPublish`, `SkipNpmPointerPublish`, `SkipChannelPromotion`, `SkipWinGetPublish`, `SkipNixPackageUpdate`, `SkipHomebrewValidation`, and `SkipReleaseAssets` set as appropriate, keeping `SkipGitHubTasks: false`. The `GitHubTasks` stage will dispatch the workflow again with the right inputs, and the workflow's own `skip_*` idempotency makes the completed steps no-ops.
+1. Re-run the AzDO pipeline with completed AzDO-side work skipped, such as `SkipNuGetPublish`, `SkipNpmRidPublish`, `SkipNpmPointerPublish`, `SkipChannelPromotion`, `SkipWinGetPublish`, `SkipNixPackageUpdate`, `SkipHomebrewValidation`, and `SkipReleaseAssets` set as appropriate, keeping `SkipGitHubTasks: false`. Leave `NpmInternalMirrorAction` at `auto` when the recovery is unrelated to npm; with both npm publish skips set, the pipeline emits no npm steps at all. The `GitHubTasks` stage will dispatch the workflow again with the right inputs, and the workflow's own `skip_*` idempotency makes the completed steps no-ops.
 2. Or, navigate to Actions → **Release GitHub Tasks**, click **Run workflow**, and fill in the parameters manually:
 
    | Parameter | Description | Example |
@@ -216,13 +217,13 @@ These automations are designed to be idempotent and safe to re-run.
 | Prepare/List npm Packages | Check that the selected source build produced all eight `microsoft-aspire-cli*.tgz` tarballs and matching `.tgz.sig` sidecars in `BlobArtifacts`. |
 | Push Packages to NuGet.org | Check NuGet.org for partial success, then re-run with already-completed steps skipped as needed. |
 | MicroBuild npm Publish | Check the ESRP release result. If RID packages published but the pointer package did not, re-run with `SkipNuGetPublish: true`, `SkipNpmRidPublish: true`, `SkipNpmPointerPublish: false`, and `SkipChannelPromotion: true`; do not set `SkipNpmPointerPublish` until the pointer package is published. |
-| Validate Published npm Package from Registry | Confirm the pointer package is visible on npm and that `npm install -g @microsoft/aspire-cli@<version>` works. If registry propagation is slow, re-run with completed publish steps skipped after the package is visible. |
-| Promote Build to Channel | Re-run with completed publish steps skipped. |
-| WinGet publishing / Homebrew validation | Re-run with the corresponding skip flags for completed work. |
-| Publish VS Code Extension to Marketplace | Check that `aspire-vscode-extension` contains one `.vsix`, `.manifest`, and `.signature.p7s`; verify the `AspireSecurePublishPipelineMarketplaceConnectionWithManagedIdentity` service connection identity is a Contributor on the Visual Studio Marketplace `microsoft-aspire` publisher; re-run with the already-completed `Skip*` flags set to `true`. |
-| GitHubTasks dispatch | Re-run with completed AzDO-side work skipped and `SkipGitHubTasks: false`; set `SkipReleaseAssets` according to whether release asset upload already completed. |
-| Release asset upload | Re-run with `SkipGitHubTasks: true` and `SkipReleaseAssets: false` after the GitHub release exists. |
-| Nix flake update dispatch | Re-run with `SkipGitHubTasks: true`, `SkipReleaseAssets: true`, and `SkipNixPackageUpdate: false` after the stable GitHub release assets and `update-baseline-<version>` branch exist. If the Nix manifest was already committed to the baseline PR, set `SkipNixPackageUpdate: true` instead. For prereleases, leave it skipped because the Nix manifest only tracks stable `x.y.z` releases. |
+| Validate Published npm Package from Registry / internal mirror validation | Confirm the pointer package is visible on npm and that `npm install -g @microsoft/aspire-cli@<version>` works. Re-run with completed publish steps skipped and `NpmInternalMirrorAction: only` after the package is visible. |
+| Promote Build to Channel | Re-run with completed publish steps skipped; leave `NpmInternalMirrorAction` at `auto` because mirror validation already succeeded. |
+| WinGet publishing / Homebrew validation | Re-run with the corresponding skip flags for completed work; leave `NpmInternalMirrorAction` at `auto`. |
+| Publish VS Code Extension to Marketplace | Check that `aspire-vscode-extension` contains one `.vsix`, `.manifest`, and `.signature.p7s`; verify the `AspireSecurePublishPipelineMarketplaceConnectionWithManagedIdentity` service connection identity is a Contributor on the Visual Studio Marketplace `microsoft-aspire` publisher; re-run with the already-completed `Skip*` flags and `NpmInternalMirrorAction` left at `auto`. |
+| GitHubTasks dispatch | Re-run with completed AzDO-side work skipped, `NpmInternalMirrorAction` left at `auto`, and `SkipGitHubTasks: false`; set `SkipReleaseAssets` according to whether release asset upload already completed. |
+| Release asset upload | Re-run with `NpmInternalMirrorAction` left at `auto`, `SkipGitHubTasks: true`, and `SkipReleaseAssets: false` after the GitHub release exists. |
+| Nix flake update dispatch | Re-run with `NpmInternalMirrorAction` left at `auto`, `SkipGitHubTasks: true`, `SkipReleaseAssets: true`, and `SkipNixPackageUpdate: false` after the stable GitHub release assets and `update-baseline-<version>` branch exist. If the Nix manifest was already committed to the baseline PR, set `SkipNixPackageUpdate: true` instead. For prereleases, leave it skipped because the Nix manifest only tracks stable `x.y.z` releases. |
 
 ### GitHub Actions failures
 
@@ -316,7 +317,53 @@ If ESRP published the RID packages but failed before publishing `@microsoft/aspi
 3. Set `SkipNpmRidPublish: true` and keep `SkipNpmPointerPublish: false` so only the pointer package is submitted.
 4. Set `SkipNpmPointerPublish: true` only after the pointer package is visible.
 
-If the pointer package published but the live npm registry validation failed afterward, re-run with `SkipNpmRidPublish: true` and `SkipNpmPointerPublish: true` so the pipeline retries the install smoke without resubmitting already-published packages.
+If the pointer package published but the live npm registry or mirror validation failed afterward, re-run with `SkipNpmRidPublish: true`, `SkipNpmPointerPublish: true`, and `NpmInternalMirrorAction: only` so the pipeline retries the npm validation path without resubmitting already-published packages.
+
+### npm internal mirror seeding or anonymous validation fails
+
+The release pipeline seeds `@microsoft/aspire-cli` into `dotnet-public-npm` only after the public npm package smoke test succeeds. It then verifies `@microsoft/aspire-cli@latest` with a credential-free npm configuration and cache before channel promotion.
+
+If public npm publication already succeeded, use a mirror-only rerun so no completed release action is repeated. Select the same source build used for the release; it must contain the npm package artifacts and validation summaries.
+
+```text
+DryRun=false
+IsPrerelease=false
+SkipNuGetPublish=true
+SkipNpmRidPublish=true
+SkipNpmPointerPublish=true
+NpmInternalMirrorAction=only
+SkipChannelPromotion=true
+SkipWinGetPublish=true
+SkipGitHubTasks=true
+SkipReleaseAssets=true
+SkipHomebrewValidation=true
+SkipNixPackageUpdate=true
+SkipVSCodeExtensionPublish=true
+```
+
+The rerun does not republish npm packages; it stages the selected source build's npm artifacts, validates the existing public package, authenticates exact tarball fetches for the staged pointer and all of its optional RID dependencies, and repeats anonymous pointer/RID tarball verification.
+
+If an authenticated pack fails, verify that the release build identity still has contributor access to `dotnet-public-npm` and that the feed's npm.org upstream is enabled. If anonymous verification exhausts its retries, check the package version directly with a credential-free npm configuration:
+
+```bash
+release_validation_dir="$(mktemp -d)"
+trap 'rm -rf "$release_validation_dir"' EXIT
+cd "$release_validation_dir"
+
+fresh_npmrc="$PWD/clean.npmrc"
+fresh_cache_dir="$PWD/npm-cache"
+
+cat >"$fresh_npmrc" <<'EOF'
+registry=https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
+EOF
+
+mkdir -p "$fresh_cache_dir"
+
+NPM_CONFIG_USERCONFIG="$fresh_npmrc" \
+NPM_CONFIG_GLOBALCONFIG=/dev/null \
+NPM_CONFIG_CACHE="$fresh_cache_dir" \
+npm view @microsoft/aspire-cli@latest version --prefer-online --registry https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
+```
 
 ### Tag already exists but points to different commit
 
