@@ -757,7 +757,7 @@ public static class GoHostingExtensions
         var resource = builder.Resource;
 
         return builder.WithDebugSupport(
-            mode =>
+            context =>
             {
                 // Resolve annotations when DCP creates the launch configuration so later
                 // resource mutations such as WithWorkingDirectory(...) are reflected.
@@ -767,13 +767,13 @@ public static class GoHostingExtensions
                     : ".";
                 var buildFlags = BuildFlagsString(resource);
 
-                return new GoLaunchConfiguration
+                return Task.FromResult(new GoLaunchConfiguration
                 {
                     Program = Path.GetFullPath(packagePath, workingDirectory),
-                    Mode = mode,
+                    Mode = context.Mode,
                     WorkingDirectory = workingDirectory,
                     BuildFlags = buildFlags.Length > 0 ? buildFlags : null
-                };
+                });
             },
             "go",
             static ctx =>

@@ -29,17 +29,19 @@ internal static class MauiPlatformHelper
         Dictionary<string, string>? msBuildProperties = null) where T : ProjectResource
     {
 #pragma warning disable ASPIREEXTENSION001 // WithDebugSupport is experimental
-        return resourceBuilder.WithDebugSupport(mode => new MauiLaunchConfiguration
-        {
-            Mode = mode,
-            ProjectPath = projectPath,
-            TargetFramework = targetFramework,
-            Platform = platform,
-            TargetKind = targetKind,
-            Device = device,
-            RuntimeIdentifier = runtimeIdentifier,
-            MsBuildProperties = msBuildProperties
-        }, MauiLaunchConfigurationType);
+        return resourceBuilder.WithDebugSupport(
+            context => Task.FromResult(new MauiLaunchConfiguration
+            {
+                Mode = context.Mode,
+                ProjectPath = projectPath,
+                TargetFramework = targetFramework,
+                Platform = platform,
+                TargetKind = targetKind,
+                Device = device,
+                RuntimeIdentifier = runtimeIdentifier,
+                MsBuildProperties = msBuildProperties
+            }),
+            MauiLaunchConfigurationType);
 #pragma warning restore ASPIREEXTENSION001
     }
 

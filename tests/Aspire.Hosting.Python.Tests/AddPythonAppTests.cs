@@ -1624,7 +1624,8 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         Assert.True(resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
 
         var exe = Executable.Create("test", "python");
-        await supportsDebugging.LaunchConfigurationAnnotator(exe, ExecutableLaunchMode.Debug, CancellationToken.None);
+        var callbackContext = LaunchConfigurationTestHelpers.CreateCallbackContext(resource);
+        await supportsDebugging.LaunchConfigurationAnnotator(exe, callbackContext);
 
         Assert.True(exe.TryGetAnnotationAsObjectList<PythonLaunchConfiguration>(
             Executable.LaunchConfigurationsAnnotation,

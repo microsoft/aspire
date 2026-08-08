@@ -505,7 +505,8 @@ public static class ProjectResourceBuilderExtensions
         }
 
         builder.WithDebugSupport(
-            mode => ProjectLaunchConfigurationFactory.Create(builder.Resource, mode),
+            context => Task.FromResult(
+                ProjectLaunchConfigurationFactory.Create(context.Resource, context.Mode)),
             KnownLaunchConfigurationTypes.Project);
 
         // File-based apps (a bare .cs file) are a .NET 10 SDK feature. The check lives here rather than in

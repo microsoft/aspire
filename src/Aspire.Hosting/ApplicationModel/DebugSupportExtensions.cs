@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
@@ -74,33 +75,48 @@ public static class DebugSupportExtensions
     }
 
     /// <summary>
-    /// Creates the launch configuration that this resource sends to the IDE for the given launch mode.
+    /// Creates the launch configuration that this resource sends to the IDE using an explicitly resolved callback context.
     /// </summary>
     /// <param name="resource">The resource to inspect. It must carry a <see cref="SupportsDebuggingAnnotation"/>.</param>
-    /// <param name="mode">The launch mode, one of the values on <see cref="ExecutableLaunchMode"/>.</param>
-    /// <param name="cancellationToken">A token to cancel the operation.</param>
+    /// <param name="context">The callback context containing the resolved execution configuration and launch data.</param>
     /// <returns>The launch configuration, typically an <see cref="ExecutableLaunchConfiguration"/>.</returns>
+    /// <exception cref="ArgumentException"><paramref name="context"/> belongs to a different resource.</exception>
     /// <exception cref="InvalidOperationException">The resource does not declare debug launch support.</exception>
     /// <remarks>
     /// <para>
-    /// Launch configuration is created by invoking the producer callback passed to
-    /// <see cref="ResourceBuilderExtensions.WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, TLaunchConfiguration}, string, Action{CommandLineArgsCallbackContext})"/>
-    /// (or its asynchronous overload),
-    /// which owns the complete configuration; Aspire serializes the result as-is. 
-    /// The configuration is produced fresh on each call; it is not a singleton.
-    /// Aspire may call the producer several times for the same resource.
+    /// Launch configuration is created by invoking the producer callback passed to <see cref="ResourceBuilderExtensions.WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{LaunchConfigurationCallbackContext, Task{TLaunchConfiguration}}, string, Action{CommandLineArgsCallbackContext})"/>,
+    /// which owns the complete configuration; Aspire serializes the result as-is.
     /// </para>
     /// <para>
-    /// This describes the launch configuration itself, not whether one is going to be used. 
-    /// Depending on how the application is started, or how a resource is configured,
-    /// Aspire may or may not run the resource under a debugger. Use <see cref="SupportsDebugging"/> to test for that.
+    /// This method never resolves arguments or environment variables. Aspire creates <paramref name="context"/>
+    /// when the active debug-support annotation is producing a launch configuration for an executable creation.
     /// </para>
     /// </remarks>
     [AspireExportIgnore(Reason = "Debug support inspection is a local .NET helper and is not part of the ATS surface.")]
-    public static Task<object> CreateLaunchConfigurationAsync(this IResource resource, string mode, CancellationToken cancellationToken = default)
+    public static Task<object> CreateLaunchConfigurationAsync(
+        this IResource resource,
+        LaunchConfigurationCallbackContext context)
     {
         ArgumentNullException.ThrowIfNull(resource);
-        ArgumentNullException.ThrowIfNull(mode);
+        ArgumentNullException.ThrowIfNull(context);
+
+        if (!ReferenceEquals(resource, context.Resource))
+        {
+            throw new ArgumentException(
+                $"The launch configuration callback context belongs to resource '{context.Resource.Name}', " +
+                $"but launch configuration was requested for resource '{resource.Name}'.",
+                nameof(context));
+        }
+
+        if (context.OriginalExecutionConfiguration.Exception is { } configurationException)
+        {
+            ExceptionDispatchInfo.Throw(configurationException);
+        }
+
+        if (context.ExecutableExecutionConfiguration.Exception is { } executableConfigurationException)
+        {
+            ExceptionDispatchInfo.Throw(executableConfigurationException);
+        }
 
         if (!resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebuggingAnnotation))
         {
@@ -110,7 +126,7 @@ public static class DebugSupportExtensions
                 $"Note that it only adds the annotation in run mode.");
         }
 
-        return supportsDebuggingAnnotation.LaunchConfigurationProducer(mode, cancellationToken);
+        return supportsDebuggingAnnotation.LaunchConfigurationProducer(context);
     }
 
     private static string[]? GetSupportedLaunchConfigurations(IConfiguration configuration)

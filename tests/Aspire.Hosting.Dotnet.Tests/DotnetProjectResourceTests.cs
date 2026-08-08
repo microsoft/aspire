@@ -209,7 +209,11 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         Assert.True(app.Resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
         Assert.Equal(KnownLaunchConfigurationTypes.Project, supportsDebugging.LaunchConfigurationType);
 
-        var launchConfig = Assert.IsType<ProjectLaunchConfiguration>(await app.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.Debug));
+        var callbackContext = LaunchConfigurationTestHelpers.CreateCallbackContext(
+            app.Resource,
+            ExecutableLaunchMode.Debug);
+        var launchConfig = Assert.IsType<ProjectLaunchConfiguration>(
+            await app.Resource.CreateLaunchConfigurationAsync(callbackContext));
         Assert.Equal(KnownLaunchConfigurationTypes.Project, launchConfig.Type);
         Assert.Equal(ExecutableLaunchMode.Debug, launchConfig.Mode);
         Assert.Equal(projectPath, launchConfig.ProjectPath);
@@ -240,7 +244,11 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         var app = builder.AddDotnetProject("svc", projectPath);
 
-        var launchConfig = Assert.IsType<ProjectLaunchConfiguration>(await app.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.Debug));
+        var callbackContext = LaunchConfigurationTestHelpers.CreateCallbackContext(
+            app.Resource,
+            ExecutableLaunchMode.Debug);
+        var launchConfig = Assert.IsType<ProjectLaunchConfiguration>(
+            await app.Resource.CreateLaunchConfigurationAsync(callbackContext));
 
         Assert.False(launchConfig.DisableLaunchProfile);
         Assert.Equal("http", launchConfig.LaunchProfile);
@@ -323,7 +331,9 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         var projectPath = Path.Combine(builder.AppHostDirectory, "MyService", "MyService.csproj");
         var app = builder.AddDotnetProject("svc", projectPath, o => o.ExcludeLaunchProfile = true)
                          .WithArgs("--config", "prod.yaml")
-                         .WithDebugSupport(_ => new ExecutableLaunchConfiguration("custom"), "custom");
+                         .WithDebugSupport(
+                             static _ => Task.FromResult(new ExecutableLaunchConfiguration("custom")),
+                             "custom");
 
         using var application = builder.Build();
         var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource, application.Services);
@@ -356,7 +366,10 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         var projectPath = Path.Combine(builder.AppHostDirectory, "MyService", "MyService.csproj");
         var app = builder.AddDotnetProject("svc", projectPath, o => o.ExcludeLaunchProfile = true)
                          .WithArgs("--config", "prod.yaml")
-                         .WithDebugSupport(_ => new ExecutableLaunchConfiguration("custom"), "custom", ctx => ctx.Args.Add("rewritten-arg"));
+                         .WithDebugSupport(
+                             static _ => Task.FromResult(new ExecutableLaunchConfiguration("custom")),
+                             "custom",
+                             ctx => ctx.Args.Add("rewritten-arg"));
 
         using var application = builder.Build();
         var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource, application.Services);

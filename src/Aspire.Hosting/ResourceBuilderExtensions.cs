@@ -4761,71 +4761,104 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Adds support for debugging the resource in VS Code when running in an extension host.
+    /// Adds support for debugging the resource in an IDE or extension host.
     /// </summary>
     /// <typeparam name="T">The resource type.</typeparam>
     /// <typeparam name="TLaunchConfiguration">The launch configuration type produced for the resource, typically derived from <see cref="ExecutableLaunchConfiguration"/>.</typeparam>
     /// <param name="builder">The resource builder.</param>
-    /// <param name="launchConfigurationProducer">Launch configuration producer for the resource. It is passed the launch mode (one of the values on <see cref="ExecutableLaunchMode"/>) and produces the configuration that is handed to the IDE.</param>
-    /// <param name="launchConfigurationType">The type tag of the launch configuration (as sent to the IDE).</param>
-    /// <param name="argsCallback">Optional callback to add or modify command line arguments when running in an extension host. Useful if the entrypoint is usually provided as an argument to the resource executable.</param>
+    /// <param name="launchConfigurationProducer">
+    /// A callback that receives the launch mode and produces the complete launch configuration handed to the IDE.
+    /// </param>
+    /// <param name="launchConfigurationType">The type tag of the launch configuration sent to the IDE.</param>
+    /// <param name="argsCallback">
+    /// Optional callback to add or modify command-line arguments while this debug support annotation is active.
+    /// When a <see cref="ProjectLaunchArgsOverrideAnnotation"/> keeps a project executable in process mode,
+    /// Aspire suppresses this rewrite for the process command line so the override remains runnable.
+    /// </param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <exception cref="ArgumentException">
-    /// <typeparamref name="TLaunchConfiguration"/> is a <see cref="Task"/> or <see cref="ValueTask"/>, which means an
-    /// asynchronous producer was written without the <see cref="CancellationToken"/> parameter and bound to this
-    /// overload. Use <see cref="WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, CancellationToken, Task{TLaunchConfiguration}}, string, Action{CommandLineArgsCallbackContext})"/> instead.
-    /// </exception>
     /// <remarks>
-    /// Aspire invokes the launch configuration producer while preparing and creating the underlying orchestrator objects, and may invoke it
-    /// several times for the same resource. Use
-    /// <see cref="WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, CancellationToken, Task{TLaunchConfiguration}}, string, Action{CommandLineArgsCallbackContext})"/>
-    /// when the configuration has to be resolved from work that is itself asynchronous, for example in the presence of 
-    /// build-argument callbacks contributed by other annotations.
+    /// Registering debug support is synchronous. Aspire invokes <paramref name="launchConfigurationProducer"/>
+    /// later only for executable creations where this debug-support annotation is active for the current debug
+    /// session, including restarts and replicas.
+    /// <para>
+    /// A <see cref="ProjectLaunchArgsOverrideAnnotation"/> that already supplies a
+    /// <see cref="KnownLaunchConfigurationTypes.Project"/> launch configuration skips the producer for that
+    /// specific <paramref name="launchConfigurationType"/>. Producers for other launch configuration types still
+    /// run when their annotation is active, but their <paramref name="argsCallback"/> does not rewrite the
+    /// process command line owned by the launch-args override.
+    /// </para>
     /// </remarks>
+    [Obsolete("Use the overload that accepts LaunchConfigurationCallbackContext and returns a Task.")]
+    [OverloadResolutionPriority(-1)]
     [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Generic debug launch configuration support is not part of the ATS surface.")]
-    public static IResourceBuilder<T> WithDebugSupport<T, TLaunchConfiguration>(this IResourceBuilder<T> builder, Func<string, TLaunchConfiguration> launchConfigurationProducer, string launchConfigurationType, Action<CommandLineArgsCallbackContext>? argsCallback = null)
+    public static IResourceBuilder<T> WithDebugSupport<T, TLaunchConfiguration>(
+        this IResourceBuilder<T> builder,
+        Func<string, TLaunchConfiguration> launchConfigurationProducer,
+        string launchConfigurationType,
+        Action<CommandLineArgsCallbackContext>? argsCallback = null)
         where T : IResource
     {
-        ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(launchConfigurationProducer);
-
-        if (typeof(Task).IsAssignableFrom(typeof(TLaunchConfiguration)) || IsValueTask(typeof(TLaunchConfiguration)))
+        var producerReturnType = typeof(TLaunchConfiguration);
+        if (typeof(Task).IsAssignableFrom(producerReturnType)
+            || producerReturnType == typeof(ValueTask)
+            || producerReturnType.IsGenericType && producerReturnType.GetGenericTypeDefinition() == typeof(ValueTask<>))
         {
-            throw new ArgumentException(
-                $"The launch configuration producer returns '{typeof(TLaunchConfiguration)}'. An asynchronous producer must take a {nameof(CancellationToken)} " +
-                $"parameter so that it binds to the asynchronous {nameof(WithDebugSupport)} overload; otherwise the task itself is used as the launch configuration.",
-                nameof(launchConfigurationProducer));
+            throw new InvalidOperationException(
+                $"The legacy {nameof(WithDebugSupport)} overload requires a synchronous launch configuration producer. " +
+                "Use the overload that accepts LaunchConfigurationCallbackContext for Task or ValueTask returning producers.");
         }
 
-        return builder.WithDebugSupport((mode, _) => Task.FromResult(launchConfigurationProducer(mode)), launchConfigurationType, argsCallback);
+#pragma warning disable ASPIREEXTENSION001 // Forwarding to the replacement experimental API.
+        var result = builder.WithDebugSupport(
+            context => Task.FromResult(launchConfigurationProducer(context.Mode)),
+            launchConfigurationType,
+            argsCallback);
+#pragma warning restore ASPIREEXTENSION001
 
-        static bool IsValueTask(Type type)
-            => type == typeof(ValueTask) || (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ValueTask<>));
+        return result;
     }
 
     /// <summary>
-    /// Adds support for debugging the resource in VS Code when running in an extension host, 
-    /// using a launch configuration that is produced asynchronously.
+    /// Adds support for debugging the resource in an IDE or extension host.
     /// </summary>
     /// <typeparam name="T">The resource type.</typeparam>
     /// <typeparam name="TLaunchConfiguration">The launch configuration type produced for the resource, typically derived from <see cref="ExecutableLaunchConfiguration"/>.</typeparam>
     /// <param name="builder">The resource builder.</param>
-    /// <param name="launchConfigurationProducer">Launch configuration producer for the resource. It is passed the launch mode (one of the values on <see cref="ExecutableLaunchMode"/>) and produces the configuration that is handed to the IDE.</param>
-    /// <param name="launchConfigurationType">The type of the resource.</param>
-    /// <param name="argsCallback">Optional callback to add or modify command line arguments when running in an extension host. Useful if the entrypoint is usually provided as an argument to the resource executable.</param>
+    /// <param name="launchConfigurationProducer">
+    /// A callback that receives the resolved execution configuration and runtime launch context, and asynchronously
+    /// produces the complete launch configuration handed to the IDE.
+    /// </param>
+    /// <param name="launchConfigurationType">The type tag of the launch configuration sent to the IDE.</param>
+    /// <param name="argsCallback">
+    /// Optional callback to add or modify command-line arguments while this debug support annotation is active.
+    /// The callback rewrites only the executable configuration; <see cref="LaunchConfigurationCallbackContext.OriginalExecutionConfiguration"/>
+    /// preserves the resolved arguments before this callback runs. When a
+    /// <see cref="ProjectLaunchArgsOverrideAnnotation"/> keeps a project executable in process mode, Aspire
+    /// suppresses this rewrite for the process command line so the override remains runnable.
+    /// </param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
-    /// Use this overload when the launch configuration has to be resolved from work that is itself asynchronous, for
-    /// example in the presence of build-argument callbacks contributed by other annotations. Aspire invokes the producer while preparing
-    /// and creating the underlying orchestrator objects, and may invoke it several times for the same resource. 
-    /// A producer that computes everything synchronously should use
-    /// <see cref="WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, TLaunchConfiguration}, string, Action{CommandLineArgsCallbackContext})"/>
-    /// instead.
+    /// Registering debug support is synchronous. Aspire invokes <paramref name="launchConfigurationProducer"/>
+    /// later only for executable creations where this debug-support annotation is active for the current debug
+    /// session, including restarts and replicas. A producer that completes synchronously should return its result
+    /// with <see cref="Task.FromResult{TResult}(TResult)"/>.
+    /// <para>
+    /// A <see cref="ProjectLaunchArgsOverrideAnnotation"/> that already supplies a
+    /// <see cref="KnownLaunchConfigurationTypes.Project"/> launch configuration skips the producer for that
+    /// specific <paramref name="launchConfigurationType"/>. Producers for other launch configuration types still
+    /// run when their annotation is active, but their <paramref name="argsCallback"/> does not rewrite the
+    /// process command line owned by the launch-args override.
+    /// </para>
     /// </remarks>
     [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Generic debug launch configuration support is not part of the ATS surface.")]
-    public static IResourceBuilder<T> WithDebugSupport<T, TLaunchConfiguration>(this IResourceBuilder<T> builder, Func<string, CancellationToken, Task<TLaunchConfiguration>> launchConfigurationProducer, string launchConfigurationType, Action<CommandLineArgsCallbackContext>? argsCallback = null)
+    public static IResourceBuilder<T> WithDebugSupport<T, TLaunchConfiguration>(
+        this IResourceBuilder<T> builder,
+        Func<LaunchConfigurationCallbackContext, Task<TLaunchConfiguration>> launchConfigurationProducer,
+        string launchConfigurationType,
+        Action<CommandLineArgsCallbackContext>? argsCallback = null)
         where T : IResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -4836,25 +4869,36 @@ public static class ResourceBuilderExtensions
             return builder;
         }
 
-        var supportsDebuggingAnnotation = SupportsDebuggingAnnotation.Create(
-            builder.Resource.Name,
-            launchConfigurationType,
-            launchConfigurationProducer,
-            rewritesArgumentsForDebugging: argsCallback is not null && builder is IResourceBuilder<IResourceWithArgs>
-        );
-
-        if (argsCallback is not null && builder is IResourceBuilder<IResourceWithArgs> resourceWithArgs)
+        SupportsDebuggingAnnotation? supportsDebuggingAnnotation = null;
+        var argsResourceBuilder = builder as IResourceBuilder<IResourceWithArgs>;
+        CommandLineArgsCallbackAnnotation? debugCommandLineArgsAnnotation = null;
+        if (argsCallback is not null && argsResourceBuilder is not null)
         {
-            resourceWithArgs.WithArgs(ctx =>
+            debugCommandLineArgsAnnotation = new CommandLineArgsCallbackAnnotation(ctx =>
             {
-                // Make sure that we do not call the callback if we aren't the active (last) SupportsDebuggingAnnotation, 
+                // Make sure that we do not call the callback if we aren't the active (last) SupportsDebuggingAnnotation,
                 // because the callback may be specific to the launch configuration type.
-                if (resourceWithArgs.Resource.SupportsDebugging(builder.ApplicationBuilder.Configuration, out var activeAnnotation)
+                if (supportsDebuggingAnnotation is not null
+                    && argsResourceBuilder.Resource.SupportsDebugging(builder.ApplicationBuilder.Configuration, out var activeAnnotation)
                     && ReferenceEquals(activeAnnotation, supportsDebuggingAnnotation))
                 {
                     argsCallback(ctx);
                 }
+
+                return Task.CompletedTask;
             });
+        }
+
+        supportsDebuggingAnnotation = SupportsDebuggingAnnotation.Create(
+            builder.Resource.Name,
+            launchConfigurationType,
+            launchConfigurationProducer,
+            debugCommandLineArgsAnnotation,
+            rewritesArgumentsForDebugging: debugCommandLineArgsAnnotation is not null);
+
+        if (debugCommandLineArgsAnnotation is not null && argsResourceBuilder is not null)
+        {
+            argsResourceBuilder.WithAnnotation(debugCommandLineArgsAnnotation);
         }
 
         return builder.WithAnnotation(supportsDebuggingAnnotation);
