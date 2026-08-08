@@ -1113,16 +1113,51 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
 
         var project = builder
             .AddProject<Project>("project1", launchProfileName: null)
-            .WithHttpEndpoint();
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints();
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
 
         var endpointReferenceEx = env.Resource.GetHostAddressExpression(project.GetEndpoint("http"));
         Assert.NotNull(endpointReferenceEx);
 
-        Assert.Equal("project1-{0}.azurewebsites.net", endpointReferenceEx.Format);
+        Assert.Equal("{0}.azurewebsites.net", endpointReferenceEx.Format);
         var provider = Assert.Single(endpointReferenceEx.ValueProviders);
         var output = Assert.IsType<BicepOutputReference>(provider);
-        Assert.Equal(env.Resource, output.Resource);
-        Assert.Equal("webSiteSuffix", output.Name);
+        var target = Assert.IsType<AzureAppServiceWebSiteResource>(project.Resource.GetDeploymentTargetAnnotation()!.DeploymentTarget);
+        Assert.Equal(target, output.Resource);
+        Assert.Equal("name", output.Name);
+    }
+
+    [Fact]
+    public async Task AppServiceWebsiteName_PreservesUniqueSuffixForLongResourceNames()
+    {
+        const string sharedPrefix = "project-with-a-name-longer-than-forty-six-characters";
+        var firstResourceName = $"{sharedPrefix}-one";
+        var secondResourceName = $"{sharedPrefix}-two";
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddAzureAppServiceEnvironment("env");
+        var firstProject = builder
+            .AddProject<Project>(firstResourceName, launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints();
+        var secondProject = builder
+            .AddProject<Project>(secondResourceName, launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints();
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var firstWebsite = Assert.IsAssignableFrom<AzureProvisioningResource>(firstProject.Resource.GetDeploymentTargetAnnotation()!.DeploymentTarget);
+        var secondWebsite = Assert.IsAssignableFrom<AzureProvisioningResource>(secondProject.Resource.GetDeploymentTargetAnnotation()!.DeploymentTarget);
+        var (_, firstBicep) = await GetManifestWithBicep(firstWebsite);
+        var (_, secondBicep) = await GetManifestWithBicep(secondWebsite);
+
+        Assert.Contains($"name: '${{take(toLower('{firstResourceName}'), 46)}}-${{uniqueString(toLower('{firstResourceName}'), resourceGroup().id)}}'", firstBicep);
+        Assert.Contains($"name: '${{take(toLower('{secondResourceName}'), 46)}}-${{uniqueString(toLower('{secondResourceName}'), resourceGroup().id)}}'", secondBicep);
     }
 
     [Theory]
@@ -1139,12 +1174,17 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         var env = builder.AddAzureAppServiceEnvironment("env");
-        env.Resource.Outputs["webSiteSuffix"] = "website123";
-        env.Resource.ProvisioningTaskCompletionSource?.TrySetResult();
 
         var project = builder
             .AddProject<Project>("project1", launchProfileName: null)
             .WithEndpoint(port: 8080, targetPort: 5000, scheme: "http", name: "http", isExternal: true);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var website = Assert.IsType<AzureAppServiceWebSiteResource>(project.Resource.GetDeploymentTargetAnnotation()!.DeploymentTarget);
+        website.Outputs["name"] = "project1-website123";
+        website.ProvisioningTaskCompletionSource?.TrySetResult();
 
 #pragma warning disable ASPIRECOMPUTE002
         var expression = env.Resource.GetEndpointPropertyExpression(project.GetEndpoint("http").Property(property));
