@@ -157,6 +157,8 @@ export const configInfoTimedOut = (seconds: number) => vscode.l10n.t('Aspire con
 export const invalidLaunchConfiguration = (projectPath: string) => vscode.l10n.t('Invalid launch configuration for {0}.', projectPath);
 export const browserDisplayName = (url: string) => vscode.l10n.t('Browser: {0}', url);
 export const browserLabel = vscode.l10n.t('Browser');
+export const installLabel = vscode.l10n.t('Install');
+export const firefoxDebuggerNotInstalled = vscode.l10n.t('Debugging with Firefox requires the Firefox Debugger extension (firefox-devtools.vscode-firefox-debug), which is not installed. Install it and try again.');
 export const goDisplayName = (program: string) => `Go: ${program}`;
 export const goLabel = 'Go';
 export const bunDisplayName = (script: string) => `Bun: ${script}`;

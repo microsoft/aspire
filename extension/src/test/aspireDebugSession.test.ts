@@ -681,6 +681,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         const debugConfig = {
             runId: 'apphost-run',
             debugSessionId: 'debug-1',
+            terminationSignal: 'adapterExit',
             type: 'coreclr',
             name: 'AppHost',
             request: 'launch',
@@ -964,6 +965,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         const debugConfig = {
             runId: 'run-1',
             debugSessionId: 'debug-1',
+            terminationSignal: 'adapterExit',
             type: 'maui',
             name: 'MAUI',
             request: 'launch',
@@ -983,6 +985,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         const debugConfig = {
             runId: 'run-1',
             debugSessionId: 'debug-1',
+            terminationSignal: 'adapterExit',
             type: 'maui',
             name: 'MAUI',
             request: 'launch',
@@ -1084,6 +1087,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         const debugConfig = {
             runId: 'run-1',
             debugSessionId: 'debug-1',
+            terminationSignal: 'adapterExit',
             type: 'coreclr',
             name: 'API',
             request: 'launch',
@@ -1292,6 +1296,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         const debugConfig = {
             runId: 'run-1',
             debugSessionId: 'debug-1',
+            terminationSignal: 'adapterExit',
             type: 'maui',
             name: 'MAUI',
             request: 'launch',
@@ -1355,6 +1360,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         const debugConfig = {
             runId: 'run-1',
             debugSessionId: 'debug-1',
+            terminationSignal: 'adapterExit',
             type: 'maui',
             name: 'MAUI',
             request: 'launch',
@@ -1415,6 +1421,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         const debugConfig = {
             runId: 'run-1',
             debugSessionId: 'debug-1',
+            terminationSignal: 'adapterExit',
             type: 'maui',
             name: 'MAUI',
             request: 'launch',

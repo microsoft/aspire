@@ -2223,7 +2223,7 @@ public static partial class JavaScriptHostingExtensions
     /// </summary>
     /// <typeparam name="T">The type of the JavaScript application resource.</typeparam>
     /// <param name="builder">The resource builder for the JavaScript application.</param>
-    /// <param name="browser">The browser to use for debugging. Defaults to <c>"msedge"</c>. Supported values include <c>"msedge"</c> and <c>"chrome"</c>.</param>
+    /// <param name="browser">The browser to use for debugging. Defaults to <c>"msedge"</c>. Supported values include <c>"msedge"</c>, <c>"chrome"</c>, and <c>"firefox"</c>. Debugging with <c>"firefox"</c> requires the Firefox Debugger extension (<c>firefox-devtools.vscode-firefox-debug</c>) to be installed in VS Code.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining additional configuration.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>

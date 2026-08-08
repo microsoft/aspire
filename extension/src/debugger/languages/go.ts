@@ -16,6 +16,8 @@ export const goDebuggerExtension: ResourceDebuggerExtension = {
     resourceType: 'go',
     debugAdapter: 'go',
     extensionId: 'golang.go',
+    // The debuggee is a process this adapter owns, so its exit is the run's lifetime signal.
+    terminationSignal: 'adapterExit',
     getDisplayName: (launchConfiguration: ExecutableLaunchConfiguration) => {
         if (isGoLaunchConfiguration(launchConfiguration)) {
             const displayPath = launchConfiguration.program || launchConfiguration.working_directory || '';

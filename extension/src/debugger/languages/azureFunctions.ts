@@ -217,6 +217,8 @@ export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
     resourceType: 'azure-functions',
     debugAdapter: 'coreclr',
     extensionId: 'ms-dotnettools.csharp',
+    // The debuggee is a process this adapter owns, so its exit is the run's lifetime signal.
+    terminationSignal: 'adapterExit',
     getDisplayName: (launchConfig: ExecutableLaunchConfiguration) => {
         if (isAzureFunctionsLaunchConfiguration(launchConfig) && launchConfig.project_path) {
             return `Azure Functions: ${path.basename(launchConfig.project_path)}`;

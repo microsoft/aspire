@@ -27,6 +27,8 @@ export const pythonDebuggerExtension: ResourceDebuggerExtension = {
     resourceType: 'python',
     debugAdapter: 'debugpy',
     extensionId: 'ms-python.python',
+    // The debuggee is a process this adapter owns, so its exit is the run's lifetime signal.
+    terminationSignal: 'adapterExit',
     getDisplayName: (launchConfiguration: ExecutableLaunchConfiguration) => `Python: ${vscode.workspace.asRelativePath(getProjectFile(launchConfiguration))}`,
     getSupportedFileTypes: () => ['.py'],
     getProjectFile: (launchConfig) => getProjectFile(launchConfig),

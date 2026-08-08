@@ -238,6 +238,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         const debugConfig: AspireResourceExtendedDebugConfiguration = {
             runId: '1',
             debugSessionId: '1',
+            terminationSignal: 'adapterExit',
             type: 'coreclr',
             name: 'Test Debug Config',
             request: 'launch'
@@ -274,6 +275,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         const debugConfig: AspireResourceExtendedDebugConfiguration = {
             runId: '1',
             debugSessionId: '1',
+            terminationSignal: 'adapterExit',
             type: 'coreclr',
             name: 'Test Debug Config',
             request: 'launch'
@@ -305,6 +307,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         const debugConfig: AspireResourceExtendedDebugConfiguration = {
             runId: '1',
             debugSessionId: '1',
+            terminationSignal: 'adapterExit',
             type: 'coreclr',
             name: 'Test Debug Config',
             request: 'launch'
@@ -355,6 +358,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         const createDebugConfig = (): AspireResourceExtendedDebugConfiguration => ({
             runId: '1',
             debugSessionId: '1',
+            terminationSignal: 'adapterExit',
             type: 'coreclr',
             name: 'Test Debug Config',
             request: 'launch'
@@ -416,6 +420,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         const debugConfig: AspireResourceExtendedDebugConfiguration = {
             runId: '1',
             debugSessionId: '1',
+            terminationSignal: 'adapterExit',
             type: 'coreclr',
             name: 'Test Debug Config',
             request: 'launch'
@@ -460,6 +465,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             const debugConfig: AspireResourceExtendedDebugConfiguration = {
                 runId: '1',
                 debugSessionId: '1',
+                terminationSignal: 'adapterExit',
                 type: 'coreclr',
                 name: 'Test Debug Config',
                 request: 'launch',
@@ -506,6 +512,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         const debugConfig: AspireResourceExtendedDebugConfiguration = {
             runId: '1',
             debugSessionId: '1',
+            terminationSignal: 'adapterExit',
             type: 'coreclr',
             name: 'Test Debug Config',
             request: 'launch'
@@ -557,6 +564,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         const debugConfig: AspireResourceExtendedDebugConfiguration = {
             runId: '1',
             debugSessionId: '1',
+            terminationSignal: 'adapterExit',
             type: 'coreclr',
             name: 'Test Debug Config',
             request: 'launch'
@@ -600,6 +608,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         const debugConfig: AspireResourceExtendedDebugConfiguration = {
             runId: '1',
             debugSessionId: '1',
+            terminationSignal: 'adapterExit',
             type: 'coreclr',
             name: 'Test Debug Config',
             request: 'launch'
@@ -660,6 +669,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             const debugConfig: AspireResourceExtendedDebugConfiguration = {
                 runId: '1',
                 debugSessionId: '1',
+                terminationSignal: 'adapterExit',
                 type: 'coreclr',
                 name: 'Test Debug Config',
                 request: 'launch'
@@ -717,6 +727,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             const debugConfig: AspireResourceExtendedDebugConfiguration = {
                 runId: '1',
                 debugSessionId: '1',
+                terminationSignal: 'adapterExit',
                 type: 'coreclr',
                 name: 'Test Debug Config',
                 request: 'launch'
@@ -782,6 +793,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             const debugConfig: AspireResourceExtendedDebugConfiguration = {
                 runId: '1',
                 debugSessionId: '1',
+                terminationSignal: 'adapterExit',
                 type: 'coreclr',
                 name: 'Test Debug Config',
                 request: 'launch'
@@ -846,6 +858,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             const debugConfig: AspireResourceExtendedDebugConfiguration = {
                 runId: '1',
                 debugSessionId: '1',
+                terminationSignal: 'adapterExit',
                 type: 'coreclr',
                 name: 'Test Debug Config',
                 request: 'launch'
@@ -914,6 +927,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             const debugConfig: AspireResourceExtendedDebugConfiguration = {
                 runId: '1',
                 debugSessionId: '1',
+                terminationSignal: 'adapterExit',
                 type: 'coreclr',
                 name: 'Test Debug Config',
                 request: 'launch'
@@ -984,6 +998,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             const debugConfig: AspireResourceExtendedDebugConfiguration = {
                 runId: '1',
                 debugSessionId: '1',
+                terminationSignal: 'adapterExit',
                 type: 'coreclr',
                 name: 'Test Debug Config',
                 request: 'launch'
@@ -1004,6 +1019,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             const appHostDebugConfig: AspireResourceExtendedDebugConfiguration = {
                 runId: '1',
                 debugSessionId: '1',
+                terminationSignal: 'adapterExit',
                 type: 'coreclr',
                 name: 'Test AppHost Debug Config',
                 request: 'launch',
@@ -1073,6 +1089,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             const debugConfig: AspireResourceExtendedDebugConfiguration = {
                 runId: '1',
                 debugSessionId: '1',
+                terminationSignal: 'adapterExit',
                 type: 'coreclr',
                 name: 'Test Debug Config',
                 request: 'launch'
@@ -1134,6 +1151,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             const debugConfig: AspireResourceExtendedDebugConfiguration = {
                 runId: '1',
                 debugSessionId: '1',
+                terminationSignal: 'adapterExit',
                 type: 'coreclr',
                 name: 'Test Debug Config',
                 request: 'launch'
@@ -1202,6 +1220,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             const debugConfig: AspireResourceExtendedDebugConfiguration = {
                 runId: '1',
                 debugSessionId: '1',
+                terminationSignal: 'adapterExit',
                 type: 'coreclr',
                 name: 'Test Debug Config',
                 request: 'launch'
@@ -1220,6 +1239,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             const appHostDebugConfig: AspireResourceExtendedDebugConfiguration = {
                 runId: '1',
                 debugSessionId: '1',
+                terminationSignal: 'adapterExit',
                 type: 'coreclr',
                 name: 'Test AppHost Debug Config',
                 request: 'launch',
@@ -1293,6 +1313,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             const debugConfig: AspireResourceExtendedDebugConfiguration = {
                 runId: '1',
                 debugSessionId: '1',
+                terminationSignal: 'adapterExit',
                 type: 'coreclr',
                 name: 'Test Debug Config',
                 request: 'launch'
@@ -1366,6 +1387,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             const debugConfig: AspireResourceExtendedDebugConfiguration = {
                 runId: '1',
                 debugSessionId: '1',
+                terminationSignal: 'adapterExit',
                 type: 'coreclr',
                 name: 'Test Debug Config',
                 request: 'launch'
@@ -1398,6 +1420,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         const debugConfig: AspireResourceExtendedDebugConfiguration = {
             runId: '1',
             debugSessionId: '1',
+            terminationSignal: 'adapterExit',
             type: 'coreclr',
             name: 'Test Debug Config',
             request: 'launch',
@@ -1441,6 +1464,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             const debugConfig: AspireResourceExtendedDebugConfiguration = {
                 runId: '1',
                 debugSessionId: '1',
+                terminationSignal: 'adapterExit',
                 type: 'coreclr',
                 name: 'Test Debug Config',
                 request: 'launch'
@@ -1498,6 +1522,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             const debugConfig: AspireResourceExtendedDebugConfiguration = {
                 runId: '1',
                 debugSessionId: '1',
+                terminationSignal: 'adapterExit',
                 type: 'coreclr',
                 name: 'Test Debug Config',
                 request: 'launch'
@@ -1553,6 +1578,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             const debugConfig: AspireResourceExtendedDebugConfiguration = {
                 runId: '1',
                 debugSessionId: '1',
+                terminationSignal: 'adapterExit',
                 type: 'coreclr',
                 name: 'Test Debug Config',
                 request: 'launch'
@@ -1597,6 +1623,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             const debugConfig: AspireResourceExtendedDebugConfiguration = {
                 runId: '1',
                 debugSessionId: '1',
+                terminationSignal: 'adapterExit',
                 type: 'coreclr',
                 name: 'Test Debug Config',
                 request: 'launch'
@@ -1642,6 +1669,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             const debugConfig: AspireResourceExtendedDebugConfiguration = {
                 runId: '1',
                 debugSessionId: '1',
+                terminationSignal: 'adapterExit',
                 type: 'coreclr',
                 name: 'Test Debug Config',
                 request: 'launch'
@@ -1707,6 +1735,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         const debugConfig: AspireResourceExtendedDebugConfiguration = {
             runId: '1',
             debugSessionId: '1',
+            terminationSignal: 'adapterExit',
             type: 'coreclr',
             name: 'Test Debug Config',
             request: 'launch'
@@ -1786,6 +1815,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         const debugConfig: AspireResourceExtendedDebugConfiguration = {
             runId: '1',
             debugSessionId: '1',
+            terminationSignal: 'adapterExit',
             type: 'coreclr',
             name: 'Test Debug Config',
             request: 'launch'
@@ -1853,6 +1883,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             const debugConfig: AspireResourceExtendedDebugConfiguration = {
                 runId: '1',
                 debugSessionId: '1',
+                terminationSignal: 'adapterExit',
                 type: 'coreclr',
                 name: 'Test Debug Config',
                 request: 'launch'
@@ -1909,6 +1940,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             const debugConfig: AspireResourceExtendedDebugConfiguration = {
                 runId: '1',
                 debugSessionId: '1',
+                terminationSignal: 'adapterExit',
                 type: 'coreclr',
                 name: 'Test Debug Config',
                 request: 'launch'
@@ -1972,6 +2004,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         const debugConfig: AspireResourceExtendedDebugConfiguration = {
             runId: '1',
             debugSessionId: '1',
+            terminationSignal: 'adapterExit',
             type: 'coreclr',
             name: 'Test Debug Config',
             request: 'launch'

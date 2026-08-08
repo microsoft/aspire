@@ -12,9 +12,11 @@ import { AnsiColors } from "../utils/AspireTerminalProvider";
 import { applyTextStyle } from "../utils/strings";
 import { nodeDebuggerExtension } from "./languages/node";
 import { cleanupRun } from "./runCleanupRegistry";
+import { ResourceSessionTermination } from "./resourceSessionTermination";
 import { runWithRunStartWrappers } from "./runStartRegistry";
 import AspireRpcServer from "../server/AspireRpcServer";
 import { AlreadyStartedResourceDebugSession, createDebugSessionConfiguration } from "./debuggerExtensions";
+import { isFirefoxDebuggerInstalled, promptToInstallFirefoxDebugger } from "./firefoxDebugger";
 import { AspireTerminalProvider } from "../utils/AspireTerminalProvider";
 import { ICliRpcClient } from "../server/rpcClient";
 import path from "path";
@@ -66,6 +68,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
   private _appHostDebugSession?: AspireResourceDebugSession = undefined;
   private _resourceDebugSessions: AspireResourceDebugSession[] = [];
   private _trackedDebugAdapters: string[] = [];
+  private readonly _sentSessionTerminations = new Set<string>();
   private _rpcClient?: ICliRpcClient;
   private _dashboardDebugSession: vscode.DebugSession | null = null;
   private _dashboardUrl: string | undefined;
@@ -147,6 +150,38 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     this._parentStopPromise = vscode.debug.stopDebugging(this._session);
 
     return this._parentStopPromise;
+  }
+
+  /**
+   * Emits the terminal DCP notification for a run whose lifetime is bounded by a VS Code debug
+   * session rather than by a debuggee process exit (browser and WASM sessions).
+   *
+   * `exit_code` is deliberately omitted unless a caller actually observed one. The DCP IDE execution
+   * contract allows omission "when a debug session ended for a reason other than program exit", which
+   * is exactly this path — a closed browser or a stopped resource produces no process exit code, and
+   * reporting a fabricated `0` would claim a successful program exit that never happened. See
+   * docs/specs/IDE-execution.md#session-change-notifications.
+   *
+   * The local `_sentSessionTerminations` guard keeps this extension-side path single-shot. DCP-side
+   * lifecycle dedup (microsoft/aspire#19125) is a separate, complementary layer: notifications sent
+   * from here flow through `AspireDcpServer.sendNotification`, so a run that DCP already terminated
+   * via `DELETE /run_session` is collapsed there rather than reaching the wire twice.
+   */
+  sendSessionTerminated(runId: string, dcpId: string, exitCode?: number): void {
+    const key = `${dcpId}\n${runId}`;
+    if (this._sentSessionTerminations.has(key)) {
+      return;
+    }
+
+    this._sentSessionTerminations.add(key);
+    const notification: SessionTerminatedNotification = {
+      notification_type: 'sessionTerminated',
+      session_id: runId,
+      dcp_id: dcpId,
+      ...(exitCode === undefined ? {} : { exit_code: exitCode })
+    };
+
+    this._dcpServer.sendNotification(notification);
   }
 
   handleMessage(message: any): void {
@@ -627,40 +662,64 @@ export class AspireDebugSession implements vscode.DebugAdapter {
         if (session.configuration.runId === debugConfig.runId) {
           extensionLogOutputChannel.info(`Debug session started: ${session.name} (run id: ${session.configuration.runId})`);
           disposable.dispose();
+          const termination = new ResourceSessionTermination(
+            session,
+            debugConfig,
+            (runId, dcpId) => this.sendSessionTerminated(runId, dcpId));
 
-          if (this._disposed) {
-            extensionLogOutputChannel.info(`Stopping debug session that started after Aspire session disposal: ${session.name} (run id: ${session.configuration.runId})`);
-            vscode.debug.stopDebugging(session);
-            cleanupRun(debugConfig.runId);
-            resolved = true;
-            resolve(undefined);
-            return;
-          }
-
-          let stopSessionPromise: Thenable<void> | undefined;
-          const disposalFunction = () => {
-            if (stopSessionPromise) {
-              return stopSessionPromise;
-            }
-
+          const stopSession = () => {
             extensionLogOutputChannel.info(`Stopping debug session: ${session.name} (run id: ${session.configuration.runId})`);
-            stopSessionPromise = vscode.debug.stopDebugging(session);
 
-            // Run any cleanup registered by resource-type extensions (e.g. func host for Azure Functions)
-            cleanupRun(debugConfig.runId);
-
-            return stopSessionPromise;
+            return termination.stop();
           };
 
+          // Built before the disposal check because both paths hand it out: the normal path tracks
+          // it, and the disposal path returns it when the stop fails so the caller can retry.
           const vsCodeDebugSession: AspireResourceDebugSession = {
             id: session.id,
             session: session,
-            stopSession: disposalFunction
+            stopSession
           };
+
+          if (this._disposed) {
+            extensionLogOutputChannel.info(`Stopping debug session that started after Aspire session disposal: ${session.name} (run id: ${session.configuration.runId})`);
+            resolved = true;
+
+            // The Aspire session is gone, so this session will never be tracked in
+            // _resourceDebugSessions. Watch for its termination anyway: if the stop below fails, an
+            // end that arrives later is the only thing left that can finish the run's lifecycle.
+            termination.watchForDebugSessionEnd();
+
+            void termination.stop().then(
+              () => resolve(undefined),
+              () => {
+                // A rejected stop means the session started and is still running. Resolving
+                // undefined here would be read by the /run_session caller as "the debugger never
+                // started", and it responds to that by calling cleanupRun(runId) -- which for a
+                // browser recursively deletes the profile of the browser VS Code just failed to
+                // stop. Hand back the session instead so the caller keeps a handle it can retry
+                // with, which is the same invariant stopCore() preserves on the normal path.
+                resolve(vsCodeDebugSession);
+              });
+            return;
+          }
+
+          termination.watchForDebugSessionEnd();
 
           this._resourceDebugSessions.push(vsCodeDebugSession);
           this._disposables.push({
-            dispose: disposalFunction
+            // Disposal has no caller to surface a stop failure to, so it must not hand back a
+            // rejected promise. It shares the memoized stop with stopSession(), so an in-flight
+            // DCP-requested stop is joined rather than duplicated.
+            //
+            // termination.dispose() bounds the listener a failed stop leaves registered: once this
+            // Aspire session is gone nothing is tracking the run, so waiting for an end that may
+            // never come would just hold the subscription for the life of the extension host. A
+            // successful stop has already finished and disposed it, making this a no-op.
+            dispose: () => {
+              termination.stopAndLogFailure();
+              termination.dispose();
+            }
           });
 
           resolved = true;
@@ -770,6 +829,15 @@ export class AspireDebugSession implements vscode.DebugAdapter {
    * The browser will automatically close when the parent Aspire debug session ends.
    */
   private async launchDebugBrowser(url: string, debugType: 'pwa-chrome' | 'pwa-msedge' | 'firefox'): Promise<void> {
+    // The `firefox` adapter is provided by the firefox-devtools.vscode-firefox-debug extension,
+    // not by VS Code's built-in js-debug. If it is missing, prompt to install it and fall back
+    // to the external browser so the dashboard still opens instead of failing silently.
+    if (debugType === 'firefox' && !isFirefoxDebuggerInstalled()) {
+      promptToInstallFirefoxDebugger();
+      await vscode.env.openExternal(vscode.Uri.parse(url));
+      return;
+    }
+
     const debugConfig: vscode.DebugConfiguration = {
       type: debugType,
       name: aspireDashboard,

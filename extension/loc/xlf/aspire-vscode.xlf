@@ -211,6 +211,9 @@
     <trans-unit id="aspire-vscode.strings.debugProject">
       <source xml:lang="en">Debug {0}</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.firefoxDebuggerNotInstalled">
+      <source xml:lang="en">Debugging with Firefox requires the Firefox Debugger extension (firefox-devtools.vscode-firefox-debug), which is not installed. Install it and try again.</source>
+    </trans-unit>
     <trans-unit id="command.deploy">
       <source xml:lang="en">Deploy app</source>
     </trans-unit>
@@ -354,6 +357,9 @@
     </trans-unit>
     <trans-unit id="command.init">
       <source xml:lang="en">Initialize Aspire in an existing codebase</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.installLabel">
+      <source xml:lang="en">Install</source>
     </trans-unit>
     <trans-unit id="command.installCli">
       <source xml:lang="en">Install Aspire CLI</source>

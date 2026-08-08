@@ -4,6 +4,7 @@ import { extensionLogOutputChannel } from "../utils/logging";
 import AspireDcpServer from '../dcp/AspireDcpServer';
 import { removeTrailingNewline } from '../utils/strings';
 import { dcpServerNotInitialized } from '../loc/strings';
+import { getResourceTerminationSignal } from './resourceSessionTermination';
 
 /**
  * Callback invoked when a restart is requested on an app host debug session.
@@ -100,6 +101,13 @@ export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapt
                     }
                 },
                 onExit(code: number | undefined) {
+                    // Runs whose termination is owned by the debug-session-end handler in
+                    // AspireDebugSession (browser/js-debug) must not also report an adapter exit,
+                    // or DCP would observe the run terminate twice.
+                    if (getResourceTerminationSignal(configuration) !== 'adapterExit') {
+                        return;
+                    }
+
                     let exitCode = debuggeeExitCode ?? code;
 
                     // Exit code 143 should be treated as normal exit (SIGTERM) on macOS and Linux

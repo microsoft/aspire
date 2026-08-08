@@ -63,6 +63,16 @@ export function isBunInstalled() {
     return isExtensionInstalled("oven.bun-vscode");
 }
 
+// The `firefox` debug adapter is provided by the firefox-devtools.vscode-firefox-debug
+// extension, NOT by VS Code's built-in js-debug. Detect it before selecting the adapter so
+// we can surface an actionable install prompt instead of an opaque "debug session failed to
+// start" error. Marketplace: https://marketplace.visualstudio.com/items?itemName=firefox-devtools.vscode-firefox-debug
+export const firefoxDebuggerExtensionId = "firefox-devtools.vscode-firefox-debug";
+
+export function isFirefoxDebuggerInstalled() {
+    return isExtensionInstalled(firefoxDebuggerExtensionId);
+}
+
 export function getSupportedCapabilities(): Capabilities {
     const capabilities: Capabilities = ['prompting', 'baseline.v1', 'secret-prompts.v1', 'file-pickers.v1', 'build-dotnet-using-cli'];
 
