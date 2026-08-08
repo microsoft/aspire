@@ -46,6 +46,26 @@ public class ComputeEnvironmentValidationTests
     }
 
     [Fact]
+    public async Task PublishMode_MultipleComputeEnvironments_WithExplicitStartAspireDashboard_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddResource(new TestComputeEnvironmentResource("env1"));
+        builder.AddResource(new TestComputeEnvironmentResource("env2"));
+
+        var explicitStartDashboard = new TestComputeResource(KnownResourceNames.AspireDashboard);
+        explicitStartDashboard.Annotations.Add(new ExplicitStartupAnnotation());
+        builder.AddResource(explicitStartDashboard);
+
+        using var app = builder.Build();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => app.ExecuteBeforeStartHooksAsync(default)).DefaultTimeout();
+
+        Assert.Contains($"'{KnownResourceNames.AspireDashboard}'", ex.Message);
+    }
+
+    [Fact]
     public async Task SingleComputeEnvironment_AutoBindsUnboundResources()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

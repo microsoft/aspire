@@ -221,7 +221,8 @@ internal sealed class ResourceCommand : BaseCommand
 
     private static async Task<ResourceSnapshotCommand?> GetCommandMetadataAsync(IAppHostAuxiliaryBackchannel connection, string resourceName, string commandName, bool includeHidden, CancellationToken cancellationToken)
     {
-        var snapshots = await connection.GetResourceSnapshotsAsync(includeHidden, cancellationToken).ConfigureAwait(false);
+        var effectiveIncludeHidden = includeHidden || !string.IsNullOrEmpty(resourceName);
+        var snapshots = await connection.GetResourceSnapshotsAsync(effectiveIncludeHidden, cancellationToken).ConfigureAwait(false);
         var resources = ResourceSnapshotMapper.ResolveResources(resourceName, snapshots);
         var lookupCommandName = s_legacyCommandNameMap.GetValueOrDefault(commandName, commandName);
 
@@ -232,7 +233,8 @@ internal sealed class ResourceCommand : BaseCommand
 
     private static async Task<(string Name, string Description)[]> GetAvailableCommandMetadataAsync(IAppHostAuxiliaryBackchannel connection, string resourceName, bool includeHidden, CancellationToken cancellationToken)
     {
-        var snapshots = await connection.GetResourceSnapshotsAsync(includeHidden, cancellationToken).ConfigureAwait(false);
+        var effectiveIncludeHidden = includeHidden || !string.IsNullOrEmpty(resourceName);
+        var snapshots = await connection.GetResourceSnapshotsAsync(effectiveIncludeHidden, cancellationToken).ConfigureAwait(false);
         var resources = ResourceSnapshotMapper.ResolveResources(resourceName, snapshots);
 
         return resources
