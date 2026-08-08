@@ -1,0 +1,16 @@
+{
+  "id": "dnceng-nuget-flat2-download-timeout",
+  "type": "infra-failure",
+  "title": "dnceng NuGet flat2 package downloads time out (no data received for 60000ms)",
+  "error_pattern": "Failed to download package '<pkg>' from 'https://pkgs.dev.azure.com/dnceng/.../_packaging/.../nuget/v3/flat2/.../*.nupkg'. An error occurred while sending the request. The download of '...' timed out because no data was received for 60000ms. The operation has timed out.",
+  "occurrences": [
+    {
+      "run_id": 31269165475,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/31269165475",
+      "job": "Tests / Azure.Messaging.ServiceBus / Azure.Messaging.ServiceBus (ubuntu-latest)",
+      "pr_number": 19139,
+      "observed_at": "2026-08-08T18:15:07Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19167"
+}

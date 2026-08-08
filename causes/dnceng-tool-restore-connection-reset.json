@@ -1,0 +1,16 @@
+{
+  "id": "dnceng-tool-restore-connection-reset",
+  "type": "infra-failure",
+  "title": "dotnet tool restore fails with 'Connection reset by peer' during arcade tool restore",
+  "error_pattern": "Unhandled exception: Unable to read data from the transport connection: Connection reset by peer. error MSB3073: The command \"\"...dotnet\" tool restore --configfile \"...NuGet.config\"\" exited with code 1. Build FAILED.",
+  "occurrences": [
+    {
+      "run_id": 31269165475,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/31269165475",
+      "job": "Tests / Azure.Messaging.ServiceBus / Azure.Messaging.ServiceBus (ubuntu-latest)",
+      "pr_number": 19139,
+      "observed_at": "2026-08-08T18:15:07Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19168"
+}

@@ -1,0 +1,16 @@
+{
+  "id": "azure-functions-core-tools-cdn-404",
+  "type": "infra-failure",
+  "title": "Azure Functions Core Tools install fails with HTTP 404 from cdn.functions.azure.com",
+  "error_pattern": "npm error attempting to GET \"https://cdn.functions.azure.com/public/.../Azure.Functions.Cli.linux-x64....zip\"\nnpm error Error downloading zip file from https://cdn.functions.azure.com/...\nnpm error Expected: 200, Actual: 404",
+  "occurrences": [
+    {
+      "run_id": 31269165475,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/31269165475",
+      "job": "Tests / Azure.Messaging.ServiceBus / Azure.Messaging.ServiceBus (ubuntu-latest)",
+      "pr_number": 19139,
+      "observed_at": "2026-08-08T18:15:07Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19166"
+}

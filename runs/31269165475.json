@@ -1,0 +1,47 @@
+{
+  "run_id": 31269165475,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/31269165475",
+  "analyzed_at": "2026-08-08T18:15:07Z",
+  "verdict": "transient-infra",
+  "pr": {
+    "number": 19139,
+    "title": "Bump Aspire branding from 13.5 to 13.6",
+    "author": "Copilot",
+    "state": "closed",
+    "head_branch": "copilot/bump-branding-to-136",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19139"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Azure.Messaging.ServiceBus / Azure.Messaging.ServiceBus (ubuntu-latest)",
+      "id": 93132314893,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31269165475/job/93132314893",
+      "classification": "transient-infra",
+      "reason": "Build failed during 'dotnet tool restore' with 'Unable to read data from the transport connection: Connection reset by peer' contacting dnceng NuGet feed. Unrelated to PR changes (branding version bump + workflow yml only).",
+      "failed_steps": ["Build test project"]
+    },
+    {
+      "name": "Tests / Playground / Playground (ubuntu-latest)",
+      "id": 93132316328,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31269165475/job/93132316328",
+      "classification": "transient-infra",
+      "reason": "Install Azure Functions Core Tools step failed with npm error: 'Expected: 200, Actual: 404' downloading Azure.Functions.Cli zip from cdn.functions.azure.com. External CDN issue, unrelated to PR.",
+      "failed_steps": ["Install Azure Functions Core Tools"]
+    },
+    {
+      "name": "Tests / Templates-XUnit_Default_NewUpAndBuildSupportProjectTemplatesTests / Templates-XUnit_Default_NewUpAndBuildSupportProjectTemplatesTests (windows-latest)",
+      "id": 93133243494,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31269165475/job/93133243494",
+      "classification": "transient-infra",
+      "reason": "Multiple NuGet package downloads from pkgs.dev.azure.com/dnceng flat2 feed timed out ('no data was received for 60000ms') and connections were forcibly closed by remote host, causing repeated restore failures. Unrelated to PR changes.",
+      "failed_steps": ["Run nuget dependent tests (Windows)"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["dnceng-tool-restore-connection-reset", "azure-functions-core-tools-cdn-404", "dnceng-nuget-flat2-download-timeout"]
+}
