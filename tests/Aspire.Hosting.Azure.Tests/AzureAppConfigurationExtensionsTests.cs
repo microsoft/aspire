@@ -128,4 +128,16 @@ public class AzureAppConfigurationExtensionsTests(ITestOutputHelper output)
         await Verify(manifest.ToString(), "json")
              .AppendContentAsFile(bicep, "bicep");
     }
+
+    [Fact]
+    public void RunAsEmulatorRegistersHealthCheck()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var appConfiguration = builder.AddAzureAppConfiguration("appconfig").RunAsEmulator();
+
+        Assert.Contains(
+            appConfiguration.Resource.Annotations,
+            annotation => annotation is HealthCheckAnnotation healthCheck && healthCheck.Key == "appconfig_emulator_/health_200_check");
+    }
 }
