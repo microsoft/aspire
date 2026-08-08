@@ -159,6 +159,13 @@ internal static class CodeGenerationDiagnosticBuilder
             case FileLoadException fle:
                 typeName = fle.FileName;
                 break;
+            case FileNotFoundException fnfe:
+                // The CLR reports a missing dependency assembly (e.g. a diverged Aspire.TypeSystem)
+                // as "Could not load file or assembly '...'. The system cannot find the file
+                // specified.", which surfaces as a FileNotFoundException in the LoaderExceptions of
+                // a ReflectionTypeLoadException. Capture the offending assembly name for diagnostics.
+                typeName = fnfe.FileName;
+                break;
             case BadImageFormatException bife:
                 typeName = bife.FileName;
                 break;
@@ -190,7 +197,12 @@ internal static class CodeGenerationDiagnosticBuilder
             {
                 foreach (var loaderException in rtle.LoaderExceptions)
                 {
-                    if (loaderException is not null && IsReflectionLoadException(loaderException))
+                    // A FileNotFoundException surfaced as an RTLE loader exception is always an
+                    // assembly-bind failure (the CLR could not load a referenced assembly while
+                    // enumerating types), so accept it here without the assembly-name shape check
+                    // applied to standalone exceptions below.
+                    if (loaderException is not null &&
+                        (IsReflectionLoadException(loaderException) || loaderException is FileNotFoundException))
                     {
                         return loaderException;
                     }
@@ -200,7 +212,8 @@ internal static class CodeGenerationDiagnosticBuilder
                 // failure — fall through and return it from the IsReflectionLoadException check below.
             }
 
-            if (IsReflectionLoadException(current))
+            if (IsReflectionLoadException(current) ||
+                (current is FileNotFoundException fnfe && IsAssemblyBindFailure(fnfe)))
             {
                 return current;
             }
@@ -216,6 +229,40 @@ internal static class CodeGenerationDiagnosticBuilder
         or FileLoadException
         or BadImageFormatException
         or ReflectionTypeLoadException;
+
+    /// <summary>
+    /// Determines whether a standalone <see cref="FileNotFoundException"/> represents an
+    /// assembly-bind failure (a missing dependency assembly) rather than ordinary missing-file IO.
+    /// </summary>
+    /// <remarks>
+    /// The CLR raises a <see cref="FileNotFoundException"/> whose <see cref="FileNotFoundException.FileName"/>
+    /// is an assembly display name (for example
+    /// <c>"Aspire.TypeSystem, Version=42.42.42.42, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51"</c>)
+    /// when it cannot bind a referenced assembly. A code generator that simply fails to open a data
+    /// file produces a path-like <c>FileName</c> instead. We only want to classify the former as an
+    /// incompatible-SDK failure, otherwise a genuine missing-file error would be misreported as a
+    /// version mismatch with a "run aspire update" hint that cannot help.
+    /// </remarks>
+    private static bool IsAssemblyBindFailure(FileNotFoundException exception)
+    {
+        if (exception.FileName is not { Length: > 0 } fileName)
+        {
+            return false;
+        }
+
+        try
+        {
+            // Require an identity component beyond the simple name (Version or PublicKeyToken) so a
+            // plain filename such as "data.json" - which AssemblyName happily parses as a simple
+            // name - is not mistaken for an assembly reference.
+            var name = new AssemblyName(fileName);
+            return name.Version is not null || name.GetPublicKeyToken() is { Length: > 0 };
+        }
+        catch (Exception ex) when (ex is FileLoadException or ArgumentException)
+        {
+            return false;
+        }
+    }
 
     private static (string? Version, string? Path, List<CodeGenerationLoadedAssemblyInfo> Assemblies) CaptureLoadedAssemblies(
         AssemblyLoader? assemblyLoader,
