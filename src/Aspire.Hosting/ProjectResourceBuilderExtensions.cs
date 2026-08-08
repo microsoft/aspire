@@ -513,7 +513,13 @@ public static class ProjectResourceBuilderExtensions
         // resolving the SDK version shells out to `dotnet --version`.
         builder.OnBeforeResourceStarted(async (r, e, ct) =>
         {
-            var currentProjectMetadata = r.GetProjectMetadata();
+            // The resource may have been transmuted (e.g. RunAsContainer) and no longer carries
+            // project metadata. In that case there is nothing to validate here.
+            if (!r.TryGetProjectMetadata(out var currentProjectMetadata))
+            {
+                return;
+            }
+
             if (!currentProjectMetadata.IsFileBasedApp)
             {
                 return;
