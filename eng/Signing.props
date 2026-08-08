@@ -14,8 +14,16 @@
     <!-- add missing entry for .msi, this can be removed once aspire uses arcade 10.0 -->
     <FileExtensionSignInfo Include=".msi" CertificateName="MicrosoftDotNet500" Condition="!@(FileExtensionSignInfo->AnyHaveMetadataValue('Identity', '.msi'))" />
 
-    <!-- We don't need to code sign .js files because they are not used in Windows Script Host. -->
+    <!--
+      JS files in project templates are customer-modifiable: users edit them after project
+      creation. Authenticode signing would append a // SIG // block that is visible to users
+      and breaks on any edit. Instead, we catalog-sign: a .cat file hashes the JS files and
+      carries the signature, leaving the JS content untouched.
+      See GenerateCatalogFiles target in Aspire.ProjectTemplates.csproj.
+    -->
     <FileExtensionSignInfo Update=".js" CertificateName="None" />
+    <!-- Sign the catalog file that covers the template JS files -->
+    <FileExtensionSignInfo Include=".cat" CertificateName="MicrosoftDotNet500" />
     <!-- Remove .py files from being signed. See https://github.com/microsoft/aspire/issues/13004 -->
     <FileExtensionSignInfo Update=".py" CertificateName="None" />
   </ItemGroup>
