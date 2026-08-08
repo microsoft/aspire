@@ -1,12 +1,15 @@
 ﻿extension radius
 
+@secure()
+param db_password string
+
 resource recipepack 'Radius.Core/recipePacks@2025-08-01-preview' = {
   name: 'default'
   properties: {
     recipes: {
       'Radius.Data/postgreSqlDatabases': {
         recipeKind: 'bicep'
-        recipeLocation: 'ghcr.io/radius-project/recipes/local-dev/postgresqldatabases:latest'
+        recipeLocation: 'ghcr.io/radius-project/kube-recipes/postgresqldatabases:latest'
       }
     }
   }
@@ -71,5 +74,7 @@ resource db 'Radius.Data/postgreSqlDatabases@2025-08-01-preview' = {
   properties: {
     application: app.id
     environment: myenv.id
+    username: 'postgres'
+    password: db_password
   }
 }
