@@ -209,4 +209,4 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'getActiveEditor' }
     | { name: 'getResourceDebuggerExtensions' }
     | { name: 'createResourceDebugConfiguration'; launchConfig: ExecutableLaunchConfiguration; args?: readonly string[]; env?: readonly EnvVar[]; debug?: boolean }
-    | { name: 'proveMauiResourceDebugging'; appHostPath: string; resourceName: string; sourcePath: string; breakpointLine: number; timeoutMs?: number; pauseOnBreakpointMs?: number };
+    | { name: 'proveResourceDebugging'; appHostPath: string; resourceName: string; sourcePath: string; breakpointLine: number; timeoutMs?: number; pauseOnBreakpointMs?: number; expectedResourceDebugSessionType?: string; stopDebuggingOnCompletion?: boolean };

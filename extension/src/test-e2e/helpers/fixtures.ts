@@ -4,8 +4,9 @@ import { spawnSync } from 'child_process';
 import type { AspireExtensionE2EControlCommand, AspireExtensionE2EControlStatus } from '../../types/extensionApi';
 import { lsJsonStreamCapability, type ConfigInfo } from '../../types/configInfo';
 import { applyE2eControl, isSamePath, readStateFile, sleepSynchronously, waitForExtensionState } from './assertions';
-import { getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getRunRoot, getWorkspaceRoot } from './paths';
+import { getCliPath, getNodeAppScriptPath, getPrimaryAppHostProjectPath, getRepoRoot, getRunRoot, getWorkspaceRoot } from './paths';
 import { ProcessError, runProcess } from './process';
+import { formatProcessSnapshot, parsePosixProcessSnapshot, type ProcessSnapshot } from '../../testing/processDiagnostics';
 
 const csharpFileHeader = `// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
@@ -186,6 +187,30 @@ export async function clearBreakpoints(): Promise<void> {
     await executeE2eControlCommand({ name: 'clearBreakpoints' });
 }
 
+/** The marker comment the Node E2E fixture puts on the line the resource debugger must stop on. */
+const nodeAppBreakpointMarker = 'aspire-e2e-breakpoint';
+
+/**
+ * The zero-based line of the Node fixture statement the resource debugger must stop on.
+ *
+ * The line is located from a marker comment rather than hardcoded so editing the fixture script
+ * cannot silently move the breakpoint onto an unrelated statement and still "pass".
+ */
+export function getNodeAppBreakpointLine(): number {
+    const scriptPath = getNodeAppScriptPath();
+    const lines = fs.readFileSync(scriptPath, 'utf8').split(/\r?\n/);
+    const line = lines.findIndex(text => text.includes(nodeAppBreakpointMarker));
+    if (line < 0) {
+        throw new Error(`The Node E2E fixture ${scriptPath} has no line marked with '${nodeAppBreakpointMarker}'.`);
+    }
+
+    return line;
+}
+
+export function isProcessAlive(pid: number): boolean {
+    return isProcessRunning(pid);
+}
+
 export async function removeGeneratedProject(projectName: string, knownAppHostPid?: number): Promise<void> {
     await waitForNoRunningAppHostPathOrStopKnownProcess(getGeneratedAppHostPath(projectName), 30000, knownAppHostPid, 'before deleting');
     removePath(getGeneratedProjectRoot(projectName), { recursive: true, force: true });
@@ -240,6 +265,33 @@ export function writeStreamingDiscoveryCliWrapper(delayMs = 5_000, initialDelayM
         streamedLsDelayMs: delayMs,
         streamedLsInitialDelayMs: initialDelayMs,
     });
+}
+
+export function writeGatedStreamingDiscoveryCliWrapper(): { cliPath: string; releasePsSnapshot: () => void; releaseLsCandidate: () => void } {
+    const gateDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers', 'gated-streaming-discovery');
+    const psSnapshotReleaseFilePath = path.join(gateDirectory, 'release-ps-snapshot');
+    const lsCandidateReleaseFilePath = path.join(gateDirectory, 'release-ls-candidate');
+    removePath(gateDirectory, { recursive: true, force: true });
+    fs.mkdirSync(gateDirectory, { recursive: true });
+
+    const cliPath = writeCliWrapper('aspire-gated-streaming-discovery', {
+        configInfoJson: createConfigInfo([lsJsonStreamCapability]),
+        streamedLsCandidate: {
+            path: getPrimaryAppHostProjectPath(),
+            language: 'csharp',
+            status: 'buildable',
+            selected: true,
+        },
+        streamedLsDelayMs: 5_000,
+        streamedLsReleaseFilePath: lsCandidateReleaseFilePath,
+        psSnapshotReleaseFilePath,
+    });
+
+    return {
+        cliPath,
+        releasePsSnapshot: () => writeFileWithRetry(psSnapshotReleaseFilePath, ''),
+        releaseLsCandidate: () => writeFileWithRetry(lsCandidateReleaseFilePath, ''),
+    };
 }
 
 export function writeTrackedStreamingDiscoveryCliWrapper(delayMs = 4_000, initialDelayMs = 500): { cliPath: string; invocationLogPath: string } {
@@ -449,7 +501,7 @@ export async function stopAppHostIfRunning(appHostPath: string): Promise<void> {
         }
 
         try {
-            await waitForProcessExit(runningAppHost.appHostPid, 30000);
+            await waitForProcessExit(runningAppHost.appHostPid, `AppHost ${appHostPath}`, 30000);
         }
         catch {
             if (isProcessRunning(runningAppHost.appHostPid)) {
@@ -656,7 +708,19 @@ function getRunningAppHostFromState(appHostPath: string) {
         : state.appHosts.find(candidate => isSamePath(candidate.appHostPath, appHostPath));
 }
 
-async function waitForProcessExit(pid: number, timeoutMs: number): Promise<void> {
+/**
+ * Reads the AppHost pid the extension state file currently reports for `appHostPath`.
+ *
+ * Callers that need to prove an AppHost stopped should capture this while it is still running and
+ * then assert on process liveness. The state file's AppHost list lags the real process after a stop
+ * (see the comment in `waitForNoRunningAppHostPathOrStopKnownProcess`), so the pid is only
+ * trustworthy as an identifier, not as evidence that the AppHost is still alive.
+ */
+export function getAppHostPidFromState(appHostPath: string): number | undefined {
+    return getRunningAppHostFromState(appHostPath)?.appHostPid;
+}
+
+export async function waitForProcessExit(pid: number, description: string, timeoutMs: number): Promise<void> {
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {
         if (!isProcessRunning(pid)) {
@@ -666,7 +730,50 @@ async function waitForProcessExit(pid: number, timeoutMs: number): Promise<void>
         await delay(250);
     }
 
-    throw new Error(`Timed out after ${timeoutMs}ms waiting for process ${pid} to exit.`);
+    throw new Error(`Timed out after ${timeoutMs}ms waiting for ${description} (pid ${pid}) to exit. Last observed process: ${formatProcessSnapshot(getProcessSnapshot(pid), pid)}.`);
+}
+
+function getProcessSnapshot(pid: number): ProcessSnapshot | undefined {
+    if (!Number.isInteger(pid) || pid <= 0) {
+        return undefined;
+    }
+
+    if (process.platform === 'win32') {
+        const result = spawnSync('powershell.exe', [
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            `$process = Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}"; if ($process) { $process | Select-Object ProcessId, ParentProcessId, CommandLine | ConvertTo-Json -Compress }`,
+        ], { encoding: 'utf8', timeout: 5000 });
+        if (result.error) {
+            throw new Error(`Unable to inspect process ${pid}: ${result.error.message}`);
+        }
+        if (result.status !== 0) {
+            throw new Error(`Unable to inspect process ${pid}: ${result.stderr.trim() || `PowerShell exited with code ${result.status}`}`);
+        }
+        if (!result.stdout.trim()) {
+            return undefined;
+        }
+
+        const snapshot = JSON.parse(result.stdout) as { ProcessId?: unknown; ParentProcessId?: unknown; CommandLine?: unknown };
+        return typeof snapshot.ProcessId === 'number' && typeof snapshot.ParentProcessId === 'number'
+            ? {
+                pid: snapshot.ProcessId,
+                parentPid: snapshot.ParentProcessId,
+                commandLine: typeof snapshot.CommandLine === 'string' ? snapshot.CommandLine : undefined,
+            }
+            : undefined;
+    }
+
+    const result = spawnSync('ps', ['-p', String(pid), '-o', 'pid=,ppid=,stat=,command='], { encoding: 'utf8', timeout: 5000 });
+    if (result.error) {
+        throw new Error(`Unable to inspect process ${pid}: ${result.error.message}`);
+    }
+    if (result.status !== 0) {
+        return undefined;
+    }
+
+    return parsePosixProcessSnapshot(result.stdout, pid);
 }
 
 async function stopProcess(pid: number, timeoutMs: number): Promise<void> {
@@ -681,7 +788,7 @@ async function stopProcess(pid: number, timeoutMs: number): Promise<void> {
         throw error;
     }
 
-    await waitForProcessExit(pid, timeoutMs);
+    await waitForProcessExit(pid, `process ${pid}`, timeoutMs);
 }
 
 function isProcessRunning(pid: number): boolean {
@@ -736,9 +843,11 @@ function writeCliWrapper(
         streamedLsCandidate?: unknown;
         streamedLsDelayMs?: number;
         streamedLsInitialDelayMs?: number;
+        streamedLsReleaseFilePath?: string;
         streamedLsInvocationLogPath?: string;
         invocationLogPath?: string;
         psSnapshotDelayMs?: number;
+        psSnapshotReleaseFilePath?: string;
     },
 ): string {
     const wrapperDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers');
@@ -747,9 +856,21 @@ function writeCliWrapper(
     const scriptPath = path.join(wrapperDirectory, `${name}.js`);
     fs.writeFileSync(scriptPath, `#!/usr/bin/env node
 const { spawnSync } = require('child_process');
+const fs = require('fs');
 const realCli = ${JSON.stringify(getCliPath())};
 const args = process.argv.slice(2);
-${options.invocationLogPath === undefined ? '' : `require('fs').appendFileSync(${JSON.stringify(options.invocationLogPath)}, JSON.stringify(args) + '\\n');`}
+${options.invocationLogPath === undefined ? '' : `fs.appendFileSync(${JSON.stringify(options.invocationLogPath)}, JSON.stringify(args) + '\\n');`}
+
+function waitForReleaseFile(filePath, description) {
+  const deadline = Date.now() + 120000;
+  while (!fs.existsSync(filePath)) {
+    if (Date.now() >= deadline) {
+      console.error(\`Timed out waiting for \${description} release file: \${filePath}\`);
+      process.exit(124);
+    }
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+  }
+}
 
 if (args.includes('--include-disabled-commands')) {
   console.error('simulated old CLI does not support --include-disabled-commands');
@@ -767,20 +888,24 @@ ${options.configInfoJson === undefined
 ${options.streamedLsCandidate === undefined
         ? ''
         : `if (args[0] === 'ls') {
-${options.streamedLsInvocationLogPath === undefined ? '' : `  require('fs').appendFileSync(${JSON.stringify(options.streamedLsInvocationLogPath)}, 'ls\\n');`}
+${options.streamedLsInvocationLogPath === undefined ? '' : `  fs.appendFileSync(${JSON.stringify(options.streamedLsInvocationLogPath)}, 'ls\\n');`}
   if (!args.includes('--format') || args[args.indexOf('--format') + 1] !== 'json' || !args.includes('--stream')) {
     console.error('Expected AppHost discovery to use ls --format json --stream.');
     process.exit(126);
   }
 
+${options.streamedLsReleaseFilePath === undefined ? '' : `  waitForReleaseFile(${JSON.stringify(options.streamedLsReleaseFilePath)}, 'streamed ls candidate');`}
   setTimeout(() => {
     console.log(${JSON.stringify(JSON.stringify(options.streamedLsCandidate))});
     setTimeout(() => process.exit(0), ${options.streamedLsDelayMs ?? 5_000});
   }, ${options.streamedLsInitialDelayMs ?? 0});
 }
 else {`}
-if (args[0] === 'ps' && !args.includes('--follow')) {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ${options.psSnapshotDelayMs ?? 0});
+if (args[0] === 'ps') {
+${options.psSnapshotReleaseFilePath === undefined ? '' : `  waitForReleaseFile(${JSON.stringify(options.psSnapshotReleaseFilePath)}, 'ps snapshot');`}
+  if (!args.includes('--follow')) {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ${options.psSnapshotDelayMs ?? 0});
+  }
 }
 
 const result = spawnSync(realCli, args, {

@@ -206,6 +206,7 @@ extension/.test-results/
 extension/.test-storage/
 extension/.test-workspace/
 extension/.test-workspaces/
+extension/.e2e-logs/
 extension/node_modules/
 extension/.corepack-cache/
 **/.vscode-test/

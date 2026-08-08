@@ -16,6 +16,7 @@ const {
   runWithRetries,
   terminateOrphanedDescendants,
 } = require('./e2e-download-retry');
+const { assertShardExecutedTests } = require('./e2e-shard-results');
 
 const extensionRoot = path.resolve(__dirname, '..');
 const extensionPackageJson = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.json'), 'utf8'));
@@ -85,6 +86,12 @@ const COMMAND_INERT_PATH_PATTERN = isWindows ? WINDOWS_COMMAND_INERT_PATH_PATTER
 const COMMAND_INTERPRETER_NAME = isWindows ? 'cmd.exe' : '/bin/sh';
 const COMMAND_INERT_PATH_ALPHABET = isWindows ? '._-+@~:\\/' : '._-+,=:@%/';
 const primaryAppHostProject = path.join(workspaceRoot, 'AspireE2E.AppHost', 'AspireE2E.AppHost.csproj');
+const nodeAppProjectName = 'AspireE2E.NodeApp';
+const nodeAppScript = path.join(workspaceRoot, nodeAppProjectName, 'app.js');
+// The Node resource is only added to the shared AppHost fixture for the shard that debugs it. Every
+// other shard asserts on the resource tree, so an extra resource there would be an unrelated change
+// in their expected state.
+const includeNodeResourceFixture = shardName === 'resource-debugger';
 const workspaceNuGetConfigPath = path.join(workspaceRoot, 'NuGet.config');
 const enableAzureFunctionsE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS === 'true';
 let cliPathForCleanup;
@@ -337,6 +344,7 @@ function logE2eConfiguration() {
   console.log('Aspire extension E2E configuration:');
   console.log(`  shard: ${shardName}`);
   console.log(`  spec: ${testSpec}`);
+  console.log(`  node resource fixture: ${includeNodeResourceFixture ? nodeAppScript : 'not included for this shard'}`);
   console.log(`  matched specs: ${matchedTestSpecs.map(file => path.relative(extensionRoot, file)).join(', ')}`);
   console.log(`  VS Code: ${vscodeVersion}`);
   console.log(`  ExTester: ${extesterVersion}`);
@@ -649,6 +657,7 @@ async function main() {
       ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE: 'true',
       ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS: process.env.ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS === 'true' ? 'true' : 'false',
       ASPIRE_EXTENSION_E2E_PRIMARY_APPHOST: primaryAppHostProject,
+      ASPIRE_EXTENSION_E2E_NODE_APP_SCRIPT: includeNodeResourceFixture ? nodeAppScript : undefined,
       ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION: appHostSdkVersion,
       ASPIRE_EXTENSION_E2E_EXTESTER_MODULE: extesterModule,
       ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS: enableAzureFunctionsE2E ? 'true' : 'false',
@@ -699,6 +708,9 @@ async function main() {
     try {
       logStep('Running VS Code extension E2E tests');
       await runWithProcessTreeTimeout(process.execPath, [extesterCli, 'run-tests', testSpec, '--storage', storageDir, '--extensions_dir', extensionsDir, '--code_version', vscodeVersion, '--code_settings', path.join(extensionRoot, 'test-e2e', 'settings.json'), '--mocha_config', path.join(extensionRoot, '.mocharc.e2e.js'), '--offline'], extestEnv, getRunTestsTimeoutMs());
+      // A shard that runs to completion without executing its tests still exits 0, so the results
+      // have to be inspected before the shard is allowed to report success.
+      assertShardExecutedTests({ shardName, results: readMochaResults() });
     }
     catch (error) {
       testFailure = error;
@@ -957,6 +969,10 @@ function prepareWorkspaceFixture(resolvedCliPath, resolvedAppHostSdkVersion) {
     writeAzureFunctionsProject('AspireE2E.Functions');
   }
   writeAppHostProject('AspireE2E.AppHost', resolvedAppHostSdkVersion, enableAzureFunctionsE2E);
+  if (includeNodeResourceFixture) {
+    writeNodeAppFixture(nodeAppProjectName);
+  }
+
   writeNuGetConfigIfLocalPackageSourcesExist();
 
   const vscodeDirectory = path.join(workspaceRoot, '.vscode');
@@ -1007,6 +1023,10 @@ function restoreWorkspaceFixture() {
 function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzureFunctions) {
   const projectDirectory = path.join(workspaceRoot, projectName);
   fs.mkdirSync(projectDirectory, { recursive: true });
+  const nodeHostingPackageReference = includeNodeResourceFixture
+    ? `
+    <PackageReference Include="Aspire.Hosting.JavaScript" Version="${resolvedAppHostSdkVersion}" />`
+    : '';
   const azureFunctionsPackageReference = includeAzureFunctions
     ? `    <PackageReference Include="Aspire.Hosting.Azure.Functions" Version="${resolvedAppHostSdkVersion}" />\n`
     : '';
@@ -1020,11 +1040,19 @@ function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzur
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../AspireE2E.Worker/AspireE2E.Worker.csproj" />
+    <ProjectReference Include="../AspireE2E.Worker/AspireE2E.Worker.csproj" />${nodeHostingPackageReference}
 ${azureFunctionsPackageReference}  </ItemGroup>
 
 </Project>
 `);
+
+  // AddNodeApp with an explicit script path launches `node app.js` directly, so the fixture needs
+  // node on PATH but no package.json, no package manager, and no install step.
+  const nodeResourceRegistration = includeNodeResourceFixture
+    ? `
+builder.AddNodeApp("e2e-node", "../${nodeAppProjectName}", "app.js");
+`
+    : '';
 
   const azureFunctionsResource = includeAzureFunctions
     ? `\nbuilder.AddAzureFunctionsProject("e2e-functions", "../AspireE2E.Functions/AspireE2E.Functions.csproj");\n`
@@ -1099,6 +1127,7 @@ builder.AddProject<Projects.AspireE2E_Worker>("e2e-worker")
         });
 
 builder.AddResource(new NoCommandsResource("e2e-no-commands"));
+${nodeResourceRegistration}
 
 // e2e-terminal opts into WithTerminal so the real CLI surfaces terminal.enabled and
 // terminal.replicaIndex over the backchannel. The extension's Open terminal action reads
@@ -1111,6 +1140,42 @@ ${azureFunctionsResource}
 builder.Build().Run();
 
 sealed class NoCommandsResource(string name) : Aspire.Hosting.ApplicationModel.Resource(name);
+`);
+}
+
+function writeNodeAppFixture(projectName) {
+  const projectDirectory = path.join(workspaceRoot, projectName);
+  fs.mkdirSync(projectDirectory, { recursive: true });
+
+  // Deliberately CommonJS with no package.json: AddNodeApp only requires a package manager when the
+  // app directory has a package.json or a run script, and this fixture must stay installable-free so
+  // the shard needs nothing beyond node on PATH.
+  //
+  // The breakpoint line is found at runtime by the E2E test from the marker comment below, so
+  // editing this script cannot silently move the breakpoint onto an unrelated statement.
+  fs.writeFileSync(path.join(projectDirectory, 'app.js'), `'use strict';
+
+const { spawn } = require('child_process');
+
+// A grandchild of the debug adapter, so stopping the session has to tear down the whole process
+// tree rather than only the process js-debug launched directly.
+const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 60000);'], { stdio: 'ignore' });
+
+console.log('ASPIRE_E2E_NODE_PID=' + process.pid);
+console.log('ASPIRE_E2E_NODE_CHILD_PID=' + child.pid);
+
+function reportIteration(iteration) {
+  const marker = 'aspire-e2e-node-iteration-' + iteration; // aspire-e2e-breakpoint
+  return marker;
+}
+
+let iteration = 0;
+
+// Repeats so the breakpoint is hit again after js-debug finishes binding it, instead of depending on
+// the debugger being attached before a single one-shot call runs.
+setInterval(() => {
+  console.log(reportIteration(iteration++));
+}, 1000);
 `);
 }
 
@@ -1653,6 +1718,7 @@ function copyWorkspaceProjectSources() {
     const destinationDirectory = path.join(workspaceDiagnosticsDir, entry.name);
     copyIfExists(path.join(sourceDirectory, 'AppHost.cs'), path.join(destinationDirectory, 'AppHost.cs'));
     copyIfExists(path.join(sourceDirectory, 'Program.cs'), path.join(destinationDirectory, 'Program.cs'));
+    copyIfExists(path.join(sourceDirectory, 'app.js'), path.join(destinationDirectory, 'app.js'));
     copyIfExists(path.join(sourceDirectory, `${entry.name}.csproj`), path.join(destinationDirectory, `${entry.name}.csproj`));
   }
 }

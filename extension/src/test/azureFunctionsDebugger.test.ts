@@ -8,7 +8,7 @@ import { DotNetService } from '../debugger/languages/dotnet';
 import { cleanupRun } from '../debugger/runCleanupRegistry';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
 import { AspireResourceExtendedDebugConfiguration, AzureFunctionsLaunchConfiguration, EnvVar, LaunchOptions } from '../dcp/types';
-import { azureFunctionsCmdDelayedExpansion, azureFunctionsCmdPercentArgument, azureFunctionsUnsupportedTaskShell } from '../loc/strings';
+import { azureFunctionsCmdDelayedExpansion, azureFunctionsCmdPercentArgument, azureFunctionsDisplayName, azureFunctionsLabel, azureFunctionsUnsupportedTaskShell } from '../loc/strings';
 
 suite('Azure Functions Debugger Extension Tests', () => {
     setup(() => {
@@ -554,4 +554,102 @@ function createAspireDebugSession(): AspireDebugSession {
     };
 
     return new AspireDebugSession(parentDebugSession, {} as any, { sendNotification: sinon.stub() } as any, terminalProvider as any, () => { });
+}
+
+// The suite above drives the func-host launch path with stubs. This one covers the plain metadata
+// the debugger extension contributes - adapter identity, session naming, project resolution - which
+// the tree and the debug UI read before any process starts.
+suite('Azure Functions Debugger Metadata Tests', () => {
+    const fakeAspireDebugSession = {} as AspireDebugSession;
+
+    test('attaches the C# debugger to the worker process the Azure Functions extension starts', () => {
+        assert.strictEqual(azureFunctionsDebuggerExtension.resourceType, 'azure-functions');
+        assert.strictEqual(azureFunctionsDebuggerExtension.debugAdapter, 'coreclr');
+        assert.strictEqual(azureFunctionsDebuggerExtension.extensionId, 'ms-dotnettools.csharp');
+        assert.deepStrictEqual(azureFunctionsDebuggerExtension.getSupportedFileTypes(), ['.cs', '.csproj']);
+    });
+
+    test('names the session from the project file', () => {
+        const displayName = azureFunctionsDebuggerExtension.getDisplayName({
+            type: 'azure-functions',
+            project_path: '/workspace/Functions/Functions.csproj',
+        } as AzureFunctionsLaunchConfiguration);
+
+        assert.strictEqual(displayName, azureFunctionsDisplayName('Functions.csproj'));
+    });
+
+    test('falls back to the generic label for another resource type', () => {
+        const displayName = azureFunctionsDebuggerExtension.getDisplayName({
+            type: 'node',
+            script_path: '/workspace/app/server.js',
+        } as unknown as AzureFunctionsLaunchConfiguration);
+
+        assert.strictEqual(displayName, azureFunctionsLabel);
+    });
+
+    test('resolves the project file from the launch configuration', () => {
+        const projectFile = azureFunctionsDebuggerExtension.getProjectFile({
+            type: 'azure-functions',
+            project_path: '/workspace/Functions/Functions.csproj',
+        } as AzureFunctionsLaunchConfiguration);
+
+        assert.strictEqual(projectFile, '/workspace/Functions/Functions.csproj');
+    });
+
+    test('rejects a project file lookup for another resource type', () => {
+        assert.throws(
+            () => azureFunctionsDebuggerExtension.getProjectFile({ type: 'node', script_path: '/workspace/app/server.js' } as unknown as AzureFunctionsLaunchConfiguration),
+            /Invalid launch configuration/);
+    });
+
+    test('reports a missing Azure Functions extension instead of starting a session that cannot attach', async () => {
+        const debugConfig = createMetadataDebugConfig();
+        // Upstream builds the project before it looks the extension up, and the unit-test host has no
+        // dotnet on PATH, so the build is stubbed to keep the assertion on the extension lookup
+        // rather than on a spawn failure.
+        sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+        sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(path.join('/workspace', 'Functions', 'bin', 'Debug', 'net10.0', 'Functions.dll'));
+
+        try {
+            await assert.rejects(
+                () => azureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
+                    { type: 'azure-functions', project_path: '/workspace/Functions/Functions.csproj' } as AzureFunctionsLaunchConfiguration,
+                    [],
+                    [],
+                    { debug: true, runId: debugConfig.runId, debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession },
+                    debugConfig),
+                /ms-azuretools\.vscode-azurefunctions/);
+        }
+        finally {
+            // The adapter registers its func-host cleanup before it reaches the extension lookup, so
+            // the registry entry has to be drained here or it would leak into later tests.
+            cleanupRun(debugConfig.runId);
+            sinon.restore();
+        }
+    });
+
+    test('rejects a session configuration for another resource type', async () => {
+        const debugConfig = createMetadataDebugConfig();
+
+        await assert.rejects(
+            () => azureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
+                { type: 'node', script_path: '/workspace/app/server.js' } as unknown as AzureFunctionsLaunchConfiguration,
+                [],
+                [],
+                { debug: true, runId: debugConfig.runId, debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession },
+                debugConfig),
+            /Invalid launch configuration/);
+    });
+});
+
+function createMetadataDebugConfig(): AspireResourceExtendedDebugConfiguration {
+    return {
+        runId: `azure-functions-unit-test-${Math.random().toString(36).slice(2)}`,
+        debugSessionId: '1',
+        type: 'coreclr',
+        name: 'Azure Functions',
+        request: 'launch',
+        program: '/workspace/Functions/Functions.csproj',
+        args: [],
+    };
 }

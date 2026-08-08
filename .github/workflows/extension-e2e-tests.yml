@@ -253,7 +253,30 @@ jobs:
             archivePattern: aspire-cli-linux-x64*.tar.gz
             cliBinary: aspire
             useXvfb: true
+            # Keep the shard visible in CI, but leave the Functions fixture disabled until
+            # the hosted Linux startup timeout is root-caused.
+            disabledIssue: 'https://github.com/microsoft/aspire/issues/19151'
             installAzureFunctions: true
+          # The resource-debugger shard debugs a Node resource with VS Code's built-in js-debug, so it
+          # needs node on PATH and nothing else: both hosted runners ship it. Adding a language whose
+          # debugger lives in a marketplace extension (Python, Go, Rust, MAUI) would need that
+          # extension installed into the E2E VS Code instance first, which this matrix does not do.
+          - name: Linux
+            shardName: resource-debugger
+            spec: out/test-e2e/test-e2e/resourceDebugger.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: resource-debugger
+            spec: out/test-e2e/test-e2e/resourceDebugger.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
     defaults:
       run:
         shell: pwsh
@@ -359,8 +382,13 @@ jobs:
             Start-Sleep -Seconds $delay
           }
 
+      - name: Note skipped Azure Functions E2E shard
+        if: ${{ matrix.disabledIssue }}
+        run: |
+          Write-Host "::notice title=Azure Functions E2E shard skipped::${{ matrix.shardName }} is disabled pending ${{ matrix.disabledIssue }}."
+
       - name: Install Azure Functions E2E prerequisites
-        if: ${{ matrix.installAzureFunctions }}
+        if: ${{ matrix.installAzureFunctions && !matrix.disabledIssue }}
         shell: bash
         run: |
           set -euo pipefail
