@@ -29,6 +29,13 @@ internal sealed class TracingSqliteConnection(string connectionString, string da
 
     protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel) => BeginTransaction(isolationLevel);
 
+    internal void ConfigureSynchronousNormal()
+    {
+        using var command = base.CreateDbCommand();
+        command.CommandText = "PRAGMA synchronous = NORMAL;";
+        command.ExecuteNonQuery();
+    }
+
     /// <summary>
     /// Aborts any statement running on this connection when <paramref name="cancellationToken"/> is canceled.
     /// </summary>

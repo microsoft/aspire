@@ -4,6 +4,7 @@
 using Dapper;
 using System.Data;
 using System.Diagnostics;
+using System.Globalization;
 using Aspire.Dashboard.Utils;
 using Microsoft.Data.Sqlite;
 
@@ -92,6 +93,12 @@ public sealed class DashboardSqliteDatabase : IDisposable
         var connection = new TracingSqliteConnection(_connectionString, DatabasePath, _activitySource);
         connection.Open();
 
+        // Unlike journal_mode, synchronous is scoped to a connection and must be configured every time.
+        // NORMAL avoids syncing the WAL after every commit while preserving database consistency, although
+        // a power loss can discard the most recent transactions.
+        // See https://sqlite.org/pragma.html#pragma_synchronous.
+        connection.ConfigureSynchronousNormal();
+
         return connection;
     }
 
@@ -128,20 +135,22 @@ public sealed class DashboardSqliteDatabase : IDisposable
             }
 
             using var connection = OpenConnection();
-            // WAL and synchronous=NORMAL provide the best balance between performance and data protection for dashboard telemetry.
-            // WAL appends writes sequentially and allows readers to continue while a writer commits. NORMAL avoids syncing the WAL
-            // after every commit while preserving database consistency, although a power loss can discard the most recent transactions.
-            // See https://sqlite.org/wal.html and https://sqlite.org/pragma.html#pragma_synchronous.
-            connection.Execute("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;");
+            // WAL appends writes sequentially and allows readers to continue while a writer commits.
+            // See https://sqlite.org/wal.html.
+            connection.Execute("PRAGMA journal_mode = WAL;");
 
             var schemaTableExists = connection.QuerySingle<long>("""
                 SELECT COUNT(*)
                 FROM sqlite_schema
                 WHERE type = 'table' AND name = 'dashboard_schema';
                 """) != 0;
-            if (schemaTableExists && !ValidateSchemaVersion(connection, transaction: null, SchemaVersion))
+            if (schemaTableExists)
             {
-                throw new InvalidOperationException("The dashboard database schema does not match the expected version.");
+                var existingSchemaVersion = GetSchemaVersion(connection, transaction: null);
+                if (existingSchemaVersion != SchemaVersion)
+                {
+                    throw new InvalidOperationException($"The dashboard database schema version {FormatSchemaVersion(existingSchemaVersion)} does not match the expected version {SchemaVersion}.");
+                }
             }
 
             using var transaction = connection.BeginTransaction();
@@ -150,9 +159,10 @@ public sealed class DashboardSqliteDatabase : IDisposable
                 connection.Execute(script, new { SchemaVersion }, transaction);
             }
 
-            if (!ValidateSchemaVersion(connection, transaction, SchemaVersion))
+            var initializedSchemaVersion = GetSchemaVersion(connection, transaction);
+            if (initializedSchemaVersion != SchemaVersion)
             {
-                throw new InvalidOperationException("The dashboard database schema was not initialized to the expected version.");
+                throw new InvalidOperationException($"The dashboard database schema was initialized to version {FormatSchemaVersion(initializedSchemaVersion)} instead of the expected version {SchemaVersion}.");
             }
             transaction.Commit();
             _schemaInitialized = true;
@@ -216,13 +226,19 @@ public sealed class DashboardSqliteDatabase : IDisposable
             return false;
         }
 
-        var version = connection.QuerySingleOrDefault<int?>("""
+        return GetSchemaVersion(connection, transaction) == expectedVersion;
+    }
+
+    private static int? GetSchemaVersion(SqliteConnection connection, IDbTransaction? transaction)
+    {
+        return connection.QuerySingleOrDefault<int?>("""
             SELECT CASE
                 WHEN COUNT(*) = 1 THEN MAX(version)
                 ELSE NULL
             END
             FROM dashboard_schema;
             """, transaction: transaction);
-        return version == expectedVersion;
     }
+
+    private static string FormatSchemaVersion(int? version) => version?.ToString(CultureInfo.InvariantCulture) ?? "unknown";
 }

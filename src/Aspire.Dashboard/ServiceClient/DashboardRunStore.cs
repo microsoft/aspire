@@ -263,7 +263,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         }
 
         var updatedMetadata = metadata with { IsPinned = isPinned };
-        File.WriteAllText(metadataPath, JsonSerializer.Serialize(updatedMetadata, s_jsonOptions));
+        WriteMetadata(updatedMetadata, metadataPath);
         if (string.Equals(run.RunId, RunId, StringComparison.Ordinal))
         {
             _metadata = updatedMetadata;
@@ -393,12 +393,13 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         }
     }
 
-    private void WriteMetadata(DashboardRunMetadata metadata)
+    private void WriteMetadata(DashboardRunMetadata metadata) => WriteMetadata(metadata, _metadataPath!);
+
+    private static void WriteMetadata(DashboardRunMetadata metadata, string metadataPath)
     {
         // Write to a sibling temp file and rename over the target. Overwriting run.json in place means a
         // crash or power loss part-way through leaves a truncated file and the run becomes unreadable on
         // the next start. A rename within the same directory is atomic on both Windows and Unix.
-        var metadataPath = _metadataPath!;
         var temporaryPath = $"{metadataPath}.tmp";
 
         try

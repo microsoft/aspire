@@ -22,6 +22,35 @@ public sealed class DashboardSqliteDatabaseTests(ITestOutputHelper testOutputHel
     private readonly TemporaryWorkspace _workspace = TemporaryWorkspace.Create(testOutputHelper);
 
     [Fact]
+    public void OpenConnection_ConfiguresSynchronousNormal()
+    {
+        using var database = new DashboardSqliteDatabase(Path.Combine(_workspace.Path, "dashboard.db"), pooling: false);
+        using var firstConnection = database.OpenConnection();
+        using var secondConnection = database.OpenConnection();
+
+        Assert.Equal(1, firstConnection.QuerySingle<int>("PRAGMA synchronous;"));
+        Assert.Equal(1, secondConnection.QuerySingle<int>("PRAGMA synchronous;"));
+    }
+
+    [Fact]
+    public async Task InitializeSchema_IncompatibleVersionReportsExistingAndExpectedVersions()
+    {
+        var databasePath = Path.Combine(_workspace.Path, "dashboard.db");
+        using (var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False"))
+        {
+            connection.Open();
+            connection.Execute("CREATE TABLE dashboard_schema (version INTEGER NOT NULL) STRICT; INSERT INTO dashboard_schema VALUES (1);");
+        }
+        using var database = new DashboardSqliteDatabase(databasePath, pooling: false);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => database.InitializeSchemaAsync(CancellationToken.None));
+
+        Assert.Equal(
+            $"The dashboard database schema version 1 does not match the expected version {DashboardSqliteDatabase.SchemaVersion}.",
+            exception.Message);
+    }
+
+    [Fact]
     public async Task InitializeSchema_HistogramValuesUseBlobStorage()
     {
         using var database = new DashboardSqliteDatabase(Path.Combine(_workspace.Path, "dashboard.db"), pooling: false);

@@ -1,5 +1,6 @@
 -- Licensed to the .NET Foundation under one or more agreements.
 -- The .NET Foundation licenses this file to you under the MIT license.
+-- IMPORTANT: Increment DashboardSqliteDatabase.SchemaVersion when changing the database schema.
 
 CREATE TABLE IF NOT EXISTS telemetry_metric_instruments (
     instrument_id INTEGER PRIMARY KEY AUTOINCREMENT,
