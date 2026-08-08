@@ -34,23 +34,17 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
     public string? GroupId { get; internal set; }
 
     public void Dispose()
-    {
-        this.consumer.Dispose();
-    }
+        => this.consumer.Dispose();
 
     public int AddBrokers(string brokers)
-    {
-        return this.consumer.AddBrokers(brokers);
-    }
+        => this.consumer.AddBrokers(brokers);
 
     public void SetSaslCredentials(string username, string password)
-    {
-        this.consumer.SetSaslCredentials(username, password);
-    }
+        => this.consumer.SetSaslCredentials(username, password);
 
     public ConsumeResult<TKey, TValue>? Consume(int millisecondsTimeout)
     {
-        DateTimeOffset start = DateTimeOffset.UtcNow;
+        var start = DateTimeOffset.UtcNow;
         ConsumeResult<TKey, TValue>? result = null;
         ConsumeResult consumeResult = default;
         string? errorType = null;
@@ -67,9 +61,9 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
         }
         finally
         {
-            DateTimeOffset end = DateTimeOffset.UtcNow;
-            if (result is { IsPartitionEOF: false })
+            if (ShouldInstrument(result, errorType))
             {
+                var end = DateTimeOffset.UtcNow;
                 this.InstrumentConsumption(start, end, consumeResult, errorType);
             }
         }
@@ -77,7 +71,7 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
 
     public ConsumeResult<TKey, TValue>? Consume(CancellationToken cancellationToken = default)
     {
-        DateTimeOffset start = DateTimeOffset.UtcNow;
+        var start = DateTimeOffset.UtcNow;
         ConsumeResult<TKey, TValue>? result = null;
         ConsumeResult consumeResult = default;
         string? errorType = null;
@@ -94,9 +88,9 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
         }
         finally
         {
-            DateTimeOffset end = DateTimeOffset.UtcNow;
-            if (result is { IsPartitionEOF: false })
+            if (ShouldInstrument(result, errorType))
             {
+                var end = DateTimeOffset.UtcNow;
                 this.InstrumentConsumption(start, end, consumeResult, errorType);
             }
         }
@@ -104,7 +98,7 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
 
     public ConsumeResult<TKey, TValue>? Consume(TimeSpan timeout)
     {
-        DateTimeOffset start = DateTimeOffset.UtcNow;
+        var start = DateTimeOffset.UtcNow;
         ConsumeResult<TKey, TValue>? result = null;
         ConsumeResult consumeResult = default;
         string? errorType = null;
@@ -121,143 +115,94 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
         }
         finally
         {
-            DateTimeOffset end = DateTimeOffset.UtcNow;
-            if (result is { IsPartitionEOF: false })
+            if (ShouldInstrument(result, errorType))
             {
+                var end = DateTimeOffset.UtcNow;
                 this.InstrumentConsumption(start, end, consumeResult, errorType);
             }
         }
     }
 
     public void Subscribe(IEnumerable<string> topics)
-    {
-        this.consumer.Subscribe(topics);
-    }
+        => this.consumer.Subscribe(topics);
 
     public void Subscribe(string topic)
-    {
-        this.consumer.Subscribe(topic);
-    }
+        => this.consumer.Subscribe(topic);
 
     public void Unsubscribe()
-    {
-        this.consumer.Unsubscribe();
-    }
+        => this.consumer.Unsubscribe();
 
     public void Assign(TopicPartition partition)
-    {
-        this.consumer.Assign(partition);
-    }
+        => this.consumer.Assign(partition);
 
     public void Assign(TopicPartitionOffset partition)
-    {
-        this.consumer.Assign(partition);
-    }
+        => this.consumer.Assign(partition);
 
     public void Assign(IEnumerable<TopicPartitionOffset> partitions)
-    {
-        this.consumer.Assign(partitions);
-    }
+        => this.consumer.Assign(partitions);
 
     public void Assign(IEnumerable<TopicPartition> partitions)
-    {
-        this.consumer.Assign(partitions);
-    }
+        => this.consumer.Assign(partitions);
 
     public void IncrementalAssign(IEnumerable<TopicPartitionOffset> partitions)
-    {
-        this.consumer.IncrementalAssign(partitions);
-    }
+        => this.consumer.IncrementalAssign(partitions);
 
     public void IncrementalAssign(IEnumerable<TopicPartition> partitions)
-    {
-        this.consumer.IncrementalAssign(partitions);
-    }
+        => this.consumer.IncrementalAssign(partitions);
 
     public void IncrementalUnassign(IEnumerable<TopicPartition> partitions)
-    {
-        this.consumer.IncrementalUnassign(partitions);
-    }
+        => this.consumer.IncrementalUnassign(partitions);
 
-    public void Unassign()
-    {
-        this.consumer.Unassign();
-    }
+    public void Unassign() => this.consumer.Unassign();
 
     public void StoreOffset(ConsumeResult<TKey, TValue> result)
-    {
-        this.consumer.StoreOffset(result);
-    }
+        => this.consumer.StoreOffset(result);
 
     public void StoreOffset(TopicPartitionOffset offset)
-    {
-        this.consumer.StoreOffset(offset);
-    }
+        => this.consumer.StoreOffset(offset);
 
     public List<TopicPartitionOffset> Commit()
-    {
-        return this.consumer.Commit();
-    }
+        => this.consumer.Commit();
 
     public void Commit(IEnumerable<TopicPartitionOffset> offsets)
-    {
-        this.consumer.Commit(offsets);
-    }
+        => this.consumer.Commit(offsets);
 
     public void Commit(ConsumeResult<TKey, TValue> result)
-    {
-        this.consumer.Commit(result);
-    }
+        => this.consumer.Commit(result);
 
     public void Seek(TopicPartitionOffset tpo)
-    {
-        this.consumer.Seek(tpo);
-    }
+        => this.consumer.Seek(tpo);
 
     public void Pause(IEnumerable<TopicPartition> partitions)
-    {
-        this.consumer.Pause(partitions);
-    }
+        => this.consumer.Pause(partitions);
 
     public void Resume(IEnumerable<TopicPartition> partitions)
-    {
-        this.consumer.Resume(partitions);
-    }
+        => this.consumer.Resume(partitions);
 
     public List<TopicPartitionOffset> Committed(TimeSpan timeout)
-    {
-        return this.consumer.Committed(timeout);
-    }
+        => this.consumer.Committed(timeout);
 
     public List<TopicPartitionOffset> Committed(IEnumerable<TopicPartition> partitions, TimeSpan timeout)
-    {
-        return this.consumer.Committed(partitions, timeout);
-    }
+        => this.consumer.Committed(partitions, timeout);
 
     public Offset Position(TopicPartition partition)
-    {
-        return this.consumer.Position(partition);
-    }
+        => this.consumer.Position(partition);
 
     public List<TopicPartitionOffset> OffsetsForTimes(IEnumerable<TopicPartitionTimestamp> timestampsToSearch, TimeSpan timeout)
-    {
-        return this.consumer.OffsetsForTimes(timestampsToSearch, timeout);
-    }
+        => this.consumer.OffsetsForTimes(timestampsToSearch, timeout);
 
     public WatermarkOffsets GetWatermarkOffsets(TopicPartition topicPartition)
-    {
-        return this.consumer.GetWatermarkOffsets(topicPartition);
-    }
+        => this.consumer.GetWatermarkOffsets(topicPartition);
 
     public WatermarkOffsets QueryWatermarkOffsets(TopicPartition topicPartition, TimeSpan timeout)
-    {
-        return this.consumer.QueryWatermarkOffsets(topicPartition, timeout);
-    }
+        => this.consumer.QueryWatermarkOffsets(topicPartition, timeout);
 
     public void Close()
-    {
-        this.consumer.Close();
-    }
+        => this.consumer.Close();
+
+    private static bool ShouldInstrument(ConsumeResult<TKey, TValue>? result, string? errorType) =>
+        result is { IsPartitionEOF: false } ||
+        (result is null && errorType is not null);
 
     private static string FormatConsumeException(ConsumeException consumeException) =>
         $"ConsumeException: {consumeException.Error}";
@@ -276,7 +221,7 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
         _ => (new ConsumeResult(exception.ConsumerRecord.TopicPartitionOffset, exception.ConsumerRecord.Message.Headers, exception.ConsumerRecord.Message.Key), FormatConsumeException(exception)),
     };
 
-    private static void GetTags(string topic, out TagList tags, int? partition = null, string? errorType = null)
+    private static void GetTags(string? topic, out TagList tags, int? partition = null, string? errorType = null)
     {
         tags = new TagList()
         {
@@ -286,10 +231,15 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
             new KeyValuePair<string, object?>(
                 SemanticConventions.AttributeMessagingSystem,
                 ConfluentKafkaCommon.KafkaMessagingSystem),
-            new KeyValuePair<string, object?>(
-                SemanticConventions.AttributeMessagingDestinationName,
-                topic),
         };
+
+        if (topic is not null)
+        {
+            tags.Add(
+                new KeyValuePair<string, object?>(
+                    SemanticConventions.AttributeMessagingDestinationName,
+                    topic));
+        }
 
         if (partition is not null)
         {
@@ -308,9 +258,9 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
         }
     }
 
-    private static void RecordReceive(TopicPartition topicPartition, TimeSpan duration, string? errorType = null)
+    private static void RecordReceive(TopicPartition? topicPartition, TimeSpan duration, string? errorType = null)
     {
-        GetTags(topicPartition.Topic, out var tags, partition: topicPartition.Partition, errorType);
+        GetTags(topicPartition?.Topic, out var tags, partition: topicPartition?.Partition, errorType);
 
         ConfluentKafkaCommon.ReceiveMessagesCounter.Add(1, in tags);
         ConfluentKafkaCommon.ReceiveDurationHistogram.Record(duration.TotalSeconds, in tags);
@@ -320,11 +270,11 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
     {
         if (this.options.Traces)
         {
-            PropagationContext propagationContext = consumeResult.Headers != null
+            var propagationContext = consumeResult.Headers != null
                 ? OpenTelemetryConsumeResultExtensions.ExtractPropagationContext(consumeResult.Headers)
                 : default;
 
-            using Activity? activity = this.StartReceiveActivity(propagationContext, startTime, consumeResult.TopicPartitionOffset, consumeResult.Key);
+            using var activity = this.StartReceiveActivity(propagationContext, startTime, consumeResult.TopicPartitionOffset, consumeResult.Key);
             if (activity != null)
             {
                 if (errorType != null)
@@ -342,22 +292,24 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
 
         if (this.options.Metrics)
         {
-            TimeSpan duration = endTime - startTime;
-            RecordReceive(consumeResult.TopicPartitionOffset!.TopicPartition, duration, errorType);
+            var duration = endTime - startTime;
+            RecordReceive(consumeResult.TopicPartitionOffset?.TopicPartition, duration, errorType);
         }
     }
 
     private Activity? StartReceiveActivity(PropagationContext propagationContext, DateTimeOffset start, TopicPartitionOffset? topicPartitionOffset, object? key)
     {
+#pragma warning disable IDE0370 // Suppression is unnecessary
         var spanName = string.IsNullOrEmpty(topicPartitionOffset?.Topic)
             ? ConfluentKafkaCommon.ReceiveOperationName
             : string.Concat(topicPartitionOffset!.Topic, " ", ConfluentKafkaCommon.ReceiveOperationName);
+#pragma warning restore IDE0370 // Suppression is unnecessary
 
         ActivityLink[] activityLinks = propagationContext.ActivityContext.IsValid()
-            ? new[] { new ActivityLink(propagationContext.ActivityContext) }
-            : Array.Empty<ActivityLink>();
+            ? [new ActivityLink(propagationContext.ActivityContext)]
+            : [];
 
-        Activity? activity = ConfluentKafkaCommon.ActivitySource.StartActivity(spanName, kind: ActivityKind.Consumer, links: activityLinks, startTime: start, parentContext: default);
+        var activity = ConfluentKafkaCommon.ActivitySource.StartActivity(spanName, kind: ActivityKind.Consumer, links: activityLinks, startTime: start, parentContext: default);
         if (activity?.IsAllDataRequested == true)
         {
             activity.SetTag(SemanticConventions.AttributeMessagingSystem, ConfluentKafkaCommon.KafkaMessagingSystem);
