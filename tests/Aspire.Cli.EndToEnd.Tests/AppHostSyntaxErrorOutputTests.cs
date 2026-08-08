@@ -11,7 +11,7 @@ using Xunit;
 namespace Aspire.Cli.EndToEnd.Tests;
 
 /// <summary>
-/// End-to-end tests for AppHost syntax-error output.
+/// End-to-end tests for AppHost failures reported before startup.
 /// </summary>
 public sealed class AppHostSyntaxErrorOutputTests(ITestOutputHelper output)
 {
@@ -26,6 +26,20 @@ public sealed class AppHostSyntaxErrorOutputTests(ITestOutputHelper output)
             command: "aspire run --apphost BrokenDotNetApp.csproj",
             expectedExitCode: 6,
             outputExpectation: s_dotNetRunOutputExpectation,
+            timeout: TimeSpan.FromMinutes(2));
+    }
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public Task RunReportsMissingSdkAsBuildFailureForDotNetAppHost()
+    {
+        return RunSyntaxErrorScenarioAsync(
+            projectName: "MissingSdkAppHost",
+            template: AspireTemplate.EmptyAppHost,
+            configureProject: WriteDotNetAppHostWithMissingSdk,
+            command: "aspire run --apphost MissingSdkAppHost.csproj",
+            expectedExitCode: 6,
+            outputExpectation: s_dotNetMissingSdkRunOutputExpectation,
             timeout: TimeSpan.FromMinutes(2));
     }
 
@@ -184,6 +198,22 @@ public sealed class AppHostSyntaxErrorOutputTests(ITestOutputHelper output)
             RunCommandStrings.RecentAppHostStartupOutput
         ]);
 
+    private static readonly CommandOutputExpectation s_dotNetMissingSdkRunOutputExpectation = new(
+        RequiredText:
+        [
+            // https://github.com/microsoft/aspire/issues/19035: the whole point of the fix is that the
+            // MSBuild SDK-resolution failure reaches the user. Match on the bare error code because the
+            // full sentence ("The SDK 'Missing.AppHost.Sdk' specified could not be found.") is long
+            // enough to be wrapped across lines in the terminal recording.
+            "MSB4236",
+            "The project could not be built."
+        ],
+        ForbiddenText:
+        [
+            InteractionServiceStrings.ProjectOptionDoesntExist,
+            InteractionServiceStrings.UnbuildableAppHostsDetected
+        ]);
+
     private static readonly CommandOutputExpectation s_dotNetStartOutputExpectation = new(
         RequiredText:
         [
@@ -244,6 +274,18 @@ public sealed class AppHostSyntaxErrorOutputTests(ITestOutputHelper output)
 
             var app = builder.Build();
             await app.RunAsync();
+            """);
+    }
+
+    private static void WriteDotNetAppHostWithMissingSdk(string projectDirectory)
+    {
+        File.WriteAllText(Path.Combine(projectDirectory, "MissingSdkAppHost.csproj"), """
+            <Project Sdk="Missing.AppHost.Sdk">
+              <PropertyGroup>
+                <OutputType>Exe</OutputType>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
             """);
     }
 

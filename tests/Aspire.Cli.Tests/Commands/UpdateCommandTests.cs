@@ -75,6 +75,58 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task UpdateCommand_WhenExplicitAppHostHasUnresolvableSdk_ReachesProjectUpdater()
+    {
+        // https://github.com/microsoft/aspire/issues/19035. `aspire update` is the recovery tool for a
+        // pinned Aspire.AppHost.Sdk that can no longer be restored, so rewriting that pin is exactly what
+        // the user is asking for. Failing inside project resolution makes the break unrecoverable.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var appHostProjectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostProjectFile.FullName, """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <Sdk Name="Aspire.AppHost.Sdk" Version="0.0.0-does-not-exist" />
+            </Project>
+            """);
+
+        FileInfo? updatedProjectFile = null;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => new TestInteractionService();
+
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                // MSBuild cannot evaluate a project whose SDK cannot be resolved, so every property
+                // query fails until the pin is rewritten.
+                runner.GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (_, _, _, _, _, _) => (1, null);
+                return runner;
+            };
+
+            options.ProjectUpdaterFactory = _ => new TestProjectUpdater()
+            {
+                UpdateProjectAsyncCallback = (context, _) =>
+                {
+                    updatedProjectFile = context.AppHostFile;
+                    return Task.FromResult(new ProjectUpdateResult { UpdatedApplied = true });
+                }
+            };
+
+            options.PackagingServiceFactory = _ => new TestPackagingService();
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"update --apphost {appHostProjectFile.FullName}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(appHostProjectFile.FullName, updatedProjectFile?.FullName);
+    }
+
+    [Fact]
     public async Task UpdateCommand_WhenProjectOptionSpecified_PassesProjectFileToProjectLocator()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
