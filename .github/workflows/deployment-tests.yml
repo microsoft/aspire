@@ -371,7 +371,7 @@ jobs:
           #   resourceType - optional; compute vCPU quotas need it (dedicated | lowPriority), omit otherwise
           # Add a line to cover a new provider, region, resource, or higher limit.
           QUOTA_TARGETS: |
-            Microsoft.Network westus3 PublicIPAddresses 150
+            Microsoft.Network westus3 publicIPAddresses 150
             Microsoft.Compute westus3 StandardDASv5Family 200 dedicated
             Microsoft.Compute westus3 cores 200 dedicated
             Microsoft.ContainerService westus3 ManagedClusters 20
