@@ -135,4 +135,16 @@
   <data name="ErrorHandlerPageTitle" xml:space="preserve">
     <value>Error</value>
   </data>
+  <data name="ErrorModePageTitle" xml:space="preserve">
+    <value>Configuration Error</value>
+  </data>
+  <data name="ErrorModePageSubtitle" xml:space="preserve">
+    <value>The dashboard has configuration errors that need to be resolved</value>
+  </data>
+  <data name="ErrorModeDismissButton" xml:space="preserve">
+    <value>Continue Anyway</value>
+  </data>
+  <data name="ErrorModeWarning" xml:space="preserve">
+    <value>Warning: Continuing with configuration errors may result in security vulnerabilities or limited functionality.</value>
+  </data>
 </root>

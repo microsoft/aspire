@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Net.Sockets;
 using System.Security.Claims;
@@ -64,6 +63,11 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     private const string DashboardAuthCookieName = ".Aspire.Dashboard.Auth";
     private const string DashboardHttpAuthCookieName = ".Aspire.Dashboard.Auth.Http";
     private const string DashboardAntiForgeryCookieName = ".Aspire.Dashboard.Antiforgery";
+
+    // Safe fallback endpoint URLs used when the dashboard enters error mode. They use the well-known
+    // default dashboard ports so a user with invalid configuration can still reach the error page.
+    private const string ErrorModeFrontendUrl = "http://localhost:18888";
+    private const string ErrorModeOtlpGrpcUrl = "http://localhost:18889";
     private readonly WebApplication _app;
     private readonly ILogger<DashboardWebApplication> _logger;
     private readonly IOptionsMonitor<DashboardOptions> _dashboardOptionsMonitor;
@@ -186,34 +190,90 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         }
 
         var dashboardConfigSection = builder.Configuration.GetSection("Dashboard");
-        builder.Services.AddOptions<DashboardOptions>()
-            .Bind(dashboardConfigSection)
-            .ValidateOnStart();
-        builder.Services.AddSingleton<IPostConfigureOptions<DashboardOptions>, PostConfigureDashboardOptions>();
-        builder.Services.AddSingleton<IValidateOptions<DashboardOptions>, ValidateDashboardOptions>();
-
-        if (!TryGetDashboardOptions(builder, dashboardConfigSection, out var dashboardOptions, out var failureMessages))
+        
+        // Try to get dashboard options. If there are validation failures, we'll continue building the app
+        // but enter error mode where the dashboard shows the errors and blocks functionality.
+        bool hasValidationFailures = !TryGetDashboardOptions(builder, dashboardConfigSection, out var dashboardOptions, out var failureMessages);
+        if (hasValidationFailures)
         {
-            // The options have validation failures. Write them out to the user and return a non-zero exit code.
-            // We don't want to start the app, but we need to build the app to access the logger to log the errors.
-            _app = builder.Build();
-            _dashboardOptionsMonitor = _app.Services.GetRequiredService<IOptionsMonitor<DashboardOptions>>();
-            _validationFailures = failureMessages.ToList();
-            _logger = GetLogger();
-            Services = _app.Services;
-            WriteVersion(_logger);
-            WriteValidationFailures(_logger, _validationFailures);
-            return;
+            _validationFailures = failureMessages?.ToList() ?? new List<string> { "Failed to validate dashboard options. Check configuration and try again." };
+
+            // Start from safe defaults so the dashboard can still build and run in error mode. Error
+            // mode only serves the error page (every other request is blocked), so the endpoints just
+            // need to be valid and unsecured.
+            dashboardOptions = new DashboardOptions();
+            dashboardOptions.Frontend.AuthMode = FrontendAuthMode.Unsecured;
+            dashboardOptions.Frontend.EndpointUrls = ErrorModeFrontendUrl;
+            dashboardOptions.Otlp.AuthMode = OtlpAuthMode.Unsecured;
+            dashboardOptions.Otlp.GrpcEndpointUrl = ErrorModeOtlpGrpcUrl;
+
+            // Layer the original configuration on top of the safe defaults. This preserves valid
+            // user-provided values (e.g. custom endpoint ports) so the error page is served from the
+            // address the user expects.
+            new PostConfigureDashboardOptions(builder.Configuration).PostConfigure(string.Empty, dashboardOptions);
+
+            // PostConfigure copies the original endpoint URLs from configuration back onto the options.
+            // In error mode those values can be the malformed URLs that triggered the validation failure
+            // in the first place. Revert any endpoint URL that can't be parsed back to a safe default;
+            // otherwise the TryParseOptions calls below fail and crash startup instead of letting error
+            // mode start and display the configuration errors.
+            dashboardOptions.Frontend.EndpointUrls = SanitizeFrontendEndpointUrls(dashboardOptions.Frontend.EndpointUrls);
+            if (!CanParseEndpointUrl(dashboardOptions.Otlp.GrpcEndpointUrl))
+            {
+                dashboardOptions.Otlp.GrpcEndpointUrl = null;
+            }
+            if (!CanParseEndpointUrl(dashboardOptions.Otlp.HttpEndpointUrl))
+            {
+                dashboardOptions.Otlp.HttpEndpointUrl = null;
+            }
+            // OTLP requires at least one endpoint URL. Restore a default gRPC endpoint if both the gRPC
+            // and HTTP URLs ended up missing or invalid.
+            if (string.IsNullOrEmpty(dashboardOptions.Otlp.GrpcEndpointUrl) && string.IsNullOrEmpty(dashboardOptions.Otlp.HttpEndpointUrl))
+            {
+                dashboardOptions.Otlp.GrpcEndpointUrl = ErrorModeOtlpGrpcUrl;
+            }
+
+            // Force unsecured auth regardless of the (possibly invalid) configuration so error mode never
+            // requires a browser token or client certificate to reach the error page.
+            dashboardOptions.Frontend.AuthMode = FrontendAuthMode.Unsecured;
+            dashboardOptions.Otlp.AuthMode = OtlpAuthMode.Unsecured;
+
+            // Parse the now-valid options to initialize internal state (e.g. endpoint addresses) that
+            // later startup steps such as ConfigureKestrelEndpoints rely on.
+            if (!dashboardOptions.Frontend.TryParseOptions(out var frontendParseError))
+            {
+                throw new InvalidOperationException($"Failed to parse frontend options in error mode: {frontendParseError}");
+            }
+            if (!dashboardOptions.Otlp.TryParseOptions(out var otlpParseError))
+            {
+                throw new InvalidOperationException($"Failed to parse OTLP options in error mode: {otlpParseError}");
+            }
+
+            // Register the valid options directly instead of using configuration binding. This prevents
+            // validation errors from being thrown when options are accessed.
+            var optionsMonitor = new OptionsMonitorWrapper<DashboardOptions>(dashboardOptions);
+            builder.Services.AddSingleton<IOptions<DashboardOptions>>(optionsMonitor);
+            builder.Services.AddScoped<IOptionsSnapshot<DashboardOptions>>(sp => optionsMonitor);
+            builder.Services.AddSingleton<IOptionsMonitor<DashboardOptions>>(optionsMonitor);
         }
         else
         {
             _validationFailures = Array.Empty<string>();
+
+            // Normal path: configure options with binding and validation
+            builder.Services.AddOptions<DashboardOptions>()
+                .Bind(dashboardConfigSection)
+                .ValidateOnStart();
+            builder.Services.AddSingleton<IPostConfigureOptions<DashboardOptions>, PostConfigureDashboardOptions>();
+            builder.Services.AddSingleton<IValidateOptions<DashboardOptions>, ValidateDashboardOptions>();
         }
 
-        ConfigureKestrelEndpoints(builder, dashboardOptions);
+        var parsedDashboardOptions = dashboardOptions!;
 
-        var browserHttpsPort = dashboardOptions.Frontend.GetEndpointAddresses().FirstOrDefault(IsHttpsOrNull)?.Port;
-        var isAllHttps = browserHttpsPort is not null && IsHttpsOrNull(dashboardOptions.Otlp.GetGrpcEndpointAddress()) && IsHttpsOrNull(dashboardOptions.Otlp.GetHttpEndpointAddress());
+        ConfigureKestrelEndpoints(builder, parsedDashboardOptions);
+
+        var browserHttpsPort = parsedDashboardOptions.Frontend.GetEndpointAddresses().FirstOrDefault(IsHttpsOrNull)?.Port;
+        var isAllHttps = browserHttpsPort is not null && IsHttpsOrNull(parsedDashboardOptions.Otlp.GetGrpcEndpointAddress()) && IsHttpsOrNull(parsedDashboardOptions.Otlp.GetHttpEndpointAddress());
         if (isAllHttps)
         {
             // Explicitly configure the HTTPS redirect port as we're possibly listening on multiple HTTPS addresses
@@ -223,7 +283,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         builder.Services.AddSingleton<IPolicyEvaluator, AspirePolicyEvaluator>();
 
-        ConfigureAuthentication(builder, dashboardOptions);
+        ConfigureAuthentication(builder, parsedDashboardOptions);
 
         // Add services to the container.
         builder.Services.AddRazorComponents().AddInteractiveServerComponents();
@@ -236,13 +296,13 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             options.MimeTypes = ["text/javascript", "application/javascript", "text/css", "image/svg+xml"];
         });
         builder.Services.AddHealthChecks();
-        if (dashboardOptions.Otlp.Cors.IsCorsEnabled)
+        if (parsedDashboardOptions.Otlp.Cors.IsCorsEnabled)
         {
             builder.Services.AddCors(options =>
             {
                 options.AddPolicy(OtlpHttpEndpointsBuilder.CorsPolicyName, builder =>
                 {
-                    var corsOptions = dashboardOptions.Otlp.Cors;
+                    var corsOptions = parsedDashboardOptions.Otlp.Cors;
 
                     builder.WithOrigins(corsOptions.AllowedOrigins.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
                     builder.SetIsOriginAllowedToAllowWildcardSubdomains();
@@ -349,6 +409,9 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             options.Cookie.Name = DashboardAntiForgeryCookieName;
         });
 
+        // Register the error mode service
+        builder.Services.AddSingleton(new DashboardErrorMode(_validationFailures));
+
         _app = builder.Build();
 
         _dashboardOptionsMonitor = _app.Services.GetRequiredService<IOptionsMonitor<DashboardOptions>>();
@@ -367,12 +430,18 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         WriteVersion(_logger);
 
+        // Log validation failures if in error mode
+        if (hasValidationFailures)
+        {
+            WriteValidationFailures(_logger, _validationFailures);
+        }
+
         _app.Lifetime.ApplicationStarted.Register(() =>
         {
             ResolvedEndpointInfo? frontendEndpointInfo = null;
             if (_frontendEndPointAccessor.Count > 0)
             {
-                if (dashboardOptions.Otlp.Cors.IsCorsEnabled)
+                if (parsedDashboardOptions.Otlp.Cors.IsCorsEnabled)
                 {
                     var corsOptions = _app.Services.GetRequiredService<IOptions<CorsOptions>>().Value;
 
@@ -452,7 +521,31 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             await next(context).ConfigureAwait(false);
         });
 
-        if (!string.IsNullOrEmpty(dashboardOptions.Otlp.Cors.AllowedOrigins))
+        var errorMode = _app.Services.GetRequiredService<DashboardErrorMode>();
+        if (errorMode.IsErrorMode)
+        {
+            // Error mode middleware: redirect browser navigation to the error page and reject every other
+            // non-asset request until the user explicitly dismisses the configuration errors.
+            _app.Use(async (context, next) =>
+            {
+                if (!errorMode.ShouldBlock || IsErrorModeAllowedRequest(context.Request.Path))
+                {
+                    await next(context).ConfigureAwait(false);
+                    return;
+                }
+
+                if (IsHtmlNavigationRequest(context.Request))
+                {
+                    context.Response.Redirect("/errormode");
+                    return;
+                }
+
+                context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+                await context.Response.WriteAsync("Dashboard is in error mode due to configuration errors.").ConfigureAwait(false);
+            });
+        }
+
+        if (!string.IsNullOrEmpty(parsedDashboardOptions.Otlp.Cors.AllowedOrigins))
         {
             // Only add CORS middleware when there is CORS configuration.
             // The default policy only allows the dashboard origin. Certain endpoints expose CORS for external origins, e.g. OTLP HTTP endpoints.
@@ -514,15 +607,15 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         _app.MapTerminalWebSocket();
 
         // OTLP HTTP services.
-        _app.MapHttpOtlpApi(dashboardOptions.Otlp);
+        _app.MapHttpOtlpApi(parsedDashboardOptions.Otlp);
 
         // OTLP gRPC services.
         _app.MapGrpcService<OtlpGrpcMetricsService>();
         _app.MapGrpcService<OtlpGrpcTraceService>();
         _app.MapGrpcService<OtlpGrpcLogsService>();
 
-        _app.MapTelemetryApi(dashboardOptions);
-        _app.MapDashboardApi(dashboardOptions);
+        _app.MapTelemetryApi(parsedDashboardOptions);
+        _app.MapDashboardApi(parsedDashboardOptions);
         _app.MapDashboardHealthChecks();
     }
 
@@ -569,6 +662,47 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             // Display version and commit like 8.0.0-preview.2.23619.3+17dd83f67c6822954ec9a918ef2d048a78ad4697
             logger.LogInformation("Aspire dashboard version: {Version}", informationalVersion);
         }
+    }
+
+    private static bool IsErrorModeAllowedRequest(PathString path)
+    {
+        if (path.StartsWithSegments("/errormode", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWithSegments("/_content", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWithSegments("/_framework", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWithSegments("/css", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWithSegments("/framework", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWithSegments("/js", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        // The error page is rendered by the same interactive Blazor host as the rest of the dashboard.
+        // Keep the circuit endpoint reachable so the dismissal button can run, while other dashboard
+        // and ingestion endpoints stay blocked by default.
+        if (path.StartsWithSegments("/_blazor", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var value = path.Value;
+        if (value is null)
+        {
+            return false;
+        }
+
+        return value.EndsWith(".css", StringComparison.OrdinalIgnoreCase) ||
+            value.EndsWith(".ico", StringComparison.OrdinalIgnoreCase) ||
+            value.EndsWith(".js", StringComparison.OrdinalIgnoreCase) ||
+            value.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
+            value.EndsWith(".svg", StringComparison.OrdinalIgnoreCase) ||
+            value.EndsWith(".woff", StringComparison.OrdinalIgnoreCase) ||
+            value.EndsWith(".woff2", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsHtmlNavigationRequest(HttpRequest request)
+    {
+        return HttpMethods.IsGet(request.Method) &&
+            request.Headers.Accept.ToString().Contains("text/html", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -937,15 +1071,12 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
     public int Run()
     {
-        if (_validationFailures.Count > 0)
-        {
-            return ExitCodeValidationFailure;
-        }
-
         try
         {
+            // Start even when configuration validation failed so standalone dashboard users can
+            // see the dismissible error page instead of only getting terminal output.
             _app.Run();
-            return 0;
+            return _validationFailures.Count > 0 ? ExitCodeValidationFailure : 0;
         }
         catch (IOException ex) when (ContainsAddressInUse(ex))
         {
@@ -1020,13 +1151,12 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
     public Task StartAsync(CancellationToken cancellationToken = default)
     {
-        Debug.Assert(_validationFailures.Count == 0, "Validation failures: " + Environment.NewLine + string.Join(Environment.NewLine, _validationFailures));
+        // Allow starting even with validation failures - error mode will handle it
         return _app.StartAsync(cancellationToken);
     }
 
     public Task StopAsync(CancellationToken cancellationToken = default)
     {
-        Debug.Assert(_validationFailures.Count == 0, "Validation failures: " + Environment.NewLine + string.Join(Environment.NewLine, _validationFailures));
         return _app.StopAsync(cancellationToken);
     }
 
@@ -1036,4 +1166,34 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     }
 
     private static bool IsHttpsOrNull(BindingAddress? address) => address == null || string.Equals(address.Scheme, "https", StringComparison.Ordinal);
+
+    // Returns true when the URL is empty (nothing to revert) or can be parsed as a binding address.
+    // Used in error mode to decide whether a configured endpoint URL should be reverted to a safe default.
+    private static bool CanParseEndpointUrl(string? url) =>
+        string.IsNullOrEmpty(url) || OptionsHelpers.TryParseBindingAddress(url, out _);
+
+    // The frontend supports multiple ';'-separated URLs and requires at least one. Parse each part
+    // independently using the same split semantics as FrontendOptions.TryParseOptions, keeping the
+    // parts that parse as binding addresses in their original order. This preserves valid user-provided
+    // URLs (e.g. a custom port) even when another part in the list is malformed, instead of discarding
+    // the whole list. Falls back to ErrorModeFrontendUrl only when no valid URL remains so error mode
+    // still has an address to bind and serve the error page from.
+    private static string SanitizeFrontendEndpointUrls(string? urls)
+    {
+        if (string.IsNullOrEmpty(urls))
+        {
+            return ErrorModeFrontendUrl;
+        }
+
+        var validParts = new List<string>();
+        foreach (var part in urls.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (OptionsHelpers.TryParseBindingAddress(part, out _))
+            {
+                validParts.Add(part);
+            }
+        }
+
+        return validParts.Count > 0 ? string.Join(';', validParts) : ErrorModeFrontendUrl;
+    }
 }
