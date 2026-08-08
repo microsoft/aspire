@@ -20,7 +20,16 @@ export type AppHostRestartHandler = (debugSessionId: string) => boolean;
 export type DapOutputCategory = 'console' | 'important' | 'stdout' | 'stderr' | 'debug' | 'telemetry' | (string & {}) | undefined;
 export type AppHostOutputHandler = (output: string, category: DapOutputCategory) => void;
 
-export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapter: string, onAppHostRestartRequested?: AppHostRestartHandler, onAppHostOutput?: AppHostOutputHandler): vscode.Disposable {
+export interface AppHostTrackerOptions {
+    // VS Code invokes every factory registered for an adapter type for every matching
+    // debug session. Scope AppHost callbacks to the synthetic Aspire session that
+    // registered this tracker so concurrent AppHosts cannot consume each other's output.
+    debugSessionId: string;
+    onRestartRequested?: AppHostRestartHandler;
+    onOutput?: AppHostOutputHandler;
+}
+
+export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapter: string, appHostTracker?: AppHostTrackerOptions): vscode.Disposable {
     return vscode.debug.registerDebugAdapterTrackerFactory(debugAdapter, {
         createDebugAdapterTracker(session: vscode.DebugSession) {
             const configuration = session.configuration;
@@ -28,6 +37,7 @@ export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapt
                 return undefined;
             }
             const debugSessionId = configuration.debugSessionId;
+            const isOwnedAppHostSession = configuration.isApphost && appHostTracker?.debugSessionId === debugSessionId;
 
             let debuggeeExitCode: number | undefined;
 
@@ -40,9 +50,9 @@ export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapt
                     if (configuration.isApphost
                         && (message.command === 'disconnect' || message.command === 'terminate')
                         && message.arguments?.restart
-                        && onAppHostRestartRequested
-                        && debugSessionId) {
-                        const shouldSuppress = onAppHostRestartRequested(debugSessionId);
+                        && isOwnedAppHostSession
+                        && appHostTracker.onRestartRequested) {
+                        const shouldSuppress = appHostTracker.onRestartRequested(debugSessionId);
                         if (shouldSuppress) {
                             message.arguments.restart = false;
                         }
@@ -53,7 +63,15 @@ export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapt
                         const { category, output } = message.body;
                         if (typeof output === 'string' && category !== 'telemetry') {
                             if (configuration.isApphost) {
-                                onAppHostOutput?.(output, category);
+                                if (isOwnedAppHostSession) {
+                                    // Only mirror into the Aspire parent console. The AppHost child
+                                    // session keeps its own DAP event because it owns a separate
+                                    // debug console: the extension starts it without
+                                    // `DebugConsoleMode.MergeWithParent`, and VS Code maps an
+                                    // unset console mode to a separate REPL.
+                                    // https://github.com/microsoft/vscode/blob/main/src/vs/workbench/api/common/extHostDebugService.ts
+                                    appHostTracker.onOutput?.(output, category);
+                                }
                                 return;
                             }
 

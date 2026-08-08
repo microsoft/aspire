@@ -28,6 +28,45 @@ public class BackchannelLoggerProviderTests
         Assert.Equal(LogLevel.Information, snapshot[0].LogLevel);
         Assert.Equal(LogLevel.Warning, snapshot[1].LogLevel);
         Assert.Equal(LogLevel.Error, snapshot[2].LogLevel);
+        Assert.Equal([1, 2, 3], snapshot.Select(entry => entry.SequenceNumber));
+    }
+
+    [Fact]
+    public void Log_StampsEverySequenceNumberAboveZero()
+    {
+        using var provider = new BackchannelLoggerProvider();
+        var logger = provider.CreateLogger("TestCategory");
+
+        // The CLI branches its structured debug-console log path on SequenceNumber > 0. This
+        // provider is the only producer of BackchannelLogEntry, so a zero can only mean the
+        // entry came off the wire from an AppHost that predates the field — which is exactly
+        // what the CLI infers. Numbering must therefore never start at or return to 0.
+        foreach (var level in new[] { LogLevel.Trace, LogLevel.Debug, LogLevel.Information, LogLevel.Warning, LogLevel.Error, LogLevel.Critical })
+        {
+            logger.Log(level, "Message");
+        }
+
+        var (snapshot, subscriberId, _) = provider.Subscribe();
+        provider.Unsubscribe(subscriberId);
+
+        Assert.Equal([1, 2, 3, 4, 5, 6], snapshot.Select(entry => entry.SequenceNumber));
+    }
+
+    [Fact]
+    public void Log_CapturesExceptionSeparatelyFromFormattedMessage()
+    {
+        using var provider = new BackchannelLoggerProvider();
+        var logger = provider.CreateLogger("TestCategory");
+        var exception = new InvalidOperationException("boom");
+
+        logger.LogError(exception, "Request failed");
+
+        var (snapshot, subscriberId, _) = provider.Subscribe();
+        provider.Unsubscribe(subscriberId);
+
+        var entry = Assert.Single(snapshot);
+        Assert.Equal("Request failed", entry.Message);
+        Assert.Equal(exception.ToString(), entry.Exception);
     }
 
     [Fact]
@@ -49,7 +88,9 @@ public class BackchannelLoggerProviderTests
         Assert.Equal(1000, snapshot.Count);
         // First entry should be "Message 1" (index 0 was evicted)
         Assert.Equal("Message 1", snapshot[0].Message);
+        Assert.Equal(2, snapshot[0].SequenceNumber);
         Assert.Equal("Message 1000", snapshot[999].Message);
+        Assert.Equal(1001, snapshot[999].SequenceNumber);
     }
 
     [Fact]

@@ -220,6 +220,59 @@ export async function waitForDebugConsoleOutput(expectedText: string, appHostPat
     return event;
 }
 
+export type DebugConsoleOutput = ExtensionE2EStateFile['debugConsoleOutputs'][number];
+
+export function getDebugConsoleOutputs(appHostPath = getPrimaryAppHostProjectPath()): readonly DebugConsoleOutput[] {
+    return readStateFile().debugConsoleOutputs.filter(event =>
+        event.appHostPath !== undefined && isSamePath(event.appHostPath, appHostPath));
+}
+
+/**
+ * Waits until no new debug console output has been recorded for an AppHost for `settleMs`.
+ *
+ * The AppHost log records reach the parent console over two independent transports — the
+ * child debug adapter's stream and the CLI backchannel — so a duplicate can trail the first
+ * copy by an arbitrary amount. Counting occurrences the moment a marker appears would pass
+ * even when the second copy is still in flight.
+ */
+export async function waitForSettledDebugConsoleOutput(
+    appHostPath = getPrimaryAppHostProjectPath(),
+    settleMs = 8000,
+    timeoutMs = 120000): Promise<readonly DebugConsoleOutput[]> {
+    const started = Date.now();
+    let previous = getDebugConsoleOutputs(appHostPath);
+    let unchangedSince = Date.now();
+
+    while (Date.now() - started < timeoutMs) {
+        await delay(500);
+
+        const current = getDebugConsoleOutputs(appHostPath);
+        // Entries are append-only with a monotonic sequence, and the bridge trims the oldest
+        // once its buffer fills, so the highest sequence is the only reliable change signal.
+        const changed = current.length !== previous.length
+            || getHighestDebugConsoleSequence(current) !== getHighestDebugConsoleSequence(previous);
+        if (changed) {
+            previous = current;
+            unchangedSince = Date.now();
+            continue;
+        }
+
+        if (Date.now() - unchangedSince >= settleMs) {
+            return current;
+        }
+    }
+
+    throw new Error(`Timed out after ${timeoutMs}ms waiting for debug console output for '${appHostPath}' to settle.`);
+}
+
+export function countDebugConsoleOccurrences(outputs: readonly DebugConsoleOutput[], marker: string): number {
+    return outputs.reduce((total, event) => total + (event.output.split(marker).length - 1), 0);
+}
+
+function getHighestDebugConsoleSequence(outputs: readonly DebugConsoleOutput[]): number {
+    return Math.max(0, ...outputs.map(event => event.sequence));
+}
+
 export function getTreeAppHostLabel(state: ExtensionStateSnapshot): string {
     return state.workspaceAppHostName ?? path.basename(getPrimaryAppHostProjectPath());
 }

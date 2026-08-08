@@ -8,7 +8,8 @@ import { createProjectDebuggerExtension, projectDebuggerExtension, quoteCommandL
 import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, ProjectLaunchConfiguration } from '../dcp/types';
 import * as io from '../utils/io';
 import { ResourceDebuggerExtension } from '../debugger/debuggerExtensions';
-import { AppHostParentOutputFilter, AspireDebugSession } from '../debugger/AspireDebugSession';
+import { AspireDebugSession } from '../debugger/AspireDebugSession';
+import { AppHostParentOutputFilter } from '../debugger/appHostLogOutput';
 
 class TestDotNetService {
     private _getDotNetTargetPathStub: sinon.SinonStub;

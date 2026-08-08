@@ -14,12 +14,6 @@ import { assertNoTerminalControlCharacters } from './cmdShim';
 // Re-exported so existing importers keep a single implementation of the guard.
 export { assertNoTerminalControlCharacters };
 
-export const enum AnsiColors {
-    Green = '\x1b[32m',
-    Yellow = '\x1b[33m',
-    Blue = '\x1b[34m',
-}
-
 export interface AspireTerminal {
     terminal: vscode.Terminal;
     dispose: () => void;

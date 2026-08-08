@@ -950,9 +950,39 @@ internal static class CompletionStates
 
 internal class BackchannelLogEntry
 {
+    /// <summary>
+    /// Gets or sets a monotonically increasing identifier for this entry, starting at 1.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The sequence is scoped to a single AppHost process and restarts at 1 whenever the
+    /// AppHost restarts. Consumers use it to discard entries they have already seen: the
+    /// provider serves a replay buffer, so a backchannel reconnect re-delivers records
+    /// that were already handled.
+    /// </para>
+    /// <para>
+    /// The value is <c>0</c> when the AppHost predates this member. It is not nullable —
+    /// changing the type would break the wire contract for existing consumers — so
+    /// <c>0</c> is the "unknown" sentinel and receivers must not rely on ordering when
+    /// they see it.
+    /// </para>
+    /// </remarks>
+    public long SequenceNumber { get; set; }
     public required EventId EventId { get; set; }
     public required LogLevel LogLevel { get; set; }
     public required string Message { get; set; }
+
+    /// <summary>
+    /// Gets or sets the formatted exception text, or <see langword="null" /> when the log
+    /// call carried no exception.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Message" /> is produced by the logger's formatter, which by default is
+    /// <c>(state, exception) =&gt; state.ToString()</c> and therefore drops the exception
+    /// entirely. Carrying it separately is the only way the stack trace survives the trip
+    /// over the backchannel.
+    /// </remarks>
+    public string? Exception { get; set; }
     public required DateTimeOffset Timestamp { get; set; }
     public required string CategoryName { get; set; }
 }

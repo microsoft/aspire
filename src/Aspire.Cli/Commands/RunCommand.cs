@@ -99,6 +99,14 @@ internal sealed class RunCommand : BaseCommand
     // error. Keep guest AppHost startup waits alive briefly so those failures are reported instead of hidden.
     private static readonly TimeSpan s_startupFailureObservationWindow = TimeSpan.FromSeconds(2);
 
+    // Bounds the structured-log capability probe. A wedged extension host never answers the probe
+    // and never faults it, so without a bound the lazy await in CaptureAppHostLogsAsync would stall
+    // the AppHost log loop forever, taking the CLI log file down with it -- the artifact used to
+    // diagnose exactly that hang. Two seconds is generous for a JSON-RPC round trip to an
+    // already-connected local host, and the clock starts when the probe does, concurrently with
+    // stream setup, so a healthy extension has normally answered before the first entry arrives.
+    private static readonly TimeSpan s_structuredLogSupportProbeTimeout = TimeSpan.FromSeconds(2);
+
     protected override bool UpdateNotificationsEnabled => !_isDetachMode;
 
     protected override TimeSpan GracefulShutdownBudget => s_gracefulShutdownBudget;
@@ -1081,22 +1089,82 @@ internal sealed class RunCommand : BaseCommand
         {
             await Task.Yield();
 
+            // The extension capability is negotiated once because it is a property of the
+            // connected extension host and the log stream can be high volume. The AppHost side
+            // needs no probe: every entry carries its own proof (see below).
+            //
+            // The probe is started but deliberately not awaited here. Awaiting it would leave the
+            // AppHost log stream unsubscribed for the duration of a round trip to the extension,
+            // and BackchannelLoggerProvider replays at most MaxReplayEntries and evicts the oldest
+            // beyond that. A slow extension would therefore cost the CLI log file the earliest
+            // startup records permanently, which is the opposite of what that file is for. The
+            // answer is only needed once an entry is actually forwarded, so it is awaited there.
+            var structuredLogSupportProbe = ExtensionHelper.IsExtensionHost(interactionService, out var extensionInteractionService, out var extensionBackchannel)
+                ? SupportsStructuredAppHostLogsAsync(extensionBackchannel, cancellationToken)
+                : Task.FromResult(false);
+
             var logEntries = backchannel.GetAppHostLogEntriesAsync(cancellationToken);
+            bool? extensionSupportsStructuredLogs = null;
 
             await foreach (var entry in logEntries.WithCancellation(cancellationToken))
             {
-                if (ExtensionHelper.IsExtensionHost(interactionService, out var extensionInteractionService, out _))
+                // Write to the unified log file via FileLoggerProvider first. The AppHost sends the
+                // exception separately because the default log formatter drops it, so append it
+                // here or the CLI log file keeps losing stack traces. This runs ahead of the
+                // extension forwarding below so a slow or wedged extension can never cost the CLI
+                // its own log file, which is the artifact used to diagnose exactly that failure.
+                var shortCategory = FileLoggerProvider.GetShortCategoryName(entry.CategoryName);
+                var message = entry.Exception is { Length: > 0 } exceptionText
+                    ? $"{entry.Message}{Environment.NewLine}{exceptionText}"
+                    : entry.Message;
+                fileLoggerProvider.WriteLog(entry.Timestamp, entry.LogLevel, $"AppHost/{shortCategory}", message);
+
+                // Trace and Debug are deliberately never forwarded to the extension. Each forwarded
+                // entry costs one blocking JSON-RPC round trip on a single-reader pump, so those two
+                // levels are the difference between a bounded trickle and an unbounded one, and the
+                // extension loses nothing by not receiving them: the AppHost also writes every record
+                // to its own console, which arrives over the debug adapter and is parsed and styled
+                // by the same code path. Forwarding them would only add a second copy to deduplicate.
+                if (extensionInteractionService is null || entry.LogLevel is LogLevel.Trace or LogLevel.Debug)
                 {
-                    if (entry.LogLevel is not LogLevel.Trace and not LogLevel.Debug)
-                    {
-                        // Send only information+ level logs to the extension host.
-                        extensionInteractionService.WriteDebugSessionMessage(entry.Message, entry.LogLevel is not LogLevel.Error and not LogLevel.Critical, "\x1b[2m");
-                    }
+                    continue;
                 }
 
-                // Write to the unified log file via FileLoggerProvider
-                var shortCategory = FileLoggerProvider.GetShortCategoryName(entry.CategoryName);
-                fileLoggerProvider.WriteLog(entry.Timestamp, entry.LogLevel, $"AppHost/{shortCategory}", entry.Message);
+                // Resolved on the first entry that is actually forwarded, and once only. The stream
+                // is already subscribed by this point, so waiting here can delay extension delivery
+                // but can no longer drop records from the CLI log file. The probe is bounded by
+                // s_structuredLogSupportProbeTimeout so an extension that never answers degrades to
+                // the legacy path instead of stalling this loop, and with it the log file.
+                extensionSupportsStructuredLogs ??= await structuredLogSupportProbe.ConfigureAwait(false);
+
+                // BackchannelLoggerProvider.WriteEntry stamps a sequence number starting at 1
+                // under its lock and is the only producer of BackchannelLogEntry, so a non-zero
+                // value proves the AppHost understands the identity-bearing shape. An AppHost
+                // that predates it deserializes into the current type as 0, which the structured
+                // path cannot use: the extension needs the sequence number to recognize replayed
+                // entries after a reconnect and to correlate an entry with the console copy of
+                // the same record. Testing the sentinel per entry also covers the auxiliary
+                // backchannel, which re-exports this stream under a different capability
+                // vocabulary that a negotiated token would not reach.
+                if (extensionSupportsStructuredLogs is true && entry.SequenceNumber > 0)
+                {
+                    extensionInteractionService.WriteAppHostLogEntry(new ExtensionAppHostLogEntry
+                    {
+                        SequenceNumber = entry.SequenceNumber,
+                        Timestamp = entry.Timestamp,
+                        LogLevel = entry.LogLevel.ToString(),
+                        Message = entry.Message,
+                        CategoryName = entry.CategoryName,
+                        EventId = entry.EventId.Id,
+                        EventName = entry.EventId.Name,
+                        Exception = entry.Exception,
+                    });
+                }
+                else
+                {
+                    // Older extensions only accept plain debug-session messages.
+                    extensionInteractionService.WriteDebugSessionMessage(entry.Message, entry.LogLevel is not LogLevel.Error and not LogLevel.Critical, "\x1b[2m");
+                }
             }
         }
         catch (OperationCanceledException)
@@ -1111,6 +1179,33 @@ internal sealed class RunCommand : BaseCommand
             // token fires because logCaptureCancellationSource.Cancel() runs in the finally
             // block after the AppHost process has already exited.
             return;
+        }
+    }
+
+    /// <summary>
+    /// Determines whether the connected extension host understands the identity-bearing log
+    /// entry shape written by <c>writeAppHostLogEntry</c>.
+    /// </summary>
+    /// <remarks>
+    /// Unlike the AppHost side, this cannot be inferred from the data: an extension with no
+    /// handler for the RPC faults the call rather than reporting anything about itself.
+    /// </remarks>
+    private static async Task<bool> SupportsStructuredAppHostLogsAsync(IExtensionBackchannel extensionBackchannel, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await extensionBackchannel.HasCapabilityAsync(KnownCapabilities.AppHostLogOutput, cancellationToken)
+                .WaitAsync(s_structuredLogSupportProbeTimeout, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // Every failure, including cancellation and the timeout above, degrades to the legacy
+            // path rather than propagating. The caller starts this probe without awaiting it and
+            // only awaits it if an entry is forwarded, so an exception escaping here could end up
+            // on a task nobody observes. Reporting "not supported" is also the right answer for the
+            // caller: an extension that cannot answer the probe in time cannot be sent the
+            // structured shape either.
+            return false;
         }
     }
 

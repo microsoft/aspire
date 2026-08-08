@@ -31,3 +31,19 @@ export function applyTextStyle(text: string, style: string | null | undefined): 
 
   return `${style}${text}\x1b[0m`;
 }
+
+/**
+ * Standard SGR codes the debug console and the Aspire terminal render through the
+ * workbench ANSI palette, so they follow the active color theme. 256-color and
+ * truecolor escapes would not.
+ *
+ * These live here rather than next to the terminal provider because that module
+ * imports `vscode`, and the debug console log formatting is host-free so it can be
+ * exercised directly under Node.
+ */
+export const enum AnsiColors {
+  Dim = '\x1b[2m',
+  Green = '\x1b[32m',
+  Yellow = '\x1b[33m',
+  Blue = '\x1b[34m',
+}

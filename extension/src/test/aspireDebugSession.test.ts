@@ -443,6 +443,68 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         assert.strictEqual(stopDebuggingStub.secondCall.args[0], parentDebugSession);
     });
 
+    test('renders one debug console line per AppHost log record across both sources', () => {
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/apphost.cs',
+                command: 'run',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const aspireDebugSession = new AspireDebugSession(
+            parentDebugSession as unknown as vscode.DebugSession,
+            {} as any,
+            {} as any,
+            {} as any,
+            () => { });
+        const messages: any[] = [];
+        const subscription = aspireDebugSession.onDidSendMessage(message => messages.push(message));
+
+        try {
+            // The AppHost console writer and the CLI backchannel both carry the warning,
+            // so only the first arrival may reach the parent debug console.
+            (aspireDebugSession as any).sendAppHostMessage("warn: Example.Category[7]\n      Port is already allocated.\n", 'stdout');
+            aspireDebugSession.sendAppHostLogEntry({
+                sequenceNumber: 1,
+                timestamp: '2026-08-07T00:00:00.0000000+00:00',
+                logLevel: 'Warning',
+                message: 'Port is already allocated.',
+                categoryName: 'Example.Category',
+                eventId: 7,
+                eventName: null,
+                exception: null,
+            });
+            aspireDebugSession.sendAppHostLogEntry({
+                sequenceNumber: 2,
+                timestamp: '2026-08-07T00:00:01.0000000+00:00',
+                logLevel: 'Error',
+                message: 'Startup failed.',
+                categoryName: 'Example.Category',
+                eventId: 8,
+                eventName: null,
+                exception: null,
+            });
+
+            assert.deepStrictEqual(
+                messages.filter(message => message.event === 'output').map(message => message.body),
+                [
+                    { category: 'stdout', output: '\x1b[33mExample.Category: Warning: Port is already allocated.\x1b[0m\n' },
+                    { category: 'stderr', output: 'Example.Category: Error: Startup failed.\n' }
+                ]);
+        }
+        finally {
+            subscription.dispose();
+        }
+    });
+
     test('stopDebugging still stops the Aspire parent session when AppHost stop fails', async () => {
         const parentDebugSession = {
             id: 'aspire-session',

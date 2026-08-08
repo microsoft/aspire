@@ -141,6 +141,10 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
     {
     }
 
+    public void WriteAppHostLogEntry(ExtensionAppHostLogEntry entry)
+    {
+    }
+
     public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines)
     {
         DisplayedLines.AddRange(lines);

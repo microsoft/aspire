@@ -47,6 +47,12 @@ internal static class KnownCapabilities
     // before opting into newline-delimited JSON candidate discovery.
     public const string LsJsonStream = "ls-json-stream.v1";
 
+    // Queried on the extension, never advertised by the CLI. It reports that the extension host has
+    // a `writeAppHostLogEntry` handler, which the CLI cannot infer any other way: an extension
+    // without one faults the RPC. Nothing on the extension side reads it back from the CLI, so it
+    // is deliberately absent from GetAdvertisedCapabilities below.
+    public const string AppHostLogOutput = "apphost-log-output.v1";
+
     /// <summary>
     /// Gets the set of capabilities this CLI advertises to extensions.
     /// </summary>

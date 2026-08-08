@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import * as sinon from 'sinon';
 
-import { IInteractionService, InteractionService } from '../../server/interactionService';
+import { addInteractionServiceEndpoints, IInteractionService, InteractionService } from '../../server/interactionService';
 import { ICliRpcClient, RpcClient, ValidationResult } from '../../server/rpcClient';
 import { extensionLogOutputChannel } from '../../utils/logging';
 import AspireRpcServer, { RpcServerConnectionInfo } from '../../server/AspireRpcServer';
@@ -795,6 +795,54 @@ suite('InteractionService endpoints', () => {
 			sandbox.restore();
 		}
 	});
+
+	test("writeDebugSessionMessage RPC preserves legacy output that has no correlation identity", async () => {
+		const sentMessages: { message: string; addNewLine: boolean; category: string }[] = [];
+		const mockDebugSession = {
+			sendMessage: (message: string, addNewLine: boolean, category: string) => {
+				sentMessages.push({ message, addNewLine, category });
+			},
+		} as unknown as AspireDebugSession;
+		const rpcClient = {} as ICliRpcClient;
+		const interactionService = new InteractionService(() => mockDebugSession, rpcClient);
+		const endpoint = getInteractionServiceEndpoint(interactionService, rpcClient, 'writeDebugSessionMessage');
+
+		await endpoint('Warning from AppHost.', true, '\x1b[2m');
+		await endpoint('Native failure.\nSystem.InvalidOperationException: boom', false, '\x1b[2m');
+		await endpoint('Repeated message.', true, '\x1b[2m');
+		await endpoint('Repeated message.', true, '\x1b[2m');
+
+		assert.deepStrictEqual(sentMessages, [
+			{ message: '\x1b[2mWarning from AppHost.\x1b[0m', addNewLine: true, category: 'stdout' },
+			{ message: '\x1b[2mNative failure.\nSystem.InvalidOperationException: boom\x1b[0m', addNewLine: true, category: 'stderr' },
+			{ message: '\x1b[2mRepeated message.\x1b[0m', addNewLine: true, category: 'stdout' },
+			{ message: '\x1b[2mRepeated message.\x1b[0m', addNewLine: true, category: 'stdout' },
+		]);
+	});
+
+	test("writeAppHostLogEntry RPC preserves structured identity for session-owned correlation", async () => {
+		const sendAppHostLogEntryStub = sinon.stub();
+		const mockDebugSession = {
+			sendAppHostLogEntry: sendAppHostLogEntryStub,
+		} as unknown as AspireDebugSession;
+		const rpcClient = {} as ICliRpcClient;
+		const interactionService = new InteractionService(() => mockDebugSession, rpcClient);
+		const endpoint = getInteractionServiceEndpoint(interactionService, rpcClient, 'writeAppHostLogEntry');
+		const entry = {
+			sequenceNumber: 12,
+			timestamp: '2026-08-07T00:00:00.0000000+00:00',
+			logLevel: 'Warning',
+			message: 'Repeated message.',
+			categoryName: 'Example.Category',
+			eventId: 7,
+			eventName: null,
+			exception: null,
+		};
+
+		await endpoint(entry);
+
+		assert.strictEqual(sendAppHostLogEntryStub.calledOnceWith(entry), true);
+	});
 });
 
 type RpcServerTestInfo = {
@@ -850,6 +898,25 @@ function restoreEnvironmentVariable(name: string, value: string | undefined): vo
 	}
 
 	process.env[name] = value;
+}
+
+function getInteractionServiceEndpoint(
+	interactionService: IInteractionService,
+	rpcClient: ICliRpcClient,
+	name: string
+): (...args: any[]) => Promise<unknown> {
+	const handlers = new Map<string, (...args: any[]) => Promise<unknown>>();
+	const connection = {
+		onRequest: (method: string, handler: (...args: any[]) => Promise<unknown>) => {
+			handlers.set(method, handler);
+		},
+	};
+
+	addInteractionServiceEndpoints(connection as any, interactionService, rpcClient, callback => callback);
+
+	const handler = handlers.get(name);
+	assert.ok(handler, `Expected ${name} interaction endpoint to be registered.`);
+	return handler;
 }
 
 class TestCliRpcClient implements ICliRpcClient {

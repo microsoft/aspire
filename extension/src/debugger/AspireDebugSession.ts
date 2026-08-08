@@ -1,15 +1,14 @@
 import * as vscode from "vscode";
 import { EventEmitter } from "vscode";
 import { promises as fs } from "fs";
-import { createDebugAdapterTracker, AppHostOutputHandler, AppHostRestartHandler } from "./adapterTracker";
+import { createDebugAdapterTracker, AppHostTrackerOptions } from "./adapterTracker";
 import { AspireResourceExtendedDebugConfiguration, AspireResourceDebugSession, EnvVar, AspireExtendedDebugConfiguration, NodeLaunchConfiguration, ProcessRestartedNotification, ProjectLaunchConfiguration, SessionTerminatedNotification, StartAppHostOptions } from "../dcp/types";
 import { extensionLogOutputChannel } from "../utils/logging";
 import AspireDcpServer, { generateDcpIdPrefix } from "../dcp/AspireDcpServer";
 import { spawnCliProcess } from "./languages/cli";
 import { disconnectingFromSession, launchingWithAppHost, launchingWithDirectory, processExceptionOccurred, processExitedWithCode, aspireDashboard, appHostSessionTerminated } from "../loc/strings";
 import { projectDebuggerExtension } from "./languages/dotnet";
-import { AnsiColors } from "../utils/AspireTerminalProvider";
-import { applyTextStyle } from "../utils/strings";
+import { AnsiColors, applyTextStyle } from "../utils/strings";
 import { nodeDebuggerExtension } from "./languages/node";
 import { cleanupRun } from "./runCleanupRegistry";
 import { runWithRunStartWrappers } from "./runStartRegistry";
@@ -23,6 +22,8 @@ import { EnvironmentVariables } from "../utils/environment";
 import { sendTelemetryEvent } from "../utils/telemetry";
 import { classifyAppHostPath, classifyAppHostDirectory } from "../utils/appHostLanguage";
 import { bucketAspireCommand } from "../utils/telemetryBuckets";
+import { AppHostLogOutputCoordinator } from "./appHostLogOutput";
+import type { AppHostLogEntry } from "./appHostLogOutput";
 import { getAppHostTargetVersion } from "../utils/appHostTargetVersion";
 import type { AspireDebugConsoleOutputEvent } from "../types/extensionApi";
 import { appHostTelemetryTargetPathConfigKey } from "./AspireDebugConfigurationMetadata";
@@ -56,7 +57,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
   private readonly _onDidSendMessage = new EventEmitter<any>();
   private readonly _onDidSendDebugConsoleOutput = new EventEmitter<AspireDebugConsoleOutputEvent>();
   private _messageSeq = 1;
-  private readonly _appHostParentOutputFilter = new AppHostParentOutputFilter();
+  private readonly _appHostLogOutput = new AppHostLogOutputCoordinator();
 
   private readonly _session: vscode.DebugSession;
   private readonly _rpcServer: AspireRpcServer;
@@ -448,13 +449,13 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     }
   }
 
-  createDebugAdapterTrackerCore(debugAdapter: string, onAppHostRestartRequested?: AppHostRestartHandler, onAppHostOutput?: AppHostOutputHandler) {
+  createDebugAdapterTrackerCore(debugAdapter: string, appHostTracker?: AppHostTrackerOptions) {
     if (this._trackedDebugAdapters.includes(debugAdapter)) {
       return;
     }
 
     this._trackedDebugAdapters.push(debugAdapter);
-    this._disposables.push(createDebugAdapterTracker(this._dcpServer, debugAdapter, onAppHostRestartRequested, onAppHostOutput));
+    this._disposables.push(createDebugAdapterTracker(this._dcpServer, debugAdapter, appHostTracker));
   }
 
   private static readonly _nodeAppHostExtensions = ['.js', '.ts', '.mjs', '.mts', '.cjs', '.cts'];
@@ -464,6 +465,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
 
   async startAppHost(projectFile: string, args: string[], environment: EnvVar[], debug: boolean, options: StartAppHostOptions): Promise<void> {
     try {
+      this._appHostLogOutput.reset();
       const fileExtension = path.extname(projectFile).toLowerCase();
       const isNodeAppHost = AspireDebugSession._nodeAppHostExtensions.includes(fileExtension);
       const isCSharpAppHost = AspireDebugSession._csharpAppHostExtensions.includes(fileExtension);
@@ -485,16 +487,16 @@ export class AspireDebugSession implements vscode.DebugAdapter {
       // explicitly opt in to filtering.
       this.createDebugAdapterTrackerCore(
         debuggerExtension.debugAdapter,
-        (debugSessionId) => {
-          if (debugSessionId === this.debugSessionId) {
+        {
+          debugSessionId: this.debugSessionId,
+          onRestartRequested: () => {
             this._appHostRestartRequested = true;
             return true; // suppress VS Code's child restart
-          }
-          return false;
+          },
+          onOutput: isCSharpAppHost
+            ? (output, category) => this.sendAppHostMessage(output, category)
+            : (output, category) => this.sendMessage(output, false, category === 'stderr' ? 'stderr' : 'stdout')
         },
-        isCSharpAppHost
-          ? (output, category) => this.sendAppHostMessage(output, category)
-          : (output, category) => this.sendMessage(output, false, category === 'stderr' ? 'stderr' : 'stdout')
       );
 
       let appHostArgs: string[];
@@ -540,6 +542,10 @@ export class AspireDebugSession implements vscode.DebugAdapter {
 
       const disposable = vscode.debug.onDidTerminateDebugSession(async session => {
         if (this._appHostDebugSession && session.id === this._appHostDebugSession.id) {
+          // Emit whatever was still being assembled before the banner, so a record the
+          // AppHost logged on its way out is not lost and still reads in order.
+          this.flushAppHostLogOutput();
+
           if (!this._appHostRestartRequested) {
             this.sendMessageWithEmoji("ℹ️", applyTextStyle(appHostSessionTerminated, AnsiColors.Yellow));
           }
@@ -839,6 +845,8 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     // Windows' SIGTERM → 143 exit code which is not normalized to 0) would
     // be missed and the summary would under-report failures.
     this._disposables.forEach(disposable => disposable.dispose());
+    this.flushAppHostLogOutput();
+    this._appHostLogOutput.reset();
     this._trackedDebugAdapters = [];
     void this.stopParentDebugSessionOnce();
     this._onDidSendDebugConsoleOutput.dispose();
@@ -925,9 +933,23 @@ export class AspireDebugSession implements vscode.DebugAdapter {
   }
 
   private sendAppHostMessage(message: string, category: string | undefined) {
-    const filteredMessage = this._appHostParentOutputFilter.filter(message, category);
-    if (filteredMessage) {
-      this.sendMessage(filteredMessage.output, false, filteredMessage.category);
+    for (const output of this._appHostLogOutput.handleDebugAdapterOutput(message, category)) {
+      this.sendMessage(output.output, false, output.category);
+    }
+  }
+
+  private flushAppHostLogOutput() {
+    for (const output of this._appHostLogOutput.flush()) {
+      this.sendMessage(output.output, false, output.category);
+    }
+  }
+
+  sendAppHostLogEntry(entry: AppHostLogEntry) {
+    const output = this._appHostLogOutput.handleBackchannelEntry(entry);
+    if (output) {
+      // The coordinator terminates every record it renders, so never append another
+      // newline here.
+      this.sendMessage(output.output, false, output.category);
     }
   }
 
@@ -980,152 +1002,4 @@ export function buildAspireCommandArgs(command: string, commandArgs: string[], e
 
 function isErrorWithStreamedDebugConsoleOutput(err: unknown): boolean {
   return err instanceof Error && (err as Error & { debugConsoleOutputAlreadyWritten?: boolean }).debugConsoleOutputAlreadyWritten === true;
-}
-
-export interface AppHostParentOutput {
-  output: string;
-  category: 'stdout' | 'stderr';
-}
-
-export class AppHostParentOutputFilter {
-  private _continuingDroppedLog = false;
-  private _continuingErrorBlock = false;
-  private _lastCategory: string | undefined;
-
-  filter(output: string, category: string | undefined): AppHostParentOutput | undefined {
-    // Per the DAP spec the `category` field is optional; clients should treat a
-    // missing category as `'console'`. Normalize once at the boundary so state
-    // tracking and per-line classification see a consistent value, and so
-    // category-less debug-adapter output gets the same suppression as `'console'`
-    // instead of being mirrored to the parent debug console as stdout.
-    const normalizedCategory = category ?? 'console';
-
-    if (normalizedCategory === 'debug') {
-      this.resetState();
-      this._lastCategory = normalizedCategory;
-      return undefined;
-    }
-
-    // Continuation state (dropped log / error block) only makes sense within a single
-    // logical stream. When the DAP category changes (e.g. console -> stdout) we are
-    // looking at a different stream and previous indented-continuation context no
-    // longer applies.
-    if (normalizedCategory !== this._lastCategory) {
-      this.resetState();
-    }
-    this._lastCategory = normalizedCategory;
-
-    const segments = output.match(/[^\r\n]*(?:\r\n|\r|\n|$)/g)?.filter(segment => segment.length > 0) ?? [];
-    let filteredOutput = '';
-    // If the DAP delivered this chunk on stderr, keep the whole emitted message on
-    // stderr — the channel itself is authoritative regardless of per-line classification.
-    let hasErrorOutput = normalizedCategory === 'stderr';
-
-    for (const segment of segments) {
-      const outputCategory = this.getLineCategory(segment, normalizedCategory);
-      if (outputCategory) {
-        filteredOutput += segment;
-        hasErrorOutput ||= outputCategory === 'stderr';
-      }
-    }
-
-    if (filteredOutput.length === 0) {
-      return undefined;
-    }
-
-    return {
-      output: filteredOutput,
-      category: hasErrorOutput ? 'stderr' : 'stdout'
-    };
-  }
-
-  private getLineCategory(segment: string, category: string): 'stdout' | 'stderr' | undefined {
-    const line = segment.replace(/(?:\r\n|\r|\n)$/, '');
-    const trimmedLine = line.trim();
-
-    if (trimmedLine.length === 0) {
-      return !this._continuingDroppedLog && this.shouldMirrorConsoleOutput(category) ? this.getCurrentCategory(category) : undefined;
-    }
-
-    if (this._continuingDroppedLog && isIndentedContinuation(line)) {
-      return undefined;
-    }
-
-    if (this._continuingErrorBlock && isIndentedContinuation(line)) {
-      return 'stderr';
-    }
-
-    const logSeverity = getConsoleLogSeverity(trimmedLine);
-    if (logSeverity) {
-      this._continuingDroppedLog = logSeverity === 'low';
-      this._continuingErrorBlock = logSeverity === 'severe';
-
-      return logSeverity === 'low' ? undefined : this.getCurrentCategory(category);
-    }
-
-    const isSevereOutput = isSevereRuntimeOutputLine(trimmedLine);
-    this._continuingDroppedLog = false;
-    this._continuingErrorBlock = isSevereOutput;
-
-    if (category === 'console' && !isSevereOutput) {
-      return undefined;
-    }
-
-    return this.getCurrentCategory(category);
-  }
-
-  private shouldMirrorConsoleOutput(category: string): boolean {
-    return category !== 'console' || this._continuingErrorBlock;
-  }
-
-  private getCurrentCategory(category: string): 'stdout' | 'stderr' {
-    return category === 'stderr' || this._continuingErrorBlock ? 'stderr' : 'stdout';
-  }
-
-  private resetState() {
-    this._continuingDroppedLog = false;
-    this._continuingErrorBlock = false;
-  }
-}
-
-function getConsoleLogSeverity(line: string): 'low' | 'normal' | 'severe' | undefined {
-  const defaultConsoleLogLevel = /^(trce|dbug|info|warn|fail|crit):\s/.exec(line)?.[1];
-  if (defaultConsoleLogLevel) {
-    return defaultConsoleLogLevel === 'trce' || defaultConsoleLogLevel === 'dbug'
-      ? 'low'
-      : defaultConsoleLogLevel === 'fail' || defaultConsoleLogLevel === 'crit'
-        ? 'severe'
-        : 'normal';
-  }
-
-  // Microsoft.Extensions.Logging "simple" console formatter emits lines shaped like
-  // `<CategoryTypeName>[<EventId>]?: <Level>: <message>`. Real category names are
-  // namespaced .NET type names containing at least one dot (e.g.
-  // `Aspire.Hosting.Health.ResourceHealthCheckService`). Requiring a dot avoids
-  // matching arbitrary user stdout like `"Status: Error: connection refused"`.
-  const simpleConsoleLogLevel = /^[A-Za-z_]\w*(?:\.\w+)+(?:\[[^\]]+\])?:\s*(Trace|Debug|Information|Warning|Error|Critical):\s/.exec(line)?.[1];
-  if (simpleConsoleLogLevel) {
-    return simpleConsoleLogLevel === 'Trace' || simpleConsoleLogLevel === 'Debug'
-      ? 'low'
-      : simpleConsoleLogLevel === 'Error' || simpleConsoleLogLevel === 'Critical'
-        ? 'severe'
-        : 'normal';
-  }
-
-  return undefined;
-}
-
-function isIndentedContinuation(line: string): boolean {
-  return /^\s+\S/.test(line);
-}
-
-function isSevereRuntimeOutputLine(line: string): boolean {
-  // Typed exception — `Namespace.Type.NameException: message` (also matches plain `System.Exception:`).
-  return /(?:^|\s)(?:[A-Za-z_][\w`]*\.)+(?:[A-Za-z_][\w`]*Exception|Exception):/.test(line)
-    // JavaScript / Node.js error shapes — `Uncaught TypeError: ...`, `Error [CODE]: ...`.
-    || /^(?:Uncaught\s+)?(?:[A-Za-z_$][\w$]*Error|Error)(?:\s+\[[^\]]+\])?:/.test(line)
-    // Anchored fatal-marker prefixes only — bare word matches like `\bfailed\b` produced
-    // false positives on user stdout (`"Failed payment retry queued"`, file paths
-    // containing "error", etc.).
-    || /^(?:fatal|critical|panic|aborted|segmentation\s+fault|unhandled\s+exception)\b/i.test(line);
 }

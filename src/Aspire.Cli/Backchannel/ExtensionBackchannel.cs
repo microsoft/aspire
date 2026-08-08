@@ -46,6 +46,7 @@ internal interface IExtensionBackchannel
     Task StartDebugSessionAsync(string workingDirectory, string? projectFile, bool debug, DebugSessionOptions? options, CancellationToken cancellationToken);
     Task DisplayPlainTextAsync(string text, CancellationToken cancellationToken);
     Task WriteDebugSessionMessageAsync(string message, bool stdout, string? textStyle, CancellationToken cancellationToken);
+    Task WriteAppHostLogEntryAsync(ExtensionAppHostLogEntry entry, CancellationToken cancellationToken);
 }
 
 internal sealed class ExtensionBackchannel : IExtensionBackchannel
@@ -715,6 +716,20 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
         await rpc.InvokeWithCancellationAsync(
             "writeDebugSessionMessage",
             [_token, message, stdout, textStyle],
+            cancellationToken);
+    }
+
+    public async Task WriteAppHostLogEntryAsync(ExtensionAppHostLogEntry entry, CancellationToken cancellationToken)
+    {
+        await ConnectAsync(cancellationToken);
+
+        using var activity = _activitySource.StartActivity();
+
+        var rpc = await _rpcTaskCompletionSource.Task;
+
+        await rpc.InvokeWithCancellationAsync(
+            "writeAppHostLogEntry",
+            [_token, entry],
             cancellationToken);
     }
 
