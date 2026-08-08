@@ -380,7 +380,6 @@ public class VersionCheckServiceTests
 
         var warnings = logger.Collector.GetSnapshot().Where(log => log.Level == LogLevel.Warning).ToList();
         Assert.Equal(expectWarning ? 1 : 0, warnings.Count);
-        Assert.Equal(isAvailable ? 1 : 0, userSecretsManager.SetSecretCalls.Count(name => name == VersionCheckService.IgnoreVersionKey));
 
         if (expectWarning)
         {

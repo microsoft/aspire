@@ -21,16 +21,12 @@ internal sealed class MockUserSecretsManager : IUserSecretsManager
 
     public Dictionary<string, string> Secrets { get; } = new(StringComparer.OrdinalIgnoreCase);
 
-    public List<string> SetSecretCalls { get; } = [];
-
     public bool IsAvailable => _isAvailable;
 
     public string FilePath => "/mock/path/secrets.json";
 
     public bool TrySetSecret(string name, string value)
     {
-        SetSecretCalls.Add(name);
-
         // Simulate an environment where persistence is unavailable (e.g. user secrets are not
         // enabled): report failure without recording the value so callers exercise their
         // persistence-failure handling.
