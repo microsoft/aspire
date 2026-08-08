@@ -22,17 +22,42 @@ jobs:
         with:
           version: v0.72.0
 
+      # Cache the local .NET SDK (installed into .dotnet by restore) so subsequent
+      # sessions skip the multi-hundred-MB SDK + runtime download. Keyed on the files
+      # that determine the SDK/runtime versions; falls back to the latest partial match.
+      - name: Cache local .NET SDK
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: .dotnet
+          key: ${{ runner.os }}-${{ runner.arch }}-aspire-dotnet-${{ hashFiles('global.json', 'eng/Versions.props') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-aspire-dotnet-
+
+      # Cache restored NuGet packages so restore is incremental across sessions.
+      # build.sh runs without -ci, so Arcade uses the global cache (~/.nuget/packages).
+      - name: Cache NuGet packages
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-${{ runner.arch }}-aspire-nuget-${{ hashFiles('**/Directory.Packages.props', 'global.json', 'eng/Versions.props') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-aspire-nuget-
+
       - name: Build solution
         # a full build is too slow; also do not fail on errors, continue so that
-        # copilot can attempt to recover
-        run: ./build.sh -restore || true
+        # copilot can attempt to recover. `time` surfaces restore duration in the log
+        # so changes to this workflow can be compared run-to-run.
+        run: time ./build.sh -restore || true
 
       # Install verify tool for snapshot testing
       - name: Install verify tool
         run: ./dotnet.sh tool install --global Verify.Tool --version 0.6.0 || true
 
       - name: Setup PATH
-        run:
+        # Must be a block scalar (|): a plain scalar folds these two lines into a
+        # single command, so the second echo would not run and the repo-local
+        # .dotnet SDK would never be added to PATH.
+        run: |
           echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
           echo "$PWD/.dotnet/" >> $GITHUB_PATH
 
