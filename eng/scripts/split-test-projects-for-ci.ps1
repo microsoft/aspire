@@ -36,10 +36,19 @@
 .PARAMETER RepoRoot
   Path to the repository root (for locating the ExtractTestPartitions tool).
 
+.PARAMETER IncludeTraitFilter
+  Optional. When set, uses positive trait filtering for class discovery instead
+  of the default exclusion-based approach. For example, "quarantined=true" will
+  run --list-tests with --filter-trait quarantined=true to discover only classes
+  that contain quarantined tests. Used by specialized test runners (quarantine,
+  outerloop) to build a lean matrix of only relevant classes.
+
 .NOTES
   PowerShell 7+
   Fails fast if ExtractTestPartitions cannot be built or run.
-  Fails fast if zero test classes discovered when in class mode.
+  Fails fast if zero test classes are discovered in default class mode.
+  With IncludeTraitFilter, zero matching classes writes an empty partitions file
+  so specialized workflows can skip projects with no matching trait.
   Only runs --list-tests when no partitions are found in the assembly.
 #>
 
@@ -58,7 +67,10 @@ param(
   [string]$TestPartitionsJsonFile,
 
   [Parameter(Mandatory=$true)]
-  [string]$RepoRoot
+  [string]$RepoRoot,
+
+  [Parameter(Mandatory=$false)]
+  [string]$IncludeTraitFilter = ""
 )
 
 $ErrorActionPreference = 'Stop'
@@ -130,11 +142,24 @@ $mode = if ($collections.Count -gt 0) { 'collection' } else { 'class' }
 if ($mode -eq 'class') {
   Write-Host "No partitions found. Running --list-tests to extract class names..."
 
-  # Run the test assembly with --list-tests to get all test names
-  $testOutput = & $RunCommand --filter-not-trait category=failing --list-tests --filter-not-trait outerloop=true --filter-not-trait quarantined=true 2>&1
+  # Run the test assembly with --list-tests to get all test names.
+  # When IncludeTraitFilter is set, use positive filtering to discover only classes
+  # with the specified trait (e.g., quarantined=true). Otherwise, use the default
+  # exclusion-based approach that skips quarantined/outerloop tests.
+  if ($IncludeTraitFilter) {
+    Write-Host "Using positive trait filter for class discovery: $IncludeTraitFilter"
+    $testOutput = & $RunCommand --filter-trait $IncludeTraitFilter --filter-not-trait category=failing --list-tests 2>&1
+  } else {
+    $testOutput = & $RunCommand --filter-not-trait category=failing --list-tests --filter-not-trait outerloop=true --filter-not-trait quarantined=true 2>&1
+  }
 
-  if ($LASTEXITCODE -ne 0) {
-    Write-Error "Test listing command failed with exit code $LASTEXITCODE"
+  $testListingExitCode = $LASTEXITCODE
+
+  # Microsoft.Testing.Platform uses exit code 8 when filters match zero tests.
+  # Positive trait discovery probes projects that may contain no matching tests,
+  # so treat only that no-tests code as retryable and keep other failures fatal.
+  if ($testListingExitCode -ne 0 -and -not ($IncludeTraitFilter -and $testListingExitCode -eq 8)) {
+    Write-Error "Test listing command failed with exit code $testListingExitCode"
   }
 
   # Extract class names from test listing
@@ -154,7 +179,14 @@ if ($mode -eq 'class') {
   }
 
   if ($classes.Count -eq 0) {
-    Write-Error "No test classes discovered matching prefix '$TestClassNamePrefixForCI'."
+    if ($IncludeTraitFilter) {
+      # When using positive trait filtering (specialized mode), zero classes is
+      # expected — this project may not have any tests with the specified trait.
+      # Write an empty partitions file so the matrix builder skips it gracefully.
+      Write-Host "No test classes found matching prefix '$TestClassNamePrefixForCI' with trait filter '$IncludeTraitFilter'. This project will be skipped."
+    } else {
+      Write-Error "No test classes discovered matching prefix '$TestClassNamePrefixForCI'."
+    }
   }
 }
 

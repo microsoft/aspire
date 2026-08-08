@@ -382,6 +382,7 @@ jobs:
           GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
           ASPIRE_E2E_CLI_ARCHIVE_DIR: ${{ fromJson(inputs.properties).requiresCliArchive == true && format('{0}/cli-archives', github.workspace) || '' }}
           GH_TOKEN: ${{ (fromJson(inputs.properties).requiresGitHubToken == true || fromJson(inputs.properties).requiresCliArchive == true) && github.token || '' }}
+          EXPLICIT_FAILING_FILTER: ${{ !contains(inputs.extraTestArgs, '--filter-query') && '--filter-not-trait "category=failing"' || '' }}
         run: |
           # Start heartbeat monitor in background (60s interval to reduce log noise)
           ${{ github.workspace }}/${{ env.DOTNET_SCRIPT }} ${{ github.workspace }}/tools/scripts/Heartbeat.cs 60 &
@@ -394,7 +395,7 @@ jobs:
             ${{ env.EFFECTIVE_MTP_BASE_ARGS }} \
             --report-trx --report-trx-filename "${{ inputs.testShortName }}.trx" \
             --results-directory ${{ github.workspace }}/testresults \
-            --filter-not-trait "category=failing" \
+            ${{ env.EXPLICIT_FAILING_FILTER }} \
             ${{ inputs.extraTestArgs }} || TEST_EXIT_CODE=$?
 
           # Persist the MTP exit code so the "Verify test results exist" gate can classify the outcome
@@ -435,6 +436,7 @@ jobs:
           GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
           ASPIRE_E2E_CLI_ARCHIVE_DIR: ${{ fromJson(inputs.properties).requiresCliArchive == true && format('{0}/cli-archives', github.workspace) || '' }}
           GH_TOKEN: ${{ (fromJson(inputs.properties).requiresGitHubToken == true || fromJson(inputs.properties).requiresCliArchive == true) && github.token || '' }}
+          EXPLICIT_FAILING_FILTER: ${{ !contains(inputs.extraTestArgs, '--filter-query') && '--filter-not-trait "category=failing"' || '' }}
         run: |
           # Start heartbeat monitor in background (output goes to console directly)
           # Use 60s interval on Windows to reduce overhead on constrained 2-core runners
@@ -450,7 +452,7 @@ jobs:
               ${{ env.EFFECTIVE_MTP_BASE_ARGS }} `
               --report-trx --report-trx-filename "${{ inputs.testShortName }}.trx" `
               --results-directory ${{ github.workspace }}/testresults `
-              --filter-not-trait "category=failing" `
+              ${{ env.EXPLICIT_FAILING_FILTER }} `
               ${{ inputs.extraTestArgs }}
             $testExitCode = $LASTEXITCODE
           }
@@ -509,6 +511,7 @@ jobs:
           TEST_EXIT_CODE=0
           ${{ env.DOTNET_SCRIPT }} test --project ${{ env.TEST_PROJECT_PATH }} \
             /p:ContinuousIntegrationBuild=true \
+            /p:DisableDefaultFailingTestFilter=${{ contains(inputs.extraTestArgs, '--filter-query') && 'true' || 'false' }} \
             /p:TrxFileNamePrefix="${{ inputs.testShortName }}" \
             -bl:${{ github.workspace }}/testresults/test.binlog \
             --no-launch-profile \
@@ -560,9 +563,16 @@ jobs:
           ASPIRE_E2E_CLI_ARCHIVE_DIR: ${{ fromJson(inputs.properties).requiresCliArchive == true && format('{0}/cli-archives', github.workspace) || '' }}
           GH_TOKEN: ${{ (fromJson(inputs.properties).requiresGitHubToken == true || fromJson(inputs.properties).requiresCliArchive == true) && github.token || '' }}
         run: |
+          # Invoke dotnet.exe directly for test execution on Windows. The repo-local
+          # dotnet.cmd shim forwards arguments through cmd.exe's %* expansion; xUnit
+          # query filters contain cmd metacharacters like & and !, which are reparsed
+          # by cmd.exe and fail before MTP starts.
+          $dotnetSdkDir = (Get-Content -Path "${{ github.workspace }}\artifacts\toolset\sdk.txt" -Raw).Trim()
+          $dotnetExecutable = Join-Path $dotnetSdkDir "dotnet.exe"
+
           # Start heartbeat monitor in background (output goes to console directly)
           # Use 60s interval on Windows to reduce overhead on constrained 2-core runners
-          $heartbeatProcess = Start-Process -FilePath "${{ env.DOTNET_SCRIPT }}" `
+          $heartbeatProcess = Start-Process -FilePath $dotnetExecutable `
             -ArgumentList "${{ github.workspace }}\tools\scripts\Heartbeat.cs 60" `
             -NoNewWindow -PassThru
 
@@ -570,8 +580,9 @@ jobs:
             # Ensure UTF-8 encoding for all output on Windows
             [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
             # Run tests
-            & ${{ env.DOTNET_SCRIPT }} test --project ${{ env.TEST_PROJECT_PATH }} `
+            & $dotnetExecutable test --project ${{ env.TEST_PROJECT_PATH }} `
               /p:ContinuousIntegrationBuild=true `
+              /p:DisableDefaultFailingTestFilter=${{ contains(inputs.extraTestArgs, '--filter-query') && 'true' || 'false' }} `
               /p:TrxFileNamePrefix="${{ inputs.testShortName }}" `
               -bl:${{ github.workspace }}/testresults/test.binlog `
               --no-launch-profile `
@@ -611,7 +622,7 @@ jobs:
           exit $testExitCode
 
       - name: Verify test results exist
-        if: ${{ inputs.ignoreTestFailures }}
+        if: ${{ always() && inputs.ignoreTestFailures }}
         shell: pwsh
         run: |
           # Classify the test run using the MTP exit code captured by the test step.

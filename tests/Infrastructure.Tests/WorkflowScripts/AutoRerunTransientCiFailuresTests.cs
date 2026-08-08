@@ -84,6 +84,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
     [Theory]
     [InlineData("Final Results")]
     [InlineData("Tests / Final Test Results")]
+    [InlineData("Tests / run_tests / Test Results")]
     [RequiresTools(["node"])]
     public async Task IgnoresConfiguredAggregatorJobsEntirely(string jobName)
     {

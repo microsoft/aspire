@@ -521,6 +521,28 @@ public sealed class TestTriggerMapTests
             $"nothing in enforce mode): {string.Join(", ", unrouted)}");
     }
 
+    [Fact]
+    public void CriticalReusableTestWorkflowsAreRoutedToAll()
+    {
+        var allGlobs = s_map.PathRules
+            .Where(r => r.Targets.Contains("ALL", StringComparer.Ordinal))
+            .SelectMany(r => r.Paths)
+            .ToList();
+
+        bool RoutedToAll(string file) => allGlobs.Any(g => TestTriggerMap.GlobMatches(g, file));
+
+        foreach (var workflow in new[]
+        {
+            ".github/workflows/tests.yml",
+            ".github/workflows/run-tests-core.yml",
+            ".github/workflows/run-tests.yml",
+            ".github/workflows/specialized-test-runner.yml"
+        })
+        {
+            Assert.True(RoutedToAll(workflow), $"{workflow} must be routed to ALL.");
+        }
+    }
+
     // Text of a top-level tests.yml job block: from "\n  <id>:" up to the next line indented exactly
     // two spaces that starts a new key (the next job), or end of file. Top-level jobs sit at two-space
     // indent and everything inside a job is indented further, so a two-space `word:` reliably delimits
