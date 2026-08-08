@@ -12,6 +12,9 @@ suite('Debug Adapter Tracker Tests', () => {
 
     setup(() => {
         dcpServer = sinon.createStubInstance(AspireDcpServer);
+        dcpServer.createRunSessionNotificationHandler.callsFake(() => notification => {
+            dcpServer.sendNotification(notification);
+        });
 
         // Create a mock debug session with AspireResourceExtendedDebugConfiguration
         debugSession = {
@@ -172,7 +175,7 @@ suite('Debug Adapter Tracker Tests', () => {
         }
     });
 
-    test('undefined exit code is sent as 0', async () => {
+    test('undefined exit code is omitted', async () => {
         const disposable = createDebugAdapterTracker(dcpServer as any, 'coreclr');
         const factory = registerFactoryStub.lastCall.args[1];
         const tracker = factory.createDebugAdapterTracker(debugSession);
@@ -180,10 +183,57 @@ suite('Debug Adapter Tracker Tests', () => {
         // Call onExit with undefined
         tracker.onExit(undefined);
 
-        // Verify notification was sent with exit code 0
         assert.strictEqual(dcpServer.sendNotification.calledOnce, true);
         const notification = dcpServer.sendNotification.firstCall.args[0] as SessionTerminatedNotification;
-        assert.strictEqual(notification.exit_code, 0);
+        assert.strictEqual('exit_code' in notification, false);
+
+        disposable.dispose();
+    });
+
+    test('uses the run-scoped notification handler for late adapter callbacks', async () => {
+        const runNotificationHandler = sinon.stub();
+        dcpServer.createRunSessionNotificationHandler.returns(runNotificationHandler);
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'coreclr');
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker(debugSession);
+
+        tracker.onExit(7);
+
+        assert.strictEqual(dcpServer.createRunSessionNotificationHandler.calledOnceWith('run-123'), true);
+        assert.strictEqual(runNotificationHandler.calledOnce, true);
+        assert.deepStrictEqual(runNotificationHandler.firstCall.args[0], {
+            notification_type: 'sessionTerminated',
+            session_id: 'run-123',
+            dcp_id: 'debug-456',
+            exit_code: 7,
+        });
+        assert.strictEqual(dcpServer.sendNotification.called, false);
+
+        disposable.dispose();
+    });
+
+    test('reserves generic notification sending for the AppHost session', async () => {
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'coreclr');
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker({
+            ...debugSession,
+            configuration: {
+                ...debugSession.configuration,
+                isApphost: true,
+                runId: '',
+            },
+        });
+
+        tracker.onExit(0);
+
+        assert.strictEqual(dcpServer.createRunSessionNotificationHandler.called, false);
+        assert.strictEqual(dcpServer.sendNotification.calledOnce, true);
+        assert.deepStrictEqual(dcpServer.sendNotification.firstCall.args[0], {
+            notification_type: 'sessionTerminated',
+            session_id: '',
+            dcp_id: 'debug-456',
+            exit_code: 0,
+        });
 
         disposable.dispose();
     });
