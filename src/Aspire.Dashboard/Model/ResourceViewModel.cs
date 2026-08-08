@@ -155,6 +155,107 @@ public sealed class ResourceViewModel
               ?? Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Unhealthy;
     }
 
+    /// <summary>
+    /// Properties whose values describe the current run of a resource rather than its identity or
+    /// configuration. When a parent row displays a replica's state these have to travel with that state,
+    /// otherwise the parent shows a state derived from the replica alongside stale values of its own
+    /// (for example a leftover non-zero exit code, or a "waiting for" list the replica has moved past).
+    /// </summary>
+    private static readonly string[] s_stateOwnedPropertyNames =
+    [
+        KnownProperties.Resource.State,
+        KnownProperties.Resource.ExitCode,
+        KnownProperties.Resource.StartTime,
+        KnownProperties.Resource.StopTime,
+        KnownProperties.Resource.HealthState,
+        KnownProperties.Resource.WaitingFor
+    ];
+
+    /// <summary>
+    /// Determines whether this resource and <paramref name="other"/> agree on every property in
+    /// <see cref="s_stateOwnedPropertyNames"/>, treating a property either side is missing as absent.
+    /// Callers compare this alongside <see cref="State"/> and friends so a replica change that only moves
+    /// a state-owned property (an exit code, for instance) still counts as a change to a derived parent
+    /// row. Runs allocation free because it is on the steady-state path of every resource update batch.
+    /// </summary>
+    /// <remarks>
+    /// This compares the protobuf values rather than the <see cref="ResourcePropertyViewModel"/> wrappers
+    /// because the wrapper is a plain class with reference equality. Every snapshot allocates new wrappers,
+    /// so comparing wrappers would report a change on every batch. <see cref="Value"/> compares structurally.
+    /// </remarks>
+    internal bool HasSameStateOwnedProperties(ResourceViewModel other)
+    {
+        foreach (var name in s_stateOwnedPropertyNames)
+        {
+            var hasValue = Properties.TryGetValue(name, out var property);
+            var otherHasValue = other.Properties.TryGetValue(name, out var otherProperty);
+
+            if (hasValue != otherHasValue)
+            {
+                return false;
+            }
+
+            if (hasValue && !Equals(property!.Value, otherProperty!.Value))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    internal ResourceViewModel WithStateFrom(ResourceViewModel stateSource)
+    {
+        return new ResourceViewModel
+        {
+            Name = Name,
+            ResourceType = ResourceType,
+            DisplayName = DisplayName,
+            Uid = Uid,
+            ReplicaIndex = ReplicaIndex,
+            State = stateSource.State,
+            KnownState = stateSource.KnownState,
+            StateStyle = stateSource.StateStyle,
+            CreationTimeStamp = CreationTimeStamp,
+            StartTimeStamp = stateSource.StartTimeStamp,
+            StopTimeStamp = stateSource.StopTimeStamp,
+            Environment = Environment,
+            Urls = Urls,
+            Volumes = Volumes,
+            Relationships = Relationships,
+            Properties = ProjectStateOwnedProperties(stateSource),
+            Commands = Commands,
+            HealthReports = stateSource.HealthReports,
+            IsHidden = IsHidden,
+            SupportsDetailedTelemetry = SupportsDetailedTelemetry,
+            IconName = IconName,
+            IconVariant = IconVariant
+        };
+    }
+
+    /// <summary>
+    /// Keeps this resource's identity and configuration properties (name, uid, source, parent name,
+    /// connection string, and so on) and replaces only the state-owned ones with the state source's
+    /// values. A state-owned property the state source doesn't have is dropped rather than inherited.
+    /// </summary>
+    private ImmutableDictionary<string, ResourcePropertyViewModel> ProjectStateOwnedProperties(ResourceViewModel stateSource)
+    {
+        var builder = Properties.ToBuilder();
+        foreach (var name in s_stateOwnedPropertyNames)
+        {
+            if (stateSource.Properties.TryGetValue(name, out var property))
+            {
+                builder[name] = property;
+            }
+            else
+            {
+                builder.Remove(name);
+            }
+        }
+
+        return builder.ToImmutable();
+    }
+
     public static string GetResourceName(ResourceViewModel resource, IDictionary<string, ResourceViewModel> allResources)
     {
         return GetResourceName(resource, allResources.Values);

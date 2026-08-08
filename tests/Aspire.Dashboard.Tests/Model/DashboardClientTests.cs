@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Threading.Channels;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
@@ -151,6 +152,155 @@ public sealed class DashboardClientTests
         var (initialData, subscription) = await subscribeTask.DefaultTimeout();
 
         Assert.Single(initialData);
+    }
+
+    [Fact]
+    public async Task GetResources_ReplicaRunning_ReturnsParentWithReplicaState()
+    {
+        await using var instance = CreateResourceServiceClient();
+        var parent = CreateResource("syndule-api", "Azure Container App", "Scaled to zero");
+        var child = CreateReplicaChild(parent, "syndule-api--0000007", "Running");
+
+        instance.SetInitialDataReceived([parent, child]);
+
+        var resources = instance.GetResources();
+
+        var updatedParent = Assert.Single(resources, r => r.Name == parent.Name);
+        Assert.Equal("Running", updatedParent.State);
+        Assert.Equal(KnownResourceState.Running, updatedParent.KnownState);
+    }
+
+    [Fact]
+    public async Task GetResources_ChildResourceWithDifferentDisplayName_DoesNotUpdateParentState()
+    {
+        await using var instance = CreateResourceServiceClient();
+        var parent = CreateResource("worker", "Project", "Scaled to zero");
+        var child = CreateChild(parent, "worker-migration", "worker-migration", "Running");
+
+        instance.SetInitialDataReceived([parent, child]);
+
+        var resources = instance.GetResources();
+
+        var updatedParent = Assert.Single(resources, r => r.Name == parent.Name);
+        Assert.Equal("Scaled to zero", updatedParent.State);
+        Assert.Null(updatedParent.KnownState);
+    }
+
+    [Fact]
+    public async Task GetResources_MultipleRunningReplicas_UsesLeastHealthyReplicaForParentHealth()
+    {
+        await using var instance = CreateResourceServiceClient();
+        var parent = CreateResource("syndule-api", "Azure Container App", "Scaled to zero");
+        var healthyChild = CreateReplicaChild(parent, "syndule-api--0000001", "Running", Aspire.DashboardService.Proto.V1.HealthStatus.Healthy);
+        var unhealthyChild = CreateReplicaChild(parent, "syndule-api--0000002", "Running", Aspire.DashboardService.Proto.V1.HealthStatus.Unhealthy);
+
+        instance.SetInitialDataReceived([parent, healthyChild, unhealthyChild]);
+
+        var resources = instance.GetResources();
+
+        var updatedParent = Assert.Single(resources, r => r.Name == parent.Name);
+        Assert.Equal("Running", updatedParent.State);
+        Assert.Equal(Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Unhealthy, updatedParent.HealthStatus);
+        Assert.Equal("syndule-api--0000002", Assert.Single(updatedParent.HealthReports).Name);
+    }
+
+    [Fact]
+    public async Task SubscribeResources_ReplicaUpdated_EmitsParentStateChange()
+    {
+        var resourceUpdates = Channel.CreateUnbounded<WatchResourcesUpdate>();
+        await using var instance = CreateResourceServiceClient();
+        instance.SetDashboardServiceClient(new MockDashboardServiceClient { ResourceUpdates = resourceUpdates });
+
+        IDashboardClient client = instance;
+        var parent = CreateResource("syndule-api", "Azure Container App", "Scaled to zero");
+        var child = CreateReplicaChild(parent, "syndule-api--0000007", "Scaled to zero");
+
+        var subscribeTask = client.SubscribeResourcesAsync(CancellationToken.None);
+
+        resourceUpdates.Writer.TryWrite(new WatchResourcesUpdate
+        {
+            InitialData = new InitialResourceData
+            {
+                Resources = { parent, child }
+            }
+        });
+
+        var (_, subscription) = await subscribeTask.DefaultTimeout();
+
+        resourceUpdates.Writer.TryWrite(new WatchResourcesUpdate
+        {
+            Changes = new WatchResourcesChanges
+            {
+                Value =
+                {
+                    new WatchResourcesChange
+                    {
+                        Upsert = CreateReplicaChild(parent, child.Name, "Running")
+                    }
+                }
+            }
+        });
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await using var enumerator = subscription.GetAsyncEnumerator(cts.Token);
+
+        Assert.True(await enumerator.MoveNextAsync().AsTask().DefaultTimeout());
+        var updatedParent = Assert.Single(enumerator.Current, c => c.ChangeType == ResourceViewModelChangeType.Upsert && c.Resource.Name == parent.Name).Resource;
+        Assert.Equal("Running", updatedParent.State);
+        Assert.Equal(KnownResourceState.Running, updatedParent.KnownState);
+    }
+
+    [Fact]
+    public async Task SubscribeResources_ReplicaDeleted_EmitsParentFallbackState()
+    {
+        var resourceUpdates = Channel.CreateUnbounded<WatchResourcesUpdate>();
+        await using var instance = CreateResourceServiceClient();
+        instance.SetDashboardServiceClient(new MockDashboardServiceClient { ResourceUpdates = resourceUpdates });
+
+        IDashboardClient client = instance;
+        var parent = CreateResource("syndule-api", "Azure Container App", "Scaled to zero");
+        var child = CreateReplicaChild(parent, "syndule-api--0000007", "Running");
+
+        var subscribeTask = client.SubscribeResourcesAsync(CancellationToken.None);
+
+        resourceUpdates.Writer.TryWrite(new WatchResourcesUpdate
+        {
+            InitialData = new InitialResourceData
+            {
+                Resources = { parent, child }
+            }
+        });
+
+        var (initialData, subscription) = await subscribeTask.DefaultTimeout();
+        var initialParent = Assert.Single(initialData, r => r.Name == parent.Name);
+        Assert.Equal("Running", initialParent.State);
+        Assert.Equal(KnownResourceState.Running, initialParent.KnownState);
+
+        resourceUpdates.Writer.TryWrite(new WatchResourcesUpdate
+        {
+            Changes = new WatchResourcesChanges
+            {
+                Value =
+                {
+                    new WatchResourcesChange
+                    {
+                        Delete = new ResourceDeletion
+                        {
+                            ResourceName = child.Name,
+                            ResourceType = child.ResourceType
+                        }
+                    }
+                }
+            }
+        });
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await using var enumerator = subscription.GetAsyncEnumerator(cts.Token);
+
+        Assert.True(await enumerator.MoveNextAsync().AsTask().DefaultTimeout());
+        var fallbackParent = Assert.Single(enumerator.Current, c => c.ChangeType == ResourceViewModelChangeType.Upsert && c.Resource.Name == parent.Name).Resource;
+        Assert.Equal("Scaled to zero", fallbackParent.State);
+        Assert.Null(fallbackParent.KnownState);
     }
 
     [Fact]
@@ -522,6 +672,7 @@ public sealed class DashboardClientTests
         public bool FailOnExecuteResourceCommand { get; init; }
         public bool CancelExecuteResourceCommandOnCallCancellation { get; init; }
         public string MinDashboardVersion { get; init; } = "";
+        public Channel<WatchResourcesUpdate>? ResourceUpdates { get; init; }
 
         public override AsyncDuplexStreamingCall<WatchInteractionsRequestUpdate, WatchInteractionsResponseUpdate> WatchInteractions(CallOptions options)
         {
@@ -607,9 +758,12 @@ public sealed class DashboardClientTests
 
         public override AsyncServerStreamingCall<WatchResourcesUpdate> WatchResources(WatchResourcesRequest request, CallOptions options)
         {
-            var reader = FailOnWatchResources
-                ? (IAsyncStreamReader<WatchResourcesUpdate>)new FailingAsyncStreamReader<WatchResourcesUpdate>()
-                : new AsyncStreamReader<WatchResourcesUpdate>();
+            IAsyncStreamReader<WatchResourcesUpdate> reader = FailOnWatchResources switch
+            {
+                true => new FailingAsyncStreamReader<WatchResourcesUpdate>(),
+                false when ResourceUpdates is not null => new ChannelAsyncStreamReader<WatchResourcesUpdate>(ResourceUpdates, options.CancellationToken),
+                false => new AsyncStreamReader<WatchResourcesUpdate>()
+            };
 
             return new AsyncServerStreamingCall<WatchResourcesUpdate>(
                 reader,
@@ -617,6 +771,24 @@ public sealed class DashboardClientTests
                 () => Status.DefaultSuccess,
                 () => new Metadata(),
                 () => { });
+        }
+    }
+
+    private sealed class ChannelAsyncStreamReader<T>(Channel<T> channel, CancellationToken cancellationToken) : IAsyncStreamReader<T>
+    {
+        public T Current { get; private set; } = default!;
+
+        public async Task<bool> MoveNext(CancellationToken cancellationTokenFromCall)
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cancellationTokenFromCall);
+
+            if (await channel.Reader.WaitToReadAsync(cts.Token) && channel.Reader.TryRead(out var item))
+            {
+                Current = item;
+                return true;
+            }
+
+            return false;
         }
     }
 
@@ -658,6 +830,57 @@ public sealed class DashboardClientTests
     private DashboardClient CreateResourceServiceClient()
     {
         return new DashboardClient(NullLoggerFactory.Instance, _configuration, _dashboardOptions, new MockKnownPropertyLookup(), new TestStringLocalizer<DashboardResources>());
+    }
+
+    private static Resource CreateResource(string name, string resourceType, string state)
+    {
+        return new Resource
+        {
+            Name = name,
+            ResourceType = resourceType,
+            DisplayName = name,
+            Uid = name,
+            CreatedAt = Timestamp.FromDateTime(DateTime.UtcNow),
+            State = state
+        };
+    }
+
+    private static Resource CreateReplicaChild(Resource parent, string name, string state, Aspire.DashboardService.Proto.V1.HealthStatus? healthStatus = null)
+    {
+        return CreateChild(parent, name, parent.DisplayName, state, healthStatus);
+    }
+
+    private static Resource CreateChild(Resource parent, string name, string displayName, string state, Aspire.DashboardService.Proto.V1.HealthStatus? healthStatus = null)
+    {
+        var resource = new Resource
+        {
+            Name = name,
+            ResourceType = parent.ResourceType,
+            DisplayName = displayName,
+            Uid = name,
+            CreatedAt = Timestamp.FromDateTime(DateTime.UtcNow),
+            State = state,
+            Properties =
+            {
+                new ResourceProperty
+                {
+                    Name = KnownProperties.Resource.ParentName,
+                    Value = Value.ForString(parent.Name)
+                }
+            }
+        };
+
+        if (healthStatus is not null)
+        {
+            resource.HealthReports.Add(new HealthReport
+            {
+                Key = name,
+                Status = healthStatus.Value,
+                Description = name
+            });
+        }
+
+        return resource;
     }
 
     private static CommandViewModel CreateCommand()
