@@ -197,8 +197,8 @@
   <data name="ProjectOptionNotSpecifiedMultipleAppHostsFound" xml:space="preserve">
     <value>The --apphost option was not specified and multiple AppHost project files were detected.</value>
   </data>
-  <data name="ProjectOptionNotSpecifiedNoCsprojFound" xml:space="preserve">
-    <value>The project argument was not specified and no AppHost project files were detected.</value>
+  <data name="ProjectOptionNotSpecifiedNoAppHostsFound" xml:space="preserve">
+    <value>The --apphost option was not specified and no AppHost project files were detected.</value>
   </data>
   <data name="ProjectCouldNotBeBuilt" xml:space="preserve">
     <value>The project could not be built.</value>
