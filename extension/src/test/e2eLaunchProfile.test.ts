@@ -496,6 +496,20 @@ suite('E2E launch profile', () => {
         assert.ok(!debugDashboard.includes("file => file.state.stoppingPaths.some(stoppingPath => isSamePath(stoppingPath, appHostPath))"));
     });
 
+    test('gates slow AppHost discovery before asserting transient loading UI', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const appHostTree = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'appHostTree.e2e.test.ts'), 'utf8');
+
+        assert.ok(fixtures.includes('writeGatedStreamingDiscoveryCliWrapper'));
+        assert.ok(fixtures.includes('function waitForReleaseFile'));
+        assert.ok(appHostTree.includes('writeGatedStreamingDiscoveryCliWrapper'));
+        assert.ok(appHostTree.includes('discoveryGate.releasePsSnapshot();'));
+        assert.ok(appHostTree.includes('discoveryGate.releaseLsCandidate();'));
+        assert.ok(appHostTree.indexOf('await waitForWorkspaceRediscoveryLoading') < appHostTree.indexOf('discoveryGate.releasePsSnapshot();'));
+        assert.ok(appHostTree.indexOf('discoveryGate.releasePsSnapshot();') < appHostTree.indexOf('discoveryGate.releaseLsCandidate();'));
+    });
+
     test('patches ExTester launch arguments without replacement-token expansion', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');

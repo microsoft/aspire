@@ -242,6 +242,33 @@ export function writeStreamingDiscoveryCliWrapper(delayMs = 5_000, initialDelayM
     });
 }
 
+export function writeGatedStreamingDiscoveryCliWrapper(): { cliPath: string; releasePsSnapshot: () => void; releaseLsCandidate: () => void } {
+    const gateDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers', 'gated-streaming-discovery');
+    const psSnapshotReleaseFilePath = path.join(gateDirectory, 'release-ps-snapshot');
+    const lsCandidateReleaseFilePath = path.join(gateDirectory, 'release-ls-candidate');
+    removePath(gateDirectory, { recursive: true, force: true });
+    fs.mkdirSync(gateDirectory, { recursive: true });
+
+    const cliPath = writeCliWrapper('aspire-gated-streaming-discovery', {
+        configInfoJson: createConfigInfo([lsJsonStreamCapability]),
+        streamedLsCandidate: {
+            path: getPrimaryAppHostProjectPath(),
+            language: 'csharp',
+            status: 'buildable',
+            selected: true,
+        },
+        streamedLsDelayMs: 5_000,
+        streamedLsReleaseFilePath: lsCandidateReleaseFilePath,
+        psSnapshotReleaseFilePath,
+    });
+
+    return {
+        cliPath,
+        releasePsSnapshot: () => writeFileWithRetry(psSnapshotReleaseFilePath, ''),
+        releaseLsCandidate: () => writeFileWithRetry(lsCandidateReleaseFilePath, ''),
+    };
+}
+
 export function writeTrackedStreamingDiscoveryCliWrapper(delayMs = 4_000, initialDelayMs = 500): { cliPath: string; invocationLogPath: string } {
     const invocationLogPath = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers', 'streaming-discovery-invocations.log');
     removePath(invocationLogPath, { force: true });
@@ -736,9 +763,11 @@ function writeCliWrapper(
         streamedLsCandidate?: unknown;
         streamedLsDelayMs?: number;
         streamedLsInitialDelayMs?: number;
+        streamedLsReleaseFilePath?: string;
         streamedLsInvocationLogPath?: string;
         invocationLogPath?: string;
         psSnapshotDelayMs?: number;
+        psSnapshotReleaseFilePath?: string;
     },
 ): string {
     const wrapperDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers');
@@ -747,9 +776,21 @@ function writeCliWrapper(
     const scriptPath = path.join(wrapperDirectory, `${name}.js`);
     fs.writeFileSync(scriptPath, `#!/usr/bin/env node
 const { spawnSync } = require('child_process');
+const fs = require('fs');
 const realCli = ${JSON.stringify(getCliPath())};
 const args = process.argv.slice(2);
-${options.invocationLogPath === undefined ? '' : `require('fs').appendFileSync(${JSON.stringify(options.invocationLogPath)}, JSON.stringify(args) + '\\n');`}
+${options.invocationLogPath === undefined ? '' : `fs.appendFileSync(${JSON.stringify(options.invocationLogPath)}, JSON.stringify(args) + '\\n');`}
+
+function waitForReleaseFile(filePath, description) {
+  const deadline = Date.now() + 120000;
+  while (!fs.existsSync(filePath)) {
+    if (Date.now() >= deadline) {
+      console.error(\`Timed out waiting for \${description} release file: \${filePath}\`);
+      process.exit(124);
+    }
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+  }
+}
 
 if (args.includes('--include-disabled-commands')) {
   console.error('simulated old CLI does not support --include-disabled-commands');
@@ -767,20 +808,24 @@ ${options.configInfoJson === undefined
 ${options.streamedLsCandidate === undefined
         ? ''
         : `if (args[0] === 'ls') {
-${options.streamedLsInvocationLogPath === undefined ? '' : `  require('fs').appendFileSync(${JSON.stringify(options.streamedLsInvocationLogPath)}, 'ls\\n');`}
+${options.streamedLsInvocationLogPath === undefined ? '' : `  fs.appendFileSync(${JSON.stringify(options.streamedLsInvocationLogPath)}, 'ls\\n');`}
   if (!args.includes('--format') || args[args.indexOf('--format') + 1] !== 'json' || !args.includes('--stream')) {
     console.error('Expected AppHost discovery to use ls --format json --stream.');
     process.exit(126);
   }
 
+${options.streamedLsReleaseFilePath === undefined ? '' : `  waitForReleaseFile(${JSON.stringify(options.streamedLsReleaseFilePath)}, 'streamed ls candidate');`}
   setTimeout(() => {
     console.log(${JSON.stringify(JSON.stringify(options.streamedLsCandidate))});
     setTimeout(() => process.exit(0), ${options.streamedLsDelayMs ?? 5_000});
   }, ${options.streamedLsInitialDelayMs ?? 0});
 }
 else {`}
-if (args[0] === 'ps' && !args.includes('--follow')) {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ${options.psSnapshotDelayMs ?? 0});
+if (args[0] === 'ps') {
+${options.psSnapshotReleaseFilePath === undefined ? '' : `  waitForReleaseFile(${JSON.stringify(options.psSnapshotReleaseFilePath)}, 'ps snapshot');`}
+  if (!args.includes('--follow')) {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ${options.psSnapshotDelayMs ?? 0});
+  }
 }
 
 const result = spawnSync(realCli, args, {

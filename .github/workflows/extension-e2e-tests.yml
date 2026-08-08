@@ -253,6 +253,9 @@ jobs:
             archivePattern: aspire-cli-linux-x64*.tar.gz
             cliBinary: aspire
             useXvfb: true
+            # Keep the shard visible in CI, but leave the Functions fixture disabled until
+            # the hosted Linux startup timeout is root-caused.
+            disabledIssue: 'https://github.com/microsoft/aspire/issues/19151'
             installAzureFunctions: true
     defaults:
       run:
@@ -359,8 +362,13 @@ jobs:
             Start-Sleep -Seconds $delay
           }
 
+      - name: Note skipped Azure Functions E2E shard
+        if: ${{ matrix.disabledIssue }}
+        run: |
+          Write-Host "::notice title=Azure Functions E2E shard skipped::${{ matrix.shardName }} is disabled pending ${{ matrix.disabledIssue }}."
+
       - name: Install Azure Functions E2E prerequisites
-        if: ${{ matrix.installAzureFunctions }}
+        if: ${{ matrix.installAzureFunctions && !matrix.disabledIssue }}
         shell: bash
         run: |
           set -euo pipefail
