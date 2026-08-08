@@ -1522,6 +1522,7 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	WithSessionLifetime() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithStatus(status TestResourceStatus) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithTerminal() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithTestRun() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithUnionDependency(dependency any) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithUrl(url any, options ...*WithUrlOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -3325,6 +3326,17 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTerminal()
 	return s
 }
 
+// WithTestRun marks a resource as a test resource
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTestRun() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUnionDependency(dependency any) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
@@ -3733,6 +3745,7 @@ type CSharpAppResource interface {
 	WithSessionLifetime() CSharpAppResource
 	WithStatus(status TestResourceStatus) CSharpAppResource
 	WithTerminal() CSharpAppResource
+	WithTestRun() CSharpAppResource
 	WithUnionDependency(dependency any) CSharpAppResource
 	WithUrl(url any, options ...*WithUrlOptions) CSharpAppResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) CSharpAppResource
@@ -5268,6 +5281,17 @@ func (s *cSharpAppResource) WithTerminal() CSharpAppResource {
 	return s
 }
 
+// WithTestRun marks a resource as a test resource
+func (s *cSharpAppResource) WithTestRun() CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *cSharpAppResource) WithUnionDependency(dependency any) CSharpAppResource {
@@ -6567,6 +6591,7 @@ type ContainerRegistryResource interface {
 	WithSessionLifetime() ContainerRegistryResource
 	WithStatus(status TestResourceStatus) ContainerRegistryResource
 	WithTerminal() ContainerRegistryResource
+	WithTestRun() ContainerRegistryResource
 	WithUnionDependency(dependency any) ContainerRegistryResource
 	WithUrl(url any, options ...*WithUrlOptions) ContainerRegistryResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ContainerRegistryResource
@@ -7410,6 +7435,17 @@ func (s *containerRegistryResource) WithTerminal() ContainerRegistryResource {
 	return s
 }
 
+// WithTestRun marks a resource as a test resource
+func (s *containerRegistryResource) WithTestRun() ContainerRegistryResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *containerRegistryResource) WithUnionDependency(dependency any) ContainerRegistryResource {
@@ -7626,6 +7662,7 @@ type ContainerResource interface {
 	WithSessionLifetime() ContainerResource
 	WithStatus(status TestResourceStatus) ContainerResource
 	WithTerminal() ContainerResource
+	WithTestRun() ContainerResource
 	WithUnionDependency(dependency any) ContainerResource
 	WithUrl(url any, options ...*WithUrlOptions) ContainerResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ContainerResource
@@ -9425,6 +9462,17 @@ func (s *containerResource) WithTerminal() ContainerResource {
 		"builder": s.handle.ToJSON(),
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithTestRun marks a resource as a test resource
+func (s *containerResource) WithTestRun() ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -11277,6 +11325,7 @@ type DotnetToolResource interface {
 	WithSessionLifetime() DotnetToolResource
 	WithStatus(status TestResourceStatus) DotnetToolResource
 	WithTerminal() DotnetToolResource
+	WithTestRun() DotnetToolResource
 	WithToolIgnoreExistingFeeds() DotnetToolResource
 	WithToolIgnoreFailedSources() DotnetToolResource
 	WithToolPackage(packageId string) DotnetToolResource
@@ -12775,6 +12824,17 @@ func (s *dotnetToolResource) WithTerminal() DotnetToolResource {
 	return s
 }
 
+// WithTestRun marks a resource as a test resource
+func (s *dotnetToolResource) WithTestRun() DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithToolIgnoreExistingFeeds configures the tool to use only the specified package sources, ignoring existing NuGet configuration.
 func (s *dotnetToolResource) WithToolIgnoreExistingFeeds() DotnetToolResource {
 	if s.err != nil { return s }
@@ -14079,6 +14139,7 @@ type ExecutableResource interface {
 	WithSessionLifetime() ExecutableResource
 	WithStatus(status TestResourceStatus) ExecutableResource
 	WithTerminal() ExecutableResource
+	WithTestRun() ExecutableResource
 	WithUnionDependency(dependency any) ExecutableResource
 	WithUrl(url any, options ...*WithUrlOptions) ExecutableResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ExecutableResource
@@ -15571,6 +15632,17 @@ func (s *executableResource) WithTerminal() ExecutableResource {
 	return s
 }
 
+// WithTestRun marks a resource as a test resource
+func (s *executableResource) WithTestRun() ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *executableResource) WithUnionDependency(dependency any) ExecutableResource {
@@ -16024,6 +16096,7 @@ type ExternalServiceResource interface {
 	WithSessionLifetime() ExternalServiceResource
 	WithStatus(status TestResourceStatus) ExternalServiceResource
 	WithTerminal() ExternalServiceResource
+	WithTestRun() ExternalServiceResource
 	WithUnionDependency(dependency any) ExternalServiceResource
 	WithUrl(url any, options ...*WithUrlOptions) ExternalServiceResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ExternalServiceResource
@@ -16882,6 +16955,17 @@ func (s *externalServiceResource) WithTerminal() ExternalServiceResource {
 		"builder": s.handle.ToJSON(),
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithTestRun marks a resource as a test resource
+func (s *externalServiceResource) WithTestRun() ExternalServiceResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -18697,6 +18781,7 @@ type ParameterResource interface {
 	WithSessionLifetime() ParameterResource
 	WithStatus(status TestResourceStatus) ParameterResource
 	WithTerminal() ParameterResource
+	WithTestRun() ParameterResource
 	WithUnionDependency(dependency any) ParameterResource
 	WithUrl(url any, options ...*WithUrlOptions) ParameterResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ParameterResource
@@ -19568,6 +19653,17 @@ func (s *parameterResource) WithTerminal() ParameterResource {
 		"builder": s.handle.ToJSON(),
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithTestRun marks a resource as a test resource
+func (s *parameterResource) WithTestRun() ParameterResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -20469,6 +20565,7 @@ type ProjectResource interface {
 	WithSessionLifetime() ProjectResource
 	WithStatus(status TestResourceStatus) ProjectResource
 	WithTerminal() ProjectResource
+	WithTestRun() ProjectResource
 	WithUnionDependency(dependency any) ProjectResource
 	WithUrl(url any, options ...*WithUrlOptions) ProjectResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ProjectResource
@@ -22001,6 +22098,17 @@ func (s *projectResource) WithTerminal() ProjectResource {
 		"builder": s.handle.ToJSON(),
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithTestRun marks a resource as a test resource
+func (s *projectResource) WithTestRun() ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -23855,6 +23963,7 @@ type TestDatabaseResource interface {
 	WithSessionLifetime() TestDatabaseResource
 	WithStatus(status TestResourceStatus) TestDatabaseResource
 	WithTerminal() TestDatabaseResource
+	WithTestRun() TestDatabaseResource
 	WithUnionDependency(dependency any) TestDatabaseResource
 	WithUrl(url any, options ...*WithUrlOptions) TestDatabaseResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) TestDatabaseResource
@@ -25657,6 +25766,17 @@ func (s *testDatabaseResource) WithTerminal() TestDatabaseResource {
 	return s
 }
 
+// WithTestRun marks a resource as a test resource
+func (s *testDatabaseResource) WithTestRun() TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *testDatabaseResource) WithUnionDependency(dependency any) TestDatabaseResource {
@@ -26081,6 +26201,7 @@ type TestRedisResource interface {
 	WithSessionLifetime() TestRedisResource
 	WithStatus(status TestResourceStatus) TestRedisResource
 	WithTerminal() TestRedisResource
+	WithTestRun() TestRedisResource
 	WithUnionDependency(dependency any) TestRedisResource
 	WithUrl(url any, options ...*WithUrlOptions) TestRedisResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) TestRedisResource
@@ -28148,6 +28269,17 @@ func (s *testRedisResource) WithTerminal() TestRedisResource {
 		"builder": s.handle.ToJSON(),
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithTestRun marks a resource as a test resource
+func (s *testRedisResource) WithTestRun() TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 

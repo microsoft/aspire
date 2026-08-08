@@ -19,6 +19,7 @@ internal interface IAppHostCliBackchannel
     Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken);
     IAsyncEnumerable<BackchannelLogEntry> GetAppHostLogEntriesAsync(CancellationToken cancellationToken);
     IAsyncEnumerable<RpcResourceState> GetResourceStatesAsync(CancellationToken cancellationToken);
+    IAsyncEnumerable<TestRunUpdate> GetTestRunUpdatesAsync(CancellationToken cancellationToken);
     Task WaitForDisconnectAsync(CancellationToken cancellationToken);
     Task ConnectAsync(string socketPath, int retryCount, CancellationToken cancellationToken);
     Task ConnectAsync(string socketPath, bool autoReconnect, int retryCount, CancellationToken cancellationToken);
@@ -143,6 +144,15 @@ internal sealed class AppHostCliBackchannel(
             (rpc, ct) => rpc.InvokeStreamingWithProfilingAsync<RpcResourceState>(
                 profilingTelemetry, "apphost", "GetResourceStatesAsync", [], ct),
             "resource states",
+            cancellationToken);
+    }
+
+    public IAsyncEnumerable<TestRunUpdate> GetTestRunUpdatesAsync(CancellationToken cancellationToken)
+    {
+        return InvokeStreamingRpcAsync<TestRunUpdate>(
+            (rpc, ct) => rpc.InvokeStreamingWithProfilingAsync<TestRunUpdate>(
+                profilingTelemetry, "apphost", "GetTestRunUpdatesAsync", [], ct, ProfilingJsonRpcExtensions.StreamingSpanLifetime.FirstItem),
+            "test run updates",
             cancellationToken);
     }
 

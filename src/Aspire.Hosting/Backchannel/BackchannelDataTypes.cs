@@ -713,6 +713,50 @@ internal sealed class RpcResourceState
 }
 
 /// <summary>
+/// Represents an update about a test resource as a test run progresses. These are streamed from the
+/// app host to the CLI (via <c>aspire test</c>) so the CLI can tick off results as they complete and,
+/// once the stream finishes, ask the app host to stop.
+/// </summary>
+internal sealed class TestRunUpdate
+{
+    /// <summary>
+    /// Gets the name of the resource marked as a test resource (via <c>WithTestRun()</c>).
+    /// </summary>
+    public required string Resource { get; init; }
+
+    /// <summary>
+    /// Gets the status of the test resource. One of <see cref="KnownTestRunStatuses"/>.
+    /// </summary>
+    public required string Status { get; init; }
+
+    /// <summary>
+    /// Gets an optional human readable detail (for example a terminal state or exit code) explaining the status.
+    /// </summary>
+    public string? Detail { get; init; }
+}
+
+/// <summary>
+/// The set of statuses a <see cref="TestRunUpdate"/> can report.
+/// </summary>
+internal static class KnownTestRunStatuses
+{
+    /// <summary>
+    /// The test resource is running and has not yet reached a terminal state.
+    /// </summary>
+    public const string Running = "Running";
+
+    /// <summary>
+    /// The test resource finished successfully.
+    /// </summary>
+    public const string Passed = "Passed";
+
+    /// <summary>
+    /// The test resource reached a terminal state that indicates failure.
+    /// </summary>
+    public const string Failed = "Failed";
+}
+
+/// <summary>
 /// Represents dashboard URLs for the running AppHost.
 /// </summary>
 internal sealed class DashboardUrlsState
