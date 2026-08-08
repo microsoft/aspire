@@ -74,6 +74,28 @@ public static class DebugSupportExtensions
     }
 
     /// <summary>
+    /// Determines whether the launch configuration performs the resource's tool invocation itself, meaning the
+    /// resource's launch tool arguments must not also be passed to the launched program.
+    /// </summary>
+    /// <param name="resource">The resource to inspect.</param>
+    /// <param name="supportsDebuggingAnnotation">The launch configuration annotation to compare.</param>
+    /// <returns><see langword="true"/> when the launch configuration supplies the tool invocation; otherwise, <see langword="false"/>.</returns>
+    /// <remarks>
+    /// This is <see langword="false"/> for a resource whose launch tool arguments declare no owning launch
+    /// configuration type, because such a prefix is always passed to the program.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Debug support inspection is a local .NET helper and is not part of the ATS surface.")]
+    public static bool HasLaunchToolArgsOwnedBy(this IResource resource, SupportsDebuggingAnnotation supportsDebuggingAnnotation)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+        ArgumentNullException.ThrowIfNull(supportsDebuggingAnnotation);
+
+        return resource.TryGetLastAnnotation<LaunchToolArgsCallbackAnnotation>(out var launchToolAnnotation)
+            && launchToolAnnotation.OwningLaunchConfigurationType is string owner
+            && string.Equals(owner, supportsDebuggingAnnotation.LaunchConfigurationType, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Creates the launch configuration that this resource sends to the IDE for the given launch mode.
     /// </summary>
     /// <param name="resource">The resource to inspect. It must carry a <see cref="SupportsDebuggingAnnotation"/>.</param>
@@ -84,7 +106,7 @@ public static class DebugSupportExtensions
     /// <remarks>
     /// <para>
     /// Launch configuration is created by invoking the producer callback passed to
-    /// <see cref="ResourceBuilderExtensions.WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, TLaunchConfiguration}, string, Action{CommandLineArgsCallbackContext})"/>
+    /// <see cref="ResourceBuilderExtensions.WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, TLaunchConfiguration}, string)"/>
     /// (or its asynchronous overload),
     /// which owns the complete configuration; Aspire serializes the result as-is. 
     /// The configuration is produced fresh on each call; it is not a singleton.

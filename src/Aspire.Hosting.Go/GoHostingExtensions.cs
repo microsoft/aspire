@@ -95,86 +95,64 @@ public static class GoHostingExtensions
                     ? argsAnnotation.Args
                     : [];
 
-                var hasDelve = ctx.Resource.TryGetLastAnnotation<GoDelveServerAnnotation>(out var delveAnnotation);
+                if (!ctx.Resource.TryGetLastAnnotation<GoDelveServerAnnotation>(out var delveAnnotation))
+                {
+                    // Normal run mode. The `go run [build flags] <pkg>` prefix is contributed as entrypoint
+                    // arguments by WithVSCodeDebugging(), so only the program's own arguments belong here.
+                    foreach (var arg in programArgs)
+                    {
+                        ctx.Args.Add(arg);
+                    }
+
+                    return;
+                }
+
+                // Delve debug mode — global flags MUST precede the subcommand per the Delve CLI:
+                //   dlv --headless=true --listen=127.0.0.1:PORT --api-version=2 debug [--continue] [--build-flags=...] <pkg> [-- args]
+                // See: https://www.jetbrains.com/help/go/attach-to-running-go-processes-with-debugger.html
+                // WithDelveServer removes the debug launch annotation, so this whole command line is a plain
+                // process invocation and stays in the regular argument callback.
                 var pkg = ctx.Resource.TryGetLastAnnotation<GoPackagePathAnnotation>(out var pkgAnnotation)
                     ? pkgAnnotation.PackagePath
                     : ".";
 
-                if (hasDelve)
+                ctx.Args.Add("--headless=true");
+                ctx.Args.Add($"--listen=127.0.0.1:{delveAnnotation.Port}");
+                ctx.Args.Add("--api-version=2");
+                if (delveAnnotation.AcceptMultiClient)
                 {
-                    // Delve debug mode — global flags MUST precede the subcommand per the Delve CLI:
-                    //   dlv --headless=true --listen=127.0.0.1:PORT --api-version=2 debug [--continue] [--build-flags=...] <pkg> [-- args]
-                    // See: https://www.jetbrains.com/help/go/attach-to-running-go-processes-with-debugger.html
-                    ctx.Args.Add("--headless=true");
-                    ctx.Args.Add($"--listen=127.0.0.1:{delveAnnotation!.Port}");
-                    ctx.Args.Add("--api-version=2");
-                    if (delveAnnotation.AcceptMultiClient)
+                    ctx.Args.Add("--accept-multiclient");
+                }
+                if (delveAnnotation.OnlySameUser.HasValue)
+                {
+                    ctx.Args.Add($"--only-same-user={delveAnnotation.OnlySameUser.Value.ToString().ToLowerInvariant()}");
+                }
+                if (delveAnnotation.Log)
+                {
+                    ctx.Args.Add("--log");
+                    if (!string.IsNullOrEmpty(delveAnnotation.LogOutput))
                     {
-                        ctx.Args.Add("--accept-multiclient");
-                    }
-                    if (delveAnnotation.OnlySameUser.HasValue)
-                    {
-                        ctx.Args.Add($"--only-same-user={delveAnnotation.OnlySameUser.Value.ToString().ToLowerInvariant()}");
-                    }
-                    if (delveAnnotation.Log)
-                    {
-                        ctx.Args.Add("--log");
-                        if (!string.IsNullOrEmpty(delveAnnotation.LogOutput))
-                        {
-                            ctx.Args.Add($"--log-output={delveAnnotation.LogOutput}");
-                        }
-                    }
-
-                    ctx.Args.Add("debug");
-                    if (delveAnnotation.ContinueOnStart)
-                    {
-                        ctx.Args.Add("--continue");
-                    }
-
-                    var buildFlags = BuildFlagsString(ctx.Resource);
-                    if (buildFlags.Length > 0)
-                    {
-                        ctx.Args.Add($"--build-flags={buildFlags}");
-                    }
-
-                    ctx.Args.Add(pkg);
-
-                    if (programArgs.Length > 0)
-                    {
-                        ctx.Args.Add("--");
-                        foreach (var arg in programArgs)
-                        {
-                            ctx.Args.Add(arg);
-                        }
+                        ctx.Args.Add($"--log-output={delveAnnotation.LogOutput}");
                     }
                 }
-                else
+
+                ctx.Args.Add("debug");
+                if (delveAnnotation.ContinueOnStart)
                 {
-                    // Normal run mode: go run [-race] [-tags=...] [-ldflags=...] [-gcflags=...] <pkg> [args]
-                    ctx.Args.Add("run");
+                    ctx.Args.Add("--continue");
+                }
 
-                    if (ctx.Resource.TryGetLastAnnotation<GoRaceDetectorAnnotation>(out _))
-                    {
-                        ctx.Args.Add("-race");
-                    }
+                var delveBuildFlags = BuildFlagsString(ctx.Resource);
+                if (delveBuildFlags.Length > 0)
+                {
+                    ctx.Args.Add($"--build-flags={delveBuildFlags}");
+                }
 
-                    if (ctx.Resource.TryGetLastAnnotation<GoBuildTagsAnnotation>(out var tagsAnnotation))
-                    {
-                        ctx.Args.Add($"-tags={string.Join(",", tagsAnnotation.Tags)}");
-                    }
+                ctx.Args.Add(pkg);
 
-                    if (ctx.Resource.TryGetLastAnnotation<GoLdFlagsAnnotation>(out var ldFlagsAnnotation))
-                    {
-                        ctx.Args.Add($"-ldflags={ldFlagsAnnotation.Flags}");
-                    }
-
-                    if (ctx.Resource.TryGetLastAnnotation<GoGcFlagsAnnotation>(out var gcFlagsAnnotation))
-                    {
-                        ctx.Args.Add($"-gcflags={gcFlagsAnnotation.Flags}");
-                    }
-
-                    ctx.Args.Add(pkg);
-
+                if (programArgs.Length > 0)
+                {
+                    ctx.Args.Add("--");
                     foreach (var arg in programArgs)
                     {
                         ctx.Args.Add(arg);
@@ -775,37 +753,48 @@ public static class GoHostingExtensions
                     BuildFlags = buildFlags.Length > 0 ? buildFlags : null
                 };
             },
-            "go",
-            static ctx =>
+            "go")
+            .WithLaunchToolArgs(static ctx =>
             {
                 // The executable resource normally starts as:
                 //   go run [-race] [-tags=...] [-ldflags=...] [-gcflags=...] <pkg> [app args]
-                // In IDE mode VS Code's Go debugger owns the tool/build/package portion via
-                // program/buildFlags, so only the user program arguments should remain.
-                if (ctx.Args is not [string runCommand, ..] || runCommand != "run")
+                // Everything up to and including <pkg> is the tool invocation: in IDE mode VS Code's Go debugger
+                // performs it via program/buildFlags, so it is not passed to the launched program.
+                if (ctx.Resource.HasAnnotationOfType<GoDelveServerAnnotation>())
                 {
+                    // WithDelveServer replaces the whole command line with a headless `dlv debug ...` invocation and
+                    // removes the debug launch annotation, so there is no `go run` prefix to contribute.
                     return;
                 }
 
-                ctx.Args.RemoveAt(0);
+                ctx.Args.Add("run");
 
-                while (ctx.Args is [string arg, ..] && IsGoRunBuildFlag(arg))
+                if (ctx.Resource.TryGetLastAnnotation<GoRaceDetectorAnnotation>(out _))
                 {
-                    ctx.Args.RemoveAt(0);
+                    ctx.Args.Add("-race");
                 }
 
-                if (ctx.Args.Count > 0)
+                if (ctx.Resource.TryGetLastAnnotation<GoBuildTagsAnnotation>(out var tagsAnnotation))
                 {
-                    ctx.Args.RemoveAt(0);
+                    ctx.Args.Add($"-tags={string.Join(",", tagsAnnotation.Tags)}");
                 }
-            });
+
+                if (ctx.Resource.TryGetLastAnnotation<GoLdFlagsAnnotation>(out var ldFlagsAnnotation))
+                {
+                    ctx.Args.Add($"-ldflags={ldFlagsAnnotation.Flags}");
+                }
+
+                if (ctx.Resource.TryGetLastAnnotation<GoGcFlagsAnnotation>(out var gcFlagsAnnotation))
+                {
+                    ctx.Args.Add($"-gcflags={gcFlagsAnnotation.Flags}");
+                }
+
+                ctx.Args.Add(ctx.Resource.TryGetLastAnnotation<GoPackagePathAnnotation>(out var pkgAnnotation)
+                    ? pkgAnnotation.PackagePath
+                    : ".");
+            },
+            ownedByLaunchConfigurationType: "go");
     }
-
-    private static bool IsGoRunBuildFlag(string arg) =>
-        arg == "-race" ||
-        arg.StartsWith("-tags=", StringComparison.Ordinal) ||
-        arg.StartsWith("-ldflags=", StringComparison.Ordinal) ||
-        arg.StartsWith("-gcflags=", StringComparison.Ordinal);
 
     /// <summary>
     /// Builds the <c>go build</c> command for the generated Dockerfile, propagating any
