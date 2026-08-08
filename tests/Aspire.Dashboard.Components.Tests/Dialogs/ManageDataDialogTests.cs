@@ -152,15 +152,17 @@ public sealed class ManageDataDialogTests : DashboardTestContext
         Assert.Equal(0, clickCount);
     }
 
-    [Fact]
-    public async Task Render_ClearedSignals_PrunesSelectionsAndSupportsRemovingEmptyResource()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Render_ClearedSignals_PrunesSelectionsAndSupportsRemovingEmptyResource(bool dashboardClientIsReadOnly)
     {
-        var dashboardClient = new TestDashboardClient(isEnabled: false, initialResources: []);
+        var dashboardClient = new TestDashboardClient(isEnabled: false, initialResources: [], isReadOnly: dashboardClientIsReadOnly);
         SetupManageDataDialogServices(dashboardClient);
 
-        var repository = Services.GetRequiredService<TelemetryRepository>();
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
         var resourceKey = new ResourceKey("orphan", "instance");
-        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        await repository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -176,7 +178,7 @@ public sealed class ManageDataDialogTests : DashboardTestContext
             }
         });
         var timestamp = DateTime.UnixEpoch;
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -205,7 +207,7 @@ public sealed class ManageDataDialogTests : DashboardTestContext
         cut.WaitForAssertion(() => AssertSelectionCheckbox(cut, "Structured logs for orphan", "true"));
         await ClickSelectionCheckboxAsync(cut, "Structured logs for orphan", "true");
 
-        repository.ClearTraces(resourceKey);
+        await repository.ClearTracesAsync(resourceKey);
 
         cut.WaitForAssertion(() =>
         {
@@ -215,7 +217,7 @@ public sealed class ManageDataDialogTests : DashboardTestContext
             AssertButtonDisabled(cut, "Remove selected", expectedDisabled: true);
         });
 
-        repository.ClearStructuredLogs(resourceKey);
+        await repository.ClearStructuredLogsAsync(resourceKey);
 
         cut.WaitForAssertion(() =>
         {
@@ -249,8 +251,9 @@ public sealed class ManageDataDialogTests : DashboardTestContext
         Services.AddSingleton<IDashboardClient>(dashboardClient);
         Services.AddSingleton<IconResolver>();
         Services.AddSingleton<ConsoleLogsManager>();
-        Services.AddSingleton<ConsoleLogsFetcher>();
-        Services.AddSingleton<TelemetryExportService>();
+        Services.AddScoped<ConsoleLogsFetcher>();
+        Services.AddScoped<TelemetryExportService>();
+        Services.AddSingleton<DashboardActivitySource>();
         Services.AddSingleton<TelemetryImportService>();
 
         FluentUISetupHelpers.SetupFluentUIComponents(this);

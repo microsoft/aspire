@@ -8,6 +8,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text.Json.Nodes;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Otlp.Http;
+using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Hosting;
 using Aspire.Tests.Shared.Telemetry;
@@ -32,6 +33,36 @@ namespace Aspire.Dashboard.Tests.Integration;
 
 public class StartupTests(ITestOutputHelper testOutputHelper)
 {
+    [Fact]
+    public async Task Construction_ValidatesServiceDescriptorsAndScopes()
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(
+            testOutputHelper,
+            preConfigureBuilder: builder => builder.WebHost.UseDefaultServiceProvider(options =>
+            {
+                options.ValidateOnBuild = true;
+                options.ValidateScopes = true;
+            }));
+    }
+
+    [Fact]
+    public async Task Construction_CurrentDataSourceIsManagedByPool()
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper);
+
+        var databasePool = app.Services.GetRequiredService<DashboardDataSourcePool>();
+        await databasePool.InitializeAsync(CancellationToken.None);
+        var currentRun = app.Services.GetRequiredService<IDashboardRunStore>().GetRuns().Single(run => run.IsCurrent);
+        var telemetryRepository = Assert.IsType<SqliteTelemetryRepository>(app.Services.GetRequiredService<ITelemetryRepository>());
+
+        Assert.Equal(currentRun.DatabasePath, databasePool.Current.Database.DatabasePath);
+        Assert.False(databasePool.Current.Database.IsReadOnly);
+        Assert.Same(databasePool.Current.Database.ActivitySource, telemetryRepository.SqlActivitySource);
+        Assert.Same(databasePool.Current.TelemetryRepository, telemetryRepository);
+        Assert.Same(databasePool.Current.ResourceRepository, app.Services.GetRequiredService<IResourceRepository>());
+        Assert.Null(app.Services.GetService<DashboardSqliteDatabase>());
+    }
+
     [Fact]
     public async Task EndPointAccessors_AppStarted_EndPointPortsAssigned()
     {

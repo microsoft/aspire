@@ -136,7 +136,16 @@ yarp.WithConfiguration(builder =>
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard);
+var dashboardBuilder = builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard);
+if (builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"] is { Length: > 0 } dashboardOtlpEndpoint)
+{
+    // The AppHost normally points every project at its own dashboard. Preserve an explicitly configured
+    // external endpoint for dashboard self-telemetry so its activities can be inspected separately.
+    dashboardBuilder
+        .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", dashboardOtlpEndpoint)
+        .WithEnvironment("OTEL_EXPORTER_OTLP_PROTOCOL", builder.Configuration["OTEL_EXPORTER_OTLP_PROTOCOL"] ?? "grpc")
+        .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", builder.Configuration["OTEL_EXPORTER_OTLP_HEADERS"] ?? string.Empty);
+}
 #endif
 
 builder.Build().Run();
