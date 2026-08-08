@@ -2090,7 +2090,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task RunCommand_SkipsBuild_WhenBuildDotNetUsingCliCapabilityIsAvailable()
+    public async Task RunCommand_SkipsBuild_WhenExtensionDoesNotAdvertiseV2BuildOwnership()
     {
         var buildCalled = false;
 
@@ -2229,14 +2229,32 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.False(buildCalled, "Build should be skipped when running in extension.");
     }
 
-    [Fact]
-    public async Task RunCommand_Builds_WhenExtensionHasBuildDotnetUsingCliCapability()
+    // Build ownership must transfer to the CLI only for extensions that advertise the exact
+    // versioned capability. Extensions shipped alongside CLI 13.2.0-13.2.4 advertise the
+    // unversioned "build-dotnet-using-cli" token and still build the AppHost themselves, so the CLI
+    // pre-building for them would duplicate work and race the extension's launch pipeline.
+    // Matching is exact rather than prefix-based so a hypothetical future revision has to opt in
+    // deliberately instead of inheriting this contract.
+    //
+    // Both launch modes are covered on purpose. CLI 13.2.0-13.2.4 derived watch mode from
+    // `isExtensionHost && !StartDebugSession`, which silently skipped the pre-build for
+    // "Run with Aspire" (no-debug) while still advertising the build capability, so nobody built
+    // and the user ran stale output (https://github.com/microsoft/aspire/issues/15850).
+    [Theory]
+    [InlineData("build-dotnet-using-cli", true, false)]
+    [InlineData("build-dotnet-using-cli", false, false)]
+    [InlineData("build-dotnet-using-cli.v2", true, true)]
+    [InlineData("build-dotnet-using-cli.v2", false, true)]
+    [InlineData("build-dotnet-using-cli.v3", true, false)]
+    [InlineData("build-dotnet-using-cli.v3", false, false)]
+    public async Task RunCommand_AppHostBuildOwnershipRequiresV2Capability(string extensionBuildCapability, bool startDebugSession, bool expectedBuildCalled)
     {
         var buildCalled = false;
-        var buildCalledTcs = new TaskCompletionSource();
+        var watchRequested = true;
+        var runCalledTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         var extensionBackchannel = new TestExtensionBackchannel();
-        extensionBackchannel.GetCapabilitiesAsyncCallback = ct => Task.FromResult(new[] { "build-dotnet-using-cli" });
+        extensionBackchannel.GetCapabilitiesAsyncCallback = ct => Task.FromResult(new[] { extensionBuildCapability });
 
         var appHostBackchannel = new TestAppHostBackchannel();
         appHostBackchannel.GetDashboardUrlsAsyncCallback = (ct) => Task.FromResult(new DashboardUrlsState
@@ -2255,11 +2273,12 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             var runner = new TestDotNetCliRunner();
             runner.BuildAsyncCallback = (projectFile, noRestore, options, ct) => {
                 buildCalled = true;
-                buildCalledTcs.TrySetResult();
                 return 0;
             };
             runner.GetAppHostInformationAsyncCallback = (projectFile, options, ct) => (0, true, VersionHelper.GetDefaultTemplateVersion());
             runner.RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, ct) => {
+                watchRequested = watch;
+                runCalledTcs.TrySetResult();
                 var backchannel = sp.GetRequiredService<IAppHostCliBackchannel>();
                 backchannelCompletionSource!.SetResult(backchannel);
                 await Task.Delay(Timeout.InfiniteTimeSpan, ct);
@@ -2287,19 +2306,23 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("run --start-debug-session");
+        var result = command.Parse(startDebugSession ? "run --start-debug-session" : "run");
 
         using var cts = new CancellationTokenSource();
         var pendingRun = result.InvokeAsync(cancellationToken: cts.Token);
 
-        // Wait for the build to be called before cancelling
-        await buildCalledTcs.Task.DefaultTimeout();
+        await runCalledTcs.Task.DefaultTimeout();
         cts.Cancel();
 
         var exitCode = await pendingRun.DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.True(buildCalled, "Build should be called when extension has build-dotnet-using-cli capability.");
+        Assert.Equal(expectedBuildCalled, buildCalled);
+
+        // Watch mode owns its own incremental build loop, so turning it on under the extension host
+        // is what allowed the pre-build to be skipped in 13.2.x. It must stay off unless the user
+        // explicitly opts into watch.
+        Assert.False(watchRequested, "Extension launches must not implicitly enable watch mode.");
     }
 
     [Fact]
@@ -2309,7 +2332,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var runCalled = false;
 
         var extensionBackchannel = new TestExtensionBackchannel();
-        extensionBackchannel.HasCapabilityAsyncCallback = (capability, ct) => Task.FromResult(capability == KnownCapabilities.BuildDotnetUsingCli);
+        extensionBackchannel.HasCapabilityAsyncCallback = (capability, ct) => Task.FromResult(capability == KnownCapabilities.BuildDotnetUsingCliV2);
 
         var extensionInteractionServiceFactory = (IServiceProvider sp) => new TestExtensionInteractionService(sp);
 
@@ -2365,7 +2388,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var buildError = "error CS0103: The name 'MissingSymbol' does not exist in the current context";
 
         var extensionBackchannel = new TestExtensionBackchannel();
-        extensionBackchannel.HasCapabilityAsyncCallback = (capability, ct) => Task.FromResult(capability == KnownCapabilities.BuildDotnetUsingCli);
+        extensionBackchannel.HasCapabilityAsyncCallback = (capability, ct) => Task.FromResult(capability == KnownCapabilities.BuildDotnetUsingCliV2);
         extensionBackchannel.DisplayLinesAsyncCallback = async lines =>
         {
             displayedLines = lines.ToArray();

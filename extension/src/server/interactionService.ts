@@ -14,6 +14,7 @@ import type { DashboardLaunchBehavior } from '../debugger/AspireDebugSession';
 import { isDirectory } from '../utils/io';
 import { sendTelemetryEvent } from '../utils/telemetry';
 import { dashboardDefaultChangedNotificationKey } from '../utils/dashboardNotificationState';
+import { buildDotnetUsingCliCapability } from '../capabilities';
 
 export interface IInteractionService {
     showStatus: (statusText: string | null) => void;
@@ -639,9 +640,11 @@ export class InteractionService implements IInteractionService {
         // Query CLI capabilities to determine if the CLI has already built the project
         const cliCapabilities = this._rpcClient ? await this._rpcClient.getCliCapabilities() : [];
 
-        // If CLI has 'build-dotnet-using-cli' capability, it already built the project, so we don't need to force a build
-        // For backwards compatibility with older CLIs that don't have this capability, we force a build
-        const cliBuiltProject = cliCapabilities.includes('build-dotnet-using-cli');
+        // Build ownership only transfers when the CLI advertises the versioned capability, because
+        // that is the first version that guarantees a pre-build on every launch (debug and
+        // no-debug). Older CLIs advertised an unversioned token they did not always honor, so treat
+        // anything but v2 as "the extension still owns the build" and force one here.
+        const cliBuiltProject = cliCapabilities.includes(buildDotnetUsingCliCapability);
         const forceBuild = !cliBuiltProject;
 
         return debugSession.startAppHost(projectFile, args, environment, debug, { forceBuild });

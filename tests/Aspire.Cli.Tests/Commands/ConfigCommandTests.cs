@@ -26,6 +26,21 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void ConfigInfo_AdvertisesOnlyV2AppHostBuildOwnershipCapability()
+    {
+        // Asserted against the literal wire values rather than KnownCapabilities constants: the
+        // capability strings are a cross-process contract with the VS Code extension, so renaming
+        // the constant must not silently change what older extensions see. CLI 13.2.0-13.2.4
+        // advertised the unversioned "build-dotnet-using-cli" token without honoring it on the
+        // no-debug path, so it must never be advertised again.
+        var capabilities = KnownCapabilities.GetAdvertisedCapabilities()
+            .Where(capability => capability.StartsWith("build-dotnet-using-cli", StringComparison.Ordinal))
+            .ToArray();
+
+        Assert.Equal(["build-dotnet-using-cli.v2"], capabilities);
+    }
+
+    [Fact]
     public void ConfigInfoJson_UsesCamelCasePropertyNames()
     {
         var info = new Aspire.Cli.Commands.ConfigInfo(

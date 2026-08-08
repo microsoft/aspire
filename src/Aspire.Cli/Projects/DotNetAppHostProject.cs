@@ -1694,12 +1694,12 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             return null;
         }
 
-        var extensionHasBuildCapability = extensionBackchannel is not null && await extensionBackchannel.HasCapabilityAsync(KnownCapabilities.BuildDotnetUsingCli, cancellationToken);
+        var extensionHasBuildCapability = extensionBackchannel is not null && await extensionBackchannel.HasCapabilityAsync(KnownCapabilities.BuildDotnetUsingCliV2, cancellationToken);
         if (isExtensionHost && !extensionHasBuildCapability)
         {
             // Older extension hosts own the AppHost build themselves. Building again in the CLI would
             // duplicate work and could race the extension's diagnostics/launch pipeline. Newer hosts
-            // opt in with build-dotnet-using-cli when they want the CLI to own this pre-build.
+            // opt in with build-dotnet-using-cli.v2 when they want the CLI to own this pre-build.
             return null;
         }
 

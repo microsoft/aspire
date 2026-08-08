@@ -726,6 +726,43 @@ suite('InteractionService endpoints', () => {
 		}
 	});
 
+	for (const testCase of [
+		{
+			name: 'forces an extension build for an old CLI that advertises the legacy capability',
+			cliCapabilities: ['build-dotnet-using-cli'],
+			expectedForceBuild: true,
+		},
+		{
+			name: 'skips the extension build for a current CLI that advertises the v2 capability',
+			cliCapabilities: ['build-dotnet-using-cli.v2'],
+			expectedForceBuild: false,
+		},
+		{
+			name: 'forces an extension build when the CLI capability is unknown',
+			cliCapabilities: [],
+			expectedForceBuild: true,
+		},
+	]) {
+		test(`AppHost build ownership ${testCase.name}`, async () => {
+			const startAppHostStub = sinon.stub().resolves();
+			const mockDebugSession = {
+				startAppHost: startAppHostStub,
+			} as unknown as AspireDebugSession;
+			const testInfo = await createTestRpcServer(null, () => mockDebugSession, undefined, testCase.cliCapabilities);
+
+			await testInfo.interactionService.launchAppHost('/workspace/AppHost.csproj', ['run'], [], false);
+
+			assert.strictEqual(startAppHostStub.calledOnce, true);
+			assert.deepStrictEqual(startAppHostStub.firstCall.args, [
+				'/workspace/AppHost.csproj',
+				['run'],
+				[],
+				false,
+				{ forceBuild: testCase.expectedForceBuild },
+			]);
+		});
+	}
+
 	test("displayLines endpoint", async () => {
 		const sandbox = sinon.createSandbox();
 
@@ -856,7 +893,11 @@ class TestCliRpcClient implements ICliRpcClient {
     debugSessionId: string | null;
     interactionService: IInteractionService;
 
-    constructor(debugSessionId: string | null, getAspireDebugSession: () => AspireDebugSession | null, globalState?: vscode.Memento) {
+    constructor(
+		debugSessionId: string | null,
+		getAspireDebugSession: () => AspireDebugSession | null,
+		globalState?: vscode.Memento,
+		private readonly cliCapabilities: readonly string[] = ['build-dotnet-using-cli.v2']) {
         this.debugSessionId = debugSessionId;
         this.interactionService = new InteractionService(getAspireDebugSession, this, globalState);
     }
@@ -882,16 +923,20 @@ class TestCliRpcClient implements ICliRpcClient {
 	}
 
 	getCliCapabilities(): Promise<string[]> {
-		return Promise.resolve(['build-dotnet-using-cli']);
+		return Promise.resolve([...this.cliCapabilities]);
 	}
 }
 
-async function createTestRpcServer(debugSessionId?: string | null, getAspireDebugSession?: () => AspireDebugSession | null, globalState?: vscode.Memento): Promise<RpcServerTestInfo> {
+async function createTestRpcServer(
+	debugSessionId?: string | null,
+	getAspireDebugSession?: () => AspireDebugSession | null,
+	globalState?: vscode.Memento,
+	cliCapabilities?: readonly string[]): Promise<RpcServerTestInfo> {
     getAspireDebugSession ??= () => {
         return null;
     };
 
-	const rpcClient = new TestCliRpcClient(debugSessionId ?? null, getAspireDebugSession, globalState);
+	const rpcClient = new TestCliRpcClient(debugSessionId ?? null, getAspireDebugSession, globalState, cliCapabilities);
 
 	const rpcServer = await AspireRpcServer.create(() => rpcClient);
 

@@ -180,6 +180,22 @@ jobs:
             cliBinary: aspire.exe
             useXvfb: false
           - name: Linux
+            shardName: build-ownership
+            spec: out/test-e2e/test-e2e/buildOwnership.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: build-ownership
+            spec: out/test-e2e/test-e2e/buildOwnership.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Linux
             shardName: debug-startup-timeout
             spec: out/test-e2e/test-e2e/debugStartupTimeout.e2e.test.js
             runner: ubuntu-latest
@@ -466,6 +482,11 @@ jobs:
         run: |
           corepack yarn compile
           corepack yarn compile-e2e
+          # Fail fast with a clear message when a shard's spec did not compile, before the job spends
+          # minutes packaging the VSIX and downloading VS Code. Test-Path only understands literal
+          # paths and PowerShell wildcards (*, ?, []) -- it does NOT expand brace alternation such as
+          # {a,b}, which scripts/run-e2e.js does support. Keep every matrix spec a literal path so
+          # this guard stays accurate; use one matrix entry per spec instead of a brace group.
           if (-not (Test-Path '${{ matrix.spec }}')) {
             throw "Compiled E2E shard spec was not found: ${{ matrix.spec }}"
           }
