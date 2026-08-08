@@ -93,9 +93,11 @@ public sealed class DashboardSqliteDatabase : IDisposable
         var connection = new TracingSqliteConnection(_connectionString, DatabasePath, _activitySource);
         connection.Open();
 
-        // Unlike journal_mode, synchronous is scoped to a connection and must be configured every time.
-        // NORMAL avoids syncing the WAL after every commit while preserving database consistency, although
-        // a power loss can discard the most recent transactions.
+        // synchronous is scoped to the native connection and is not stored in the database. A pooled native
+        // connection retains its value, but Microsoft.Data.Sqlite doesn't expose whether Open created a new
+        // native connection or leased one from the pool, so apply it after every logical open. NORMAL avoids
+        // syncing the WAL after every commit while preserving database consistency, although a power loss can
+        // discard the most recent transactions.
         // See https://sqlite.org/pragma.html#pragma_synchronous.
         connection.ConfigureSynchronousNormal();
 
@@ -135,8 +137,10 @@ public sealed class DashboardSqliteDatabase : IDisposable
             }
 
             using var connection = OpenConnection();
-            // WAL appends writes sequentially and allows readers to continue while a writer commits.
-            // See https://sqlite.org/wal.html.
+            // Unlike synchronous, WAL journal mode is stored in the database and persists across connections
+            // and process restarts, so it only needs to be set during database initialization rather than on
+            // every open. WAL appends writes sequentially and allows readers to continue while a writer commits.
+            // See https://sqlite.org/pragma.html#pragma_journal_mode.
             connection.Execute("PRAGMA journal_mode = WAL;");
 
             var schemaTableExists = connection.QuerySingle<long>("""
