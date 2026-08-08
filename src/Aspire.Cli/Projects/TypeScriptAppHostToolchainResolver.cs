@@ -15,7 +15,8 @@ internal enum TypeScriptAppHostToolchain
     Npm,
     Bun,
     Yarn,
-    Pnpm
+    Pnpm,
+    Deno
 }
 
 internal static class TypeScriptAppHostToolchainResolver
@@ -28,6 +29,9 @@ internal static class TypeScriptAppHostToolchainResolver
     private const string YarnConfigFileName = ".yarnrc.yml";
     private const string PackageLockFileName = "package-lock.json";
     private const string PnpmLockFileName = "pnpm-lock.yaml";
+    private const string DenoLockFileName = "deno.lock";
+    private const string DenoJsonFileName = "deno.json";
+    private const string DenoJsoncFileName = "deno.jsonc";
 
     public static bool IsTypeScriptLanguage(LanguageInfo? language)
     {
@@ -87,6 +91,21 @@ internal static class TypeScriptAppHostToolchainResolver
                 return CreateLockFileResolution(TypeScriptAppHostToolchain.Yarn, YarnConfigFileName, candidateDirectory);
             }
 
+            if (File.Exists(Path.Combine(candidateDirectory.FullName, DenoLockFileName)))
+            {
+                return CreateLockFileResolution(TypeScriptAppHostToolchain.Deno, DenoLockFileName, candidateDirectory);
+            }
+
+            if (File.Exists(Path.Combine(candidateDirectory.FullName, DenoJsonFileName)))
+            {
+                return CreateLockFileResolution(TypeScriptAppHostToolchain.Deno, DenoJsonFileName, candidateDirectory);
+            }
+
+            if (File.Exists(Path.Combine(candidateDirectory.FullName, DenoJsoncFileName)))
+            {
+                return CreateLockFileResolution(TypeScriptAppHostToolchain.Deno, DenoJsoncFileName, candidateDirectory);
+            }
+
             if (File.Exists(Path.Combine(candidateDirectory.FullName, PackageLockFileName)))
             {
                 return CreateLockFileResolution(TypeScriptAppHostToolchain.Npm, PackageLockFileName, candidateDirectory);
@@ -113,6 +132,7 @@ internal static class TypeScriptAppHostToolchainResolver
             TypeScriptAppHostToolchain.Bun => "bun",
             TypeScriptAppHostToolchain.Yarn => "yarn",
             TypeScriptAppHostToolchain.Pnpm => "pnpm",
+            TypeScriptAppHostToolchain.Deno => "deno",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
         };
     }
@@ -130,6 +150,7 @@ internal static class TypeScriptAppHostToolchainResolver
             TypeScriptAppHostToolchain.Bun => "Bun",
             TypeScriptAppHostToolchain.Yarn => "Yarn",
             TypeScriptAppHostToolchain.Pnpm => "pnpm",
+            TypeScriptAppHostToolchain.Deno => "Deno",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
         };
     }
@@ -198,6 +219,13 @@ internal static class TypeScriptAppHostToolchainResolver
                     Command = "pnpm",
                     Args = ["exec", "tsc", "--noEmit", "-p", tsConfigFileName]
                 },
+                // Deno type-checks with its own compiler and config (deno.json), so there is no
+                // tsc/tsconfig step. `deno check` is the native no-emit type-check over the AppHost graph.
+                TypeScriptAppHostToolchain.Deno => new CommandSpec
+                {
+                    Command = "deno",
+                    Args = ["check", "{appHostFile}"]
+                },
                 _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
             }
         ];
@@ -221,6 +249,15 @@ internal static class TypeScriptAppHostToolchainResolver
             {
                 Command = "pnpm",
                 Args = ["exec", "tsx", "--tsconfig", tsConfigFileName, "{appHostFile}"]
+            },
+            // Deno runs the AppHost as its own runtime (no tsx transpiler). Unlike Node/Bun, Deno is
+            // not permissive for package.json projects: APIs like Deno.env/Deno.serve throw NotCapable
+            // without flags (and error non-interactively rather than prompting). The AppHost needs
+            // full host access, so `-A` grants all permissions, mirroring how Node/Bun run unrestricted.
+            TypeScriptAppHostToolchain.Deno => new CommandSpec
+            {
+                Command = "deno",
+                Args = ["run", "-A", "{appHostFile}"]
             },
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
         };
@@ -274,6 +311,14 @@ internal static class TypeScriptAppHostToolchainResolver
                     "--ignore", ".aspire/modules/",
                     "--exec", $"pnpm exec tsc --noEmit -p {tsConfigFileName} && pnpm exec tsx --tsconfig {tsConfigFileName} \"{{appHostFile}}\""
                 ]
+            },
+            // Deno has a native file watcher, so nodemon is unnecessary. `--check` makes each restart
+            // type-check before running, matching the nodemon "tsc --noEmit && run" behavior other
+            // toolchains emulate. `-A` grants full permissions as on the non-watch execute command.
+            TypeScriptAppHostToolchain.Deno => new CommandSpec
+            {
+                Command = "deno",
+                Args = ["run", "-A", "--check", "--watch", "{appHostFile}"]
             },
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
         };
@@ -344,6 +389,7 @@ internal static class TypeScriptAppHostToolchainResolver
             "bun" => TypeScriptAppHostToolchain.Bun,
             "yarn" => TypeScriptAppHostToolchain.Yarn,
             "pnpm" => TypeScriptAppHostToolchain.Pnpm,
+            "deno" => TypeScriptAppHostToolchain.Deno,
             _ => null
         };
 
