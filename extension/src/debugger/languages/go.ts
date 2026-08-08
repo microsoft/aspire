@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, isGoLaunchConfiguration } from "../../dcp/types";
-import { goDisplayName, goLabel, invalidLaunchConfiguration } from "../../loc/strings";
+import { goDebuggerName, goDisplayName, goLabel, invalidLaunchConfiguration } from "../../loc/strings";
 import { extensionLogOutputChannel } from "../../utils/logging";
 import { ResourceDebuggerExtension } from "../debuggerExtensions";
 
@@ -16,6 +16,7 @@ export const goDebuggerExtension: ResourceDebuggerExtension = {
     resourceType: 'go',
     debugAdapter: 'go',
     extensionId: 'golang.go',
+    extensionDisplayName: goDebuggerName,
     getDisplayName: (launchConfiguration: ExecutableLaunchConfiguration) => {
         if (isGoLaunchConfiguration(launchConfiguration)) {
             const displayPath = launchConfiguration.program || launchConfiguration.working_directory || '';

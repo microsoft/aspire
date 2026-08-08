@@ -40,7 +40,7 @@ import { readGitCommitSha } from './utils/versionInfo';
 import { collectResourceCommandArguments } from './views/ResourceCommandArguments';
 import { createResourceCommandArgumentLoader } from './views/ResourceCommandArgumentsLoader';
 import { executeResourceCommand } from './views/resourceCommandExecution';
-import { ResourceCommandJson } from './views/AppHostDataRepository';
+import { ResourceCommandJson, ResourceJson } from './views/AppHostDataRepository';
 import { AppHostDiscoveryService } from './utils/appHostDiscovery';
 import { ConfigInfoProvider } from './utils/configInfoProvider';
 import { AppHostLaunchService } from './services/AppHostLaunchService';
@@ -49,6 +49,7 @@ import { createE2eStateFileBridge, isE2eBridgeEnabled } from './testing/e2eState
 import type { AspireAppHostState, AspireExtensionApi, AspireExtensionStateSnapshot, WaitForStateOptions } from './types/extensionApi';
 import { AppHostsViewTelemetry } from './views/AppHostsViewTelemetry';
 import { initializeCliPathEnvironmentSync } from './utils/cliPathEnvironment';
+import { createDebuggerInstallHintService, DebuggerInstallHint } from './debugger/debuggerInstallHints';
 
 let aspireExtensionContext = new AspireExtensionContext();
 
@@ -273,9 +274,17 @@ export async function activate(context: vscode.ExtensionContext) {
     { dispose: () => { appHostTreeProvider.dispose(); dataRepository.dispose(); } });
 
   // CodeLens provider — shows Debug on pipeline steps, resource state on resources
-  const codeLensProvider = new AspireCodeLensProvider(appHostTreeProvider, dataRepository);
+  const debuggerInstallHintService = createDebuggerInstallHintService(context.globalState);
+  // Resource snapshots carry the launch configuration type Aspire.Hosting published for each resource,
+  // so evaluating install hints is a cheap in-memory scan of data the repository already polls.
+  const notifyMissingDebuggers = () => debuggerInstallHintService.notifyMissingDebuggers(getAllKnownResources(dataRepository));
+  const debuggerInstallHintSubscription = dataRepository.onDidChangeData(notifyMissingDebuggers);
+  notifyMissingDebuggers();
+  const codeLensProvider = new AspireCodeLensProvider(appHostTreeProvider, dataRepository, debuggerInstallHintService);
   const languageFilters = getSupportedLanguageIds().map(lang => ({ language: lang, scheme: 'file' }));
   const codeLensRegistration = vscode.languages.registerCodeLensProvider(languageFilters, codeLensProvider);
+  const installDebuggerExtensionRegistration = registerInstrumentedCommand('aspire-vscode.installDebuggerExtension', 'codelens', (hint: DebuggerInstallHint) =>
+    debuggerInstallHintService.installExtension(hint));
   const codeLensDebugPipelineStepRegistration = registerInstrumentedCommand('aspire-vscode.codeLensDebugPipelineStep', 'codelens', (stepName: string) => editorCommandProvider.tryExecuteDoAppHost(false, stepName));
   const codeLensResourceActionRegistration = registerInstrumentedCommand('aspire-vscode.codeLensResourceAction', 'codelens', async (resourceName: string, action: string, appHostPath: string, resourceCommand?: ResourceCommandJson) => {
     const effectiveResourceCommand = getCurrentResourceCommand(dataRepository, resourceName, action, appHostPath) ?? resourceCommand;
@@ -335,7 +344,7 @@ export async function activate(context: vscode.ExtensionContext) {
     additionalArgs.push('--follow');
     terminalProvider.sendAspireCommandToAspireTerminal('logs', true, additionalArgs);
   });
-  context.subscriptions.push(codeLensRegistration, codeLensDebugPipelineStepRegistration, codeLensResourceActionRegistration, codeLensViewLogsRegistration, codeLensRevealResourceRegistration, codeLensOpenDashboardRegistration, codeLensViewAppHostLogsRegistration, codeLensProvider);
+  context.subscriptions.push(codeLensRegistration, installDebuggerExtensionRegistration, codeLensDebugPipelineStepRegistration, codeLensResourceActionRegistration, codeLensViewLogsRegistration, codeLensRevealResourceRegistration, codeLensOpenDashboardRegistration, codeLensViewAppHostLogsRegistration, codeLensProvider, debuggerInstallHintSubscription, debuggerInstallHintService);
 
   // Gutter decorations — colored dots next to resources showing runtime state
   const gutterDecorationProvider = new AspireGutterDecorationProvider(appHostTreeProvider);
@@ -438,6 +447,21 @@ function getExtensionModeForTelemetry(mode: vscode.ExtensionMode): string {
     default:
       return 'unknown';
   }
+}
+
+/**
+ * Every resource the repository currently knows about, across all AppHosts plus the workspace view.
+ * Duplicates are harmless: callers only ask whether *some* resource has a given characteristic.
+ */
+function getAllKnownResources(dataRepository: AppHostDataRepository): ResourceJson[] {
+  const resources: ResourceJson[] = [...dataRepository.workspaceResources];
+  for (const appHost of dataRepository.appHosts) {
+    if (appHost.resources) {
+      resources.push(...appHost.resources);
+    }
+  }
+
+  return resources;
 }
 
 function getCurrentResourceCommand(dataRepository: AppHostDataRepository, resourceName: string, commandName: string, appHostPath: string | undefined): ResourceCommandJson | undefined {

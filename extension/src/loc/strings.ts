@@ -163,6 +163,19 @@ export const bunDisplayName = (script: string) => `Bun: ${script}`;
 export const bunLabel = 'Bun';
 export const nodeDisplayName = (script: string) => `Node.js: ${script}`;
 export const nodeLabel = 'Node.js';
+export const pythonDebuggerName = vscode.l10n.t('Python');
+export const goDebuggerName = vscode.l10n.t('Go');
+export const bunDebuggerName = vscode.l10n.t('Bun');
+export const csharpDebuggerName = vscode.l10n.t('C#');
+export const mauiDebuggerName = vscode.l10n.t('.NET MAUI');
+export const debuggerInstallAction = vscode.l10n.t('Install');
+// The CodeLens is anchored to the AppHost line that declares one resource, so "this Aspire resource"
+// has a referent there. The toast is coalesced to one per debugger extension across every resource
+// and AppHost, so it speaks about the app rather than about any single resource.
+export const debuggerInstallLensTooltip = (debuggerName: string) => vscode.l10n.t('Install the {0} debugger extension to debug this Aspire resource.', debuggerName);
+export const debuggerInstallNotification = (debuggerName: string) => vscode.l10n.t('Install the {0} debugger extension to debug resources in this app.', debuggerName);
+export const debuggerInstalledRestartAppHost = (debuggerName: string) => vscode.l10n.t('The {0} debugger extension is installed. Restart the AppHost to debug {0} resources.', debuggerName);
+export const debuggerInstallFailed = (debuggerName: string, error: string) => vscode.l10n.t('The {0} debugger extension could not be installed: {1}', debuggerName, error);
 export const dontShowAgainLabel = vscode.l10n.t("Don't Show Again");
 export const doYouWantToSetDefaultApphost = (appHost: string) => vscode.l10n.t('Do you want to set {0} as the default AppHost for this workspace?', appHost);
 export const doYouWantToSelectDefaultApphost = vscode.l10n.t('Do you want to select the default AppHost for this workspace?');
@@ -232,3 +245,4 @@ export const codeLensViewLogs = vscode.l10n.t('$(output)\u200A Logs');
 export const codeLensCommand = (name: string) => vscode.l10n.t('$(terminal)\u200A {0}', name);
 export const codeLensOpenDashboard = vscode.l10n.t('$(dashboard)\u200A Open Dashboard');
 export const codeLensViewAppHostLogs = vscode.l10n.t('$(output)\u200A View Logs');
+export const codeLensInstallDebugger = (debuggerName: string) => vscode.l10n.t('$(warning)\u200A Install {0} debugger', debuggerName);

@@ -1,6 +1,6 @@
 import * as path from 'path';
 import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, JavaScriptRuntimeLaunchConfiguration, isJavaScriptRuntimeLaunchConfiguration } from "../../dcp/types";
-import { bunDisplayName, bunLabel, invalidLaunchConfiguration } from "../../loc/strings";
+import { bunDebuggerName, bunDisplayName, bunLabel, invalidLaunchConfiguration } from "../../loc/strings";
 import { extensionLogOutputChannel } from "../../utils/logging";
 import { ResourceDebuggerExtension } from "../debuggerExtensions";
 import { getJavaScriptRuntimeDisplayName, getJavaScriptRuntimeTargetPath, jsRuntimeBaseFileTypes, launchMethodDirect, launchMethodPackageManager, resolveJavaScriptLaunchMethod } from "./javascriptRuntime";
@@ -18,6 +18,7 @@ export const bunDebuggerExtension: ResourceDebuggerExtension = {
     resourceType: 'bun',
     debugAdapter: 'bun',
     extensionId: 'oven.bun-vscode',
+    extensionDisplayName: bunDebuggerName,
     getDisplayName: (launchConfig) => getJavaScriptRuntimeDisplayName(launchConfig, 'bun', bunDisplayName, bunLabel),
     getSupportedFileTypes: () => [...jsRuntimeBaseFileTypes, '.jsx', '.tsx'],
     getProjectFile: (launchConfig) => getJavaScriptRuntimeTargetPath(asBunConfig(launchConfig)),

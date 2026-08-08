@@ -17,9 +17,18 @@ import { waitForRunStartIdle } from "./runStartRegistry";
 
 // Represents a resource-specific debugger extension for when the default session configuration is not sufficient to launch the resource.
 export interface ResourceDebuggerExtension {
+    /**
+     * The launch configuration type this debugger handles. Matches the value Aspire.Hosting publishes as
+     * the `resource.launchConfigurationType` snapshot property (from `SupportsDebuggingAnnotation`).
+     */
     resourceType: string;
     debugAdapter: string;
     extensionId: string | null;
+    /**
+     * Human-readable name of `extensionId`, used when offering to install a missing debug adapter.
+     * `null` exactly when `extensionId` is `null`, i.e. when the adapter ships with VS Code.
+     */
+    extensionDisplayName: string | null;
     getDisplayName: (launchConfig: ExecutableLaunchConfiguration) => string;
     getProjectFile: (launchConfig: ExecutableLaunchConfiguration) => string;
     getSupportedFileTypes: () => string[];
@@ -87,6 +96,29 @@ export async function prepareDebugSession(debugSessionConfig: AspireExtendedDebu
         debugConfiguration: configuration,
         alreadyStartedSession
     };
+}
+
+/**
+ * Every debugger extension Aspire knows how to launch a resource with, keyed by launch configuration
+ * type, regardless of whether its prerequisites are installed.
+ *
+ * {@link getResourceDebuggerExtensions} narrows this to the debuggers that can actually launch
+ * something right now. Install hints need the unfiltered set, because they exist precisely to report
+ * the debug adapters that are *not* installed yet.
+ */
+const allResourceDebuggerExtensions: readonly ResourceDebuggerExtension[] = [
+    projectDebuggerExtension,
+    azureFunctionsDebuggerExtension,
+    pythonDebuggerExtension,
+    goDebuggerExtension,
+    nodeDebuggerExtension,
+    browserDebuggerExtension,
+    bunDebuggerExtension,
+    mauiDebuggerExtension,
+];
+
+export function getAllResourceDebuggerExtensions(): readonly ResourceDebuggerExtension[] {
+    return allResourceDebuggerExtensions;
 }
 
 export function getResourceDebuggerExtensions(): ResourceDebuggerExtension[] {

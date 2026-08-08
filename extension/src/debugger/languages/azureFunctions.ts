@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, isAzureFunctionsLaunchConfiguration } from '../../dcp/types';
-import { azureFunctionsCmdDelayedExpansion, azureFunctionsCmdPercentArgument, azureFunctionsUnsupportedTaskShell, invalidLaunchConfiguration } from '../../loc/strings';
+import { azureFunctionsCmdDelayedExpansion, azureFunctionsCmdPercentArgument, azureFunctionsUnsupportedTaskShell, csharpDebuggerName, invalidLaunchConfiguration } from '../../loc/strings';
 import { assertNoTerminalControlCharacters, quoteShellArg } from '../../utils/AspireTerminalProvider';
 import { quoteCmdArgument } from '../../utils/cmdShim';
 import { extensionLogOutputChannel } from '../../utils/logging';
@@ -217,6 +217,7 @@ export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
     resourceType: 'azure-functions',
     debugAdapter: 'coreclr',
     extensionId: 'ms-dotnettools.csharp',
+    extensionDisplayName: csharpDebuggerName,
     getDisplayName: (launchConfig: ExecutableLaunchConfiguration) => {
         if (isAzureFunctionsLaunchConfiguration(launchConfig) && launchConfig.project_path) {
             return `Azure Functions: ${path.basename(launchConfig.project_path)}`;

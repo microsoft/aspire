@@ -8,12 +8,13 @@ import { AspireCodeLensProvider } from '../editor/AspireCodeLensProvider';
 import { AspireGutterDecorationProvider } from '../editor/AspireGutterDecorationProvider';
 import * as AppHostResourceParser from '../editor/parsers/AppHostResourceParser';
 import { ParsedResource } from '../editor/parsers/AppHostResourceParser';
-import { codeLensCommand, codeLensResourceValueMissing } from '../loc/strings';
+import { codeLensCommand, codeLensInstallDebugger, codeLensResourceValueMissing } from '../loc/strings';
 import { ResourceState, ResourceType } from '../editor/resourceConstants';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
 import { AppHostDataRepository, AppHostDisplayInfo, ResourceJson } from '../views/AppHostDataRepository';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
+import { DebuggerInstallHintService } from '../debugger/debuggerInstallHints';
 // Import parsers so they self-register before the provider consults them.
 import '../editor/parsers/csharpAppHostParser';
 import '../editor/parsers/jsTsAppHostParser';
@@ -107,6 +108,17 @@ function makeResource(name: string, overrides: Partial<ResourceJson> = {}): Reso
     } as unknown as ResourceJson;
 }
 
+/**
+ * A running resource that reports the launch configuration type Aspire.Hosting publishes for resources
+ * with debug support, which is what the install-hint lens keys off.
+ */
+function makeDebuggableResource(name: string, launchConfigurationType: string, overrides: Partial<ResourceJson> = {}): ResourceJson {
+    return makeResource(name, {
+        properties: { 'resource.launchConfigurationType': launchConfigurationType },
+        ...overrides,
+    });
+}
+
 interface TestHarness {
     provider: AspireCodeLensProvider;
     appHostsStub: sinon.SinonStub;
@@ -114,6 +126,9 @@ interface TestHarness {
     workspaceAppHostPathStub: sinon.SinonStub;
     repository: AppHostDataRepository;
     treeProvider: AspireAppHostTreeProvider;
+    debuggerInstallHintService: DebuggerInstallHintService;
+    extensionChanges: vscode.EventEmitter<void>;
+    installedExtensions: Set<string>;
     dispose(): void;
 }
 
@@ -121,17 +136,32 @@ function createHarness(opts: {
     appHosts?: AppHostDisplayInfo[];
     workspaceResources?: ResourceJson[];
     workspaceAppHostPath?: string;
+    installedExtensions?: Iterable<string>;
 }): TestHarness {
     const subs: vscode.Disposable[] = [];
     const terminalProvider = new AspireTerminalProvider(subs);
     const repository = new AppHostDataRepository(terminalProvider);
     const treeProvider = new AspireAppHostTreeProvider(repository, terminalProvider, new AppHostLaunchService());
+    const installedExtensions = new Set(opts.installedExtensions);
+    const extensionChanges = new vscode.EventEmitter<void>();
+    const debuggerInstallHintService = new DebuggerInstallHintService({
+        get: <T>(_key: string, defaultValue?: T) => defaultValue,
+        update: () => Promise.resolve(),
+        keys: () => [],
+        setKeysForSync: () => { },
+    } as vscode.Memento, {
+        getExtension: extensionId => installedExtensions.has(extensionId) ? { id: extensionId } as vscode.Extension<unknown> : undefined,
+        onDidChangeExtensions: extensionChanges.event,
+        showInformationMessage: () => Promise.resolve(undefined),
+        showErrorMessage: () => Promise.resolve(undefined),
+        installExtension: () => Promise.resolve(),
+    });
 
     const appHostsStub = sinon.stub(repository, 'appHosts').get(() => opts.appHosts ?? []);
     const workspaceResourcesStub = sinon.stub(repository, 'workspaceResources').get(() => opts.workspaceResources ?? []);
     const workspaceAppHostPathStub = sinon.stub(repository, 'workspaceAppHostPath').get(() => opts.workspaceAppHostPath);
 
-    const provider = new AspireCodeLensProvider(treeProvider, repository);
+    const provider = new AspireCodeLensProvider(treeProvider, repository, debuggerInstallHintService);
 
     return {
         provider,
@@ -140,10 +170,16 @@ function createHarness(opts: {
         workspaceAppHostPathStub,
         repository,
         treeProvider,
+        debuggerInstallHintService,
+        extensionChanges,
+        installedExtensions,
         dispose() {
             workspaceAppHostPathStub.restore();
             workspaceResourcesStub.restore();
             appHostsStub.restore();
+            provider.dispose();
+            debuggerInstallHintService.dispose();
+            extensionChanges.dispose();
             treeProvider.dispose();
             repository.dispose();
             subs.forEach(s => s.dispose());
@@ -194,6 +230,254 @@ function makeParsedResource(name: string, line: number): ParsedResource {
         statementStartLine: line,
     };
 }
+
+suite('AspireCodeLensProvider debugger install hints', () => {
+    let getConfigStub: sinon.SinonStub;
+
+    setup(() => {
+        getConfigStub = sinon.stub(vscode.workspace, 'getConfiguration').returns({
+            get: () => true,
+            has: () => true,
+            inspect: () => undefined,
+            update: () => Promise.resolve(),
+        } as any);
+    });
+
+    teardown(() => {
+        getConfigStub.restore();
+    });
+
+    function getDebuggerInstallLenses(lenses: vscode.CodeLens[]): vscode.CodeLens[] {
+        return lenses.filter(lens => lens.command?.command === 'aspire-vscode.installDebuggerExtension');
+    }
+
+    test('emits warning install lenses for debuggable resources in a C# AppHost', async () => {
+        const docPath = p('repo', 'AppHost', 'AppHost.cs');
+        const hostPath = p('repo', 'AppHost', 'AppHost.csproj');
+        const content = [
+            'var builder = DistributedApplication.CreateBuilder(args);',
+            'builder.AddPythonApp("python", ".", "app.py");',
+            'builder.AddUvicornApp("uvicorn", ".", "main:app");',
+            'builder.AddGoApp("go", ".");',
+            'builder.AddBunApp("bun", ".", "app.ts");',
+        ].join('\n');
+        const harness = createHarness({
+            workspaceAppHostPath: hostPath,
+            workspaceResources: [
+                makeDebuggableResource('python', 'python'),
+                makeDebuggableResource('uvicorn', 'python'),
+                makeDebuggableResource('go', 'go'),
+                makeDebuggableResource('bun', 'bun'),
+            ],
+        });
+
+        const lenses = await harness.provider.provideCodeLenses(createMockDocument(content, docPath), cancellationToken) as vscode.CodeLens[];
+        const installLenses = getDebuggerInstallLenses(lenses);
+
+        assert.deepStrictEqual(
+            installLenses.map(lens => [lens.command?.title, lens.command?.arguments]),
+            [
+                [codeLensInstallDebugger('Python'), [{ debuggerName: 'Python', extensionId: 'ms-python.debugpy' }]],
+                [codeLensInstallDebugger('Python'), [{ debuggerName: 'Python', extensionId: 'ms-python.debugpy' }]],
+                [codeLensInstallDebugger('Go'), [{ debuggerName: 'Go', extensionId: 'golang.go' }]],
+                [codeLensInstallDebugger('Bun'), [{ debuggerName: 'Bun', extensionId: 'oven.bun-vscode' }]],
+            ]);
+        harness.dispose();
+    });
+
+    test('emits warning install lenses for debuggable resources in a TypeScript AppHost', async () => {
+        const docPath = p('repo', 'AppHost', 'apphost.ts');
+        const content = [
+            'const builder = await createBuilder();',
+            'await builder.addPythonModule("python", ".", "uvicorn");',
+            'await builder.addUvicornApp("uvicorn", ".", "main:app");',
+            'await builder.addGoApp("go", ".");',
+            'await builder.addBunApp("bun", ".", "app.ts");',
+        ].join('\n');
+        const harness = createHarness({
+            workspaceAppHostPath: docPath,
+            workspaceResources: [
+                makeDebuggableResource('python', 'python'),
+                makeDebuggableResource('uvicorn', 'python'),
+                makeDebuggableResource('go', 'go'),
+                makeDebuggableResource('bun', 'bun'),
+            ],
+        });
+
+        const lenses = await harness.provider.provideCodeLenses(createMockDocument(content, docPath), cancellationToken) as vscode.CodeLens[];
+        const installLenses = getDebuggerInstallLenses(lenses);
+
+        assert.deepStrictEqual(
+            installLenses.map(lens => [lens.command?.title, lens.command?.arguments]),
+            [
+                [codeLensInstallDebugger('Python'), [{ debuggerName: 'Python', extensionId: 'ms-python.debugpy' }]],
+                [codeLensInstallDebugger('Python'), [{ debuggerName: 'Python', extensionId: 'ms-python.debugpy' }]],
+                [codeLensInstallDebugger('Go'), [{ debuggerName: 'Go', extensionId: 'golang.go' }]],
+                [codeLensInstallDebugger('Bun'), [{ debuggerName: 'Bun', extensionId: 'oven.bun-vscode' }]],
+            ]);
+        harness.dispose();
+    });
+
+    test('does not emit install lens when debugger extension is installed', async () => {
+        const docPath = p('repo', 'AppHost', 'AppHost.cs');
+        const hostPath = p('repo', 'AppHost', 'AppHost.csproj');
+        const harness = createHarness({
+            workspaceAppHostPath: hostPath,
+            workspaceResources: [makeDebuggableResource('python', 'python')],
+            installedExtensions: ['ms-python.debugpy'],
+        });
+
+        const lenses = await harness.provider.provideCodeLenses(
+            createMockDocument('var builder = DistributedApplication.CreateBuilder(args);\nbuilder.AddPythonApp("python", ".", "app.py");', docPath),
+            cancellationToken) as vscode.CodeLens[];
+
+        assert.deepStrictEqual(getDebuggerInstallLenses(lenses), []);
+        harness.dispose();
+    });
+
+    test('does not emit install lens when resource is not running', async () => {
+        const docPath = p('repo', 'AppHost', 'AppHost.cs');
+        const hostPath = p('repo', 'AppHost', 'AppHost.csproj');
+        const harness = createHarness({
+            workspaceAppHostPath: hostPath,
+            workspaceResources: [makeDebuggableResource('go', 'go', { state: ResourceState.Stopped })],
+        });
+
+        const lenses = await harness.provider.provideCodeLenses(
+            createMockDocument('var builder = DistributedApplication.CreateBuilder(args);\nbuilder.AddGoApp("go", ".");', docPath),
+            cancellationToken) as vscode.CodeLens[];
+
+        assert.deepStrictEqual(getDebuggerInstallLenses(lenses), []);
+        harness.dispose();
+    });
+
+    test('does not emit install lens for resources without debug support', async () => {
+        const docPath = p('repo', 'AppHost', 'AppHost.cs');
+        const hostPath = p('repo', 'AppHost', 'AppHost.csproj');
+        const harness = createHarness({
+            workspaceAppHostPath: hostPath,
+            workspaceResources: [makeResource('container')],
+        });
+
+        const lenses = await harness.provider.provideCodeLenses(
+            createMockDocument('var builder = DistributedApplication.CreateBuilder(args);\nbuilder.AddContainer("container", "nginx");', docPath),
+            cancellationToken) as vscode.CodeLens[];
+
+        assert.deepStrictEqual(getDebuggerInstallLenses(lenses), []);
+        harness.dispose();
+    });
+
+    test('emits an install lens for an Add* method the parser has never heard of', async () => {
+        // The hint comes from the resource snapshot, not from a table of known Add* method names, so a
+        // resource added by a future or third-party integration is covered without any extension change.
+        const docPath = p('repo', 'AppHost', 'AppHost.cs');
+        const hostPath = p('repo', 'AppHost', 'AppHost.csproj');
+        const harness = createHarness({
+            workspaceAppHostPath: hostPath,
+            workspaceResources: [makeDebuggableResource('api', 'python')],
+        });
+
+        const lenses = await harness.provider.provideCodeLenses(
+            createMockDocument('var builder = DistributedApplication.CreateBuilder(args);\nbuilder.AddFastApiApp("api", ".", "main:app");', docPath),
+            cancellationToken) as vscode.CodeLens[];
+
+        assert.deepStrictEqual(
+            getDebuggerInstallLenses(lenses).map(lens => [lens.command?.title, lens.command?.arguments]),
+            [[codeLensInstallDebugger('Python'), [{ debuggerName: 'Python', extensionId: 'ms-python.debugpy' }]]]);
+        harness.dispose();
+    });
+
+    test('does not emit install lens when CodeLens is disabled', async () => {
+        getConfigStub.restore();
+        getConfigStub = sinon.stub(vscode.workspace, 'getConfiguration').returns({
+            get: () => false,
+            has: () => true,
+            inspect: () => undefined,
+            update: () => Promise.resolve(),
+        } as any);
+        const docPath = p('repo', 'AppHost', 'AppHost.cs');
+        const hostPath = p('repo', 'AppHost', 'AppHost.csproj');
+        const harness = createHarness({
+            workspaceAppHostPath: hostPath,
+            workspaceResources: [makeDebuggableResource('bun', 'bun')],
+        });
+
+        const lenses = await harness.provider.provideCodeLenses(
+            createMockDocument('var builder = DistributedApplication.CreateBuilder(args);\nbuilder.AddBunApp("bun", ".", "app.ts");', docPath),
+            cancellationToken) as vscode.CodeLens[];
+
+        assert.deepStrictEqual(lenses, []);
+        harness.dispose();
+    });
+
+    test('refreshes and removes install lens after extension installation', async () => {
+        const docPath = p('repo', 'AppHost', 'AppHost.cs');
+        const hostPath = p('repo', 'AppHost', 'AppHost.csproj');
+        const harness = createHarness({
+            workspaceAppHostPath: hostPath,
+            workspaceResources: [makeDebuggableResource('python', 'python')],
+        });
+        const document = createMockDocument(
+            'var builder = DistributedApplication.CreateBuilder(args);\nbuilder.AddPythonApp("python", ".", "app.py");',
+            docPath);
+        let refreshCount = 0;
+        const subscription = harness.provider.onDidChangeCodeLenses!(() => refreshCount++);
+
+        const before = await harness.provider.provideCodeLenses(document, cancellationToken) as vscode.CodeLens[];
+        assert.strictEqual(getDebuggerInstallLenses(before).length, 1);
+
+        harness.installedExtensions.add('ms-python.debugpy');
+        harness.extensionChanges.fire();
+
+        assert.strictEqual(refreshCount, 1);
+        const after = await harness.provider.provideCodeLenses(document, cancellationToken) as vscode.CodeLens[];
+        assert.deepStrictEqual(getDebuggerInstallLenses(after), []);
+
+        subscription.dispose();
+        harness.dispose();
+    });
+
+    test('refreshes and adds install lens when the resource starts running', async () => {
+        const docPath = p('repo', 'AppHost', 'AppHost.cs');
+        const hostPath = p('repo', 'AppHost', 'AppHost.csproj');
+        const resource = makeDebuggableResource('go', 'go', { state: ResourceState.Stopped });
+        const harness = createHarness({
+            workspaceAppHostPath: hostPath,
+            workspaceResources: [resource],
+        });
+        const document = createMockDocument(
+            'var builder = DistributedApplication.CreateBuilder(args);\nbuilder.AddGoApp("go", ".");',
+            docPath);
+        let refreshCount = 0;
+        const subscription = harness.provider.onDidChangeCodeLenses!(() => refreshCount++);
+
+        const before = await harness.provider.provideCodeLenses(document, cancellationToken) as vscode.CodeLens[];
+        assert.deepStrictEqual(getDebuggerInstallLenses(before), []);
+
+        resource.state = ResourceState.Running;
+        (harness.treeProvider as unknown as { _onDidChangeTreeData: vscode.EventEmitter<void> })._onDidChangeTreeData.fire();
+
+        assert.strictEqual(refreshCount, 1);
+        const after = await harness.provider.provideCodeLenses(document, cancellationToken) as vscode.CodeLens[];
+        assert.strictEqual(getDebuggerInstallLenses(after).length, 1);
+
+        subscription.dispose();
+        harness.dispose();
+    });
+
+    test('dispose removes tree and extension listeners', () => {
+        const harness = createHarness({});
+        let refreshCount = 0;
+        harness.provider.onDidChangeCodeLenses!(() => refreshCount++);
+
+        harness.provider.dispose();
+        harness.extensionChanges.fire();
+        (harness.treeProvider as unknown as { _onDidChangeTreeData: vscode.EventEmitter<void> })._onDidChangeTreeData.fire();
+
+        assert.strictEqual(refreshCount, 0);
+        harness.dispose();
+    });
+});
 
 suite('AspireCodeLensProvider builder lens', () => {
     let getConfigStub: sinon.SinonStub;

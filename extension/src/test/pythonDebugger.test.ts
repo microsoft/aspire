@@ -1,5 +1,7 @@
 import * as assert from 'assert';
 import * as sinon from 'sinon';
+import * as vscode from 'vscode';
+import { getSupportedCapabilities } from '../capabilities';
 import { pythonDebuggerExtension } from '../debugger/languages/python';
 import { AspireResourceExtendedDebugConfiguration, PythonLaunchConfiguration } from '../dcp/types';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
@@ -19,6 +21,23 @@ function createDebugConfig(overrides: Partial<AspireResourceExtendedDebugConfigu
 
 suite('Python Debugger Extension Tests', () => {
     teardown(() => sinon.restore());
+
+    test('uses the standalone debugpy extension for Python debugging', () => {
+        sinon.stub(vscode.extensions, 'getExtension').callsFake((extensionId: string) =>
+            extensionId === 'ms-python.debugpy'
+                ? { id: extensionId } as vscode.Extension<unknown>
+                : undefined);
+
+        assert.deepStrictEqual(
+            {
+                extensionId: pythonDebuggerExtension.extensionId,
+                supportsPython: getSupportedCapabilities().includes('python'),
+            },
+            {
+                extensionId: 'ms-python.debugpy',
+                supportsPython: true,
+            });
+    });
 
     test('working_directory overrides cwd in debug configuration', async () => {
         const launchConfig: PythonLaunchConfiguration = {

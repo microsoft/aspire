@@ -1,6 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREEXTENSION001 // Debug support annotations are experimental.
+
+using System.Collections.Immutable;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
@@ -82,6 +85,125 @@ public class ResourceSnapshotBuilderTests
         AssertHighlightedProperty(snapshot, KnownProperties.Project.Path, "Project path", isSensitive: false, sortOrder: 0);
         AssertHighlightedProperty(snapshot, KnownProperties.Project.LaunchProfile, "Launch profile", isSensitive: false, sortOrder: 1);
         AssertHighlightedProperty(snapshot, KnownProperties.Executable.Pid, "Process ID", isSensitive: false, sortOrder: 2);
+    }
+
+    [Fact]
+    public void ProjectSnapshotAddsLaunchConfigurationTypeWhenResourceSupportsDebugging()
+    {
+        var project = new ProjectResource("project");
+        project.Annotations.Add(new TestProjectMetadata());
+        project.Annotations.Add(new LaunchProfileAnnotation("https"));
+        project.Annotations.Add(CreateSupportsDebuggingAnnotation(project.Name, KnownLaunchConfigurationTypes.Project));
+
+        var executable = Executable.Create("project", "dotnet");
+        executable.Annotate(DcpCustomResource.ResourceNameAnnotation, project.Name);
+        executable.Status = new ExecutableStatus
+        {
+            EffectiveArgs = ["run"],
+            ProcessId = 1234
+        };
+
+        var snapshot = CreateSnapshotBuilder(new Dictionary<string, IResource>
+        {
+            [project.Name] = project
+        }).ToSnapshot(executable, CreatePreviousSnapshot());
+
+        // The launch configuration type is a machine-facing contract for IDEs rather than something the
+        // dashboard surfaces, so it is published without display metadata.
+        AssertDefaultProperty(snapshot, KnownProperties.Resource.LaunchConfigurationType, isSensitive: false);
+        Assert.Equal(KnownLaunchConfigurationTypes.Project, GetProperty(snapshot, KnownProperties.Resource.LaunchConfigurationType).Value);
+    }
+
+    [Fact]
+    public void ExecutableSnapshotAddsLaunchConfigurationTypeWhenResourceSupportsDebugging()
+    {
+        // A Python resource is the case the property exists for: it has no project metadata, so an IDE has no
+        // other way to learn which debug adapter the resource needs.
+        var pythonResource = new TestDotnetProjectResource("pythonapp");
+        pythonResource.Annotations.Add(CreateSupportsDebuggingAnnotation(pythonResource.Name, "python"));
+
+        var executable = Executable.Create("pythonapp", "python3");
+        executable.Annotate(DcpCustomResource.ResourceNameAnnotation, pythonResource.Name);
+        executable.Spec.WorkingDirectory = "/app";
+        executable.Status = new ExecutableStatus
+        {
+            EffectiveArgs = ["app.py"],
+            ProcessId = 1234
+        };
+
+        var snapshot = CreateSnapshotBuilder(new Dictionary<string, IResource>
+        {
+            [pythonResource.Name] = pythonResource
+        }).ToSnapshot(executable, CreatePreviousSnapshot());
+
+        AssertDefaultProperty(snapshot, KnownProperties.Resource.LaunchConfigurationType, isSensitive: false);
+        Assert.Equal("python", GetProperty(snapshot, KnownProperties.Resource.LaunchConfigurationType).Value);
+    }
+
+    [Fact]
+    public void ExecutableSnapshotOmitsLaunchConfigurationTypeWhenResourceDoesNotSupportDebugging()
+    {
+        var executableResource = new TestDotnetProjectResource("exe");
+
+        var executable = Executable.Create("exe", "dotnet");
+        executable.Annotate(DcpCustomResource.ResourceNameAnnotation, executableResource.Name);
+        executable.Spec.WorkingDirectory = "/app";
+        executable.Status = new ExecutableStatus
+        {
+            EffectiveArgs = ["run"],
+            ProcessId = 1234
+        };
+
+        var snapshot = CreateSnapshotBuilder(new Dictionary<string, IResource>
+        {
+            [executableResource.Name] = executableResource
+        }).ToSnapshot(executable, CreatePreviousSnapshot());
+
+        Assert.Equal(
+            [
+                KnownProperties.Executable.Args,
+                KnownProperties.Executable.Path,
+                KnownProperties.Executable.Pid,
+                KnownProperties.Executable.WorkDir,
+                KnownProperties.Resource.AppArgs,
+                KnownProperties.Resource.AppArgsSensitivity,
+            ],
+            snapshot.Properties.Select(p => p.Name).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void ExecutableSnapshotRemovesStaleLaunchConfigurationTypeWhenResourceNoLongerSupportsDebugging()
+    {
+        var executableResource = new TestDotnetProjectResource("exe");
+
+        var executable = Executable.Create("exe", "dotnet");
+        executable.Annotate(DcpCustomResource.ResourceNameAnnotation, executableResource.Name);
+        executable.Spec.WorkingDirectory = "/app";
+        executable.Status = new ExecutableStatus
+        {
+            EffectiveArgs = ["run"],
+            ProcessId = 1234
+        };
+
+        // Absence of the property is the "no debug support" signal, and snapshots are merged into the
+        // previously published one, so a carried-forward value has to be removed rather than just omitted.
+        var previous = CreatePreviousSnapshot(properties: [new(KnownProperties.Resource.LaunchConfigurationType, "python")]);
+
+        var snapshot = CreateSnapshotBuilder(new Dictionary<string, IResource>
+        {
+            [executableResource.Name] = executableResource
+        }).ToSnapshot(executable, previous);
+
+        Assert.Equal(
+            [
+                KnownProperties.Executable.Args,
+                KnownProperties.Executable.Path,
+                KnownProperties.Executable.Pid,
+                KnownProperties.Executable.WorkDir,
+                KnownProperties.Resource.AppArgs,
+                KnownProperties.Resource.AppArgsSensitivity,
+            ],
+            snapshot.Properties.Select(p => p.Name).Order(StringComparer.Ordinal));
     }
 
     [Fact]
@@ -247,17 +369,26 @@ public class ResourceSnapshotBuilderTests
         return executable;
     }
 
+    private static SupportsDebuggingAnnotation CreateSupportsDebuggingAnnotation(string resourceName, string launchConfigurationType)
+    {
+        // Only LaunchConfigurationType is read by the snapshot builder, so the producer is never invoked.
+        return SupportsDebuggingAnnotation.Create<object>(
+            resourceName,
+            launchConfigurationType,
+            (_, _) => Task.FromResult<object>(new object()));
+    }
+
     private static DcpResourceSnapshotBuilder CreateSnapshotBuilder(IDictionary<string, IResource>? applicationModel = null)
     {
         return new(new DcpResourceState(applicationModel ?? new Dictionary<string, IResource>(), []));
     }
 
-    private static CustomResourceSnapshot CreatePreviousSnapshot(string resourceType = "resource")
+    private static CustomResourceSnapshot CreatePreviousSnapshot(string resourceType = "resource", ImmutableArray<ResourcePropertySnapshot>? properties = null)
     {
         return new()
         {
             ResourceType = resourceType,
-            Properties = []
+            Properties = properties ?? []
         };
     }
 

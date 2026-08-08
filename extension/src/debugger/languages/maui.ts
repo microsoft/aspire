@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration, MauiLaunchConfiguration, isMauiLaunchConfiguration } from "../../dcp/types";
-import { invalidLaunchConfiguration } from "../../loc/strings";
+import { invalidLaunchConfiguration, mauiDebuggerName } from "../../loc/strings";
 import { addFilteredEnvironmentKeys, removeFilteredEnvironmentKeys } from "../../utils/environment";
 import { extensionLogOutputChannel } from "../../utils/logging";
 import { ResourceDebuggerExtension } from "../debuggerExtensions";
@@ -755,6 +755,7 @@ export const mauiDebuggerExtension: ResourceDebuggerExtension = {
     resourceType: 'maui',
     debugAdapter: 'maui',
     extensionId: 'ms-dotnettools.dotnet-maui',
+    extensionDisplayName: mauiDebuggerName,
     getDisplayName,
     getSupportedFileTypes: () => ['.csproj'],
     getProjectFile: (launchConfig) => getProjectFile(launchConfig),

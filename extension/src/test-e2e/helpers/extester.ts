@@ -85,6 +85,7 @@ export interface QuickPickItem {
 
 export interface Notification {
     getMessage(): Promise<string>;
+    findElements(locator: Locator): Promise<WebElement[]>;
     dismiss(): Promise<void>;
 }
 

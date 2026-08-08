@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREEXTENSION001 // Debug support annotations are experimental.
+
 using System.Collections.Immutable;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
@@ -156,6 +158,18 @@ internal class ResourceSnapshotBuilder
             state = KnownResourceStates.NotStarted;
         }
 
+        // The app model already knows which debugger a resource needs, so publish that identifier instead of
+        // making IDEs re-derive the language from AppHost source. The annotation is present whenever the
+        // resource opted into debugging through WithDebugSupport, independent of whether the active debug
+        // session can honor it - a resource the IDE had to downgrade to plain process execution (because the
+        // matching debug adapter is missing) still reports its type, which is exactly the case an IDE needs
+        // to detect in order to offer the adapter.
+        string? launchConfigurationType = null;
+        if (appModelResource is not null && appModelResource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebuggingAnnotation))
+        {
+            launchConfigurationType = supportsDebuggingAnnotation.LaunchConfigurationType;
+        }
+
         var urls = GetUrls(executable, executable.Status?.State);
 
         var effectiveArgs = executable.Status?.EffectiveArgs;
@@ -171,21 +185,25 @@ internal class ResourceSnapshotBuilder
 
         if (projectPath is not null)
         {
+            List<ResourcePropertySnapshot> projectProperties = [
+                ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Executable.Path, executable.Spec.ExecutablePath),
+                ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Executable.WorkDir, executable.Spec.WorkingDirectory),
+                ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Executable.Args, effectiveArgs ?? [], isSensitive: true),
+                ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Executable.Pid, executable.Status?.ProcessId),
+                ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Project.Path, projectPath),
+                ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Project.LaunchProfile, launchProfileName),
+                new(KnownProperties.Resource.AppArgs, launchArguments?.Args) { IsSensitive = launchArguments?.IsSensitive ?? false },
+                new(KnownProperties.Resource.AppArgsSensitivity, launchArguments?.ArgsAreSensitive) { IsSensitive = launchArguments?.IsSensitive ?? false },
+            ];
+
+            var projectPreviousProperties = AddOrRemoveLaunchConfigurationType(previous.Properties, projectProperties, KnownResourceTypes.Project, launchConfigurationType);
+
             return previous with
             {
                 ResourceType = previous.ResourceType ?? KnownResourceTypes.Project,
                 State = state,
                 ExitCode = executable.Status?.ExitCode,
-                Properties = previous.Properties.SetResourcePropertyRange([
-                    ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Executable.Path, executable.Spec.ExecutablePath),
-                    ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Executable.WorkDir, executable.Spec.WorkingDirectory),
-                    ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Executable.Args, effectiveArgs ?? [], isSensitive: true),
-                    ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Executable.Pid, executable.Status?.ProcessId),
-                    ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Project.Path, projectPath),
-                    ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Project.LaunchProfile, launchProfileName),
-                    new(KnownProperties.Resource.AppArgs, launchArguments?.Args) { IsSensitive = launchArguments?.IsSensitive ?? false },
-                    new(KnownProperties.Resource.AppArgsSensitivity, launchArguments?.ArgsAreSensitive) { IsSensitive = launchArguments?.IsSensitive ?? false },
-                ]),
+                Properties = projectPreviousProperties.SetResourcePropertyRange([.. projectProperties]),
                 EnvironmentVariables = environment,
                 CreationTimeStamp = executable.Metadata.CreationTimestamp?.ToUniversalTime(),
                 StartTimeStamp = executable.Status?.StartupTimestamp?.ToUniversalTime(),
@@ -195,19 +213,23 @@ internal class ResourceSnapshotBuilder
             };
         }
 
+        List<ResourcePropertySnapshot> executableProperties = [
+            ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Executable, KnownProperties.Executable.Path, executable.Spec.ExecutablePath),
+            ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Executable, KnownProperties.Executable.WorkDir, executable.Spec.WorkingDirectory),
+            ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Executable, KnownProperties.Executable.Args, effectiveArgs ?? [], isSensitive: true),
+            ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Executable, KnownProperties.Executable.Pid, executable.Status?.ProcessId),
+            new(KnownProperties.Resource.AppArgs, launchArguments?.Args) { IsSensitive = launchArguments?.IsSensitive ?? false },
+            new(KnownProperties.Resource.AppArgsSensitivity, launchArguments?.ArgsAreSensitive) { IsSensitive = launchArguments?.IsSensitive ?? false },
+        ];
+
+        var executablePreviousProperties = AddOrRemoveLaunchConfigurationType(previous.Properties, executableProperties, KnownResourceTypes.Executable, launchConfigurationType);
+
         return previous with
         {
             ResourceType = previous.ResourceType ?? KnownResourceTypes.Executable,
             State = state,
             ExitCode = executable.Status?.ExitCode,
-            Properties = previous.Properties.SetResourcePropertyRange([
-                ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Executable, KnownProperties.Executable.Path, executable.Spec.ExecutablePath),
-                ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Executable, KnownProperties.Executable.WorkDir, executable.Spec.WorkingDirectory),
-                ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Executable, KnownProperties.Executable.Args, effectiveArgs ?? [], isSensitive: true),
-                ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Executable, KnownProperties.Executable.Pid, executable.Status?.ProcessId),
-                new(KnownProperties.Resource.AppArgs, launchArguments?.Args) { IsSensitive = launchArguments?.IsSensitive ?? false },
-                new(KnownProperties.Resource.AppArgsSensitivity, launchArguments?.ArgsAreSensitive) { IsSensitive = launchArguments?.IsSensitive ?? false },
-            ]),
+            Properties = executablePreviousProperties.SetResourcePropertyRange([.. executableProperties]),
             EnvironmentVariables = environment,
             CreationTimeStamp = executable.Metadata.CreationTimestamp?.ToUniversalTime(),
             StartTimeStamp = executable.Status?.StartupTimestamp?.ToUniversalTime(),
@@ -215,6 +237,25 @@ internal class ResourceSnapshotBuilder
             Urls = urls,
             Relationships = relationships
         };
+    }
+
+    // The launch configuration type is only meaningful when the resource actually opted into debugging, and
+    // consumers treat its absence - not an empty value - as "this resource has no debug support". Snapshots
+    // are merged into the previously published one and SetResourcePropertyRange only adds or replaces, so the
+    // property has to be removed explicitly rather than merely omitted, otherwise a stale value would survive.
+    private static ImmutableArray<ResourcePropertySnapshot> AddOrRemoveLaunchConfigurationType(
+        ImmutableArray<ResourcePropertySnapshot> previousProperties,
+        List<ResourcePropertySnapshot> properties,
+        string resourceType,
+        string? launchConfigurationType)
+    {
+        if (string.IsNullOrWhiteSpace(launchConfigurationType))
+        {
+            return previousProperties.RemoveResourceProperty(KnownProperties.Resource.LaunchConfigurationType);
+        }
+
+        properties.Add(ResourcePropertySnapshotMetadata.Create(resourceType, KnownProperties.Resource.LaunchConfigurationType, launchConfigurationType));
+        return previousProperties;
     }
 
     private static bool IsNotStartedExecutableState(string? state)

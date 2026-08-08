@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
-import { launchingWithAppHost, launchingWithDirectory } from '../loc/strings';
+import { codeLensInstallDebugger, debuggerInstallFailed, debuggerInstallLensTooltip, debuggerInstallNotification, debuggerInstalledRestartAppHost, launchingWithAppHost, launchingWithDirectory } from '../loc/strings';
 import { formatText } from '../utils/strings';
 
 suite('utils/strings tests', () => {
@@ -78,5 +78,50 @@ suite('loc/strings tests', () => {
 				launchingRunWithDirectory: 'Launching Aspire run session using directory {0}: attempting to determine effective AppHost...',
 				launchingRunWithAppHost: 'Launching Aspire run session for AppHost {0}...',
 			});
+	});
+
+	test('registers debugger install hint messages for localization', () => {
+		const extensionRoot = path.resolve(__dirname, '..', '..');
+		const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
+
+		assert.deepStrictEqual(
+			{
+				debuggerInstallNotification: packageNls['aspire-vscode.strings.debuggerInstallNotification'],
+				debuggerInstallLensTooltip: packageNls['aspire-vscode.strings.debuggerInstallLensTooltip'],
+				debuggerInstalledRestartAppHost: packageNls['aspire-vscode.strings.debuggerInstalledRestartAppHost'],
+				debuggerInstallFailed: packageNls['aspire-vscode.strings.debuggerInstallFailed'],
+				debuggerInstallAction: packageNls['aspire-vscode.strings.debuggerInstallAction'],
+				csharpDebuggerName: packageNls['aspire-vscode.strings.csharpDebuggerName'],
+				mauiDebuggerName: packageNls['aspire-vscode.strings.mauiDebuggerName'],
+				codeLensInstallDebugger: packageNls['aspire-vscode.strings.codeLensInstallDebugger'],
+			},
+			{
+				debuggerInstallNotification: 'Install the {0} debugger extension to debug resources in this app.',
+				debuggerInstallLensTooltip: 'Install the {0} debugger extension to debug this Aspire resource.',
+				debuggerInstalledRestartAppHost: 'The {0} debugger extension is installed. Restart the AppHost to debug {0} resources.',
+				debuggerInstallFailed: 'The {0} debugger extension could not be installed: {1}',
+				debuggerInstallAction: 'Install',
+				csharpDebuggerName: 'C#',
+				mauiDebuggerName: '.NET MAUI',
+				codeLensInstallDebugger: '$(warning)\u200A Install {0} debugger',
+			});
+
+		assert.deepStrictEqual(
+			[
+				debuggerInstallNotification('Python'),
+				debuggerInstallNotification('C#'),
+				debuggerInstallLensTooltip('Python'),
+				debuggerInstalledRestartAppHost('Go'),
+				debuggerInstallFailed('Bun', 'offline'),
+				codeLensInstallDebugger('Python'),
+			],
+			[
+				'Install the Python debugger extension to debug resources in this app.',
+				'Install the C# debugger extension to debug resources in this app.',
+				'Install the Python debugger extension to debug this Aspire resource.',
+				'The Go debugger extension is installed. Restart the AppHost to debug Go resources.',
+				'The Bun debugger extension could not be installed: offline',
+				'$(warning)\u200A Install Python debugger',
+			]);
 	});
 });

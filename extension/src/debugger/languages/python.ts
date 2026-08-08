@@ -1,5 +1,5 @@
 import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, isPythonLaunchConfiguration } from "../../dcp/types";
-import { invalidLaunchConfiguration } from "../../loc/strings";
+import { invalidLaunchConfiguration, pythonDebuggerName } from "../../loc/strings";
 import { extensionLogOutputChannel } from "../../utils/logging";
 import { ResourceDebuggerExtension } from "../debuggerExtensions";
 import * as vscode from 'vscode';
@@ -26,7 +26,8 @@ function getProjectFile(launchConfig: ExecutableLaunchConfiguration): string {
 export const pythonDebuggerExtension: ResourceDebuggerExtension = {
     resourceType: 'python',
     debugAdapter: 'debugpy',
-    extensionId: 'ms-python.python',
+    extensionId: 'ms-python.debugpy',
+    extensionDisplayName: pythonDebuggerName,
     getDisplayName: (launchConfiguration: ExecutableLaunchConfiguration) => `Python: ${vscode.workspace.asRelativePath(getProjectFile(launchConfiguration))}`,
     getSupportedFileTypes: () => ['.py'],
     getProjectFile: (launchConfig) => getProjectFile(launchConfig),

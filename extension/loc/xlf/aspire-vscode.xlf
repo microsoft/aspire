@@ -1,11 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2">
   <file original="package" source-language="en" datatype="plaintext"><body>
+    <trans-unit id="aspire-vscode.strings.codeLensInstallDebugger">
+      <source xml:lang="en">$(warning)  Install {0} debugger</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.resourceCommandDisabledDescription">
       <source xml:lang="en">(disabled)</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.resourceCountDescription">
       <source xml:lang="en">({0} resources)</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.mauiDebuggerName">
+      <source xml:lang="en">.NET MAUI</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.debugSessionAlreadyExists">
       <source xml:lang="en">A debug session is already active for id {0}.</source>
@@ -105,6 +111,12 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.buildFailedWithExitCode">
       <source xml:lang="en">Build failed with exit code {0}.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.bunDebuggerName">
+      <source xml:lang="en">Bun</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.csharpDebuggerName">
+      <source xml:lang="en">C#</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.lookingForDevkitBuildTask">
       <source xml:lang="en">C# Dev Kit is installed, looking for C# Dev Kit build task...</source>
@@ -349,17 +361,29 @@
     <trans-unit id="walkthrough.getStarted.title">
       <source xml:lang="en">Get started with Aspire</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.goDebuggerName">
+      <source xml:lang="en">Go</source>
+    </trans-unit>
     <trans-unit id="configuration.aspire.enableDebugConfigEnvironmentLogging">
       <source xml:lang="en">Include environment variables when logging debug session configurations. This can help diagnose environment-related issues but may expose sensitive information in logs.</source>
     </trans-unit>
     <trans-unit id="command.init">
       <source xml:lang="en">Initialize Aspire in an existing codebase</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.debuggerInstallAction">
+      <source xml:lang="en">Install</source>
+    </trans-unit>
     <trans-unit id="command.installCli">
       <source xml:lang="en">Install Aspire CLI</source>
     </trans-unit>
     <trans-unit id="walkthrough.getStarted.installCli.title">
       <source xml:lang="en">Install the Aspire CLI</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.debuggerInstallNotification">
+      <source xml:lang="en">Install the {0} debugger extension to debug resources in this app.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.debuggerInstallLensTooltip">
+      <source xml:lang="en">Install the {0} debugger extension to debug this Aspire resource.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.invalidLaunchConfiguration">
       <source xml:lang="en">Invalid launch configuration for {0}.</source>
@@ -553,6 +577,9 @@
     <trans-unit id="command.publish">
       <source xml:lang="en">Publish deployment artifacts</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.pythonDebuggerName">
+      <source xml:lang="en">Python</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.rpcServerError">
       <source xml:lang="en">RPC server error: {0}.</source>
     </trans-unit>
@@ -726,6 +753,12 @@
     </trans-unit>
     <trans-unit id="extension.debug.step">
       <source xml:lang="en">The pipeline step name to execute when command is &apos;do&apos;</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.debuggerInstallFailed">
+      <source xml:lang="en">The {0} debugger extension could not be installed: {1}</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.debuggerInstalledRestartAppHost">
+      <source xml:lang="en">The {0} debugger extension is installed. Restart the AppHost to debug {0} resources.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.resourceCommandDynamicInputsUnsupported">
       <source xml:lang="en">This command has dynamic inputs that the Aspire extension cannot prompt for yet. Run it from the Aspire Dashboard or Aspire CLI instead.</source>

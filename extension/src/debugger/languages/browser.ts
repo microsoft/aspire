@@ -7,6 +7,7 @@ export const browserDebuggerExtension: ResourceDebuggerExtension = {
     resourceType: 'browser',
     debugAdapter: 'pwa-msedge',
     extensionId: null, // built-in to VS Code via js-debug
+    extensionDisplayName: null,
     getDisplayName: (launchConfiguration: ExecutableLaunchConfiguration) => {
         if (isBrowserLaunchConfiguration(launchConfiguration) && launchConfiguration.url) {
             return browserDisplayName(launchConfiguration.url);

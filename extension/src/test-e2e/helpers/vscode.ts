@@ -251,6 +251,11 @@ export async function waitForNotificationMessage(expectedText: string, timeoutMs
     }, timeoutMs, `Timed out waiting for notification containing '${expectedText}'.`);
 }
 
+export async function getNotificationActionTitles(notification: Notification): Promise<string[]> {
+    const actions = await notification.findElements(By.css('.notification-list-item-buttons-container .monaco-button'));
+    return await Promise.all(actions.map(action => action.getText()));
+}
+
 export async function getNotificationCount(): Promise<number> {
     return (await new Workbench().getNotifications()).length;
 }
