@@ -7,6 +7,8 @@ using Azure.Security.KeyVault.Secrets;
 
 [assembly: ConfigurationSchema("Aspire:Azure:Security:KeyVault", typeof(AzureSecurityKeyVaultSettings))]
 [assembly: ConfigurationSchema("Aspire:Azure:Security:KeyVault:ClientOptions", typeof(SecretClientOptions), exclusionPaths: ["Default"])]
+[assembly: ConfigurationSchema("Aspire:Azure:Security:KeyVault:*", typeof(AzureSecurityKeyVaultSettings))]
+[assembly: ConfigurationSchema("Aspire:Azure:Security:KeyVault:*:ClientOptions", typeof(SecretClientOptions), exclusionPaths: ["Default"])]
 
 [assembly: LoggingCategories(
     "Azure",

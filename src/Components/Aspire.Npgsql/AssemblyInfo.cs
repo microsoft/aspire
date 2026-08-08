@@ -5,6 +5,7 @@ using Aspire.Npgsql;
 using Aspire;
 
 [assembly: ConfigurationSchema("Aspire:Npgsql", typeof(NpgsqlSettings))]
+[assembly: ConfigurationSchema("Aspire:Npgsql:*", typeof(NpgsqlSettings))]
 
 [assembly: LoggingCategories(
     "Npgsql",

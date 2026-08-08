@@ -7,6 +7,9 @@ using Azure.Messaging.WebPubSub;
 
 [assembly: ConfigurationSchema("Aspire:Azure:Messaging:WebPubSub", typeof(AzureMessagingWebPubSubSettings))]
 [assembly: ConfigurationSchema("Aspire:Azure:Messaging:WebPubSub:ClientOptions", typeof(WebPubSubServiceClientOptions), exclusionPaths: ["Default"])]
+[assembly: ConfigurationSchema("Aspire:Azure:Messaging:WebPubSub:*", typeof(AzureMessagingWebPubSubSettings))]
+[assembly: ConfigurationSchema("Aspire:Azure:Messaging:WebPubSub:*:ClientOptions", typeof(WebPubSubServiceClientOptions), exclusionPaths: ["Default"])]
+[assembly: ConfigurationSchema("Aspire:Azure:Messaging:WebPubSub:*:*", typeof(AzureMessagingWebPubSubSettings))]
 
 [assembly: LoggingCategories(
     "Azure",

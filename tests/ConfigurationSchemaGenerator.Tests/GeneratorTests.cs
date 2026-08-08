@@ -1495,13 +1495,22 @@ public partial class GeneratorTests
                 "Certificates": {
                   "type": "object",
                   "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "PrivateKey": {
-                        "type": "string",
-                        "description": "The private key of the certificate, in base64 format."
+                    "anyOf": [
+                      {
+                        "not": {
+                          "type": "object"
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "PrivateKey": {
+                            "type": "string",
+                            "description": "The private key of the certificate, in base64 format."
+                          }
+                        }
                       }
-                    }
+                    ]
                   }
                 }
               }
@@ -1537,18 +1546,137 @@ public partial class GeneratorTests
                   "type": "object",
                   "properties": {
                     "PrivateKey": {
-                      "type": "string",
-                      "description": "The private key of the certificate, in base64 format."
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "description": "The private key of the certificate, in base64 format."
+                        },
+                        {
+                          "$ref": "#/properties/Certificates/additionalProperties/anyOf/1"
+                        }
+                      ]
                     }
                   },
                   "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "PrivateKey": {
-                        "type": "string",
-                        "description": "The private key of the certificate, in base64 format."
+                    "anyOf": [
+                      {
+                        "not": {
+                          "type": "object"
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "PrivateKey": {
+                            "type": "string",
+                            "description": "The private key of the certificate, in base64 format."
+                          }
+                        }
                       }
+                    ]
+                  }
+                }
+              }
+            }
+            """);
+    }
+
+    [Fact]
+    public void CanGenerateNestedSchemaForNamedOptionsWithDefaultOptions()
+    {
+        var source =
+            """
+            [assembly: Aspire.ConfigurationSchema("Components", typeof(ComponentSettings))]
+            [assembly: Aspire.ConfigurationSchema("Components:ClientOptions", typeof(ClientOptions))]
+            [assembly: Aspire.ConfigurationSchema("Components:*", typeof(ComponentSettings))]
+            [assembly: Aspire.ConfigurationSchema("Components:*:ClientOptions", typeof(ClientOptions))]
+
+            public class ComponentSettings
+            {
+                public string? ConnectionString { get; set; }
+            }
+
+            public class ClientOptions
+            {
+                public int RetryCount { get; set; }
+            }
+            """;
+
+        var schema = GenerateSchemaFromCode(source, []);
+
+        AssertIsJson(schema,
+            """
+            {
+              "type": "object",
+              "properties": {
+                "Components": {
+                  "type": "object",
+                  "properties": {
+                    "ClientOptions": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "RetryCount": {
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "allOf": [
+                            {
+                              "$ref": "#/properties/Components/additionalProperties/anyOf/1"
+                            },
+                            {
+                              "not": {
+                                "anyOf": [
+                                  {
+                                    "required": [
+                                      "RetryCount"
+                                    ]
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    "ConnectionString": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "$ref": "#/properties/Components/additionalProperties/anyOf/1"
+                        }
+                      ]
                     }
+                  },
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "not": {
+                          "type": "object"
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "ClientOptions": {
+                            "type": "object",
+                            "properties": {
+                              "RetryCount": {
+                                "type": "integer"
+                              }
+                            }
+                          },
+                          "ConnectionString": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    ]
                   }
                 }
               }

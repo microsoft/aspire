@@ -7,6 +7,8 @@ using Azure.AI.OpenAI;
 
 [assembly: ConfigurationSchema("Aspire:Azure:AI:OpenAI", typeof(AzureOpenAISettings))]
 [assembly: ConfigurationSchema("Aspire:Azure:AI:OpenAI:ClientOptions", typeof(AzureOpenAIClientOptions))]
+[assembly: ConfigurationSchema("Aspire:Azure:AI:OpenAI:*", typeof(AzureOpenAISettings))]
+[assembly: ConfigurationSchema("Aspire:Azure:AI:OpenAI:*:ClientOptions", typeof(AzureOpenAIClientOptions))]
 
 [assembly: LoggingCategories(
     "Azure",

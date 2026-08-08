@@ -5,6 +5,7 @@ using Aspire;
 using Aspire.Microsoft.EntityFrameworkCore.SqlServer;
 
 [assembly: ConfigurationSchema("Aspire:Microsoft:EntityFrameworkCore:SqlServer", typeof(MicrosoftEntityFrameworkCoreSqlServerSettings))]
+[assembly: ConfigurationSchema("Aspire:Microsoft:EntityFrameworkCore:SqlServer:*", typeof(MicrosoftEntityFrameworkCoreSqlServerSettings))]
 
 [assembly: LoggingCategories(
     "Microsoft.EntityFrameworkCore",

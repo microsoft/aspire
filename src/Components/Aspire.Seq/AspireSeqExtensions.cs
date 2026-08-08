@@ -41,8 +41,11 @@ public static class AspireSeqExtensions
         settings.Traces.ExportProcessorType = ExportProcessorType.Batch;
 
         var configSection = builder.Configuration.GetSection(DefaultConfigSectionName);
-        var namedConfigSection = builder.Configuration.GetSection(connectionName);
+        var legacyNamedConfigSection = builder.Configuration.GetSection(connectionName);
+        var namedConfigSection = configSection.GetSection(connectionName);
         configSection.Bind(settings);
+        // Preserve the legacy root-level named section while preferring the standard integration-specific section.
+        legacyNamedConfigSection.Bind(settings);
         namedConfigSection.Bind(settings);
 
         if (builder.Configuration.GetConnectionString(connectionName) is string connectionString)

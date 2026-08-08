@@ -7,7 +7,11 @@ using Azure.Storage.Blobs;
 using System.Runtime.CompilerServices;
 
 [assembly: ConfigurationSchema("Aspire:Azure:Storage:Blobs", typeof(AzureStorageBlobsSettings))]
+[assembly: ConfigurationSchema("Aspire:Azure:Storage:Blobs", typeof(AzureBlobStorageContainerSettings))]
 [assembly: ConfigurationSchema("Aspire:Azure:Storage:Blobs:ClientOptions", typeof(BlobClientOptions), exclusionPaths: ["Default"])]
+[assembly: ConfigurationSchema("Aspire:Azure:Storage:Blobs:*", typeof(AzureStorageBlobsSettings))]
+[assembly: ConfigurationSchema("Aspire:Azure:Storage:Blobs:*", typeof(AzureBlobStorageContainerSettings))]
+[assembly: ConfigurationSchema("Aspire:Azure:Storage:Blobs:*:ClientOptions", typeof(BlobClientOptions), exclusionPaths: ["Default"])]
 
 [assembly: LoggingCategories(
     "Azure",

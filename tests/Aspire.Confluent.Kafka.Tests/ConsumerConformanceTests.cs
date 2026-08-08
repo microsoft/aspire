@@ -69,6 +69,14 @@ public class ConsumerConformanceTests : ConformanceTests<IConsumer<string, strin
                                     "DisableMetrics": false,
                                     "Config": {
                                         "GroupId": "test"
+                                    },
+                                    "orders": {
+                                        "ConnectionString": "localhost:9093",
+                                        "DisableHealthChecks": true,
+                                        "DisableMetrics": true,
+                                        "Config": {
+                                            "GroupId": "orders"
+                                        }
                                     }
                                 }
                             }
@@ -80,7 +88,8 @@ public class ConsumerConformanceTests : ConformanceTests<IConsumer<string, strin
     protected override (string json, string error)[] InvalidJsonToErrorMessage => new[]
         {
             ("""{"Aspire": { "Confluent":{ "Kafka": { "Consumer": { "DisableMetrics": 0}}}}}""", "Value is \"integer\" but should be \"boolean\""),
-            ("""{"Aspire": { "Confluent":{ "Kafka": { "Consumer": { "DisableHealthChecks": 0}}}}}""", "Value is \"integer\" but should be \"boolean\"")
+            ("""{"Aspire": { "Confluent":{ "Kafka": { "Consumer": { "DisableHealthChecks": 0}}}}}""", "Value is \"integer\" but should be \"boolean\""),
+            ("""{"Aspire": { "Confluent":{ "Kafka": { "Consumer": { "orders": { "DisableMetrics": 0}}}}}}""", "Value is \"integer\" but should be \"boolean\"")
         };
 
     [Fact]

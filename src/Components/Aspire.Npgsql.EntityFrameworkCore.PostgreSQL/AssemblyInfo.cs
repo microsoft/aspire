@@ -5,6 +5,7 @@ using Aspire;
 using Aspire.Npgsql.EntityFrameworkCore.PostgreSQL;
 
 [assembly: ConfigurationSchema("Aspire:Npgsql:EntityFrameworkCore:PostgreSQL", typeof(NpgsqlEntityFrameworkCorePostgreSQLSettings))]
+[assembly: ConfigurationSchema("Aspire:Npgsql:EntityFrameworkCore:PostgreSQL:*", typeof(NpgsqlEntityFrameworkCorePostgreSQLSettings))]
 
 [assembly: LoggingCategories(
   "Microsoft.EntityFrameworkCore",
