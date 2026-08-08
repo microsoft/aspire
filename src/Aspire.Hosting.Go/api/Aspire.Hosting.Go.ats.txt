@@ -4,10 +4,19 @@
 # Handle Types
 Aspire.Hosting.Go/Aspire.Hosting.Go.GoAppResource [ExposeProperties]
 
+# DTO Types
+Aspire.Hosting.Go/Aspire.Hosting.Go.DelveServerOptions # Configures the headless Delve debug server used for remote debugging of a Go application.
+  AcceptMultiClient?: boolean # Gets a value indicating whether Delve accepts multiple debugger clients. The default is `false`.
+  ContinueOnStart?: boolean # Gets a value indicating whether Delve continues the application immediately after startup. The default is `false`.
+  Log?: boolean # Gets a value indicating whether Delve server logging is enabled. The default is `false`.
+  LogOutput?: string # Gets the Delve logging components enabled when `Log` is `true`. When `null` or empty, Delve uses its default logging components.
+  OnlySameUser?: boolean # Gets a value indicating whether Delve allows connections only from the same operating system user. When `null`, Delve's default same-user policy is used.
+  Port?: number # Gets the TCP port on which Delve listens. The default is `2345`.
+
 # Capabilities
 Aspire.Hosting.Go/addGoApp(name: string, appDirectory: string, packagePath?: string, buildTags?: string[], ldFlags?: string, gcFlags?: string, raceDetector?: boolean) -> Aspire.Hosting.Go/Aspire.Hosting.Go.GoAppResource
 Aspire.Hosting.Go/withAppArgs(args: any[]) -> Aspire.Hosting.Go/Aspire.Hosting.Go.GoAppResource
-Aspire.Hosting.Go/withDelveServer(port?: number) -> Aspire.Hosting.Go/Aspire.Hosting.Go.GoAppResource
+Aspire.Hosting.Go/withDelveServer(options?: Aspire.Hosting.Go/Aspire.Hosting.Go.DelveServerOptions) -> Aspire.Hosting.Go/Aspire.Hosting.Go.GoAppResource
 Aspire.Hosting.Go/withGoPrivate(privatePatterns: string[], authHost: string, usernameArgName?: string, tokenSecretId?: string) -> Aspire.Hosting.Go/Aspire.Hosting.Go.GoAppResource
 Aspire.Hosting.Go/withModDownload() -> Aspire.Hosting.Go/Aspire.Hosting.Go.GoAppResource
 Aspire.Hosting.Go/withModTidy() -> Aspire.Hosting.Go/Aspire.Hosting.Go.GoAppResource

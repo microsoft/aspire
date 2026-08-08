@@ -18,6 +18,7 @@ Aspire.Hosting.Orleans/withMemoryGrainStorage(name: string) -> Aspire.Hosting.Or
 Aspire.Hosting.Orleans/withMemoryReminders() -> Aspire.Hosting.Orleans/Aspire.Hosting.Orleans.OrleansService
 Aspire.Hosting.Orleans/withMemoryStreaming(name: string) -> Aspire.Hosting.Orleans/Aspire.Hosting.Orleans.OrleansService
 Aspire.Hosting.Orleans/withOrleansClientReference(orleansServiceClient: Aspire.Hosting.Orleans/Aspire.Hosting.Orleans.OrleansServiceClient) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
+Aspire.Hosting.Orleans/withOrleansProviderType(providerType: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString
 Aspire.Hosting.Orleans/withOrleansReference(orleansService: Aspire.Hosting.Orleans/Aspire.Hosting.Orleans.OrleansService) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
 Aspire.Hosting.Orleans/withReminders(provider: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString) -> Aspire.Hosting.Orleans/Aspire.Hosting.Orleans.OrleansService
 Aspire.Hosting.Orleans/withServiceId(serviceId: string) -> Aspire.Hosting.Orleans/Aspire.Hosting.Orleans.OrleansService
