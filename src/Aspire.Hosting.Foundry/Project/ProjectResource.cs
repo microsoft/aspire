@@ -144,6 +144,11 @@ public class AzureCognitiveServicesProjectResource :
     /// </summary>
     public BicepOutputReference PrincipalId => new("principalId", this);
 
+    /// <summary>
+    /// Gets the roles granted on the parent Microsoft Foundry account to this project's managed identity.
+    /// </summary>
+    internal HashSet<RoleDefinition> ParentRoleAssignments { get; } = [];
+
     internal BicepOutputReference ContainerRegistryUrl => new("AZURE_CONTAINER_REGISTRY_ENDPOINT", this);
     internal BicepOutputReference ContainerRegistryName => new("AZURE_CONTAINER_REGISTRY_NAME", this);
     // Mnaged identity used for client access to container registry
