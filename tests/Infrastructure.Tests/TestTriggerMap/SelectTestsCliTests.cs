@@ -156,6 +156,15 @@ public sealed class SelectTestsCliTests
                 var comment = File.ReadAllText(commentPath);
                 Assert.StartsWith("## Tests selector", comment);
                 Assert.DoesNotContain("audit mode", comment);
+                // The run-full-ci kill switch is surfaced near the top of every comment, before the
+                // selected-subset lists, as a GitHub [!TIP] callout so a reviewer who thinks the reduced
+                // selection is wrong sees the escape hatch first. Pin the alert, the label, and ordering.
+                Assert.Contains("> [!TIP]", comment);
+                Assert.Contains("Add the **`run-full-ci`** label", comment);
+                Assert.True(
+                    comment.IndexOf("run-full-ci", StringComparison.Ordinal)
+                        < comment.IndexOf("### Selected test projects", StringComparison.Ordinal),
+                    "The run-full-ci kill-switch note must appear before the selected test projects.");
                 Assert.Contains("### Selected test projects (1 / 2)", comment);
                 Assert.Contains("`Aspire.Hosting.Tests`", comment);
                 Assert.Contains("### Selected jobs (1)", comment);
