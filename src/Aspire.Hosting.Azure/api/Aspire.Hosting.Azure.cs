@@ -125,6 +125,7 @@ namespace Aspire.Hosting
         [AspireExport]
         public static string GetBicepIdentifier(this ApplicationModel.IAzureResource resource) { throw null; }
 
+        [System.Obsolete("PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.")]
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> PublishAsConnectionString<T>(this ApplicationModel.IResourceBuilder<T> builder)
             where T : ApplicationModel.IAzureResource, ApplicationModel.IResourceWithConnectionString { throw null; }
@@ -134,6 +135,30 @@ namespace Aspire.Hosting
     {
         [AspireExportIgnore(Reason = "Use the polyglot asExisting overload that accepts string or ParameterResource values instead.")]
         public static ApplicationModel.IResourceBuilder<T> AsExisting<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> nameParameter, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? resourceGroupParameter)
+            where T : ApplicationModel.IAzureResource { throw null; }
+
+        [AspireExportIgnore(Reason = "Use the polyglot asExistingInResourceGroup overload that accepts string or ParameterResource values instead.")]
+        public static ApplicationModel.IResourceBuilder<T> AsExistingInResourceGroup<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> nameParameter, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> resourceGroupParameter, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> subscriptionParameter)
+            where T : ApplicationModel.IAzureResource { throw null; }
+
+        [AspireExportIgnore(Reason = "Use the polyglot asExistingInResourceGroup overload that accepts string or ParameterResource values instead.")]
+        public static ApplicationModel.IResourceBuilder<T> AsExistingInResourceGroup<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, string resourceGroup, string subscription)
+            where T : ApplicationModel.IAzureResource { throw null; }
+
+        [AspireExportIgnore(Reason = "Use the polyglot asExistingInSubscription overload that accepts string or ParameterResource values instead.")]
+        public static ApplicationModel.IResourceBuilder<T> AsExistingInSubscription<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> nameParameter, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> subscriptionParameter)
+            where T : ApplicationModel.IAzureResource { throw null; }
+
+        [AspireExportIgnore(Reason = "Use the polyglot asExistingInSubscription overload that accepts string or ParameterResource values instead.")]
+        public static ApplicationModel.IResourceBuilder<T> AsExistingInSubscription<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, string subscription)
+            where T : ApplicationModel.IAzureResource { throw null; }
+
+        [AspireExportIgnore(Reason = "Use the polyglot asExistingInTenant overload that accepts string or ParameterResource values instead.")]
+        public static ApplicationModel.IResourceBuilder<T> AsExistingInTenant<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> nameParameter)
+            where T : ApplicationModel.IAzureResource { throw null; }
+
+        [AspireExportIgnore(Reason = "Use the polyglot asExistingInTenant overload that accepts string or ParameterResource values instead.")]
+        public static ApplicationModel.IResourceBuilder<T> AsExistingInTenant<T>(this ApplicationModel.IResourceBuilder<T> builder, string name)
             where T : ApplicationModel.IAzureResource { throw null; }
 
         [AspireExportIgnore(Reason = "Use the Azure resource-specific polyglot export instead.")]
@@ -147,12 +172,60 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> PublishAsExisting<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, string? resourceGroup)
             where T : ApplicationModel.IAzureResource { throw null; }
 
+        [AspireExportIgnore(Reason = "Use the polyglot publishAsExistingInResourceGroup overload that accepts string or ParameterResource values instead.")]
+        public static ApplicationModel.IResourceBuilder<T> PublishAsExistingInResourceGroup<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> nameParameter, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> resourceGroupParameter, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> subscriptionParameter)
+            where T : ApplicationModel.IAzureResource { throw null; }
+
+        [AspireExportIgnore(Reason = "Use the polyglot publishAsExistingInResourceGroup overload that accepts string or ParameterResource values instead.")]
+        public static ApplicationModel.IResourceBuilder<T> PublishAsExistingInResourceGroup<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, string resourceGroup, string subscription)
+            where T : ApplicationModel.IAzureResource { throw null; }
+
+        [AspireExportIgnore(Reason = "Use the polyglot publishAsExistingInSubscription overload that accepts string or ParameterResource values instead.")]
+        public static ApplicationModel.IResourceBuilder<T> PublishAsExistingInSubscription<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> nameParameter, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> subscriptionParameter)
+            where T : ApplicationModel.IAzureResource { throw null; }
+
+        [AspireExportIgnore(Reason = "Use the polyglot publishAsExistingInSubscription overload that accepts string or ParameterResource values instead.")]
+        public static ApplicationModel.IResourceBuilder<T> PublishAsExistingInSubscription<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, string subscription)
+            where T : ApplicationModel.IAzureResource { throw null; }
+
+        [AspireExportIgnore(Reason = "Use the polyglot publishAsExistingInTenant overload that accepts string or ParameterResource values instead.")]
+        public static ApplicationModel.IResourceBuilder<T> PublishAsExistingInTenant<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> nameParameter)
+            where T : ApplicationModel.IAzureResource { throw null; }
+
+        [AspireExportIgnore(Reason = "Use the polyglot publishAsExistingInTenant overload that accepts string or ParameterResource values instead.")]
+        public static ApplicationModel.IResourceBuilder<T> PublishAsExistingInTenant<T>(this ApplicationModel.IResourceBuilder<T> builder, string name)
+            where T : ApplicationModel.IAzureResource { throw null; }
+
         [AspireExportIgnore(Reason = "Use the polyglot runAsExisting overload that accepts string or ParameterResource values instead.")]
         public static ApplicationModel.IResourceBuilder<T> RunAsExisting<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> nameParameter, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? resourceGroupParameter)
             where T : ApplicationModel.IAzureResource { throw null; }
 
         [AspireExportIgnore(Reason = "Use the polyglot runAsExisting overload that accepts string or ParameterResource values instead.")]
         public static ApplicationModel.IResourceBuilder<T> RunAsExisting<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, string? resourceGroup)
+            where T : ApplicationModel.IAzureResource { throw null; }
+
+        [AspireExportIgnore(Reason = "Use the polyglot runAsExistingInResourceGroup overload that accepts string or ParameterResource values instead.")]
+        public static ApplicationModel.IResourceBuilder<T> RunAsExistingInResourceGroup<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> nameParameter, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> resourceGroupParameter, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> subscriptionParameter)
+            where T : ApplicationModel.IAzureResource { throw null; }
+
+        [AspireExportIgnore(Reason = "Use the polyglot runAsExistingInResourceGroup overload that accepts string or ParameterResource values instead.")]
+        public static ApplicationModel.IResourceBuilder<T> RunAsExistingInResourceGroup<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, string resourceGroup, string subscription)
+            where T : ApplicationModel.IAzureResource { throw null; }
+
+        [AspireExportIgnore(Reason = "Use the polyglot runAsExistingInSubscription overload that accepts string or ParameterResource values instead.")]
+        public static ApplicationModel.IResourceBuilder<T> RunAsExistingInSubscription<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> nameParameter, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> subscriptionParameter)
+            where T : ApplicationModel.IAzureResource { throw null; }
+
+        [AspireExportIgnore(Reason = "Use the polyglot runAsExistingInSubscription overload that accepts string or ParameterResource values instead.")]
+        public static ApplicationModel.IResourceBuilder<T> RunAsExistingInSubscription<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, string subscription)
+            where T : ApplicationModel.IAzureResource { throw null; }
+
+        [AspireExportIgnore(Reason = "Use the polyglot runAsExistingInTenant overload that accepts string or ParameterResource values instead.")]
+        public static ApplicationModel.IResourceBuilder<T> RunAsExistingInTenant<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> nameParameter)
+            where T : ApplicationModel.IAzureResource { throw null; }
+
+        [AspireExportIgnore(Reason = "Use the polyglot runAsExistingInTenant overload that accepts string or ParameterResource values instead.")]
+        public static ApplicationModel.IResourceBuilder<T> RunAsExistingInTenant<T>(this ApplicationModel.IResourceBuilder<T> builder, string name)
             where T : ApplicationModel.IAzureResource { throw null; }
     }
 }
@@ -231,9 +304,15 @@ namespace Aspire.Hosting.Azure
 
         public AzureBicepResourceScope(object resourceGroup) { }
 
+        public bool IsTenantScope { get { throw null; } }
+
         public object ResourceGroup { get { throw null; } }
 
         public object? Subscription { get { throw null; } }
+
+        public static AzureBicepResourceScope CreateForSubscription(object subscription) { throw null; }
+
+        public static AzureBicepResourceScope CreateForTenant() { throw null; }
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
@@ -334,9 +413,13 @@ namespace Aspire.Hosting.Azure
 
     public static partial class AzureSubnetServiceDelegations
     {
+        [AspireValue("AzureSubnetServiceDelegations")]
         public const string ApplicationGatewayForContainers = "Microsoft.ServiceNetworking/trafficControllers";
+        [AspireValue("AzureSubnetServiceDelegations")]
         public const string AppServiceEnvironments = "Microsoft.Web/serverFarms";
+        [AspireValue("AzureSubnetServiceDelegations")]
         public const string ContainerAppEnvironments = "Microsoft.App/environments";
+        [AspireValue("AzureSubnetServiceDelegations")]
         public const string ContainerInstances = "Microsoft.ContainerInstance/containerGroups";
     }
 
@@ -442,11 +525,17 @@ namespace Aspire.Hosting.Azure
 
     public sealed partial class ExistingAzureResourceAnnotation : ApplicationModel.IResourceAnnotation
     {
+        public ExistingAzureResourceAnnotation(object name, object? resourceGroup, object subscription) { }
+
         public ExistingAzureResourceAnnotation(object name, object? resourceGroup = null) { }
+
+        public bool IsTenantScope { get { throw null; } }
 
         public object Name { get { throw null; } }
 
         public object? ResourceGroup { get { throw null; } }
+
+        public object? Subscription { get { throw null; } }
     }
 
     public partial interface IAddRoleAssignmentsContext

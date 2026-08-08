@@ -767,6 +767,30 @@ namespace Aspire.Hosting.Azure.Kubernetes
             public const string StandardD96dsV6 = "Standard_D96ds_v6";
         }
 
+        public static partial class StandardDdsv7
+        {
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD128dsV7 = "Standard_D128ds_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD16dsV7 = "Standard_D16ds_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD192dsV7 = "Standard_D192ds_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD2dsV7 = "Standard_D2ds_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD32dsV7 = "Standard_D32ds_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD48dsV7 = "Standard_D48ds_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD4dsV7 = "Standard_D4ds_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD64dsV7 = "Standard_D64ds_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD8dsV7 = "Standard_D8ds_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD96dsV7 = "Standard_D96ds_v7";
+        }
+
         public static partial class StandardDDv4
         {
             [AspireValue("AksNodeVmSizes")]
@@ -847,6 +871,30 @@ namespace Aspire.Hosting.Azure.Kubernetes
             public const string StandardD96ldsV6 = "Standard_D96lds_v6";
         }
 
+        public static partial class StandardDldsv7
+        {
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD128ldsV7 = "Standard_D128lds_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD16ldsV7 = "Standard_D16lds_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD192ldsV7 = "Standard_D192lds_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD2ldsV7 = "Standard_D2lds_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD32ldsV7 = "Standard_D32lds_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD48ldsV7 = "Standard_D48lds_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD4ldsV7 = "Standard_D4lds_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD64ldsV7 = "Standard_D64lds_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD8ldsV7 = "Standard_D8lds_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD96ldsV7 = "Standard_D96lds_v7";
+        }
+
         public static partial class StandardDLSv5
         {
             [AspireValue("AksNodeVmSizes")]
@@ -887,6 +935,118 @@ namespace Aspire.Hosting.Azure.Kubernetes
             public const string StandardD8lsV6 = "Standard_D8ls_v6";
             [AspireValue("AksNodeVmSizes")]
             public const string StandardD96lsV6 = "Standard_D96ls_v6";
+        }
+
+        public static partial class StandardDlsv7
+        {
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD128lsV7 = "Standard_D128ls_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD16lsV7 = "Standard_D16ls_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD192lsV7 = "Standard_D192ls_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD2lsV7 = "Standard_D2ls_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD32lsV7 = "Standard_D32ls_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD48lsV7 = "Standard_D48ls_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD4lsV7 = "Standard_D4ls_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD64lsV7 = "Standard_D64ls_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD8lsV7 = "Standard_D8ls_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD96lsV7 = "Standard_D96ls_v7";
+        }
+
+        public static partial class StandardDndv6
+        {
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD128ndsV6 = "Standard_D128nds_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD16ndsV6 = "Standard_D16nds_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD2ndsV6 = "Standard_D2nds_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD32ndsV6 = "Standard_D32nds_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD48ndsV6 = "Standard_D48nds_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD4ndsV6 = "Standard_D4nds_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD64ndsV6 = "Standard_D64nds_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD8ndsV6 = "Standard_D8nds_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD96ndsV6 = "Standard_D96nds_v6";
+        }
+
+        public static partial class StandardDnldv6
+        {
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD128nldsV6 = "Standard_D128nlds_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD16nldsV6 = "Standard_D16nlds_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD2nldsV6 = "Standard_D2nlds_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD32nldsV6 = "Standard_D32nlds_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD48nldsV6 = "Standard_D48nlds_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD4nldsV6 = "Standard_D4nlds_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD64nldsV6 = "Standard_D64nlds_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD8nldsV6 = "Standard_D8nlds_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD96nldsV6 = "Standard_D96nlds_v6";
+        }
+
+        public static partial class StandardDnlv6
+        {
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD128nlsV6 = "Standard_D128nls_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD16nlsV6 = "Standard_D16nls_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD2nlsV6 = "Standard_D2nls_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD32nlsV6 = "Standard_D32nls_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD48nlsV6 = "Standard_D48nls_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD4nlsV6 = "Standard_D4nls_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD64nlsV6 = "Standard_D64nls_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD8nlsV6 = "Standard_D8nls_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD96nlsV6 = "Standard_D96nls_v6";
+        }
+
+        public static partial class StandardDnv6
+        {
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD128nsV6 = "Standard_D128ns_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD16nsV6 = "Standard_D16ns_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD2nsV6 = "Standard_D2ns_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD32nsV6 = "Standard_D32ns_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD48nsV6 = "Standard_D48ns_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD4nsV6 = "Standard_D4ns_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD64nsV6 = "Standard_D64ns_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD8nsV6 = "Standard_D8ns_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD96nsV6 = "Standard_D96ns_v6";
         }
 
         public static partial class StandardDPDSv5
@@ -1193,6 +1353,30 @@ namespace Aspire.Hosting.Azure.Kubernetes
             public const string StandardD8sV6 = "Standard_D8s_v6";
             [AspireValue("AksNodeVmSizes")]
             public const string StandardD96sV6 = "Standard_D96s_v6";
+        }
+
+        public static partial class StandardDsv7
+        {
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD128sV7 = "Standard_D128s_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD16sV7 = "Standard_D16s_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD192sV7 = "Standard_D192s_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD2sV7 = "Standard_D2s_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD32sV7 = "Standard_D32s_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD48sV7 = "Standard_D48s_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD4sV7 = "Standard_D4s_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD64sV7 = "Standard_D64s_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD8sV7 = "Standard_D8s_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardD96sV7 = "Standard_D96s_v7";
         }
 
         public static partial class StandardDv2
@@ -1993,6 +2177,32 @@ namespace Aspire.Hosting.Azure.Kubernetes
             public const string StandardE96dsV6 = "Standard_E96ds_v6";
         }
 
+        public static partial class StandardEdsv7
+        {
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE128dsV7 = "Standard_E128ds_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE16dsV7 = "Standard_E16ds_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE192dsV7 = "Standard_E192ds_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE20dsV7 = "Standard_E20ds_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE2dsV7 = "Standard_E2ds_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE32dsV7 = "Standard_E32ds_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE48dsV7 = "Standard_E48ds_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE4dsV7 = "Standard_E4ds_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE64dsV7 = "Standard_E64ds_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE8dsV7 = "Standard_E8ds_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE96dsV7 = "Standard_E96ds_v7";
+        }
+
         public static partial class StandardEDv4
         {
             [AspireValue("AksNodeVmSizes")]
@@ -2077,28 +2287,60 @@ namespace Aspire.Hosting.Azure.Kubernetes
             public const string StandardE104idV5 = "Standard_E104id_v5";
         }
 
-        public static partial class StandardEISv3
-        {
-            [AspireValue("AksNodeVmSizes")]
-            public const string StandardE64isV3 = "Standard_E64is_v3";
-        }
-
         public static partial class StandardEISv5
         {
             [AspireValue("AksNodeVmSizes")]
             public const string StandardE104isV5 = "Standard_E104is_v5";
         }
 
-        public static partial class StandardEIv3
-        {
-            [AspireValue("AksNodeVmSizes")]
-            public const string StandardE64iV3 = "Standard_E64i_v3";
-        }
-
         public static partial class StandardEIv5
         {
             [AspireValue("AksNodeVmSizes")]
             public const string StandardE104iV5 = "Standard_E104i_v5";
+        }
+
+        public static partial class StandardEndv6
+        {
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE128ndsV6 = "Standard_E128nds_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE16ndsV6 = "Standard_E16nds_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE2ndsV6 = "Standard_E2nds_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE32ndsV6 = "Standard_E32nds_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE48ndsV6 = "Standard_E48nds_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE4ndsV6 = "Standard_E4nds_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE64ndsV6 = "Standard_E64nds_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE8ndsV6 = "Standard_E8nds_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE96ndsV6 = "Standard_E96nds_v6";
+        }
+
+        public static partial class StandardEnv6
+        {
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE128nsV6 = "Standard_E128ns_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE16nsV6 = "Standard_E16ns_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE2nsV6 = "Standard_E2ns_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE32nsV6 = "Standard_E32ns_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE48nsV6 = "Standard_E48ns_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE4nsV6 = "Standard_E4ns_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE64nsV6 = "Standard_E64ns_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE8nsV6 = "Standard_E8ns_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE96nsV6 = "Standard_E96ns_v6";
         }
 
         public static partial class StandardEPDSv5
@@ -2343,6 +2585,32 @@ namespace Aspire.Hosting.Azure.Kubernetes
             public const string StandardE9648sV6 = "Standard_E96-48s_v6";
             [AspireValue("AksNodeVmSizes")]
             public const string StandardE96sV6 = "Standard_E96s_v6";
+        }
+
+        public static partial class StandardEsv7
+        {
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE128sV7 = "Standard_E128s_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE16sV7 = "Standard_E16s_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE192sV7 = "Standard_E192s_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE20sV7 = "Standard_E20s_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE2sV7 = "Standard_E2s_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE32sV7 = "Standard_E32s_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE48sV7 = "Standard_E48s_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE4sV7 = "Standard_E4s_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE64sV7 = "Standard_E64s_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE8sV7 = "Standard_E8s_v7";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardE96sV7 = "Standard_E96s_v7";
         }
 
         public static partial class StandardEv3
@@ -3104,9 +3372,15 @@ namespace Aspire.Hosting.Azure.Kubernetes
         public static partial class StandardMDSHighMemoryv3
         {
             [AspireValue("AksNodeVmSizes")]
+            public const string StandardM416ds10V3 = "Standard_M416ds_10_v3";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardM416ds12V3 = "Standard_M416ds_12_v3";
+            [AspireValue("AksNodeVmSizes")]
             public const string StandardM416ds6V3 = "Standard_M416ds_6_v3";
             [AspireValue("AksNodeVmSizes")]
             public const string StandardM416ds8V3 = "Standard_M416ds_8_v3";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardM416ds9V3 = "Standard_M416ds_9_v3";
             [AspireValue("AksNodeVmSizes")]
             public const string StandardM624ds12V3 = "Standard_M624ds_12_v3";
             [AspireValue("AksNodeVmSizes")]
@@ -3228,9 +3502,15 @@ namespace Aspire.Hosting.Azure.Kubernetes
         public static partial class StandardMSHighMemoryv3
         {
             [AspireValue("AksNodeVmSizes")]
+            public const string StandardM416s10V3 = "Standard_M416s_10_v3";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardM416s12V3 = "Standard_M416s_12_v3";
+            [AspireValue("AksNodeVmSizes")]
             public const string StandardM416s6V3 = "Standard_M416s_6_v3";
             [AspireValue("AksNodeVmSizes")]
             public const string StandardM416s8V3 = "Standard_M416s_8_v3";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardM416s9V3 = "Standard_M416s_9_v3";
             [AspireValue("AksNodeVmSizes")]
             public const string StandardM624s12V3 = "Standard_M624s_12_v3";
             [AspireValue("AksNodeVmSizes")]
@@ -3335,6 +3615,28 @@ namespace Aspire.Hosting.Azure.Kubernetes
         {
             [AspireValue("AksNodeVmSizes")]
             public const string StandardNCC40adsH100V5 = "Standard_NCC40ads_H100_v5";
+        }
+
+        public static partial class StandardNCdsRTXPRO6000BSEv6XL
+        {
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardNC144dsXlRTXPRO6000BSEV6 = "Standard_NC144ds_xl_RTXPRO6000BSE_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardNC144ldsXlRTXPRO6000BSEV6 = "Standard_NC144lds_xl_RTXPRO6000BSE_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardNC24ldsXlRTXPRO6000BSEV6 = "Standard_NC24lds_xl_RTXPRO6000BSE_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardNC288dsXlRTXPRO6000BSEV6 = "Standard_NC288ds_xl_RTXPRO6000BSE_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardNC288ldsXlRTXPRO6000BSEV6 = "Standard_NC288lds_xl_RTXPRO6000BSE_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardNC36dsXlRTXPRO6000BSEV6 = "Standard_NC36ds_xl_RTXPRO6000BSE_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardNC36ldsXlRTXPRO6000BSEV6 = "Standard_NC36lds_xl_RTXPRO6000BSE_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardNC72dsXlRTXPRO6000BSEV6 = "Standard_NC72ds_xl_RTXPRO6000BSE_v6";
+            [AspireValue("AksNodeVmSizes")]
+            public const string StandardNC72ldsXlRTXPRO6000BSEV6 = "Standard_NC72lds_xl_RTXPRO6000BSE_v6";
         }
 
         public static partial class StandardNCSv3

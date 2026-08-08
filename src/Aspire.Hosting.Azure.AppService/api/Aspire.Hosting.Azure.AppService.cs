@@ -55,7 +55,7 @@ namespace Aspire.Hosting
 
 namespace Aspire.Hosting.Azure
 {
-    public partial class AzureAppServiceEnvironmentResource : AzureProvisioningResource, IAzureComputeEnvironmentResource, ApplicationModel.IComputeEnvironmentResource, ApplicationModel.IResource, IAzureContainerRegistry, ApplicationModel.IContainerRegistry
+    public partial class AzureAppServiceEnvironmentResource : AzureProvisioningResource, IAzureComputeEnvironmentResource, ApplicationModel.IComputeEnvironmentResource, ApplicationModel.IResource, IAzureContainerRegistry, ApplicationModel.IContainerRegistry, IAzureDelegatedSubnetResource
     {
         public AzureAppServiceEnvironmentResource(string name, System.Action<AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
 
@@ -66,6 +66,8 @@ namespace Aspire.Hosting.Azure
         IAzureContainerRegistryResource? IAzureComputeEnvironmentResource.ContainerRegistry { get { throw null; } }
 
         ApplicationModel.ReferenceExpression IAzureContainerRegistry.ManagedIdentityId { get { throw null; } }
+
+        string IAzureDelegatedSubnetResource.DelegatedSubnetServiceName { get { throw null; } }
 
         public BicepOutputReference AzureAppInsightsConnectionStringReference { get { throw null; } }
 
