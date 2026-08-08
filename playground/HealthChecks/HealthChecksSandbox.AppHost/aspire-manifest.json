@@ -1,3 +1,22 @@
 {
-  "resources": {}
+  "resources": {
+    "unhealthy-url": {
+      "type": "parameter.v0",
+      "value": "{unhealthy-url.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "invalid-url": {
+      "type": "parameter.v0",
+      "value": "{invalid-url.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    }
+  }
 }

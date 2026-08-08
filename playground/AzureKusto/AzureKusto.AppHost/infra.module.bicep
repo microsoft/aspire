@@ -38,7 +38,7 @@ resource infra_law 'Microsoft.OperationalInsights/workspaces@2025-02-01' = {
   tags: tags
 }
 
-resource infra 'Microsoft.App/managedEnvironments@2025-01-01' = {
+resource infra 'Microsoft.App/managedEnvironments@2025-07-01' = {
   name: take('infra${uniqueString(resourceGroup().id)}', 24)
   location: location
   properties: {
@@ -59,7 +59,7 @@ resource infra 'Microsoft.App/managedEnvironments@2025-01-01' = {
   tags: tags
 }
 
-resource aspireDashboard 'Microsoft.App/managedEnvironments/dotNetComponents@2024-10-02-preview' = {
+resource aspireDashboard 'Microsoft.App/managedEnvironments/dotNetComponents@2025-10-02-preview' = {
   name: 'aspire-dashboard'
   properties: {
     componentType: 'AspireDashboard'
