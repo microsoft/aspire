@@ -6,6 +6,8 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Maui.Annotations;
 using Aspire.Hosting.Maui.Lifecycle;
+using Aspire.Hosting.Tests;
+using Aspire.Hosting.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -734,6 +736,48 @@ public class MauiBuildQueueTests
         // Semaphore should be released regardless.
         Assert.True(env.Parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var annotation));
         Assert.Equal(1, annotation!.BuildSemaphore.CurrentCount);
+    }
+
+    [Fact]
+    public async Task SelectedTargetArgument_IsAppliedToSerializedBuildAndLaunch()
+    {
+        using var dir = new TestTempDirectory();
+        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
+
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var android = maui.AddAndroidEmulator("android").Resource;
+        var selection = Assert.Single(android.Annotations.OfType<SelectedEmulatorAnnotation>());
+        selection.SelectedId = "emulator-5556";
+
+        var buildInfo = Assert.Single(android.Annotations.OfType<MauiBuildInfoAnnotation>());
+        var buildArgs = MauiBuildQueueEventSubscriber.GetBuildArguments(android, buildInfo);
+        var launchArgs = await ArgumentEvaluator.GetArgumentListAsync(android);
+
+        Assert.Contains("-p:AdbTarget=-s emulator-5556", buildArgs);
+        Assert.Contains("-p:AdbTarget=-s emulator-5556", launchArgs);
+    }
+
+    [Fact]
+    public async Task SelectedIOSSimulatorArgument_IsAppliedToSerializedBuildAndLaunch()
+    {
+        using var dir = new TestTempDirectory();
+        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
+
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var iosSimulator = maui.AddiOSSimulator("ios-simulator").Resource;
+        var selection = Assert.Single(iosSimulator.Annotations.OfType<SelectedEmulatorAnnotation>());
+        selection.SelectedId = "E25BBE37-69BA-4720-B6FD-D54C97791E79";
+
+        var buildInfo = Assert.Single(iosSimulator.Annotations.OfType<MauiBuildInfoAnnotation>());
+        var buildArgs = MauiBuildQueueEventSubscriber.GetBuildArguments(iosSimulator, buildInfo);
+        var launchArgs = await ArgumentEvaluator.GetArgumentListAsync(iosSimulator);
+
+        Assert.Contains("-p:_DeviceName=:v2:udid=E25BBE37-69BA-4720-B6FD-D54C97791E79", buildArgs);
+        Assert.Contains("-p:_DeviceName=:v2:udid=E25BBE37-69BA-4720-B6FD-D54C97791E79", launchArgs);
     }
 
     private static void AddOriginalStopCommand(IResource resource, Action? onExecute = null)
