@@ -15,7 +15,7 @@ The deployment tests require an Azure subscription with sufficient quota for the
 | Resource | Quota Required | Current Setting | Notes |
 |----------|---------------|-----------------|-------|
 | Managed Environments | 150+ | 150 | Each test run creates a new environment. High quota allows concurrent runs and handles cleanup delays. |
-| Standard Public IP Addresses (`Microsoft.Network`) | 150+ | 20 | Public Container Apps environments consume this regional quota. The workflow requests 150 in `westus3`. |
+| Standard Public IP Addresses (`Microsoft.Network`) | 150+ | 20 | Public Container Apps environments consume this regional quota. Request manually in `westus3`; Microsoft.Quota exposes the limit but rejects CLI create/update requests. |
 | Container App Instances | Default | - | Standard quota is typically sufficient |
 
 ### App Service
