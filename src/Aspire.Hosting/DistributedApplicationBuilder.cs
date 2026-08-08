@@ -279,11 +279,13 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         // Compute the dashboard application name - use DashboardApplicationName if set for file-based apps,
         // otherwise fall back to the environment's ApplicationName
         var dashboardApplicationName = options.DashboardApplicationName ?? _innerBuilder.Environment.ApplicationName;
+        var configuredPublicationRoot = _innerBuilder.Configuration[KnownConfigNames.PublicationRoot];
 
         _innerBuilder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
             // Make the app host directory available to the application via configuration
             ["AppHost:Directory"] = AppHostDirectory,
+            ["AppHost:PublicationRoot"] = string.IsNullOrWhiteSpace(configuredPublicationRoot) ? AppHostDirectory : configuredPublicationRoot,
             ["AppHost:Path"] = AppHostPath,
             ["AppHost:FilePath"] = appHostFilePath,
             ["AppHost:DashboardApplicationName"] = dashboardApplicationName,

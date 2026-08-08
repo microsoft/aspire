@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using Aspire.Cli.Telemetry;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Git;
@@ -17,15 +18,29 @@ namespace Aspire.Cli.Git;
 internal sealed class GitRepository(CliExecutionContext executionContext, IEnvironment environment, ILogger<GitRepository> logger, ProfilingTelemetry profilingTelemetry) : IGitRepository
 {
     /// <inheritdoc />
-    public async Task<DirectoryInfo?> GetRootAsync(CancellationToken cancellationToken)
+    public Task<DirectoryInfo?> GetRootAsync(CancellationToken cancellationToken)
     {
-        logger.LogDebug("Searching for Git repository root from working directory: {WorkingDirectory}", executionContext.WorkingDirectory.FullName);
+        return GetRootAsync(executionContext.WorkingDirectory, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<DirectoryInfo?> GetRootAsync(DirectoryInfo searchRoot, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(searchRoot);
+
+        if (!searchRoot.Exists)
+        {
+            logger.LogDebug("Search root does not exist: {SearchRoot}", searchRoot.FullName);
+            return null;
+        }
+
+        logger.LogDebug("Searching for Git repository root from directory: {SearchRoot}", searchRoot.FullName);
 
         try
         {
             var startInfo = new ProcessStartInfo("git")
             {
-                WorkingDirectory = executionContext.WorkingDirectory.FullName,
+                WorkingDirectory = searchRoot.FullName,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -35,7 +50,7 @@ internal sealed class GitRepository(CliExecutionContext executionContext, IEnvir
             startInfo.ArgumentList.Add("--show-toplevel");
 
             using var process = new Process { StartInfo = startInfo };
-            using var activity = profilingTelemetry.StartGitCommand("rev-parse", startInfo.FileName, startInfo.ArgumentList, executionContext.WorkingDirectory);
+            using var activity = profilingTelemetry.StartGitCommand("rev-parse", startInfo.FileName, startInfo.ArgumentList, searchRoot);
 
             process.Start();
             activity.SetProcessId(process.Id);
@@ -62,6 +77,13 @@ internal sealed class GitRepository(CliExecutionContext executionContext, IEnvir
 
             var rootPath = output.Trim();
 
+            // Git canonicalizes macOS firmlinked working directories to /private/* paths.
+            // Preserve the user-facing path shape used by the selected AppHost.
+            if (environment.IsMacOS())
+            {
+                rootPath = CliPathHelper.StripMacOSFirmlinkPrefix(rootPath);
+            }
+
             if (string.IsNullOrEmpty(rootPath))
             {
                 logger.LogDebug("Git command returned empty output");
@@ -80,8 +102,7 @@ internal sealed class GitRepository(CliExecutionContext executionContext, IEnvir
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
-            // Missing git is not fatal for callers. Ambient discovery treats null as
-            // "git acceleration unavailable" and falls back to the filesystem walker.
+            // Missing git is not fatal. Callers treat null as unavailable and use their non-Git fallback.
             logger.LogDebug(ex, "Git is not installed or not found in PATH");
             return null;
         }

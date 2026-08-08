@@ -13,6 +13,19 @@ namespace Aspire.Hosting.Pipelines;
 public interface IPipelineOutputService
 {
     /// <summary>
+    /// Gets the root directory for publisher destinations that are resolved relative to the source tree.
+    /// </summary>
+    /// <returns>An absolute path to the publication root.</returns>
+    /// <remarks>
+    /// When the Aspire CLI discovers a Git repository containing the selected AppHost, this is the repository root.
+    /// Otherwise, this defaults to the AppHost directory and then the current directory. Unlike
+    /// <see cref="GetOutputDirectory()"/>, this value is not affected by <c>--output-path</c>.
+    /// Implementations compiled against an earlier version of this interface use
+    /// <see cref="GetOutputDirectory()"/> as a binary-compatible fallback.
+    /// </remarks>
+    string GetPublicationRoot() => GetOutputDirectory();
+
+    /// <summary>
     /// Gets the output directory for deployment artifacts.
     /// If no output path is configured, defaults to the AppHost directory's <c>aspire-output</c> folder.
     /// Falls back to the current directory when the AppHost directory is unavailable.

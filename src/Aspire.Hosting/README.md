@@ -26,6 +26,13 @@ Aspire's approach ensures flexibility, strong tooling support, and clear separat
 
 For the full details and specification, see the [App Model document](https://github.com/microsoft/aspire/blob/main/docs/specs/appmodel.md).
 
+## Pipeline output locations
+
+Pipeline publishers use `IPipelineOutputService` to choose output locations. `GetOutputDirectory` and its resource
+overload provide the primary deployment artifact directory and honor `--output-path`. `GetPublicationRoot` provides a
+stable base for source-tree destinations outside that directory. The Aspire CLI uses the Git repository containing the
+selected AppHost when available, then falls back to the AppHost directory.
+
 ## Feedback & contributing
 
 https://github.com/microsoft/aspire

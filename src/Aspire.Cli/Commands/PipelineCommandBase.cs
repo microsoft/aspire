@@ -10,6 +10,7 @@ using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Exceptions;
+using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -36,6 +37,7 @@ internal abstract class PipelineCommandBase : BaseCommand
 
     private readonly IConfiguration _configuration;
     private readonly IFeatures _features;
+    private readonly IGitRepository _gitRepository;
     private readonly ICliHostEnvironment _hostEnvironment;
     private readonly ILogger _logger;
     private readonly IAnsiConsole _ansiConsole;
@@ -89,6 +91,7 @@ internal abstract class PipelineCommandBase : BaseCommand
         _hostEnvironment = hostEnvironment;
         _configuration = configuration;
         _features = features;
+        _gitRepository = services.GitRepository;
         _projectFactory = projectFactory;
         _logger = logger;
         _ansiConsole = ansiConsole;
@@ -185,6 +188,14 @@ internal abstract class PipelineCommandBase : BaseCommand
             var project = _projectFactory.GetProject(effectiveAppHostFile);
 
             var env = new Dictionary<string, string>();
+
+            // Publisher destinations can live above the AppHost. Search from the selected AppHost
+            // so --apphost still identifies the correct repository when it is outside the CLI working directory.
+            if (effectiveAppHostFile.Directory is { } appHostDirectory &&
+                await _gitRepository.GetRootAsync(appHostDirectory, cancellationToken) is { } publicationRoot)
+            {
+                env[KnownConfigNames.PublicationRoot] = publicationRoot.FullName;
+            }
 
             // Set interactivity enabled based on host environment capabilities
             if (!_hostEnvironment.SupportsInteractiveInput)

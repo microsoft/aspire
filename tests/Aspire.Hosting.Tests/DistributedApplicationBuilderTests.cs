@@ -107,6 +107,7 @@ public class DistributedApplicationBuilderTests
 
         var config = app.Services.GetRequiredService<IConfiguration>();
         Assert.Equal(appHostDirectory, config["AppHost:Directory"]);
+        Assert.Equal(appHostDirectory, config["AppHost:PublicationRoot"]);
     }
 
     [Fact]
@@ -120,6 +121,24 @@ public class DistributedApplicationBuilderTests
         using var app = appBuilder.Build();
 
         var outputService = app.Services.GetRequiredService<IPipelineOutputService>();
+        Assert.Equal(projectDirectory, outputService.GetPublicationRoot());
+        Assert.Equal(Path.Combine(projectDirectory, "aspire-output"), outputService.GetOutputDirectory());
+    }
+
+    [Fact]
+    public void PipelineOutputServiceUsesConfiguredPublicationRootWithoutChangingOutputDirectory()
+    {
+        var publicationRoot = OperatingSystem.IsWindows() ? @"C:\projects\Tailspin" : "/projects/Tailspin";
+        var projectDirectory = Path.Combine(publicationRoot, "src", "AppHost");
+        var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            ProjectDirectory = projectDirectory,
+            Args = [$"{KnownConfigNames.PublicationRoot}={publicationRoot}"]
+        });
+        using var app = appBuilder.Build();
+
+        var outputService = app.Services.GetRequiredService<IPipelineOutputService>();
+        Assert.Equal(publicationRoot, outputService.GetPublicationRoot());
         Assert.Equal(Path.Combine(projectDirectory, "aspire-output"), outputService.GetOutputDirectory());
     }
 

@@ -9,11 +9,18 @@ internal sealed class TestGitRepository : IGitRepository
 {
     public Func<CancellationToken, Task<DirectoryInfo?>>? GetRootAsyncCallback { get; set; }
 
+    public Func<DirectoryInfo, CancellationToken, Task<DirectoryInfo?>>? GetRootFromDirectoryAsyncCallback { get; set; }
+
     public Func<DirectoryInfo, CancellationToken, Task<IReadOnlySet<string>?>>? GetIncludedFilesAsyncCallback { get; set; }
 
     public Task<DirectoryInfo?> GetRootAsync(CancellationToken cancellationToken)
     {
         return GetRootAsyncCallback?.Invoke(cancellationToken) ?? Task.FromResult<DirectoryInfo?>(null);
+    }
+
+    public Task<DirectoryInfo?> GetRootAsync(DirectoryInfo searchRoot, CancellationToken cancellationToken)
+    {
+        return GetRootFromDirectoryAsyncCallback?.Invoke(searchRoot, cancellationToken) ?? Task.FromResult<DirectoryInfo?>(null);
     }
 
     public Task<IReadOnlySet<string>?> GetIncludedFilesAsync(DirectoryInfo searchRoot, CancellationToken cancellationToken)
