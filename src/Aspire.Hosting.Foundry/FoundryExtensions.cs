@@ -57,7 +57,7 @@ public static class FoundryExtensions
     /// <param name="modelVersion">The version of the model to deploy.</param>
     /// <param name="format">The format of the model to deploy.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addDeployment dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addDeployment dispatcher export.")]
     public static IResourceBuilder<FoundryDeploymentResource> AddDeployment(this IResourceBuilder<FoundryResource> builder, [ResourceName] string name, string modelName, string modelVersion, string format)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -126,7 +126,7 @@ public static class FoundryExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addDeployment dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addDeployment dispatcher export.")]
     public static IResourceBuilder<FoundryDeploymentResource> AddDeployment(this IResourceBuilder<FoundryResource> builder, [ResourceName] string name, FoundryModel model)
     {
         ArgumentNullException.ThrowIfNull(builder);

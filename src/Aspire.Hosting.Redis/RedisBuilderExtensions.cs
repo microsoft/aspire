@@ -35,7 +35,7 @@ public static class RedisBuilderExtensions
     /// </para>
     /// This version of the package defaults to the <inheritdoc cref="RedisContainerImageTags.Tag"/> tag of the <inheritdoc cref="RedisContainerImageTags.Image"/> container image.
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the canonical addRedis export with options.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the canonical addRedis export with options.")]
     public static IResourceBuilder<RedisResource> AddRedis(this IDistributedApplicationBuilder builder, [ResourceName] string name, int? port)
     {
         return builder.AddRedis(name, port, null);

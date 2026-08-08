@@ -132,7 +132,7 @@ public static class OtlpConfigurationExtensions
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withOtlpExporter dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withOtlpExporter dispatcher export.")]
     public static IResourceBuilder<T> WithOtlpExporter<T>(this IResourceBuilder<T> builder) where T : IResourceWithEnvironment
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -169,7 +169,7 @@ public static class OtlpConfigurationExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="protocol">The protocol to use for the OTLP exporter. If not set, it will try gRPC then Http.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withOtlpExporter dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withOtlpExporter dispatcher export.")]
     public static IResourceBuilder<T> WithOtlpExporter<T>(this IResourceBuilder<T> builder, OtlpProtocol protocol) where T : IResourceWithEnvironment
     {
         ArgumentNullException.ThrowIfNull(builder);

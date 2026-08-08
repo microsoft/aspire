@@ -97,7 +97,7 @@ public static class ProjectResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addProject dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addProject dispatcher export.")]
     public static IResourceBuilder<ProjectResource> AddProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string projectPath)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -208,7 +208,7 @@ public static class ProjectResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addProject dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addProject dispatcher export.")]
     public static IResourceBuilder<ProjectResource> AddProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string projectPath, string? launchProfileName)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -302,7 +302,7 @@ public static class ProjectResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addProject dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addProject dispatcher export.")]
     public static IResourceBuilder<ProjectResource> AddProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string projectPath, Action<ProjectResourceOptions> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -347,7 +347,7 @@ public static class ProjectResourceBuilderExtensions
     /// </example>
     /// </remarks>
     [Experimental("ASPIRECSHARPAPPS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addCSharpApp dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addCSharpApp dispatcher export.")]
     public static IResourceBuilder<ProjectResource> AddCSharpApp(this IDistributedApplicationBuilder builder, string name, string path)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -399,7 +399,7 @@ public static class ProjectResourceBuilderExtensions
     /// </example>
     /// </remarks>
     [Experimental("ASPIRECSHARPAPPS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addCSharpApp dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addCSharpApp dispatcher export.")]
     public static IResourceBuilder<CSharpAppResource> AddCSharpApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string path, Action<ProjectResourceOptions> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -476,7 +476,7 @@ public static class ProjectResourceBuilderExtensions
     /// </para>
     /// </remarks>
     [Experimental("ASPIREPROJECTS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "Project launch defaults are applied by the .NET language integration, not by polyglot app hosts.")]
+    [AspireExportIgnore(Reason = "Project launch defaults are applied by the .NET language integration, not by polyglot AppHosts.")]
     public static IResourceBuilder<TProjectResource> WithProjectDefaults<TProjectResource>(this IResourceBuilder<TProjectResource> builder, ProjectResourceOptions options)
         where TProjectResource : class, IResourceWithEnvironment, IResourceWithEndpoints, IResourceWithArgs
     {

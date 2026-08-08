@@ -155,7 +155,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal createBuilder dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal createBuilder dispatcher export.")]
     public static IDistributedApplicationBuilder CreateBuilder(string[] args)
     {
         ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostCreateBuilderEntered);
@@ -221,7 +221,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// </summary>
     /// <param name="options">The <see cref="CreateBuilderOptions"/> to use for configuring the builder.</param>
     /// <returns>A new instance of the <see cref="IDistributedApplicationBuilder"/> interface.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal createBuilder dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal createBuilder dispatcher export.")]
     internal static IDistributedApplicationBuilder CreateBuilder(CreateBuilderOptions options)
     {
         ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostCreateBuilderEntered);

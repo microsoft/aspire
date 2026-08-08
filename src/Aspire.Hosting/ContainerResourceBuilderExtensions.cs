@@ -772,7 +772,7 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the async callback overload.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the async callback overload.")]
     public static IResourceBuilder<T> WithDockerfileFactory<T>(this IResourceBuilder<T> builder, string contextPath, Func<DockerfileFactoryContext, string> dockerfileFactory, string? stage = null) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -947,7 +947,7 @@ public static class ContainerResourceBuilderExtensions
     /// The output is trusted and not validated.
     /// </para>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the async callback overload.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the async callback overload.")]
     public static IResourceBuilder<ContainerResource> AddDockerfileFactory(this IDistributedApplicationBuilder builder, [ResourceName] string name, string contextPath, Func<DockerfileFactoryContext, string> dockerfileFactory, string? stage = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -1194,7 +1194,7 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withBuildArg dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withBuildArg dispatcher export.")]
     public static IResourceBuilder<T> WithBuildArg<T>(this IResourceBuilder<T> builder, string name, IResourceBuilder<ParameterResource> value) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);

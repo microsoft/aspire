@@ -63,7 +63,7 @@ public static class TerminalResourceBuilderExtensions
     /// </code>
     /// </example>
     [Experimental(TerminalExperimentalDiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the parameterless withTerminal dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the parameterless withTerminal dispatcher export.")]
     public static IResourceBuilder<T> WithTerminal<T>(this IResourceBuilder<T> builder, Action<TerminalOptions>? configure = null)
         where T : IResource
     {

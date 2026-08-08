@@ -75,7 +75,7 @@ public static class ExecutableResourceBuilderExtensions
     /// <typeparam name="T">Type of executable resource</typeparam>
     /// <param name="builder">Resource builder</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the overload with the optional configure callback.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the overload with the optional configure callback.")]
     public static IResourceBuilder<T> PublishAsDockerFile<T>(this IResourceBuilder<T> builder) where T : ExecutableResource
     {
         return builder.PublishAsDockerFile(c => { });
