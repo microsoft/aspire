@@ -109,7 +109,6 @@ export const resourceCommandDynamicInputsFailed = vscode.l10n.t('Failed to load 
 export const resourceCommandLoadingDynamicInputs = vscode.l10n.t('Updating command inputs...');
 export const resourceCommandSecretWarning = vscode.l10n.t('This command has secret arguments. Values are masked while you enter them, but they are passed to the Aspire CLI as command-line arguments and may briefly be visible to other processes on this machine.');
 export const resourceCommandContinue = vscode.l10n.t('Continue');
-export const resourceCommandDontShowAgain = vscode.l10n.t("Don't show again");
 export const resourceCommandInvalidNumber = vscode.l10n.t('Enter a number using invariant culture, for example 1, -1.5, or 1e3.');
 export const resourceCommandMaxLength = (length: number) => vscode.l10n.t('Value must be {0} characters or fewer.', length);
 export const resourceCommandDisabledDescription = vscode.l10n.t('(disabled)');
@@ -163,7 +162,7 @@ export const bunDisplayName = (script: string) => `Bun: ${script}`;
 export const bunLabel = 'Bun';
 export const nodeDisplayName = (script: string) => `Node.js: ${script}`;
 export const nodeLabel = 'Node.js';
-export const dontShowAgainLabel = vscode.l10n.t("Don't Show Again");
+export const dontShowAgainLabel = vscode.l10n.t("Don't show again");
 export const doYouWantToSetDefaultApphost = (appHost: string) => vscode.l10n.t('Do you want to set {0} as the default AppHost for this workspace?', appHost);
 export const doYouWantToSelectDefaultApphost = vscode.l10n.t('Do you want to select the default AppHost for this workspace?');
 export const selectDefaultLaunchApphost = vscode.l10n.t('Select the default AppHost to launch when starting an Aspire debug session');
@@ -184,6 +183,10 @@ export const dotNetRunFileBasedExecutableProfileFallback = (profileName: string,
 export const executableLaunchProfileMissingExecutablePath = (profileName: string) => vscode.l10n.t('Launch profile \'{0}\' uses commandName \'Executable\' but does not specify an executablePath. Add an executablePath to the launch profile.', profileName);
 export const lookingForDevkitBuildTask = vscode.l10n.t('C# Dev Kit is installed, looking for C# Dev Kit build task...');
 export const csharpDevKitNotInstalled = vscode.l10n.t('C# Dev Kit is not installed, building using dotnet CLI...');
+export const hotReloadDisabledNotice = vscode.l10n.t('.NET Hot Reload can apply code edits to running Aspire resources without restarting them, but it is turned off in C# Dev Kit. To use it, enable \'csharp.experimental.debug.hotReload\' in your user settings.');
+export const hotReloadActiveNotice = vscode.l10n.t('.NET Hot Reload is enabled for .NET project resources in this Aspire app. Saving a file asks C# Dev Kit to apply supported edits to the running resource without restarting it, and the Hot Reload button applies pending edits across them. Dev Kit reports results in the .NET Hot Reload output.');
+export const hotReloadActiveNoticeSaveDisabled = vscode.l10n.t('.NET Hot Reload is enabled for .NET project resources in this Aspire app, but \'csharp.debug.hotReloadOnSave\' is turned off, so saving does not apply edits. Use the Hot Reload button to apply pending edits. Dev Kit reports results in the .NET Hot Reload output.');
+export const showHotReloadOutputLabel = vscode.l10n.t('Show Hot Reload Output');
 export const dismissLabel = vscode.l10n.t('Dismiss');
 export const openCliInstallInstructions = vscode.l10n.t('See CLI installation instructions');
 export const cliNotAvailable = vscode.l10n.t('Aspire CLI is not available on PATH. Please install it and restart VS Code.');

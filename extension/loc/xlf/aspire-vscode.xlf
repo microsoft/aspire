@@ -7,6 +7,15 @@
     <trans-unit id="aspire-vscode.strings.resourceCountDescription">
       <source xml:lang="en">({0} resources)</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.hotReloadDisabledNotice">
+      <source xml:lang="en">.NET Hot Reload can apply code edits to running Aspire resources without restarting them, but it is turned off in C# Dev Kit. To use it, enable &apos;csharp.experimental.debug.hotReload&apos; in your user settings.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.hotReloadActiveNoticeSaveDisabled">
+      <source xml:lang="en">.NET Hot Reload is enabled for .NET project resources in this Aspire app, but &apos;csharp.debug.hotReloadOnSave&apos; is turned off, so saving does not apply edits. Use the Hot Reload button to apply pending edits. Dev Kit reports results in the .NET Hot Reload output.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.hotReloadActiveNotice">
+      <source xml:lang="en">.NET Hot Reload is enabled for .NET project resources in this Aspire app. Saving a file asks C# Dev Kit to apply supported edits to the running resource without restarting it, and the Hot Reload button applies pending edits across them. Dev Kit reports results in the .NET Hot Reload output.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.debugSessionAlreadyExists">
       <source xml:lang="en">A debug session is already active for id {0}.</source>
     </trans-unit>
@@ -240,9 +249,6 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.doYouWantToSetDefaultApphost">
       <source xml:lang="en">Do you want to set {0} as the default AppHost for this workspace?</source>
-    </trans-unit>
-    <trans-unit id="aspire-vscode.strings.resourceCommandDontShowAgain">
-      <source xml:lang="en">Don&apos;t show again</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.dontShowAgainLabel">
       <source xml:lang="en">Don&apos;t show again</source>
@@ -639,6 +645,9 @@
     </trans-unit>
     <trans-unit id="configuration.aspire.enableCodeLens">
       <source xml:lang="en">Show CodeLens actions (state, restart, stop, logs) inline above resource declarations in AppHost files.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.showHotReloadOutputLabel">
+      <source xml:lang="en">Show Hot Reload Output</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.dashboardLaunchNotificationLabel">
       <source xml:lang="en">Show a notification</source>

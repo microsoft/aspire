@@ -24,6 +24,7 @@ import {
 } from '../launchProfiles';
 import { AspireDebugSession } from '../AspireDebugSession';
 import { createAspireCliPathProcessEnvironment } from '../../utils/cliPathEnvironment';
+import { getHotReloadDiagnostics, logHotReloadDiagnostics, showHotReloadNotificationIfNeeded } from '../hotReload';
 
 interface IDotNetService {
     getAndActivateDevKit(): Promise<boolean>
@@ -609,6 +610,37 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
             // variable (see https://github.com/dotnet/sdk/pull/35029), we need to replicate the behavior by setting it ourselves.
             if (launchOptions.isApphost && profileName) {
                 debugConfiguration.env['DOTNET_LAUNCH_PROFILE'] = profileName;
+            }
+
+            // The AppHost is orchestration infrastructure, not a .NET resource covered by this
+            // advisory. Keeping it out prevents a polyglot app from seeing Hot Reload UI and leaves
+            // the one-time notification available for the first eligible .NET resource.
+            if (launchOptions.isApphost) {
+                return;
+            }
+
+            // Hot Reload for .NET resources is provided entirely by C# Dev Kit and vsdbg; Aspire
+            // launches a normal `coreclr` session and inherits it. Nothing here configures the
+            // feature — it only reports the state and, when the feature is switched off, says why
+            // it is unavailable. The whole block is guarded because it is the only part of this callback
+            // that reads a third-party optional extension, and Hot Reload is an enhancement:
+            // nothing it does may turn a working .NET debug session into a failed one.
+            try {
+                // Hot Reload is applied by the debugger, so `noDebug` decides whether any of this
+                // applies at all. Gated on the configuration's own `noDebug`, not
+                // `launchOptions.debug`: the `dotnet run` and file-based-executable fallbacks above
+                // force `noDebug = true` while `launchOptions.debug` stays true.
+                const isDebugSession = debugConfiguration.noDebug !== true;
+                const hotReloadDiagnostics = getHotReloadDiagnostics();
+                logHotReloadDiagnostics(path.basename(projectPath), hotReloadDiagnostics, isDebugSession);
+
+                // Deliberately NOT awaited. A VS Code notification stays up until the user interacts
+                // with it, and this callback runs before the debug session is created, so awaiting it
+                // would stall the resource behind an advisory message.
+                showHotReloadNotificationIfNeeded(hotReloadDiagnostics, isDebugSession);
+            }
+            catch (err) {
+                extensionLogOutputChannel.warn(`Could not determine C# Dev Kit Hot Reload availability; continuing without it: ${err instanceof Error ? err.message : String(err)}`);
             }
         }
     };

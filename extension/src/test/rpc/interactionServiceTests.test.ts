@@ -7,6 +7,7 @@ import * as sinon from 'sinon';
 
 import { IInteractionService, InteractionService } from '../../server/interactionService';
 import { ICliRpcClient, RpcClient, ValidationResult } from '../../server/rpcClient';
+import { createTestMemento } from '../common';
 import { extensionLogOutputChannel } from '../../utils/logging';
 import AspireRpcServer, { RpcServerConnectionInfo } from '../../server/AspireRpcServer';
 import { AspireDebugSession } from '../../debugger/AspireDebugSession';
@@ -824,23 +825,6 @@ function createAspireConfiguration(values: Record<string, unknown> = {}): vscode
 			workspaceFolderValue: undefined,
 		}),
 	} as vscode.WorkspaceConfiguration;
-}
-
-function createTestMemento(): vscode.Memento {
-	const values = new Map<string, unknown>();
-
-	return {
-		keys: () => [...values.keys()],
-		get: <T>(key: string, defaultValue?: T) => values.has(key) ? values.get(key) as T : defaultValue as T,
-		update: async (key: string, value: unknown) => {
-			if (value === undefined) {
-				values.delete(key);
-				return;
-			}
-
-			values.set(key, value);
-		},
-	} as vscode.Memento;
 }
 
 function restoreEnvironmentVariable(name: string, value: string | undefined): void {

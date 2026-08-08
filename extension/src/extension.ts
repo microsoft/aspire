@@ -38,6 +38,7 @@ import { AppHostFilePresenceWatcher } from './editor/AppHostFilePresenceWatcher'
 import { getSupportedLanguageIds } from './editor/parsers/AppHostResourceParser';
 import { readGitCommitSha } from './utils/versionInfo';
 import { collectResourceCommandArguments } from './views/ResourceCommandArguments';
+import { initializeHotReloadNotificationState } from './debugger/hotReload';
 import { createResourceCommandArgumentLoader } from './views/ResourceCommandArgumentsLoader';
 import { executeResourceCommand } from './views/resourceCommandExecution';
 import { ResourceCommandJson } from './views/AppHostDataRepository';
@@ -364,6 +365,10 @@ export async function activate(context: vscode.ExtensionContext) {
   }));
 
   aspireExtensionContext.initialize(rpcServer, context, debugConfigProvider, dcpServer, terminalProvider, editorCommandProvider);
+
+  // The .NET resource launch path decides whether to show Hot Reload state, but it has no access to
+  // the extension context, so hand it the context used to remember a dismissal.
+  initializeHotReloadNotificationState(context);
 
   // Register Aspire MCP server definition provider so the Aspire MCP server
   // appears automatically in VS Code's MCP tools list for Aspire workspaces.
