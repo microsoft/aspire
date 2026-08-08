@@ -427,9 +427,9 @@ jobs:
             # re-submitting it via the `||` fallback. A request that is not granted in time surfaces
             # later as a normal QuotaExceeded error in the test that needs it.
             if timeout 30 az quota create --resource-name "$name" --scope "$scope" \
-                 --limit-object value="$desired" "${rt_args[@]}" --no-wait --only-show-errors >/dev/null 2>&1 \
+                 --limit-object value="$desired" "${rt_args[@]}" --no-wait --only-show-errors \
                || timeout 30 az quota update --resource-name "$name" --scope "$scope" \
-                 --limit-object value="$desired" "${rt_args[@]}" --no-wait --only-show-errors >/dev/null 2>&1; then
+                 --limit-object value="$desired" "${rt_args[@]}" --no-wait --only-show-errors; then
               echo "  Request submitted for $provider/$name in $location (asynchronous; may await manual approval)."
             else
               echo "⚠ Quota request for $provider/$name in $location was not accepted (may need manual approval); continuing."
