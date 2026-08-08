@@ -13,4 +13,8 @@
     <PackageReference Include="System.CommandLine" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="QuarantineTools.Tests" />
+  </ItemGroup>
+
 </Project>

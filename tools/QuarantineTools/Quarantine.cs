@@ -6,6 +6,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.CommandLine;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -22,7 +23,7 @@ using System.Text.RegularExpressions;
 //    - quarantine: provide one or more fully-qualified test names immediately after -q, and pass the
 //      issue URL using -i/--url. Example: `quarantine -q N.C.M -i https://...`
 //    - unquarantine: provide one or more fully-qualified test names after -u. Example: `quarantine -u N.C.M`
-// 2. Locate the repo root (looks for a .git folder) and then the tests directory under it.
+// 2. Locate the repo root (asks `git rev-parse --show-toplevel`) and then the tests directory under it.
 // 3. Enumerate all .cs files under tests, ignoring bin/ and obj/.
 // 4. For each file, parse a syntax tree and find method declarations. For each method, compute its
 //    containing namespace and type chain and compare against requested targets (namespace + nested type
@@ -41,6 +42,22 @@ public class Program
 {
     private const string DefaultQuarantinedTestAttributeFullName = "Aspire.TestUtilities.QuarantinedTest";
     private const string DefaultActiveIssueAttributeFullName = "Xunit.ActiveIssueAttribute";
+
+    /// <summary>
+    /// Upper bound for the `git rev-parse` probe.
+    /// </summary>
+    private static readonly TimeSpan s_gitProbeTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Exit code for refusing to edit a tree the caller is not standing in. Distinct from the other
+    /// failure codes (2 = tests folder not found, 3 = no matching test) so a caller can tell them apart.
+    /// </summary>
+    internal const int ExitCodeWrongTree = 4;
+
+    /// <summary>
+    /// Matches the conventional MAXSYMLINKS limit; bounds link resolution so a symlink cycle terminates.
+    /// </summary>
+    private const int MaxLinkDepth = 40;
 
     public static Task<int> Main(string[] args)
     {
@@ -133,7 +150,17 @@ public class Program
     private static async Task<int> ExecuteAsync(bool quarantine, bool unquarantine, List<string> fullMethodNames, string? issueUrl, string? scanRootOverride, string attributeFullName, CancellationToken cancellationToken)
     {
         // Resolve repository root and tests folder
-        var repoRoot = FindRepoRoot(Directory.GetCurrentDirectory()) ?? Directory.GetCurrentDirectory();
+        var currentDirectory = Directory.GetCurrentDirectory();
+        var repoRoot = await FindRepoRootAsync(currentDirectory, cancellationToken).ConfigureAwait(false) ?? currentDirectory;
+
+        // This tool rewrites source files in bulk, so a wrong root is destructive rather than merely
+        // wrong. Refuse instead of editing a tree the caller is not standing in.
+        if (TryGetWrongTreeError(repoRoot, currentDirectory) is { } wrongTreeError)
+        {
+            Console.Error.WriteLine(wrongTreeError);
+            return ExitCodeWrongTree;
+        }
+
         var testsRoot = string.IsNullOrWhiteSpace(scanRootOverride)
                             ? Path.Combine(repoRoot, "tests")
                             : (Path.IsPathRooted(scanRootOverride!)
@@ -472,21 +499,331 @@ public class Program
     }
 
     /// <summary>
-    /// Walks up the directory tree from <paramref name="startDir"/> to locate the repository root
-    /// (identified by the presence of a .git folder). Returns null if not found.
+    /// Resolves the root of the git working tree that contains <paramref name="startDir"/>.
+    /// Returns null if no repository root can be determined.
     /// </summary>
-    private static string? FindRepoRoot(string startDir)
+    internal static async Task<string?> FindRepoRootAsync(string startDir, CancellationToken cancellationToken)
     {
+        // Ask git first. Git owns the definition of "working tree root" and gets linked worktrees,
+        // submodules, and symlinked paths right, none of which a directory probe can do reliably.
+        if (await TryGetGitTopLevelAsync(startDir, cancellationToken).ConfigureAwait(false) is { } topLevel)
+        {
+            return topLevel;
+        }
+
+        // Fallback for when git is unavailable or `startDir` is not inside a repository.
+        return FindRepoRootByMarker(startDir);
+    }
+
+    /// <summary>
+    /// Walks up from <paramref name="startDir"/> looking for a <c>.git</c> marker. Used when git cannot
+    /// answer. Returns null if no marker is found.
+    /// </summary>
+    internal static string? FindRepoRootByMarker(string startDir)
+    {
+        // IMPORTANT: `.git` must be matched as a file *or* a directory. In a linked worktree `.git` is a
+        // regular file holding a `gitdir: <path>` pointer, so a directory-only probe walks straight past
+        // the worktree root. When a worktree is nested inside another checkout of the same repository,
+        // that walk terminates on the outer checkout's real `.git` directory and this tool then rewrites
+        // source files in the wrong tree - silently, because the edit itself succeeds.
+        // See https://git-scm.com/docs/gitrepository-layout#Documentation/gitrepository-layout.txt-gitfile
         var dir = new DirectoryInfo(startDir);
         while (dir != null)
         {
-            if (Directory.Exists(Path.Combine(dir.FullName, ".git")))
+            var gitPath = Path.Combine(dir.FullName, ".git");
+            if (Directory.Exists(gitPath) || File.Exists(gitPath))
             {
                 return dir.FullName;
             }
             dir = dir.Parent;
         }
         return null;
+    }
+
+    /// <summary>
+    /// Runs <c>git rev-parse --show-toplevel</c> in <paramref name="startDir"/>. Returns null when git is
+    /// not on PATH, the directory is not inside a working tree, or the command otherwise fails.
+    /// </summary>
+    private static async Task<string?> TryGetGitTopLevelAsync(string startDir, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var startInfo = new ProcessStartInfo("git")
+            {
+                WorkingDirectory = startDir,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            startInfo.ArgumentList.Add("rev-parse");
+            startInfo.ArgumentList.Add("--show-toplevel");
+
+            using var process = Process.Start(startInfo);
+            if (process is null)
+            {
+                return null;
+            }
+
+            // Resolving the repo root must never be the reason the tool appears to hang, so bound the
+            // probe and fall back to the directory walk if git does not answer.
+            using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutSource.CancelAfter(s_gitProbeTimeout);
+
+            // Read both streams concurrently to avoid deadlock when a pipe buffer fills.
+            var standardOutputTask = process.StandardOutput.ReadToEndAsync(timeoutSource.Token);
+            var standardErrorTask = process.StandardError.ReadToEndAsync(timeoutSource.Token);
+
+            try
+            {
+                await process.WaitForExitAsync(timeoutSource.Token).ConfigureAwait(false);
+                await Task.WhenAll(standardOutputTask, standardErrorTask).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                TryKill(process);
+
+                // The linked source cancels for two unrelated reasons, and only one of them is a probe
+                // failure. If the caller cancelled (Ctrl+C), swallowing it here would send
+                // FindRepoRootAsync into the fallback walk and let ExecuteAsync enumerate the whole
+                // tests tree before cancellation is next observed. Re-throw that; fall back only for
+                // the internal timeout.
+                cancellationToken.ThrowIfCancellationRequested();
+                return null;
+            }
+
+            if (process.ExitCode != 0)
+            {
+                return null;
+            }
+
+            // git prints a single absolute path using forward slashes on every platform, including
+            // Windows (for example `C:/src/aspire`). GetFullPath normalizes the separators.
+            var trimmed = standardOutputTask.Result.Trim();
+            return trimmed.Length == 0 ? null : Path.GetFullPath(trimmed);
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+        {
+            // git missing from PATH or not executable - fall back to the directory walk.
+            return null;
+        }
+    }
+
+    private static void TryKill(Process process)
+    {
+        try
+        {
+            process.Kill(entireProcessTree: true);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException or System.ComponentModel.Win32Exception)
+        {
+            // The process already exited or cannot be killed; nothing useful to do either way.
+        }
+    }
+
+    /// <summary>
+    /// Returns the error text to print when <paramref name="repoRoot"/> is not a tree the caller is
+    /// standing in, or null when the root is safe to use.
+    /// </summary>
+    internal static string? TryGetWrongTreeError(string repoRoot, string currentDirectory)
+    {
+        if (IsSameOrAncestorDirectory(repoRoot, currentDirectory))
+        {
+            return null;
+        }
+
+        // Only now, on the failure path, pay for symlink resolution. The two paths can legitimately be
+        // spelled differently - a Windows junction or `subst` drive lets the caller's directory read as
+        // `D:\src\aspire` while git reports `C:/src/aspire` - and refusing a valid run would be its own
+        // bug. Confining canonicalization to this path means a gap in it can only rescue a run that was
+        // already being refused, never block one that was about to succeed.
+        if (IsSameOrAncestorDirectory(Canonicalize(repoRoot), Canonicalize(currentDirectory)))
+        {
+            return null;
+        }
+
+        // Name both paths: the whole point of this guard is that a wrong-tree run is otherwise
+        // indistinguishable from a correct one, so the message has to say which tree was rejected.
+        return $"""
+            Refusing to run: the resolved repository root is not the working directory or one of its ancestors.
+              Resolved repository root: {repoRoot}
+              Current directory:        {currentDirectory}
+            """;
+    }
+
+    /// <summary>
+    /// Resolves every symlinked component of <paramref name="path"/>. Returns the input unchanged if it
+    /// cannot be resolved; this is a best-effort comparison aid, never a correctness requirement.
+    /// </summary>
+    private static string Canonicalize(string path)
+    {
+        try
+        {
+            return CanonicalizeCore(Path.GetFullPath(path), MaxLinkDepth);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return path;
+        }
+    }
+
+    private static string CanonicalizeCore(string path, int remainingDepth)
+    {
+        if (remainingDepth <= 0)
+        {
+            // A cycle, or a chain long enough to be indistinguishable from one.
+            return path;
+        }
+
+        var info = new DirectoryInfo(path);
+
+        // A link's stored target is whatever string was written at creation time, so substituting it can
+        // reintroduce an unresolved spelling (and may itself be relative to the link's own directory).
+        // Re-canonicalize the substituted path rather than trusting it, one hop at a time.
+        if (ResolveLink(info) is { } target)
+        {
+            var linkDirectory = info.Parent?.FullName ?? path;
+            return CanonicalizeCore(Path.GetFullPath(target, linkDirectory), remainingDepth - 1);
+        }
+
+        return info.Parent is { } parent
+            ? Path.Combine(CanonicalizeCore(parent.FullName, remainingDepth - 1), info.Name)
+            : Path.TrimEndingDirectorySeparator(info.FullName);
+    }
+
+    /// <summary>
+    /// Returns the link target of <paramref name="info"/>, or null when it is not a link.
+    /// </summary>
+    private static string? ResolveLink(DirectoryInfo info)
+    {
+        try
+        {
+            return info.ResolveLinkTarget(returnFinalTarget: false)?.FullName;
+        }
+        catch (IOException)
+        {
+            // On Windows the entry can be a kind this overload rejects; treat it as "not a link" and let
+            // the caller keep the path as spelled.
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Returns true when <paramref name="candidateAncestor"/> is <paramref name="directory"/> itself or
+    /// one of its ancestors.
+    /// </summary>
+    internal static bool IsSameOrAncestorDirectory(string candidateAncestor, string directory)
+        => IsSameOrAncestorDirectory(candidateAncestor, directory, IsCaseSensitiveDirectory);
+
+    /// <summary>
+    /// Returns true when <paramref name="candidateAncestor"/> is <paramref name="directory"/> itself or
+    /// one of its ancestors, comparing names with the supplied casing rule.
+    /// </summary>
+    /// <param name="candidateAncestor">The directory being tested as an ancestor.</param>
+    /// <param name="directory">The directory whose ancestry is walked.</param>
+    /// <param name="caseSensitive">Whether directory names on the volume holding the paths distinguish case.</param>
+    internal static bool IsSameOrAncestorDirectory(string candidateAncestor, string directory, bool caseSensitive)
+        => IsSameOrAncestorDirectory(candidateAncestor, directory, _ => caseSensitive);
+
+    /// <summary>
+    /// Returns true when <paramref name="candidateAncestor"/> is <paramref name="directory"/> itself or
+    /// one of its ancestors, comparing each segment with the casing rules of that segment's parent.
+    /// </summary>
+    internal static bool IsSameOrAncestorDirectory(string candidateAncestor, string directory, Func<string, bool> isCaseSensitiveDirectory)
+    {
+        var ancestor = TrimTrailingSeparator(Path.GetFullPath(candidateAncestor));
+        var current = TrimTrailingSeparator(Path.GetFullPath(directory));
+        var ancestorRoot = Path.GetPathRoot(ancestor) ?? string.Empty;
+        var currentRoot = Path.GetPathRoot(current) ?? string.Empty;
+
+        if (!string.Equals(ancestorRoot, currentRoot, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var ancestorSegments = GetPathSegments(ancestor, ancestorRoot);
+        var currentSegments = GetPathSegments(current, currentRoot);
+        if (ancestorSegments.Length > currentSegments.Length)
+        {
+            return false;
+        }
+
+        var parent = currentRoot;
+        for (var i = 0; i < ancestorSegments.Length; i++)
+        {
+            // Comparing case-insensitively under a case-sensitive parent would let two genuinely
+            // different trees whose paths differ only by case satisfy this guard, which is the one
+            // outcome it exists to prevent. Comparing case-sensitively everywhere is not the answer
+            // either: git canonicalizes --show-toplevel to the on-disk casing, and while getcwd(3)
+            // does the same on Unix, the Windows current directory keeps whatever casing the process
+            // was given. Follow each parent instead of applying the repository root's final-segment
+            // probe to the whole absolute path.
+            var comparison = isCaseSensitiveDirectory(parent) ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+            if (!string.Equals(ancestorSegments[i], currentSegments[i], comparison))
+            {
+                return false;
+            }
+
+            parent = Path.Combine(parent, currentSegments[i]);
+        }
+
+        return true;
+    }
+
+    private static string[] GetPathSegments(string fullPath, string root)
+    {
+        var remainder = fullPath[root.Length..]
+            .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return remainder.Split(
+            [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+            StringSplitOptions.RemoveEmptyEntries);
+    }
+
+    /// <summary>
+    /// Probes whether directory names alongside <paramref name="directory"/> distinguish case, by
+    /// asking whether it is reachable through a case-flipped spelling of its own final segment.
+    /// </summary>
+    /// <remarks>
+    /// The operating system is not a reliable proxy for the volume: macOS APFS can be formatted
+    /// case-sensitive, Windows exposes a per-directory case-sensitivity flag that WSL sets, and Linux
+    /// can mount case-insensitive volumes. The probe is read-only - it only tests for existence.
+    /// </remarks>
+    internal static bool IsCaseSensitiveDirectory(string directory)
+    {
+        var full = TrimTrailingSeparator(Path.GetFullPath(directory));
+        var name = Path.GetFileName(full);
+        var parent = Path.GetDirectoryName(full);
+        var flipped = FlipCase(name);
+
+        // A volume root has no segment to flip, and a segment with no cased letters cannot answer the
+        // question. Neither is a reason to refuse, so fall back to the platform's usual default.
+        if (parent is null || name.Length == 0 || string.Equals(flipped, name, StringComparison.Ordinal))
+        {
+            return !OperatingSystem.IsWindows() && !OperatingSystem.IsMacOS();
+        }
+
+        // A case-sensitive volume that happens to hold a real sibling differing only by case is read as
+        // case-insensitive here. That is acceptable: it only restores the behavior this guard had
+        // before the probe existed, and such a pair is not something a checkout layout produces.
+        return !Directory.Exists(Path.Combine(parent, flipped));
+    }
+
+    private static string FlipCase(string value)
+    {
+        return string.Create(value.Length, value, static (destination, source) =>
+        {
+            for (var i = 0; i < source.Length; i++)
+            {
+                destination[i] = char.IsUpper(source[i]) ? char.ToLowerInvariant(source[i]) : char.ToUpperInvariant(source[i]);
+            }
+        });
+    }
+
+    private static string TrimTrailingSeparator(string path)
+    {
+        // A root such as "/" or "C:\" must keep its separator, so never trim the path down to empty.
+        var trimmed = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return trimmed.Length == 0 ? path : trimmed;
     }
 
     /// <summary>

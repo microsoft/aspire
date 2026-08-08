@@ -22,4 +22,8 @@
     <PackageReference Include="xunit.v3.assert" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\tools\QuarantineTools\QuarantineTools.csproj" />
+  </ItemGroup>
+
 </Project>
