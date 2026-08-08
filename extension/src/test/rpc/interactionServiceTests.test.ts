@@ -221,6 +221,26 @@ suite('InteractionService endpoints', () => {
 		}
 	});
 
+	test("showStatus reports CLI status as dismissible window progress", async () => {
+		const testInfo = await createTestRpcServer();
+		const withProgressSpy = sinon.spy(vscode.window, 'withProgress');
+
+		try {
+			testInfo.interactionService.showStatus('Building...');
+
+			sinon.assert.calledOnce(withProgressSpy);
+			// A progress notification cannot be dismissed while the operation runs, so it covers the
+			// editor for the whole CLI run (https://github.com/microsoft/aspire/issues/19036).
+			const options = withProgressSpy.firstCall.args[0] as vscode.ProgressOptions;
+			assert.strictEqual(options.location, vscode.ProgressLocation.Window);
+			assert.strictEqual(options.cancellable, undefined);
+		}
+		finally {
+			testInfo.interactionService.clearProgressNotification();
+			withProgressSpy.restore();
+		}
+	});
+
 	test("RPC close clears active progress notification", async () => {
 		let closeHandler: (() => void) | undefined;
 		const messageConnection = {

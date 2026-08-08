@@ -171,7 +171,7 @@ export class InteractionService implements IInteractionService {
     constructor(getAspireDebugSession: () => AspireDebugSession | null, rpcClient: ICliRpcClient, private readonly _globalState?: vscode.Memento) {
         this._getAspireDebugSession = getAspireDebugSession;
         this._rpcClient = rpcClient;
-        this._progressNotifier = new ProgressNotifier(this._rpcClient);
+        this._progressNotifier = new ProgressNotifier();
     }
 
     showStatus(statusText: string | null) {

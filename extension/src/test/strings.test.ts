@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 import { launchingWithAppHost, launchingWithDirectory } from '../loc/strings';
-import { formatText } from '../utils/strings';
+import { collapseWhitespace, escapeCodicons, formatText } from '../utils/strings';
 
 suite('utils/strings tests', () => {
 	test('formatText formats correctly ', () => {
@@ -21,6 +21,22 @@ suite('utils/strings tests', () => {
         const resultWithNoEmojis = formatText(inputWithNoEmojis);
         assert.strictEqual(resultWithNoEmojis, expectedOutputWithNoEmojis);
 	});
+
+    test('collapseWhitespace renders multi-line CLI status as a single line', () => {
+        assert.strictEqual(collapseWhitespace('  Building\n  the AppHost\r\n\tnow  '), 'Building the AppHost now');
+        assert.strictEqual(collapseWhitespace('Building...'), 'Building...');
+        assert.strictEqual(collapseWhitespace('   '), '');
+    });
+
+    test('escapeCodicons stops untrusted text from injecting status bar icons', () => {
+        // VS Code renders `$(name)` as an icon in the status bar and in window progress, so CLI
+        // controlled status text could otherwise draw an arbitrary (or spinning) icon.
+        assert.strictEqual(escapeCodicons('Building $(error) now'), 'Building \\$(error) now');
+        assert.strictEqual(escapeCodicons('$(sync~spin)$(bug)'), '\\$(sync~spin)\\$(bug)');
+        // An already escaped sequence must not be double escaped, otherwise the backslash shows up.
+        assert.strictEqual(escapeCodicons('Building \\$(error) now'), 'Building \\$(error) now');
+        assert.strictEqual(escapeCodicons('Cost is $5 (approx)'), 'Cost is $5 (approx)');
+    });
 
     test('copy AppHost path loc strings have package nls entries', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');

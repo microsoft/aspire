@@ -255,6 +255,11 @@ export async function getNotificationCount(): Promise<number> {
     return (await new Workbench().getNotifications()).length;
 }
 
+export async function getNotificationMessages(): Promise<string[]> {
+    const notifications = await new Workbench().getNotifications();
+    return await Promise.all(notifications.map(notification => notification.getMessage()));
+}
+
 export async function waitForNotificationCountGreaterThan(count: number, timeoutMs = 30000): Promise<void> {
     await VSBrowser.instance.driver.wait(async () => {
         const currentCount = await getNotificationCount();

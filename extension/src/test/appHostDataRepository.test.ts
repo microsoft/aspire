@@ -3570,7 +3570,7 @@ suite('AppHostDataRepository', () => {
         }
     });
 
-    test('workspace discovery shows non-cancellable progress only while the workspace view is visible', async () => {
+    test('workspace discovery shows non-cancellable window progress only while the workspace view is visible', async () => {
         const workspaceFolder = {
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
@@ -3598,7 +3598,7 @@ suite('AppHostDataRepository', () => {
             await waitForCondition(() => withProgressStub.calledOnce, 'workspace discovery progress did not appear');
 
             assert.deepStrictEqual(withProgressStub.firstCall.args[0], {
-                location: vscode.ProgressLocation.Notification,
+                location: vscode.ProgressLocation.Window,
                 title: 'Discovering AppHosts...',
                 cancellable: false,
             });

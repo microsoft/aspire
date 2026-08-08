@@ -4,7 +4,10 @@ import * as path from 'path';
 import { getCommandInvocationCount, getDebugLaunchCount, getStoppingPathEventCount, getTreeAppHostLabel, isSamePath, waitForAppHostLaunching, waitForCommandOutcome, waitForDebugConsoleOutput, waitForDebugDashboardUrl, waitForDebugLaunch, waitForDebugSessionStartup, waitForExtensionState, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForRunningAppHost, waitForStoppingPathEvent, waitForWorkspaceAppHost } from './helpers/assertions';
 import { executeE2eControlCommand, resetDashboardDefaultChangedNotificationForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setShowStatusDelayForE2E, stopPrimaryAppHostIfRunning, writeFileWithRetry, writeWorkspaceSetting } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
-import { openAspireView, waitForEditorTitle, waitForNotificationMessage, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
+import { getNotificationMessages, openAspireView, waitForEditorTitle, waitForNotificationMessage, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
+
+// Long-running statuses the Aspire CLI reports through the showStatus RPC during `aspire run`.
+const cliRunStatusTexts = ['Building AppHost...', 'Connecting to AppHost...', 'Starting dashboard...'];
 
 suite('Aspire debug dashboard E2E', function () {
     this.timeout(240000);
@@ -187,6 +190,39 @@ suite('Aspire debug dashboard E2E', function () {
         await executeE2eControlCommand({ name: 'stopDebugging' });
         await waitForNoDebugSessions();
         await waitForNoRunningAppHost(120000, appHostPath);
+    });
+
+    test('keeps long-running CLI run status out of notifications', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+        const discovered = await waitForWorkspaceAppHost();
+        const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
+
+        // Each showStatus RPC is held briefly so a single status stays on screen long enough for the
+        // poll below to observe it. Without the delay a fast build can move through every status
+        // between two polls.
+        await setShowStatusDelayForE2E(2500);
+        try {
+            const before = getCommandInvocationCount('aspire-vscode.debugAppHost');
+            await executeE2eControlCommand({ name: 'debugAppHost', appHostPath }, { waitFor: 'started' });
+            await waitForCommandOutcome('aspire-vscode.debugAppHost', 'success', 120000, before);
+
+            // A progress notification cannot be dismissed while the operation runs, so CLI status
+            // stayed on top of the editor for the whole run
+            // (https://github.com/microsoft/aspire/issues/19036).
+            const notificationMessages = await getNotificationMessages();
+            assert.deepStrictEqual(
+                notificationMessages.filter(message => cliRunStatusTexts.some(status => message.includes(status))),
+                [],
+                `Expected CLI run status to never appear as a notification: ${JSON.stringify(notificationMessages)}`);
+        }
+        finally {
+            await setShowStatusDelayForE2E(undefined);
+        }
+
+        await stopPrimaryAppHostIfRunning();
+        await waitForNoDebugSessions(180000);
+        await waitForNoRunningAppHost(180000, appHostPath);
     });
 
     test('surfaces AppHost build failure logs in the debug console when the CLI exits after a build failure', async function () {
