@@ -97,6 +97,38 @@ suite('AspireDebugSession tests', () => {
         ]);
     });
 
+    test('forwards explicit launch configuration provenance to the Aspire CLI', async () => {
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/apphost.cs',
+                command: 'run',
+                __aspireAppHostSelectionOrigin: 'explicit-launch-configuration',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const terminalProvider = {
+            isCliDebugLoggingEnabled: () => false,
+        };
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, {} as any, terminalProvider as any, () => { });
+        const spawnStub = sinon.stub(aspireDebugSession, 'spawnAspireCommand').resolves();
+
+        aspireDebugSession.handleMessage({ command: 'launch', seq: 1, arguments: { noDebug: false } });
+
+        await waitFor(() => spawnStub.calledOnce);
+        assert.deepStrictEqual(spawnStub.firstCall.args[4], [{
+            name: 'ASPIRE_CLI_APPHOST_SELECTION_ORIGIN',
+            value: 'explicit-launch-configuration',
+        }]);
+    });
+
     test('describes a no-debug launch as an Aspire run session', async () => {
         const parentDebugSession = {
             id: 'aspire-session',

@@ -2,8 +2,8 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getCommandInvocationCount, getDebugLaunchCount, getStoppingPathEventCount, getTreeAppHostLabel, isSamePath, waitForAppHostLaunching, waitForCommandOutcome, waitForDebugConsoleOutput, waitForDebugDashboardUrl, waitForDebugLaunch, waitForDebugSessionStartup, waitForExtensionState, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForRunningAppHost, waitForStoppingPathEvent, waitForWorkspaceAppHost } from './helpers/assertions';
-import { executeE2eControlCommand, resetDashboardDefaultChangedNotificationForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setShowStatusDelayForE2E, stopPrimaryAppHostIfRunning, writeFileWithRetry, writeWorkspaceSetting } from './helpers/fixtures';
-import { getPrimaryAppHostProjectPath } from './helpers/paths';
+import { createAdditionalAppHostCandidate, executeE2eControlCommand, removeAdditionalAppHostCandidate, resetDashboardDefaultChangedNotificationForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setShowStatusDelayForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, writeFileWithRetry, writeWorkspaceSetting } from './helpers/fixtures';
+import { getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
 import { openAspireView, waitForEditorTitle, waitForNotificationMessage, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
 
 suite('Aspire debug dashboard E2E', function () {
@@ -21,6 +21,7 @@ suite('Aspire debug dashboard E2E', function () {
             () => stopPrimaryAppHostIfRunning(),
             () => waitForNoDebugSessions().catch(() => undefined),
             () => waitForNoRunningAppHost().catch(() => undefined),
+            () => removeAdditionalAppHostCandidate(),
         ], 'Debug dashboard E2E teardown failed.');
     });
 
@@ -187,6 +188,81 @@ suite('Aspire debug dashboard E2E', function () {
         await executeE2eControlCommand({ name: 'stopDebugging' });
         await waitForNoDebugSessions();
         await waitForNoRunningAppHost(120000, appHostPath);
+    });
+
+    test('switching named launch configurations does not change the workspace AppHost default', async function () {
+        if (process.env.ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS === 'true') {
+            return;
+        }
+
+        // Each iteration starts and stops a full AppHost debug session, and the secondary AppHost is
+        // created at test time so its first build is cold. That does not fit the suite-wide budget.
+        this.timeout(600000);
+
+        await openAspireView();
+        await waitForRepositoryIdle();
+        await waitForWorkspaceAppHost();
+
+        const workspaceRoot = getWorkspaceRoot();
+        const primaryAppHostPath = getPrimaryAppHostProjectPath();
+        const configPath = path.join(workspaceRoot, 'aspire.config.json');
+        const launchJsonPath = path.join(workspaceRoot, '.vscode', 'launch.json');
+        let secondaryAppHostPath: string | undefined;
+        let originalConfig: Buffer | undefined;
+        let originalLaunchJson: Buffer | undefined;
+
+        try {
+            secondaryAppHostPath = createAdditionalAppHostCandidate();
+            originalConfig = fs.readFileSync(configPath);
+            originalLaunchJson = fs.existsSync(launchJsonPath) ? fs.readFileSync(launchJsonPath) : undefined;
+            const configurations = [
+                { name: 'Primary AppHost', program: primaryAppHostPath },
+                { name: 'Secondary AppHost', program: secondaryAppHostPath },
+            ];
+
+            writeFileWithRetry(launchJsonPath, JSON.stringify({
+                version: '0.2.0',
+                configurations: configurations.map(configuration => ({
+                    type: 'aspire',
+                    request: 'launch',
+                    ...configuration,
+                })),
+            }, undefined, 2));
+
+            // VS Code refreshes its launch-configuration cache from a file watcher; the
+            // startDebugConfiguration control command waits for the entry to become resolvable.
+            for (const configuration of configurations) {
+                await executeE2eControlCommand(
+                    { name: 'startDebugConfiguration', configurationName: configuration.name },
+                    { waitFor: 'started' });
+                await waitForDebugSessionStartup(configuration.program);
+
+                assert.deepStrictEqual(
+                    fs.readFileSync(configPath),
+                    originalConfig,
+                    `Expected ${configuration.name} to leave aspire.config.json byte-for-byte unchanged.`);
+
+                await executeE2eControlCommand({ name: 'stopDebugging' });
+                await waitForNoDebugSessions();
+                await waitForNoRunningAppHost(120000, configuration.program);
+            }
+        }
+        finally {
+            const capturedConfig = originalConfig;
+            const capturedLaunchJson = originalLaunchJson;
+            const capturedSecondaryAppHostPath = secondaryAppHostPath;
+            await runE2eTeardown([
+                () => executeE2eControlCommand({ name: 'stopDebugging' }),
+                () => waitForNoDebugSessions().catch(() => undefined),
+                () => stopAppHostIfRunning(primaryAppHostPath),
+                () => capturedSecondaryAppHostPath ? stopAppHostIfRunning(capturedSecondaryAppHostPath) : undefined,
+                () => capturedConfig === undefined ? undefined : fs.writeFileSync(configPath, capturedConfig),
+                () => capturedLaunchJson === undefined
+                    ? fs.rmSync(launchJsonPath, { force: true })
+                    : fs.writeFileSync(launchJsonPath, capturedLaunchJson),
+                () => removeAdditionalAppHostCandidate(),
+            ], 'Named launch configuration persistence E2E cleanup failed.');
+        }
     });
 
     test('surfaces AppHost build failure logs in the debug console when the CLI exits after a build failure', async function () {

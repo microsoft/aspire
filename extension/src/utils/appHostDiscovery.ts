@@ -1189,7 +1189,7 @@ function isCSharpSourceFileForProjectCandidate(filePath: string, projectPath: st
         && !relativePath.split(path.sep).some(segment => segment.toLowerCase() === 'bin' || segment.toLowerCase() === 'obj');
 }
 
-function isSamePath(left: string, right: string): boolean {
+export function isSamePath(left: string, right: string): boolean {
     const comparison = process.platform === 'win32' || process.platform === 'darwin'
         ? 'case-insensitive'
         : 'case-sensitive';

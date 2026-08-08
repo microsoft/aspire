@@ -2,6 +2,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as vscode from 'vscode';
 import { AspireCommandType, AspireExtendedDebugConfiguration } from '../dcp/types';
+import { appHostSelectionOriginConfigKey, type AppHostSelectionOrigin } from '../debugger/AspireDebugConfigurationMetadata';
 import { startDebuggingDeclined } from '../loc/strings';
 import { classifyAppHostDirectory, classifyAppHostPath } from '../utils/appHostLanguage';
 import { classifyError, isCommandCancellation, sendTelemetryEvent, type EventProperties } from '../utils/telemetry';
@@ -136,8 +137,12 @@ export class AppHostLaunchService implements vscode.Disposable {
      * @param command The Aspire CLI command to execute (run, deploy, publish, do).
      * @param noDebug When true, launches without the debugger attached.
      * @param doStep Optional step name for the 'do' command.
+     * @param selectionOrigin Who chose {@link appHostPath}. Defaults to `user-selection` because every
+     * caller here is a UI gesture the user performed; callers acting on the user's behalf rather than
+     * at their direction (language-model tools, for example) must pass `agent-selection` so the CLI
+     * does not rewrite the workspace default to a target the user never named.
      */
-    async launch(appHostPath: string, command: AspireCommandType, noDebug: boolean, doStep?: string): Promise<void> {
+    async launch(appHostPath: string, command: AspireCommandType, noDebug: boolean, doStep?: string, selectionOrigin: AppHostSelectionOrigin = 'user-selection'): Promise<void> {
         const startTime = Date.now();
         const executionSuppressed = isE2eDebugLaunchSuppressed();
         const telemetryProperties = await getLaunchTelemetryProperties(appHostPath, command, noDebug, executionSuppressed);
@@ -148,7 +153,8 @@ export class AppHostLaunchService implements vscode.Disposable {
             request: 'launch',
             program: appHostPath,
             command,
-            noDebug
+            noDebug,
+            [appHostSelectionOriginConfigKey]: selectionOrigin,
         };
 
         if (doStep) {

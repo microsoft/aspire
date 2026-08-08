@@ -527,6 +527,26 @@ async function executeE2eControlCommand(
       markStarted();
       return getE2eBreakpoints();
     }
+    case 'startDebugConfiguration': {
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      if (!workspaceFolder) {
+        throw new Error('Aspire extension E2E debug configuration launch requires an open workspace folder.');
+      }
+
+      // VS Code repopulates the launch-configuration cache from a file watcher, so a test that has
+      // just written launch.json can otherwise race ahead of the entry becoming resolvable by name.
+      // The budget stays below the test-side control-command timeout (10s in applyE2eControl) so a
+      // genuine propagation failure surfaces as the diagnostic below rather than an opaque timeout.
+      await waitForLaunchConfiguration(workspaceFolder, command.configurationName);
+
+      const startPromise = vscode.debug.startDebugging(workspaceFolder, command.configurationName);
+      markStarted();
+      if (!await startPromise) {
+        throw new Error(`Failed to start debug configuration '${command.configurationName}'.`);
+      }
+
+      return undefined;
+    }
     case 'stopDebugging': {
       markStarted();
       await stopDebuggingForE2E(aspireContext, dataRepository, appHostLaunchService, appHostTreeProvider);
@@ -1517,4 +1537,22 @@ function getUnknownCommandName(command: unknown): string {
 export function isE2eBridgeEnabled(): boolean {
   return process.env.ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE === 'true' &&
     Boolean(process.env.ASPIRE_EXTENSION_E2E_STATE_FILE && process.env.ASPIRE_EXTENSION_E2E_CONTROL_FILE);
+}
+
+async function waitForLaunchConfiguration(workspaceFolder: vscode.WorkspaceFolder, configurationName: string, timeoutMs = 5000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const configurations = vscode.workspace
+      .getConfiguration('launch', workspaceFolder.uri)
+      .get<Array<{ name?: string }>>('configurations') ?? [];
+    if (configurations.some(configuration => configuration?.name === configurationName)) {
+      return;
+    }
+
+    if (Date.now() >= deadline) {
+      throw new Error(`Debug configuration '${configurationName}' was not visible to VS Code within ${timeoutMs}ms. Available: ${configurations.map(configuration => configuration?.name).join(', ')}`);
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
 }

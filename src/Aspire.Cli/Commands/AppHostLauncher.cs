@@ -17,6 +17,7 @@ using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Commands;
@@ -37,6 +38,7 @@ internal sealed class AppHostLauncher(
     FileLoggerProvider fileLoggerProvider,
     ProcessTreeGracefulShutdownService processShutdownService,
     IProcessExecutionFactory processExecutionFactory,
+    IConfiguration configuration,
     ILogger<AppHostLauncher> logger,
     TimeProvider timeProvider)
 {
@@ -352,7 +354,21 @@ internal sealed class AppHostLauncher(
     internal static bool IsExtensionEnvironmentVariable(string name) =>
         name.StartsWith(ExtensionEnvironmentVariablePrefix, StringComparison.OrdinalIgnoreCase);
 
-    internal static Dictionary<string, string> CreateDetachedChildEnvironment(Activity? activity)
+    /// <summary>
+    /// Builds the environment for the detached child CLI. The child continues the <em>same</em> logical
+    /// invocation, so invocation-scoped state that <see cref="ProcessExecutionFactory"/> strips from
+    /// every child by default has to be re-stated here; the factory overlays this dictionary after the
+    /// strip, and the strip itself is what keeps that state out of the AppHost/build process tree.
+    /// </summary>
+    /// <param name="activity">The spawn activity whose profiling context the child should join.</param>
+    /// <param name="appHostSelectionOrigin">
+    /// How this invocation's AppHost target was selected (<see cref="KnownConfigNames.CliAppHostSelectionOrigin"/>),
+    /// or <see langword="null"/> when nothing selected it explicitly. Forwarded so the child CLI's
+    /// ProjectLocator makes the same "may I record the workspace default?" decision the foreground CLI
+    /// made — without it, a launch-configuration target would clobber the workspace default from the
+    /// detached child instead. See https://github.com/microsoft/aspire/issues/19080.
+    /// </param>
+    internal static Dictionary<string, string> CreateDetachedChildEnvironment(Activity? activity, string? appHostSelectionOrigin)
     {
         var environment = new Dictionary<string, string> { [KnownConfigNames.CliRunDetached] = "true" };
 
@@ -361,6 +377,11 @@ internal sealed class AppHostLauncher(
         // reaches readiness. Without this, killing `aspire start`/`aspire run --detach` mid-start (for
         // example a test runner timing it out) leaks the AppHost + dashboard as orphaned processes.
         OrphanDetectionEnvironment.ApplyCurrentProcess(environment, KnownConfigNames.CliLauncherProcessId, KnownConfigNames.CliLauncherProcessStarted);
+
+        if (!string.IsNullOrEmpty(appHostSelectionOrigin))
+        {
+            environment[KnownConfigNames.CliAppHostSelectionOrigin] = appHostSelectionOrigin;
+        }
 
         ProfilingTelemetry.AddActivityContextToEnvironment(activity, environment);
         ProfileCaptureEnvironment.AddCurrentToEnvironment(environment);
@@ -393,7 +414,7 @@ internal sealed class AppHostLauncher(
                 childProcess = processExecutionFactory.CreateExecution(
                     executablePath,
                     childArgs.ToArray(),
-                    CreateDetachedChildEnvironment(Activity.Current),
+                    CreateDetachedChildEnvironment(Activity.Current, configuration[KnownConfigNames.CliAppHostSelectionOrigin]),
                     executionContext.WorkingDirectory,
                     options);
 

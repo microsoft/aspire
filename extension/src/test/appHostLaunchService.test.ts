@@ -92,6 +92,7 @@ suite('AppHostLaunchService', () => {
         assert.strictEqual(config.noDebug, false);
         assert.strictEqual(config.step, undefined);
         assert.strictEqual(config.skipCliAvailabilityCheck, true);
+        assert.strictEqual(config.__aspireAppHostSelectionOrigin, 'user-selection');
     });
 
     test('launch includes step when doStep is provided', async () => {
@@ -100,6 +101,13 @@ suite('AppHostLaunchService', () => {
         const config = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
         assert.strictEqual(config.command, 'do');
         assert.strictEqual(config.step, 'deploy');
+    });
+
+    test('launch stamps the caller-provided selection origin', async () => {
+        await service.launch('/repo/AppHost.csproj', 'run', false, undefined, 'agent-selection');
+
+        const config = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        assert.strictEqual(config.__aspireAppHostSelectionOrigin, 'agent-selection');
     });
 
     test('launch owns CLI availability probe', async () => {

@@ -89,6 +89,9 @@ internal static class KnownConfigNames
     public const string CliDotnetBinlogDirectory = "ASPIRE_CLI_DOTNET_BINLOG_DIR";
     public const string CliBackchannelConnectTimeoutSeconds = "ASPIRE_CLI_BACKCHANNEL_CONNECT_TIMEOUT_SECONDS";
 
+    // Internal extension-to-CLI handoff used to preserve AppHost selection ownership.
+    public const string CliAppHostSelectionOrigin = "ASPIRE_CLI_APPHOST_SELECTION_ORIGIN";
+
     // DCP owns these profiling variables. Aspire maps its profiling state to these names when
     // spawning DCP because DCP intentionally does not read ASPIRE_* configuration names.
     public const string DcpOtelStartupProfilingEnabled = "DCP_OTEL_STARTUP_PROFILING_ENABLED";

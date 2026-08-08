@@ -175,7 +175,7 @@ public class TelemetryConfigurationTests
         using var activity = source.StartActivity("parent");
         Assert.NotNull(activity);
 
-        var config = AppHostLauncher.CreateDetachedChildEnvironment(activity);
+        var config = AppHostLauncher.CreateDetachedChildEnvironment(activity, appHostSelectionOrigin: null);
         config[AspireCliTelemetry.OtlpExporterEndpointConfigKey] = "http://localhost:4317";
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(config.Select(pair => new KeyValuePair<string, string?>(pair.Key, pair.Value)))
