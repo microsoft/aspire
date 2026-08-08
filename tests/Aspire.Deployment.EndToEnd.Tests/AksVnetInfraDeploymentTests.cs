@@ -106,10 +106,10 @@ var workerSubnet = vnet.AddSubnet("worker-subnet", "10.1.4.0/22");
 
 // AKS environment with VNet integration and per-pool subnets
 var aks = builder.AddAzureKubernetesEnvironment("aks")
-    .WithSystemNodePool("Standard_D2s_v5")
+    .WithSystemNodePool("Standard_D2as_v5")
     .WithSubnet(systemSubnet);
 
-aks.AddNodePool("workers", "Standard_D2s_v5", 1, 3)
+aks.AddNodePool("workers", "Standard_D2as_v5", 1, 3)
     .WithSubnet(workerSubnet);
 
 #pragma warning restore ASPIREAZURE003
@@ -127,7 +127,7 @@ builder.Build().Run();
             // Step 7: Set environment variables for deployment
             // Unset the job-level Azure__Location=westus3 the CI workflow injects: on Linux it coexists
             // with AZURE__LOCATION (case-sensitive env) and .NET config may bind the inherited westus3 instead.
-            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && unset Azure__Location && export AZURE__LOCATION=centralus && export AZURE__RESOURCEGROUP={resourceGroupName}");
+            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && unset Azure__Location && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 

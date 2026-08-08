@@ -252,11 +252,12 @@ jobs:
             Microsoft.Quota
             Microsoft.ManagedIdentity
             # AKS node pools are Microsoft.Compute VMSS, and reading/requesting the compute vCPU
-            # quota (StandardDSv5Family, in QUOTA_TARGETS below) needs this provider registered on a
+            # quota (StandardDASv5Family, in QUOTA_TARGETS below) needs this provider registered on a
             # fresh subscription; without it the quota self-heal step silently skips that target.
             Microsoft.Compute
             Microsoft.ContainerInstance
             Microsoft.OperationalInsights
+            Microsoft.OperationsManagement
             Microsoft.Insights
             Microsoft.App
             Microsoft.ContainerRegistry
@@ -292,7 +293,9 @@ jobs:
             local registered p
             registered="$(cat)"
             for p in "${providers[@]}"; do
-              grep -qxF "$p" <<<"$registered" || echo "$p"
+              # Azure canonicalizes some namespaces with different casing (for example,
+              # microsoft.insights), but provider namespace matching is case-insensitive.
+              grep -qxiF "$p" <<<"$registered" || echo "$p"
             done
           }
 
@@ -342,35 +345,35 @@ jobs:
 
       # Ensure the target subscription has enough quota for the resources listed in QUOTA_TARGETS
       # below. Like provider registration above, this is per-subscription setup rather than a test
-      # concern: a fresh subscription starts with low quotas, so tests fail with QuotaExceeded
-      # (observed: a fresh subscription reports 0 dedicated vCPUs for the target compute family in
-      # centralus). For each requested quota, read the current limit via the provider-agnostic
+      # concern: a fresh subscription can have little or no dedicated vCPU quota for the target
+      # compute family, so tests fail with QuotaExceeded. For each requested quota, read the current
+      # limit via the provider-agnostic
       # Microsoft.Quota service and only when it is below the desired value submit an increase
       # request. Best-effort and never fails the job: quota requests can route to manual review
       # (self-service auto-approves only small increases; larger asks need a support ticket) and are
       # not guaranteed to be granted synchronously, so a still-short quota surfaces its own
       # QuotaExceeded error in the test that needs it.
       #
-      # Scope: this self-heals only the quotas configured in QUOTA_TARGETS (currently the centralus
-      # AKS node-pool compute vCPUs — both the StandardDSv5Family quota and the Total Regional vCPUs
-      # quota, which Azure enforces independently, so a node pool needs headroom in each). Other
-      # quotas the suite depends on are NOT covered here — westus3 Container Apps / App Service,
-      # australiaeast DASv4 (AksBlazorRedis), and the AKS managed-cluster count
-      # (Microsoft.ContainerService is not exposed through the Microsoft.Quota API used here) remain
-      # documented manual quota requests (see the E2E README's quota section). Requests are submitted
-      # asynchronously (--no-wait, below), so extending QUOTA_TARGETS does not lengthen this step.
+      # Scope: this self-heals only the quotas configured in QUOTA_TARGETS (currently the westus3
+      # AKS node-pool compute vCPUs and managed-cluster count). Azure enforces both the
+      # StandardDASv5Family quota and Total Regional vCPUs independently, so a node pool needs
+      # headroom in each. Other quotas the suite depends on, such as westus3 Container Apps and
+      # App Service, remain documented manual quota requests (see the E2E README's quota section).
+      # Requests are submitted asynchronously (--no-wait, below), so extending QUOTA_TARGETS does
+      # not lengthen this step.
       - name: Ensure Azure quotas
         env:
           # Quotas to ensure, one per line: "provider location resourceName desiredLimit [resourceType]".
           #   provider     - resource provider that owns the quota (e.g. Microsoft.Compute, Microsoft.Network)
           #   location     - region the quota applies to; match the Azure__Location the tests deploy into
-          #   resourceName - the quota's resource name (e.g. StandardDSv5Family, cores)
+          #   resourceName - the quota's resource name (e.g. StandardDASv5Family, cores)
           #   desiredLimit - both the minimum we accept and the value we request
           #   resourceType - optional; compute vCPU quotas need it (dedicated | lowPriority), omit otherwise
           # Add a line to cover a new provider, region, resource, or higher limit.
           QUOTA_TARGETS: |
-            Microsoft.Compute centralus StandardDSv5Family 200 dedicated
-            Microsoft.Compute centralus cores 200 dedicated
+            Microsoft.Compute westus3 StandardDASv5Family 200 dedicated
+            Microsoft.Compute westus3 cores 200 dedicated
+            Microsoft.ContainerService westus3 ManagedClusters 20
         run: |
           sub="$ASPIRE_DEPLOYMENT_TEST_SUBSCRIPTION"
 
@@ -380,7 +383,7 @@ jobs:
 
           # Read the current effective limit for a quota (works across providers). Shape of
           # 'az quota show':
-          #   { "name": "standardDSv5Family",
+          #   { "name": "standardDASv5Family",
           #     "properties": { "limit": { "value": 100 }, "unit": "Count", ... } }
           read_limit() {
             az quota show --resource-name "$2" --scope "$1" \
@@ -423,9 +426,9 @@ jobs:
             # re-submitting it via the `||` fallback. A request that is not granted in time surfaces
             # later as a normal QuotaExceeded error in the test that needs it.
             if timeout 30 az quota create --resource-name "$name" --scope "$scope" \
-                 --limit-object value="$desired" "${rt_args[@]}" --no-wait --only-show-errors >/dev/null 2>&1 \
+                 --limit-object value="$desired" "${rt_args[@]}" --no-wait --only-show-errors \
                || timeout 30 az quota update --resource-name "$name" --scope "$scope" \
-                 --limit-object value="$desired" "${rt_args[@]}" --no-wait --only-show-errors >/dev/null 2>&1; then
+                 --limit-object value="$desired" "${rt_args[@]}" --no-wait --only-show-errors; then
               echo "  Request submitted for $provider/$name in $location (asynchronous; may await manual approval)."
             else
               echo "⚠ Quota request for $provider/$name in $location was not accepted (may need manual approval); continuing."

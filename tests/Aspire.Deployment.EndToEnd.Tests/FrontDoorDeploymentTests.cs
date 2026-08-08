@@ -151,17 +151,17 @@ builder.Build().Run();
             await auto.WaitUntilTextAsync(ConsoleActivityLoggerStrings.PipelineSucceeded, timeout: TimeSpan.FromMinutes(30));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
-            // Step 10: Verify endpoints (skip Front Door endpoint checks — DNS propagation takes 5-15 minutes)
-            output.WriteLine("Step 10: Verifying deployed endpoints...");
+            // Front Door provisioning is covered by the successful deployment above. Do not query it
+            // through `az afd` here: recent Azure CLI versions dynamically install the `cdn` extension,
+            // which can block this interactive terminal waiting for installation confirmation. Front Door
+            // HTTP checks are also intentionally skipped because DNS propagation can take 5-15 minutes.
+            output.WriteLine("Step 10: Verifying deployed ACA endpoints...");
             await auto.TypeAsync($"RG_NAME=\"{resourceGroupName}\" && " +
                   "echo \"Resource group: $RG_NAME\" && " +
                   "if ! az group show -n \"$RG_NAME\" &>/dev/null; then echo \"❌ Resource group not found\"; exit 1; fi && " +
                   // Check ACA endpoints (exclude internal endpoints)
                   "urls=$(az containerapp list -g \"$RG_NAME\" --query \"[].properties.configuration.ingress.fqdn\" -o tsv 2>/dev/null | grep -v '\\.internal\\.') && " +
                   "if [ -z \"$urls\" ]; then echo \"❌ No external container app endpoints found\"; exit 1; fi && " +
-                  // Check Front Door endpoints
-                  "fdurls=$(az afd endpoint list -g \"$RG_NAME\" --profile-name $(az afd profile list -g \"$RG_NAME\" --query \"[0].name\" -o tsv 2>/dev/null) --query \"[].hostName\" -o tsv 2>/dev/null) && " +
-                  "echo \"Front Door endpoints: $fdurls\" && " +
                   "failed=0 && " +
                   // Share a single deadline across every endpoint (see the rationale comment below the
                   // command) so the whole loop stays bounded no matter how many endpoints are returned.
