@@ -48,7 +48,7 @@ import { cloneAppHostState, createStateSnapshot, getDashboardUrl } from './exten
 import { createE2eStateFileBridge, isE2eBridgeEnabled } from './testing/e2eStateFileBridge';
 import type { AspireAppHostState, AspireExtensionApi, AspireExtensionStateSnapshot, WaitForStateOptions } from './types/extensionApi';
 import { AppHostsViewTelemetry } from './views/AppHostsViewTelemetry';
-import { initializeCliPathEnvironmentSync } from './utils/cliPathEnvironment';
+import { initializeCliPathEnvironmentSync, syncAspireExtensionVersionEnvironment } from './utils/cliPathEnvironment';
 
 let aspireExtensionContext = new AspireExtensionContext();
 
@@ -77,6 +77,11 @@ export async function activate(context: vscode.ExtensionContext) {
   }).catch(error => {
     extensionLogOutputChannel.warn(`Initial Aspire CLI path resolution failed: ${String(error)}`);
   });
+
+  // Report this extension instance's version to child processes so `aspire doctor`
+  // can compare the *running* extension against the Marketplace instead of guessing
+  // from VS Code's on-disk extension roots (https://github.com/microsoft/aspire/issues/18694).
+  syncAspireExtensionVersionEnvironment(context.environmentVariableCollection, context.extension.packageJSON?.version);
 
   const rpcServer = await AspireRpcServer.create(
     (rpcServerConnectionInfo: RpcServerConnectionInfo, connection: MessageConnection, token: string, debugSessionId: string | null) => {

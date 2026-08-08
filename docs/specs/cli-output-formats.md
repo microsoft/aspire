@@ -456,13 +456,19 @@ The JSON form includes secret values. Do not redirect it to logs or files unless
       "category": "devtools",
       "name": "vscode-extension",
       "status": "warning",
-      "message": "VS Code is installed, but the Aspire extension is not installed",
-      "fix": "Install the Aspire extension from the VS Code Marketplace for an integrated Aspire experience.",
+      "message": "Aspire extension for VS Code 1.2.3 is out of date (latest: 1.16.0)",
+      "fix": "Update the Aspire extension from the VS Code Marketplace.",
       "link": "https://aka.ms/aspire/vscode-extension",
       "metadata": {
         "vsCodeInstalled": true,
-        "extensionInstalled": false,
-        "extensionId": "microsoft-aspire.aspire-vscode"
+        "extensionInstalled": true,
+        "extensionId": "microsoft-aspire.aspire-vscode",
+        "updateCheckEnabled": true,
+        "latestVersionKnown": true,
+        "extensionVersion": "1.2.3",
+        "latestVersion": "1.16.0",
+        "latestVersionChannel": "stable",
+        "updateAvailable": true
       }
     }
   ],
@@ -476,7 +482,13 @@ The JSON form includes secret values. Do not redirect it to logs or files unless
 
 `status` is one of `pass`, `warning`, or `fail`. Individual checks can include `details`, `fix`, `link`, or command-specific `metadata`.
 
-The `devtools` category surfaces development-tooling recommendations. The `vscode-extension` check only appears when VS Code is detected: it reports `warning` when the [Aspire VS Code extension](https://aka.ms/aspire/vscode-extension) is missing and `pass` when it is installed. Its `metadata` exposes `vsCodeInstalled` (bool), `extensionInstalled` (bool), and `extensionId` (string).
+The `devtools` category surfaces development-tooling recommendations. The `vscode-extension` check only appears when VS Code is detected. It reports `warning` when the [Aspire VS Code extension](https://aka.ms/aspire/vscode-extension) is missing, when the installed extension is behind the latest Marketplace version on its own release channel, when the installed version could not be determined, or when the Marketplace lookup could not complete. It reports `pass` when the installed extension is current or newer, and when update notifications are disabled.
+
+Its `metadata` always exposes `vsCodeInstalled` (bool), `extensionInstalled` (bool), and `extensionId` (string). An installed extension adds `updateCheckEnabled` (bool), `latestVersionKnown` (bool), `extensionVersionSource` (`extension`, `manifest`, or `unknown`), and `extensionVersion` (string) when a version was resolved.
+
+The installed version is resolved in two steps. The `ASPIRE_VSCODE_EXTENSION_VERSION` environment variable, which the Aspire VS Code extension contributes to every terminal, task, and debug process VS Code creates for it, is authoritative and used first (`extensionVersionSource` is `extension`): only the extension host knows which installation is loaded, because several extension roots can hold the extension at once (a desktop install plus `.vscode-server` for Remote, WSL, and dev containers), `--extensions-dir` is invisible to a child process, and portable mode relocates the whole root. When the variable is absent or unparseable — an extension predating the variable, or a doctor run outside a VS Code-created process — the check scans the known extension roots and reads the `version` field of each installed extension's `package.json`, falling back to the `<publisher>.<name>-<version>` folder name, and takes the highest version by semver precedence (`extensionVersionSource` is `manifest`). If neither step yields a version the check reports a distinct `warning` naming the roots it searched and sets `extensionVersionKnown` to `false`; it never reports `pass` on an undetermined version.
+
+The Marketplace is only queried when a parseable [semantic version](https://semver.org) was resolved and update notifications are enabled. A semver pre-release tag selects the Marketplace pre-release channel; anything else compares against the stable channel. A successful lookup sets `latestVersionKnown` to `true` and adds `latestVersion` (string), `latestVersionChannel` (`stable` or `pre-release`), and `updateAvailable` (bool). A lookup that times out, is unavailable, or omits the requested channel leaves `latestVersionKnown` as `false`, adds `latestVersionError` (`timeout` or `unavailable`), and reports the reason in `details` without a `fix` or `link`.
 
 ### `aspire config info`
 

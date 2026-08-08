@@ -25,6 +25,22 @@ import { aspireCliPathEnvironmentDescription } from '../loc/strings';
 export const ASPIRE_CLI_PATH_ENV_VAR = 'AspireCliPath';
 
 /**
+ * Name of the env var carrying this extension's version to every terminal, task,
+ * and debug process VS Code creates for the extension.
+ *
+ * `aspire doctor` uses it to compare the running extension against the
+ * Marketplace. Nothing on disk can answer that question: several extension roots
+ * can hold the extension at once (desktop plus `.vscode-server` for
+ * Remote/WSL/devcontainers), `--extensions-dir` is invisible to a child process,
+ * and portable mode relocates the whole root. The extension host already knows
+ * which instance is loaded, so it reports the version instead of making the CLI
+ * reverse-engineer it. Read on the CLI side by
+ * `src/Aspire.Cli/Utils/EnvironmentChecker/VsCodeExtensionCheck.cs`.
+ */
+export const ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR = 'ASPIRE_VSCODE_EXTENSION_VERSION';
+
+
+/**
  * Configuration key under the `aspire` namespace whose value the user-facing
  * "Aspire Cli Executable Path" setting writes into.
  */
@@ -252,6 +268,36 @@ export function registerCliPathEnvironmentSync(
 
     subscriptions.push(disposable);
     return disposable;
+}
+
+/**
+ * Contributes the running extension's version to terminals, tasks, and debug
+ * processes so `aspire doctor` can identify the active installation.
+ *
+ * Deliberately independent of `syncAspireCliPathEnvironment`: that function
+ * clears the collection description and deletes its variable when no forwardable
+ * CLI path exists, and the version signal is valid regardless of which CLI (if
+ * any) is being forwarded.
+ *
+ * Returns the value that was applied, or `undefined` when the variable was
+ * cleared, so callers and tests can verify the decision without inspecting the
+ * collection internals.
+ */
+export function syncAspireExtensionVersionEnvironment(
+    collection: CliPathEnvironmentCollection,
+    version: string | undefined,
+    log: ((message: string) => void) | undefined = defaultDeps.log,
+): string | undefined {
+    const trimmedVersion = version?.trim();
+    if (trimmedVersion === undefined || trimmedVersion.length === 0) {
+        collection.delete(ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR);
+        log?.(`Not forwarding ${ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR}: the extension manifest reported no version.`);
+        return undefined;
+    }
+
+    collection.replace(ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR, trimmedVersion);
+    log?.(`Forwarding ${ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR}=${trimmedVersion} to terminals, tasks, and debug processes.`);
+    return trimmedVersion;
 }
 
 /**

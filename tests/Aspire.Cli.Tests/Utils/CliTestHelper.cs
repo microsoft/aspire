@@ -201,6 +201,7 @@ internal static class CliTestHelper
         // pattern as production wiring in Program.cs.
         services.AddSingleton<IIdentityChannelReader>(_ => new IdentityChannelReader(typeof(Program).Assembly));
         services.AddSingleton<IEnvironment, TestEnvironment>();
+        services.AddSingleton(options.VsCodeExtensionMarketplaceClientFactory);
         services.AddSingleton<ProfileCaptureService>();
 
         // AppHost project handlers - must match Program.cs registration pattern
@@ -222,6 +223,13 @@ internal static class CliTestHelper
         services.AddSingleton<IDcpConnectionChecker, TestDcpConnectionChecker>();
         services.AddSingleton<IEnvironmentCheck, DcpConnectionHealthCheck>();
         services.AddSingleton<IEnvironmentCheck, DeprecatedAgentConfigCheck>();
+        services.AddSingleton<IEnvironmentCheck>(serviceProvider => new VsCodeExtensionCheck(
+            serviceProvider.GetRequiredService<IEnvironment>(),
+            serviceProvider.GetRequiredService<CliExecutionContext>(),
+            serviceProvider.GetRequiredService<IVsCodeExtensionMarketplaceClient>(),
+            serviceProvider.GetRequiredService<IFeatures>(),
+            serviceProvider.GetRequiredService<ILogger<VsCodeExtensionCheck>>(),
+            _ => null));
         services.AddSingleton<IEnvironmentChecker, EnvironmentChecker>();
 
         // MCP server transport
@@ -587,6 +595,12 @@ internal sealed class CliServiceCollectionTestOptions
         var logger = serviceProvider.GetRequiredService<ILogger<Features>>();
         return new Features(configuration, logger);
     };
+
+    public Func<IServiceProvider, IVsCodeExtensionMarketplaceClient> VsCodeExtensionMarketplaceClientFactory { get; set; } = _ =>
+        new TestVsCodeExtensionMarketplaceClient
+        {
+            GetLatestVersionsAsyncCallback = _ => throw new InvalidOperationException("The VS Code Marketplace must be configured explicitly for this test.")
+        };
 
     public Func<IServiceProvider, ITemplateProvider> TemplateProviderFactory { get; set; } = (IServiceProvider serviceProvider) =>
     {

@@ -1067,7 +1067,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 yield break;
             }
 
-            foreach (var product in GetVsCodeProductNames())
+            foreach (var product in VsCodeInstallLayout.UserDataFolderNames)
             {
                 yield return Path.Combine(appData, product, "User", "globalStorage", "state.vscdb");
             }
@@ -1082,7 +1082,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 yield break;
             }
 
-            foreach (var product in GetVsCodeProductNames())
+            foreach (var product in VsCodeInstallLayout.UserDataFolderNames)
             {
                 yield return Path.Combine(home, "Library", "Application Support", product, "User", "globalStorage", "state.vscdb");
             }
@@ -1092,21 +1092,18 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
         var xdgConfigHome = _environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
         var configHome = string.IsNullOrWhiteSpace(xdgConfigHome) ? Path.Combine(home, ".config") : xdgConfigHome;
-        foreach (var product in GetVsCodeProductNames())
+        foreach (var product in VsCodeInstallLayout.UserDataFolderNames)
         {
             yield return Path.Combine(configHome, product, "User", "globalStorage", "state.vscdb");
         }
 
         if (IsWsl())
         {
-            yield return Path.Combine(home, ".vscode-server", "data", "User", "globalStorage", "state.vscdb");
-            yield return Path.Combine(home, ".vscode-server-insiders", "data", "User", "globalStorage", "state.vscdb");
+            foreach (var serverDataFolderName in VsCodeInstallLayout.ServerDataFolderNames)
+            {
+                yield return Path.Combine(home, serverDataFolderName, "data", "User", "globalStorage", "state.vscdb");
+            }
         }
-    }
-
-    private static string[] GetVsCodeProductNames()
-    {
-        return ["Code", "Code - Insiders", "VSCodium"];
     }
 
     private bool IsWsl()

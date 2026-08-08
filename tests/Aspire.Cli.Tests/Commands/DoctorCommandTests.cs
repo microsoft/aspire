@@ -5,6 +5,7 @@ using System.Text.Json;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
@@ -12,6 +13,7 @@ using Aspire.Cli.Utils.EnvironmentChecker;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.AspNetCore.InternalTesting;
+using Semver;
 using Spectre.Console;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -76,6 +78,98 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
         Assert.True(metadata.TryGetProperty("osType", out _));
         Assert.True(metadata.TryGetProperty("displayName", out _));
         Assert.True(metadata.TryGetProperty("version", out _));
+    }
+
+    [Fact]
+    public async Task DoctorCommand_Json_IncludesOutdatedVsCodeExtensionStatus()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var marketplaceClient = new TestVsCodeExtensionMarketplaceClient
+        {
+            GetLatestVersionsAsyncCallback = _ => Task.FromResult(new VsCodeExtensionMarketplaceVersions(
+                StableVersion: SemVersion.Parse("1.3.0", SemVersionStyles.Strict),
+                PreReleaseVersion: SemVersion.Parse("1.4.0", SemVersionStyles.Strict)))
+        };
+
+        using var doc = await RunDoctorJsonAsync(
+            workspace,
+            configureOptions: options => options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier(),
+            configureServices: services => ConfigureVsCodeExtensionServices(services, "1.2.3", marketplaceClient));
+
+        var extensionCheck = GetCheckByName(doc, VsCodeExtensionCheck.CheckName);
+        Assert.Equal("warning", extensionCheck.GetProperty("status").GetString());
+        Assert.Equal(DoctorCommandStrings.VsCodeExtensionOutOfDateFix, extensionCheck.GetProperty("fix").GetString());
+        Assert.Equal(VsCodeExtensionCheck.MarketplaceUrl, extensionCheck.GetProperty("link").GetString());
+        var metadata = extensionCheck.GetProperty("metadata");
+        Assert.Equal("1.2.3", metadata.GetProperty("extensionVersion").GetString());
+        Assert.Equal("1.3.0", metadata.GetProperty("latestVersion").GetString());
+        Assert.Equal("stable", metadata.GetProperty("latestVersionChannel").GetString());
+        Assert.True(metadata.GetProperty("updateAvailable").GetBoolean());
+    }
+
+    [Fact]
+    public async Task DoctorCommand_HumanReadable_HidesMarketplaceFailureDetails()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string rawFailure = "Proxy proxy.internal.example rejected the request.";
+        var marketplaceClient = new TestVsCodeExtensionMarketplaceClient
+        {
+            GetLatestVersionsAsyncCallback = _ => Task.FromException<VsCodeExtensionMarketplaceVersions>(
+                new HttpRequestException(rawFailure))
+        };
+        var output = new StringWriter();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Interactive = InteractionSupport.No,
+            Out = new AnsiConsoleOutput(output),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false },
+        });
+        console.Profile.Width = int.MaxValue;
+        var services = CreateDoctorVersionServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier();
+        });
+        ConfigureVsCodeExtensionServices(services, "1.2.3", marketplaceClient);
+        services.RemoveAll<IAnsiConsole>();
+        services.AddSingleton<IAnsiConsole>(console);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+        var result = command.Parse("doctor");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var rendered = output.ToString();
+        Assert.Contains(DoctorCommandStrings.VsCodeExtensionInstalledMessage, rendered, StringComparison.Ordinal);
+        Assert.Contains(DoctorCommandStrings.VsCodeExtensionLatestVersionCheckUnavailableDetails, rendered, StringComparison.Ordinal);
+        Assert.DoesNotContain(rawFailure, rendered, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DoctorCommand_Json_ReportsMarketplaceFailureAsNeutralWarning()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var marketplaceClient = new TestVsCodeExtensionMarketplaceClient
+        {
+            GetLatestVersionsAsyncCallback = _ => Task.FromException<VsCodeExtensionMarketplaceVersions>(
+                new HttpRequestException("Proxy proxy.internal.example rejected the request."))
+        };
+
+        using var doc = await RunDoctorJsonAsync(
+            workspace,
+            configureOptions: options => options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier(),
+            configureServices: services => ConfigureVsCodeExtensionServices(services, "1.2.3", marketplaceClient));
+
+        var extensionCheck = GetCheckByName(doc, VsCodeExtensionCheck.CheckName);
+        Assert.Equal("warning", extensionCheck.GetProperty("status").GetString());
+        Assert.Equal(
+            DoctorCommandStrings.VsCodeExtensionLatestVersionCheckUnavailableDetails,
+            extensionCheck.GetProperty("details").GetString());
+        var metadata = extensionCheck.GetProperty("metadata");
+        Assert.False(metadata.GetProperty("latestVersionKnown").GetBoolean());
+        Assert.Equal("unavailable", metadata.GetProperty("latestVersionError").GetString());
     }
 
     [Fact]
@@ -1041,6 +1135,13 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
         services.RemoveAll<IEnvironmentCheck>();
         services.AddSingleton<IEnvironmentCheck, AspireVersionCheck>();
         services.AddSingleton<IEnvironmentCheck, OperatingSystemCheck>();
+        services.AddSingleton<IEnvironmentCheck>(serviceProvider => new VsCodeExtensionCheck(
+            serviceProvider.GetRequiredService<IEnvironment>(),
+            serviceProvider.GetRequiredService<CliExecutionContext>(),
+            serviceProvider.GetRequiredService<IVsCodeExtensionMarketplaceClient>(),
+            serviceProvider.GetRequiredService<Aspire.Cli.Configuration.IFeatures>(),
+            serviceProvider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<VsCodeExtensionCheck>>(),
+            _ => null));
         UseFakeInstallationDiscovery(
             services,
             self: new InstallationInfo
@@ -1054,6 +1155,23 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 Status = InstallationInfoStatus.Ok,
             });
         return services;
+    }
+
+    private static void ConfigureVsCodeExtensionServices(
+        IServiceCollection services,
+        string reportedExtensionVersion,
+        IVsCodeExtensionMarketplaceClient marketplaceClient)
+    {
+        services.RemoveAll<IEnvironment>();
+        // Mirrors what the VS Code extension contributes to the terminals, tasks, and debug processes
+        // it creates (see extension/src/utils/cliPathEnvironment.ts).
+        services.AddSingleton<IEnvironment>(new TestEnvironment(new Dictionary<string, string?>
+        {
+            ["TERM_PROGRAM"] = "vscode",
+            [VsCodeExtensionCheck.ExtensionVersionEnvironmentVariable] = reportedExtensionVersion
+        }));
+        services.RemoveAll<IVsCodeExtensionMarketplaceClient>();
+        services.AddSingleton(marketplaceClient);
     }
 
     private static void UseFakeInstallationDiscovery(
