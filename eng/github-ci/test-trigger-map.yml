@@ -338,6 +338,7 @@ affected_project_rules:
       - Aspire.Hosting.Go
       - Aspire.Hosting.JavaScript
       - Aspire.Hosting.Python
+      - Aspire.Hosting.Rust
     targets: [job:polyglot]
     reason: ATS typesystem -> per-language SDK generators -> RemoteHost server + CLI run + fixtures
   - projects: [Aspire.Hosting.CodeGeneration.TypeScript]

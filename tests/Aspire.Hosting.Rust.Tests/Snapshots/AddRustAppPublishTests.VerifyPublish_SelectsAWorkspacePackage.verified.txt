@@ -1,0 +1,18 @@
+﻿FROM rust:alpine AS build
+WORKDIR /app
+COPY . .
+RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/build/target \
+    cargo build --package worker --release --target-dir /build/target && \
+    count=0 && \
+    for candidate in /build/target/release/worker /build/target/*/release/worker; do if [ -f "$candidate" ]; then bin="$candidate"; count=$((count+1)); fi; done && \
+    if [ "$count" = 0 ]; then echo "no worker under /build/target" >&2; exit 1; fi && \
+    if [ "$count" != 1 ]; then echo "found $count worker under /build/target; rebuild with --no-cache" >&2; exit 1; fi && \
+    mkdir -p /build/bin && \
+    cp "$bin" /build/bin/worker
+
+FROM alpine:3.24
+RUN (addgroup -S app || groupadd --system app) && (adduser -S -G app app || useradd --system --gid app --no-create-home app)
+WORKDIR /app
+COPY --from=build /build/bin/worker /app/worker
+USER app
+ENTRYPOINT ["/app/worker"]

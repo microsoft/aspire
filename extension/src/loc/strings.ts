@@ -159,6 +159,11 @@ export const browserDisplayName = (url: string) => vscode.l10n.t('Browser: {0}',
 export const browserLabel = vscode.l10n.t('Browser');
 export const goDisplayName = (program: string) => `Go: ${program}`;
 export const goLabel = 'Go';
+export const rustDisplayName = (program: string) => vscode.l10n.t('Rust: {0}', program);
+export const rustLabel = vscode.l10n.t('Rust');
+export const rustBuildFailedWithError = (workingDirectory: string, error: string) => vscode.l10n.t('cargo build failed in {0} with error: {1}.', workingDirectory, error);
+export const rustBuildFailedWithExitCode = (workingDirectory: string, exitCode: string) => vscode.l10n.t('cargo build failed in {0} with exit code {1}.', workingDirectory, exitCode);
+export const rustLaunchConfigurationMissingExecutable = (workingDirectory: string) => vscode.l10n.t('The Aspire app host did not report which executable the Rust app in {0} produces, so there is nothing to debug.', workingDirectory);
 export const bunDisplayName = (script: string) => `Bun: ${script}`;
 export const bunLabel = 'Bun';
 export const nodeDisplayName = (script: string) => `Node.js: ${script}`;

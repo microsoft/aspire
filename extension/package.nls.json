@@ -280,5 +280,10 @@
   "aspire-vscode.strings.workspaceViewSelectedSingleAppHostWithLanguage": "Workspace view selected because aspire ls found one buildable {0} AppHost.",
   "aspire-vscode.strings.workspaceViewSelectedSingleAppHost": "Workspace view selected because aspire ls found one buildable AppHost.",
   "aspire-vscode.strings.workspaceViewSelectedMultipleAppHosts": "Workspace view selected because aspire ls found {0} buildable AppHosts.",
+  "aspire-vscode.strings.rustDisplayName": "Rust: {0}",
+  "aspire-vscode.strings.rustLabel": "Rust",
+  "aspire-vscode.strings.rustBuildFailedWithError": "cargo build failed in {0} with error: {1}.",
+  "aspire-vscode.strings.rustBuildFailedWithExitCode": "cargo build failed in {0} with exit code {1}.",
+  "aspire-vscode.strings.rustLaunchConfigurationMissingExecutable": "The Aspire app host did not report which executable the Rust app in {0} produces, so there is nothing to debug.",
   "command.openDashboardToSide": "Open Aspire Dashboard to the Side"
 }

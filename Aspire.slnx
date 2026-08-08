@@ -77,6 +77,7 @@
     <Project Path="src/Aspire.Hosting.RabbitMQ/Aspire.Hosting.RabbitMQ.csproj" />
     <Project Path="src/Aspire.Hosting.Radius/Aspire.Hosting.Radius.csproj" />
     <Project Path="src/Aspire.Hosting.Redis/Aspire.Hosting.Redis.csproj" />
+    <Project Path="src/Aspire.Hosting.Rust/Aspire.Hosting.Rust.csproj" />
     <Project Path="src/Aspire.Hosting.Seq/Aspire.Hosting.Seq.csproj" />
     <Project Path="src/Aspire.Hosting.SqlServer/Aspire.Hosting.SqlServer.csproj" />
     <Project Path="src/Aspire.Hosting.Tasks/Aspire.Hosting.Tasks.csproj" />
@@ -367,6 +368,9 @@
     <Project Path="playground/Redis/Redis.ApiService/Redis.ApiService.csproj" />
     <Project Path="playground/Redis/Redis.AppHost/Redis.AppHost.csproj" />
   </Folder>
+  <Folder Name="/playground/rust/">
+    <Project Path="playground/rust/Rust.AppHost/Rust.AppHost.csproj" />
+  </Folder>
   <Folder Name="/playground/seq/">
     <Project Path="playground/seq/Seq.ApiService/Seq.ApiService.csproj" />
     <Project Path="playground/seq/Seq.AppHost/Seq.AppHost.csproj" />
@@ -553,6 +557,7 @@
     <Project Path="tests/Aspire.Hosting.Radius.Tests/Aspire.Hosting.Radius.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Redis.Tests/Aspire.Hosting.Redis.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.RemoteHost.Tests/Aspire.Hosting.RemoteHost.Tests.csproj" />
+    <Project Path="tests/Aspire.Hosting.Rust.Tests/Aspire.Hosting.Rust.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Seq.Tests/Aspire.Hosting.Seq.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.SqlServer.Tests/Aspire.Hosting.SqlServer.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Testing.Tests/Aspire.Hosting.Testing.Tests.csproj" />

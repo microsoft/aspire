@@ -607,6 +607,12 @@
     <trans-unit id="aspire-vscode.strings.runningAspireRestore">
       <source xml:lang="en">Running aspire restore on {0} ...</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.rustLabel">
+      <source xml:lang="en">Rust</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.rustDisplayName">
+      <source xml:lang="en">Rust: {0}</source>
+    </trans-unit>
     <trans-unit id="walkthrough.getStarted.createProject.description">
       <source xml:lang="en">Scaffold a new Aspire project from a starter template. The template includes an AppHost orchestrator, a sample API, and a web frontend.&#10;&#10;[Create new project](command:aspire-vscode.new)</source>
     </trans-unit>
@@ -702,6 +708,9 @@
     </trans-unit>
     <trans-unit id="walkthrough.getStarted.dashboard.description">
       <source xml:lang="en">The Aspire Dashboard shows your resources, endpoints, logs, traces, and metrics — all in one place.&#10;&#10;[Open dashboard](command:aspire-vscode.openDashboard)</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.rustLaunchConfigurationMissingExecutable">
+      <source xml:lang="en">The Aspire app host did not report which executable the Rust app in {0} produces, so there is nothing to debug.</source>
     </trans-unit>
     <trans-unit id="views.appHosts.genericErrorWelcome">
       <source xml:lang="en">The Aspire panel couldn&apos;t load AppHost data right now. See Aspire Extension output for details.&#10;[Refresh](command:aspire-vscode.globalRefreshAppHosts)</source>
@@ -834,6 +843,12 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.aspireRestoreFailed">
       <source xml:lang="en">aspire restore failed for {0}: {1}</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.rustBuildFailedWithError">
+      <source xml:lang="en">cargo build failed in {0} with error: {1}.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.rustBuildFailedWithExitCode">
+      <source xml:lang="en">cargo build failed in {0} with exit code {1}.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.aspireCliCommandTimedOut">
       <source xml:lang="en">timed out after {0}ms</source>

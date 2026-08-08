@@ -4,12 +4,13 @@ import { debugProject, runProject } from "../loc/strings";
 import { getEnvironmentWithoutE2EBridgeVariables, mergeEnvs } from "../utils/environment";
 import { extensionLogOutputChannel } from "../utils/logging";
 import { projectDebuggerExtension } from "./languages/dotnet";
-import { isAzureFunctionsExtensionInstalled, isBunInstalled, isCsharpInstalled, isGoInstalled, isMauiInstalled, isPythonInstalled } from '../capabilities';
+import { isAzureFunctionsExtensionInstalled, isBunInstalled, isCsharpInstalled, isGoInstalled, isMauiInstalled, isPythonInstalled, isRustInstalled } from '../capabilities';
 import { pythonDebuggerExtension } from "./languages/python";
 import { nodeDebuggerExtension } from "./languages/node";
 import { browserDebuggerExtension } from "./languages/browser";
 import { azureFunctionsDebuggerExtension } from "./languages/azureFunctions";
 import { goDebuggerExtension } from "./languages/go";
+import { rustDebuggerExtension } from "./languages/rust";
 import { bunDebuggerExtension } from "./languages/bun";
 import { mauiDebuggerExtension } from "./languages/maui";
 import { isDirectory } from "../utils/io";
@@ -105,6 +106,10 @@ export function getResourceDebuggerExtensions(): ResourceDebuggerExtension[] {
 
     if (isGoInstalled()) {
         extensions.push(goDebuggerExtension);
+    }
+
+    if (isRustInstalled()) {
+        extensions.push(rustDebuggerExtension);
     }
 
     extensions.push(nodeDebuggerExtension);

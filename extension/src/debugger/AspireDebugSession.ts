@@ -810,10 +810,40 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     }
   }
 
+  /**
+   * Ties a disposable to this session's lifetime. Work started on behalf of the session (such as a
+   * language build spawned while preparing a resource launch) registers here so it is torn down when
+   * the session ends instead of outliving it. Disposing the returned handle detaches it early.
+   */
+  registerDisposable(disposable: vscode.Disposable): vscode.Disposable {
+    if (this._disposed) {
+      disposable.dispose();
+      return { dispose: () => { } };
+    }
+
+    this._disposables.push(disposable);
+
+    let detached = false;
+    return {
+      dispose: () => {
+        if (detached) {
+          return;
+        }
+
+        detached = true;
+        const index = this._disposables.indexOf(disposable);
+        if (index !== -1) {
+          this._disposables.splice(index, 1);
+        }
+      }
+    };
+  }
+
   dispose(): void {
     if (this._disposed) {
       return;
     }
+
     this._disposed = true;
     extensionLogOutputChannel.info('Stopping the Aspire debug session');
     this._onDidChangeState.fire();
