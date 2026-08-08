@@ -110,14 +110,23 @@ local iteration `yarn run package` plus the launch configs below is usually enou
 The extension has Mocha unit tests under `extension/src/test/` executed by `@vscode/test-cli`.
 
 ```bash
-yarn run compile-tests   # tsc -> ./out (or watch-tests to keep rebuilding)
-yarn run test            # alias for unit-test (vscode-test); runs lint+compile via pretest
+yarn run compile-tests   # tsc6 -> ./out (or watch-tests to keep rebuilding)
+yarn run test            # alias for unit-test (vscode-test); runs lint+compile+typecheck via pretest
 yarn run lint            # eslint src
+yarn run typecheck       # TypeScript 7 native compiler, --noEmit
 ```
 
-`pretest` runs `compile-tests`, `compile`, and `lint`, so `yarn run test` is the single command that
-builds and runs everything. When iterating on one area, keep `watch-tests` running and re-run
-`yarn run test`.
+`pretest` runs `compile-tests`, `compile`, `lint`, and `typecheck`, so `yarn run test` is the single
+command that builds and runs everything. When iterating on one area, keep `watch-tests` running and
+re-run `yarn run test`.
+
+The extension installs two TypeScript compilers side by side: `typescript` is aliased to
+`npm:@typescript/typescript6` (the TypeScript 6.0 JavaScript API, plus a `tsc6` binary) because
+`editor/parsers/jsTsAppHostParser.ts`, `test/telemetryInventory.test.ts`, ts-loader,
+gulp-typescript, and typescript-eslint all need that API, while `@typescript/native` is aliased to
+`npm:typescript@7` for the native compiler used by `yarn run typecheck`. That is why the emitting
+scripts call `tsc6` rather than `tsc`. See
+[extension/CONTRIBUTING.md](../../../extension/CONTRIBUTING.md) for the full rationale.
 
 Add new tests as `extension/src/test/<area>.test.ts` mirroring nearby tests (e.g.
 `appHostDiscovery.test.ts`, `strings.test.ts`). There is a `strings.test.ts` that guards

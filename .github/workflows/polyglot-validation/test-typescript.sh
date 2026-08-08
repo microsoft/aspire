@@ -5,6 +5,22 @@ set -e
 
 echo "=== TypeScript AppHost SDK Validation ==="
 
+# `aspire init --language typescript` installs the scaffolded AppHost's dependencies through the
+# guest runtime's package manager, which is invoked without a --registry argument. Without this the
+# install resolves through whatever registry the image happens to default to, so the packages this
+# job validates would come from outside the approved dotnet-public-npm feed.
+#
+# Fail closed when the helper is absent: an image that did not ship it must not fall through to
+# installing from an unapproved feed.
+NPM_REGISTRY_ENV="$(dirname "${BASH_SOURCE[0]}")/npm-registry-env.sh"
+if [ ! -f "$NPM_REGISTRY_ENV" ]; then
+    echo "❌ $NPM_REGISTRY_ENV is missing, so the approved-feed configuration cannot be applied."
+    echo "   Refusing to install packages that would come from an unapproved registry."
+    exit 1
+fi
+# shellcheck source=npm-registry-env.sh
+source "$NPM_REGISTRY_ENV"
+
 # Verify aspire CLI is available
 if ! command -v aspire &> /dev/null; then
     echo "❌ Aspire CLI not found in PATH"

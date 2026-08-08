@@ -2,7 +2,8 @@
 # Polyglot SDK Validation - TypeScript validation AppHosts
 # Iterates all TypeScript validation AppHosts under tests/PolyglotAppHosts/*/TypeScript,
 # runs 'aspire restore --apphost' to regenerate the per-integration .aspire/modules/ SDK, and
-# type-checks each AppHost with tsgo against the generated API surface.
+# type-checks each AppHost twice: once with the TypeScript the AppHost's own package.json declares,
+# and once with the TypeScript 7 native compiler.
 set -euo pipefail
 
 echo "=== TypeScript Validation AppHost Codegen Validation ==="
@@ -22,19 +23,42 @@ if ! command -v npm &> /dev/null; then
     exit 1
 fi
 
-if ! command -v npx &> /dev/null; then
-    echo "❌ npx not found in PATH (Node.js required to run @typescript/native-preview when tsgo is not installed)"
+# TypeScript 7 is the native (Go) port of the compiler. Since 7.0 GA it ships as the plain
+# `typescript` package with a `tsc` binary; the pre-GA `@typescript/native-preview` package and its
+# `tsgo` binary are being retired, and nightly builds have moved to `typescript@next`. See
+# https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/.
+#
+# Dockerfile.typescript installs this compiler globally from NPM_REGISTRY, so it is always on PATH
+# in CI. There is deliberately no `npx` fallback: `npx --yes` resolves through whatever registry the
+# invoking environment happens to have configured, which for this repository would acquire the
+# compiler from outside the approved dotnet-public-npm feed. Failing with the install command is
+# honest about the missing prerequisite instead of silently changing where the toolchain comes from.
+#
+# A `tsc` on PATH can be any TypeScript version (6.x and older are JavaScript builds), so it is only
+# accepted when it reports 7.x. `tsc --version` prints e.g. "Version 7.0.2".
+TYPESCRIPT_VERSION="${TYPESCRIPT_VERSION:-7}"
+# Point every package manager at the approved dotnet-public-npm feed before anything is installed.
+# This also sets NPM_REGISTRY, used in the install hint below.
+#
+# Fail closed when the helper is absent: an image that did not ship it must not fall through to
+# installing from an unapproved feed.
+NPM_REGISTRY_ENV="$(dirname "${BASH_SOURCE[0]}")/npm-registry-env.sh"
+if [ ! -f "$NPM_REGISTRY_ENV" ]; then
+    echo "❌ $NPM_REGISTRY_ENV is missing, so the approved-feed configuration cannot be applied."
+    echo "   Refusing to install packages that would come from an unapproved registry."
     exit 1
 fi
+# shellcheck source=npm-registry-env.sh
+source "$NPM_REGISTRY_ENV"
 
-if command -v tsgo &> /dev/null; then
-    TSGO_COMMAND=(tsgo)
-elif command -v npx &> /dev/null; then
-    TSGO_COMMAND=(npx --yes @typescript/native-preview)
-else
-    echo "❌ tsgo not found in PATH and npx is unavailable to run @typescript/native-preview"
+if ! command -v tsc &> /dev/null || [[ "$(tsc --version 2>/dev/null)" != "Version 7."* ]]; then
+    echo "❌ A TypeScript 7 'tsc' is required on PATH to type-check the generated API surface."
+    echo "   Found: $(command -v tsc &> /dev/null && tsc --version || echo 'no tsc on PATH')"
+    echo "   Install it from the approved feed with:"
+    echo "     npm install --global --registry \"${NPM_REGISTRY}\" \"typescript@${TYPESCRIPT_VERSION}\""
     exit 1
 fi
+TYPESCRIPT_COMMAND=(tsc)
 
 detect_parallelism() {
     if [ -n "${MAX_PARALLEL_TYPESCRIPT_VALIDATIONS:-}" ]; then
@@ -53,7 +77,7 @@ detect_parallelism() {
 echo "Aspire CLI version:"
 aspire --version
 echo "TypeScript checker:"
-"${TSGO_COMMAND[@]}" --version
+"${TYPESCRIPT_COMMAND[@]}" --version
 
 export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
@@ -158,7 +182,11 @@ install_command_text() {
 }
 
 typecheck_command_text() {
-    echo "tsgo --noEmit --project tsconfig.json"
+    echo "tsc --noEmit --project tsconfig.json"
+}
+
+declared_typecheck_command_text() {
+    echo "node_modules/.bin/tsc --noEmit --project tsconfig.json"
 }
 
 run_install() {
@@ -171,7 +199,31 @@ run_install() {
 }
 
 run_typecheck() {
-    "${TSGO_COMMAND[@]}" --noEmit --project tsconfig.json
+    "${TYPESCRIPT_COMMAND[@]}" --noEmit --project tsconfig.json
+}
+
+# Compiles the generated API surface with the TypeScript the AppHost's own package.json declares,
+# rather than only with the native TypeScript 7 compiler the workflow supplies.
+#
+# Without this leg the installed toolchain is never used: CI would type-check with a compiler no
+# scaffolded AppHost actually has, so generated code that the declared compiler rejects would reach
+# users with the polyglot job green. The two legs answer different questions — this one is "does the
+# compiler users run accept the surface we generate", the TypeScript 7 leg is "will it still be
+# accepted once the native compiler is the default".
+#
+# Every package manager installs a `tsc` shim into node_modules/.bin, including Bun and pnpm with
+# --ignore-workspace, so the binary is resolved by path instead of through `npm exec`/`bunx`, which
+# would fall back to fetching the package when it is missing locally.
+run_declared_typecheck() {
+    local declared_tsc="node_modules/.bin/tsc"
+
+    if [ ! -x "$declared_tsc" ]; then
+        echo "  ❌ $declared_tsc is missing after install; the AppHost must declare typescript in its devDependencies"
+        return 1
+    fi
+
+    echo "  → declared TypeScript: $("$declared_tsc" --version)"
+    "$declared_tsc" --noEmit --project tsconfig.json
 }
 
 ensure_package_manager_available() {
@@ -269,11 +321,19 @@ validate_apphost() {
         return 1
     fi
 
+    declared_typecheck_command=$(declared_typecheck_command_text)
+    echo "  → $declared_typecheck_command..."
+    if ! run_declared_typecheck 2>&1; then
+        echo "  ❌ Declared-toolchain TypeScript compilation failed for $integration_name"
+        printf 'FAIL|%s|declared tsc\n' "$integration_name" > "$result_file"
+        return 1
+    fi
+
     typecheck_command=$(typecheck_command_text "$SELECTED_PACKAGE_MANAGER")
     echo "  → $typecheck_command..."
     if ! run_typecheck "$SELECTED_PACKAGE_MANAGER" 2>&1; then
-        echo "  ❌ tsgo compilation failed for $integration_name"
-        printf 'FAIL|%s|tsgo\n' "$integration_name" > "$result_file"
+        echo "  ❌ TypeScript compilation failed for $integration_name"
+        printf 'FAIL|%s|tsc\n' "$integration_name" > "$result_file"
         return 1
     fi
 

@@ -81,6 +81,27 @@ corepack yarn test
 
 This compiles tests and sources, lints, then runs the suite (`corepack yarn lint` lints only). Add or update tests for behavior changes, and ensure tests and lint pass before opening a PR.
 
+### TypeScript 6 and 7 side by side
+
+The extension installs two TypeScript compilers, because TypeScript 7 is a native (Go) compiler that
+ships no JavaScript compiler API and TypeScript 7.1 is the first release expected to expose a
+replacement:
+
+| `package.json` entry | Resolves to | Used by |
+|----------------------|-------------|---------|
+| `typescript` → `npm:@typescript/typescript6` | The TypeScript 6.0 API (and the `tsc6` binary) | `import * as ts from 'typescript'` in `editor/parsers/jsTsAppHostParser.ts` and `test/telemetryInventory.test.ts`, plus ts-loader, gulp-typescript, and typescript-eslint (whose `typescript` peer range is capped below 6.1.0) |
+| `@typescript/native` → `npm:typescript@7` | The TypeScript 7 native compiler | `corepack yarn typecheck` |
+
+Aliasing `typescript` leaves no `tsc` binary in that package, so the emitting scripts
+(`compile-tests`, `watch-tests`, `compile-e2e`) call `tsc6`. `corepack yarn typecheck` runs the
+TypeScript 7 compiler with `--noEmit` and is part of `pretest`, so `corepack yarn test` type-checks
+the extension with both compilers. See
+[Running Side-by-Side with TypeScript 6.0](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/)
+for the upstream guidance this follows.
+
+Once typescript-eslint and the other tooling above support the TypeScript 7 API, the `typescript`
+alias can be dropped and `@typescript/native` folded back into a plain `typescript` dependency.
+
 To run a single unit-test file or a filtered subset, compile the tests first and pass Mocha selectors through `unit-test`:
 
 ```bash

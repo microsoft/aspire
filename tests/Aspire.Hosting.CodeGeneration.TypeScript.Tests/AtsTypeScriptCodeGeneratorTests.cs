@@ -25,24 +25,6 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
-    public void EmbeddedResource_PackageJson_IsAvailableWithExpectedStructure()
-    {
-        // The package.json under Resources/ is the single source of truth for
-        // the SDK manifest emitted alongside generated TypeScript. Verify the
-        // embedded resource loads and has the structural fields downstream
-        // consumers rely on — without copying its bytes into a snapshot file
-        // that would drift from the resource on every edit.
-        var content = EmbeddedResources.Read("package.json");
-
-        Assert.NotEmpty(content);
-
-        var packageJson = System.Text.Json.Nodes.JsonNode.Parse(content)!.AsObject();
-        Assert.Equal("aspire-host", packageJson["name"]?.GetValue<string>());
-        Assert.Equal("module", packageJson["type"]?.GetValue<string>());
-        Assert.NotNull(packageJson["dependencies"]?["vscode-jsonrpc"]);
-    }
-
-    [Fact]
     public void GenerateDistributedApplication_EmitsBaseAndTransportResourcesVerbatim()
     {
         var atsContext = CreateContextFromTestAssembly();

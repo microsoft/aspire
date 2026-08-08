@@ -933,6 +933,61 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
         throw new InvalidOperationException("No integration src/Aspire.Hosting*/api/<name>.ats.txt with a matching tests/PolyglotAppHosts/<name> fixture was found.");
     }
 
+    // The TypeScript codegen generators emit the scaffold manifest and the .aspire/modules SDK that
+    // the TypeScript* tests in Aspire.Cli.EndToEnd.Tests npm-install and build. Those tests are the
+    // only place CI actually installs a generated package, so they are what catches a manifest that
+    // cannot resolve — a dependency floor whose peer range excludes the TypeScript the same manifest
+    // pins, for instance. Routing codegen changes only to job:polyglot and job:typescript-sdk left
+    // that class of break invisible until it reached users, so this pins the routing.
+    [Fact]
+    public void RealMapTypeScriptCodegenChangeRunsCliEndToEndTests()
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories());
+
+        var generatorSource = Path.Combine("src", "Aspire.Hosting.CodeGeneration.TypeScript", "TypeScriptLanguageSupport.cs")
+            .Replace(Path.DirectorySeparatorChar, '/');
+        Assert.True(File.Exists(Path.Combine(RepoRoot.Path, generatorSource)), $"{generatorSource} does not exist. Update this test if the generator moved.");
+
+        var r = selector.Select([generatorSource], ["Aspire.Hosting.CodeGeneration.TypeScript"], new SelectorOptions());
+
+        Assert.False(r.SelectsAll);
+        Assert.Contains("Aspire.Cli.EndToEnd.Tests", r.TestProjects);
+    }
+
+    // A lockfile under tests/PolyglotAppHosts or a shipped template is where npm feed drift actually
+    // lands, and Infrastructure.Tests/Pipelines/NpmLockfileRegistryTests is the only thing that
+    // catches it. A lockfile is not a compiled item, so Layer 1 is blind to it: without curated
+    // routing the polyglot fixtures reach only job:polyglot and the template lockfiles only
+    // job:typescript-sdk, and the guard never runs on the PR that introduces the drift. Discovered
+    // from the filesystem (never hardcoded) so the test survives fixtures being added or renamed.
+    [Theory]
+    [InlineData("package-lock.json")]
+    [InlineData("bun.lock")]
+    [InlineData("pnpm-lock.yaml")]
+    [InlineData("yarn.lock")]
+    public void RealMapPolyglotLockfileChangeRunsInfrastructureTests(string lockfileName)
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories());
+
+        var lockfile = FirstPolyglotLockfile(lockfileName);
+
+        var r = selector.Select([lockfile], [], new SelectorOptions());
+
+        Assert.False(r.SelectsAll);
+        Assert.Contains("Infrastructure.Tests", r.TestProjects);
+    }
+
+    private static string FirstPolyglotLockfile(string lockfileName)
+    {
+        var polyglotRoot = Path.Combine(RepoRoot.Path, "tests", "PolyglotAppHosts");
+        var lockfile = Directory.EnumerateFiles(polyglotRoot, lockfileName, SearchOption.AllDirectories).Order(StringComparer.Ordinal).FirstOrDefault()
+            ?? throw new InvalidOperationException($"No tests/PolyglotAppHosts/**/{lockfileName} fixture was found.");
+
+        return Path.GetRelativePath(RepoRoot.Path, lockfile).Replace(Path.DirectorySeparatorChar, '/');
+    }
+
     private static (string Dir, string Test) FirstComponentWithSameNamedTest(IReadOnlyCollection<string> matrix)
     {
         var componentsRoot = Path.Combine(RepoRoot.Path, "src", "Components");

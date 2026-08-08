@@ -1491,4 +1491,91 @@ public class PackageJsonMergerTests
         // Engines set
         Assert.Contains(">=24", doc["engines"]?["node"]?.GetValue<string>());
     }
+
+    /// <summary>
+    /// The scaffold pins typescript-eslint ^8.58.0, whose peer range is
+    /// typescript ">=4.8.4 &lt;6.1.0". Dependency merging keeps the newer version, so a project
+    /// already on TypeScript 7 keeps it and would receive an unsatisfiable pair. Reproduced against
+    /// the real resolver: npm reports ERESOLVE "Found: typescript@7.0.2".
+    /// </summary>
+    [Theory]
+    [InlineData("^7.0.2")]
+    [InlineData("~7.1.0")]
+    [InlineData("6.1.0")]
+    public void Merge_BrownfieldOnUnsupportedTypeScript_DropsLintToolchain(string existingTypeScript)
+    {
+        var existing = $$"""
+            {
+              "name": "brownfield",
+              "devDependencies": { "typescript": "{{existingTypeScript}}" }
+            }
+            """;
+
+        var result = MergeJson(existing, ScaffoldWithLintToolchain);
+        var merged = ParseJson(result);
+
+        Assert.Equal(existingTypeScript, GetDep(result, "devDependencies", "typescript"));
+        Assert.Null(merged["devDependencies"]?["typescript-eslint"]);
+        Assert.DoesNotContain("aspire:lint", GetScripts(result).Select(script => script.Key));
+
+        // The rest of the AppHost toolchain is untouched: only the lint rules need typescript-eslint.
+        Assert.Equal("^8.2.0", GetDep(result, "dependencies", "vscode-jsonrpc"));
+        Assert.Equal("tsc -p tsconfig.apphost.json", GetScript(result, "aspire:build"));
+    }
+
+    [Theory]
+    [InlineData("^6.0.3")]
+    [InlineData("^5.9.3")]
+    public void Merge_BrownfieldOnSupportedTypeScript_KeepsLintToolchain(string existingTypeScript)
+    {
+        var existing = $$"""
+            {
+              "name": "brownfield",
+              "devDependencies": { "typescript": "{{existingTypeScript}}" }
+            }
+            """;
+
+        var result = MergeJson(existing, ScaffoldWithLintToolchain);
+
+        Assert.Equal("^8.58.0", GetDep(result, "devDependencies", "typescript-eslint"));
+        Assert.Equal("eslint apphost.mts", GetScript(result, "aspire:lint"));
+    }
+
+    /// <summary>
+    /// A project that already depends on typescript-eslint owns that choice, so `aspire init` leaves
+    /// it in place rather than making a destructive edit to a dependency it did not introduce.
+    /// </summary>
+    [Fact]
+    public void Merge_BrownfieldAlreadyUsingTypeScriptEslint_LeavesItInPlace()
+    {
+        const string Existing = """
+            {
+              "name": "brownfield",
+              "devDependencies": {
+                "typescript": "^7.0.2",
+                "typescript-eslint": "^8.58.0"
+              }
+            }
+            """;
+
+        var result = MergeJson(Existing, ScaffoldWithLintToolchain);
+
+        Assert.Equal("^8.58.0", GetDep(result, "devDependencies", "typescript-eslint"));
+        Assert.Equal("^7.0.2", GetDep(result, "devDependencies", "typescript"));
+    }
+
+    private const string ScaffoldWithLintToolchain = """
+        {
+          "scripts": {
+            "aspire:lint": "eslint apphost.mts",
+            "aspire:build": "tsc -p tsconfig.apphost.json"
+          },
+          "dependencies": { "vscode-jsonrpc": "^8.2.0" },
+          "devDependencies": {
+            "typescript": "^6.0.3",
+            "typescript-eslint": "^8.58.0",
+            "eslint": "^10.0.3"
+          }
+        }
+        """;
 }

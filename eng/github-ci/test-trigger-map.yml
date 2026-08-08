@@ -168,6 +168,22 @@ path_rules:
       - .github/workflows/polyglot-validation.yml
     targets: [job:polyglot]
     reason: polyglot fixtures + workflow; the typesystem/SDK/CLI/codegen production projects are in affected_project_rules
+  # Feed drift arrives as an edit to exactly these lockfiles, and
+  # Infrastructure.Tests/Pipelines/NpmLockfileRegistryTests is the only thing that catches it -- it
+  # asserts every tarball URL they record resolves through the approved dotnet-public-npm feed. A
+  # lockfile is not a compiled item, so Layer 1 is blind to it, and the rules above route these paths
+  # to job:polyglot and job:typescript-sdk only. Without this rule the guard never runs on the PR that
+  # introduces the drift.
+  - paths:
+      - tests/PolyglotAppHosts/**/package-lock.json
+      - tests/PolyglotAppHosts/**/bun.lock
+      - tests/PolyglotAppHosts/**/pnpm-lock.yaml
+      - tests/PolyglotAppHosts/**/yarn.lock
+      - src/Aspire.Cli/Templating/Templates/ts-starter/package-lock.json
+      - src/Aspire.Cli/Templating/Templates/py-starter/package-lock.json
+      - tests/Aspire.Hosting.CodeGeneration.TypeScript.JsTests/package-lock.json
+    targets: [test:Infrastructure.Tests]
+    reason: NpmLockfileRegistryTests asserts every tarball URL in these lockfiles resolves through the approved dotnet-public-npm feed; lockfiles are not compiled items, so Layer 1 is blind and this is the only rule that fires the guard on the change that would introduce the drift
   - paths:
       - tests/Aspire.Hosting.CodeGeneration.TypeScript.JsTests/**
       - src/Aspire.Cli/Templating/Templates/ts-starter/**
@@ -358,9 +374,9 @@ affected_project_rules:
   - projects: [Aspire.Hosting, Aspire.Hosting.AppHost, Aspire.Hosting.PostgreSQL, Aspire.Hosting.Redis]
     targets: [test:Aspire.EndToEnd.Tests]
     reason: OUTERLOOP-ONLY today; builds testproject apphost against built nugets
-  - projects: [Aspire.Cli, Aspire.TypeSystem, Aspire.Managed, Aspire.AppHost.Sdk]
+  - projects: [Aspire.Cli, Aspire.TypeSystem, Aspire.Managed, Aspire.AppHost.Sdk, Aspire.Hosting.CodeGeneration.*]
     targets: [test:Aspire.Cli.EndToEnd.Tests]
-    reason: consumes the CLI native archive (RequiresCliArchive=true) built from these sources
+    reason: consumes the CLI native archive (RequiresCliArchive=true) built from these sources; the codegen generators also emit the scaffold and .aspire/modules SDK that the 16 TypeScript* tests here npm-install and build, so a manifest/API change lands in this suite before it lands on a user
 
 # Derived targets: selected test project -> extra jobs/tests. Applied to the UNION of Layer 1 and
 # Layer 2 selected tests, to a fixpoint (a derived test is itself expanded; cycle-safe). This is how

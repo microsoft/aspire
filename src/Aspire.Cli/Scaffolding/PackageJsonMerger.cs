@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging;
+using Semver;
 
 namespace Aspire.Cli.Scaffolding;
 
@@ -22,6 +23,16 @@ internal static class PackageJsonMerger
     private const string EnginesKey = "engines";
     private const string EnginesNodeKey = "node";
     private const string AspirePrefix = "aspire:";
+    private const string TypeScriptPackage = "typescript";
+    private const string TypeScriptEslintPackage = "typescript-eslint";
+    private const string AspireLintScriptName = "aspire:lint";
+
+    /// <summary>
+    /// The lowest TypeScript version typescript-eslint 8.58.0 refuses, from its peer range
+    /// <c>typescript: "&gt;=4.8.4 &lt;6.1.0"</c>. Kept next to the scaffold floor in
+    /// TypeScriptLanguageSupport, which pins <c>typescript-eslint: "^8.58.0"</c>.
+    /// </summary>
+    private static readonly SemVersion s_firstUnsupportedTypeScript = SemVersion.Parse("6.1.0", SemVersionStyles.Strict);
 
     // package.json standard uses 2-space indentation. These options produce output
     // consistent with npm init / npm install formatting conventions.
@@ -93,6 +104,11 @@ internal static class PackageJsonMerger
     /// </summary>
     private static void MergeObjects(JsonObject existing, JsonObject scaffold, ILogger logger, string toolchainCommand)
     {
+        // Captured before merging: whether the lint toolchain is ours to withdraw. A project that
+        // already depends on typescript-eslint owns that choice, and removing it would be a
+        // destructive edit to a dependency `aspire init` did not introduce.
+        var projectAlreadyLinted = FindDependencyVersion(existing, TypeScriptEslintPackage) is not null;
+
         // Handle scripts separately with conflict-aware logic
         var scaffoldScripts = scaffold[ScriptsKey]?.AsObject();
         if (scaffoldScripts is not null)
@@ -133,6 +149,92 @@ internal static class PackageJsonMerger
             }
             // Arrays and scalar values in existing are preserved
         }
+
+        if (!projectAlreadyLinted)
+        {
+            RemoveLintToolchainWhenTypeScriptIsTooNew(existing, logger);
+        }
+    }
+
+    /// <summary>
+    /// Withdraws the scaffolded typescript-eslint lint toolchain when the project's TypeScript is
+    /// newer than typescript-eslint supports, so the merged manifest still installs.
+    /// </summary>
+    /// <remarks>
+    /// Dependency merging keeps whichever version is newer, so a project already on TypeScript 7
+    /// keeps it while the scaffold contributes typescript-eslint. typescript-eslint 8.58.0 peers
+    /// `typescript: ">=4.8.4 &lt;6.1.0"`, so the combination is unsatisfiable and `npm install` fails
+    /// with ERESOLVE — the exact failure `aspire init` is supposed to avoid.
+    ///
+    /// Downgrading the project's compiler is not an option: TypeScript 7 is the native compiler and
+    /// the user chose it. The AppHost only needs `tsc` to build, so the lint rules are what gets
+    /// dropped. eslint.config.mjs is still written, and starts working once typescript-eslint
+    /// supports TypeScript 7 and the dependency is added back.
+    /// </remarks>
+    private static void RemoveLintToolchainWhenTypeScriptIsTooNew(JsonObject existing, ILogger logger)
+    {
+        var typeScriptVersion = FindDependencyVersion(existing, TypeScriptPackage);
+        if (typeScriptVersion is null ||
+            !NpmVersionHelper.TryParseNpmVersion(typeScriptVersion, out var resolvedTypeScript) ||
+            SemVersion.ComparePrecedence(resolvedTypeScript, s_firstUnsupportedTypeScript) < 0)
+        {
+            return;
+        }
+
+        if (RemoveDependency(existing, TypeScriptEslintPackage))
+        {
+            logger.LogWarning(
+                "Skipped adding {Package} because this project uses TypeScript {Version}, which is outside the range {Package} supports. The AppHost lint script was not added.",
+                TypeScriptEslintPackage,
+                typeScriptVersion,
+                TypeScriptEslintPackage);
+        }
+
+        // The scaffolded eslint.config.mjs enables @typescript-eslint/no-floating-promises, so
+        // without the dependency the script would fail on every run. Remove it and any alias the
+        // script merge generated for it rather than leaving a command that cannot succeed.
+        if (existing[ScriptsKey] is not JsonObject scripts)
+        {
+            return;
+        }
+
+        foreach (var scriptName in scripts
+            .Where(script => script.Key == AspireLintScriptName ||
+                GetStringValue(script.Value)?.Contains(AspireLintScriptName, StringComparison.Ordinal) == true)
+            .Select(script => script.Key)
+            .ToArray())
+        {
+            scripts.Remove(scriptName);
+        }
+    }
+
+    private static string? FindDependencyVersion(JsonObject packageJson, string packageName)
+    {
+        // A malformed package.json can have a non-object here — `"dependencies": ["express"]` is
+        // real enough that MergeObjects repairs it. Indexing a JsonArray by name throws, and this
+        // runs before that repair, so match the section shape instead of assuming it.
+        return GetStringValue((packageJson[DependenciesKey] as JsonObject)?[packageName]) ??
+            GetStringValue((packageJson[DevDependenciesKey] as JsonObject)?[packageName]);
+    }
+
+    private static bool RemoveDependency(JsonObject packageJson, string packageName)
+    {
+        var removed = false;
+
+        foreach (var sectionName in new[] { DependenciesKey, DevDependenciesKey })
+        {
+            if (packageJson[sectionName] is JsonObject section)
+            {
+                removed |= section.Remove(packageName);
+            }
+        }
+
+        return removed;
+    }
+
+    private static string? GetStringValue(JsonNode? node)
+    {
+        return node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
     }
 
     /// <summary>

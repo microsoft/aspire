@@ -45,10 +45,10 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
         Assert.Equal("npm run aspire:lint", scripts["prebuild"]?.GetValue<string>());
         Assert.Equal("npm run aspire:build", scripts["build"]?.GetValue<string>());
         Assert.Equal("npm run aspire:dev", scripts["watch"]?.GetValue<string>());
-        Assert.Equal("^4.21.0", devDependencies["tsx"]?.GetValue<string>());
-        Assert.Equal("^5.9.3", devDependencies["typescript"]?.GetValue<string>());
+        Assert.Equal("^4.22.3", devDependencies["tsx"]?.GetValue<string>());
+        Assert.Equal("^6.0.3", devDependencies["typescript"]?.GetValue<string>());
         Assert.Equal("^10.0.3", devDependencies["eslint"]?.GetValue<string>());
-        Assert.Equal("^8.57.1", devDependencies["typescript-eslint"]?.GetValue<string>());
+        Assert.Equal("^8.58.0", devDependencies["typescript-eslint"]?.GetValue<string>());
 
         var engines = packageJson["engines"]!.AsObject();
         Assert.Equal("^20.19.0 || ^22.13.0 || >=24", engines["node"]?.GetValue<string>());
@@ -118,10 +118,10 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
 
         // Scaffold should only contain Aspire-desired dependencies (at Aspire's versions)
         Assert.Equal("^8.2.0", dependencies["vscode-jsonrpc"]?.GetValue<string>());
-        Assert.Equal("^4.21.0", devDependencies["tsx"]?.GetValue<string>());
+        Assert.Equal("^4.22.3", devDependencies["tsx"]?.GetValue<string>());
         Assert.Equal("^22.0.0", devDependencies["@types/node"]?.GetValue<string>());
         Assert.Equal("^3.1.14", devDependencies["nodemon"]?.GetValue<string>());
-        Assert.Equal("^5.9.3", devDependencies["typescript"]?.GetValue<string>());
+        Assert.Equal("^6.0.3", devDependencies["typescript"]?.GetValue<string>());
         Assert.False(devDependencies.ContainsKey("vite"));
 
         // engines.node is always set
@@ -184,8 +184,8 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
         Assert.Equal("^8.2.0", dependencies["vscode-jsonrpc"]?.GetValue<string>());
         Assert.Equal("^22.0.0", devDependencies["@types/node"]?.GetValue<string>());
         Assert.Equal("^3.1.14", devDependencies["nodemon"]?.GetValue<string>());
-        Assert.Equal("^4.21.0", devDependencies["tsx"]?.GetValue<string>());
-        Assert.Equal("^5.9.3", devDependencies["typescript"]?.GetValue<string>());
+        Assert.Equal("^4.22.3", devDependencies["tsx"]?.GetValue<string>());
+        Assert.Equal("^6.0.3", devDependencies["typescript"]?.GetValue<string>());
     }
 
     [Fact]
@@ -298,6 +298,79 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
         // The scaffold emits the embedded tsconfig.apphost.json verbatim. See
         // Scaffold_EmitsScaffoldedEslintConfigVerbatim for the rationale.
         Assert.Equal(EmbeddedResources.Read("tsconfig.apphost.json"), files["tsconfig.apphost.json"]);
+    }
+
+    [Fact]
+    public void Scaffold_PinsTypeScriptToTheLastJavaScriptApiRelease()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var files = _languageSupport.Scaffold(new ScaffoldRequest
+        {
+            TargetPath = workspace.Path,
+            ProjectName = "BridgeApp"
+        });
+
+        var devDependencies = ParseJson(files["package.json"])["devDependencies"]!.AsObject();
+        var typeScriptRange = devDependencies["typescript"]?.GetValue<string>();
+
+        // TypeScript 7 is a native (Go) compiler with no JavaScript compiler API, and the scaffolded
+        // `aspire:lint` script runs typescript-eslint, whose `typescript` peer range is capped below
+        // 6.1.0. TypeScript 6.0 is therefore the newest release a scaffolded AppHost can take, and it
+        // is the exact compiler that the `@typescript/typescript6` TS7 compatibility package
+        // re-exports. See "Running Side-by-Side with TypeScript 6.0" in
+        // https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/.
+        Assert.Equal("^6.0.3", typeScriptRange);
+        Assert.True(
+            NpmVersionHelper.TryParseNpmVersion(typeScriptRange!, out var typeScriptVersion),
+            $"Expected '{typeScriptRange}' to be a parseable npm version range.");
+        Assert.Equal(6, typeScriptVersion.Major);
+        Assert.Equal(0, typeScriptVersion.Minor);
+    }
+
+    [Fact]
+    public void Scaffold_PinsTypeScriptEslintHighEnoughToPeerTheScaffoldedTypeScript()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var files = _languageSupport.Scaffold(new ScaffoldRequest
+        {
+            TargetPath = workspace.Path,
+            ProjectName = "PeerApp"
+        });
+
+        var devDependencies = ParseJson(files["package.json"])["devDependencies"]!.AsObject();
+        var typeScriptRange = devDependencies["typescript"]!.GetValue<string>();
+        var typeScriptEslintRange = devDependencies["typescript-eslint"]!.GetValue<string>();
+
+        Assert.True(NpmVersionHelper.TryParseNpmVersion(typeScriptRange, out var typeScript));
+
+        // The scaffolded package pairs a `typescript` floor with a `typescript-eslint` floor, and
+        // `aspire:lint` only installs if the resolved typescript-eslint peers the resolved
+        // TypeScript. typescript-eslint's `typescript` peer range moves one minor at a time:
+        //   8.57.1 -> ">=4.8.4 <6.0.0"
+        //   8.58.0 -> ">=4.8.4 <6.1.0"
+        // A caret floor is satisfiable by the floor itself, so pinning `^8.57.1` alongside
+        // TypeScript 6 produces a scaffold that fails to install on the peer conflict. This asserts
+        // the pairing rather than the literal strings, so a future TypeScript bump has to move the
+        // typescript-eslint floor with it.
+        var requiredTypeScriptEslintFloor = $"{typeScript.Major}.{typeScript.Minor}" switch
+        {
+            "6.0" => "8.58.0",
+            _ => null
+        };
+
+        Assert.True(
+            requiredTypeScriptEslintFloor is not null,
+            $"The scaffold now pins TypeScript '{typeScriptRange}'. Look up the first typescript-eslint " +
+            "release whose `typescript` peer range admits it and record the required floor in this test.");
+
+        // ShouldUpgrade(existing, desired) is true when desired is strictly newer, so the scaffolded
+        // floor is high enough exactly when it does not want upgrading to the required floor.
+        Assert.False(
+            NpmVersionHelper.ShouldUpgrade(typeScriptEslintRange, requiredTypeScriptEslintFloor!),
+            $"Scaffolded typescript '{typeScriptRange}' needs a typescript-eslint floor of at least " +
+            $"{requiredTypeScriptEslintFloor} to satisfy its peer range, but the scaffold pins '{typeScriptEslintRange}'.");
     }
 
     private static JsonObject ParseJson(string content) => JsonNode.Parse(content)!.AsObject();
