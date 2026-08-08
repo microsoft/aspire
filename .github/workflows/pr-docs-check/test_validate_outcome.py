@@ -9,7 +9,9 @@ from pathlib import Path
 
 from validate_outcome import (
     OutcomeValidationError,
+    build_side_effect_outcome,
     encode_workflow_command_data,
+    load_expected_source_pr_number,
     load_payload,
     main,
     validate_outcome,
@@ -32,6 +34,14 @@ def payload(
                 "result": result,
             }
         ]
+    }
+
+
+def create_pull_request_item() -> dict:
+    return {
+        "type": "create_pull_request",
+        "title": "Draft docs",
+        "body": "Docs",
     }
 
 
@@ -81,6 +91,17 @@ class ValidateOutcomeTests(unittest.TestCase):
         ):
             validate_outcome(duplicate_payload, "", EXPECTED_SOURCE_PR_NUMBER)
 
+    def test_integral_float_source_pr_number_fails(self) -> None:
+        with self.assertRaisesRegex(
+            OutcomeValidationError,
+            "Invalid source_pr_number from agent",
+        ):
+            validate_outcome(
+                payload(source_pr_number=18868.0),
+                "",
+                EXPECTED_SOURCE_PR_NUMBER,
+            )
+
     def test_draft_failed_fails(self) -> None:
         with self.assertRaisesRegex(
             OutcomeValidationError,
@@ -123,6 +144,22 @@ class ValidateOutcomeTests(unittest.TestCase):
             validate_outcome(
                 payload(),
                 "https://github.com/microsoft/aspire.dev/pull/1447",
+                EXPECTED_SOURCE_PR_NUMBER,
+            )
+
+    def test_skipped_with_create_pull_request_item_fails_without_created_url(
+        self,
+    ) -> None:
+        contradictory_payload = payload()
+        contradictory_payload["items"].append(create_pull_request_item())
+
+        with self.assertRaisesRegex(
+            OutcomeValidationError,
+            "also requested a docs PR",
+        ):
+            validate_outcome(
+                contradictory_payload,
+                "",
                 EXPECTED_SOURCE_PR_NUMBER,
             )
 
@@ -193,6 +230,107 @@ class ValidateOutcomeTests(unittest.TestCase):
             output_path.write_text(json.dumps(expected), encoding="utf-8")
 
             self.assertEqual(expected, load_payload(output_path))
+
+    def test_load_expected_source_pr_number_reads_pull_request_event(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            event_path = Path(directory) / "event.json"
+            event_path.write_text(
+                json.dumps({"pull_request": {"number": EXPECTED_SOURCE_PR_NUMBER}}),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                EXPECTED_SOURCE_PR_NUMBER,
+                load_expected_source_pr_number(event_path),
+            )
+
+    def test_load_expected_source_pr_number_reads_dispatch_event(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            event_path = Path(directory) / "event.json"
+            event_path.write_text(
+                json.dumps(
+                    {"inputs": {"pr_number": f" {EXPECTED_SOURCE_PR_NUMBER} "}}
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                EXPECTED_SOURCE_PR_NUMBER,
+                load_expected_source_pr_number(event_path),
+            )
+
+
+class SideEffectOutcomeTests(unittest.TestCase):
+    def test_valid_draft_allows_comment_and_sme_review(self) -> None:
+        outcome = build_side_effect_outcome(
+            payload("drafted"),
+            "https://github.com/microsoft/aspire.dev/pull/1447",
+            EXPECTED_SOURCE_PR_NUMBER,
+        )
+
+        self.assertTrue(outcome["allow_comment"])
+        self.assertTrue(outcome["allow_sme_review"])
+        self.assertEqual("drafted", outcome["render_kind"])
+        self.assertEqual(EXPECTED_SOURCE_PR_NUMBER, outcome["source_pr_number"])
+
+    def test_duplicate_notifications_allow_only_generic_warning(self) -> None:
+        duplicate_payload = payload("drafted")
+        duplicate_payload["items"].append(duplicate_payload["items"][0].copy())
+
+        outcome = build_side_effect_outcome(
+            duplicate_payload,
+            "https://github.com/microsoft/aspire.dev/pull/1447",
+            EXPECTED_SOURCE_PR_NUMBER,
+        )
+
+        self.assertTrue(outcome["allow_comment"])
+        self.assertFalse(outcome["allow_sme_review"])
+        self.assertEqual("invalid", outcome["render_kind"])
+
+    def test_mismatched_source_identity_allows_no_side_effects(self) -> None:
+        outcome = build_side_effect_outcome(
+            payload(source_pr_number=EXPECTED_SOURCE_PR_NUMBER + 1),
+            "https://github.com/microsoft/aspire.dev/pull/1447",
+            EXPECTED_SOURCE_PR_NUMBER,
+        )
+
+        self.assertFalse(outcome["allow_comment"])
+        self.assertFalse(outcome["allow_sme_review"])
+
+    def test_integral_float_source_identity_allows_no_side_effects(self) -> None:
+        outcome = build_side_effect_outcome(
+            payload(source_pr_number=18868.0),
+            "https://github.com/microsoft/aspire.dev/pull/1447",
+            EXPECTED_SOURCE_PR_NUMBER,
+        )
+
+        self.assertFalse(outcome["allow_comment"])
+        self.assertFalse(outcome["allow_sme_review"])
+
+    def test_skipped_create_request_allows_only_generic_warning(self) -> None:
+        contradictory_payload = payload()
+        contradictory_payload["items"].append(create_pull_request_item())
+
+        outcome = build_side_effect_outcome(
+            contradictory_payload,
+            "",
+            EXPECTED_SOURCE_PR_NUMBER,
+        )
+
+        self.assertTrue(outcome["allow_comment"])
+        self.assertFalse(outcome["allow_sme_review"])
+        self.assertEqual("invalid", outcome["render_kind"])
+
+    def test_draft_failed_with_created_pr_allows_only_generic_warning(self) -> None:
+        outcome = build_side_effect_outcome(
+            payload("draft_failed"),
+            "https://github.com/microsoft/aspire.dev/pull/1447",
+            EXPECTED_SOURCE_PR_NUMBER,
+        )
+
+        self.assertTrue(outcome["allow_comment"])
+        self.assertFalse(outcome["allow_sme_review"])
+        self.assertEqual("invalid", outcome["render_kind"])
 
 
 class ValidatorCliTests(unittest.TestCase):

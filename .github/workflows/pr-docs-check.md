@@ -258,6 +258,21 @@ safe-outputs:
           required: true
           type: string
       steps:
+        - name: Check out outcome validator
+          uses: actions/checkout@v4
+          with:
+            path: _validator
+            sparse-checkout: .github/workflows/pr-docs-check/validate_outcome.py
+            sparse-checkout-cone-mode: false
+        - name: Prepare trusted documentation outcome
+          env:
+            CREATED_PR_URL: ${{ needs.safe_outputs.outputs.created_pr_url }}
+          run: >-
+            python _validator/.github/workflows/pr-docs-check/validate_outcome.py
+            --agent-output "${GH_AW_AGENT_OUTPUT}"
+            --created-pr-url "${CREATED_PR_URL}"
+            --github-event-path "${GITHUB_EVENT_PATH}"
+            --write-side-effect-outcome "${RUNNER_TEMP}/pr-docs-check-side-effect-outcome.json"
         - name: Mint aspire-bot token (microsoft/aspire)
           id: aspire-token
           uses: actions/create-github-app-token@v3.1.1
@@ -278,6 +293,7 @@ safe-outputs:
         - name: Post status comment on source PR
           uses: actions/github-script@v9
           env:
+            CANONICAL_OUTCOME_PATH: ${{ runner.temp }}/pr-docs-check-side-effect-outcome.json
             DRAFT_PR_URL: ${{ needs.safe_outputs.outputs.created_pr_url }}
             DRAFT_PR_NUMBER: ${{ needs.safe_outputs.outputs.created_pr_number }}
           with:
@@ -287,81 +303,38 @@ safe-outputs:
               const MARKER = '<!-- pr-docs-check:notify-source-pr -->';
               const SUMMARY_MAX = 2000;
 
-              const outputPath = process.env.GH_AW_AGENT_OUTPUT;
+              const outputPath = process.env.CANONICAL_OUTCOME_PATH;
               if (!outputPath || !fs.existsSync(outputPath)) {
-                core.warning(`Agent output file not found at ${outputPath}; skipping comment.`);
+                core.warning(`Canonical outcome file not found at ${outputPath}; skipping comment.`);
                 return;
               }
 
-              let payload;
+              let outcome;
               try {
-                payload = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
+                outcome = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
               } catch (e) {
-                core.warning(`Failed to parse agent output: ${e.message}`);
+                core.warning(`Failed to parse canonical outcome: ${e.message}`);
                 return;
               }
-              const items = (payload && Array.isArray(payload.items)) ? payload.items : [];
-              const notifications = items.filter(i => i && i.type === 'notify_source_pr');
-              const item = notifications[0] || {};
-
-              // GITHUB_EVENT_PATH contains a trusted event payload in one of these shapes:
-              //   pull_request:     { "pull_request": { "number": 18868 } }
-              //   workflow_dispatch: { "inputs": { "pr_number": "18868" } }
-              // Read it directly because custom safe-job env expressions do not reliably
-              // preserve workflow context.
-              const eventPath = process.env.GITHUB_EVENT_PATH;
-              if (!eventPath || !fs.existsSync(eventPath)) {
-                core.warning(`Workflow event payload not found at ${eventPath}; skipping comment.`);
+              if (!outcome.allow_comment) {
+                core.warning(`Canonical outcome rejected source comment: ${outcome.diagnostic || 'unknown reason'}`);
                 return;
               }
 
-              let event;
-              try {
-                event = JSON.parse(fs.readFileSync(eventPath, 'utf8'));
-              } catch (e) {
-                core.warning(`Failed to parse workflow event payload: ${e.message}; skipping comment.`);
-                return;
-              }
-
-              const rawExpectedNumber = event?.pull_request?.number ?? event?.inputs?.pr_number;
-              const expectedNumber = typeof rawExpectedNumber === 'string' && /^[1-9]\d*$/.test(rawExpectedNumber.trim())
-                ? Number(rawExpectedNumber.trim())
-                : rawExpectedNumber;
-              if (!Number.isInteger(expectedNumber) || expectedNumber <= 0 || expectedNumber > 10_000_000) {
-                core.warning(`Invalid triggering source PR number: ${rawExpectedNumber}; skipping comment.`);
-                return;
-              }
-
-              if (notifications.length === 1) {
-                // An invalid or mismatched agent association is a trust-boundary violation.
-                // The validator fails the workflow; this notifier intentionally does not post.
-                const agentNumber = item.source_pr_number;
-                if (!Number.isInteger(agentNumber) || agentNumber <= 0 || agentNumber > 10_000_000) {
-                  core.warning(`Invalid source_pr_number from agent: ${item.source_pr_number}; skipping comment.`);
-                  return;
-                }
-                if (agentNumber !== expectedNumber) {
-                  core.warning(
-                    `Agent source_pr_number ${agentNumber} does not match triggering source PR ${expectedNumber}; skipping comment.`
-                  );
-                  return;
-                }
-              }
-              const sourcePrNumber = expectedNumber;
-
-              const result = (item.result || '').toString().trim().toLowerCase();
-              const targetBranch = (item.target_branch || '').toString().trim();
+              const sourcePrNumber = outcome.source_pr_number;
+              const renderKind = (outcome.render_kind || '').toString();
+              const targetBranch = (outcome.target_branch || '').toString().trim();
               const draftUrl = (process.env.DRAFT_PR_URL || '').trim();
               const draftNumber = (process.env.DRAFT_PR_NUMBER || '').trim();
 
               // Bound the agent-supplied summary so a malformed item can't blow up the comment.
-              let summary = (item.summary || '').toString().trim();
+              let summary = (outcome.summary || '').toString().trim();
               if (summary.length > SUMMARY_MAX) {
                 summary = summary.slice(0, SUMMARY_MAX) + '\n\n_(summary truncated)_';
               }
 
               let body;
-              if (notifications.length === 1 && result === 'drafted' && draftUrl) {
+              if (renderKind === 'drafted') {
                 const branchSuffix = targetBranch ? ` targeting \`${targetBranch}\`` : '';
                 const numberDisplay = draftNumber || '?';
                 body = [
@@ -373,7 +346,7 @@ safe-outputs:
                   '> [!NOTE]',
                   '> This draft PR needs human review before merging.'
                 ].join('\n');
-              } else if (notifications.length === 1 && result === 'drafted') {
+              } else if (renderKind === 'drafted_missing_pr') {
                 // Agent intended to draft a PR but the safe-outputs handler did not produce
                 // a created_pr_url. Surface this as a failure rather than a "skipped" result.
                 body = [
@@ -384,7 +357,7 @@ safe-outputs:
                   '',
                   summary
                 ].join('\n');
-              } else if (notifications.length === 1 && result === 'draft_failed' && !draftUrl) {
+              } else if (renderKind === 'draft_failed') {
                 // Step 5 determined docs WERE required, but Step 10 could not
                 // produce a docs PR (e.g. a base-branch/validation error, a
                 // protected-file rejection, or an empty/invalid patch). This is
@@ -400,7 +373,7 @@ safe-outputs:
                   '',
                   `See the workflow run for details: ${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
                 ].join('\n');
-              } else if (notifications.length === 1 && result === 'skipped' && !draftUrl) {
+              } else if (renderKind === 'skipped') {
                 body = [
                   MARKER,
                   '✅ No documentation update needed.',
@@ -450,36 +423,35 @@ safe-outputs:
                 issue_number: sourcePrNumber,
                 body,
               });
-              core.info(`Posted ${result || 'unknown'} comment on microsoft/aspire#${sourcePrNumber}`);
+              core.info(`Posted ${renderKind || 'unknown'} comment on microsoft/aspire#${sourcePrNumber}`);
         - name: Request SME review on draft PR
           if: needs.safe_outputs.outputs.created_pr_url != ''
           uses: actions/github-script@v9
           env:
+            CANONICAL_OUTCOME_PATH: ${{ runner.temp }}/pr-docs-check-side-effect-outcome.json
             DRAFT_PR_NUMBER: ${{ needs.safe_outputs.outputs.created_pr_number }}
           with:
             github-token: ${{ steps.aspire-dev-token.outputs.token }}
             script: |
               const fs = require('fs');
 
-              const outputPath = process.env.GH_AW_AGENT_OUTPUT;
+              const outputPath = process.env.CANONICAL_OUTCOME_PATH;
               if (!outputPath || !fs.existsSync(outputPath)) {
-                core.info('Agent output file not found; skipping reviewer request.');
+                core.info('Canonical outcome file not found; skipping reviewer request.');
                 return;
               }
-              let payload;
+              let outcome;
               try {
-                payload = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
+                outcome = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
               } catch (e) {
-                core.warning(`Failed to parse agent output: ${e.message}`);
+                core.warning(`Failed to parse canonical outcome: ${e.message}`);
                 return;
               }
-              const items = (payload && Array.isArray(payload.items)) ? payload.items : [];
-              const item = items.find(i => i && i.type === 'notify_source_pr');
-              if (!item) {
-                core.info('No notify_source_pr item; skipping reviewer request.');
+              if (!outcome.allow_sme_review) {
+                core.info(`Canonical outcome rejected SME review: ${outcome.diagnostic || 'outcome is not a confirmed draft'}`);
                 return;
               }
-              const sme = (item.sme_login || '').toString().trim().replace(/^@/, '');
+              const sme = (outcome.sme_login || '').toString().trim().replace(/^@/, '');
               if (!sme) {
                 core.info('No SME login provided; leaving draft PR without an explicit reviewer.');
                 return;
