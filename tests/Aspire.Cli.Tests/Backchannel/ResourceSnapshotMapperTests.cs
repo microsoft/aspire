@@ -331,6 +331,34 @@ public class ResourceSnapshotMapperTests
     }
 
     [Fact]
+    public void MapToResourceJson_PreservesProjectTargetNameProperty()
+    {
+        // The CLI/backchannel property bag is a pass-through, so the build-time project.targetName
+        // contract reaches `aspire describe` without any mapper-specific handling.
+        var resource = new ResourceSnapshot
+        {
+            Name = "frontend",
+            DisplayName = "frontend",
+            ResourceType = "Project",
+            State = "Running",
+            Properties = new Dictionary<string, JsonNode?>
+            {
+                ["project.path"] = JsonValue.Create("/repo/Worker/Worker.csproj"),
+                ["project.targetName"] = JsonValue.Create("My Attach Service")
+            }
+        };
+
+        var result = ResourceSnapshotMapper.MapToResourceJson(resource, [resource]);
+
+        Assert.NotNull(result.Properties);
+        Assert.Equal("My Attach Service", result.Properties["project.targetName"]?.GetValue<string>());
+
+        var json = JsonSerializer.Serialize(result, ResourcesCommandJsonContext.RelaxedEscaping.ResourceJson);
+        using var document = JsonDocument.Parse(json);
+        Assert.Equal("My Attach Service", document.RootElement.GetProperty("properties").GetProperty("project.targetName").GetString());
+    }
+
+    [Fact]
     public void MapToResourceJson_MapsListPropertiesAsJsonArrays()
     {
         var resource = new ResourceSnapshot

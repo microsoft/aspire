@@ -148,6 +148,11 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
                     <!-- Properties for in-repo building -->
                     <RepoRoot>{_repoRoot}</RepoRoot>
                     <SkipValidateAspireHostProjectResources>true</SkipValidateAspireHostProjectResources>
+                    <!-- The ProjectReferences below are Aspire.Hosting.* libraries, not app resources anyone
+                         attaches a debugger to, so probing each one for an evaluated TargetName is pure cost.
+                         Skipping also keeps this real build from failing on a reference the probe cannot
+                         evaluate, the same reasoning as SkipValidateAspireHostProjectResources above. -->
+                    <SkipAspireProjectResourceTargetName>true</SkipAspireProjectResourceTargetName>
                     <SkipAddAspireDefaultReferences>true</SkipAddAspireDefaultReferences>
                     <SkipAspireIntegrationAnalyzersReference>true</SkipAspireIntegrationAnalyzersReference>
                     <AspireHostingSDKVersion>42.42.42</AspireHostingSDKVersion>

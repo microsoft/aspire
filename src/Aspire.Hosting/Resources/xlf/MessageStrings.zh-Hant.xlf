@@ -132,6 +132,11 @@
         <target state="new">Project path</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourcePropertyProjectTargetNameDisplayName">
+        <source>Target name</source>
+        <target state="new">Target name</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourcePropertyToolPackageDisplayName">
         <source>Tool package</source>
         <target state="new">Tool package</target>

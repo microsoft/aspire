@@ -23,6 +23,7 @@ public class KnownPropertyLookupTests
     [Theory]
     [InlineData(KnownProperties.Project.Path)]
     [InlineData(KnownProperties.Project.LaunchProfile)]
+    [InlineData(KnownProperties.Project.TargetName)]
     [InlineData(KnownProperties.Executable.Path)]
     [InlineData(KnownProperties.Executable.WorkDir)]
     [InlineData(KnownProperties.Executable.Args)]

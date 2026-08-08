@@ -79,6 +79,12 @@
     <trans-unit id="extension.debug.defaultConfiguration.name">
       <source xml:lang="en">Aspire: Launch default AppHost</source>
     </trans-unit>
+    <trans-unit id="command.attachDebuggerToResource">
+      <source xml:lang="en">Attach debugger</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.attachDebuggerConfigurationName">
+      <source xml:lang="en">Attach debugger: {0}</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.unsupportedResourceType">
       <source xml:lang="en">Attempted to start unsupported resource type: {0}.</source>
     </trans-unit>
@@ -174,6 +180,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostSourceNotFound">
       <source xml:lang="en">Could not determine the AppHost source file to open.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.attachDebuggerProcessNameUnresolved">
+      <source xml:lang="en">Could not determine the process to attach to for {0}: {1}. Check that the project can be evaluated by MSBuild, or start the debugger and attach manually.</source>
     </trans-unit>
     <trans-unit id="walkthrough.getStarted.createProject.title">
       <source xml:lang="en">Create a new project</source>
@@ -360,6 +369,9 @@
     </trans-unit>
     <trans-unit id="walkthrough.getStarted.installCli.title">
       <source xml:lang="en">Install the Aspire CLI</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.attachDebuggerCsharpExtensionRequired">
+      <source xml:lang="en">Install the C# extension to attach the debugger to .NET project resources.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.invalidLaunchConfiguration">
       <source xml:lang="en">Invalid launch configuration for {0}.</source>
@@ -727,6 +739,9 @@
     <trans-unit id="extension.debug.step">
       <source xml:lang="en">The pipeline step name to execute when command is &apos;do&apos;</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.attachDebuggerResourceNotFound">
+      <source xml:lang="en">The selected resource is no longer available. Refresh the Aspire pane and try again.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.resourceCommandDynamicInputsUnsupported">
       <source xml:lang="en">This command has dynamic inputs that the Aspire extension cannot prompt for yet. Run it from the Aspire Dashboard or Aspire CLI instead.</source>
     </trans-unit>
@@ -735,6 +750,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.fieldRequired">
       <source xml:lang="en">This field is required.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.attachDebuggerUnavailable">
+      <source xml:lang="en">This resource is not a running .NET project resource that can be attached with the C# debugger.</source>
     </trans-unit>
     <trans-unit id="configuration.aspire.globalAppHostsPollingInterval.deprecated">
       <source xml:lang="en">This setting has been renamed to aspire.appHostsPollingInterval.</source>
@@ -765,6 +783,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.startDebuggingDeclined">
       <source xml:lang="en">VS Code did not start the Aspire {0} session for {1}.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.attachDebuggerDeclined">
+      <source xml:lang="en">VS Code did not start the debugger attach session for {0}.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.parameterValueMissing">
       <source xml:lang="en">Value missing</source>

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { extensionLogOutputChannel } from '../../utils/logging';
-import { noCsharpBuildTask, buildFailedWithExitCode, noOutputFromMsbuild, failedToGetTargetPath, invalidLaunchConfiguration, buildFailedForProjectWithError, processExitedWithCode, lookingForDevkitBuildTask, csharpDevKitNotInstalled, failedToInspectRuntimeConfig, dotNetRunFallbackDisablesDebugger, dotNetRunFileBasedExecutableProfileFallback, executableLaunchProfileMissingExecutablePath } from '../../loc/strings';
+import { noCsharpBuildTask, buildFailedWithExitCode, noOutputFromMsbuild, failedToGetTargetPath, invalidLaunchConfiguration, buildFailedForProjectWithError, processExitedWithCode, lookingForDevkitBuildTask, csharpDevKitNotInstalled, failedToInspectRuntimeConfig, dotNetRunFallbackDisablesDebugger, dotNetRunFileBasedExecutableProfileFallback, executableLaunchProfileMissingExecutablePath, attachDebuggerConfigurationName, attachDebuggerProcessNameUnresolved } from '../../loc/strings';
 import { ChildProcessWithoutNullStreams, execFile, spawn } from 'child_process';
 import * as util from 'util';
 import * as path from 'path';
@@ -9,7 +9,7 @@ import * as os from 'os';
 import * as fs from 'fs';
 import { doesFileExist } from '../../utils/io';
 import { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration, isProjectLaunchConfiguration, ProjectLaunchConfiguration } from '../../dcp/types';
-import { ResourceDebuggerExtension } from '../debuggerExtensions';
+import { AttachDebuggerConfigurationError, DebuggableResourceSnapshot, ResourceDebuggerExtension } from '../debuggerExtensions';
 import {
     readLaunchSettings,
     determineBaseLaunchProfile,
@@ -32,17 +32,32 @@ interface IDotNetService {
     getDotNetRunApiOutput(projectFile: string, environment?: NodeJS.ProcessEnv): Promise<string>;
 }
 
-export class DotNetService implements IDotNetService {
-    private _debugSession: AspireDebugSession;
+interface DotNetAttachDebuggerResourceInfo {
+    projectPath: string;
+    resourceLabel: string;
+    reportedTargetName: string | undefined;
+}
 
-    constructor(debugSession: AspireDebugSession) {
+const executablePidPropertyName = 'executable.pid';
+const executablePathPropertyName = 'executable.path';
+const projectPathPropertyName = 'project.path';
+// Well-known snapshot property added by the AppHost SDK target-name contract.
+// It carries the MSBuild-evaluated `TargetName`, which is the process name the C# debugger attaches to.
+const projectTargetNamePropertyName = 'project.targetName';
+const resourceParentNamePropertyName = 'resource.parentName';
+const dotNetProjectFileExtensions = new Set(['.csproj', '.fsproj', '.vbproj']);
+
+export class DotNetService implements IDotNetService {
+    private _debugSession: AspireDebugSession | undefined;
+
+    constructor(debugSession: AspireDebugSession | undefined) {
         this._debugSession = debugSession;
     }
 
     execFileAsync = util.promisify(execFile);
 
     writeToDebugConsole(message: string, category: 'stdout' | 'stderr', addNewLine: boolean = false): void {
-        this._debugSession.sendMessage(message, addNewLine, category);
+        this._debugSession?.sendMessage(message, addNewLine, category);
     }
 
     async getAndActivateDevKit(): Promise<boolean> {
@@ -391,7 +406,117 @@ function configureDotNetRunDebugConfiguration(
     ));
 }
 
-export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSession: AspireDebugSession) => IDotNetService): ResourceDebuggerExtension {
+function getDotNetAttachDebuggerResourceInfo(resource: DebuggableResourceSnapshot): DotNetAttachDebuggerResourceInfo | undefined {
+    if (resource.resourceType !== 'Project' || resource.state !== 'Running' || getResourceParentName(resource) !== null) {
+        return undefined;
+    }
+
+    if (getAttachDebuggerProcessId(resource) === undefined) {
+        return undefined;
+    }
+
+    if (!isDotNetExecutable(resource)) {
+        return undefined;
+    }
+
+    const projectPath: unknown = resource.properties?.[projectPathPropertyName];
+    if (typeof projectPath !== 'string' || projectPath.trim().length === 0) {
+        return undefined;
+    }
+
+    if (!dotNetProjectFileExtensions.has(path.extname(projectPath).toLowerCase())) {
+        return undefined;
+    }
+
+    return {
+        projectPath,
+        resourceLabel: resource.displayName ?? resource.name,
+        reportedTargetName: getReportedTargetName(resource),
+    };
+}
+
+function getResourceParentName(resource: DebuggableResourceSnapshot): string | null {
+    const value: unknown = resource.properties?.[resourceParentNamePropertyName];
+    return typeof value === 'string' ? value : null;
+}
+
+function getReportedTargetName(resource: DebuggableResourceSnapshot): string | undefined {
+    const value: unknown = resource.properties?.[projectTargetNamePropertyName];
+    if (typeof value !== 'string') {
+        return undefined;
+    }
+
+    const targetName = value.trim();
+    return targetName.length > 0 ? targetName : undefined;
+}
+
+function getAttachDebuggerProcessId(resource: DebuggableResourceSnapshot): number | undefined {
+    const value: unknown = resource.properties?.[executablePidPropertyName];
+    if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
+        return value;
+    }
+
+    if (typeof value !== 'string') {
+        return undefined;
+    }
+
+    const processId = Number(value);
+    if (!Number.isInteger(processId) || processId <= 0) {
+        return undefined;
+    }
+
+    return processId;
+}
+
+function isDotNetExecutable(resource: DebuggableResourceSnapshot): boolean {
+    const executablePath: unknown = resource.properties?.[executablePathPropertyName];
+    if (typeof executablePath !== 'string') {
+        return false;
+    }
+
+    const executableName = executablePath.split(/[\\/]/).pop()?.toLowerCase();
+    return executableName === 'dotnet' || executableName === 'dotnet.exe';
+}
+
+async function createDotNetAttachDebugSessionConfiguration(resource: DebuggableResourceSnapshot, dotNetService: IDotNetService): Promise<vscode.DebugConfiguration> {
+    const attachInfo = getDotNetAttachDebuggerResourceInfo(resource);
+    if (!attachInfo) {
+        throw new AttachDebuggerConfigurationError('ResourceNotAttachable', invalidLaunchConfiguration(JSON.stringify(resource)));
+    }
+
+    let processName = attachInfo.reportedTargetName;
+    if (processName === undefined) {
+        processName = await getProcessNameFromTargetPath(attachInfo.projectPath, attachInfo.resourceLabel, dotNetService);
+    }
+
+    return {
+        type: 'coreclr',
+        request: 'attach',
+        name: attachDebuggerConfigurationName(attachInfo.resourceLabel),
+        processName,
+    };
+}
+
+async function getProcessNameFromTargetPath(projectPath: string, resourceLabel: string, dotNetService: IDotNetService): Promise<string> {
+    try {
+        const targetPath = await dotNetService.getDotNetTargetPath(projectPath);
+        const fileName = targetPath.trim().split(/[\\/]/).pop() ?? '';
+        const processName = fileName.replace(/\.(dll|exe)$/i, '');
+        if (processName.length === 0) {
+            throw new Error(noOutputFromMsbuild);
+        }
+
+        return processName;
+    } catch (error) {
+        throw new AttachDebuggerConfigurationError('ProcessNameUnresolved', attachDebuggerProcessNameUnresolved(resourceLabel, getErrorMessage(error)));
+    }
+}
+
+function getErrorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+}
+
+export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSession: AspireDebugSession | undefined) => IDotNetService): ResourceDebuggerExtension {
     return {
         resourceType: 'project',
         debugAdapter: 'coreclr',
@@ -404,6 +529,10 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
             }
 
             throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
+        },
+        canAttachToResource: (resource) => getDotNetAttachDebuggerResourceInfo(resource) !== undefined,
+        createAttachDebugSessionConfigurationCallback: async (resource): Promise<vscode.DebugConfiguration> => {
+            return await createDotNetAttachDebugSessionConfiguration(resource, dotNetServiceProducer(undefined));
         },
         createDebugSessionConfigurationCallback: async (launchConfig, args, env, launchOptions, debugConfiguration: AspireResourceExtendedDebugConfiguration): Promise<void> => {
             if (!isProjectLaunchConfiguration(launchConfig)) {

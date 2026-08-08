@@ -50,6 +50,7 @@ internal static class ResourcePropertySnapshotMetadata
             (KnownResourceTypes.Project, KnownProperties.Project.Path) => (ResourcePropertyProjectPathDisplayName, true, 0),
             (KnownResourceTypes.Project, KnownProperties.Project.LaunchProfile) => (ResourcePropertyProjectLaunchProfileDisplayName, true, 1),
             (KnownResourceTypes.Project, KnownProperties.Executable.Pid) => (ResourcePropertyExecutableProcessIdDisplayName, true, 2),
+            (KnownResourceTypes.Project, KnownProperties.Project.TargetName) => (ResourcePropertyProjectTargetNameDisplayName, true, 3),
             _ => (null, false, null)
         };
     }

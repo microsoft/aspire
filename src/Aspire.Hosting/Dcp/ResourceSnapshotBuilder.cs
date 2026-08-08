@@ -131,6 +131,7 @@ internal class ResourceSnapshotBuilder
     public CustomResourceSnapshot ToSnapshot(Executable executable, CustomResourceSnapshot previous)
     {
         string? projectPath = null;
+        string? projectTargetName = null;
         string? launchProfileName = null;
         IResource? appModelResource = null;
 
@@ -139,13 +140,16 @@ internal class ResourceSnapshotBuilder
         {
             if (appModelResource is ProjectResource projectResource)
             {
-                projectPath = projectResource.GetProjectMetadata().ProjectPath;
+                var metadata = projectResource.GetProjectMetadata();
+                projectPath = metadata.ProjectPath;
+                projectTargetName = metadata.TargetName;
                 launchProfileName = projectResource.GetEffectiveLaunchProfile()?.Name;
             }
             else if (appModelResource.TryGetProjectMetadata(out var projectMetadata))
             {
                 // New-style, annotation-based C# service (DotnetProjectResource)
                 projectPath = projectMetadata.ProjectPath;
+                projectTargetName = projectMetadata.TargetName;
                 launchProfileName = appModelResource.GetEffectiveLaunchProfile()?.Name;
             }
         }
@@ -171,21 +175,40 @@ internal class ResourceSnapshotBuilder
 
         if (projectPath is not null)
         {
+            List<ResourcePropertySnapshot> projectProperties = [
+                ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Executable.Path, executable.Spec.ExecutablePath),
+                ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Executable.WorkDir, executable.Spec.WorkingDirectory),
+                ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Executable.Args, effectiveArgs ?? [], isSensitive: true),
+                ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Executable.Pid, executable.Status?.ProcessId),
+                ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Project.Path, projectPath),
+                ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Project.LaunchProfile, launchProfileName),
+                new(KnownProperties.Resource.AppArgs, launchArguments?.Args) { IsSensitive = launchArguments?.IsSensitive ?? false },
+                new(KnownProperties.Resource.AppArgsSensitivity, launchArguments?.ArgsAreSensitive) { IsSensitive = launchArguments?.IsSensitive ?? false },
+            ];
+
+            // The target name is only known when the AppHost build baked it into the generated project metadata.
+            // Its absence - not a null or empty value - is the capability signal consumers use to decide whether the
+            // evaluated target name can be relied on, so nothing is written when it could not be resolved.
+            var previousProperties = previous.Properties;
+            if (!string.IsNullOrWhiteSpace(projectTargetName))
+            {
+                projectProperties.Add(ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Project.TargetName, projectTargetName));
+            }
+            else
+            {
+                // Snapshots are merged into the previously published one and SetResourcePropertyRange only adds or
+                // replaces, so simply omitting the property would leave an earlier value in place. That stale value
+                // would read as "the target name is available" and defeat the absence-is-the-signal contract, so
+                // the property has to be removed explicitly.
+                previousProperties = previousProperties.RemoveResourceProperty(KnownProperties.Project.TargetName);
+            }
+
             return previous with
             {
                 ResourceType = previous.ResourceType ?? KnownResourceTypes.Project,
                 State = state,
                 ExitCode = executable.Status?.ExitCode,
-                Properties = previous.Properties.SetResourcePropertyRange([
-                    ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Executable.Path, executable.Spec.ExecutablePath),
-                    ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Executable.WorkDir, executable.Spec.WorkingDirectory),
-                    ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Executable.Args, effectiveArgs ?? [], isSensitive: true),
-                    ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Executable.Pid, executable.Status?.ProcessId),
-                    ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Project.Path, projectPath),
-                    ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Project.LaunchProfile, launchProfileName),
-                    new(KnownProperties.Resource.AppArgs, launchArguments?.Args) { IsSensitive = launchArguments?.IsSensitive ?? false },
-                    new(KnownProperties.Resource.AppArgsSensitivity, launchArguments?.ArgsAreSensitive) { IsSensitive = launchArguments?.IsSensitive ?? false },
-                ]),
+                Properties = previousProperties.SetResourcePropertyRange([.. projectProperties]),
                 EnvironmentVariables = environment,
                 CreationTimeStamp = executable.Metadata.CreationTimestamp?.ToUniversalTime(),
                 StartTimeStamp = executable.Status?.StartupTimestamp?.ToUniversalTime(),

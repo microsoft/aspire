@@ -1,4 +1,5 @@
 import path from "path";
+import * as vscode from "vscode";
 import { ExecutableLaunchConfiguration, EnvVar, LaunchOptions, AspireResourceExtendedDebugConfiguration, AspireExtendedDebugConfiguration, AspireResourceDebugSession } from "../dcp/types";
 import { debugProject, runProject } from "../loc/strings";
 import { getEnvironmentWithoutE2EBridgeVariables, mergeEnvs } from "../utils/environment";
@@ -15,6 +16,23 @@ import { mauiDebuggerExtension } from "./languages/maui";
 import { isDirectory } from "../utils/io";
 import { waitForRunStartIdle } from "./runStartRegistry";
 
+export interface DebuggableResourceSnapshot {
+    name: string;
+    displayName: string | null;
+    resourceType: string;
+    state: string | null;
+    properties: Record<string, unknown> | null;
+}
+
+export type AttachDebuggerConfigurationErrorKind = 'ResourceNotAttachable' | 'ProcessNameUnresolved';
+
+export class AttachDebuggerConfigurationError extends Error {
+    constructor(public readonly errorKind: AttachDebuggerConfigurationErrorKind, message: string) {
+        super(message);
+        this.name = 'AttachDebuggerConfigurationError';
+    }
+}
+
 // Represents a resource-specific debugger extension for when the default session configuration is not sufficient to launch the resource.
 export interface ResourceDebuggerExtension {
     resourceType: string;
@@ -24,6 +42,8 @@ export interface ResourceDebuggerExtension {
     getProjectFile: (launchConfig: ExecutableLaunchConfiguration) => string;
     getSupportedFileTypes: () => string[];
     createDebugSessionConfigurationCallback?: (launchConfig: ExecutableLaunchConfiguration, args: string[] | undefined, env: EnvVar[], launchOptions: LaunchOptions, debugConfiguration: AspireResourceExtendedDebugConfiguration) => Promise<AlreadyStartedResourceDebugSession | void>;
+    canAttachToResource?: (resource: DebuggableResourceSnapshot) => boolean;
+    createAttachDebugSessionConfigurationCallback?: (resource: DebuggableResourceSnapshot) => Promise<vscode.DebugConfiguration>;
 }
 
 export interface AlreadyStartedResourceDebugSession extends AspireResourceDebugSession {
@@ -87,6 +107,43 @@ export async function prepareDebugSession(debugSessionConfig: AspireExtendedDebu
         debugConfiguration: configuration,
         alreadyStartedSession
     };
+}
+
+export async function createAttachDebugSessionConfiguration(resource: DebuggableResourceSnapshot, debuggerExtension: ResourceDebuggerExtension): Promise<vscode.DebugConfiguration> {
+    if (!debuggerExtension.createAttachDebugSessionConfigurationCallback) {
+        throw new AttachDebuggerConfigurationError('ResourceNotAttachable', `Resource type '${resource.resourceType}' does not support debugger attach.`);
+    }
+
+    return await debuggerExtension.createAttachDebugSessionConfigurationCallback(resource);
+}
+
+export function getAttachDebuggerExtensionForResource(resource: DebuggableResourceSnapshot): ResourceDebuggerExtension | undefined {
+    return getResourceDebuggerExtensions().find(extension => extension.canAttachToResource?.(resource) === true);
+}
+
+export function getMissingAttachDebuggerExtensionForResource(resource: DebuggableResourceSnapshot): ResourceDebuggerExtension | undefined {
+    if (getAttachDebuggerExtensionForResource(resource)) {
+        return undefined;
+    }
+
+    return getKnownAttachDebuggerExtensionForResource(resource);
+}
+
+export function getKnownAttachDebuggerExtensionForResource(resource: DebuggableResourceSnapshot): ResourceDebuggerExtension | undefined {
+    return getKnownResourceDebuggerExtensions().find(extension => extension.canAttachToResource?.(resource) === true);
+}
+
+function getKnownResourceDebuggerExtensions(): ResourceDebuggerExtension[] {
+    return [
+        projectDebuggerExtension,
+        azureFunctionsDebuggerExtension,
+        pythonDebuggerExtension,
+        goDebuggerExtension,
+        nodeDebuggerExtension,
+        browserDebuggerExtension,
+        bunDebuggerExtension,
+        mauiDebuggerExtension,
+    ];
 }
 
 export function getResourceDebuggerExtensions(): ResourceDebuggerExtension[] {

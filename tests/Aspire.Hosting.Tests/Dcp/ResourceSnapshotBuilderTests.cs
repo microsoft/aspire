@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Immutable;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
@@ -82,6 +83,163 @@ public class ResourceSnapshotBuilderTests
         AssertHighlightedProperty(snapshot, KnownProperties.Project.Path, "Project path", isSensitive: false, sortOrder: 0);
         AssertHighlightedProperty(snapshot, KnownProperties.Project.LaunchProfile, "Launch profile", isSensitive: false, sortOrder: 1);
         AssertHighlightedProperty(snapshot, KnownProperties.Executable.Pid, "Process ID", isSensitive: false, sortOrder: 2);
+    }
+
+    [Fact]
+    public void ProjectSnapshotAddsTargetNameWhenProjectMetadataSuppliesIt()
+    {
+        var project = new ProjectResource("project");
+        project.Annotations.Add(new TestProjectMetadata { TargetName = "My Attach Service" });
+        project.Annotations.Add(new LaunchProfileAnnotation("https"));
+
+        var executable = Executable.Create("project", "dotnet");
+        executable.Annotate(DcpCustomResource.ResourceNameAnnotation, project.Name);
+        executable.Status = new ExecutableStatus
+        {
+            EffectiveArgs = ["run"],
+            ProcessId = 1234
+        };
+
+        var snapshot = CreateSnapshotBuilder(new Dictionary<string, IResource>
+        {
+            [project.Name] = project
+        }).ToSnapshot(executable, CreatePreviousSnapshot());
+
+        AssertHighlightedProperty(snapshot, KnownProperties.Project.TargetName, "Target name", isSensitive: false, sortOrder: 3);
+        Assert.Equal("My Attach Service", GetProperty(snapshot, KnownProperties.Project.TargetName).Value);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void ProjectSnapshotOmitsTargetNameWhenProjectMetadataDoesNotSupplyIt(string? targetName)
+    {
+        var project = new ProjectResource("project");
+        project.Annotations.Add(new TestProjectMetadata { TargetName = targetName });
+        project.Annotations.Add(new LaunchProfileAnnotation("https"));
+
+        var executable = Executable.Create("project", "dotnet");
+        executable.Annotate(DcpCustomResource.ResourceNameAnnotation, project.Name);
+        executable.Status = new ExecutableStatus
+        {
+            EffectiveArgs = ["run"],
+            ProcessId = 1234
+        };
+
+        var snapshot = CreateSnapshotBuilder(new Dictionary<string, IResource>
+        {
+            [project.Name] = project
+        }).ToSnapshot(executable, CreatePreviousSnapshot());
+
+        // Assert the complete property set rather than the absence of one name, so that a future property added
+        // to the project branch has to be acknowledged here instead of silently slipping through.
+        Assert.Equal(
+            [
+                KnownProperties.Executable.Args,
+                KnownProperties.Executable.Path,
+                KnownProperties.Executable.Pid,
+                KnownProperties.Executable.WorkDir,
+                KnownProperties.Project.LaunchProfile,
+                KnownProperties.Project.Path,
+                KnownProperties.Resource.AppArgs,
+                KnownProperties.Resource.AppArgsSensitivity,
+            ],
+            snapshot.Properties.Select(p => p.Name).Order(StringComparer.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void ProjectSnapshotRemovesStaleTargetNameWhenProjectMetadataNoLongerSuppliesIt(string? targetName)
+    {
+        var project = new ProjectResource("project");
+        project.Annotations.Add(new TestProjectMetadata { TargetName = targetName });
+        project.Annotations.Add(new LaunchProfileAnnotation("https"));
+
+        var executable = Executable.Create("project", "dotnet");
+        executable.Annotate(DcpCustomResource.ResourceNameAnnotation, project.Name);
+        executable.Status = new ExecutableStatus
+        {
+            EffectiveArgs = ["run"],
+            ProcessId = 1234
+        };
+
+        // Snapshots are merged into the previously published one, so a carried-forward target name has to be
+        // removed rather than just omitted. Absence is the capability signal, and a surviving stale value would
+        // tell consumers the evaluated target name is still available.
+        var previous = CreatePreviousSnapshot(properties: [new(KnownProperties.Project.TargetName, "Stale.Target.Name")]);
+
+        var snapshot = CreateSnapshotBuilder(new Dictionary<string, IResource>
+        {
+            [project.Name] = project
+        }).ToSnapshot(executable, previous);
+
+        Assert.Equal(
+            [
+                KnownProperties.Executable.Args,
+                KnownProperties.Executable.Path,
+                KnownProperties.Executable.Pid,
+                KnownProperties.Executable.WorkDir,
+                KnownProperties.Project.LaunchProfile,
+                KnownProperties.Project.Path,
+                KnownProperties.Resource.AppArgs,
+                KnownProperties.Resource.AppArgsSensitivity,
+            ],
+            snapshot.Properties.Select(p => p.Name).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void ProjectSnapshotReplacesStaleTargetNameWhenProjectMetadataStillSuppliesIt()
+    {
+        var project = new ProjectResource("project");
+        project.Annotations.Add(new TestProjectMetadata { TargetName = "My Attach Service" });
+        project.Annotations.Add(new LaunchProfileAnnotation("https"));
+
+        var executable = Executable.Create("project", "dotnet");
+        executable.Annotate(DcpCustomResource.ResourceNameAnnotation, project.Name);
+        executable.Status = new ExecutableStatus
+        {
+            EffectiveArgs = ["run"],
+            ProcessId = 1234
+        };
+
+        var previous = CreatePreviousSnapshot(properties: [new(KnownProperties.Project.TargetName, "Stale.Target.Name")]);
+
+        var snapshot = CreateSnapshotBuilder(new Dictionary<string, IResource>
+        {
+            [project.Name] = project
+        }).ToSnapshot(executable, previous);
+
+        Assert.Equal("My Attach Service", GetProperty(snapshot, KnownProperties.Project.TargetName).Value);
+    }
+
+    [Fact]
+    public void ExecutableSnapshotWithoutProjectMetadataOmitsTargetName()
+    {
+        var executable = Executable.Create("exe", "dotnet");
+        executable.Spec.WorkingDirectory = "/app";
+        executable.Status = new ExecutableStatus
+        {
+            EffectiveArgs = ["run"],
+            ProcessId = 1234
+        };
+
+        var snapshot = CreateSnapshotBuilder().ToSnapshot(executable, CreatePreviousSnapshot());
+
+        // An executable that is not a project resource never takes the project branch, so it gets the executable
+        // property set plus the shared resource properties, and no project properties at all.
+        Assert.Equal(
+            [
+                KnownProperties.Executable.Args,
+                KnownProperties.Executable.Path,
+                KnownProperties.Executable.Pid,
+                KnownProperties.Executable.WorkDir,
+                KnownProperties.Resource.AppArgs,
+                KnownProperties.Resource.AppArgsSensitivity,
+            ],
+            snapshot.Properties.Select(p => p.Name).Order(StringComparer.Ordinal));
     }
 
     [Fact]
@@ -252,12 +410,12 @@ public class ResourceSnapshotBuilderTests
         return new(new DcpResourceState(applicationModel ?? new Dictionary<string, IResource>(), []));
     }
 
-    private static CustomResourceSnapshot CreatePreviousSnapshot(string resourceType = "resource")
+    private static CustomResourceSnapshot CreatePreviousSnapshot(string resourceType = "resource", ImmutableArray<ResourcePropertySnapshot> properties = default)
     {
         return new()
         {
             ResourceType = resourceType,
-            Properties = []
+            Properties = properties.IsDefault ? [] : properties
         };
     }
 
@@ -293,6 +451,8 @@ public class ResourceSnapshotBuilderTests
     private sealed class TestProjectMetadata : IProjectMetadata
     {
         public string ProjectPath => "/app/project.csproj";
+
+        public string? TargetName { get; init; }
 
         public LaunchSettings LaunchSettings { get; } = new()
         {

@@ -43,6 +43,17 @@ public class App : global::Aspire.Hosting.IProjectMetadata
     public string ProjectPath => """{AspirePath}/App/App.csproj""";
 
     /// <summary>
+    /// The target name that the App project builds to.
+    /// </summary>
+    /// <remarks>
+    /// Evaluated by MSBuild when this AppHost was built, so it reflects any TargetName set by the project or
+    /// imported into it rather than the project file name.
+    /// </remarks>
+#nullable enable
+    public string? TargetName => @"App";
+#nullable restore
+
+    /// <summary>
     /// Gets a value indicating whether building the project before running it should be suppressed.
     /// </summary>
     /// <remarks>

@@ -113,6 +113,20 @@ suite('extension/package.json', () => {
         assertContains(openResourceTerminal?.when, 'viewItem =~ /^resource.*:canOpenTerminal/');
     });
 
+    test('attach debugger context action targets debuggable resources', () => {
+        const manifest = readManifest();
+        const commands = manifest.contributes.commands ?? [];
+        const contextMenus = manifest.contributes.menus?.['view/item/context'] ?? [];
+
+        const command = commands.find(item => item.command === 'aspire-vscode.attachDebuggerToResource');
+        const menuItem = contextMenus.find(item => item.command === 'aspire-vscode.attachDebuggerToResource');
+
+        assert.ok(command, 'Expected attach debugger command to be contributed');
+        assert.strictEqual(command.icon, '$(debug-alt)');
+        assertContains(menuItem?.when, 'view == aspire-vscode.appHosts');
+        assertContains(menuItem?.when, 'viewItem =~ /^resource.*:canAttachDebugger/');
+    });
+
     test('running apphost context actions only target running apphost contexts', () => {
         const manifest = readManifest();
         const contextMenus = manifest.contributes.menus?.['view/item/context'] ?? [];

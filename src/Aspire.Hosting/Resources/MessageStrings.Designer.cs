@@ -223,6 +223,15 @@ namespace Aspire.Hosting.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Target name.
+        /// </summary>
+        internal static string ResourcePropertyProjectTargetNameDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyProjectTargetNameDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Launch profile.
         /// </summary>
         internal static string ResourcePropertyProjectLaunchProfileDisplayName {

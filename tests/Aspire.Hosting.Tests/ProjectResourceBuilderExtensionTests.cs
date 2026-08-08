@@ -107,6 +107,27 @@ public class ProjectResourceBuilderExtensionTests
     }
 
     [Fact]
+    public void ProjectMetadataTargetNameDefaultsToNullForImplementationsThatDoNotSupplyIt()
+    {
+        // TargetName is a default interface member so metadata types that shipped before the
+        // build-time contract existed (external implementations, path-based and file-based apps)
+        // stay source and binary compatible.
+        IProjectMetadata metadata = new TestProject();
+
+        Assert.Null(metadata.TargetName);
+    }
+
+    [Fact]
+    public void ProjectMetadataTargetNameIsNullForPathBasedProjects()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var project = builder.AddProject("project", Path.Combine(AppContext.BaseDirectory, "project.csproj"), options => options.ExcludeLaunchProfile = true);
+
+        Assert.Null(project.Resource.GetProjectMetadata().TargetName);
+    }
+
+    [Fact]
     public void WithProjectDefaultsThrowsWhenResourceHasMultipleProjectMetadataAnnotations()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

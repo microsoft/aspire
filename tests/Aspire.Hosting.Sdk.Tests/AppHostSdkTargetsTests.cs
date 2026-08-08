@@ -93,6 +93,378 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ProjectMetadataUsesTargetNameImportedFromDirectoryBuildProps()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // The AssemblyName deliberately lives outside the project file. Reading the raw project XML
+        // would fall back to the file name ("Worker") and produce a process name that does not exist.
+        var generatedSource = await GenerateProjectMetadataSourceAsync(
+            workspace,
+            referencedProjectXml: """
+                  <PropertyGroup>
+                    <OutputType>Exe</OutputType>
+                    <TargetFramework>net8.0</TargetFramework>
+                  </PropertyGroup>
+                """,
+            referencedDirectoryBuildPropsXml: """
+                  <PropertyGroup>
+                    <AssemblyName>My Attach Service</AssemblyName>
+                  </PropertyGroup>
+                """);
+
+        Assert.Equal("""    public string? TargetName => @"My Attach Service";""", GetGeneratedTargetNameMember(generatedSource));
+    }
+
+    [Fact]
+    public async Task ProjectMetadataUsesProjectFileNameWhenTargetNameIsNotSet()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // The overwhelmingly common case: no AssemblyName anywhere, so the evaluated name falls back to the project
+        // file name. Consumers rely on the property being present and correct here, not just in the exotic cases.
+        var generatedSource = await GenerateProjectMetadataSourceAsync(
+            workspace,
+            referencedProjectXml: """
+                  <PropertyGroup>
+                    <OutputType>Exe</OutputType>
+                    <TargetFramework>net8.0</TargetFramework>
+                  </PropertyGroup>
+                """);
+
+        Assert.Equal("""    public string? TargetName => @"Worker";""", GetGeneratedTargetNameMember(generatedSource));
+    }
+
+    [Fact]
+    public async Task ProjectMetadataUsesTargetNameInheritedFromAnAncestorDirectoryBuildProps()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // The AssemblyName is several directory levels above the project, which is where a repo-wide convention
+        // usually lives. Only an MSBuild evaluation can see it.
+        var generatedSource = await GenerateProjectMetadataSourceAsync(
+            workspace,
+            referencedProjectXml: """
+                  <PropertyGroup>
+                    <OutputType>Exe</OutputType>
+                    <TargetFramework>net8.0</TargetFramework>
+                  </PropertyGroup>
+                """,
+            referencedProjectDirectoryName: "src/services/Worker",
+            ancestorDirectoryBuildPropsXml: """
+                  <PropertyGroup>
+                    <AssemblyName>Inherited Attach Service</AssemblyName>
+                  </PropertyGroup>
+                """);
+
+        Assert.Equal("""    public string? TargetName => @"Inherited Attach Service";""", GetGeneratedTargetNameMember(generatedSource));
+    }
+
+    [Fact]
+    public async Task ProjectMetadataUsesTargetNameWhenItDivergesFromAssemblyName()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // TargetName is what the built output is actually named, and an SDK is free to set it to something other
+        // than AssemblyName. The debugger attaches to the built assembly, so TargetName is the value that has to
+        // win; asserting the divergence keeps a future refactor from quietly switching to AssemblyName.
+        var generatedSource = await GenerateProjectMetadataSourceAsync(
+            workspace,
+            referencedProjectXml: """
+                  <PropertyGroup>
+                    <OutputType>Exe</OutputType>
+                    <TargetFramework>net8.0</TargetFramework>
+                    <AssemblyName>Declared Name</AssemblyName>
+                    <TargetName>Rewritten By Sdk</TargetName>
+                  </PropertyGroup>
+                """);
+
+        Assert.Equal("""    public string? TargetName => @"Rewritten By Sdk";""", GetGeneratedTargetNameMember(generatedSource));
+    }
+
+    [Fact]
+    public async Task ProjectMetadataUsesConfigurationConditionedTargetName()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var generatedSource = await GenerateProjectMetadataSourceAsync(
+            workspace,
+            referencedProjectXml: """
+                  <PropertyGroup>
+                    <OutputType>Exe</OutputType>
+                    <TargetFramework>net8.0</TargetFramework>
+                    <AssemblyName Condition="'$(Configuration)' == 'Release'">Released Service</AssemblyName>
+                    <AssemblyName Condition="'$(Configuration)' != 'Release'">Debugged Service</AssemblyName>
+                  </PropertyGroup>
+                """,
+            extraArguments: ["-p:Configuration=Release"],
+            configuration: "Release");
+
+        Assert.Equal("""    public string? TargetName => @"Released Service";""", GetGeneratedTargetNameMember(generatedSource));
+    }
+
+    [Fact]
+    public async Task ProjectMetadataUsesProjectReferenceConfiguration()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var generatedSource = await GenerateProjectMetadataSourceAsync(
+            workspace,
+            referencedProjectXml: """
+                  <PropertyGroup>
+                    <OutputType>Exe</OutputType>
+                    <TargetFramework>net8.0</TargetFramework>
+                    <AssemblyName Condition="'$(Configuration)' == 'Release'">Released Service</AssemblyName>
+                    <AssemblyName Condition="'$(Configuration)' != 'Release'">Debugged Service</AssemblyName>
+                  </PropertyGroup>
+                """,
+            projectReferenceMetadataXml: """
+                  <SetConfiguration>Configuration=Release</SetConfiguration>
+                """);
+
+        Assert.Equal("""    public string? TargetName => @"Released Service";""", GetGeneratedTargetNameMember(generatedSource));
+    }
+
+    [Fact]
+    public async Task ProjectMetadataUsesProjectReferencePlatform()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var generatedSource = await GenerateProjectMetadataSourceAsync(
+            workspace,
+            referencedProjectXml: """
+                  <PropertyGroup>
+                    <OutputType>Exe</OutputType>
+                    <TargetFramework>net8.0</TargetFramework>
+                    <AssemblyName Condition="'$(Platform)' == 'x64'">64-bit Service</AssemblyName>
+                    <AssemblyName Condition="'$(Platform)' != 'x64'">Any CPU Service</AssemblyName>
+                  </PropertyGroup>
+                """,
+            projectReferenceMetadataXml: """
+                  <SetPlatform>Platform=x64</SetPlatform>
+                """);
+
+        Assert.Equal("""    public string? TargetName => @"64-bit Service";""", GetGeneratedTargetNameMember(generatedSource));
+    }
+
+    [Fact]
+    public async Task ProjectMetadataUsesSolutionPreparedProjectReferenceConfigurationAndPlatform()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var generatedSource = await GenerateProjectMetadataSourceAsync(
+            workspace,
+            referencedProjectXml: """
+                  <PropertyGroup>
+                    <OutputType>Exe</OutputType>
+                    <TargetFramework>net8.0</TargetFramework>
+                    <AssemblyName>Worker_$(Configuration)_$(Platform)_$(TargetFramework)</AssemblyName>
+                  </PropertyGroup>
+                """,
+            solutionProjectConfiguration: "Release|x64");
+
+        Assert.Equal("""    public string? TargetName => @"Worker_Release_x64_net8.0";""", GetGeneratedTargetNameMember(generatedSource));
+    }
+
+    [Fact]
+    public async Task ProjectMetadataSkipsTargetNameForReferenceDisabledInSolutionConfiguration()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // A reference the solution excludes from the build carries BuildReference=false, and ResolveProjectReferences
+        // skips it. The probe has to skip it too: nothing caches GetTargetPath for it, so probing costs a fresh
+        // evaluation of a project the build was told not to touch.
+        var generatedSource = await GenerateProjectMetadataSourceAsync(
+            workspace,
+            referencedProjectXml: """
+                  <PropertyGroup>
+                    <OutputType>Exe</OutputType>
+                    <TargetFramework>net8.0</TargetFramework>
+                    <AssemblyName>Disabled Service</AssemblyName>
+                  </PropertyGroup>
+                """,
+            solutionProjectConfiguration: "Debug|AnyCPU",
+            buildProjectInSolution: false);
+
+        // Absence is the capability signal, so an unprobed reference must omit the member rather than guess a name.
+        Assert.Null(GetGeneratedTargetNameMember(generatedSource));
+    }
+
+    [Fact]
+    public async Task ProjectMetadataRemovesProjectReferenceGlobalProperties()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var generatedSource = await GenerateProjectMetadataSourceAsync(
+            workspace,
+            referencedProjectXml: """
+                  <PropertyGroup>
+                    <OutputType>Exe</OutputType>
+                    <TargetFramework>net8.0</TargetFramework>
+                    <AssemblyName Condition="'$(Flavor)' == ''">Unflavored Service</AssemblyName>
+                    <AssemblyName Condition="'$(Flavor)' != ''">Flavored Service</AssemblyName>
+                  </PropertyGroup>
+                """,
+            projectReferenceMetadataXml: """
+                  <GlobalPropertiesToRemove>Flavor</GlobalPropertiesToRemove>
+                """,
+            extraArguments: ["-p:Flavor=Chocolate"]);
+
+        Assert.Equal("""    public string? TargetName => @"Unflavored Service";""", GetGeneratedTargetNameMember(generatedSource));
+    }
+
+    [Fact]
+    public async Task ProjectMetadataUsesTargetFrameworkConditionedTargetNameForMultiTargetedReference()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var generatedSource = await GenerateProjectMetadataSourceAsync(
+            workspace,
+            referencedProjectXml: """
+                  <PropertyGroup>
+                    <OutputType>Exe</OutputType>
+                    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+                    <AssemblyName Condition="'$(TargetFramework)' == 'net8.0'">Eight Service</AssemblyName>
+                    <AssemblyName Condition="'$(TargetFramework)' == 'net9.0'">Nine Service</AssemblyName>
+                  </PropertyGroup>
+                """);
+
+        Assert.Equal("""    public string? TargetName => @"Eight Service";""", GetGeneratedTargetNameMember(generatedSource));
+    }
+
+    [Fact]
+    public async Task ProjectMetadataRespectsProjectReferenceTargetFramework()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var generatedSource = await GenerateProjectMetadataSourceAsync(
+            workspace,
+            referencedProjectXml: """
+                  <PropertyGroup>
+                    <OutputType>Exe</OutputType>
+                    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+                    <AssemblyName Condition="'$(TargetFramework)' == 'net8.0'">Eight Service</AssemblyName>
+                    <AssemblyName Condition="'$(TargetFramework)' == 'net9.0'">Nine Service</AssemblyName>
+                  </PropertyGroup>
+                """,
+            projectReferenceMetadataXml: """
+                  <SetTargetFramework>TargetFramework=net9.0</SetTargetFramework>
+                """);
+
+        Assert.Equal("""    public string? TargetName => @"Nine Service";""", GetGeneratedTargetNameMember(generatedSource));
+    }
+
+    [Fact]
+    public async Task ProjectMetadataPreservesExplicitTargetFrameworkWhenItIsAlsoRemoved()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var generatedSource = await GenerateProjectMetadataSourceAsync(
+            workspace,
+            referencedProjectXml: """
+                  <PropertyGroup>
+                    <OutputType>Exe</OutputType>
+                    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+                    <AssemblyName Condition="'$(TargetFramework)' == 'net8.0' and '$(Flavor)' == ''">Eight Clean Service</AssemblyName>
+                    <AssemblyName Condition="'$(TargetFramework)' == 'net8.0' and '$(Flavor)' != ''">Eight Flavored Service</AssemblyName>
+                    <AssemblyName Condition="'$(TargetFramework)' == 'net9.0' and '$(Flavor)' == ''">Nine Clean Service</AssemblyName>
+                    <AssemblyName Condition="'$(TargetFramework)' == 'net9.0' and '$(Flavor)' != ''">Nine Flavored Service</AssemblyName>
+                  </PropertyGroup>
+                """,
+            projectReferenceMetadataXml: """
+                  <SetTargetFramework>TargetFramework=net9.0</SetTargetFramework>
+                  <GlobalPropertiesToRemove>Flavor;TargetFramework</GlobalPropertiesToRemove>
+                """,
+            extraArguments: ["-p:Flavor=Chocolate"]);
+
+        Assert.Equal("""    public string? TargetName => @"Nine Clean Service";""", GetGeneratedTargetNameMember(generatedSource));
+    }
+
+    [Fact]
+    public async Task ProjectMetadataEscapesTargetNameForCSharpSource()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var generatedSource = await GenerateProjectMetadataSourceAsync(
+            workspace,
+            referencedProjectXml: """
+                  <PropertyGroup>
+                    <OutputType>Exe</OutputType>
+                    <TargetFramework>net8.0</TargetFramework>
+                    <AssemblyName>Ünicode &quot;quoted&quot; O'Brien</AssemblyName>
+                  </PropertyGroup>
+                """);
+
+        Assert.Equal("""    public string? TargetName => @"Ünicode ""quoted"" O'Brien";""", GetGeneratedTargetNameMember(generatedSource));
+    }
+
+    [Fact]
+    public async Task ProjectMetadataResolvesTargetNameWhenProjectDirectoryContainsAnApostrophe()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // An apostrophe in the project path reaches two different MSBuild property functions: the
+        // GetFullPath over %(Identity) that normalizes ProjectPath, and the GetFullPath over the
+        // $(_AspireResolvedProjectFile) property that normalizes the resolved project file before the
+        // two lists are correlated. Both have to survive it, because a failure here does not degrade
+        // the target name - it fails metadata generation and takes the whole AppHost build with it.
+        var generatedSource = await GenerateProjectMetadataSourceAsync(
+            workspace,
+            referencedProjectXml: """
+                  <PropertyGroup>
+                    <OutputType>Exe</OutputType>
+                    <TargetFramework>net8.0</TargetFramework>
+                    <AssemblyName>Apostrophe Service</AssemblyName>
+                  </PropertyGroup>
+                """,
+            referencedProjectDirectoryName: "O'Brien");
+
+        Assert.Equal("""    public string? TargetName => @"Apostrophe Service";""", GetGeneratedTargetNameMember(generatedSource));
+    }
+
+    [Fact]
+    public async Task ProjectMetadataOmitsTargetNameWhenResolutionIsDisabled()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var generatedSource = await GenerateProjectMetadataSourceAsync(
+            workspace,
+            referencedProjectXml: """
+                  <PropertyGroup>
+                    <OutputType>Exe</OutputType>
+                    <TargetFramework>net8.0</TargetFramework>
+                    <AssemblyName>My Attach Service</AssemblyName>
+                  </PropertyGroup>
+                """,
+            extraArguments: ["-p:SkipAspireProjectResourceTargetName=true"]);
+
+        Assert.Null(GetGeneratedTargetNameMember(generatedSource));
+    }
+
+    [Fact]
+    public async Task ProjectMetadataResolvesTargetNameWhenProbeFailuresAreFatal()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // The probe passes ContinueOnError="!$(BuildingProject)", so a real build makes a failed
+        // reference probe fatal while a design-time build stays tolerant. Every other test here runs
+        // a bare -t: invocation, which never executes BuildOnlySettings and therefore leaves
+        // BuildingProject at its default of false. Forcing it to true covers the strict path.
+        var generatedSource = await GenerateProjectMetadataSourceAsync(
+            workspace,
+            referencedProjectXml: """
+                  <PropertyGroup>
+                    <OutputType>Exe</OutputType>
+                    <TargetFramework>net8.0</TargetFramework>
+                    <AssemblyName>My Attach Service</AssemblyName>
+                  </PropertyGroup>
+                """,
+            extraArguments: ["-p:BuildingProject=true"]);
+
+        Assert.Equal("""    public string? TargetName => @"My Attach Service";""", GetGeneratedTargetNameMember(generatedSource));
+    }
+
+    [Fact]
     public async Task ComputeRunArgumentsUsesAspireCliWhenCliBundleIsEnabled()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -741,6 +1113,164 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         Assert.True(result.ExitCode == 0, result.Output);
 
         return await File.ReadAllLinesAsync(packageReferencesPath);
+    }
+
+    /// <summary>
+    /// Builds a throwaway AppHost that ProjectReferences a single worker project, runs the Aspire
+    /// codegen target, and returns the generated <c>IProjectMetadata</c> source for the worker.
+    /// </summary>
+    private static async Task<string> GenerateProjectMetadataSourceAsync(
+        TemporaryWorkspace workspace,
+        string referencedProjectXml,
+        string? referencedDirectoryBuildPropsXml = null,
+        string[]? extraArguments = null,
+        string targetFramework = "net8.0",
+        string configuration = "Debug",
+        string? projectReferenceMetadataXml = null,
+        string? solutionProjectConfiguration = null,
+        string referencedProjectDirectoryName = "Worker",
+        string? ancestorDirectoryBuildPropsXml = null,
+        bool buildProjectInSolution = true)
+    {
+        var repoRoot = GetRepoRoot();
+
+        // Terminate MSBuild's upward Directory.Build.props/targets probe at the workspace root so the
+        // generated metadata only reflects what this test authored, not whatever happens to sit above
+        // the temp directory on the machine running the test. Directory.Packages.props is discovered
+        // independently of that probe, so central package management has to be switched off explicitly.
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "Directory.Build.props"), "<Project />");
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "Directory.Build.targets"), "<Project />");
+        await File.WriteAllTextAsync(
+            Path.Combine(workspace.Path, "Directory.Packages.props"),
+            "<Project><PropertyGroup><ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally></PropertyGroup></Project>");
+
+        var workerDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, referencedProjectDirectoryName)).FullName;
+        var workerProjectFile = Path.Combine(workerDirectory, "Worker.csproj");
+        await File.WriteAllTextAsync(workerProjectFile,
+            $"""
+            <Project Sdk="Microsoft.NET.Sdk">
+
+            {referencedProjectXml}
+
+            </Project>
+            """);
+        await File.WriteAllTextAsync(Path.Combine(workerDirectory, "Program.cs"), """
+            System.Console.WriteLine("worker");
+            """);
+
+        if (referencedDirectoryBuildPropsXml is not null)
+        {
+            await File.WriteAllTextAsync(Path.Combine(workerDirectory, "Directory.Build.props"),
+                $"""
+                <Project>
+
+                {referencedDirectoryBuildPropsXml}
+
+                </Project>
+                """);
+        }
+
+        if (ancestorDirectoryBuildPropsXml is not null)
+        {
+            // Written to the top-most segment of the referenced project's path rather than next to the project, so
+            // the value is only visible after MSBuild's upward Directory.Build.props probe has climbed several
+            // levels. A consumer that reads the project XML cannot see it at all.
+            var ancestorDirectory = Path.Combine(workspace.Path, referencedProjectDirectoryName.Split('/')[0]);
+            await File.WriteAllTextAsync(Path.Combine(ancestorDirectory, "Directory.Build.props"),
+                $"""
+                <Project>
+
+                {ancestorDirectoryBuildPropsXml}
+
+                </Project>
+                """);
+        }
+
+        var appHostDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "AppHost")).FullName;
+        var appHostTargetsPath = SecurityElement.Escape(Path.Combine(repoRoot, "src", "Aspire.Hosting.AppHost", "build", "Aspire.Hosting.AppHost.in.targets"));
+        var appHostProjectFile = Path.Combine(appHostDirectory, "AppHost.csproj");
+        var solutionConfigurationXml = solutionProjectConfiguration is null
+            ? null
+            : $$"""
+              <PropertyGroup>
+                <CurrentSolutionConfigurationContents>&lt;SolutionConfiguration&gt;&lt;ProjectConfiguration Project=&quot;{C42D47BF-C684-40EB-B438-FC98C4DC6F5D}&quot; AbsolutePath=&quot;{{SecurityElement.Escape(workerProjectFile)}}&quot; BuildProjectInSolution=&quot;{{(buildProjectInSolution ? "True" : "False")}}&quot;&gt;{{solutionProjectConfiguration}}&lt;/ProjectConfiguration&gt;&lt;/SolutionConfiguration&gt;</CurrentSolutionConfigurationContents>
+              </PropertyGroup>
+            """;
+
+        // The SDK props/targets are imported explicitly so the Aspire AppHost targets land *after*
+        // Sdk.targets, which is where a NuGet package's build/*.targets normally gets imported. The
+        // ordering matters because the codegen writes to $(IntermediateOutputPath), which is only
+        // defined once Microsoft.Common.CurrentVersion.targets has been evaluated.
+        // The ProjectReference metadata mirrors what Aspire.AppHost.Sdk defaults for Aspire project
+        // resources; this test imports only the AppHost targets, so the defaults are spelled out.
+        await File.WriteAllTextAsync(appHostProjectFile,
+            $$"""
+            <Project>
+
+              <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+
+              <PropertyGroup>
+                <OutputType>Exe</OutputType>
+                <TargetFramework>{{targetFramework}}</TargetFramework>
+                <IsAspireHost>true</IsAspireHost>
+                <_AspireTasksAssembly>{{SecurityElement.Escape(GetAspireHostingTasksAssemblyPath())}}</_AspireTasksAssembly>
+                <SkipAspireWorkloadManifest>true</SkipAspireWorkloadManifest>
+                <SkipValidateAspireHostProjectResources>true</SkipValidateAspireHostProjectResources>
+              </PropertyGroup>
+
+              <ItemGroup>
+                <ProjectReference Include="../{{referencedProjectDirectoryName}}/Worker.csproj"
+                                  IsAspireProjectResource="true"
+                                  ReferenceOutputAssembly="false"
+                                  SkipGetTargetFrameworkProperties="true"
+                                  ExcludeAssets="all"
+                                  Private="false">
+                  <Project>{C42D47BF-C684-40EB-B438-FC98C4DC6F5D}</Project>
+            {{projectReferenceMetadataXml}}
+                </ProjectReference>
+              </ItemGroup>
+
+            {{solutionConfigurationXml}}
+
+              <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+
+              <Import Project="{{appHostTargetsPath}}" />
+
+            </Project>
+            """);
+        await File.WriteAllTextAsync(Path.Combine(appHostDirectory, "Program.cs"), """
+            System.Console.WriteLine("apphost");
+            """);
+
+        var arguments = new List<string>
+        {
+            "msbuild",
+            "-nologo",
+            "-restore",
+            "-t:WriteAspireProjectMetadataSources",
+            appHostProjectFile
+        };
+
+        if (extraArguments is not null)
+        {
+            arguments.AddRange(extraArguments);
+        }
+
+        var result = await RunDotNetWithArgumentsAsync(appHostDirectory, [.. arguments]);
+        Assert.True(result.ExitCode == 0, result.Output);
+
+        var generatedPath = Path.Combine(appHostDirectory, "obj", configuration, targetFramework, "Aspire", "references", "Worker.ProjectMetadata.g.cs");
+        Assert.True(File.Exists(generatedPath), $"Generated project metadata was not found at '{generatedPath}'.{Environment.NewLine}{result.Output}");
+
+        return await File.ReadAllTextAsync(generatedPath);
+    }
+
+    private static string? GetGeneratedTargetNameMember(string generatedSource)
+    {
+        return generatedSource
+            .Split('\n')
+            .Select(line => line.TrimEnd('\r'))
+            .SingleOrDefault(line => line.Contains("TargetName =>", StringComparison.Ordinal));
     }
 
     private static async Task<RunHookProject> CreateRunHookProjectAsync(
