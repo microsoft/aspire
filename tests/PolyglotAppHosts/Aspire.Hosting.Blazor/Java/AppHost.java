@@ -17,5 +17,9 @@ void main() throws Exception {
 
         gateway.withBlazorClientApp(blazorApp);
 
+        var dotnetProjectBlazorApp = builder.addBlazorWasmProject("dotnet-app", "./src/Client/Client.csproj");
+        var dotnetProjectGateway = builder.addDotnetProjectBlazorGateway("dotnet-gateway");
+        dotnetProjectGateway.withBlazorClientApp(dotnetProjectBlazorApp);
+
         builder.build().run();
     }
