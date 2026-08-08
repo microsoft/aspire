@@ -25,6 +25,21 @@ public sealed record CustomResourceSnapshot
     internal long Version { get; init; }
 
     /// <summary>
+    /// Monotonically increasing generation of the running resource instance.
+    /// </summary>
+    internal long ResourceGeneration { get; init; }
+
+    /// <summary>
+    /// Gets whether the normalized snapshot state came from DCP executable termination.
+    /// </summary>
+    internal bool IsDcpExecutableTerminated { get; init; }
+
+    /// <summary>
+    /// Gets whether DCP has reported executable completion before its exit code snapshot.
+    /// </summary>
+    internal bool HasPendingDcpExitCode { get; init; }
+
+    /// <summary>
     /// The type of the resource.
     /// </summary>
     public required string ResourceType { get; init; }
@@ -180,7 +195,10 @@ public sealed record CustomResourceSnapshot
 
         // Version counts publications rather than describing the resource. HealthStatus is derived
         // from State and HealthReports, so neither property needs an independent comparison.
-        if (ResourceType != other.ResourceType ||
+        if (ResourceGeneration != other.ResourceGeneration ||
+            IsDcpExecutableTerminated != other.IsDcpExecutableTerminated ||
+            HasPendingDcpExitCode != other.HasPendingDcpExitCode ||
+            ResourceType != other.ResourceType ||
             CreationTimeStamp != other.CreationTimeStamp ||
             StartTimeStamp != other.StartTimeStamp ||
             StopTimeStamp != other.StopTimeStamp ||
@@ -311,7 +329,8 @@ public sealed record CustomResourceSnapshot
 /// A snapshot of an event.
 /// </summary>
 /// <param name="EventTask">The task the represents the result of executing the event.</param>
-internal record EventSnapshot(Task EventTask);
+/// <param name="ResourceGeneration">The generation of the resource instance that raised the event.</param>
+internal record EventSnapshot(Task EventTask, long ResourceGeneration);
 
 /// <summary>
 /// A snapshot of the resource state

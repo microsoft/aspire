@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 
@@ -42,17 +43,7 @@ internal sealed class DevTunnelHealthCheck(
                 }
             }
 
-            // Get tunnel and port access status
-            var tunnelAccessStatus = await _devTunnelClient.GetAccessAsync(_tunnelResource.ResolvedTunnelId, portNumber: null, logger, cancellationToken).ConfigureAwait(false);
-            _tunnelResource.LastKnownAccessStatus = tunnelAccessStatus;
-
-            // Get access status for each port
-            foreach (var portResource in _tunnelResource.Ports)
-            {
-                var tunnelPort = await portResource.GetTunnelPortAsync(cancellationToken).ConfigureAwait(false);
-                var portAccessStatus = await _devTunnelClient.GetAccessAsync(_tunnelResource.ResolvedTunnelId, tunnelPort, logger, cancellationToken).ConfigureAwait(false);
-                portResource.LastKnownAccessStatus = portAccessStatus;
-            }
+            _ = DevTunnelAccessStatusRefresh.QueueTunnelAndPortRefresh(_devTunnelClient, _tunnelResource, logger, cancellationToken);
 
             return HealthCheckResult.Healthy(string.Format(CultureInfo.CurrentCulture, Resources.MessageStrings.DevTunnelHealthy, _tunnelResource.TunnelId, tunnelStatus.HostConnections, tunnelStatus.Ports?.Count));
         }
@@ -72,6 +63,207 @@ internal sealed class DevTunnelHealthCheck(
             catch { } // Ignore errors from login check
 
             return HealthCheckResult.Unhealthy(string.Format(CultureInfo.CurrentCulture, Resources.MessageStrings.DevTunnelUnhealthy_Error, _tunnelResource.TunnelId, ex.Message), ex);
+        }
+    }
+}
+
+internal static class DevTunnelAccessStatusRefresh
+{
+    internal const string AnonymousAccessPropertyName = "Anonymous access";
+    internal const string UnknownAccessPolicy = "Unknown";
+    internal const string HealthCheckName = "devtunnel-port-access-refresh";
+    private static readonly TimeSpan s_refreshTimeout = TimeSpan.FromSeconds(2);
+
+    public static Task QueueTunnelAndPortRefresh(
+        IDevTunnelClient devTunnelClient,
+        DevTunnelResource tunnelResource,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return Task.CompletedTask;
+        }
+
+        return Task.Run(async () =>
+        {
+            try
+            {
+                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeoutCts.CancelAfter(s_refreshTimeout);
+
+                var tunnelAccessStatus = await devTunnelClient.GetAccessAsync(tunnelResource.ResolvedTunnelId, portNumber: null, logger, timeoutCts.Token).ConfigureAwait(false);
+                tunnelResource.LastKnownAccessStatus = tunnelAccessStatus;
+
+                foreach (var portResource in tunnelResource.Ports)
+                {
+                    int? tunnelPort = null;
+                    try
+                    {
+                        tunnelPort = await portResource.GetTunnelPortAsync(timeoutCts.Token).ConfigureAwait(false);
+                        var portAccessStatus = await devTunnelClient.GetAccessAsync(tunnelResource.ResolvedTunnelId, tunnelPort, logger, timeoutCts.Token).ConfigureAwait(false);
+
+                        if (portResource.ActiveTunnelPort is null || portResource.ActiveTunnelPort == tunnelPort)
+                        {
+                            portResource.LastKnownAccessStatus = portAccessStatus;
+                        }
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+                    {
+                        ClearPortAccessStatus(portResource, tunnelPort);
+                        logger.LogDebug(ex, "Failed to refresh dev tunnel access status for port resource '{PortResource}' on tunnel '{Tunnel}'.", portResource.Name, tunnelResource.TunnelId);
+                        if (timeoutCts.IsCancellationRequested)
+                        {
+                            break;
+                        }
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+            }
+            catch (Exception ex)
+            {
+                tunnelResource.LastKnownAccessStatus = null;
+                logger.LogDebug(ex, "Failed to refresh dev tunnel access status for tunnel '{Tunnel}'.", tunnelResource.TunnelId);
+            }
+        }, CancellationToken.None);
+    }
+
+    public static Task QueuePortRefresh(
+        IDevTunnelClient devTunnelClient,
+        DevTunnelPortResource portResource,
+        ResourceNotificationService notifications,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        if (cancellationToken.IsCancellationRequested || portResource.ActiveTunnelPort is not { } activeTunnelPort)
+        {
+            return Task.CompletedTask;
+        }
+
+        var refreshCts = portResource.StartAccessStatusRefresh(cancellationToken);
+        var refreshCancellationToken = refreshCts.Token;
+        return Task.Run(async () =>
+        {
+            try
+            {
+                var retryDelay = portResource.AccessStatusRetryDelay;
+                while (!refreshCancellationToken.IsCancellationRequested &&
+                       portResource.ActiveTunnelPort == activeTunnelPort)
+                {
+                    try
+                    {
+                        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(refreshCancellationToken);
+                        timeoutCts.CancelAfter(s_refreshTimeout);
+
+                        var tunnelAccessStatus = await devTunnelClient.GetAccessAsync(portResource.DevTunnel.ResolvedTunnelId, portNumber: null, logger, timeoutCts.Token).ConfigureAwait(false);
+                        var portAccessStatus = await devTunnelClient.GetAccessAsync(portResource.DevTunnel.ResolvedTunnelId, activeTunnelPort, logger, timeoutCts.Token).ConfigureAwait(false);
+
+                        await portResource.PortUpdateLock.WaitAsync(timeoutCts.Token).ConfigureAwait(false);
+                        try
+                        {
+                            if (portResource.ActiveTunnelPort != activeTunnelPort)
+                            {
+                                return;
+                            }
+
+                            portResource.DevTunnel.LastKnownAccessStatus = tunnelAccessStatus;
+                            portResource.LastKnownAccessStatus = portAccessStatus;
+
+                            var effectivePolicy = portAccessStatus.LogAnonymousAccessPolicy(logger);
+                            await notifications.PublishUpdateAsync(portResource, snapshot =>
+                            {
+                                if (portResource.ActiveTunnelPort != activeTunnelPort)
+                                {
+                                    return snapshot;
+                                }
+
+                                return (snapshot with
+                                {
+                                    Properties = snapshot.Properties.SetResourceProperty(AnonymousAccessPropertyName, effectivePolicy)
+                                }).WithHealthReports([.. snapshot.HealthReports.Where(report => report.Name != HealthCheckName)]);
+                            }).ConfigureAwait(false);
+                        }
+                        finally
+                        {
+                            portResource.PortUpdateLock.Release();
+                        }
+
+                        return;
+                    }
+                    catch (OperationCanceledException) when (refreshCancellationToken.IsCancellationRequested)
+                    {
+                        return;
+                    }
+                    catch (Exception ex)
+                    {
+                        try
+                        {
+                            await portResource.PortUpdateLock.WaitAsync(refreshCancellationToken).ConfigureAwait(false);
+                        }
+                        catch (OperationCanceledException) when (refreshCancellationToken.IsCancellationRequested)
+                        {
+                            return;
+                        }
+
+                        try
+                        {
+                            if (refreshCancellationToken.IsCancellationRequested ||
+                                portResource.ActiveTunnelPort != activeTunnelPort)
+                            {
+                                return;
+                            }
+
+                            portResource.DevTunnel.LastKnownAccessStatus = null;
+                            portResource.LastKnownAccessStatus = null;
+
+                            await notifications.PublishUpdateAsync(portResource, snapshot =>
+                                (snapshot with
+                                {
+                                    Properties = snapshot.Properties.SetResourceProperty(AnonymousAccessPropertyName, UnknownAccessPolicy)
+                                }).WithHealthReports(
+                                [
+                                    .. snapshot.HealthReports.Where(report => report.Name != HealthCheckName),
+                                    new(
+                                        HealthCheckName,
+                                        HealthStatus.Unhealthy,
+                                        "The dev tunnel port access policy could not be refreshed.",
+                                        ExceptionText: null)
+                                ])).ConfigureAwait(false);
+                        }
+                        finally
+                        {
+                            portResource.PortUpdateLock.Release();
+                        }
+
+                        logger.LogDebug(ex, "Failed to refresh dev tunnel access status for port '{Port}' on tunnel '{Tunnel}'; retrying.", activeTunnelPort, portResource.DevTunnel.TunnelId);
+
+                        try
+                        {
+                            await Task.Delay(retryDelay, refreshCancellationToken).ConfigureAwait(false);
+                        }
+                        catch (OperationCanceledException) when (refreshCancellationToken.IsCancellationRequested)
+                        {
+                            return;
+                        }
+
+                        retryDelay = TimeSpan.FromTicks(Math.Min(retryDelay.Ticks * 2, portResource.AccessStatusMaxRetryDelay.Ticks));
+                    }
+                }
+            }
+            finally
+            {
+                portResource.CompleteAccessStatusRefresh(refreshCts);
+            }
+        }, CancellationToken.None);
+    }
+
+    private static void ClearPortAccessStatus(DevTunnelPortResource portResource, int? tunnelPort)
+    {
+        if (tunnelPort is null || portResource.ActiveTunnelPort is null || portResource.ActiveTunnelPort == tunnelPort)
+        {
+            portResource.LastKnownAccessStatus = null;
         }
     }
 }

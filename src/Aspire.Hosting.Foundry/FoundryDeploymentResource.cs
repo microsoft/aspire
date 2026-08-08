@@ -41,6 +41,9 @@ public class FoundryDeploymentResource : Resource, IResourceWithParent<FoundryRe
     /// </summary>
     internal string? ModelId { get; set; }
 
+    // ResourceReadyEvent handlers can overlap across parent resource generations.
+    internal SemaphoreSlim LocalInitializationLock { get; } = new(1, 1);
+
     /// <summary>
     /// Gets or sets the name of the deployment.
     /// </summary>

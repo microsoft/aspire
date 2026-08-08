@@ -1106,7 +1106,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
                 await @event.Notifications.PublishUpdateAsync(resource, s => s with
                 {
                     State = KnownResourceStates.Running,
-                    ResourceReadyEvent = new EventSnapshot(Task.CompletedTask)
+                    ResourceReadyEvent = new EventSnapshot(Task.CompletedTask, s.ResourceGeneration + 1)
                 });
             });
     }
