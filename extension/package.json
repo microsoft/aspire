@@ -49,11 +49,78 @@
     "workspaceContains:**/apphost.mjs",
     "workspaceContains:**/apphost.cjs",
     "onCommand:aspire-vscode.installCli",
-    "onCommand:aspire-vscode.verifyCliInstalled"
+    "onCommand:aspire-vscode.verifyCliInstalled",
+    "onLanguageModelTool:aspire_apphost_start",
+    "onLanguageModelTool:aspire_apphost_stop"
   ],
   "main": "./dist/extension.js",
   "l10n": "./l10n",
   "contributes": {
+    "languageModelTools": [
+      {
+        "name": "aspire_apphost_start",
+        "toolReferenceName": "aspireStartAppHost",
+        "displayName": "%languageModelTool.aspireAppHostStart.displayName%",
+        "modelDescription": "%languageModelTool.aspireAppHostStart.modelDescription%",
+        "userDescription": "%languageModelTool.aspireAppHostStart.userDescription%",
+        "icon": "$(debug-start)",
+        "canBeReferencedInPrompt": true,
+        "when": "isWorkspaceTrusted",
+        "tags": [
+          "aspire",
+          "apphost"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "appHostPath": {
+              "type": "string",
+              "description": "%languageModelTool.aspireAppHost.appHostPath.description%"
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "run",
+                "debug"
+              ],
+              "description": "%languageModelTool.aspireAppHostStart.mode.description%"
+            }
+          },
+          "required": [
+            "appHostPath",
+            "mode"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "aspire_apphost_stop",
+        "toolReferenceName": "aspireStopAppHost",
+        "displayName": "%languageModelTool.aspireAppHostStop.displayName%",
+        "modelDescription": "%languageModelTool.aspireAppHostStop.modelDescription%",
+        "userDescription": "%languageModelTool.aspireAppHostStop.userDescription%",
+        "icon": "$(debug-stop)",
+        "canBeReferencedInPrompt": true,
+        "when": "isWorkspaceTrusted",
+        "tags": [
+          "aspire",
+          "apphost"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "appHostPath": {
+              "type": "string",
+              "description": "%languageModelTool.aspireAppHost.appHostPath.description%"
+            }
+          },
+          "required": [
+            "appHostPath"
+          ],
+          "additionalProperties": false
+        }
+      }
+    ],
     "mcpServerDefinitionProviders": [
       {
         "id": "aspire-mcp-server",

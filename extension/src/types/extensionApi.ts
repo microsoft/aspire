@@ -196,6 +196,9 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'stopDebugging' }
     | { name: 'closeAllEditors' }
     | { name: 'getRegisteredAspireCommands' }
+    | { name: 'getRegisteredLanguageModelTools' }
+    | { name: 'prepareLanguageModelToolInvocation'; toolName: string; input: Record<string, unknown> }
+    | { name: 'invokeLanguageModelTool'; toolName: string; input: Record<string, unknown>; times?: number }
     | { name: 'getExtensionPackageJson' }
     | { name: 'getExtensionFileStatus'; relativePaths: readonly string[] }
     | { name: 'getDiagnostics'; filePath: string }

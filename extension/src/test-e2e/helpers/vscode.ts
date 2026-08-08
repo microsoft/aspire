@@ -1,4 +1,4 @@
-import { BottomBarPanel, By, EditorView, InputBox, Notification, SideBarView, TreeItem, TreeSection, VSBrowser, WebView, Workbench } from './extester';
+import { BottomBarPanel, By, EditorView, InputBox, ModalDialog, Notification, SideBarView, TreeItem, TreeSection, VSBrowser, WebView, Workbench } from './extester';
 
 const escapeKey = '\uE00C';
 const aspireAppHostsSectionTitle = 'AppHosts';
@@ -249,6 +249,50 @@ export async function waitForNotificationMessage(expectedText: string, timeoutMs
 
         return false;
     }, timeoutMs, `Timed out waiting for notification containing '${expectedText}'.`);
+}
+
+export interface AcceptedModalDialog {
+    message: string;
+    details: string;
+}
+
+/**
+ * Accepts the modal confirmation VS Code shows for a language model tool invoked
+ * outside chat. `invokeTool` does not resolve until the dialog is answered, so callers
+ * must start the invocation first and accept the dialog while it is still pending.
+ *
+ * `screenshotName` captures the dialog before the button is pushed. This confirmation is
+ * the only thing standing between an agent and a real process launch, so a run leaves
+ * visual proof that it was actually presented rather than only asserting on its text.
+ */
+export async function acceptModalDialog(buttonTitle: string, timeoutMs = 120000, screenshotName?: string): Promise<AcceptedModalDialog> {
+    let lastError: unknown;
+    const accepted = await VSBrowser.instance.driver.wait(async () => {
+        try {
+            const dialog = new ModalDialog();
+            const message = await dialog.getMessage();
+            if (!message) {
+                return false;
+            }
+
+            const details = await dialog.getDetails().catch(() => '');
+            if (screenshotName) {
+                // A screenshot failure must not fail the assertion the caller came for.
+                await VSBrowser.instance.takeScreenshot(screenshotName).catch(() => undefined);
+            }
+
+            await dialog.pushButton(buttonTitle);
+            return { message, details };
+        }
+        catch (error) {
+            // The dialog is only present while a confirmation is pending, so a missing
+            // element here means "not shown yet" rather than a failure.
+            lastError = error;
+            return false;
+        }
+    }, timeoutMs, `Timed out waiting for a modal dialog with a '${buttonTitle}' button. Last error: ${lastError}`);
+
+    return accepted as AcceptedModalDialog;
 }
 
 export async function getNotificationCount(): Promise<number> {
