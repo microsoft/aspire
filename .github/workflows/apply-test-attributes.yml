@@ -27,9 +27,26 @@ jobs:
       issues: write
       pull-requests: write
     steps:
+    # The helpers are only needed to parse the comment, which happens before the commenter is
+    # authorized, so they are checked out sparsely and without credentials.
+    #
+    # IMPORTANT: this must use a dedicated `path` and not the job workspace root. actions/checkout
+    # records sparse state in the repository it creates (`core.sparseCheckout=true` in .git/config
+    # plus the patterns in .git/info/sparse-checkout). When a later checkout targets the same
+    # directory it runs `git sparse-checkout disable`, which writes `core.sparseCheckout=false` into
+    # the per-worktree config, and then unsets `extensions.worktreeConfig` - so git stops reading
+    # that file and the original `core.sparseCheckout=true` takes effect again. The following
+    # `git checkout --force` then re-applies the stale patterns and prunes the "full" checkout back
+    # to just the helper file, leaving global.json and tools/QuarantineTools missing.
+    # See https://github.com/microsoft/aspire/actions/runs/31212187976.
+    #
+    # The `Checkout repo` step below clears the workspace, so `.workflow-helpers` is gone from that
+    # point on. Nothing after comment parsing reads it, and the checkout post-step tolerates the
+    # missing directory.
     - name: Checkout workflow helpers
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
+        path: .workflow-helpers
         sparse-checkout: .github/workflows/workflow-command-helpers.js
         sparse-checkout-cone-mode: false
         persist-credentials: false
@@ -77,7 +94,7 @@ jobs:
           const matched = commandConfig[commandName];
 
           // Parse arguments using shared quote-aware tokenizer
-          const { tokenizeArguments } = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/workflow-command-helpers.js`);
+          const { tokenizeArguments } = require(`${process.env.GITHUB_WORKSPACE}/.workflow-helpers/.github/workflows/workflow-command-helpers.js`);
 
           let allTokens;
           try {
