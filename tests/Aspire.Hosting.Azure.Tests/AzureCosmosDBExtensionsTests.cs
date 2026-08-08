@@ -550,6 +550,22 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task RunAsPreviewEmulatorAppliesOtlpExporterAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var cosmos = builder.AddAzureCosmosDB("cosmos")
+                           .RunAsPreviewEmulator();
+
+        Assert.NotEmpty(cosmos.Resource.Annotations.OfType<OtlpExporterAnnotation>());
+
+        // ENABLE_OTLP_EXPORTER activates the emulator's built-in exporter; it must be set alongside the annotation.
+        using var serviceProvider = builder.Services.BuildServiceProvider();
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(cosmos.Resource, DistributedApplicationOperation.Run, serviceProvider);
+        Assert.True(config.TryGetValue("ENABLE_OTLP_EXPORTER", out var enableOtlp));
+        Assert.Equal("true", enableOtlp?.ToString());
+    }
+
+    [Fact]
     public void AddAsExistingResource_ShouldBeIdempotent_ForAzureCosmosDBResource()
     {
         // Arrange
@@ -906,7 +922,8 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
 
         // The vNext emulator does not read AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE; persistence is
         // enabled implicitly by mounting the volume at /data.
-        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(cosmos.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+        using var serviceProvider = builder.Services.BuildServiceProvider();
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(cosmos.Resource, DistributedApplicationOperation.Run, serviceProvider);
         Assert.DoesNotContain("AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE", config.Keys);
     }
 
@@ -963,7 +980,8 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
         Assert.Equal(1234, endpoint.TargetPort);
         Assert.Equal(9999, endpoint.Port);
 
-        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(cosmos.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+        using var serviceProvider = builder.Services.BuildServiceProvider();
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(cosmos.Resource, DistributedApplicationOperation.Run, serviceProvider);
         Assert.True(config.TryGetValue("ENABLE_EXPLORER", out var enableExplorer));
         Assert.Equal("true", enableExplorer);
     }
@@ -992,7 +1010,8 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
         var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsPreviewEmulator();
 
         // The vNext image enables the Data Explorer by default; Aspire disables it unless WithDataExplorer is called.
-        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(cosmos.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+        using var serviceProvider = builder.Services.BuildServiceProvider();
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(cosmos.Resource, DistributedApplicationOperation.Run, serviceProvider);
         Assert.True(config.TryGetValue("ENABLE_EXPLORER", out var enableExplorer));
         Assert.Equal("false", enableExplorer);
     }
