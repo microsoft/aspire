@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { yesLabel } from '../loc/strings';
-import { checkForExistingAppHostPathInWorkspace, getCommonExcludeGlob, findAspireSettingsFiles } from '../utils/workspace';
+import { checkForExistingAppHostPathInWorkspace, getCommonExcludeGlob, findAspireSettingsFiles, getRelativePathToWorkspace } from '../utils/workspace';
 import { AppHostDiscoveryService, getWorkspaceAppHostProjectSearchResult } from '../utils/appHostDiscovery';
 import { getAppHostDiscoveryExcludeGlob } from '../utils/workspaceFileSearch';
 
@@ -18,6 +18,88 @@ suite('utils/workspace tests', () => {
 
     teardown(() => {
         sandbox.restore();
+    });
+
+    test('getRelativePathToWorkspace falls back to the workspace name when asRelativePath cannot relativize', () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        sandbox.stub(vscode.workspace, 'getWorkspaceFolder').returns(workspaceFolder);
+        sandbox.stub(vscode.workspace, 'workspaceFolders').value([workspaceFolder]);
+        const asRelativePathStub = sandbox.stub(vscode.workspace, 'asRelativePath');
+
+        // `asRelativePath` returns the input unchanged when it cannot be made relative, and it
+        // resolves against the workspace rather than the extension host. Both platforms' absolute
+        // forms must be rejected here, because the Win32 forms are only recognized by `path.win32`
+        // and the POSIX form only by `path.posix`.
+        const hostAbsolutePath = path.join(path.sep, 'workspace', 'src', 'AppHost.csproj');
+        const unrelativizedResults = [
+            hostAbsolutePath,
+            'C:\\Users\\me\\src\\AppHost.csproj',
+            '\\\\server\\share\\src\\AppHost.csproj',
+            '/home/me/src/AppHost.csproj',
+        ].map(unrelativized => {
+            asRelativePathStub.returns(unrelativized);
+            return getRelativePathToWorkspace(hostAbsolutePath);
+        });
+
+        assert.deepStrictEqual(unrelativizedResults, ['workspace', 'workspace', 'workspace', 'workspace']);
+    });
+
+    test('getRelativePathToWorkspace reduces absolute paths from either platform to a bare file name', () => {
+        // A path that is absolute only under the *other* platform's rules is inside no workspace
+        // folder on this host, so `getWorkspaceFolder` returns undefined and the absolute-path
+        // rejection in the `asRelativePath` branch is never reached. That left `path.basename`,
+        // which on POSIX does not treat `\` as a separator, so the whole
+        // `C:\Users\me\secret\AppHost.csproj` was returned as the debug configuration name.
+        sandbox.stub(vscode.workspace, 'getWorkspaceFolder').returns(undefined);
+
+        const absolutePaths = [
+            'C:\\Users\\me\\secret\\AppHost.csproj',
+            'C:/Users/me/secret/AppHost.csproj',
+            '\\\\server\\share\\secret\\AppHost.csproj',
+            '/home/me/secret/AppHost.csproj',
+        ];
+
+        const names = absolutePaths.map(absolutePath => getRelativePathToWorkspace(absolutePath));
+
+        assert.deepStrictEqual(names, ['AppHost.csproj', 'AppHost.csproj', 'AppHost.csproj', 'AppHost.csproj']);
+        for (const name of names) {
+            // The privacy property, asserted independently of host platform: whatever is returned
+            // is a single path segment, so no directory component can leak.
+            assert.ok(!/[\\/]/.test(name), `'${name}' must be a single path segment on either host platform`);
+        }
+    });
+
+    test('getRelativePathToWorkspace keeps genuinely relative paths in either separator style', () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        sandbox.stub(vscode.workspace, 'getWorkspaceFolder').returns(workspaceFolder);
+        sandbox.stub(vscode.workspace, 'workspaceFolders').value([workspaceFolder]);
+        const asRelativePathStub = sandbox.stub(vscode.workspace, 'asRelativePath');
+
+        const relativePaths = [
+            'apps/Store/AppHost.csproj',
+            'apps\\Store\\AppHost.csproj',
+        ];
+
+        const identities = relativePaths.map(relativePath => {
+            asRelativePathStub.returns(relativePath);
+            return getRelativePathToWorkspace('/workspace/apps/Store/AppHost.csproj');
+        });
+
+        assert.deepStrictEqual(identities, relativePaths, 'rejecting both absolute forms must not reject relative paths');
+    });
+
+    test('getRelativePathToWorkspace uses the file name when the path is outside every workspace folder', () => {
+        sandbox.stub(vscode.workspace, 'getWorkspaceFolder').returns(undefined);
+
+        assert.strictEqual(getRelativePathToWorkspace(path.join(path.sep, 'elsewhere', 'src', 'AppHost.csproj')), 'AppHost.csproj');
     });
 
     test('getCommonExcludeGlob returns valid glob pattern', () => {

@@ -228,7 +228,9 @@ suite('InteractionService endpoints', () => {
 				closeHandler = handler;
 				return { dispose: () => { } };
 			},
-			sendRequest: sinon.stub()
+			sendRequest: sinon.stub(),
+			end: sinon.stub(),
+			dispose: sinon.stub()
 		} as any;
 
 		const rpcClient = new RpcClient(messageConnection, null, () => null);
@@ -239,6 +241,39 @@ suite('InteractionService endpoints', () => {
 		closeHandler!();
 
 		assert.strictEqual((rpcClient.interactionService as any)._progressNotifier.isActive, false);
+	});
+
+	test("RPC client disposal closes the transport and prevents late status resurrection", () => {
+		const end = sinon.stub();
+		const dispose = sinon.stub();
+		const messageConnection = {
+			onClose: () => ({ dispose: () => { } }),
+			sendRequest: sinon.stub(),
+			end,
+			dispose
+		} as any;
+		const rpcClient = new RpcClient(messageConnection, null, () => null);
+
+		rpcClient.interactionService.showStatus('Connecting to AppHost...');
+		rpcClient.dispose();
+		rpcClient.interactionService.showStatus('Starting Dashboard...');
+		rpcClient.dispose();
+
+		assert.strictEqual((rpcClient.interactionService as any)._progressNotifier.isActive, false);
+		sinon.assert.calledOnce(end);
+		sinon.assert.calledOnce(dispose);
+	});
+
+	test("RPC server disposal clears CLI status when the connection never closes", async () => {
+		const testInfo = await createTestRpcServer();
+		testInfo.rpcServer.addConnection(testInfo.rpcClient);
+
+		testInfo.interactionService.showStatus('Building AppHost...');
+		assert.strictEqual((testInfo.interactionService as any)._progressNotifier.isActive, true);
+
+		testInfo.rpcServer.dispose();
+
+		assert.strictEqual((testInfo.interactionService as any)._progressNotifier.isActive, false);
 	});
 
 	test("displaySubtleMessage endpoint", async () => {
@@ -799,6 +834,7 @@ suite('InteractionService endpoints', () => {
 
 type RpcServerTestInfo = {
 	rpcServerInfo: RpcServerConnectionInfo;
+	rpcServer: AspireRpcServer;
 	rpcClient: ICliRpcClient;
 	interactionService: IInteractionService;
 };
@@ -861,6 +897,10 @@ class TestCliRpcClient implements ICliRpcClient {
         this.interactionService = new InteractionService(getAspireDebugSession, this, globalState);
     }
 
+	dispose(): void {
+		this.interactionService.dispose();
+	}
+
 	stopCli(): Promise<void> {
 		return Promise.resolve();
 	}
@@ -901,6 +941,7 @@ async function createTestRpcServer(debugSessionId?: string | null, getAspireDebu
 
 	return {
 		rpcServerInfo: rpcServer.connectionInfo,
+		rpcServer: rpcServer,
 		rpcClient: rpcClient,
 		interactionService: rpcClient.interactionService
 	};

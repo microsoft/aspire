@@ -423,8 +423,8 @@ export async function activate(context: vscode.ExtensionContext) {
   return Object.freeze(api);
 }
 
-export function deactivate() {
-  aspireExtensionContext.dispose();
+export function deactivate(): Promise<void> {
+  return aspireExtensionContext.deactivate();
 }
 
 function getExtensionModeForTelemetry(mode: vscode.ExtensionMode): string {

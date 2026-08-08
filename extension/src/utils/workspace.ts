@@ -54,19 +54,48 @@ export function isFolderOpenInWorkspace(folderPath: string): boolean {
 }
 
 export function getRelativePathToWorkspace(filePath: string): string {
-    if (!isWorkspaceOpen(false)) {
-        return filePath;
+    // Reject paths that are absolute only under the *other* platform's rules before the
+    // workspace-membership check below, not after it. `getWorkspaceFolder` cannot match such a
+    // path, so control would reach `path.basename`, which on POSIX does not treat `\` as a
+    // separator: `C:\Users\me\src\AppHost.csproj` comes back whole and the full path leaks into the
+    // debug configuration name. POSIX hosts see Windows paths routinely via remote/SSH, Codespaces
+    // and WSL, so the ordering is what makes this check reachable for the input it exists to catch.
+    if (isForeignAbsolutePath(filePath)) {
+        // Only Win32 forms can be foreign: `path.win32.isAbsolute` also accepts a leading `/`, so a
+        // POSIX path is never foreign on a Windows host (and `path.win32.basename` splits on both
+        // separators, which is why that direction was already safe).
+        return path.win32.basename(filePath);
     }
 
     const uri = vscode.Uri.file(filePath);
     const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
+    if (!workspaceFolder) {
+        return path.basename(filePath);
+    }
 
-    if (workspaceFolder) {
-        const relativePath = vscode.workspace.asRelativePath(uri);
+    const relativePath = vscode.workspace.asRelativePath(uri);
+    // `asRelativePath` returns the path unchanged when it cannot be made relative, and it resolves
+    // against the *workspace*, which may use different path semantics than the extension host.
+    // Reject both platforms' absolute forms so the workspace-name fallback runs either way.
+    if (relativePath && !isAbsoluteOnAnyPlatform(relativePath)) {
         return relativePath;
     }
 
-    return filePath;
+    return workspaceFolder.name || path.basename(filePath);
+}
+
+/**
+ * Determines whether a path is absolute under one platform's rules but not under the extension
+ * host's, which means it can never be resolved against this workspace and the host's `path` helpers
+ * cannot decompose it — `path.posix.basename('C:\\Users\\me\\AppHost.csproj')` returns the whole
+ * string rather than the file name.
+ */
+function isForeignAbsolutePath(filePath: string): boolean {
+    return isAbsoluteOnAnyPlatform(filePath) && !path.isAbsolute(filePath);
+}
+
+function isAbsoluteOnAnyPlatform(filePath: string): boolean {
+    return path.posix.isAbsolute(filePath) || path.win32.isAbsolute(filePath);
 }
 
 interface AppHostQuickPickItem extends vscode.QuickPickItem {

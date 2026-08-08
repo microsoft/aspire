@@ -109,8 +109,9 @@ export function spawnCliProcess(terminalProvider: AspireTerminalProvider, comman
     return child;
 }
 
-export function terminateCliProcess(childProcess: ChildProcessWithoutNullStreams, description: string, options?: { suppressTimeoutWarning?: boolean }): void {
-    const processGroupPid = process.platform !== 'win32' && managedPosixProcessGroups.has(childProcess)
+export function terminateCliProcess(childProcess: ChildProcessWithoutNullStreams, description: string, options?: { suppressTimeoutWarning?: boolean; force?: boolean }): void {
+    const isWindows = process.platform === 'win32';
+    const processGroupPid = !isWindows && managedPosixProcessGroups.has(childProcess)
         ? childProcess.pid
         : undefined;
     let exited = childProcess.exitCode !== null || childProcess.signalCode !== null;
@@ -161,7 +162,30 @@ export function terminateCliProcess(childProcess: ChildProcessWithoutNullStreams
                 forceTermination();
             }
             managedPosixProcessGroups.delete(childProcess);
+            return;
         }
+
+        if (!isWindows) {
+            return;
+        }
+
+        // Windows does not tie child lifetimes to the parent process. An exited CLI leader can
+        // still have an AppHost/resource tree underneath its recorded PID, so sweep it with
+        // taskkill during forceful shutdown instead of treating the leader's exit as proof that
+        // teardown completed. Non-force callers keep the historical no-op behavior because a short
+        // helper CLI can legitimately exit before its close handler observes it.
+        if (!options?.force) {
+            return;
+        }
+    }
+
+    if (options?.force) {
+        // Skip the graceful signal and its escalation timer entirely. The timer below is `unref`'d,
+        // so a caller that is itself shutting down — extension deactivation, which resolves as soon
+        // as this returns — can have its host exit before the timer ever fires, leaving a process
+        // that ignored SIGTERM alive along with its whole tree. Such callers have already spent
+        // their own cooperative window, so the only signal left that means anything is the hard one.
+        forceTermination();
         return;
     }
 
