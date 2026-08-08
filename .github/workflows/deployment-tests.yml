@@ -354,10 +354,10 @@ jobs:
       # not guaranteed to be granted synchronously, so a still-short quota surfaces its own
       # QuotaExceeded error in the test that needs it.
       #
-      # Scope: this self-heals only the quotas configured in QUOTA_TARGETS (currently westus3
-      # public IPs plus AKS node-pool compute vCPUs and managed-cluster count).
-      # Azure enforces both the StandardDASv5Family quota and Total Regional vCPUs independently,
-      # so a node pool needs headroom in each. Other quotas the suite depends on, such as westus3
+      # Scope: this self-heals only the quotas configured in QUOTA_TARGETS (currently the westus3
+      # AKS node-pool compute vCPUs and managed-cluster count). Azure enforces both the
+      # StandardDASv5Family quota and Total Regional vCPUs independently, so a node pool needs
+      # headroom in each. Other quotas the suite depends on, such as westus3 Container Apps and
       # App Service, remain documented manual quota requests (see the E2E README's quota section).
       # Requests are submitted asynchronously (--no-wait, below), so extending QUOTA_TARGETS does
       # not lengthen this step.
@@ -371,7 +371,6 @@ jobs:
           #   resourceType - optional; compute vCPU quotas need it (dedicated | lowPriority), omit otherwise
           # Add a line to cover a new provider, region, resource, or higher limit.
           QUOTA_TARGETS: |
-            Microsoft.Network westus3 publicIPAddresses 150
             Microsoft.Compute westus3 StandardDASv5Family 200 dedicated
             Microsoft.Compute westus3 cores 200 dedicated
             Microsoft.ContainerService westus3 ManagedClusters 20
