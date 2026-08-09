@@ -75,4 +75,8 @@ Do not treat these placeholders as errors.
 
 ## Verified file conventions
 
-Verify writes `.verified.*` files as UTF-8 with BOM, LF line endings, and no trailing newline. The root `.editorconfig` has no override for these files, so an editor honouring `charset = utf-8` / `insert_final_newline = true` may try to strip the BOM or append a newline. Do not let it — that reformatting causes spurious diffs and failing tests. Leave `.verified.*` files exactly as Verify wrote them.
+- Encoding: UTF-8 with BOM
+- Line endings: LF (not CRLF)
+- No trailing newline
+
+These are enforced by the `[*.verified.*]` section in the root `.editorconfig` and by `*.verified.* text eol=lf` in `.gitattributes`. Do not reformat `.verified.*` files — leave them exactly as Verify wrote them.

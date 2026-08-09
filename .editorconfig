@@ -479,3 +479,11 @@ dotnet_diagnostic.CA2007.severity = silent
 
 [*.{cs,vb}]
 dotnet_diagnostic.ASPIREEVENTING001.severity = none
+
+# Verify snapshot files. These are written by the Verify tool and must be left
+# byte for byte as generated, otherwise snapshot tests fail with spurious diffs.
+[*.verified.*]
+charset = utf-8-bom
+end_of_line = lf
+insert_final_newline = false
+trim_trailing_whitespace = false

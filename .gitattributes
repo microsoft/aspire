@@ -62,3 +62,7 @@
 *.h linguist-language=C
 
 .github/workflows/*.lock.yml linguist-generated=true merge=ours
+
+# Verify snapshot files are generated with LF endings and must stay that way
+# in the working tree, even on Windows.
+*.verified.* text eol=lf
