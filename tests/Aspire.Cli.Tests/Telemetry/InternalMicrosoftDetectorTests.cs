@@ -492,7 +492,14 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         stopwatch.Stop();
 
         Assert.False(result.IsInternalMicrosoft);
-        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(2));
+
+        // The handler blocks for a minute per request, so if the overall candidate budget were not
+        // enforced this would take at least that long. The bound only has to separate "budget enforced"
+        // (~500ms of real work: 5 candidates at the 100ms per-candidate timeout) from "not enforced"
+        // (>= 1 minute). A tight bound buys no extra proof and does fail: at 2 seconds this test flaked on
+        // a loaded windows-latest runner at 2s 064ms while macOS and ubuntu passed on the same commit
+        // (https://github.com/microsoft/aspire/issues/19181).
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(10), $"Elapsed {stopwatch.Elapsed} exceeded the overall candidate timeout budget.");
         Assert.Equal(5, handler.GetRequestPaths().Count(path => path == "/user"));
     }
 
