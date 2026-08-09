@@ -16,6 +16,9 @@ public class EnvironmentCheckerTests
         using var releaseCheck = new ManualResetEventSlim();
         var checkStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var checkExited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        // This test intentionally blocks a ThreadPool worker. Keep the timeout large enough that
+        // the next check doesn't fail just because a loaded CI worker takes >100 ms to dispatch Task.Run.
+        var checkTimeout = TimeSpan.FromSeconds(2);
         var completedResult = new EnvironmentCheckResult
         {
             Category = EnvironmentCheckCategories.Environment,
@@ -35,8 +38,8 @@ public class EnvironmentCheckerTests
                 new TestEnvironmentCheck(1, _ => Task.FromResult<IReadOnlyList<EnvironmentCheckResult>>([completedResult])),
             ],
             NullLogger<EnvironmentChecker>.Instance,
-            checkTimeout: TimeSpan.FromMilliseconds(100),
-            totalTimeout: TimeSpan.FromSeconds(5));
+            checkTimeout: checkTimeout,
+            totalTimeout: TimeSpan.FromSeconds(10));
 
         var checkAllTask = checker.CheckAllAsync(TestContext.Current.CancellationToken);
         IReadOnlyList<EnvironmentCheckResult> results;
@@ -59,7 +62,7 @@ public class EnvironmentCheckerTests
                 Assert.Equal("test-environment", timeoutResult.Name);
                 Assert.Equal(EnvironmentCheckStatus.Warning, timeoutResult.Status);
                 Assert.Equal(nameof(TestEnvironmentCheck), timeoutResult.Metadata!["checkType"]!.GetValue<string>());
-                Assert.Equal(0.1, timeoutResult.Metadata["timeoutSeconds"]!.GetValue<double>());
+                Assert.Equal(checkTimeout.TotalSeconds, timeoutResult.Metadata["timeoutSeconds"]!.GetValue<double>());
             },
             result => Assert.Same(completedResult, result));
     }
