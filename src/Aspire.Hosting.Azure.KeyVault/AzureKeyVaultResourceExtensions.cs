@@ -143,6 +143,7 @@ public static partial class AzureKeyVaultResourceExtensions
 
         var resource = new AzureKeyVaultResource(name, configureInfrastructure);
         return builder.AddResource(resource)
+            .WithIconName("Vault")
             .WithDefaultRoleAssignments(KeyVaultBuiltInRole.GetBuiltInRoleName,
                 KeyVaultBuiltInRole.KeyVaultSecretsUser);
     }
@@ -297,7 +298,7 @@ public static partial class AzureKeyVaultResourceExtensions
         var secret = new AzureKeyVaultSecretResource(name, name, builder.Resource, parameterResource);
         builder.Resource.Secrets.Add(secret);
 
-        return builder.ApplicationBuilder.AddResource(secret).ExcludeFromManifest();
+        return builder.ApplicationBuilder.AddResource(secret).WithIconName("LockClosed").ExcludeFromManifest();
     }
 
     /// <summary>
@@ -318,7 +319,7 @@ public static partial class AzureKeyVaultResourceExtensions
         var secret = new AzureKeyVaultSecretResource(name, name, builder.Resource, value);
         builder.Resource.Secrets.Add(secret);
 
-        return builder.ApplicationBuilder.AddResource(secret).ExcludeFromManifest();
+        return builder.ApplicationBuilder.AddResource(secret).WithIconName("LockClosed").ExcludeFromManifest();
     }
 
     /// <summary>
@@ -357,7 +358,7 @@ public static partial class AzureKeyVaultResourceExtensions
         var secret = new AzureKeyVaultSecretResource(name, secretName, builder.Resource, parameterResource);
         builder.Resource.Secrets.Add(secret);
 
-        return builder.ApplicationBuilder.AddResource(secret).ExcludeFromManifest();
+        return builder.ApplicationBuilder.AddResource(secret).WithIconName("LockClosed").ExcludeFromManifest();
     }
 
     /// <summary>
@@ -379,7 +380,7 @@ public static partial class AzureKeyVaultResourceExtensions
         var secret = new AzureKeyVaultSecretResource(name, secretName, builder.Resource, value);
         builder.Resource.Secrets.Add(secret);
 
-        return builder.ApplicationBuilder.AddResource(secret).ExcludeFromManifest();
+        return builder.ApplicationBuilder.AddResource(secret).WithIconName("LockClosed").ExcludeFromManifest();
     }
 
     private static void ValidateSecretName(string secretName)

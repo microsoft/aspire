@@ -26,8 +26,14 @@ void main() throws Exception {
             .withAppArgs(new String[] { "--config", "prod.yaml" });
 
         // Go app with headless Delve server for remote debugging (GoLand / VS Code attach)
+        var delveServerOptions = new DelveServerOptions();
+        // Java DTOs serialize unset fields as null, so specify every non-nullable default.
+        delveServerOptions.setPort(2345.0);
+        delveServerOptions.setAcceptMultiClient(false);
+        delveServerOptions.setContinueOnStart(false);
+        delveServerOptions.setLog(false);
         var debugService = builder.addGoApp("debug-service", "../go-debug-service")
-            .withDelveServer();
+            .withDelveServer(delveServerOptions);
 
         builder.build().run();
     }

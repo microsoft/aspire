@@ -47,8 +47,13 @@ inputs:
     description: 'The PR base SHA. When set, selection diffs base..head; the base commit is fetched first. Empty (non-PR events) selects everything.'
   headSha:
     required: false
-    default: ${{ github.sha }}
-    description: 'The head SHA to diff to.'
+    # The PR's REAL head, NOT github.sha (the synthetic refs/pull/N/merge commit, regenerated as the base
+    # advances -- feeding it lets base-branch churn leak into the diff and over-select). Only consumed when
+    # prBaseSha is set (PR events), where pull_request.head.sha is populated; empty on non-PR events, where
+    # headSha is unused because prBaseSha is empty too. Default kept correct so a caller can't reintroduce
+    # the github.sha bug by omitting it.
+    default: ${{ github.event.pull_request.head.sha }}
+    description: 'The PR head SHA to diff to (the PR''s real head, not the synthetic merge ref).'
 
 outputs:
   project_override_props:
@@ -124,10 +129,14 @@ runs:
         if [ "$FORCE_ALL" = "true" ]; then
           args+=(--force-all)
         elif [ -n "$PR_BASE_SHA" ]; then
-          # Pull requests diff base..head. This job's checkout is shallow, so fetch the base commit.
-          # If it can't be made available we FAIL rather than fall back to --force-all: base.sha is
-          # always reachable on origin, so a failure here is a real problem (a bad fetch or a
-          # rewritten base), and masking it with run-all would teach the audit nothing.
+          # Pull requests select on the PR's own commits: SelectTests diffs HEAD against the merge-base
+          # of base..head (the branch point), so commits that landed on the base branch after the PR
+          # branched don't get mis-attributed to it. This job's checkout is shallow, so we must make
+          # enough history of BOTH endpoints available locally for git to find their common ancestor.
+          #
+          # Start with the base commit itself. If it can't be fetched we FAIL rather than fall back to
+          # --force-all: base.sha is always reachable on origin, so a failure here is a real problem (a
+          # bad fetch or a rewritten base), and masking it with run-all would teach the audit nothing.
           if ! git fetch --no-tags --depth=1 origin "$PR_BASE_SHA"; then
             echo "::error::Failed to fetch PR base commit $PR_BASE_SHA; cannot compute the changed-file diff." >&2
             exit 1
@@ -136,7 +145,37 @@ runs:
             echo "::error::PR base commit $PR_BASE_SHA is unavailable after fetch; cannot compute the changed-file diff." >&2
             exit 1
           fi
-          args+=(--from "$PR_BASE_SHA" --to "$HEAD_SHA")
+
+          # Deepen both endpoints until their merge-base is reachable. A shallow checkout truncates
+          # ancestry, so git can't see the branch point yet. Re-fetch both SHAs at a growing depth until
+          # `git merge-base` succeeds. If it never resolves within the bound, DON'T fail the PR: fall back
+          # to --force-all (run every test) -- the fail-SAFE outcome, matching SelectTests' own fallback --
+          # and warn loudly so a systemic regression is visible instead of blocking PRs while it's fixed.
+          # The bound also prevents an unbounded fetch on pathological histories.
+          merge_base_found=true
+          depth=1
+          until git merge-base "$PR_BASE_SHA" "$HEAD_SHA" >/dev/null 2>&1; do
+            if [ "$depth" -ge 4096 ]; then
+              echo "::warning::Could not find a merge-base of base $PR_BASE_SHA and head $HEAD_SHA within $depth commits of history; running ALL tests for this PR." >&2
+              merge_base_found=false
+              break
+            fi
+            depth=$((depth * 4))
+            echo "Merge-base of base..head not yet reachable; deepening history to depth $depth."
+            # Fetch both SHAs in one shot. '|| true' so a deepen that can't make progress (e.g. one side
+            # is already complete) doesn't abort the loop -- the merge-base check above is the real gate,
+            # and the depth bound guarantees termination.
+            git fetch --no-tags --depth="$depth" origin "$PR_BASE_SHA" "$HEAD_SHA" || true
+          done
+          if [ "$merge_base_found" = "true" ]; then
+            args+=(--from "$PR_BASE_SHA" --to "$HEAD_SHA")
+          else
+            # Unresolved merge-base -> fail-safe run-all rather than blocking the PR. Pass the reason so the
+            # run summary records WHY this is a full run -- distinct from a run-full-ci kill switch -- to
+            # match SelectTests' own tool-level fallback. Without it a systemic shallow-history regression
+            # hides behind a "(kill switch)" label in the audit's durable record (the summary, not the logs).
+            args+=(--force-all --force-all-reason "git merge-base of base $PR_BASE_SHA and head $HEAD_SHA was unreachable within $depth commits of CI checkout history")
+          fi
         else
           # Non-PR events (e.g. push to main) have no reliable base -> run everything.
           args+=(--force-all)

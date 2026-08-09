@@ -4,7 +4,7 @@ import * as path from 'path';
 import { getCommandInvocationCount, getTerminalCommandCount, isSamePath, waitForCommandOutcome, waitForExtensionState, waitForRepositoryIdle, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
 import { createAdditionalAppHostCandidate, executeE2eControlCommand, removeAdditionalAppHostCandidate, removeWorkspaceAppHostConfig, restoreE2eCliPathForE2E, restoreWorkspaceAppHostConfig, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, writeWorkspaceCliPath } from './helpers/fixtures';
 import { getWorkspaceRoot } from './helpers/paths';
-import { executeCommandFromPalette, openAspireView, waitForEditorTitle, waitForNotificationMessage, waitForTerminalChannel, waitForWorkbenchText } from './helpers/vscode';
+import { chooseActiveQuickPick, executeCommandFromPalette, openAspireView, waitForEditorTitle, waitForNotificationMessage, waitForTerminalChannel, waitForWorkbenchText } from './helpers/vscode';
 
 suite('Aspire command palette E2E', function () {
     this.timeout(420000);
@@ -84,12 +84,13 @@ suite('Aspire command palette E2E', function () {
 
         const configureBefore = getCommandInvocationCount('aspire-vscode.configureLaunchJson');
         await executeCommandFromPalette('Aspire: Configure launch.json file');
+        await chooseActiveQuickPick('Do not open the dashboard');
         await waitForCommandOutcome('aspire-vscode.configureLaunchJson', 'success', 60000, configureBefore);
         assert.ok((await waitForEditorTitle('launch.json')).includes('launch.json'));
 
         const launchJsonPath = path.join(getWorkspaceRoot(), '.vscode', 'launch.json');
-        const launchJson = JSON.parse(fs.readFileSync(launchJsonPath, 'utf8')) as { configurations?: Array<{ type?: string; request?: string }> };
-        assert.ok(launchJson.configurations?.some(configuration => configuration.type === 'aspire' && configuration.request === 'launch'));
+        const launchJson = JSON.parse(fs.readFileSync(launchJsonPath, 'utf8')) as { configurations?: Array<{ type?: string; request?: string; dashboardBrowser?: string }> };
+        assert.ok(launchJson.configurations?.some(configuration => configuration.type === 'aspire' && configuration.request === 'launch' && configuration.dashboardBrowser === 'none'));
     });
 
     test('observes multiple AppHost candidates without selecting the wrong one', async () => {

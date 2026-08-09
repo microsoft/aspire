@@ -7,6 +7,8 @@ void main() throws Exception {
         var helmChartName = builder.addParameter("helm-chart-name");
         var helmChartVersion = builder.addParameter("helm-chart-version");
         var helmChartDescription = builder.addParameter("helm-chart-description");
+        var persistentVolumeStorageClass = builder.addParameter("persistent-volume-storage-class");
+        var persistentVolumeCapacity = builder.addParameter("persistent-volume-capacity");
         var kubernetes = builder.addKubernetesEnvironment("kube");
         kubernetes.withHelm((helm) -> {
             helm.withNamespace("validation-namespace");
@@ -42,6 +44,13 @@ void main() throws Exception {
         var ingress = kubernetes.addIngress("public-ingress");
         ingress.withHostname("ingress.example.com");
         ingress.withTls("ingress-tls");
+        var persistentVolume = kubernetes.addPersistentVolume("data");
+        persistentVolume.withStorageClass("fast-storage");
+        persistentVolume.withCapacity("5Gi");
+        var _persistentVolumeResourceName = persistentVolume.getResourceName();
+        var parameterizedPersistentVolume = kubernetes.addPersistentVolume("parameterized-data");
+        parameterizedPersistentVolume.withStorageClassParam(persistentVolumeStorageClass);
+        parameterizedPersistentVolume.withCapacityParam(persistentVolumeCapacity);
         var serviceContainer = builder.addContainer("kube-service", "redis:alpine");
         serviceContainer.withComputeEnvironment(kubernetes);
         serviceContainer.publishAsKubernetesService((service) -> {

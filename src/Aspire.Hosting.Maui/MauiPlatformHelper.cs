@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Maui.Annotations;
@@ -88,16 +89,35 @@ internal static class MauiPlatformHelper
         // Check if the project has the platform TFM and get the actual TFM value
         var platformTfm = ProjectFileReader.GetPlatformTargetFramework(projectPath, platformName);
 
-        // Set the command line arguments with the detected TFM if available
+        // Override the default DCP launch command from 'dotnet run' to 'dotnet build --no-restore /t:Run -p:NoBuild=true'.
+        // The Build target is run separately by MauiBuildQueueEventSubscriber before DCP starts
+        // the process, giving reliable exit-code-based build completion detection and allowing
+        // the "Building" state to persist in the dashboard. DCP only needs to launch the
+        // already-built app, so disable restore/build work in the Run target to avoid concurrent
+        // MSBuild output writes after the queue lock is released.
+        resourceBuilder.WithAnnotation(new ProjectLaunchArgsOverrideAnnotation(["build", "--no-restore", "/t:Run", "-p:NoBuild=true"], leadingResourceArgumentToRemove: "run"));
+
+        // Store build parameters so the event subscriber can run 'dotnet build' before launch.
+        // The annotation captures the same target framework, configuration, and MSBuild properties
+        // that DCP later passes to the no-build Run target.
+        var workingDir = Path.GetDirectoryName(projectPath)
+            ?? throw new InvalidOperationException($"Unable to determine directory from project path: {projectPath}");
+        var configuration = resourceBuilder.ApplicationBuilder.AppHostAssembly?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration;
+        resourceBuilder.WithAnnotation(new MauiBuildInfoAnnotation(projectPath, workingDir, platformTfm, configuration, additionalArgs));
+
+        // Set the command line arguments with the detected TFM and platform-specific args.
+        // These are appended AFTER the DCP-generated project args.
         resourceBuilder.WithArgs(context =>
         {
             context.Args.Add("run");
+
             if (!string.IsNullOrEmpty(platformTfm))
             {
                 context.Args.Add("-f");
                 context.Args.Add(platformTfm);
             }
-            // Add any additional platform-specific arguments
+
+            // Add any additional platform-specific arguments (e.g., -p:AdbTarget=...)
             foreach (var arg in additionalArgs)
             {
                 context.Args.Add(arg);

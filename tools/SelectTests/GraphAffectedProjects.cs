@@ -59,8 +59,12 @@ public sealed record AffectedPath(string ChangedFile, IReadOnlyList<string> Proj
 /// through a libgit2-backed MSBuild virtual filesystem to diff packages, which (a) crashes whenever
 /// the diff touches <c>Directory.Packages.props</c> — it eager-loads <c>global.json</c> as MSBuild
 /// XML (leonardochaia/dotnet-affected#155) — and (b) cannot run inside a git worktree. A HEAD-only
-/// graph never evaluates from-commit content, so both problems disappear. Two-commit central-package
-/// diffing is intentionally not reproduced; Layer 2 routes <c>Directory.Packages.props -&gt; ALL</c>.
+/// graph never evaluates from-commit content, so both problems disappear. Two-commit <em>per-package</em>
+/// diffing (mapping a single changed <c>&lt;PackageVersion&gt;</c> to only its consumers) is not
+/// reproduced and is not needed: the SDK imports <c>Directory.Packages.props</c> at evaluation, so it is
+/// in every project's <see cref="ProjectInstance.ImportPaths"/> and Layer 1 already attributes a change
+/// to it to every importing project (i.e. all test projects). Layer 2 also routes it to <c>ALL</c> to
+/// additionally fire the non-.NET <c>job:</c> targets, which Layer 1 never emits.
 /// </para>
 /// <para>
 /// Why no <c>Microsoft.Build.Prediction</c>: a file-&gt;project index built from the evaluated

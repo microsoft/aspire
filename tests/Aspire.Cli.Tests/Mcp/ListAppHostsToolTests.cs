@@ -15,7 +15,7 @@ public class ListAppHostsToolTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ListAppHostsTool_ReturnsEmptyListWhenNoConnections()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var executionContext = CreateCliExecutionContext(workspace.WorkspaceRoot);
 
@@ -39,7 +39,7 @@ public class ListAppHostsToolTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ListAppHostsTool_ReturnsInScopeAppHosts()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var executionContext = CreateCliExecutionContext(workspace.WorkspaceRoot);
 
@@ -71,7 +71,7 @@ public class ListAppHostsToolTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ListAppHostsTool_ReturnsOutOfScopeAppHosts()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var executionContext = CreateCliExecutionContext(workspace.WorkspaceRoot);
 
@@ -103,7 +103,7 @@ public class ListAppHostsToolTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ListAppHostsTool_SeparatesInScopeAndOutOfScopeAppHosts()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var executionContext = CreateCliExecutionContext(workspace.WorkspaceRoot);
 
@@ -147,7 +147,7 @@ public class ListAppHostsToolTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ListAppHostsTool_CallsScanAsyncBeforeReturningResults()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var executionContext = CreateCliExecutionContext(workspace.WorkspaceRoot);
 

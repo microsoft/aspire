@@ -2601,4 +2601,120 @@ public class AspireExportAnalyzerTests
 
         await test.RunAsync();
     }
+
+    [Fact]
+    public async Task ExportsWithoutMarker_NoDiagnostics()
+    {
+        // Has [AspireExport] coverage and no marker: polyglot-compatible by default, so ASPIREEXPORT017
+        // must not fire (the 'polyglot' tag is added at pack time).
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public static class TestExports
+            {
+                [AspireExport]
+                public static string TestMethod() => "test";
+            }
+            """,
+            [],
+            includeAspireHostingReference: true,
+            isAspirePolyglotCompatible: null);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task ExportsWithMarkerFalse_NoDiagnostics()
+    {
+        // Has [AspireExport] coverage but explicitly opts out: allowed (the project just won't get the
+        // 'polyglot' tag), so ASPIREEXPORT017 must not fire.
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public static class TestExports
+            {
+                [AspireExport]
+                public static string TestMethod() => "test";
+            }
+            """,
+            [],
+            includeAspireHostingReference: true,
+            isAspirePolyglotCompatible: "false");
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task NoExportsWithoutMarker_ReportsASPIREEXPORT017()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_missingPolyglotCompatibleMarker;
+
+        // No [AspireExport] coverage and no opt-out: the project is treated as a polyglot integration but
+        // has nothing to export, so the build fails until exports are added or the project opts out.
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public static class TestHelpers
+            {
+                public static string TestMethod() => "test";
+            }
+            """,
+            [new DiagnosticResult(diagnostic).WithArguments("TestProject")],
+            includeAspireHostingReference: true,
+            isAspirePolyglotCompatible: null);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task NoExportsWithMarkerTrue_ReportsASPIREEXPORT017()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_missingPolyglotCompatibleMarker;
+
+        // Setting the marker to 'true' does not satisfy the rule: only an explicit 'false' opts out, so a
+        // project that claims polyglot compatibility but has no [AspireExport] surface still fails.
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public static class TestHelpers
+            {
+                public static string TestMethod() => "test";
+            }
+            """,
+            [new DiagnosticResult(diagnostic).WithArguments("TestProject")],
+            includeAspireHostingReference: true,
+            isAspirePolyglotCompatible: "true");
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task NoExportsWithMarkerFalse_NoDiagnostics()
+    {
+        // No [AspireExport] coverage but the project acknowledges it is not a polyglot integration, so
+        // ASPIREEXPORT017 must not fire.
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public static class TestHelpers
+            {
+                public static string TestMethod() => "test";
+            }
+            """,
+            [],
+            includeAspireHostingReference: true,
+            isAspirePolyglotCompatible: "false");
+
+        await test.RunAsync();
+    }
 }

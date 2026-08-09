@@ -122,7 +122,7 @@ internal sealed class PlaywrightCliInstaller(
             return (PlaywrightInstallStatus.Skipped, null);
         }
 
-        // Step 1: Resolve the target version and integrity hash from the npm registry.
+        // Step 1: Resolve the target version from the internal npm registry.
         var versionOverride = configuration[VersionOverrideKey];
         string effectiveRange;
 
@@ -147,7 +147,7 @@ internal sealed class PlaywrightCliInstaller(
             effectiveRange = VersionRange;
         }
 
-        logger.LogDebug("Resolving {Package}@{Range} from npm registry.", PackageName, effectiveRange);
+        logger.LogDebug("Resolving {Package}@{Range} from the internal npm registry.", PackageName, effectiveRange);
         var packageInfo = await npmRunner.ResolvePackageAsync(PackageName, effectiveRange, cancellationToken);
 
         if (packageInfo is null)
@@ -155,7 +155,7 @@ internal sealed class PlaywrightCliInstaller(
             return (PlaywrightInstallStatus.Failed, string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_FailedToResolvePackage, NpmPackageInfo.FormatPackageSpecifier(PackageName, effectiveRange)));
         }
 
-        logger.LogDebug("Resolved {PackageSpecifier} with integrity {Integrity}.", NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version), packageInfo.Integrity);
+        logger.LogDebug("Resolved {PackageSpecifier}.", NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version));
 
         // Step 2: Check if a suitable version is already installed.
         var installedVersion = await playwrightCliRunner.GetVersionAsync(cancellationToken);
@@ -190,43 +190,8 @@ internal sealed class PlaywrightCliInstaller(
                 DisablePackageValidationKey);
         }
 
-        if (!validationDisabled)
-        {
-            // Step 3: Verify provenance via Sigstore bundle verification and SLSA attestation checks.
-            // This cryptographically verifies the Sigstore bundle (Fulcio CA, Rekor tlog, OIDC identity)
-            // and then checks the provenance fields (source repo, workflow, build type, ref).
-            logger.LogDebug("Verifying provenance for {PackageSpecifier}.", NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version));
-            var provenanceResult = await provenanceChecker.VerifyProvenanceAsync(
-                PackageName,
-                packageInfo.Version.ToString(),
-                ExpectedSourceRepository,
-                ExpectedWorkflowPath,
-                ExpectedBuildType,
-                refInfo => string.Equals(refInfo.Kind, "tags", StringComparison.Ordinal) &&
-                           (string.Equals(refInfo.Name, $"{packageInfo.Version}", StringComparison.Ordinal) ||
-                            string.Equals(refInfo.Name, $"v{packageInfo.Version}", StringComparison.Ordinal)),
-                packageInfo.Integrity,
-                cancellationToken);
-
-            if (!provenanceResult.IsVerified)
-            {
-                logger.LogWarning(
-                    "Provenance verification failed for {PackageSpecifier}: {Outcome}. Expected source repository: {ExpectedRepo}",
-                    NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version),
-                    provenanceResult.Outcome,
-                    ExpectedSourceRepository);
-                return (PlaywrightInstallStatus.Failed, string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_ProvenanceVerificationFailed, NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version), provenanceResult.Outcome));
-            }
-
-            logger.LogDebug(
-                "Provenance verification passed for {PackageSpecifier} (source: {SourceRepo})",
-                NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version),
-                provenanceResult.Provenance?.SourceRepository);
-        }
-
-        // Step 4: Download the tarball via npm pack.
-        var tempDir = Path.Combine(Path.GetTempPath(), $"aspire-playwright-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempDir);
+        // Step 3: Download the tarball via npm pack.
+        var tempDir = Directory.CreateTempSubdirectory("aspire-playwright-").FullName;
 
         try
         {
@@ -239,21 +204,42 @@ internal sealed class PlaywrightCliInstaller(
                 return (PlaywrightInstallStatus.Failed, string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_FailedToDownload, NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version)));
             }
 
-            // Step 5: Verify the downloaded tarball's SHA-512 hash matches the SRI integrity value.
-            if (!validationDisabled && !VerifyIntegrity(tarballPath, packageInfo.Integrity))
-            {
-                logger.LogWarning(
-                    "Integrity verification failed for {PackageSpecifier}. The downloaded package may have been tampered with.",
-                    NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version));
-                return (PlaywrightInstallStatus.Failed, string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_IntegrityVerificationFailed, NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version)));
-            }
-
             if (!validationDisabled)
             {
-                logger.LogDebug("Integrity verification passed for {TarballPath}.", tarballPath);
+                // Step 4: Verify provenance via Sigstore bundle verification and SLSA attestation checks.
+                // The digest is computed from the downloaded archive so verification binds the
+                // exact package bytes to the signed provenance statement.
+                var tarballIntegrity = ComputeIntegrity(tarballPath);
+                logger.LogDebug("Verifying provenance for {PackageSpecifier}.", NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version));
+                var provenanceResult = await provenanceChecker.VerifyProvenanceAsync(
+                    PackageName,
+                    packageInfo.Version.ToString(),
+                    ExpectedSourceRepository,
+                    ExpectedWorkflowPath,
+                    ExpectedBuildType,
+                    refInfo => string.Equals(refInfo.Kind, "tags", StringComparison.Ordinal) &&
+                               (string.Equals(refInfo.Name, $"{packageInfo.Version}", StringComparison.Ordinal) ||
+                                string.Equals(refInfo.Name, $"v{packageInfo.Version}", StringComparison.Ordinal)),
+                    tarballIntegrity,
+                    cancellationToken);
+
+                if (!provenanceResult.IsVerified)
+                {
+                    logger.LogWarning(
+                        "Provenance verification failed for {PackageSpecifier}: {Outcome}. Expected source repository: {ExpectedRepo}",
+                        NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version),
+                        provenanceResult.Outcome,
+                        ExpectedSourceRepository);
+                    return (PlaywrightInstallStatus.Failed, string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_ProvenanceVerificationFailed, NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version), provenanceResult.Outcome));
+                }
+
+                logger.LogDebug(
+                    "Provenance verification passed for {PackageSpecifier} (source: {SourceRepo})",
+                    NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version),
+                    provenanceResult.Provenance?.SourceRepository);
             }
 
-            // Step 6: Install globally from the verified tarball.
+            // Step 5: Install globally from the verified tarball.
             logger.LogDebug("Installing {PackageSpecifier} globally.", NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version));
             var installSuccess = await npmRunner.InstallGlobalAsync(tarballPath, cancellationToken);
 
@@ -263,7 +249,7 @@ internal sealed class PlaywrightCliInstaller(
                 return (PlaywrightInstallStatus.Failed, string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_FailedToInstallGlobally, NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version)));
             }
 
-            // Step 7: Generate skill files and mirror to selected locations.
+            // Step 6: Generate skill files and mirror to selected locations.
             return await InstallAndMirrorSkillsAsync(repoRoot, selectedSkillDirectories, cancellationToken);
         }
         finally
@@ -476,22 +462,12 @@ internal sealed class PlaywrightCliInstaller(
     }
 
     /// <summary>
-    /// Verifies that the SHA-512 hash of the file matches the SRI integrity string.
+    /// Computes the SHA-512 SRI integrity value for a file.
     /// </summary>
-    internal static bool VerifyIntegrity(string filePath, string sriIntegrity)
+    internal static string ComputeIntegrity(string filePath)
     {
-        // SRI format: "sha512-<base64hash>"
-        if (!sriIntegrity.StartsWith("sha512-", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        var expectedHash = sriIntegrity["sha512-".Length..];
-
         using var stream = File.OpenRead(filePath);
-        var hashBytes = SHA512.HashData(stream);
-        var actualHash = Convert.ToBase64String(hashBytes);
-
-        return string.Equals(expectedHash, actualHash, StringComparison.Ordinal);
+        return $"sha512-{Convert.ToBase64String(SHA512.HashData(stream))}";
     }
+
 }

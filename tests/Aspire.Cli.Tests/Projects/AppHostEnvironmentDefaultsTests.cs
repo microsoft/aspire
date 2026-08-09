@@ -2,13 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Projects;
+using Aspire.Hosting;
 
 namespace Aspire.Cli.Tests.Projects;
 
 public class AppHostEnvironmentDefaultsTests
 {
-    private const string AspNetCoreEnvironmentVariableName = "ASPNETCORE_ENVIRONMENT";
-
     [Fact]
     public void ApplyEffectiveEnvironment_UsesDefaultWhenNoEnvironmentVariablesAreSet()
     {
@@ -16,8 +15,8 @@ public class AppHostEnvironmentDefaultsTests
 
         AppHostEnvironmentDefaults.ApplyEffectiveEnvironment(env, AppHostEnvironmentDefaults.ProductionEnvironmentName);
 
-        Assert.Equal("Production", env["DOTNET_ENVIRONMENT"]);
-        Assert.False(env.ContainsKey(AspNetCoreEnvironmentVariableName));
+        Assert.Equal("Production", env[KnownAspNetCoreConfigNames.DotNetEnvironment]);
+        Assert.False(env.ContainsKey(KnownAspNetCoreConfigNames.Environment));
     }
 
     [Fact]
@@ -25,14 +24,14 @@ public class AppHostEnvironmentDefaultsTests
     {
         var env = new Dictionary<string, string>
         {
-            [AppHostEnvironmentDefaults.DotNetEnvironmentVariableName] = "Production",
+            [KnownAspNetCoreConfigNames.DotNetEnvironment] = "Production",
             [AppHostEnvironmentDefaults.AspireEnvironmentVariableName] = "Staging"
         };
 
         AppHostEnvironmentDefaults.ApplyEffectiveEnvironment(env, AppHostEnvironmentDefaults.DevelopmentEnvironmentName);
 
-        Assert.Equal("Production", env["DOTNET_ENVIRONMENT"]);
-        Assert.False(env.ContainsKey(AspNetCoreEnvironmentVariableName));
+        Assert.Equal("Production", env[KnownAspNetCoreConfigNames.DotNetEnvironment]);
+        Assert.False(env.ContainsKey(KnownAspNetCoreConfigNames.Environment));
         Assert.Equal("Staging", env["ASPIRE_ENVIRONMENT"]);
     }
 
@@ -41,7 +40,7 @@ public class AppHostEnvironmentDefaultsTests
     {
         var env = new Dictionary<string, string>
         {
-            [AppHostEnvironmentDefaults.DotNetEnvironmentVariableName] = "Production",
+            [KnownAspNetCoreConfigNames.DotNetEnvironment] = "Production",
             [AppHostEnvironmentDefaults.AspireEnvironmentVariableName] = "Development"
         };
 
@@ -50,8 +49,8 @@ public class AppHostEnvironmentDefaultsTests
             AppHostEnvironmentDefaults.DevelopmentEnvironmentName,
             args: ["--environment", "Staging"]);
 
-        Assert.Equal("Staging", env["DOTNET_ENVIRONMENT"]);
-        Assert.False(env.ContainsKey(AspNetCoreEnvironmentVariableName));
+        Assert.Equal("Staging", env[KnownAspNetCoreConfigNames.DotNetEnvironment]);
+        Assert.False(env.ContainsKey(KnownAspNetCoreConfigNames.Environment));
         Assert.Equal("Development", env["ASPIRE_ENVIRONMENT"]);
     }
 
@@ -61,13 +60,13 @@ public class AppHostEnvironmentDefaultsTests
         var env = new Dictionary<string, string>
         {
             [AppHostEnvironmentDefaults.AspireEnvironmentVariableName] = "Testing",
-            [AspNetCoreEnvironmentVariableName] = "Staging"
+            [KnownAspNetCoreConfigNames.Environment] = "Staging"
         };
 
         AppHostEnvironmentDefaults.ApplyEffectiveEnvironment(env, AppHostEnvironmentDefaults.DevelopmentEnvironmentName);
 
-        Assert.Equal("Testing", env["DOTNET_ENVIRONMENT"]);
-        Assert.Equal("Staging", env["ASPNETCORE_ENVIRONMENT"]);
+        Assert.Equal("Testing", env[KnownAspNetCoreConfigNames.DotNetEnvironment]);
+        Assert.Equal("Staging", env[KnownAspNetCoreConfigNames.Environment]);
         Assert.Equal("Testing", env["ASPIRE_ENVIRONMENT"]);
     }
 
@@ -85,7 +84,7 @@ public class AppHostEnvironmentDefaultsTests
             AppHostEnvironmentDefaults.ProductionEnvironmentName,
             inherited);
 
-        Assert.Equal("Staging", env["DOTNET_ENVIRONMENT"]);
-        Assert.False(env.ContainsKey(AspNetCoreEnvironmentVariableName));
+        Assert.Equal("Staging", env[KnownAspNetCoreConfigNames.DotNetEnvironment]);
+        Assert.False(env.ContainsKey(KnownAspNetCoreConfigNames.Environment));
     }
 }

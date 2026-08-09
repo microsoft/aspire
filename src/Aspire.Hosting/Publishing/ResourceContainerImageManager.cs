@@ -327,7 +327,7 @@ internal sealed class ResourceContainerImageManager(
     private async Task ExecuteDotnetPublishAsync(IResource resource, ResolvedContainerBuildOptions options, CancellationToken cancellationToken)
     {
         // This is a resource project so we'll use the .NET SDK to build the container image.
-        if (!resource.TryGetLastAnnotation<IProjectMetadata>(out var projectMetadata))
+        if (!resource.TryGetProjectMetadata(out var projectMetadata))
         {
             throw new DistributedApplicationException($"The resource '{resource.Name}' does not have a project metadata annotation.");
         }

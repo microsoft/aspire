@@ -1,11 +1,10 @@
 {
   "aspire.closeDashboardOnDebugEnd": true,
-  "aspire.dashboardBrowser": "integratedBrowser",
-  "aspire.enableAspireDashboardAutoLaunch": "launch",
   "aspire.enableAutoRestore": false,
   "aspire.enableSettingsFileCreationPromptOnStartup": false,
   "aspire.appHostDiscoveryTimeoutMs": 120000,
   "aspire.globalAppHostsPollingInterval": 1000,
+  "azureFunctions.pickProcessTimeout": 120,
   "telemetry.telemetryLevel": "off",
   "update.mode": "none",
   "extensions.ignoreRecommendations": true,

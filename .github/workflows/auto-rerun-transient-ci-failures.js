@@ -115,6 +115,7 @@ const infrastructureNetworkFailureLogOverridePatterns = [
     /expected 'packfile'/i,
     /\bRPC failed\b/i,
     /\bRecv failure\b/i,
+    /Unable to read data from the transport connection: Connection reset by peer/i,
 ];
 
 function matchesAny(value, patterns) {

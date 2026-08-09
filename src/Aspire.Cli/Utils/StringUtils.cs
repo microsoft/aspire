@@ -62,7 +62,7 @@ internal static class StringUtils
         }
 
         // Starts with (high priority)
-        if (targetLower.StartsWith(searchLower))
+        if (targetLower.StartsWith(searchLower, StringComparison.Ordinal))
         {
             return 0.95;
         }

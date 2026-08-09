@@ -16,7 +16,10 @@ using Aspire.Hosting;
 using Grpc.Core;
 using Grpc.Net.Client;
 using Grpc.Net.Client.Configuration;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
+using Semver;
+using DashboardResources = Aspire.Dashboard.Resources.Resources;
 using ResourceCommandResponseKind = Aspire.Dashboard.Model.ResourceCommandResponseKind;
 
 namespace Aspire.Dashboard.ServiceClient;
@@ -43,6 +46,10 @@ internal sealed class DashboardClient : IDashboardClient
     private const string ApiKeyHeaderName = "x-resource-service-api-key";
     private const string TroubleshootingUrl = "https://aka.ms/aspire/dashboard-apphost-connection-failed";
 
+    // The dashboard's own version, extracted from its assembly at startup. Used to compare against
+    // the minimum version required by the AppHost.
+    private static readonly SemVersion? s_dashboardVersion = GetDashboardVersion();
+
     private readonly Dictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
     private readonly InteractionCollection _pendingInteractionCollection = new();
     private readonly CancellationTokenSource _cts = new();
@@ -57,11 +64,13 @@ internal sealed class DashboardClient : IDashboardClient
     private readonly ILoggerFactory _loggerFactory;
     private readonly IKnownPropertyLookup _knownPropertyLookup;
     private readonly DashboardOptions _dashboardOptions;
+    private readonly IStringLocalizer<DashboardResources> _loc;
     private readonly ILogger<DashboardClient> _logger;
 
     private ImmutableHashSet<Channel<IReadOnlyList<ResourceViewModelChange>>> _outgoingResourceChannels = [];
     private ImmutableHashSet<Channel<WatchInteractionsResponseUpdate>> _outgoingInteractionChannels = [];
     private string? _applicationName;
+    private string? _minRequiredVersion;
 
     private DashboardConnectionState _connectionState;
     private readonly object _connectionStateLock = new();
@@ -85,11 +94,13 @@ internal sealed class DashboardClient : IDashboardClient
         IConfiguration configuration,
         IOptions<DashboardOptions> dashboardOptions,
         IKnownPropertyLookup knownPropertyLookup,
+        IStringLocalizer<DashboardResources> loc,
         Action<SocketsHttpHandler>? configureHttpHandler = null)
     {
         _loggerFactory = loggerFactory;
         _knownPropertyLookup = knownPropertyLookup;
         _dashboardOptions = dashboardOptions.Value;
+        _loc = loc;
 
         // Take a copy of the token and always use it to avoid race between disposal of CTS and usage of token.
         _clientCancellationToken = _cts.Token;
@@ -277,7 +288,7 @@ internal sealed class DashboardClient : IDashboardClient
                 // This handles both initial connection and reconnection after a disconnect.
                 _whenConnectedTcs.TrySetResult();
             }
-            else if (state is DashboardConnectionState.Disconnected or DashboardConnectionState.Connecting)
+            else if (state is DashboardConnectionState.Disconnected or DashboardConnectionState.Connecting or DashboardConnectionState.Unsupported)
             {
                 // Reset the WhenConnected TCS when disconnecting so that callers can re-await it.
                 if (_whenConnectedTcs.Task.IsCompleted)
@@ -320,7 +331,10 @@ internal sealed class DashboardClient : IDashboardClient
     {
         try
         {
-            await ConnectWithRetryAsync(cancellationToken).ConfigureAwait(false);
+            if (!await ConnectWithRetryAsync(cancellationToken).ConfigureAwait(false))
+            {
+                return;
+            }
 
             await Task.WhenAll(
                 Task.Run(async () =>
@@ -350,7 +364,7 @@ internal sealed class DashboardClient : IDashboardClient
     /// On failure, transitions to Disconnected and waits before retrying. The delay can be
     /// cancelled by <see cref="ReconnectAsync"/> for immediate retry.
     /// </summary>
-    private async Task ConnectWithRetryAsync(CancellationToken cancellationToken)
+    private async Task<bool> ConnectWithRetryAsync(CancellationToken cancellationToken)
     {
         var errorCount = 0;
 
@@ -398,12 +412,22 @@ internal sealed class DashboardClient : IDashboardClient
 
             try
             {
-                var response = await _client!.GetApplicationInformationAsync(new(), headers: _headers, cancellationToken: cancellationToken);
+                var request = new ApplicationInformationRequest();
+                var response = await _client!.GetApplicationInformationAsync(request, headers: _headers, cancellationToken: cancellationToken);
 
                 _applicationName = response.ApplicationName;
+                _minRequiredVersion = string.IsNullOrEmpty(response.MinDashboardVersion) ? null : response.MinDashboardVersion;
+
+                // MinDashboardVersion is empty when the server predates this field or hasn't set it,
+                // which means the dashboard is always considered supported.
+                if (!IsDashboardVersionSufficient(s_dashboardVersion, _minRequiredVersion))
+                {
+                    SetConnectionState(DashboardConnectionState.Unsupported);
+                    return false;
+                }
 
                 SetConnectionState(DashboardConnectionState.Connected);
-                return;
+                return true;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -753,6 +777,8 @@ internal sealed class DashboardClient : IDashboardClient
             ?? "Aspire";
     }
 
+    public string? MinRequiredVersion => _minRequiredVersion;
+
     public ResourceViewModel? GetResource(string resourceName)
     {
         EnsureInitialized();
@@ -964,11 +990,23 @@ internal sealed class DashboardClient : IDashboardClient
 
             return response.ToViewModel();
         }
-        catch (RpcException ex)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            _logger.LogError(ex, "Error executing command \"{CommandName}\" on resource \"{ResourceName}\": {StatusCode}", command.Name, resourceName, ex.StatusCode);
-
-            var errorMessage = ex.StatusCode == StatusCode.Unimplemented ? "Command not implemented" : "Unknown error. See logs for details";
+            return new ResourceCommandResponseViewModel()
+            {
+                Kind = ResourceCommandResponseKind.Cancelled
+            };
+        }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled && cancellationToken.IsCancellationRequested)
+        {
+            return new ResourceCommandResponseViewModel()
+            {
+                Kind = ResourceCommandResponseKind.Cancelled
+            };
+        }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled && _clientCancellationToken.IsCancellationRequested)
+        {
+            var errorMessage = _loc[nameof(DashboardResources.ResourceCommandAppHostDisconnected)];
 
             return new ResourceCommandResponseViewModel()
             {
@@ -977,6 +1015,71 @@ internal sealed class DashboardClient : IDashboardClient
                 Message = errorMessage
             };
         }
+        catch (RpcException ex)
+        {
+            _logger.LogError(ex, "Error executing command \"{CommandName}\" on resource \"{ResourceName}\": {StatusCode}", command.Name, resourceName, ex.StatusCode);
+
+            var errorMessage = ex.StatusCode switch
+            {
+                StatusCode.Unimplemented => "Command not implemented",
+                StatusCode.Unavailable => _loc[nameof(DashboardResources.ResourceCommandAppHostDisconnected)],
+                _ => "Unknown error. See logs for details"
+            };
+
+            return new ResourceCommandResponseViewModel()
+            {
+                Kind = ResourceCommandResponseKind.Failed,
+                ErrorMessage = errorMessage,
+                Message = errorMessage
+            };
+        }
+    }
+
+    public async Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, CancellationToken cancellationToken)
+    {
+        EnsureInitialized();
+
+        using var combinedTokens = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
+        using var call = _client!.UploadFile(headers: _headers, cancellationToken: combinedTokens.Token);
+
+        const int chunkSize = 64 * 1024; // 64 KB chunks
+        var buffer = new byte[chunkSize];
+        var isFirst = true;
+        long totalBytesRead = 0;
+
+        int bytesRead;
+        while ((bytesRead = await fileStream.ReadAsync(buffer, combinedTokens.Token).ConfigureAwait(false)) > 0)
+        {
+            totalBytesRead += bytesRead;
+            if (totalBytesRead > expectedSize)
+            {
+                throw new InvalidOperationException($"File '{fileName}' exceeded the expected size of {expectedSize} bytes.");
+            }
+
+            var chunk = new UploadFileChunk
+            {
+                Data = Google.Protobuf.ByteString.CopyFrom(buffer, 0, bytesRead)
+            };
+
+            if (isFirst)
+            {
+                chunk.FileName = fileName;
+            }
+
+            await call.RequestStream.WriteAsync(chunk, combinedTokens.Token).ConfigureAwait(false);
+            isFirst = false;
+        }
+
+        // Handle case where the file was empty — still send filename.
+        if (isFirst)
+        {
+            await call.RequestStream.WriteAsync(new UploadFileChunk { FileName = fileName }, combinedTokens.Token).ConfigureAwait(false);
+        }
+
+        await call.RequestStream.CompleteAsync().ConfigureAwait(false);
+
+        var response = await call.ResponseAsync.ConfigureAwait(false);
+        return response.FileId;
     }
 
     public async ValueTask DisposeAsync()
@@ -1025,5 +1128,51 @@ internal sealed class DashboardClient : IDashboardClient
     {
         Retry,
         DoNotRetry
+    }
+
+    private static SemVersion? GetDashboardVersion()
+    {
+        // The informational version contains the full semver string stamped at build time
+        // (e.g. "13.5.0-preview.1.26307.2+commitHash").
+        var informationalVersion = Shared.AssemblyVersionHelper.GetInformationalVersion(typeof(DashboardClient).Assembly);
+        if (informationalVersion is not { Length: > 0 })
+        {
+            return null;
+        }
+
+        return SemVersion.TryParse(informationalVersion, SemVersionStyles.Any, out var version) ? version : null;
+    }
+
+    /// <summary>
+    /// Compares the dashboard version against the required version, ignoring pre-release labels.
+    /// A dashboard version of "13.5.0-dev" is considered sufficient for a requirement of "13.5.0".
+    /// Returns <see langword="true"/> when no version requirement is specified or the dashboard meets it.
+    /// </summary>
+    internal static bool IsDashboardVersionSufficient(SemVersion? dashboardVersion, string? requiredVersionText)
+    {
+        // No requirement specified — always sufficient.
+        if (string.IsNullOrEmpty(requiredVersionText))
+        {
+            return true;
+        }
+
+        // Can't parse the requirement — treat as sufficient to avoid blocking users.
+        if (!SemVersion.TryParse(requiredVersionText, SemVersionStyles.Any, out var requiredVersion))
+        {
+            return true;
+        }
+
+        // Dashboard version unknown — can't verify, treat as insufficient.
+        if (dashboardVersion is null)
+        {
+            return false;
+        }
+
+        // Strip pre-release from both versions so that dev/preview builds
+        // are treated as equivalent to their release counterpart.
+        var dashboardRelease = new SemVersion(dashboardVersion.Major, dashboardVersion.Minor, dashboardVersion.Patch);
+        var requiredRelease = new SemVersion(requiredVersion.Major, requiredVersion.Minor, requiredVersion.Patch);
+
+        return SemVersion.ComparePrecedence(dashboardRelease, requiredRelease) >= 0;
     }
 }

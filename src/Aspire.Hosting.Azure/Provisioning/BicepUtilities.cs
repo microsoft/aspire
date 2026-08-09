@@ -86,7 +86,10 @@ internal static class BicepUtilities
             return;
         }
 
-        await SetScopeValueAsync(scope, "resourceGroup", targetScope.ResourceGroup, cancellationToken).ConfigureAwait(false);
+        if (targetScope.HasResourceGroup)
+        {
+            await SetScopeValueAsync(scope, "resourceGroup", targetScope.ResourceGroup, cancellationToken).ConfigureAwait(false);
+        }
         await SetScopeValueAsync(scope, "subscription", targetScope.Subscription, cancellationToken).ConfigureAwait(false);
         if (targetScope.IsTenantScope)
         {

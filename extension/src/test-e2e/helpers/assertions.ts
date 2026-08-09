@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as http from 'http';
 import * as https from 'https';
 import * as path from 'path';
-import type { AspireAppHostState as AppHostState, AspireDebugSessionState, AspireExtensionE2EControlStatus as ExtensionE2EControlStatus, AspireExtensionE2EStateFile as ExtensionE2EStateFile, AspireExtensionStateSnapshot as ExtensionStateSnapshot, AspireResourceState as ResourceState } from '../../types/extensionApi';
+import type { AspireAppHostState as AppHostState, AspireDebugSessionState, AspireExtensionE2EControlStatus as ExtensionE2EControlStatus, AspireExtensionE2EStateFile as ExtensionE2EStateFile, AspireExtensionE2ETaskProcessEvent as TaskProcessEvent, AspireExtensionStateSnapshot as ExtensionStateSnapshot, AspireResourceState as ResourceState } from '../../types/extensionApi';
 import { getControlFilePath, getPrimaryAppHostProjectPath, getStateFilePath, getWorkspaceRoot } from './paths';
 
 type CommandInvocation = ExtensionE2EStateFile['commandInvocations'][number];
@@ -105,6 +105,28 @@ export async function waitForNoDebugSessions(timeoutMs = 90000): Promise<Extensi
     return await waitForExtensionState(file => file.state.debugSessions.length === 0, 'debug sessions to stop', timeoutMs);
 }
 
+export async function waitForTaskProcessEvent(
+    predicate: (event: TaskProcessEvent) => boolean,
+    description: string,
+    timeoutMs = 60000,
+    afterSequence = 0,
+): Promise<TaskProcessEvent> {
+    const file = await waitForExtensionState(
+        stateFile => stateFile.taskProcessEvents.some(event => event.sequence > afterSequence && predicate(event)),
+        description,
+        timeoutMs);
+    const event = file.taskProcessEvents.find(candidate => candidate.sequence > afterSequence && predicate(candidate));
+    if (!event) {
+        throw new Error(`Task process event '${description}' was not found even though the state predicate matched.`);
+    }
+
+    return event;
+}
+
+export function getTaskProcessEventCount(): number {
+    return Math.max(0, ...readStateFile().taskProcessEvents.map(event => event.sequence));
+}
+
 export async function waitForCommandOutcome(command: string, outcome: CommandInvocation['outcome'], timeoutMs = 60000, afterInvocationSequence = 0): Promise<CommandInvocation> {
     const file = await waitForExtensionState(stateFile => stateFile.commandInvocations.some(event => event.command === command && event.sequence > afterInvocationSequence && event.outcome === outcome), `${command} ${outcome} outcome`, timeoutMs);
     const event = file.commandInvocations.find(candidate => candidate.command === command && candidate.sequence > afterInvocationSequence && candidate.outcome === outcome);
@@ -122,6 +144,23 @@ export function getCommandInvocationCount(command?: string): number {
         : file.commandInvocations;
 
     return Math.max(0, ...matchingEvents.map(event => event.sequence));
+}
+
+export function getStoppingPathEventCount(): number {
+    return Math.max(0, ...readStateFile().stoppingPathEvents.map(event => event.sequence));
+}
+
+export async function waitForStoppingPathEvent(appHostPath: string, state: 'entered' | 'left', afterSequence: number, timeoutMs = 60000): Promise<ExtensionE2EStateFile['stoppingPathEvents'][number]> {
+    const file = await waitForExtensionState(
+        stateFile => stateFile.stoppingPathEvents.some(event => event.sequence > afterSequence && event.state === state && isSamePath(event.appHostPath, appHostPath)),
+        `AppHost '${appHostPath}' stopping path ${state} event`,
+        timeoutMs);
+    const event = file.stoppingPathEvents.find(candidate => candidate.sequence > afterSequence && candidate.state === state && isSamePath(candidate.appHostPath, appHostPath));
+    if (!event) {
+        throw new Error(`Stopping path '${state}' event for '${appHostPath}' was not found even though the state predicate matched.`);
+    }
+
+    return event;
 }
 
 export async function waitForTerminalCommand(
@@ -310,7 +349,7 @@ export async function applyE2eControl(payload: Record<string, unknown>, waitFor:
     const revision = ++controlRevision;
     writeJsonFileAtomic(controlFilePath, { revision, ...payload });
     const stateFile = await waitForExtensionState(
-        file => file.control?.revision === revision && (file.control.status === 'error' || file.control.status === 'applied' || (waitFor === 'started' && file.control.status === 'started')),
+        file => file.control?.revision === revision && (file.control.status === 'error' || (waitFor === 'applied' ? file.control.status === 'applied' : file.control.startedObserved === true)),
         `E2E control revision ${revision}`,
         timeoutMs);
 

@@ -1,7 +1,0 @@
-@media (min-height: 500px) {
-    ::deep.modal-chat-body {
-        height: calc(100vh - 160px);
-        display: flex;
-        flex-direction: column;
-    }
-}

@@ -221,6 +221,9 @@ $pointerPackageJson = [ordered]@{
   bin = [ordered]@{
     aspire = 'bin/aspire.js'
   }
+  scripts = [ordered]@{
+    postinstall = 'node bin/aspire.js --npm-postinstall-check'
+  }
   # Minimum Node 20: the launcher (`bin/aspire.js`) uses Error options-bag
   # `new Error(msg, { cause: err })` which was added in Node 16.9.0. The
   # `libc` selector in the per-RID optionalDependencies relies on
@@ -239,6 +242,7 @@ Write-JsonFile (Join-Path $pointerPackageBin 'aspire-package-map.json') $ridPack
 $pointerReadmeTemplate = Read-TemplateFile (Join-Path $PSScriptRoot 'pack-cli-npm-package.pointer.README.md')
 $pointerReadme = Expand-Template $pointerReadmeTemplate @{
   PACKAGE_NAME = $PackageName
+  VERSION = $Version
 }
 
 Write-TextFile (Join-Path $pointerPackageRoot 'README.md') $pointerReadme

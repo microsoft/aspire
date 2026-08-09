@@ -2,10 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Diagnostics;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.TypeSystem;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Projects;
 
@@ -19,6 +21,7 @@ internal sealed class GuestRuntime
     private readonly ILogger _logger;
     private readonly FileLoggerProvider? _fileLoggerProvider;
     private readonly Func<string, string?> _commandResolver;
+    private readonly IEnvironment _environment;
     private readonly ProfilingTelemetry _profilingTelemetry;
 
     /// <summary>
@@ -27,17 +30,20 @@ internal sealed class GuestRuntime
     /// <param name="spec">The runtime specification describing how to execute the guest language.</param>
     /// <param name="logger">Logger for debugging output.</param>
     /// <param name="commandResolver">Command resolver used to locate executables on PATH.</param>
+    /// <param name="environment">The environment abstraction for OS detection.</param>
     /// <param name="profilingTelemetry">Profiling telemetry for child-process diagnostics.</param>
     /// <param name="fileLoggerProvider">Optional file logger for writing output to disk.</param>
-    public GuestRuntime(RuntimeSpec spec, ILogger logger, Func<string, string?> commandResolver, ProfilingTelemetry profilingTelemetry, FileLoggerProvider? fileLoggerProvider = null)
+    public GuestRuntime(RuntimeSpec spec, ILogger logger, Func<string, string?> commandResolver, IEnvironment environment, ProfilingTelemetry profilingTelemetry, FileLoggerProvider? fileLoggerProvider = null)
     {
         ArgumentNullException.ThrowIfNull(commandResolver);
+        ArgumentNullException.ThrowIfNull(environment);
         ArgumentNullException.ThrowIfNull(profilingTelemetry);
 
         _spec = spec;
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;
         _commandResolver = commandResolver;
+        _environment = environment;
         _profilingTelemetry = profilingTelemetry;
     }
 
@@ -86,6 +92,8 @@ internal sealed class GuestRuntime
                 args,
                 directory,
                 environmentVariables,
+                afterLaunchAsync: null,
+                options: null,
                 cancellationToken);
             activity.SetProcessExitCode(exitCode);
             if (exitCode != 0)
@@ -124,6 +132,8 @@ internal sealed class GuestRuntime
             args,
             directory,
             environmentVariables,
+            afterLaunchAsync: null,
+            options: null,
             cancellationToken);
         activity.SetProcessExitCode(exitCode);
         if (exitCode != 0)
@@ -145,6 +155,11 @@ internal sealed class GuestRuntime
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <param name="noBuild">Whether to skip pre-execution build/check commands.</param>
     /// <param name="afterAppHostLaunchedAsync">Callback invoked after the AppHost execute command has launched.</param>
+    /// <param name="appHostLaunchOptions">
+    /// Optional launch options forwarded to the launcher for the long-running AppHost execute command only.
+    /// Pre-execute commands (e.g. <c>tsc --noEmit</c>) and dependency installation are short-lived and
+    /// keep today's force-kill behavior, so this is not passed there.
+    /// </param>
     /// <returns>A tuple of the exit code and captured output (null when launched via extension).</returns>
     public async Task<(int ExitCode, OutputCollector? Output)> RunAsync(
         FileInfo appHostFile,
@@ -154,7 +169,8 @@ internal sealed class GuestRuntime
         IGuestProcessLauncher launcher,
         CancellationToken cancellationToken,
         bool noBuild = false,
-        Func<Task>? afterAppHostLaunchedAsync = null)
+        Func<Task>? afterAppHostLaunchedAsync = null,
+        GuestLaunchOptions? appHostLaunchOptions = null)
     {
         var useWatchCommand = watchMode && _spec.WatchExecute is not null;
         var commandSpec = useWatchCommand
@@ -174,7 +190,7 @@ internal sealed class GuestRuntime
         var phase = useWatchCommand
             ? ProfilingTelemetry.Values.GuestCommandPhaseWatchExecute
             : ProfilingTelemetry.Values.GuestCommandPhaseExecute;
-        return await ExecuteCommandAsync(commandSpec, appHostFile, directory, environmentVariables, null, phase, launcher, cancellationToken, afterLaunchAsync: afterAppHostLaunchedAsync);
+        return await ExecuteCommandAsync(commandSpec, appHostFile, directory, environmentVariables, null, phase, launcher, cancellationToken, afterLaunchAsync: afterAppHostLaunchedAsync, launchOptions: appHostLaunchOptions);
     }
 
     /// <summary>
@@ -237,7 +253,7 @@ internal sealed class GuestRuntime
 
             _logger.LogDebug("Launching pre-execution command: {Command} {Args}", commandSpec.Command, string.Join(" ", args));
             using var activity = _profilingTelemetry.StartGuestExecuteCommand(_spec.Language, _spec.DisplayName, commandSpec.Command, args, directory, ProfilingTelemetry.Values.GuestCommandPhasePreExecute);
-            var (exitCode, output) = await preExecuteLauncher.LaunchAsync(commandSpec.Command, args, directory, mergedEnvironment, cancellationToken);
+            var (exitCode, output) = await preExecuteLauncher.LaunchAsync(commandSpec.Command, args, directory, mergedEnvironment, afterLaunchAsync: null, options: null, cancellationToken);
             activity.SetProcessExitCode(exitCode);
             if (exitCode != 0)
             {
@@ -258,7 +274,8 @@ internal sealed class GuestRuntime
         string phase,
         IGuestProcessLauncher launcher,
         CancellationToken cancellationToken,
-        Func<Task>? afterLaunchAsync = null)
+        Func<Task>? afterLaunchAsync = null,
+        GuestLaunchOptions? launchOptions = null)
     {
         var args = ReplacePlaceholders(commandSpec.Args, appHostFile, directory, additionalArgs);
 
@@ -266,7 +283,7 @@ internal sealed class GuestRuntime
 
         _logger.LogDebug("Launching: {Command} {Args}", commandSpec.Command, string.Join(" ", args));
         using var activity = _profilingTelemetry.StartGuestExecuteCommand(_spec.Language, _spec.DisplayName, commandSpec.Command, args, directory, phase);
-        var (exitCode, output) = await launcher.LaunchAsync(commandSpec.Command, args, directory, mergedEnvironment, cancellationToken, afterLaunchAsync: afterLaunchAsync);
+        var (exitCode, output) = await launcher.LaunchAsync(commandSpec.Command, args, directory, mergedEnvironment, afterLaunchAsync: afterLaunchAsync, options: launchOptions, cancellationToken);
         activity.SetProcessExitCode(exitCode);
         if (exitCode != 0)
         {
@@ -317,7 +334,14 @@ internal sealed class GuestRuntime
     /// <summary>
     /// Creates the default process-based launcher for this runtime.
     /// </summary>
-    public ProcessGuestLauncher CreateDefaultLauncher() => new(_spec.Language, _logger, _commandResolver, _fileLoggerProvider);
+    public ProcessGuestLauncher CreateDefaultLauncher() => new(
+        _spec.Language,
+        _logger,
+        fileLoggerProvider: _fileLoggerProvider,
+        commandResolver: _commandResolver,
+        // The launcher logs each guest stdout/stderr line itself, so the execution factory is given
+        // a NullLogger to avoid double-logging those lines.
+        processExecutionFactory: new ProcessExecutionFactory(_environment, NullLogger<ProcessExecutionFactory>.Instance));
 
     /// <summary>
     /// Replaces placeholders in command arguments with actual values.

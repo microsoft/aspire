@@ -77,6 +77,7 @@ public static class RabbitMQBuilderExtensions
         var rabbitmq = builder.AddResource(rabbitMq)
                               .WithImage(RabbitMQContainerImageTags.Image, RabbitMQContainerImageTags.Tag)
                               .WithImageRegistry(RabbitMQContainerImageTags.Registry)
+                              .WithIconName("MailMultiple")
                               .WithEndpoint(port: port, targetPort: 5672, name: RabbitMQServerResource.PrimaryEndpointName)
                               .WithEnvironment(context =>
                               {
@@ -249,7 +250,7 @@ public static class RabbitMQBuilderExtensions
                 if (existingTag.Length > alpine.Length)
                 {
                     // Transform tag like "3.12-alpine" to "3.12-management-alpine"
-                    var tagPrefix = existingTag[..existingTag.IndexOf($"-{alpine}")];
+                    var tagPrefix = existingTag[..existingTag.IndexOf($"-{alpine}", StringComparison.Ordinal)];
                     annotation.Tag = $"{tagPrefix}-{management}-{alpine}";
                 }
                 else

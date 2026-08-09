@@ -10,8 +10,9 @@ import { cleanupRun } from '../debugger/runCleanupRegistry';
 import type { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration } from '../dcp/types';
 import { createStateSnapshot, getSensitiveDashboardUrl, isSamePath } from '../extensionState';
 import { AppHostLaunchRequestedEvent, AppHostLaunchService } from '../services/AppHostLaunchService';
-import type { AspireDebugConsoleOutputEvent, AspireExtensionE2ECommandInvocation, AspireExtensionE2EControlCommand, AspireExtensionE2EControlPayload, AspireExtensionE2EControlStatus, AspireExtensionE2EDebugConsoleOutput, AspireExtensionE2EDebugLaunch, AspireExtensionE2ETerminalCommand, AspireExtensionStateSnapshot } from '../types/extensionApi';
+import type { AspireDebugConsoleOutputEvent, AspireExtensionE2ECommandInvocation, AspireExtensionE2EControlCommand, AspireExtensionE2EControlPayload, AspireExtensionE2EControlStatus, AspireExtensionE2EDebugConsoleOutput, AspireExtensionE2EDebugLaunch, AspireExtensionE2EStoppingPathEvent, AspireExtensionE2ETaskProcessEvent, AspireExtensionE2ETerminalCommand, AspireExtensionStateSnapshot } from '../types/extensionApi';
 import { AspireTerminalCommandEvent, AspireTerminalProvider } from '../utils/AspireTerminalProvider';
+import { dashboardDefaultChangedNotificationKey } from '../utils/dashboardNotificationState';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { onDidInvokeCommand } from '../utils/telemetry';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
@@ -38,23 +39,62 @@ export function createE2eStateFileBridge(
   const terminalCommands: AspireExtensionE2ETerminalCommand[] = [];
   const debugLaunches: AspireExtensionE2EDebugLaunch[] = [];
   const debugConsoleOutputs: AspireExtensionE2EDebugConsoleOutput[] = [];
+  const stoppingPathEvents: AspireExtensionE2EStoppingPathEvent[] = [];
+  const taskProcessEvents: AspireExtensionE2ETaskProcessEvent[] = [];
+  const clipboardSnapshot: E2eClipboardSnapshot = { hasSnapshot: false };
+  const clipboardExpectation: E2eClipboardExpectation = {};
   let commandInvocationSequence = 0;
   let terminalCommandSequence = 0;
   let debugLaunchSequence = 0;
   let debugConsoleOutputSequence = 0;
+  let stoppingPathSequence = 0;
+  let taskProcessSequence = 0;
+  let taskExecutionSequence = 0;
+  let previousStoppingPaths: readonly string[] | undefined;
+  const taskExecutionIds = new WeakMap<vscode.TaskExecution, number>();
   let controlStatus: AspireExtensionE2EControlStatus | undefined;
   let lastControlRevision = -1;
   const writeStateFile = () => {
+    const state = createStateSnapshot(dataRepository, appHostLaunchService, appHostTreeProvider, aspireContext, true);
+    recordStoppingPathEvents(state.stoppingPaths);
+
     writeJsonFileAtomic(stateFile, {
       updatedAt: new Date().toISOString(),
-      state: createStateSnapshot(dataRepository, appHostLaunchService, appHostTreeProvider, aspireContext, true),
+      state,
       dashboardUrl: getSensitiveDashboardUrl(dataRepository),
       commandInvocations,
       terminalCommands,
       debugLaunches,
       debugConsoleOutputs,
+      stoppingPathEvents,
+      taskProcessEvents,
       control: controlStatus,
     });
+  };
+
+  const recordStoppingPathEvents = (currentStoppingPaths: readonly string[]) => {
+    if (previousStoppingPaths === undefined) {
+      previousStoppingPaths = [...currentStoppingPaths];
+      return;
+    }
+
+    for (const appHostPath of currentStoppingPaths) {
+      if (!previousStoppingPaths.some(previousPath => isSamePath(previousPath, appHostPath))) {
+        stoppingPathEvents.push({ sequence: ++stoppingPathSequence, appHostPath, state: 'entered' });
+      }
+    }
+
+    for (const appHostPath of previousStoppingPaths) {
+      if (!currentStoppingPaths.some(currentPath => isSamePath(currentPath, appHostPath))) {
+        stoppingPathEvents.push({ sequence: ++stoppingPathSequence, appHostPath, state: 'left' });
+      }
+    }
+
+    if (stoppingPathEvents.length > 100) {
+      stoppingPathEvents.splice(0, stoppingPathEvents.length - 100);
+    }
+
+    previousStoppingPaths = [...currentStoppingPaths];
   };
 
   fs.mkdirSync(path.dirname(stateFile), { recursive: true });
@@ -90,6 +130,35 @@ export function createE2eStateFileBridge(
     if (debugLaunches.length > 100) {
       debugLaunches.shift();
     }
+    writeStateFile();
+  });
+  const taskStartSubscription = vscode.tasks.onDidStartTaskProcess(event => {
+    const executionId = ++taskExecutionSequence;
+    taskExecutionIds.set(event.execution, executionId);
+    taskProcessEvents.push({
+      sequence: ++taskProcessSequence,
+      executionId,
+      state: 'started',
+      taskName: event.execution.task.name,
+      taskSource: event.execution.task.source,
+      taskDefinitionType: event.execution.task.definition.type,
+      processId: event.processId,
+    });
+    trimTaskProcessEvents(taskProcessEvents);
+    writeStateFile();
+  });
+  const taskEndSubscription = vscode.tasks.onDidEndTaskProcess(event => {
+    const executionId = taskExecutionIds.get(event.execution) ?? ++taskExecutionSequence;
+    taskProcessEvents.push({
+      sequence: ++taskProcessSequence,
+      executionId,
+      state: 'ended',
+      taskName: event.execution.task.name,
+      taskSource: event.execution.task.source,
+      taskDefinitionType: event.execution.task.definition.type,
+      exitCode: event.exitCode,
+    });
+    trimTaskProcessEvents(taskProcessEvents);
     writeStateFile();
   });
 
@@ -131,18 +200,21 @@ export function createE2eStateFileBridge(
           else if (typeof payload.showStatusDelayMs === 'number') {
             process.env.ASPIRE_EXTENSION_E2E_SHOW_STATUS_DELAY_MS = String(payload.showStatusDelayMs);
           }
+          if (payload.resetDashboardDefaultChangedNotification) {
+            await context.globalState.update(dashboardDefaultChangedNotificationKey, undefined);
+          }
           if (payload.command) {
             let commandStarted = false;
             const markCommandStarted = () => {
               if (!commandStarted) {
                 commandStarted = true;
-                controlStatus = { revision, status: 'started' };
+                controlStatus = { revision, status: 'started', startedObserved: true };
                 writeStateFile();
               }
             };
 
-            const result = await executeE2eControlCommand(context, aspireContext, appHostLaunchService, appHostTreeProvider, terminalProvider, payload.command, markCommandStarted);
-            controlStatus = { revision, status: 'applied', result };
+            const result = await executeE2eControlCommand(context, aspireContext, dataRepository, appHostLaunchService, appHostTreeProvider, terminalProvider, clipboardSnapshot, clipboardExpectation, payload.command, markCommandStarted);
+            controlStatus = { revision, status: 'applied', startedObserved: commandStarted, result };
           }
           else {
             controlStatus = { revision, status: 'applied' };
@@ -165,7 +237,13 @@ export function createE2eStateFileBridge(
     }
   });
 
-  return vscode.Disposable.from(stateSubscription, commandSubscription, terminalCommandSubscription, debugLaunchSubscription, debugConsoleOutputSubscription, controlSubscription);
+  return vscode.Disposable.from(stateSubscription, commandSubscription, terminalCommandSubscription, debugLaunchSubscription, debugConsoleOutputSubscription, taskStartSubscription, taskEndSubscription, controlSubscription);
+}
+
+function trimTaskProcessEvents(events: AspireExtensionE2ETaskProcessEvent[]): void {
+  if (events.length > 100) {
+    events.splice(0, events.length - 100);
+  }
 }
 
 function writeJsonFileAtomic(filePath: string, value: unknown): void {
@@ -241,9 +319,12 @@ function getE2eErrorMessage(error: unknown): string {
 async function executeE2eControlCommand(
   context: vscode.ExtensionContext,
   aspireContext: AspireExtensionContext,
+  dataRepository: AppHostDataRepository,
   appHostLaunchService: AppHostLaunchService,
   appHostTreeProvider: AspireAppHostTreeProvider,
   terminalProvider: AspireTerminalProvider,
+  clipboardSnapshot: E2eClipboardSnapshot,
+  clipboardExpectation: E2eClipboardExpectation,
   command: AspireExtensionE2EControlCommand,
   markStarted: () => void
 ): Promise<unknown> {
@@ -317,10 +398,12 @@ async function executeE2eControlCommand(
     }
     case 'copyAppHostPath': {
       const element = getAppHostElement(appHostTreeProvider, command.appHostPath);
+      const expectedClipboardText = getAppHostPathForClipboard(element);
       const commandPromise = vscode.commands.executeCommand('aspire-vscode.copyAppHostPath', element);
       markStarted();
       await commandPromise;
-      return await vscode.env.clipboard.readText();
+      setClipboardExpectation(clipboardExpectation, expectedClipboardText, 'path');
+      return undefined;
     }
     case 'viewAppHostLogFile': {
       const element = getLogFileElement(appHostTreeProvider, command.appHostPath);
@@ -331,10 +414,12 @@ async function executeE2eControlCommand(
     }
     case 'copyLogFilePath': {
       const element = getLogFileElement(appHostTreeProvider, command.appHostPath);
+      const expectedClipboardText = getLogFilePathForClipboard(element);
       const commandPromise = vscode.commands.executeCommand('aspire-vscode.copyLogFilePath', element);
       markStarted();
       await commandPromise;
-      return await vscode.env.clipboard.readText();
+      setClipboardExpectation(clipboardExpectation, expectedClipboardText, 'path');
+      return undefined;
     }
     case 'viewResourceLogs': {
       const element = getResourceElement(appHostTreeProvider, command.resourceName, command.appHostPath);
@@ -350,17 +435,20 @@ async function executeE2eControlCommand(
     }
     case 'copyResourceName': {
       const element = getResourceElement(appHostTreeProvider, command.resourceName, command.appHostPath);
+      const expectedClipboardText = getResourceNameForClipboard(element);
       const commandPromise = vscode.commands.executeCommand('aspire-vscode.copyResourceName', element);
       markStarted();
       await commandPromise;
-      return await vscode.env.clipboard.readText();
+      setClipboardExpectation(clipboardExpectation, expectedClipboardText);
+      return undefined;
     }
     case 'copyEndpointUrl': {
       const endpoint = getEndpointElement(appHostTreeProvider, command);
       const commandPromise = vscode.commands.executeCommand('aspire-vscode.copyEndpointUrl', endpoint.element);
       markStarted();
       await commandPromise;
-      return await vscode.env.clipboard.readText();
+      setClipboardExpectation(clipboardExpectation, endpoint.url);
+      return undefined;
     }
     case 'openInIntegratedBrowser': {
       const endpoint = getEndpointElement(appHostTreeProvider, command);
@@ -399,6 +487,17 @@ async function executeE2eControlCommand(
       markStarted();
       return await commandPromise;
     }
+    case 'executeCodeLensResourceAction': {
+      const element = getResourceCommandElement(appHostTreeProvider, command);
+      const commandPromise = vscode.commands.executeCommand(
+        'aspire-vscode.codeLensResourceAction',
+        element.resourceItem.resource.name,
+        element.commandName,
+        command.appHostPath ?? element.resourceItem.appHostPath ?? '',
+        element.commandJson);
+      markStarted();
+      return await commandPromise;
+    }
     case 'executeAspireCommand': {
       const commandId = getE2eAspireCommandId(command.commandId);
       const args = getE2eCommandArguments(command.args);
@@ -430,7 +529,7 @@ async function executeE2eControlCommand(
     }
     case 'stopDebugging': {
       markStarted();
-      await vscode.debug.stopDebugging();
+      await stopDebuggingForE2E(aspireContext, dataRepository, appHostLaunchService, appHostTreeProvider);
       return undefined;
     }
     case 'closeAllEditors': {
@@ -497,9 +596,45 @@ async function executeE2eControlCommand(
       markStarted();
       return await getDiagnosticsForFile(command.filePath);
     }
-    case 'readClipboard': {
+    case 'snapshotClipboard': {
       markStarted();
-      return await vscode.env.clipboard.readText();
+      // The state and control files are uploaded as E2E diagnostics, so arbitrary user
+      // clipboard text must stay in extension-host memory instead of crossing the JSON bridge.
+      clipboardSnapshot.text = await vscode.env.clipboard.readText();
+      clipboardSnapshot.hasSnapshot = true;
+      return undefined;
+    }
+    case 'restoreClipboardSnapshot': {
+      markStarted();
+      if (clipboardSnapshot.hasSnapshot) {
+        await vscode.env.clipboard.writeText(clipboardSnapshot.text ?? '');
+        clipboardSnapshot.text = undefined;
+        clipboardSnapshot.hasSnapshot = false;
+      }
+
+      return undefined;
+    }
+    case 'captureWorkspaceAppHostPathClipboardExpectation': {
+      markStarted();
+      const state = createStateSnapshot(dataRepository, appHostLaunchService, appHostTreeProvider, aspireContext, true);
+      if (!state.workspaceAppHostPath) {
+        throw new Error('E2E clipboard assertion could not determine the workspace AppHost path.');
+      }
+
+      setClipboardExpectation(clipboardExpectation, state.workspaceAppHostPath, 'path');
+      return undefined;
+    }
+    case 'assertClipboardMatchesLastExpectation': {
+      markStarted();
+      await assertExpectedClipboardText(clipboardExpectation);
+      return undefined;
+    }
+    case 'openFile': {
+      const filePath = getE2eRunPath(command.filePath);
+      markStarted();
+      const document = await vscode.workspace.openTextDocument(vscode.Uri.file(filePath));
+      await vscode.window.showTextDocument(document, { preview: false });
+      return getActiveEditorInfo();
     }
     case 'openWorkspaceFolder': {
       const folderPath = getE2eWorkspaceFolderPath(command.folderPath);
@@ -523,6 +658,51 @@ async function executeE2eControlCommand(
     default:
       throw new Error(`Unsupported Aspire extension E2E control command: ${getUnknownCommandName(command)}`);
   }
+}
+
+interface E2eClipboardSnapshot {
+  text?: string;
+  hasSnapshot: boolean;
+}
+
+interface E2eClipboardExpectation {
+  text?: string;
+  comparison?: 'exact' | 'path';
+}
+
+function setClipboardExpectation(expectation: E2eClipboardExpectation, text: string, comparison: 'exact' | 'path' = 'exact'): void {
+  expectation.text = text;
+  expectation.comparison = comparison;
+}
+
+async function assertExpectedClipboardText(expectation: E2eClipboardExpectation): Promise<void> {
+  if (expectation.text === undefined) {
+    throw new Error('E2E clipboard assertion did not have an expected value captured in memory.');
+  }
+
+  const expectedText = expectation.text;
+  const comparison = expectation.comparison ?? 'exact';
+
+  // Keep the expected value in memory until the assertion succeeds so transient clipboard
+  // mismatches can be retried. The E2E state file serializes thrown errors, so mismatch
+  // diagnostics must avoid echoing arbitrary clipboard contents.
+  const clipboardText = await vscode.env.clipboard.readText();
+  const matches = comparison === 'path'
+    ? isSamePath(clipboardText, expectedText)
+    : clipboardText === expectedText;
+  if (!matches) {
+    throw new Error(formatClipboardMismatchError(comparison, expectedText.length, clipboardText.length));
+  }
+
+  // Only clear once the assertion has succeeded so a failing assertion can be retried.
+  expectation.text = undefined;
+  expectation.comparison = undefined;
+}
+
+function formatClipboardMismatchError(comparison: 'exact' | 'path', expectedLength: number, actualLength: number): string {
+  return comparison === 'path'
+    ? `E2E clipboard path did not match the expected path. Expected length: ${expectedLength}; actual length: ${actualLength}.`
+    : `E2E clipboard text did not match the expected text. Expected length: ${expectedLength}; actual length: ${actualLength}.`;
 }
 
 function getE2eLaunchConfiguration(value: unknown): ExecutableLaunchConfiguration {
@@ -912,6 +1092,52 @@ async function waitForE2eValue<T>(description: string, timeoutMs: number, getVal
   throw new Error(`Timed out after ${timeoutMs}ms waiting for ${description}. Last error: ${lastError ?? '<none>'}`);
 }
 
+async function stopDebuggingForE2E(
+  aspireContext: AspireExtensionContext,
+  dataRepository: AppHostDataRepository,
+  appHostLaunchService: AppHostLaunchService,
+  appHostTreeProvider: AspireAppHostTreeProvider
+): Promise<void> {
+  const trackedSessions = aspireContext.aspireDebugSessions;
+  if (trackedSessions.length > 0) {
+    const stoppedDebugSessionIds = new Set(trackedSessions.map(debugSession => debugSession.debugSessionId));
+    const stoppedAppHostPaths = trackedSessions
+      .map(debugSession => debugSession.appHostPath)
+      .filter(path => path !== undefined);
+    await Promise.all(trackedSessions.map(debugSession => debugSession.stopDebugging()));
+    for (const appHostPath of stoppedAppHostPaths) {
+      dataRepository.requestAppHostStopRefresh(appHostPath);
+    }
+
+    await waitForE2eValue('Aspire debug sessions to stop', 120000, () => {
+      const state = createStateSnapshot(dataRepository, appHostLaunchService, appHostTreeProvider, aspireContext, true);
+      const stoppedSessionsAreGone = aspireContext.aspireDebugSessions.every(debugSession => !stoppedDebugSessionIds.has(debugSession.debugSessionId));
+      const stoppedAppHostsAreGone = stoppedAppHostPaths.every(appHostPath => !hasRunningAppHost(state, appHostPath));
+      return stoppedSessionsAreGone && stoppedAppHostsAreGone && state.launchingPaths.length === 0 && state.stoppingPaths.length === 0
+        ? true
+        : undefined;
+    });
+
+    return;
+  }
+
+  await vscode.debug.stopDebugging();
+
+  await waitForE2eValue('VS Code debug sessions to stop', 120000, () => {
+    const state = createStateSnapshot(dataRepository, appHostLaunchService, appHostTreeProvider, aspireContext, true);
+    return state.debugSessions.length === 0
+      && state.launchingPaths.length === 0
+      && state.stoppingPaths.length === 0
+      ? true
+      : undefined;
+  });
+}
+
+function hasRunningAppHost(state: AspireExtensionStateSnapshot, appHostPath: string): boolean {
+  return (state.workspaceAppHost !== undefined && isSamePath(state.workspaceAppHost.appHostPath, appHostPath))
+    || state.appHosts.some(appHost => isSamePath(appHost.appHostPath, appHostPath));
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -986,6 +1212,23 @@ function getE2eWorkspaceFolderPath(folderPath: unknown): string {
   return folderPath;
 }
 
+function getE2eRunPath(filePath: unknown): string {
+  if (typeof filePath !== 'string' || filePath.length === 0 || !path.isAbsolute(filePath)) {
+    throw new Error('Aspire extension E2E openFile requires an absolute file path.');
+  }
+
+  if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+    throw new Error(`Aspire extension E2E openFile requires an existing file: ${filePath}`);
+  }
+
+  const runRoot = process.env.ASPIRE_EXTENSION_E2E_RUN_ROOT;
+  if (typeof runRoot !== 'string' || runRoot.length === 0 || !isPathWithinDirectory(filePath, runRoot)) {
+    throw new Error('Aspire extension E2E openFile can only open files inside the configured E2E run root.');
+  }
+
+  return filePath;
+}
+
 function getE2eBreakpointLine(line: unknown): number {
   if (typeof line !== 'number' || !Number.isInteger(line) || line < 0) {
     throw new Error('Aspire extension E2E setSourceBreakpoint requires a zero-based non-negative integer line.');
@@ -1048,6 +1291,39 @@ function getAppHostElement(appHostTreeProvider: AspireAppHostTreeProvider, appHo
   return appHostPath ? appHostTreeProvider.findAppHostElement(appHostPath) ?? { appHostPath } : undefined;
 }
 
+function getAppHostPathForClipboard(element: unknown): string {
+  if (hasAppHostPath(element)) {
+    return element.appHostPath;
+  }
+
+  if (hasNestedAppHostPath(element)) {
+    return element.appHost.appHostPath;
+  }
+
+  throw new Error('Aspire extension E2E AppHost clipboard assertion found an AppHost tree item with an unexpected shape.');
+}
+
+function hasAppHostPath(element: unknown): element is { appHostPath: string } {
+  return typeof element === 'object'
+    && element !== null
+    && 'appHostPath' in element
+    && typeof element.appHostPath === 'string'
+    && element.appHostPath.length > 0;
+}
+
+function hasNestedAppHostPath(element: unknown): element is { appHost: { appHostPath: string } } {
+  if (typeof element !== 'object' || element === null || !('appHost' in element)) {
+    return false;
+  }
+
+  const appHost = element.appHost;
+  return typeof appHost === 'object'
+    && appHost !== null
+    && 'appHostPath' in appHost
+    && typeof appHost.appHostPath === 'string'
+    && appHost.appHostPath.length > 0;
+}
+
 function getResourceElement(appHostTreeProvider: AspireAppHostTreeProvider, resourceName: string, appHostPath?: string): unknown {
   if (typeof resourceName !== 'string' || resourceName.length === 0) {
     throw new Error('Aspire extension E2E resource command requires resourceName.');
@@ -1089,10 +1365,35 @@ function hasEndpointUrl(element: unknown): element is { url: string } {
     && element.url.length > 0;
 }
 
+function getResourceNameForClipboard(element: unknown): string {
+  if (!hasResourceForClipboard(element)) {
+    throw new Error('Aspire extension E2E resource clipboard assertion found a resource tree item with an unexpected shape.');
+  }
+
+  return element.resource.displayName ?? element.resource.name;
+}
+
+function hasResourceForClipboard(element: unknown): element is { resource: { displayName?: string | null; name: string } } {
+  if (typeof element !== 'object' || element === null || !('resource' in element)) {
+    return false;
+  }
+
+  const resource = element.resource;
+  return typeof resource === 'object'
+    && resource !== null
+    && 'name' in resource
+    && typeof resource.name === 'string'
+    && (!('displayName' in resource) || resource.displayName === undefined || resource.displayName === null || typeof resource.displayName === 'string');
+}
+
 function getResourceCommandElement(
   appHostTreeProvider: AspireAppHostTreeProvider,
-  command: Extract<AspireExtensionE2EControlCommand, { name: 'executeResourceCommandItem' }>
-): unknown {
+  command: Extract<AspireExtensionE2EControlCommand, { name: 'executeResourceCommandItem' | 'executeCodeLensResourceAction' }>
+): {
+  commandName: string;
+  commandJson: unknown;
+  resourceItem: { resource: { name: string }; appHostPath?: string };
+} {
   if (typeof command.resourceName !== 'string' || command.resourceName.length === 0) {
     throw new Error('Aspire extension E2E resource command item requires resourceName.');
   }
@@ -1110,7 +1411,31 @@ function getResourceCommandElement(
     throw new Error(`Aspire extension E2E resource command item could not find command '${command.commandName}' on resource '${command.resourceName}'.`);
   }
 
+  if (!hasResourceCommandShape(element)) {
+    throw new Error(`Aspire extension E2E resource command item '${command.commandName}' on resource '${command.resourceName}' has an unexpected shape.`);
+  }
+
   return element;
+}
+
+function hasResourceCommandShape(element: unknown): element is {
+  commandName: string;
+  commandJson: unknown;
+  resourceItem: { resource: { name: string }; appHostPath?: string };
+} {
+  return typeof element === 'object'
+    && element !== null
+    && 'commandName' in element
+    && typeof element.commandName === 'string'
+    && 'commandJson' in element
+    && 'resourceItem' in element
+    && typeof element.resourceItem === 'object'
+    && element.resourceItem !== null
+    && 'resource' in element.resourceItem
+    && typeof element.resourceItem.resource === 'object'
+    && element.resourceItem.resource !== null
+    && 'name' in element.resourceItem.resource
+    && typeof element.resourceItem.resource.name === 'string';
 }
 
 function getLogFileElement(appHostTreeProvider: AspireAppHostTreeProvider, appHostPath?: string): unknown {
@@ -1122,11 +1447,28 @@ function getLogFileElement(appHostTreeProvider: AspireAppHostTreeProvider, appHo
   return element;
 }
 
-function getActiveEditorInfo(): { uri?: string; fileName?: string } {
+function getLogFilePathForClipboard(element: unknown): string {
+  if (!hasLogFilePath(element)) {
+    throw new Error('Aspire extension E2E log file clipboard assertion found a log file tree item with an unexpected shape.');
+  }
+
+  return element.logFilePath;
+}
+
+function hasLogFilePath(element: unknown): element is { logFilePath: string } {
+  return typeof element === 'object'
+    && element !== null
+    && 'logFilePath' in element
+    && typeof element.logFilePath === 'string'
+    && element.logFilePath.length > 0;
+}
+
+function getActiveEditorInfo(): { uri?: string; fileName?: string; text?: string } {
   const document = vscode.window.activeTextEditor?.document;
   return {
     uri: document?.uri.toString(),
     fileName: document?.fileName,
+    text: document?.getText(),
   };
 }
 

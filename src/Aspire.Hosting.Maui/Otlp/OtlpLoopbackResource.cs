@@ -12,7 +12,7 @@ namespace Aspire.Hosting.Maui.Otlp;
 /// <remarks>
 /// This resource is used internally for MAUI OTLP configurations (especially with dev tunnels).
 /// It creates an endpoint annotation that can be referenced by MAUI platform resources through service discovery.
-/// The endpoint always points to localhost at the specified port and scheme, but can be tunneled externally.
+/// The endpoint points to localhost at a configured or dashboard-allocated port and can be tunneled externally.
 /// </remarks>
 internal sealed class OtlpLoopbackResource : Resource, IResourceWithEndpoints
 {
@@ -22,11 +22,13 @@ internal sealed class OtlpLoopbackResource : Resource, IResourceWithEndpoints
     /// <param name="name">The name of the resource.</param>
     /// <param name="port">The port number for the OTLP endpoint.</param>
     /// <param name="scheme">The URI scheme (http or https).</param>
-    public OtlpLoopbackResource(string name, int port, string scheme) : base(name)
+    public OtlpLoopbackResource(string name, int? port, string scheme) : base(name)
     {
-        // Create an endpoint annotation for service discovery
-        // This endpoint represents the OTLP collector endpoint that MAUI apps will connect to
-        Annotations.Add(new EndpointAnnotation(
+        // File-based AppHosts commonly use dynamic dashboard ports, so the port can start as
+        // null and be filled from ResourceEndpointsAllocatedEvent once the dashboard OTLP
+        // endpoint is known. Configured OTLP endpoint URLs are already concrete and can be
+        // allocated immediately.
+        OtlpEndpoint = new EndpointAnnotation(
             ProtocolType.Tcp,
             uriScheme: scheme,
             name: "otlp",
@@ -36,6 +38,18 @@ internal sealed class OtlpLoopbackResource : Resource, IResourceWithEndpoints
             // TargetHost = localhost means this resource is running on the local machine
             // When tunneled through dev tunnels, the service discovery will rewrite this to the tunnel URL
             TargetHost = "localhost"
-        });
+        };
+
+        if (port is int configuredPort)
+        {
+            OtlpEndpoint.AllocatedEndpoint = new AllocatedEndpoint(OtlpEndpoint, "localhost", configuredPort);
+        }
+
+        Annotations.Add(OtlpEndpoint);
     }
+
+    /// <summary>
+    /// Gets the synthetic endpoint that targets the local dashboard OTLP listener.
+    /// </summary>
+    internal EndpointAnnotation OtlpEndpoint { get; }
 }

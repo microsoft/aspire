@@ -2,24 +2,24 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="ru" original="../AzureProvisioningStrings.resx">
     <body>
-      <trans-unit id="CancelDeploymentCommandConfirmation">
-        <source>This requests cancellation of the cached Azure deployment for this resource. Any Azure resources already created by the deployment are not deleted. Do you want to continue?</source>
-        <target state="new">This requests cancellation of the cached Azure deployment for this resource. Any Azure resources already created by the deployment are not deleted. Do you want to continue?</target>
+      <trans-unit id="CancelCommandConfirmation">
+        <source>This requests cancellation of the active Azure operation that includes this resource, or the active Azure deployment for this resource. If the operation includes other Azure resources, they will be canceled too. Azure may continue work that cannot be canceled immediately, and resources already created are not deleted. Do you want to continue?</source>
+        <target state="new">This requests cancellation of the active Azure operation that includes this resource, or the active Azure deployment for this resource. If the operation includes other Azure resources, they will be canceled too. Azure may continue work that cannot be canceled immediately, and resources already created are not deleted. Do you want to continue?</target>
         <note />
       </trans-unit>
-      <trans-unit id="CancelDeploymentCommandDescription">
-        <source>Requests cancellation of the cached Azure deployment for this resource.</source>
-        <target state="new">Requests cancellation of the cached Azure deployment for this resource.</target>
+      <trans-unit id="CancelCommandDescription">
+        <source>Requests cancellation of the active Azure operation or deployment for this resource.</source>
+        <target state="new">Requests cancellation of the active Azure operation or deployment for this resource.</target>
         <note />
       </trans-unit>
-      <trans-unit id="CancelDeploymentCommandName">
-        <source>Cancel deployment</source>
-        <target state="new">Cancel deployment</target>
+      <trans-unit id="CancelCommandName">
+        <source>Cancel</source>
+        <target state="new">Cancel</target>
         <note />
       </trans-unit>
-      <trans-unit id="CancelDeploymentCommandSuccess">
-        <source>Azure deployment cancellation requested.</source>
-        <target state="new">Azure deployment cancellation requested.</target>
+      <trans-unit id="CancelCommandSuccess">
+        <source>Azure cancellation requested.</source>
+        <target state="new">Azure cancellation requested.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeAzureContextCommandConfirmation">
@@ -55,6 +55,11 @@
       <trans-unit id="ChangeResourceLocationCommandSuccess">
         <source>Azure resource location updated and reprovisioning completed.</source>
         <target state="new">Azure resource location updated and reprovisioning completed.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ChangeResourceLocationKeyVaultUnsupported">
+        <source>Azure Key Vault resources cannot change location because soft-deleted vault names remain reserved globally. Use delete, reprovision, or forget state to recover this resource.</source>
+        <target state="new">Azure Key Vault resources cannot change location because soft-deleted vault names remain reserved globally. Use delete, reprovision, or forget state to recover this resource.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationPromptMessage">
@@ -93,13 +98,13 @@
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourceCommandConfirmation">
-        <source>This cancels the cached Azure deployment, deletes Azure resources targeted by this resource's deployment, and clears cached deployment state. Do you want to continue?</source>
-        <target state="new">This cancels the cached Azure deployment, deletes Azure resources targeted by this resource's deployment, and clears cached deployment state. Do you want to continue?</target>
+        <source>This cancels the cached Azure deployment, deletes Azure resources targeted by this resource's deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state. Do you want to continue?</source>
+        <target state="new">This cancels the cached Azure deployment, deletes Azure resources targeted by this resource's deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state. Do you want to continue?</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourceCommandDescription">
-        <source>Cancels the cached Azure deployment, deletes Azure resources targeted by the deployment, and clears cached deployment state for this resource.</source>
-        <target state="new">Cancels the cached Azure deployment, deletes Azure resources targeted by the deployment, and clears cached deployment state for this resource.</target>
+        <source>Cancels the cached Azure deployment, deletes Azure resources targeted by the deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state for this resource.</source>
+        <target state="new">Cancels the cached Azure deployment, deletes Azure resources targeted by the deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state for this resource.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourceCommandName">
@@ -132,6 +137,26 @@
         <target state="new">Azure resources deleted and provisioning state reset.</target>
         <note />
       </trans-unit>
+      <trans-unit id="DeploymentOperationCanceledResourcesFormat">
+        <source>Canceled Azure resources: {0}</source>
+        <target state="new">Canceled Azure resources: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeploymentOperationFailedResourcesFormat">
+        <source>Failed Azure resources: {0}</source>
+        <target state="new">Failed Azure resources: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeploymentOperationRunningResourcesFormat">
+        <source>Provisioning Azure resources: {0}</source>
+        <target state="new">Provisioning Azure resources: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeploymentOperationSummaryDisplayName">
+        <source>Azure deployment diagnostics</source>
+        <target state="new">Azure deployment diagnostics</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FailurePropertyCodeDisplayName">
         <source>Azure error code</source>
         <target state="new">Azure error code</target>
@@ -145,6 +170,11 @@
       <trans-unit id="FailurePropertyCurrentLocationDisplayName">
         <source>Azure current location</source>
         <target state="new">Azure current location</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FailurePropertyFailedResourcesDisplayName">
+        <source>Failed Azure resources</source>
+        <target state="new">Failed Azure resources</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyHttpStatusDisplayName">
@@ -291,6 +321,101 @@ To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/pro
         <target state="translated">Подготовка Azure</target>
         <note />
       </trans-unit>
+      <trans-unit id="OperationAlreadyRunningOrQueued">
+        <source>Azure operation '{0}' is already running or queued for the same resource scope. Wait for it to finish or run '{2}' before starting '{1}'.</source>
+        <target state="new">Azure operation '{0}' is already running or queued for the same resource scope. Wait for it to finish or run '{2}' before starting '{1}'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPhaseApplyingAzureContext">
+        <source>Applying Azure context</source>
+        <target state="new">Applying Azure context</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPhaseChangingAzureContext">
+        <source>Changing Azure context</source>
+        <target state="new">Changing Azure context</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPhaseChangingLocationToFormat">
+        <source>Changing location to {0}</source>
+        <target state="new">Changing location to {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPhaseDeletingAzureResource">
+        <source>Deleting Azure resource</source>
+        <target state="new">Deleting Azure resource</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPhaseDeletingAzureResources">
+        <source>Deleting Azure resources</source>
+        <target state="new">Deleting Azure resources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPhaseDeletingExistingAzureResourceBeforeChangingLocationFormat">
+        <source>Deleting existing Azure resource before changing location to {0}</source>
+        <target state="new">Deleting existing Azure resource before changing location to {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPhaseProvisioningAzureResources">
+        <source>Provisioning Azure resources</source>
+        <target state="new">Provisioning Azure resources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPhasePurgingDeletedKeyVault">
+        <source>Purging deleted Key Vault</source>
+        <target state="new">Purging deleted Key Vault</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPhasePurgingRecoverableKeyVaultFormat">
+        <source>Purging recoverable Key Vault {0}</source>
+        <target state="new">Purging recoverable Key Vault {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPhaseReprovisioning">
+        <source>Reprovisioning</source>
+        <target state="new">Reprovisioning</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPhaseReprovisioningAzureResources">
+        <source>Reprovisioning Azure resources</source>
+        <target state="new">Reprovisioning Azure resources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPhaseReprovisioningInLocationFormat">
+        <source>Reprovisioning in {0}</source>
+        <target state="new">Reprovisioning in {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPhaseResettingProvisioningState">
+        <source>Resetting provisioning state</source>
+        <target state="new">Resetting provisioning state</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPropertyNameDisplayName">
+        <source>Azure operation</source>
+        <target state="new">Azure operation</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPropertyPhaseDisplayName">
+        <source>Azure operation phase</source>
+        <target state="new">Azure operation phase</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPropertyStartedAtDisplayName">
+        <source>Azure operation started</source>
+        <target state="new">Azure operation started</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPropertyStatusDisplayName">
+        <source>Azure operation status</source>
+        <target state="new">Azure operation status</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPropertyTargetLocationDisplayName">
+        <source>Azure operation target location</source>
+        <target state="new">Azure operation target location</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ReprovisionAllCommandConfirmation">
         <source>This clears the cached Azure deployment state for this AppHost and reprovisions all Azure resources again using the current Azure tenant, subscription, resource group, and location.</source>
         <target state="new">This clears the cached Azure deployment state for this AppHost and reprovisions all Azure resources again using the current Azure tenant, subscription, resource group, and location.</target>
@@ -369,6 +494,106 @@ To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/pro
       <trans-unit id="ResourceGroupSelectionMessage">
         <source>Select your Azure resource group or enter a new name:</source>
         <target state="translated">Выберите группу ресурсов Azure или введите новое имя:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateAzureDeploymentCanceled">
+        <source>Azure deployment canceled</source>
+        <target state="new">Azure deployment canceled</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateAzureDeploymentFailed">
+        <source>Azure deployment failed</source>
+        <target state="new">Azure deployment failed</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateCanceled">
+        <source>Canceled</source>
+        <target state="new">Canceled</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateCanceling">
+        <source>Canceling</source>
+        <target state="new">Canceling</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateChangingLocation">
+        <source>Changing location</source>
+        <target state="new">Changing location</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateCompilingArmTemplate">
+        <source>Compiling ARM template</source>
+        <target state="new">Compiling ARM template</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateCreatingArmDeployment">
+        <source>Creating ARM Deployment</source>
+        <target state="new">Creating ARM Deployment</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateDeleting">
+        <source>Deleting</source>
+        <target state="new">Deleting</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateDrifted">
+        <source>Drifted</source>
+        <target state="new">Drifted</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateFailedToDelete">
+        <source>Failed to Delete</source>
+        <target state="new">Failed to Delete</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateFailedToProvision">
+        <source>Failed to Provision</source>
+        <target state="new">Failed to Provision</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateMissingInAzure">
+        <source>Missing in Azure</source>
+        <target state="new">Missing in Azure</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateMissingSubscriptionConfiguration">
+        <source>Missing subscription configuration</source>
+        <target state="new">Missing subscription configuration</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateProvisioned">
+        <source>Provisioned</source>
+        <target state="new">Provisioned</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateProvisionedMultipleAzureResourcesFormat">
+        <source>Provisioned {0} Azure resources</source>
+        <target state="new">Provisioned {0} Azure resources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateProvisioningMultipleAzureResourcesFormat">
+        <source>Provisioning {0} Azure resources</source>
+        <target state="new">Provisioning {0} Azure resources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateProvisioningPrefix">
+        <source>Provisioning </source>
+        <target state="new">Provisioning </target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateProvisioningResourceFormat">
+        <source>Provisioning {0}</source>
+        <target state="new">Provisioning {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateStarting">
+        <source>Starting</source>
+        <target state="new">Starting</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateWaitingForDeployment">
+        <source>Waiting for Deployment</source>
+        <target state="new">Waiting for Deployment</target>
         <note />
       </trans-unit>
       <trans-unit id="SubscriptionDialogTitle">

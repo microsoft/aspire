@@ -35,7 +35,6 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.DotNet.XUnitV3Extensions" />
   </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\Aspire.TestUtilities\Aspire.TestUtilities.csproj" />
   </ItemGroup>

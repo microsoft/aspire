@@ -187,11 +187,12 @@ public class SecretsStoreTests : IDisposable
         store.Save();
 
         var json = File.ReadAllText(path);
-        // Should NOT contain \u0027 or \u003C escaping
-        Assert.DoesNotContain("\\u0027", json);
-        Assert.DoesNotContain("\\u003C", json);
-        Assert.Contains("'quotes'", json);
-        Assert.Contains("<angle>", json);
+        var expectedJson = """
+            {
+              "key": "value with 'quotes' and <angle> brackets"
+            }
+            """;
+        Assert.Equal(expectedJson, json, ignoreLineEndingDifferences: true);
     }
 
     [Fact]
@@ -214,6 +215,28 @@ public class SecretsStoreTests : IDisposable
 
         Assert.True(store.ContainsKey("exists"));
         Assert.False(store.ContainsKey("missing"));
+    }
+
+    [Fact]
+    public void Save_PreservesAmpersandAndPlusCharacters()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/5537
+        // Characters like & and + were being escaped as \u0026 and \u002B
+        var path = GetSecretsPath();
+        var store = new SecretsStore(path);
+
+        store.Set("Parameters:token", "some=thing&looking=url&like=true");
+        store.Set("Parameters:password", "P+qMWNzkn*xm1rhXNF5st0");
+        store.Save();
+
+        var json = File.ReadAllText(path);
+        var expectedJson = """
+            {
+              "Parameters:token": "some=thing&looking=url&like=true",
+              "Parameters:password": "P+qMWNzkn*xm1rhXNF5st0"
+            }
+            """;
+        Assert.Equal(expectedJson, json, ignoreLineEndingDifferences: true);
     }
 
     [Fact]

@@ -11,7 +11,6 @@
 namespace Aspire.Dashboard.Resources {
     using System;
 
-
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -124,11 +123,38 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to The AppHost disconnected while executing the command. Restart the AppHost and try again..
+        /// </summary>
+        public static string ResourceCommandAppHostDisconnected {
+            get {
+                return ResourceManager.GetString("ResourceCommandAppHostDisconnected", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to &quot;{0}&quot; canceled.
         /// </summary>
         public static string ResourceCommandCanceled {
             get {
                 return ResourceManager.GetString("ResourceCommandCanceled", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Cancel.
+        /// </summary>
+        public static string ResourceCommandCancel {
+            get {
+                return ResourceManager.GetString("ResourceCommandCancel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to &quot;{0}&quot; canceling....
+        /// </summary>
+        public static string ResourceCommandCanceling {
+            get {
+                return ResourceManager.GetString("ResourceCommandCanceling", resourceCulture);
             }
         }
 

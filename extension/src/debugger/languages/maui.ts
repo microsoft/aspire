@@ -147,6 +147,8 @@ function isMauiDebugAdapterInfrastructureEnvironmentVariable(name: string): bool
 function isKnownMauiApplicationEnvironmentVariable(name: string): boolean {
     return name === 'ASPNETCORE_ENVIRONMENT' ||
         name === 'DOTNET_ENVIRONMENT' ||
+        // TODO: Remove ASPIRE_DASHBOARD_AI_DISABLED — no longer recognized by the dashboard.
+        // See https://github.com/microsoft/aspire/issues/18751
         name === 'ASPIRE_DASHBOARD_AI_DISABLED' ||
         name === 'ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL' ||
         name === 'ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL' ||

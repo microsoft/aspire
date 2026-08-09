@@ -17,6 +17,41 @@
         <target state="new">{0} stopped successfully.</target>
         <note />
       </trans-unit>
+      <trans-unit id="CleaningPersistentResources">
+        <source>Cleaning up persistent resources for {0}...</source>
+        <target state="new">Cleaning up persistent resources for {0}...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CouldNotDetermineAppHostPath">
+        <source>Could not determine the AppHost project path.</source>
+        <target state="new">Could not determine the AppHost project path.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpCleanupCompatibilityCheckFailed">
+        <source>Could not inspect the AppHost project to verify persistent resource cleanup compatibility. Persistent resource cleanup will still be attempted.</source>
+        <target state="new">Could not inspect the AppHost project to verify persistent resource cleanup compatibility. Persistent resource cleanup will still be attempted.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpCleanupExitCode">
+        <source>DCP cleanup exited with code {0}.</source>
+        <target state="new">DCP cleanup exited with code {0}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpCleanupFailed">
+        <source>Failed to clean up persistent resources for {0}. {1}</source>
+        <target state="new">Failed to clean up persistent resources for {0}. {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpCleanupUnavailable">
+        <source>Could not find the DCP executable needed to clean up persistent resources.</source>
+        <target state="new">Could not find the DCP executable needed to clean up persistent resources.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpCleanupUnsupportedAppHostVersion">
+        <source>This AppHost uses Aspire.Hosting {0}, which might not support persistent resource cleanup. Persistent resource cleanup requires Aspire.Hosting {1} or later, or an AppHost configured to use the Aspire CLI bundle. Persistent resource cleanup will still be attempted.</source>
+        <target state="new">This AppHost uses Aspire.Hosting {0}, which might not support persistent resource cleanup. Persistent resource cleanup requires Aspire.Hosting {1} or later, or an AppHost configured to use the Aspire CLI bundle. Persistent resource cleanup will still be attempted.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="Description">
         <source>Stop a running AppHost</source>
         <target state="needs-review-translation">Остановить запущенный хост приложений Aspire.</target>
@@ -25,6 +60,11 @@
       <trans-unit id="FailedToStopAppHost">
         <source>Failed to stop {0}.</source>
         <target state="new">Failed to stop {0}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ForceOptionDescription">
+        <source>Stop the AppHost and clean up its persistent resources</source>
+        <target state="new">Stop the AppHost and clean up its persistent resources</target>
         <note />
       </trans-unit>
       <trans-unit id="FoundRunningAppHost">
@@ -40,6 +80,11 @@
       <trans-unit id="MultipleAppHostsRunning">
         <source>Multiple AppHosts are running. Use --apphost to specify which one to stop, or select one:</source>
         <target state="needs-review-translation">Запущено несколько хостов приложений. Используйте параметр --apphost, чтобы указать, какой остановить, или выберите один из них:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PersistentResourcesCleaned">
+        <source>Persistent resources for {0} cleaned up.</source>
+        <target state="new">Persistent resources for {0} cleaned up.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
@@ -65,6 +110,11 @@
       <trans-unit id="AllAndProjectMutuallyExclusive">
         <source>The {0} and {1} options cannot be used together.</source>
         <target state="translated">Параметры {0} и {1} не могут использоваться одновременно.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UnknownAspireHostingVersion">
+        <source>an unknown version</source>
+        <target state="new">an unknown version</target>
         <note />
       </trans-unit>
     </body>

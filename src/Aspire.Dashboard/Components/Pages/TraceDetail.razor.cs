@@ -7,8 +7,6 @@ using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Assistant;
-using Aspire.Dashboard.Model.Assistant.Prompts;
 using Aspire.Dashboard.Model.GenAI;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
@@ -26,6 +24,7 @@ namespace Aspire.Dashboard.Components.Pages;
 
 public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisposable
 {
+    private const string ScrollContainerId = "traceDetailScrollContainer";
     private const string NameColumn = nameof(NameColumn);
     private const string ResourceColumn = nameof(ResourceColumn);
     private const string TicksColumn = nameof(TicksColumn);
@@ -41,9 +40,9 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     private List<OtlpResource> _resources = default!;
     private readonly List<string> _collapsedSpanIds = [];
     private string? _elementIdBeforeDetailsViewOpened;
+    private string? _pendingFocusElementId;
     private FluentDataGrid<SpanWaterfallViewModel> _dataGrid = null!;
     private GridColumnManager _manager = null!;
-    private AIContext? _aiContext;
     private IList<GridColumn> _gridColumns = null!;
     private readonly List<MenuButtonItem> _traceActionsMenuItems = [];
     private AspirePageContentLayout? _layout;
@@ -80,9 +79,6 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     public required NavigationManager NavigationManager { get; init; }
 
     [Inject]
-    public required IAIContextProvider AIContextProvider { get; init; }
-
-    [Inject]
     public required IStringLocalizer<Dashboard.Resources.TraceDetail> Loc { get; init; }
 
     [Inject]
@@ -106,7 +102,6 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     protected override void OnInitialized()
     {
         TelemetryContextProvider.Initialize(TelemetryContext);
-        _aiContext = CreateAIContext();
 
         _gridColumns = [
             new GridColumn(Name: NameColumn, DesktopWidth: "7fr", MobileWidth: "7fr"),
@@ -216,9 +211,6 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
             // If parameters change after render then the grid is automatically updated.
             // Explicitly update data grid to support navigating between traces via span links.
             await _dataGrid.SafeRefreshDataAsync();
-
-            // Update AI context with new trace.
-            _aiContext?.ContextHasChanged();
         }
 
         if (SpanId is not null && PageViewModel.SpanWaterfallViewModels is not null)
@@ -226,7 +218,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
             var spanVm = PageViewModel.SpanWaterfallViewModels.SingleOrDefault(vm => vm.Span.SpanId == SpanId);
             if (spanVm != null)
             {
-                await OnShowPropertiesAsync(spanVm, buttonId: null);
+                await OnShowPropertiesAsync(spanVm, focusElementId: null);
             }
 
             // Navigate to remove ?spanId=xxx in the URL. A small delay is required here, otherwise the page rendering breaks.
@@ -236,31 +228,26 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         }
     }
 
-    private AIContext CreateAIContext()
-    {
-        return AIContextProvider.AddNew(nameof(TraceDetail), c =>
-        {
-            c.BuildIceBreakers = (builder, context) =>
-            {
-                if (_trace is { } trace)
-                {
-                    builder.Trace(context, trace);
-                }
-                else
-                {
-                    builder.Default(context);
-                }
-            };
-        });
-    }
-
-    protected override void OnAfterRender(bool firstRender)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         // Check to see whether max item count should be set on every render.
         // This is required because the data grid's virtualize component can be recreated on data change.
         if (_dataGrid != null && FluentDataGridHelper<SpanWaterfallViewModel>.TrySetMaxItemCount(_dataGrid, 10_000))
         {
             StateHasChanged();
+        }
+
+        if (firstRender)
+        {
+            // Focus the scroll container without showing the focus ring. The container is a large
+            // content area where a visible focus indicator would be visually noisy on initial load.
+            await JS.InvokeVoidAsync("focusElement", ScrollContainerId, true);
+        }
+
+        if (_pendingFocusElementId is { } pendingFocusElementId)
+        {
+            _pendingFocusElementId = null;
+            await JS.InvokeVoidAsync("focusElement", pendingFocusElementId);
         }
     }
 
@@ -408,9 +395,9 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         await _layout.CloseMobileToolbarAsync();
     }
 
-    private async Task OnShowPropertiesAsync(SpanWaterfallViewModel viewModel, string? buttonId)
+    private async Task OnShowPropertiesAsync(SpanWaterfallViewModel viewModel, string? focusElementId)
     {
-        _elementIdBeforeDetailsViewOpened = buttonId;
+        _elementIdBeforeDetailsViewOpened = focusElementId;
 
         if (PageViewModel.SelectedData?.SpanViewModel?.Span.SpanId == viewModel.Span.SpanId)
         {
@@ -427,16 +414,18 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         }
     }
 
-    private async Task ClearSelectedSpanAsync(bool causedByUserAction = false)
+    private Task ClearSelectedSpanAsync(bool causedByUserAction = false)
     {
         PageViewModel.SelectedData = null;
 
         if (_elementIdBeforeDetailsViewOpened is not null && causedByUserAction)
         {
-            await JS.InvokeVoidAsync("focusElement", _elementIdBeforeDetailsViewOpened);
+            _pendingFocusElementId = _elementIdBeforeDetailsViewOpened;
         }
 
         _elementIdBeforeDetailsViewOpened = null;
+
+        return Task.CompletedTask;
     }
 
     private bool HasCollapsedSpans()
@@ -537,23 +526,6 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
                     genAISpans.Add(vm.Span);
                 }
                 return genAISpans;
-            });
-    }
-
-    private async Task ExplainTraceAsync()
-    {
-        await AIContextProvider.LaunchAssistantSidebarAsync(
-            promptContext =>
-            {
-                if (_trace is { } trace)
-                {
-                    return PromptContextsBuilder.AnalyzeTrace(
-                        promptContext,
-                        AIPromptsLoc.GetString(nameof(AIPrompts.PromptAnalyzeTrace), OtlpHelpers.ToShortenedId(trace.TraceId)),
-                        trace);
-                }
-
-                return Task.CompletedTask;
             });
     }
 
@@ -675,7 +647,6 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     public void Dispose()
     {
         _cts.Cancel();
-        _aiContext?.Dispose();
         foreach (var subscription in _peerChangesSubscriptions)
         {
             subscription.Dispose();

@@ -5,14 +5,13 @@ namespace Aspire.Hosting;
 
 internal static class DashboardConfigNames
 {
-    public static readonly ConfigName DashboardFrontendUrlName = new(KnownConfigNames.AspNetCoreUrls);
+    public static readonly ConfigName DashboardFrontendUrlName = new(KnownAspNetCoreConfigNames.Urls);
 
     public static readonly ConfigName DashboardOtlpGrpcUrlName = new(KnownConfigNames.DashboardOtlpGrpcEndpointUrl);
     public static readonly ConfigName DashboardOtlpHttpUrlName = new(KnownConfigNames.DashboardOtlpHttpEndpointUrl);
     public static readonly ConfigName DashboardUnsecuredAllowAnonymousName = new(KnownConfigNames.DashboardUnsecuredAllowAnonymous);
     public static readonly ConfigName DashboardConfigFilePathName = new(KnownConfigNames.DashboardConfigFilePath);
     public static readonly ConfigName DashboardFileConfigDirectoryName = new(KnownConfigNames.DashboardFileConfigDirectory);
-    public static readonly ConfigName DashboardAIDisabledName = new(KnownConfigNames.DashboardAIDisabled);
     public static readonly ConfigName DashboardAspireApiEnabledName = new(KnownConfigNames.DashboardApiEnabled);
     public static readonly ConfigName DashboardAspireApiDisabledName = new(KnownConfigNames.DashboardApiDisabled);
     public static readonly ConfigName ResourceServiceUrlName = new(KnownConfigNames.ResourceServiceEndpointUrl);

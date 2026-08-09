@@ -57,6 +57,7 @@ public static class AzureManagedRedisExtensions
 
         var resource = new AzureManagedRedisResource(name, ConfigureRedisInfrastructure);
         return builder.AddResource(resource)
+            .WithIconName("Database")
             .WithAnnotation(new DefaultRoleAssignmentsAnnotation(new HashSet<RoleDefinition>()));
     }
 

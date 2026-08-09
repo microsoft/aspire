@@ -28,7 +28,7 @@ public class OracleFunctionalTests(ITestOutputHelper testOutputHelper)
     private const string DatabaseReadyText = "Completed: ALTER DATABASE OPEN";
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyEfOracle()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(15));
@@ -72,7 +72,7 @@ public class OracleFunctionalTests(ITestOutputHelper testOutputHelper)
     [Theory]
     [InlineData(true)]
     [InlineData(false, Skip = "https://github.com/microsoft/aspire/issues/5191")]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task WithDataShouldPersistStateBetweenUsages(bool useVolume)
     {
         var oracleDbName = "freepdb1";
@@ -249,7 +249,7 @@ public class OracleFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyWithInitBindMount()
     {
         // Creates a script that should be executed when the container is initialized.
@@ -347,7 +347,7 @@ public class OracleFunctionalTests(ITestOutputHelper testOutputHelper)
     [Theory]
     [InlineData(true)]
     [InlineData(false, Skip = "https://github.com/microsoft/aspire/issues/5190")]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyWithInitFiles(bool init)
     {
         // Creates a script that should be executed when the container is initialized.
@@ -442,7 +442,7 @@ public class OracleFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyWaitForOnOracleBlocksDependentResources()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
@@ -479,7 +479,7 @@ public class OracleFunctionalTests(ITestOutputHelper testOutputHelper)
         await app.StopAsync();
     }
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public Task Oracle_WithPersistentLifetime_ReusesContainer()
     {
         return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(

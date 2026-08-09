@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECERTIFICATES001
@@ -514,7 +514,7 @@ public class DistributedApplicationTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task ExplicitStart_StartContainer()
     {
         const string testName = "explicit-start-container";
@@ -597,7 +597,7 @@ public class DistributedApplicationTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task ExplicitStart_StartPersistentContainer()
     {
         foreach (var firstRun in new[] { true, false })
@@ -816,7 +816,7 @@ public class DistributedApplicationTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyContainerArgs()
     {
         using var testProgram = CreateTestProgram("verify-container-args");
@@ -844,7 +844,7 @@ public class DistributedApplicationTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyContainerCreateFile()
     {
         using var testProgram = CreateTestProgram("verify-container-create-file", trustDeveloperCertificate: false);
@@ -909,7 +909,7 @@ public class DistributedApplicationTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyRedisWithCertificateKeyPair()
     {
         const string testName = "verify-redis-with-certificate";
@@ -954,7 +954,7 @@ public class DistributedApplicationTests
     }
 
     [Theory]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [RequiresFeature(TestFeature.DevCert)]
     [InlineData(false, false, false, false, CertificateTrustScope.Append)]
     [InlineData(false, true, true, false, CertificateTrustScope.Append)]
@@ -1080,7 +1080,7 @@ public class DistributedApplicationTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyContainerSucceedsWithCreateFileContinueOnError()
     {
         using var testProgram = CreateTestProgram("verify-container-continue-on-error", trustDeveloperCertificate: false);
@@ -1109,7 +1109,7 @@ public class DistributedApplicationTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [RequiresFeature(TestFeature.DevCert)]
     public async Task VerifyEnvironmentVariablesAvailableInCertificateTrustConfigCallback()
     {
@@ -1155,7 +1155,7 @@ public class DistributedApplicationTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyEnvironmentVariablesAppliedWithoutCertificateTrustConfig()
     {
         // Don't apply developer certificate trust so the config callback shouldn't be invoked
@@ -1194,7 +1194,7 @@ public class DistributedApplicationTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyContainerStopStartWorks()
     {
         using var testProgram = CreateTestProgram("container-start-stop", randomizePorts: false);
@@ -1279,7 +1279,7 @@ public class DistributedApplicationTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task SpecifyingEnvPortInEndpointFlowsToEnv()
     {
         const string testName = "ports-flow-to-env";
@@ -1338,7 +1338,7 @@ public class DistributedApplicationTests
     {
         const string testName = "dashboard-urls-display";
         var args = new string[] {
-            $"{KnownConfigNames.AspNetCoreUrls}=https://localhost:0;http://localhost:0",
+            $"{KnownAspNetCoreConfigNames.Urls}=https://localhost:0;http://localhost:0",
             $"{KnownConfigNames.DashboardOtlpGrpcEndpointUrl}=http://localhost:0"
         };
         using var testProgram = CreateTestProgram(testName, args: args, disableDashboard: false);
@@ -1369,7 +1369,7 @@ public class DistributedApplicationTests
         const string testName = "dashboard-auth-config";
         var browserToken = "ThisIsATestToken";
         var args = new string[] {
-            $"{KnownConfigNames.AspNetCoreUrls}=http://localhost:0",
+            $"{KnownAspNetCoreConfigNames.Urls}=http://localhost:0",
             $"{KnownConfigNames.DashboardOtlpGrpcEndpointUrl}=http://localhost:0",
             $"{tokenEnvVarName}={browserToken}"
         };
@@ -1406,7 +1406,7 @@ public class DistributedApplicationTests
     {
         const string testName = "dashboard-allow-anonymous";
         var args = new string[] {
-            $"{KnownConfigNames.AspNetCoreUrls}=http://localhost:0",
+            $"{KnownAspNetCoreConfigNames.Urls}=http://localhost:0",
             $"{KnownConfigNames.DashboardOtlpGrpcEndpointUrl}=http://localhost:0",
             $"{KnownConfigNames.DashboardUnsecuredAllowAnonymous}=true"
         };
@@ -1497,7 +1497,7 @@ public class DistributedApplicationTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyDockerWithEntrypointWorks()
     {
         const string testName = "docker-entrypoint";
@@ -1524,7 +1524,7 @@ public class DistributedApplicationTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyDockerWithBindMountWorksWithAbsolutePaths()
     {
         const string testName = "docker-bindmount-absolute";
@@ -1553,7 +1553,7 @@ public class DistributedApplicationTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyDockerWithBindMountWorksWithRelativePaths()
     {
         const string testName = "docker-bindmount-relative";
@@ -1582,7 +1582,7 @@ public class DistributedApplicationTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyDockerWithVolumeWorksWithName()
     {
         const string testName = "docker-volume";
@@ -1610,7 +1610,7 @@ public class DistributedApplicationTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task KubernetesHasResourceNameForContainersAndExes()
     {
         const string testName = "kube-resource-names";
@@ -1812,7 +1812,7 @@ public class DistributedApplicationTests
 
     [Fact]
     [OuterloopTest("Long-running container test")]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task ProxylessContainerCanBeReferenced()
     {
         const string testName = "proxyless-container";
@@ -1891,7 +1891,7 @@ public class DistributedApplicationTests
 
     [Fact]
     [OuterloopTest("Long-running endpoint proxy test")]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task WithEndpointProxySupportDisablesProxies()
     {
         const string testName = "endpoint-proxy-support";
@@ -1969,7 +1969,7 @@ public class DistributedApplicationTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task ProxylessContainerWithoutPortThrows()
     {
         const string testName = "proxyless-container-without-ports";
@@ -1989,7 +1989,7 @@ public class DistributedApplicationTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task PersistentNetworkCreatedIfPersistentContainers(bool createPersistentContainer)
     {
         const string testName = "persistent-network-if-persistent-containers";
@@ -2021,7 +2021,7 @@ public class DistributedApplicationTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task ParentProcessLifetimeScopesExecutableAndContainerToParentProcess()
     {
         const string testName = "parent-process-lifetime-scope";
@@ -2070,7 +2070,7 @@ public class DistributedApplicationTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task ParentProcessLifetimeReusesResourcesAcrossAppRestartsAndStopsWhenParentExits()
     {
         const string testName = "parent-process-lifetime-reuse";
@@ -2080,9 +2080,10 @@ public class DistributedApplicationTests
         using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.ExtraLongTimeoutDuration);
         var token = cts.Token;
 
-        using var aspireStore = new TestTempDirectory();
-        using var executableDirectory = new TestTempDirectory();
-        var executableAppPath = DotnetFileAppProcess.WriteApp(executableDirectory, "worker.cs", """
+        using var workspace = TemporaryWorkspace.Create(_testOutputHelper);
+        var aspireStoreDir = workspace.CreateDirectory("aspire-store");
+        var executableDir = workspace.CreateDirectory("executable");
+        var executableAppPath = DotnetFileAppProcess.WriteApp(executableDir.FullName, "worker.cs", """
             using System.Threading;
             using System.Threading.Tasks;
 
@@ -2134,14 +2135,14 @@ public class DistributedApplicationTests
         async Task<ParentScopedResourcesRun> StartParentScopedResourcesAsync(int parentProcessId, CancellationToken cancellationToken)
         {
             var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(_testOutputHelper)
-                .WithTempAspireStore(aspireStore.Path)
+                .WithTempAspireStore(aspireStoreDir.FullName)
                 .WithResourceCleanUp(false);
 
             AddRedisContainer(builder, containerResourceName)
                 .WithContainerName(containerResourceName)
                 .WithParentProcessLifetime(parentProcessId);
 
-            builder.AddExecutable(executableResourceName, DotnetFileAppProcess.ExecutablePath, executableDirectory.Path, DotnetFileAppProcess.CreateArguments(executableAppPath))
+            builder.AddExecutable(executableResourceName, DotnetFileAppProcess.ExecutablePath, executableDir.FullName, DotnetFileAppProcess.CreateArguments(executableAppPath))
                 .WithParentProcessLifetime(parentProcessId);
 
             var app = builder.Build();
@@ -2187,7 +2188,7 @@ public class DistributedApplicationTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task AfterResourcesCreatedLifecycleHookWorks()
     {
         const string testName = "lifecycle-hook-after-resource-created";
@@ -2280,7 +2281,7 @@ public class DistributedApplicationTests
     }
 
     [Theory]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [InlineData(0)] // Success exit code
     [InlineData(100)] // Failing (non-zero) exit code
     public async Task ContainerExitsImmediatelyAfterStart(int exitCode)
@@ -2377,20 +2378,9 @@ public class DistributedApplicationTests
         return resourceEvent.Snapshot.Properties.FirstOrDefault(p => p.Name == propertyName)?.Value;
     }
 
-    private static Process StartLongRunningProcess()
-    {
-        var startInfo = OperatingSystem.IsWindows()
-            ? new ProcessStartInfo("ping", "-t localhost") { CreateNoWindow = true }
-            : new ProcessStartInfo("tail", "-f /dev/null");
-
-        startInfo.RedirectStandardOutput = true;
-        startInfo.RedirectStandardError = true;
-
-        var process = Process.Start(startInfo);
-        Assert.NotNull(process);
-
-        return process;
-    }
+    // Delegates to the shared bounded, self-terminating helper so an aborted test host can't leak
+    // this child on a CI agent.
+    private static Process StartLongRunningProcess() => TestProcesses.StartLongRunning();
 
     private static async Task KillProcessAsync(Process process, CancellationToken cancellationToken)
     {

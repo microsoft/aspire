@@ -20,7 +20,7 @@ internal sealed class SdkGenerateCommand : BaseCommand
 {
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly IAppHostServerProjectFactory _appHostServerProjectFactory;
-    private readonly IAppHostServerSessionFactory _appHostServerSessionFactory;
+    private readonly IAppHostServerSessionFactory _serverSessionFactory;
     private readonly ILogger<SdkGenerateCommand> _logger;
 
     private static readonly Argument<FileInfo> s_integrationArgument = new("integration")
@@ -41,14 +41,14 @@ internal sealed class SdkGenerateCommand : BaseCommand
     public SdkGenerateCommand(
         ILanguageDiscovery languageDiscovery,
         IAppHostServerProjectFactory appHostServerProjectFactory,
-        IAppHostServerSessionFactory appHostServerSessionFactory,
+        IAppHostServerSessionFactory serverSessionFactory,
         ILogger<SdkGenerateCommand> logger,
         CommonCommandServices services)
         : base("generate", "Generate typed SDKs from an Aspire integration library for use in other languages.", services)
     {
         _languageDiscovery = languageDiscovery;
         _appHostServerProjectFactory = appHostServerProjectFactory;
-        _appHostServerSessionFactory = appHostServerSessionFactory;
+        _serverSessionFactory = serverSessionFactory;
         _logger = logger;
 
         Arguments.Add(s_integrationArgument);
@@ -154,10 +154,11 @@ internal sealed class SdkGenerateCommand : BaseCommand
                 return CliExitCodes.FailedToBuildArtifacts;
             }
 
-            await using var serverSession = _appHostServerSessionFactory.Start(
-                appHostServerProject,
-                environmentVariables: null,
-                debug: false);
+            await using var serverSession = _serverSessionFactory.Create(appHostServerProject, environmentVariables: null, debug: false, gracefulShutdownSignaler: null, shutdownService: null, isolateConsole: false, cancellationToken);
+            // Short-lived RPC session: StartAsync() spawns the server. We never observe the
+            // exit-code task (WaitForExitAsync) because disposal flows the exit code through the
+            // activity scope and the only failure mode we care about surfaces via the RPC call below.
+            await serverSession.StartAsync();
 
             // Connect and generate code
             var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);

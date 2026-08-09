@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Tests.Utils;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
 using Xunit;
@@ -127,8 +126,8 @@ var albSubnet = vnet.AddSubnet("alb-public", "10.100.4.0/24");
 
 var aks = builder.AddAzureKubernetesEnvironment("aks")
     .WithSubnet(aksSubnet)
-    .WithSystemNodePool("Standard_D2as_v5");
-aks.AddNodePool("workload", "Standard_D2as_v5", minCount: 1, maxCount: 3);
+    .WithSystemNodePool("Standard_D2s_v5");
+aks.AddNodePool("workload", "Standard_D2s_v5", minCount: 1, maxCount: 3);
 
 var publicLb = aks.AddLoadBalancer("public", albSubnet);
 
@@ -181,9 +180,11 @@ builder.Build().Run();
             await auto.WaitForSuccessPromptAsync(counter);
 
             output.WriteLine("Step 8: Setting deployment environment variables...");
+            // Unset the job-level Azure__Location=westus3 the CI workflow injects: on Linux it coexists
+            // with AZURE__LOCATION (case-sensitive env) and .NET config may bind the inherited westus3 instead.
             await auto.TypeAsync(
-                $"unset ASPIRE_PLAYGROUND && " +
-                $"export AZURE__LOCATION=westus3 && " +
+                $"unset ASPIRE_PLAYGROUND && unset Azure__Location && " +
+                $"export AZURE__LOCATION=centralus && " +
                 $"export AZURE__RESOURCEGROUP={resourceGroupName} && " +
                 $"export Parameters__acmeemail={acmeEmail}");
             await auto.EnterAsync();

@@ -116,7 +116,7 @@ internal sealed class DeprecatedWorkloadCheck(ILogger<DeprecatedWorkloadCheck> l
             // Skip header lines, separator lines, and informational lines
             if (trimmedLine.StartsWith("Installed", StringComparison.OrdinalIgnoreCase) ||
                 trimmedLine.StartsWith("Workload version:", StringComparison.OrdinalIgnoreCase) ||
-                trimmedLine.StartsWith("---") ||
+                trimmedLine.StartsWith("---", StringComparison.Ordinal) ||
                 trimmedLine.StartsWith("Use", StringComparison.OrdinalIgnoreCase) ||
                 string.IsNullOrWhiteSpace(trimmedLine))
             {

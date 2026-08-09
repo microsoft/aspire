@@ -29,6 +29,7 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
     // the agent's own instance identity below, and to consumers that reference the agent (see
     // HostedAgentResourceBuilderExtensions.GrantHostedAgentConsumerRoles).
     internal const string AzureAIUserRoleDefinitionId = "53ca6127-db72-4b80-b1b0-d745d6d5456d";
+    internal const string DefaultResponsesProtocolVersion = "2.0.0";
 
     /// <summary>
     /// Creates a new instance of the <see cref="AzureHostedAgentResource"/> class.
@@ -121,7 +122,16 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
         {
             Configure(def);
         }
+        EnsureProtocolVersions(def);
         return def;
+    }
+
+    internal static void EnsureProtocolVersions(HostedAgentConfiguration configuration)
+    {
+        if (configuration.ProtocolVersions.Count == 0)
+        {
+            configuration.ProtocolVersions.Add(new ProtocolVersionRecord(ProjectsAgentProtocol.Responses, DefaultResponsesProtocolVersion));
+        }
     }
 
     /// <summary>
@@ -157,10 +167,12 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
             throw new InvalidOperationException($"Project '{project.Name}' does not have a valid connection string.");
         }
         var def = await ToHostedAgentConfigurationAsync(context).ConfigureAwait(false);
+        var options = def.ToProjectsAgentVersionCreationOptions(Target.Name);
+
         var projectClient = new AIProjectClient(new Uri(projectEndpoint), credential);
         var result = await projectClient.AgentAdministrationClient.CreateAgentVersionAsync(
             Name,
-            def.ToProjectsAgentVersionCreationOptions(Target.Name),
+            options,
             cancellationToken: context.CancellationToken
         ).ConfigureAwait(false);
 
@@ -174,7 +186,7 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
 
     private async Task UpdateAgentEndpointProtocolsAsync(AgentAdministrationClient agentsClient, HostedAgentConfiguration configuration, CancellationToken cancellationToken)
     {
-        var endpointProtocols = GetAgentEndpointProtocols(configuration.ContainerProtocolVersions);
+        var endpointProtocols = GetAgentEndpointProtocols(configuration.ProtocolVersions);
         if (endpointProtocols.Count == 0)
         {
             return;

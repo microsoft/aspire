@@ -1,17 +1,22 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Net.Sockets;
+using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Aspire.Hosting;
 using Aspire.Hosting.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console;
@@ -20,15 +25,13 @@ namespace Aspire.Cli.Tests.Projects;
 
 public class GuestAppHostProjectTests : IDisposable
 {
-    private const string AspNetCoreEnvironmentVariableName = "ASPNETCORE_ENVIRONMENT";
-
     private readonly TemporaryWorkspace _workspace;
     private readonly IConfiguration _configuration;
     private readonly ProfilingTelemetry _profilingTelemetry;
 
     public GuestAppHostProjectTests(ITestOutputHelper outputHelper)
     {
-        _workspace = TemporaryWorkspace.Create(outputHelper);
+        _workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         _configuration = new ConfigurationBuilder().Build();
         _profilingTelemetry = new ProfilingTelemetry(_configuration);
     }
@@ -345,8 +348,8 @@ public class GuestAppHostProjectTests : IDisposable
 
         var envVars = project.GetServerEnvironmentVariables(_workspace.WorkspaceRoot);
 
-        Assert.Equal("https://localhost:16319;http://localhost:16320", envVars["ASPNETCORE_URLS"]);
-        Assert.Equal("Development", envVars["ASPNETCORE_ENVIRONMENT"]);
+        Assert.Equal("https://localhost:16319;http://localhost:16320", envVars[KnownAspNetCoreConfigNames.Urls]);
+        Assert.Equal("Development", envVars[KnownAspNetCoreConfigNames.Environment]);
         Assert.Equal("https://localhost:17269", envVars["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]);
         Assert.Equal("https://localhost:17269", envVars["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]);
         Assert.False(envVars.ContainsKey("ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"));
@@ -360,8 +363,8 @@ public class GuestAppHostProjectTests : IDisposable
             defaultEnvironment: AppHostEnvironmentDefaults.ProductionEnvironmentName,
             inheritedEnvironmentVariables: new Dictionary<string, string?>());
 
-        Assert.Equal("Production", envVars["DOTNET_ENVIRONMENT"]);
-        Assert.False(envVars.ContainsKey("ASPNETCORE_ENVIRONMENT"));
+        Assert.Equal("Production", envVars[KnownAspNetCoreConfigNames.DotNetEnvironment]);
+        Assert.False(envVars.ContainsKey(KnownAspNetCoreConfigNames.Environment));
     }
 
     [Fact]
@@ -370,9 +373,9 @@ public class GuestAppHostProjectTests : IDisposable
         var envVars = GuestAppHostProject.GetServerEnvironmentVariables(
             launchProfileEnvironmentVariables: new Dictionary<string, string>
             {
-                ["ASPNETCORE_URLS"] = "https://localhost:16319;http://localhost:16320",
-                ["ASPNETCORE_ENVIRONMENT"] = "Development",
-                ["DOTNET_ENVIRONMENT"] = "Development",
+                [KnownAspNetCoreConfigNames.Urls] = "https://localhost:16319;http://localhost:16320",
+                [KnownAspNetCoreConfigNames.Environment] = "Development",
+                [KnownAspNetCoreConfigNames.DotNetEnvironment] = "Development",
                 ["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = "https://localhost:17269",
                 ["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = "https://localhost:18269"
             },
@@ -380,9 +383,9 @@ public class GuestAppHostProjectTests : IDisposable
             includeLaunchProfileEnvironmentVariables: false,
             inheritedEnvironmentVariables: new Dictionary<string, string?>());
 
-        Assert.Equal("Production", envVars["DOTNET_ENVIRONMENT"]);
-        Assert.False(envVars.ContainsKey("ASPNETCORE_ENVIRONMENT"));
-        Assert.Equal("https://localhost:16319;http://localhost:16320", envVars["ASPNETCORE_URLS"]);
+        Assert.Equal("Production", envVars[KnownAspNetCoreConfigNames.DotNetEnvironment]);
+        Assert.False(envVars.ContainsKey(KnownAspNetCoreConfigNames.Environment));
+        Assert.Equal("https://localhost:16319;http://localhost:16320", envVars[KnownAspNetCoreConfigNames.Urls]);
         Assert.Equal("https://localhost:17269", envVars["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]);
         Assert.Equal("https://localhost:18269", envVars["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]);
         Assert.False(envVars.ContainsKey("ASPIRE_ENVIRONMENT"));
@@ -394,17 +397,17 @@ public class GuestAppHostProjectTests : IDisposable
         var envVars = GuestAppHostProject.GetServerEnvironmentVariables(
             launchProfileEnvironmentVariables: new Dictionary<string, string>
             {
-                ["ASPNETCORE_URLS"] = "https://localhost:16319;http://localhost:16320",
+                [KnownAspNetCoreConfigNames.Urls] = "https://localhost:16319;http://localhost:16320",
                 ["ASPIRE_ENVIRONMENT"] = "Development",
-                ["ASPNETCORE_ENVIRONMENT"] = "Development",
-                ["DOTNET_ENVIRONMENT"] = "Development",
+                [KnownAspNetCoreConfigNames.Environment] = "Development",
+                [KnownAspNetCoreConfigNames.DotNetEnvironment] = "Development",
             },
             defaultEnvironment: AppHostEnvironmentDefaults.ProductionEnvironmentName,
             inheritedEnvironmentVariables: new Dictionary<string, string?>(),
             args: ["--environment", "Staging"]);
 
-        Assert.Equal("Staging", envVars["DOTNET_ENVIRONMENT"]);
-        Assert.Equal("Development", envVars["ASPNETCORE_ENVIRONMENT"]);
+        Assert.Equal("Staging", envVars[KnownAspNetCoreConfigNames.DotNetEnvironment]);
+        Assert.Equal("Development", envVars[KnownAspNetCoreConfigNames.Environment]);
         Assert.Equal("Development", envVars["ASPIRE_ENVIRONMENT"]);
     }
 
@@ -434,7 +437,7 @@ public class GuestAppHostProjectTests : IDisposable
             new Dictionary<string, string>
             {
                 ["CUSTOM_CONTEXT_VARIABLE"] = "context",
-                ["ASPNETCORE_URLS"] = "http://context"
+                [KnownAspNetCoreConfigNames.Urls] = "http://context"
             },
             new Dictionary<string, string>
             {
@@ -442,10 +445,10 @@ public class GuestAppHostProjectTests : IDisposable
             });
 
         Assert.Equal("context", envVars["CUSTOM_CONTEXT_VARIABLE"]);
-        Assert.Equal("https://localhost:16319;http://localhost:16320", envVars["ASPNETCORE_URLS"]);
+        Assert.Equal("https://localhost:16319;http://localhost:16320", envVars[KnownAspNetCoreConfigNames.Urls]);
         Assert.Equal("Staging", envVars["ASPIRE_ENVIRONMENT"]);
-        Assert.Equal("Staging", envVars["DOTNET_ENVIRONMENT"]);
-        Assert.False(envVars.ContainsKey("ASPNETCORE_ENVIRONMENT"));
+        Assert.Equal("Staging", envVars[KnownAspNetCoreConfigNames.DotNetEnvironment]);
+        Assert.False(envVars.ContainsKey(KnownAspNetCoreConfigNames.Environment));
         Assert.Equal("https://localhost:17269", envVars["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]);
         Assert.Equal("https://localhost:18269", envVars["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]);
         Assert.Equal("/tmp/certs", envVars["SSL_CERT_DIR"]);
@@ -458,10 +461,10 @@ public class GuestAppHostProjectTests : IDisposable
             contextEnvironmentVariables: new Dictionary<string, string>(),
             launchProfileEnvironmentVariables: new Dictionary<string, string>
             {
-                ["ASPNETCORE_URLS"] = "https://localhost:16319;http://localhost:16320",
+                [KnownAspNetCoreConfigNames.Urls] = "https://localhost:16319;http://localhost:16320",
                 ["ASPIRE_ENVIRONMENT"] = "Development",
-                ["ASPNETCORE_ENVIRONMENT"] = "Development",
-                ["DOTNET_ENVIRONMENT"] = "Development",
+                [KnownAspNetCoreConfigNames.Environment] = "Development",
+                [KnownAspNetCoreConfigNames.DotNetEnvironment] = "Development",
                 ["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = "https://localhost:17269",
                 ["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = "https://localhost:18269"
             },
@@ -469,9 +472,9 @@ public class GuestAppHostProjectTests : IDisposable
             includeLaunchProfileEnvironmentVariables: false,
             inheritedEnvironmentVariables: new Dictionary<string, string?>());
 
-        Assert.Equal("Production", envVars["DOTNET_ENVIRONMENT"]);
-        Assert.False(envVars.ContainsKey("ASPNETCORE_ENVIRONMENT"));
-        Assert.Equal("https://localhost:16319;http://localhost:16320", envVars["ASPNETCORE_URLS"]);
+        Assert.Equal("Production", envVars[KnownAspNetCoreConfigNames.DotNetEnvironment]);
+        Assert.False(envVars.ContainsKey(KnownAspNetCoreConfigNames.Environment));
+        Assert.Equal("https://localhost:16319;http://localhost:16320", envVars[KnownAspNetCoreConfigNames.Urls]);
         Assert.Equal("https://localhost:17269", envVars["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]);
         Assert.Equal("https://localhost:18269", envVars["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]);
         Assert.False(envVars.ContainsKey("ASPIRE_ENVIRONMENT"));
@@ -485,15 +488,15 @@ public class GuestAppHostProjectTests : IDisposable
             launchProfileEnvironmentVariables: new Dictionary<string, string>
             {
                 ["ASPIRE_ENVIRONMENT"] = "Development",
-                ["ASPNETCORE_ENVIRONMENT"] = "Development",
-                ["DOTNET_ENVIRONMENT"] = "Development",
+                [KnownAspNetCoreConfigNames.Environment] = "Development",
+                [KnownAspNetCoreConfigNames.DotNetEnvironment] = "Development",
             },
             defaultEnvironment: AppHostEnvironmentDefaults.ProductionEnvironmentName,
             inheritedEnvironmentVariables: new Dictionary<string, string?>(),
             args: ["--environment", "Staging"]);
 
-        Assert.Equal("Staging", envVars["DOTNET_ENVIRONMENT"]);
-        Assert.Equal("Development", envVars["ASPNETCORE_ENVIRONMENT"]);
+        Assert.Equal("Staging", envVars[KnownAspNetCoreConfigNames.DotNetEnvironment]);
+        Assert.Equal("Development", envVars[KnownAspNetCoreConfigNames.Environment]);
         Assert.Equal("Development", envVars["ASPIRE_ENVIRONMENT"]);
     }
 
@@ -509,8 +512,8 @@ public class GuestAppHostProjectTests : IDisposable
                 [AppHostEnvironmentDefaults.AspireEnvironmentVariableName] = "Staging"
             });
 
-        Assert.Equal("Staging", envVars["DOTNET_ENVIRONMENT"]);
-        Assert.False(envVars.ContainsKey("ASPNETCORE_ENVIRONMENT"));
+        Assert.Equal("Staging", envVars[KnownAspNetCoreConfigNames.DotNetEnvironment]);
+        Assert.False(envVars.ContainsKey(KnownAspNetCoreConfigNames.Environment));
     }
 
     [Fact]
@@ -519,14 +522,14 @@ public class GuestAppHostProjectTests : IDisposable
         var envVars = GuestAppHostProject.CreateGuestEnvironmentVariables(
             contextEnvironmentVariables: new Dictionary<string, string>
             {
-                [AppHostEnvironmentDefaults.DotNetEnvironmentVariableName] = "Production",
+                [KnownAspNetCoreConfigNames.DotNetEnvironment] = "Production",
                 [AppHostEnvironmentDefaults.AspireEnvironmentVariableName] = "Staging"
             },
             launchProfileEnvironmentVariables: null,
             inheritedEnvironmentVariables: new Dictionary<string, string?>());
 
-        Assert.Equal("Production", envVars["DOTNET_ENVIRONMENT"]);
-        Assert.False(envVars.ContainsKey("ASPNETCORE_ENVIRONMENT"));
+        Assert.Equal("Production", envVars[KnownAspNetCoreConfigNames.DotNetEnvironment]);
+        Assert.False(envVars.ContainsKey(KnownAspNetCoreConfigNames.Environment));
         Assert.Equal("Staging", envVars["ASPIRE_ENVIRONMENT"]);
     }
 
@@ -537,13 +540,13 @@ public class GuestAppHostProjectTests : IDisposable
             contextEnvironmentVariables: new Dictionary<string, string>
             {
                 [AppHostEnvironmentDefaults.AspireEnvironmentVariableName] = "Testing",
-                [AspNetCoreEnvironmentVariableName] = "Staging"
+                [KnownAspNetCoreConfigNames.Environment] = "Staging"
             },
             launchProfileEnvironmentVariables: null,
             inheritedEnvironmentVariables: new Dictionary<string, string?>());
 
-        Assert.Equal("Testing", envVars["DOTNET_ENVIRONMENT"]);
-        Assert.Equal("Staging", envVars["ASPNETCORE_ENVIRONMENT"]);
+        Assert.Equal("Testing", envVars[KnownAspNetCoreConfigNames.DotNetEnvironment]);
+        Assert.Equal("Staging", envVars[KnownAspNetCoreConfigNames.Environment]);
         Assert.Equal("Testing", envVars["ASPIRE_ENVIRONMENT"]);
     }
 
@@ -927,6 +930,75 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.Equal(seededChannel, reloaded.Channel);
     }
 
+    [Theory]
+    [InlineData(CliExitCodes.Success, "The AppHost server process exited")]
+    [InlineData(42, "The AppHost server process exited unexpectedly with exit code 42")]
+    [InlineData(null, "The AppHost server process exited unexpectedly")]
+    public async Task StartBackchannelConnectionAsync_WhenGuestServerExitsBeforeBackchannelConnects_ReportsExitCodeWhenKnown(
+        int? serverExitCode,
+        string expectedMessage)
+    {
+        var backchannel = new TestAppHostBackchannel
+        {
+            ConnectAsyncCallback = (_, _) => throw new SocketException((int)SocketError.ConnectionRefused)
+        };
+        var project = CreateGuestAppHostProject(backchannel: backchannel);
+        var serverSession = new FakeAppHostServerSession
+        {
+            ServerHasExited = true,
+            ServerExitCode = serverExitCode
+        };
+        var backchannelCompletionSource = new TaskCompletionSource<IAppHostCliBackchannel>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await InvokeStartBackchannelConnectionAsync(project, serverSession, backchannelCompletionSource);
+
+        var exception = await Assert.ThrowsAsync<FailedToConnectBackchannelConnection>(
+            () => backchannelCompletionSource.Task).DefaultTimeout();
+        Assert.Equal(expectedMessage, exception.Message);
+    }
+
+    [Fact]
+    public async Task RunAsync_PassesWorkloadIdToAppHostServerEnvironment()
+    {
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+        var appHostFile = new FileInfo(appHostPath);
+        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile);
+
+        var projectFactory = new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (path, _) =>
+                Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(path))
+        };
+
+        var serverSession = new FakeAppHostServerSession
+        {
+            GetRpcClientAsyncCallback = _ => Task.FromException<IAppHostRpcClient>(
+                new InvalidOperationException("Stop after the server launch environment has been captured."))
+        };
+        var sessionFactory = new FakeAppHostServerSessionFactory
+        {
+            Session = serverSession
+        };
+        var project = CreateGuestAppHostProject(
+            appHostServerProjectFactory: projectFactory,
+            serverSessionFactory: sessionFactory);
+
+        var context = new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
+        };
+
+        var exitCode = await project.RunAsync(context, CancellationToken.None);
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+        Assert.True(serverSession.StartAsyncCalled);
+        Assert.NotNull(sessionFactory.CapturedEnvironmentVariables);
+        Assert.Equal(expectedWorkloadId, sessionFactory.CapturedEnvironmentVariables[KnownConfigNames.DcpWorkloadId]);
+    }
+
     [Fact]
     public void IsUsingProjectReferencesReturnsFalseWhenIdentityIsOverridden()
     {
@@ -1003,12 +1075,12 @@ public class GuestAppHostProjectTests : IDisposable
                 Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(appPath))
         };
 
-        var sessionFactory = new TestAppHostServerSessionFactory();
+        IAppHostServerSessionFactory sessionFactory = new FakeAppHostServerSessionFactory();
 
         var project = CreateGuestAppHostProject(
             interactionService: interactionService,
             appHostServerProjectFactory: factory,
-            appHostServerSessionFactory: sessionFactory);
+            serverSessionFactory: sessionFactory);
 
         var context = new UpdatePackagesContext
         {
@@ -1034,6 +1106,11 @@ public class GuestAppHostProjectTests : IDisposable
             {
                 Assert.Equal("package", m.Emoji.Name);
                 Assert.Equal($"Aspire.Hosting {staleVersion} to {cliVersion}", Markup.Remove(m.Message));
+            },
+            m =>
+            {
+                Assert.Equal("warning", m.Emoji.Name);
+                Assert.Equal(ErrorStrings.LegacyTypeScriptAppHostWarning, Markup.Remove(m.Message));
             },
             m =>
             {
@@ -1087,12 +1164,12 @@ public class GuestAppHostProjectTests : IDisposable
                 Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(appPath))
         };
 
-        var sessionFactory = new TestAppHostServerSessionFactory();
+        IAppHostServerSessionFactory sessionFactory = new FakeAppHostServerSessionFactory();
 
         var project = CreateGuestAppHostProject(
             interactionService: interactionService,
             appHostServerProjectFactory: factory,
-            appHostServerSessionFactory: sessionFactory);
+            serverSessionFactory: sessionFactory);
 
         var context = new UpdatePackagesContext
         {
@@ -1130,6 +1207,11 @@ public class GuestAppHostProjectTests : IDisposable
             },
             m =>
             {
+                Assert.Equal("warning", m.Emoji.Name);
+                Assert.Equal(ErrorStrings.LegacyTypeScriptAppHostWarning, Markup.Remove(m.Message));
+            },
+            m =>
+            {
                 Assert.Equal("package", m.Emoji.Name);
                 Assert.Equal(UpdateCommandStrings.RegeneratedSdkCode, m.Message);
             });
@@ -1153,8 +1235,9 @@ public class GuestAppHostProjectTests : IDisposable
     private GuestAppHostProject CreateGuestAppHostProject(
         TestInteractionService? interactionService = null,
         string identityChannel = "local",
+        TestAppHostBackchannel? backchannel = null,
         TestAppHostServerProjectFactory? appHostServerProjectFactory = null,
-        IAppHostServerSessionFactory? appHostServerSessionFactory = null,
+        IAppHostServerSessionFactory? serverSessionFactory = null,
         bool identityOverridden = false)
     {
         var language = new LanguageInfo(
@@ -1172,12 +1255,18 @@ public class GuestAppHostProjectTests : IDisposable
             logFilePath: logFilePath,
             identityOverridden: identityOverridden);
 
+        // Construct a real graceful-shutdown window so the contract matches production:
+        // GuestAppHostProject requires it even when a test exits the Run path early
+        // (e.g. via FailedToBuildArtifacts) without exercising shutdown. The test fake stands in for
+        // ConsoleCancellationManager so the fixture doesn't register process-global OS signal handlers;
+        // none of the tests here drive the launcher or AppHostServerSession paths that would fire it.
+        var shutdownWindow = new TestGracefulShutdownWindow();
+
         return new GuestAppHostProject(
             language: language,
             interactionService: interactionService ?? new TestInteractionService(),
-            backchannel: new TestAppHostBackchannel(),
+            backchannel: backchannel ?? new TestAppHostBackchannel(),
             appHostServerProjectFactory: appHostServerProjectFactory ?? new TestAppHostServerProjectFactory(),
-            appHostServerSessionFactory: appHostServerSessionFactory ?? new TestAppHostServerSessionFactory(),
             certificateService: new TestCertificateService(),
             runner: new TestDotNetCliRunner(),
             packagingService: new TestPackagingService(),
@@ -1185,10 +1274,41 @@ public class GuestAppHostProjectTests : IDisposable
             features: new Features(_configuration, NullLogger<Features>.Instance),
             languageDiscovery: new TestLanguageDiscovery(),
             executionContext: executionContext,
+            environment: new TestEnvironment(),
             logger: NullLogger<GuestAppHostProject>.Instance,
             fileLoggerProvider: new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()),
             profilingTelemetry: _profilingTelemetry,
+            gracefulShutdownSignaler: new NoOpGracefulSignaler(),
+            shutdownService: shutdownWindow,
+            serverSessionFactory: serverSessionFactory ?? new FakeAppHostServerSessionFactory(),
             timeProvider: TimeProvider.System);
+    }
+
+    private static async Task InvokeStartBackchannelConnectionAsync(
+        GuestAppHostProject project,
+        IAppHostServerSession serverSession,
+        TaskCompletionSource<IAppHostCliBackchannel> backchannelCompletionSource)
+    {
+        var method = typeof(GuestAppHostProject).GetMethod(
+            "StartBackchannelConnectionAsync",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(method);
+
+        var task = Assert.IsAssignableFrom<Task>(method.Invoke(project, [
+            serverSession,
+            "fake.sock",
+            backchannelCompletionSource,
+            false,
+            default(System.Diagnostics.ActivityContext),
+            CancellationToken.None
+        ]));
+        await task.DefaultTimeout();
+    }
+
+    private sealed class NoOpGracefulSignaler : IProcessTreeGracefulShutdownSignaler
+    {
+        public Task<bool> RequestProcessTreeGracefulShutdownAsync(int pid, DateTimeOffset? startTime, bool includeStartTimeForDcp, CancellationToken cancellationToken)
+            => Task.FromResult(true);
     }
 
 }

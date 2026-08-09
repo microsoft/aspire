@@ -25,7 +25,7 @@ public class ConformanceTests : ConformanceTests<IConnection, RabbitMQClientSett
     public ConformanceTests(RabbitMQContainerFixture? containerFixture, ITestOutputHelper? output = null) : base(output)
     {
         _containerFixture = containerFixture;
-        ConnectionString = (_containerFixture is not null && RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker))
+        ConnectionString = (_containerFixture is not null && RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers))
                                     ? _containerFixture.GetConnectionString()
                                     : "amqp://localhost:5672";
     }
@@ -35,11 +35,11 @@ public class ConformanceTests : ConformanceTests<IConnection, RabbitMQClientSett
     // IConnectionMultiplexer can be created only via call to ConnectionMultiplexer.Connect
     protected override bool CanCreateClientWithoutConnectingToServer => false;
 
-    protected override bool CanConnectToServer => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker);
+    protected override bool CanConnectToServer => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers);
 
     protected override bool SupportsKeyedRegistrations => true;
 
-    protected override string[] RequiredLogCategories => Array.Empty<string>();
+    protected override RequiredLogCategory[] RequiredLogCategories => [];
 
 #if RABBITMQ_V6
     protected override string ActivitySourceName => "Aspire.RabbitMQ.Client";
@@ -143,14 +143,14 @@ public class ConformanceTests : ConformanceTests<IConnection, RabbitMQClientSett
 
 #if !RABBITMQ_V6
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.Testcontainers)]
     public void TracingEnablesTheRightActivitySource()
         => RemoteInvokeWithLogging(static connectionStringToUse =>
             RunWithConnectionString(connectionStringToUse, static obj => obj.RunActivitySourceTest(key: null)),
             ConnectionString, Output);
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.Testcontainers)]
     public void TracingEnablesTheRightActivitySource_Keyed()
         => RemoteInvokeWithLogging(static connectionStringToUse =>
             RunWithConnectionString(connectionStringToUse, static obj => obj.RunActivitySourceTest(key: "key")),

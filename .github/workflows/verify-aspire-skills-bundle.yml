@@ -5,7 +5,10 @@ on:
   pull_request:
     paths:
       - 'src/Aspire.Cli/Agents/AspireSkills/Embedded/**'
+      - 'src/Aspire.Cli/Agents/Hooks/track-telemetry.sh'
+      - 'src/Aspire.Cli/Agents/Hooks/track-telemetry.ps1'
       - 'eng/scripts/verify-aspire-skills-bundle.ps1'
+      - 'eng/scripts/aspire-skills-bundle.common.ps1'
       - '.github/workflows/verify-aspire-skills-bundle.yml'
 
 permissions:

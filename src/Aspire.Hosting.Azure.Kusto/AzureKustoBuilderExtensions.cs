@@ -88,7 +88,8 @@ public static class AzureKustoBuilderExtensions
         };
 
         var resource = new AzureKustoClusterResource(name, configureInfrastructure);
-        var resourceBuilder = builder.AddResource(resource);
+        var resourceBuilder = builder.AddResource(resource)
+            .WithIconName("DatabaseMultiple");
 
         AddKustoHealthChecksAndLifecycleManagement(resourceBuilder);
         AddKustoCustomCommands(resourceBuilder);
@@ -116,7 +117,8 @@ public static class AzureKustoBuilderExtensions
 
         var kustoDatabase = new AzureKustoReadWriteDatabaseResource(name, databaseName, builder.Resource);
         builder.Resource.Databases.Add(kustoDatabase);
-        var resourceBuilder = builder.ApplicationBuilder.AddResource(kustoDatabase);
+        var resourceBuilder = builder.ApplicationBuilder.AddResource(kustoDatabase)
+            .WithIconName("Database");
 
         // Register a health check that will be used to verify database is available
         KustoConnectionStringBuilder? kcsb = null;

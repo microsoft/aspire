@@ -438,10 +438,10 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
                 {
                     // Ensure we use a trusted developer certificate (Kestrel selects the latest certificate, which may not be trusted after an SDK update).
                     // There can be issues referencing an exported PEM key pair on MacOS, so we the PFX version of the certificate here.
-                    ctx.EnvironmentVariables["Kestrel__Certificates__Default__Path"] = ctx.PfxPath;
+                    ctx.EnvironmentVariables[KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPath] = ctx.PfxPath;
                     if (ctx.Password is not null)
                     {
-                        ctx.EnvironmentVariables["Kestrel__Certificates__Default__Password"] = ctx.Password;
+                        ctx.EnvironmentVariables[KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPassword] = ctx.Password;
                     }
 
                     return Task.CompletedTask;
@@ -462,7 +462,9 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
                         // Other endpoints are for the dashboard UI. There are typically dashboard UI endpoints for http and https.
                         // Order these before non-browser usable endpoints.
                         url.DisplayText = $"Dashboard ({endpoint.EndpointName})";
+#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set for compatibility.
                         url.DisplayOrder = 1;
+#pragma warning restore CS0618
 
                         // Append the browser token to the URL as a query string parameter if token is configured
                         if (!string.IsNullOrEmpty(browserToken))
@@ -597,7 +599,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
         var resourceServiceUrl = await dashboardEndpointProvider.GetResourceServiceUriAsync(context.CancellationToken).ConfigureAwait(false);
 
-        context.EnvironmentVariables["ASPNETCORE_ENVIRONMENT"] = environment;
+        context.EnvironmentVariables[KnownAspNetCoreConfigNames.Environment] = environment;
         context.EnvironmentVariables[DashboardConfigNames.ResourceServiceUrlName.EnvVarName] = resourceServiceUrl;
 
         PopulateDashboardUrls(context);
@@ -952,7 +954,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             // (e.g. Aspire.Hosting.Dashboard.Model.IconResolver). Third-party categories (e.g.
             // Microsoft.AspNetCore.Server.Kestrel) get a "ThirdParty" segment so they can be filtered
             // with a single rule on "Aspire.Hosting.Dashboard.ThirdParty".
-            if (category.StartsWith("Aspire.Dashboard."))
+            if (category.StartsWith("Aspire.Dashboard.", StringComparison.Ordinal))
             {
                 var categoryTrimmed = category["Aspire.Dashboard.".Length..];
                 return loggerFactory.CreateLogger($"Aspire.Hosting.Dashboard.{categoryTrimmed}");

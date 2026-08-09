@@ -450,6 +450,15 @@ namespace Aspire.Hosting.Azure.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Azure Key Vault resources cannot change location because soft-deleted vault names remain reserved globally. Use delete, reprovision, or forget state to recover this resource..
+        /// </summary>
+        internal static string ChangeResourceLocationKeyVaultUnsupported {
+            get {
+                return ResourceManager.GetString("ChangeResourceLocationKeyVaultUnsupported", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Returns cached deployment state and live Azure existence information for this resource..
         /// </summary>
         internal static string GetAzureResourceCommandDescription {
@@ -477,43 +486,43 @@ namespace Aspire.Hosting.Azure.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to This requests cancellation of the cached Azure deployment for this resource. Any Azure resources already created by the deployment are not deleted. Do you want to continue?.
+        ///   Looks up a localized string similar to This requests cancellation of the active Azure operation that includes this resource, or the active Azure deployment for this resource. If the operation includes other Azure resources, they will be canceled too. Azure may continue work that cannot be canceled immediately, and resources already created are not deleted. Do you want to continue?.
         /// </summary>
-        internal static string CancelDeploymentCommandConfirmation {
+        internal static string CancelCommandConfirmation {
             get {
-                return ResourceManager.GetString("CancelDeploymentCommandConfirmation", resourceCulture);
+                return ResourceManager.GetString("CancelCommandConfirmation", resourceCulture);
             }
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Requests cancellation of the cached Azure deployment for this resource..
+        ///   Looks up a localized string similar to Requests cancellation of the active Azure operation or deployment for this resource..
         /// </summary>
-        internal static string CancelDeploymentCommandDescription {
+        internal static string CancelCommandDescription {
             get {
-                return ResourceManager.GetString("CancelDeploymentCommandDescription", resourceCulture);
+                return ResourceManager.GetString("CancelCommandDescription", resourceCulture);
             }
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Cancel deployment.
+        ///   Looks up a localized string similar to Cancel.
         /// </summary>
-        internal static string CancelDeploymentCommandName {
+        internal static string CancelCommandName {
             get {
-                return ResourceManager.GetString("CancelDeploymentCommandName", resourceCulture);
+                return ResourceManager.GetString("CancelCommandName", resourceCulture);
             }
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Azure deployment cancellation requested..
+        ///   Looks up a localized string similar to Azure cancellation requested..
         /// </summary>
-        internal static string CancelDeploymentCommandSuccess {
+        internal static string CancelCommandSuccess {
             get {
-                return ResourceManager.GetString("CancelDeploymentCommandSuccess", resourceCulture);
+                return ResourceManager.GetString("CancelCommandSuccess", resourceCulture);
             }
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to This cancels the cached Azure deployment, deletes Azure resources targeted by this resource's deployment, and clears cached deployment state. Do you want to continue?.
+        ///   Looks up a localized string similar to This cancels the cached Azure deployment, deletes Azure resources targeted by this resource's deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state. Do you want to continue?.
         /// </summary>
         internal static string DeleteAzureResourceCommandConfirmation {
             get {
@@ -522,7 +531,7 @@ namespace Aspire.Hosting.Azure.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Cancels the cached Azure deployment, deletes Azure resources targeted by the deployment, and clears cached deployment state for this resource..
+        ///   Looks up a localized string similar to Cancels the cached Azure deployment, deletes Azure resources targeted by the deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state for this resource..
         /// </summary>
         internal static string DeleteAzureResourceCommandDescription {
             get {
@@ -675,6 +684,15 @@ namespace Aspire.Hosting.Azure.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Azure operation '{0}' is already running or queued for the same resource scope. Wait for it to finish or run '{2}' before starting '{1}'..
+        /// </summary>
+        internal static string OperationAlreadyRunningOrQueued {
+            get {
+                return ResourceManager.GetString("OperationAlreadyRunningOrQueued", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Azure location.
         /// </summary>
         internal static string ContextPropertyLocationDisplayName {
@@ -720,6 +738,87 @@ namespace Aspire.Hosting.Azure.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Azure deployment diagnostics.
+        /// </summary>
+        internal static string DeploymentOperationSummaryDisplayName {
+            get {
+                return ResourceManager.GetString("DeploymentOperationSummaryDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Failed Azure resources: {0}.
+        /// </summary>
+        internal static string DeploymentOperationFailedResourcesFormat {
+            get {
+                return ResourceManager.GetString("DeploymentOperationFailedResourcesFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Canceled Azure resources: {0}.
+        /// </summary>
+        internal static string DeploymentOperationCanceledResourcesFormat {
+            get {
+                return ResourceManager.GetString("DeploymentOperationCanceledResourcesFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Provisioning Azure resources: {0}.
+        /// </summary>
+        internal static string DeploymentOperationRunningResourcesFormat {
+            get {
+                return ResourceManager.GetString("DeploymentOperationRunningResourcesFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure operation.
+        /// </summary>
+        internal static string OperationPropertyNameDisplayName {
+            get {
+                return ResourceManager.GetString("OperationPropertyNameDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure operation phase.
+        /// </summary>
+        internal static string OperationPropertyPhaseDisplayName {
+            get {
+                return ResourceManager.GetString("OperationPropertyPhaseDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure operation status.
+        /// </summary>
+        internal static string OperationPropertyStatusDisplayName {
+            get {
+                return ResourceManager.GetString("OperationPropertyStatusDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure operation target location.
+        /// </summary>
+        internal static string OperationPropertyTargetLocationDisplayName {
+            get {
+                return ResourceManager.GetString("OperationPropertyTargetLocationDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure operation started.
+        /// </summary>
+        internal static string OperationPropertyStartedAtDisplayName {
+            get {
+                return ResourceManager.GetString("OperationPropertyStartedAtDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Azure error code.
         /// </summary>
         internal static string FailurePropertyCodeDisplayName {
@@ -743,6 +842,15 @@ namespace Aspire.Hosting.Azure.Resources {
         internal static string FailurePropertyCurrentLocationDisplayName {
             get {
                 return ResourceManager.GetString("FailurePropertyCurrentLocationDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Failed Azure resources.
+        /// </summary>
+        internal static string FailurePropertyFailedResourcesDisplayName {
+            get {
+                return ResourceManager.GetString("FailurePropertyFailedResourcesDisplayName", resourceCulture);
             }
         }
 
@@ -833,6 +941,303 @@ namespace Aspire.Hosting.Azure.Resources {
         internal static string FailurePropertyTargetResourceIdDisplayName {
             get {
                 return ResourceManager.GetString("FailurePropertyTargetResourceIdDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Missing in Azure.
+        /// </summary>
+        internal static string ResourceStateMissingInAzure {
+            get {
+                return ResourceManager.GetString("ResourceStateMissingInAzure", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Missing subscription configuration.
+        /// </summary>
+        internal static string ResourceStateMissingSubscriptionConfiguration {
+            get {
+                return ResourceManager.GetString("ResourceStateMissingSubscriptionConfiguration", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Drifted.
+        /// </summary>
+        internal static string ResourceStateDrifted {
+            get {
+                return ResourceManager.GetString("ResourceStateDrifted", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Starting.
+        /// </summary>
+        internal static string ResourceStateStarting {
+            get {
+                return ResourceManager.GetString("ResourceStateStarting", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Compiling ARM template.
+        /// </summary>
+        internal static string ResourceStateCompilingArmTemplate {
+            get {
+                return ResourceManager.GetString("ResourceStateCompilingArmTemplate", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Creating ARM Deployment.
+        /// </summary>
+        internal static string ResourceStateCreatingArmDeployment {
+            get {
+                return ResourceManager.GetString("ResourceStateCreatingArmDeployment", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Waiting for Deployment.
+        /// </summary>
+        internal static string ResourceStateWaitingForDeployment {
+            get {
+                return ResourceManager.GetString("ResourceStateWaitingForDeployment", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Changing location.
+        /// </summary>
+        internal static string ResourceStateChangingLocation {
+            get {
+                return ResourceManager.GetString("ResourceStateChangingLocation", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Deleting.
+        /// </summary>
+        internal static string ResourceStateDeleting {
+            get {
+                return ResourceManager.GetString("ResourceStateDeleting", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Canceling.
+        /// </summary>
+        internal static string ResourceStateCanceling {
+            get {
+                return ResourceManager.GetString("ResourceStateCanceling", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Canceled.
+        /// </summary>
+        internal static string ResourceStateCanceled {
+            get {
+                return ResourceManager.GetString("ResourceStateCanceled", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Provisioned.
+        /// </summary>
+        internal static string ResourceStateProvisioned {
+            get {
+                return ResourceManager.GetString("ResourceStateProvisioned", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Failed to Provision.
+        /// </summary>
+        internal static string ResourceStateFailedToProvision {
+            get {
+                return ResourceManager.GetString("ResourceStateFailedToProvision", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Failed to Delete.
+        /// </summary>
+        internal static string ResourceStateFailedToDelete {
+            get {
+                return ResourceManager.GetString("ResourceStateFailedToDelete", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure deployment failed.
+        /// </summary>
+        internal static string ResourceStateAzureDeploymentFailed {
+            get {
+                return ResourceManager.GetString("ResourceStateAzureDeploymentFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure deployment canceled.
+        /// </summary>
+        internal static string ResourceStateAzureDeploymentCanceled {
+            get {
+                return ResourceManager.GetString("ResourceStateAzureDeploymentCanceled", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Provisioning .
+        /// </summary>
+        internal static string ResourceStateProvisioningPrefix {
+            get {
+                return ResourceManager.GetString("ResourceStateProvisioningPrefix", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Provisioning {0}.
+        /// </summary>
+        internal static string ResourceStateProvisioningResourceFormat {
+            get {
+                return ResourceManager.GetString("ResourceStateProvisioningResourceFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Provisioning {0} Azure resources.
+        /// </summary>
+        internal static string ResourceStateProvisioningMultipleAzureResourcesFormat {
+            get {
+                return ResourceManager.GetString("ResourceStateProvisioningMultipleAzureResourcesFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Provisioned {0} Azure resources.
+        /// </summary>
+        internal static string ResourceStateProvisionedMultipleAzureResourcesFormat {
+            get {
+                return ResourceManager.GetString("ResourceStateProvisionedMultipleAzureResourcesFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Resetting provisioning state.
+        /// </summary>
+        internal static string OperationPhaseResettingProvisioningState {
+            get {
+                return ResourceManager.GetString("OperationPhaseResettingProvisioningState", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Changing Azure context.
+        /// </summary>
+        internal static string OperationPhaseChangingAzureContext {
+            get {
+                return ResourceManager.GetString("OperationPhaseChangingAzureContext", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Applying Azure context.
+        /// </summary>
+        internal static string OperationPhaseApplyingAzureContext {
+            get {
+                return ResourceManager.GetString("OperationPhaseApplyingAzureContext", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Provisioning Azure resources.
+        /// </summary>
+        internal static string OperationPhaseProvisioningAzureResources {
+            get {
+                return ResourceManager.GetString("OperationPhaseProvisioningAzureResources", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Reprovisioning Azure resources.
+        /// </summary>
+        internal static string OperationPhaseReprovisioningAzureResources {
+            get {
+                return ResourceManager.GetString("OperationPhaseReprovisioningAzureResources", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Deleting Azure resources.
+        /// </summary>
+        internal static string OperationPhaseDeletingAzureResources {
+            get {
+                return ResourceManager.GetString("OperationPhaseDeletingAzureResources", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Deleting Azure resource.
+        /// </summary>
+        internal static string OperationPhaseDeletingAzureResource {
+            get {
+                return ResourceManager.GetString("OperationPhaseDeletingAzureResource", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Changing location to {0}.
+        /// </summary>
+        internal static string OperationPhaseChangingLocationToFormat {
+            get {
+                return ResourceManager.GetString("OperationPhaseChangingLocationToFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Deleting existing Azure resource before changing location to {0}.
+        /// </summary>
+        internal static string OperationPhaseDeletingExistingAzureResourceBeforeChangingLocationFormat {
+            get {
+                return ResourceManager.GetString("OperationPhaseDeletingExistingAzureResourceBeforeChangingLocationFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Reprovisioning.
+        /// </summary>
+        internal static string OperationPhaseReprovisioning {
+            get {
+                return ResourceManager.GetString("OperationPhaseReprovisioning", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Reprovisioning in {0}.
+        /// </summary>
+        internal static string OperationPhaseReprovisioningInLocationFormat {
+            get {
+                return ResourceManager.GetString("OperationPhaseReprovisioningInLocationFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Purging deleted Key Vault.
+        /// </summary>
+        internal static string OperationPhasePurgingDeletedKeyVault {
+            get {
+                return ResourceManager.GetString("OperationPhasePurgingDeletedKeyVault", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Purging recoverable Key Vault {0}.
+        /// </summary>
+        internal static string OperationPhasePurgingRecoverableKeyVaultFormat {
+            get {
+                return ResourceManager.GetString("OperationPhasePurgingRecoverableKeyVaultFormat", resourceCulture);
             }
         }
     }

@@ -22,11 +22,12 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
     [InlineData("brew", "Brew")]
     [InlineData("dotnet-tool", "DotnetTool")]
     [InlineData("localhive", "LocalHive")]
+    [InlineData("nix", "Nix")]
     public void TryRead_ParsesEachKnownSource(string wireValue, string expectedEnumName)
     {
         var expected = Enum.Parse<InstallSource>(expectedEnumName);
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, $"{{\"source\":\"{wireValue}\"}}");
 
         var reader = CliTestHelper.CreateSidecarReader(outputHelper);
@@ -40,7 +41,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
     [Fact]
     public void TryRead_ReturnsNotFoundWhenSidecarMissing()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var expectedPath = Path.Combine(workspace.WorkspaceRoot.FullName, InstallSidecarReader.SidecarFileName);
 
         var reader = CliTestHelper.CreateSidecarReader(outputHelper);
@@ -71,7 +72,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
             return;
         }
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sidecarPath = WriteSidecar(workspace.WorkspaceRoot.FullName, "{\"source\":\"script\"}");
         var originalMode = File.GetUnixFileMode(sidecarPath);
 
@@ -95,7 +96,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
     [Fact]
     public void TryRead_MalformedJson_ReturnsInvalidWithParseReason()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sidecarPath = WriteSidecar(workspace.WorkspaceRoot.FullName, "{not valid json");
 
         var reader = CliTestHelper.CreateSidecarReader(outputHelper);
@@ -118,7 +119,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
         // discovery walk. RawSource preserves the literal wire value so a
         // future client can re-interpret it without re-reading the file.
         _ = scenario; // surfaced in test name for debuggability
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, sidecarBody);
 
         var reader = CliTestHelper.CreateSidecarReader(outputHelper);
@@ -132,7 +133,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
     [Fact]
     public void TryRead_SidecarPathIsAbsolutePathOfReadFile()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, "{\"source\":\"script\"}");
 
         var reader = CliTestHelper.CreateSidecarReader(outputHelper);
@@ -146,7 +147,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ReadSourceField_ReturnsRawSource()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sidecarPath = WriteSidecar(workspace.WorkspaceRoot.FullName, "{\"source\":\"script\"}");
 
         var result = InstallSidecarReader.ReadSourceField(sidecarPath);
@@ -157,7 +158,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ReadSourceField_MissingSidecar_ReturnsNull()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sidecarPath = Path.Combine(workspace.WorkspaceRoot.FullName, InstallSidecarReader.SidecarFileName);
 
         var result = InstallSidecarReader.ReadSourceField(sidecarPath);
@@ -168,7 +169,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ReadSourceField_MalformedJson_ReturnsNull()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sidecarPath = WriteSidecar(workspace.WorkspaceRoot.FullName, "{not valid json");
 
         var result = InstallSidecarReader.ReadSourceField(sidecarPath);
@@ -185,7 +186,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
             return;
         }
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sidecarPath = WriteSidecar(workspace.WorkspaceRoot.FullName, "{\"source\":\"script\"}");
         var originalMode = File.GetUnixFileMode(sidecarPath);
 
@@ -210,6 +211,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
     [InlineData("Brew", "brew")]
     [InlineData("DotnetTool", "dotnet-tool")]
     [InlineData("LocalHive", "localhive")]
+    [InlineData("Nix", "nix")]
     public void ToWireString_RoundTripsWithParseInstallSource(string enumName, string expectedWire)
     {
         var source = Enum.Parse<InstallSource>(enumName);
@@ -229,7 +231,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
         // Discovery walks PATH and reads any .aspire-install.json next to a candidate
         // binary. A pathological (or hostile) file planted next to such a candidate
         // must not be parsed into memory in full.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sidecarPath = Path.Combine(workspace.WorkspaceRoot.FullName, InstallSidecarReader.SidecarFileName);
         var oversized = new string('a', (int)InstallSidecarReader.MaxSidecarBytes + 1);
         File.WriteAllText(sidecarPath, $"{{\"source\":\"{oversized}\"}}");
@@ -245,7 +247,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ReadSourceField_OversizedSidecar_ReturnsNull()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sidecarPath = Path.Combine(workspace.WorkspaceRoot.FullName, InstallSidecarReader.SidecarFileName);
         var oversized = new string('a', (int)InstallSidecarReader.MaxSidecarBytes + 1);
         File.WriteAllText(sidecarPath, $"{{\"source\":\"{oversized}\"}}");
@@ -261,7 +263,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
         // `JsonDocument.Parse` tolerates the BOM today; pin that behavior so a
         // future parser change does not silently break sidecars planted by the
         // legacy PS 5.x writer.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sidecarPath = Path.Combine(workspace.WorkspaceRoot.FullName, InstallSidecarReader.SidecarFileName);
         var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes("{\"source\":\"script\"}")).ToArray();
         File.WriteAllBytes(sidecarPath, bytes);
@@ -279,7 +281,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
     {
         // Same Windows PowerShell 5.x BOM scenario as TryRead_HandlesUtf8Bom_ReturnsOk,
         // but exercising the lightweight ReadSourceField path.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sidecarPath = Path.Combine(workspace.WorkspaceRoot.FullName, InstallSidecarReader.SidecarFileName);
         var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes("{\"source\":\"script\"}")).ToArray();
         File.WriteAllBytes(sidecarPath, bytes);
@@ -294,7 +296,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
         // must ignore unknown properties (and nested shapes) rather than reject
         // them, so a newer CLI can extend the sidecar without breaking
         // discovery on older installs.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, "{\"source\":\"script\",\"futureField\":\"value\",\"nested\":{\"a\":1,\"b\":[1,2]}}");
 
         var reader = CliTestHelper.CreateSidecarReader(outputHelper);
@@ -313,7 +315,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
         // Older sidecars omit these fields; the resolver layer applies its
         // own fallback when they are null, so the reader's contract is just
         // "round-trip what's on disk".
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         WriteSidecar(
             workspace.WorkspaceRoot.FullName,
             """
@@ -343,7 +345,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
         // work) must continue to parse cleanly with all identity fields null.
         // This is the bytes-on-disk compatibility guarantee that lets older
         // installers and parents coexist with the new resolver.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, "{\"source\":\"script\"}");
 
         var reader = CliTestHelper.CreateSidecarReader(outputHelper);
