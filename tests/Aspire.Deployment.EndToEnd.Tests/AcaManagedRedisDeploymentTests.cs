@@ -18,6 +18,7 @@ public sealed class AcaManagedRedisDeploymentTests(ITestOutputHelper output)
     private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(40);
 
     [Fact]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/19174")]
     public async Task DeployStarterWithManagedRedisToAzureContainerApps()
     {
         using var cts = new CancellationTokenSource(s_testTimeout);
