@@ -485,7 +485,12 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
             probeStages: [],
             environmentVariables: environmentVariables,
             gitHubHttpMessageHandler: handler,
-            gitHubCandidateTimeout: TimeSpan.FromMilliseconds(100));
+            gitHubCandidateTimeout: TimeSpan.FromMilliseconds(100),
+            // HttpClient.Timeout defaults to 3 seconds here, which would independently cancel every
+            // probe well inside the assertion bound below and make this test pass even with no candidate
+            // budget at all. Disabling the per-request timeout leaves the overall budget as the only
+            // thing that can stop the handler's one-minute delay, so the assertion measures what it claims.
+            gitHubHttpTimeout: Timeout.InfiniteTimeSpan);
 
         var stopwatch = Stopwatch.StartNew();
         var result = await detector.CheckCopilotCliAsync(CancellationToken.None);
@@ -512,7 +517,8 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         TestProcessExecutionFactory? processFactory = null,
         IReadOnlyDictionary<string, string?>? environmentVariables = null,
         HttpMessageHandler? gitHubHttpMessageHandler = null,
-        TimeSpan? gitHubCandidateTimeout = null)
+        TimeSpan? gitHubCandidateTimeout = null,
+        TimeSpan? gitHubHttpTimeout = null)
     {
         var executionContext = Utils.TestExecutionContextHelper.CreateExecutionContext(
             new DirectoryInfo(Path.GetDirectoryName(cacheFilePath) ?? AppContext.BaseDirectory));
@@ -526,7 +532,8 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
             processFactory ?? new TestProcessExecutionFactory(),
             probeStages,
             gitHubHttpMessageHandler,
-            gitHubCandidateTimeout);
+            gitHubCandidateTimeout,
+            gitHubHttpTimeout);
     }
 
     private static HttpResponseMessage JsonResponse(HttpStatusCode statusCode, string json)

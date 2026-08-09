@@ -49,6 +49,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     private readonly IProcessExecutionFactory _processExecutionFactory;
     private readonly HttpMessageHandler? _gitHubHttpMessageHandler;
     private readonly TimeSpan _gitHubCandidateTimeout;
+    private readonly TimeSpan _gitHubHttpTimeout;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<InternalMicrosoftDetector> _logger;
     private readonly IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>> _probeStages;
@@ -74,7 +75,8 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         IProcessExecutionFactory processExecutionFactory,
         IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>>? probeStages,
         HttpMessageHandler? gitHubHttpMessageHandler = null,
-        TimeSpan? gitHubCandidateTimeout = null)
+        TimeSpan? gitHubCandidateTimeout = null,
+        TimeSpan? gitHubHttpTimeout = null)
     {
         _cacheFilePath = cacheFilePath;
         _executionContext = executionContext;
@@ -82,6 +84,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         _processExecutionFactory = processExecutionFactory;
         _gitHubHttpMessageHandler = gitHubHttpMessageHandler;
         _gitHubCandidateTimeout = gitHubCandidateTimeout ?? s_gitHubCandidateTimeout;
+        _gitHubHttpTimeout = gitHubHttpTimeout ?? s_gitHubHttpTimeout;
         _timeProvider = timeProvider;
         _logger = logger;
         _probeStages = probeStages ?? CreateDefaultProbeStages();
@@ -728,7 +731,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         var http = _gitHubHttpMessageHandler is null
             ? new HttpClient()
             : new HttpClient(_gitHubHttpMessageHandler, disposeHandler: false);
-        http.Timeout = s_gitHubHttpTimeout;
+        http.Timeout = _gitHubHttpTimeout;
 
         http.DefaultRequestHeaders.UserAgent.ParseAdd("aspire-cli-internal-microsoft-detector/1.0");
         return http;
