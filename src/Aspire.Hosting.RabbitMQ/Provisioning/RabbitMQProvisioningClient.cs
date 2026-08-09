@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
@@ -14,6 +15,14 @@ namespace Aspire.Hosting.RabbitMQ.Provisioning;
 
 internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
 {
+    // Broker provisioning happens during startup, when the broker may still be warming up (connection
+    // refused, HTTP 503, mid-restart channel drops). Every provisioning operation therefore retries a
+    // transient failure up to MaxAttempts total tries with exponential backoff. Definitive failures
+    // (a 404 "not found", an HTTP 4xx, cancellation) are never retried.
+    private const int MaxAttempts = 5;
+    private static readonly TimeSpan s_baseRetryDelay = TimeSpan.FromMilliseconds(200);
+    private static readonly TimeSpan s_maxRetryDelay = TimeSpan.FromSeconds(5);
+
     private readonly ILogger _logger;
     private readonly RabbitMQAmqpConnectionManager _amqp;
 
@@ -22,6 +31,72 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         _logger = logger;
         _amqp = new RabbitMQAmqpConnectionManager(server);
     }
+
+    // Runs operation with bounded exponential-backoff retry. shouldRetry classifies a thrown exception as
+    // transient (retry) vs definitive (rethrow immediately). Cancellation always rethrows and never counts
+    // as a retryable attempt, so a superseded reconcile abandons work instead of looping.
+    private async Task RunWithRetryAsync(Func<Task> operation, Func<Exception, bool> shouldRetry, string operationDescription, CancellationToken ct)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await operation().ConfigureAwait(false);
+                return;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex) when (attempt < MaxAttempts && shouldRetry(ex))
+            {
+                var delay = ComputeBackoff(attempt);
+                _logger.LogDebug(
+                    "Transient failure {Operation} (attempt {Attempt}/{MaxAttempts}): {Error}. Retrying in {DelayMs}ms.",
+                    operationDescription, attempt, MaxAttempts, ex.Message, delay.TotalMilliseconds);
+                await Task.Delay(delay, ct).ConfigureAwait(false);
+            }
+        }
+    }
+
+    // Exponential backoff (200ms, 400ms, 800ms, 1600ms...) capped at s_maxRetryDelay, with up to 30% jitter
+    // added to avoid thundering-herd retries when many resources reconcile against a warming broker at once.
+    private static TimeSpan ComputeBackoff(int attempt)
+    {
+        var exponentialMs = s_baseRetryDelay.TotalMilliseconds * Math.Pow(2, attempt - 1);
+        var cappedMs = Math.Min(exponentialMs, s_maxRetryDelay.TotalMilliseconds);
+        var jitterMs = cappedMs * 0.3 * Random.Shared.NextDouble();
+        return TimeSpan.FromMilliseconds(cappedMs + jitterMs);
+    }
+
+    // A RabbitMQ.Client exception is transient unless it is a definitive broker rejection. This retry is
+    // complementary to the client's AutomaticRecoveryEnabled (set in GetOrCreateEntryAsync), not redundant:
+    //   - BrokerUnreachableException is the initial-connect failure during broker warmup. Auto-recovery does
+    //     NOT cover this (there is no established connection to recover), so retrying here is what makes a
+    //     resource come up cleanly against a still-starting broker.
+    //   - AlreadyClosedException is an in-flight call hitting a dropped channel/connection. Auto-recovery
+    //     heals the connection in the background over ~5s, but the failed call still throws; a short retry
+    //     rides out that window and re-issues on the recovered channel (GetOrCreateChannelAsync returns it).
+    //   - A 404 NOT_FOUND is a definitive answer (entity missing), never retried.
+    // AlreadyClosedException must precede OperationInterruptedException because it derives from it (and a
+    // closed channel is never a 404).
+    private static bool IsTransientAmqp(Exception ex) => ex switch
+    {
+        AlreadyClosedException => true,
+        OperationInterruptedException oie => oie.ShutdownReason?.ReplyCode != 404,
+        BrokerUnreachableException => true,
+        _ => false,
+    };
+
+    // An HTTP failure is transient when the request never reached the server or the server was
+    // unavailable. HttpPutAsync/HttpDeleteAsync throw a wrapped HttpRequestException on a retryable
+    // status via EnsureRetryableStatus; a definitive 4xx surfaces as a non-retryable status and is
+    // not wrapped, so it is not retried. TaskCanceledException here is an HTTP timeout (caller
+    // cancellation is filtered earlier by the OperationCanceledException guard).
+    private static bool IsTransientHttp(Exception ex) => ex is HttpRequestException or TaskCanceledException;
+
+    private static bool IsRetryableStatus(HttpStatusCode status)
+        => (int)status >= 500 || status == HttpStatusCode.RequestTimeout;
 
     public async ValueTask<IConnection> GetOrCreateConnectionAsync(string vhost, CancellationToken ct)
         => await _amqp.GetOrCreateConnectionAsync(vhost, ct).ConfigureAwait(false);
@@ -189,38 +264,28 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         await gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            var ch = await _amqp.GetOrCreateChannelAsync(vhost, ct).ConfigureAwait(false);
-            try
-            {
-                await action(ch).ConfigureAwait(false);
-            }
-            catch (Exception e) when (e is AlreadyClosedException or OperationInterruptedException)
-            {
-                ch = await _amqp.GetOrCreateChannelAsync(vhost, ct).ConfigureAwait(false);
-                try
+            // Each attempt fetches the channel fresh: a transient failure (channel dropped, broker
+            // restarting) closes the channel, and GetOrCreateChannelAsync recreates it on the next attempt.
+            await RunWithRetryAsync(
+                async () =>
                 {
+                    var ch = await _amqp.GetOrCreateChannelAsync(vhost, ct).ConfigureAwait(false);
                     await action(ch).ConfigureAwait(false);
-                }
-                // Let cancellation flow through unwrapped so callers can distinguish a superseded reconcile /
-                // shutdown from a genuine broker failure. Wrapping it caused exchange bindings to be recorded
-                // as permanent failures on a superseded startup pass. See RabbitMQExchangeBindingReconciler.
-                catch (OperationCanceledException) when (ct.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch (Exception retryEx)
-                {
-                    throw new DistributedApplicationException($"{errorMessage}: {retryEx.Message}", retryEx);
-                }
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                throw new DistributedApplicationException($"{errorMessage}: {ex.Message}", ex);
-            }
+                },
+                IsTransientAmqp,
+                errorMessage,
+                ct).ConfigureAwait(false);
+        }
+        // Cancellation flows through unwrapped so callers can distinguish a superseded reconcile / shutdown
+        // from a genuine broker failure. Wrapping it caused exchange bindings to be recorded as permanent
+        // failures on a superseded startup pass. See RabbitMQExchangeBindingReconciler.
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new DistributedApplicationException($"{errorMessage}: {ex.Message}", ex);
         }
         finally
         {
@@ -237,18 +302,29 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         await gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            var ch = await _amqp.GetOrCreateChannelAsync(vhost, ct).ConfigureAwait(false);
-            try
-            {
-                await passiveDeclare(ch).ConfigureAwait(false);
-                return true;
-            }
-            catch (OperationInterruptedException ex) when (ex.ShutdownReason?.ReplyCode == 404)
-            {
-                // 404 NOT_FOUND: the entity does not exist. The channel is now closed by the broker;
-                // it will be recreated lazily on the next call.
-                return false;
-            }
+            // The 404 NOT_FOUND result is a definitive answer (entity absent), not a transient failure, so it
+            // is caught inside the operation and returned as false — it never reaches the retry classifier.
+            // A dropped channel or broker restart, however, is transient and retries with a fresh channel.
+            var exists = false;
+            await RunWithRetryAsync(
+                async () =>
+                {
+                    var ch = await _amqp.GetOrCreateChannelAsync(vhost, ct).ConfigureAwait(false);
+                    try
+                    {
+                        await passiveDeclare(ch).ConfigureAwait(false);
+                        exists = true;
+                    }
+                    catch (OperationInterruptedException ex) when (ex.ShutdownReason?.ReplyCode == 404)
+                    {
+                        // Channel is now closed by the broker; it is recreated lazily on the next call.
+                        exists = false;
+                    }
+                },
+                IsTransientAmqp,
+                $"probing existence on vhost '{vhost}'",
+                ct).ConfigureAwait(false);
+            return exists;
         }
         finally
         {
@@ -261,12 +337,29 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         var http = await _amqp.GetOrCreateHttpClientAsync(ct).ConfigureAwait(false);
         try
         {
-            // Dispose the response so its connection/content buffers are released promptly; these helpers
-            // run on repeated health probes and lifecycle commands, so leaked responses accumulate sockets.
-            using var response = body is null
-                ? await http.PutAsync(path, null, ct).ConfigureAwait(false)
-                : await http.PutAsJsonAsync(path, body, cancellationToken: ct).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
+            await RunWithRetryAsync(
+                async () =>
+                {
+                    // Dispose the response so its connection/content buffers are released promptly; these
+                    // helpers run on repeated health probes and lifecycle commands, so leaked responses
+                    // accumulate sockets.
+                    using var response = body is null
+                        ? await http.PutAsync(path, null, ct).ConfigureAwait(false)
+                        : await http.PutAsJsonAsync(path, body, cancellationToken: ct).ConfigureAwait(false);
+                    EnsureSuccessOrClassifiedThrow(response, errorMessage);
+                },
+                IsTransientHttp,
+                errorMessage,
+                ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (DistributedApplicationException)
+        {
+            // Already classified (definitive 4xx) — surface as-is without double-wrapping.
+            throw;
         }
         catch (Exception ex)
         {
@@ -279,16 +372,38 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         var http = await _amqp.GetOrCreateHttpClientAsync(ct).ConfigureAwait(false);
         try
         {
-            using var response = await http.GetAsync(path, ct).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
-            {
-                return null;
-            }
+            T? result = null;
+            await RunWithRetryAsync(
+                async () =>
+                {
+                    using var response = await http.GetAsync(path, ct).ConfigureAwait(false);
+                    // A retryable status (5xx/408) throws so the loop retries; a definitive non-success
+                    // (e.g. 404 "not found") is a valid "no value" answer for a drift read and returns null.
+                    if (IsRetryableStatus(response.StatusCode))
+                    {
+                        throw new HttpRequestException($"Retryable status {(int)response.StatusCode} reading '{path}'.");
+                    }
 
-            return await response.Content.ReadFromJsonAsync<T>(cancellationToken: ct).ConfigureAwait(false);
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        result = null;
+                        return;
+                    }
+
+                    result = await response.Content.ReadFromJsonAsync<T>(cancellationToken: ct).ConfigureAwait(false);
+                },
+                IsTransientHttp,
+                $"reading '{path}'",
+                ct).ConfigureAwait(false);
+            return result;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
         }
         catch
         {
+            // Drift reads are best-effort: after exhausting retries, treat any failure as "no live value".
             return null;
         }
     }
@@ -298,18 +413,52 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         var http = await _amqp.GetOrCreateHttpClientAsync(ct).ConfigureAwait(false);
         try
         {
-            using var response = await http.DeleteAsync(path, ct).ConfigureAwait(false);
-            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-            {
-                return;
-            }
+            await RunWithRetryAsync(
+                async () =>
+                {
+                    using var response = await http.DeleteAsync(path, ct).ConfigureAwait(false);
+                    // Deleting a non-existent entity is a no-op, not a failure.
+                    if (response.StatusCode == HttpStatusCode.NotFound)
+                    {
+                        return;
+                    }
 
-            response.EnsureSuccessStatusCode();
+                    EnsureSuccessOrClassifiedThrow(response, errorMessage);
+                },
+                IsTransientHttp,
+                errorMessage,
+                ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (DistributedApplicationException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
             throw new DistributedApplicationException($"{errorMessage}: {ex.Message}", ex);
         }
+    }
+
+    // Maps a management-API response onto the retry policy: 2xx returns; a retryable status (5xx/408) throws
+    // HttpRequestException (transient — the loop retries); any other non-success is a definitive client error
+    // (4xx) thrown as a non-retryable DistributedApplicationException so it fails fast.
+    private static void EnsureSuccessOrClassifiedThrow(HttpResponseMessage response, string errorMessage)
+    {
+        if (response.IsSuccessStatusCode)
+        {
+            return;
+        }
+
+        if (IsRetryableStatus(response.StatusCode))
+        {
+            throw new HttpRequestException($"{errorMessage}: retryable status {(int)response.StatusCode}.");
+        }
+
+        throw new DistributedApplicationException($"{errorMessage}: status {(int)response.StatusCode}.");
     }
 
     private sealed class RabbitMQAmqpConnectionManager(RabbitMQServerResource server) : IAsyncDisposable
