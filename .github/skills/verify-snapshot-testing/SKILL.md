@@ -79,4 +79,4 @@ Do not treat these placeholders as errors.
 - Line endings: LF (not CRLF)
 - No trailing newline
 
-These are enforced by the `[*.verified.*]` section in the root `.editorconfig` and by `*.verified.* text eol=lf` in `.gitattributes`. Do not reformat `.verified.*` files — leave them exactly as Verify wrote them.
+These are enforced for text based snapshots by the root `.editorconfig` and `.gitattributes`. When a snapshot with a new text extension is added, add that extension to both files. Do not reformat `.verified.*` files — leave them exactly as Verify wrote them.
