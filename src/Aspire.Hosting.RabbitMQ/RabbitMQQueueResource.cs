@@ -123,10 +123,32 @@ public class RabbitMQQueueResource : RabbitMQDestination, IResourceWithConnectio
     }
 
     internal override async ValueTask DeleteAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
-        => await client.DeleteQueueAsync(VirtualHost.VirtualHostName, QueueName, cancellationToken).ConfigureAwait(false);
+    {
+        // A queue is declared over AMQP, so it can also be deleted over AMQP without the management plugin.
+        // Only use the management HTTP delete when management is enabled (it is not required for queues).
+        if (client.ManagementEnabled)
+        {
+            await client.DeleteQueueAsync(VirtualHost.VirtualHostName, QueueName, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            await client.DeleteQueueAmqpAsync(VirtualHost.VirtualHostName, QueueName, cancellationToken).ConfigureAwait(false);
+        }
+    }
 
     internal override async ValueTask<RabbitMQProbeResult> ProbeAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
     {
+        // Without the management plugin the HTTP drift probe is unavailable. Fall back to an AMQP passive
+        // declare, which confirms the queue exists on the broker. Argument/durability drift cannot be
+        // detected over AMQP (passive declare only reports existence), so this is existence-only health.
+        if (!client.ManagementEnabled)
+        {
+            var exists = await client.QueueExistsAsync(VirtualHost.VirtualHostName, QueueName, cancellationToken).ConfigureAwait(false);
+            return exists
+                ? RabbitMQProbeResult.Healthy
+                : RabbitMQProbeResult.Unhealthy($"Queue '{QueueName}' does not exist in virtual host '{VirtualHost.VirtualHostName}'.");
+        }
+
         var live = await client.GetQueueAsync(VirtualHost.VirtualHostName, QueueName, cancellationToken).ConfigureAwait(false);
         if (live is null)
         {

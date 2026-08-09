@@ -100,10 +100,32 @@ public class RabbitMQExchangeResource : RabbitMQDestination, IResourceWithConnec
     }
 
     internal override async ValueTask DeleteAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
-        => await client.DeleteExchangeAsync(VirtualHost.VirtualHostName, ExchangeName, cancellationToken).ConfigureAwait(false);
+    {
+        // An exchange is declared over AMQP, so it can also be deleted over AMQP without the management plugin.
+        // Only use the management HTTP delete when management is enabled (it is not required for exchanges).
+        if (client.ManagementEnabled)
+        {
+            await client.DeleteExchangeAsync(VirtualHost.VirtualHostName, ExchangeName, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            await client.DeleteExchangeAmqpAsync(VirtualHost.VirtualHostName, ExchangeName, cancellationToken).ConfigureAwait(false);
+        }
+    }
 
     internal override async ValueTask<RabbitMQProbeResult> ProbeAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
     {
+        // Without the management plugin the HTTP drift probe is unavailable. Fall back to an AMQP passive
+        // declare, which confirms the exchange exists on the broker. Argument/durability drift cannot be
+        // detected over AMQP (passive declare only reports existence), so this is existence-only health.
+        if (!client.ManagementEnabled)
+        {
+            var exists = await client.ExchangeExistsAsync(VirtualHost.VirtualHostName, ExchangeName, cancellationToken).ConfigureAwait(false);
+            return exists
+                ? RabbitMQProbeResult.Healthy
+                : RabbitMQProbeResult.Unhealthy($"Exchange '{ExchangeName}' does not exist in virtual host '{VirtualHost.VirtualHostName}'.");
+        }
+
         var live = await client.GetExchangeAsync(VirtualHost.VirtualHostName, ExchangeName, cancellationToken).ConfigureAwait(false);
         if (live is null)
         {

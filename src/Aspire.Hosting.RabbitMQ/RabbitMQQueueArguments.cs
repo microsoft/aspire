@@ -90,6 +90,11 @@ public sealed class RabbitMQQueueArguments
         XArgDeadLetterRoutingKey,
     }.ToFrozenSet(StringComparer.Ordinal);
 
+    // Policy-definition forms of the reserved keys (the x- prefix stripped, e.g. "message-ttl"). Used to
+    // detect collisions in RabbitMQPolicyResource.AdditionalArguments, which are emitted with policy keys.
+    internal static readonly FrozenSet<string> s_reservedPolicyKeys =
+        s_reservedKeys.Select(ToPolicyKey).ToFrozenSet(StringComparer.Ordinal);
+
     // Merges all arguments into target using AMQP x-argument keys (e.g. x-message-ttl).
     internal void FlattenInto(IDictionary<string, object?> target, string resourceDescription)
         => FlattenCore(target, resourceDescription, policyKeys: false);

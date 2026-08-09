@@ -53,6 +53,11 @@ internal static class RabbitMQExchangeBindingReconciler
                 // Clear any errors from a previous run before re-applying.
                 while (bindingErrors.TryTake(out _)) { }
 
+                // These bindings run in parallel, and each binding's BindAsync ultimately uses the same
+                // cached per-vhost IChannel inside RabbitMQProvisioningClient. Concurrent use of a shared
+                // IChannel is unsafe (frame interleaving), but RabbitMQProvisioningClient.AmqpAsync now
+                // serializes all channel access per vhost via a SemaphoreSlim, so this parallelism only
+                // overlaps the WaitForResourceAsync waits — the actual AMQP calls are mutually exclusive.
                 await Task.WhenAll(exchange.Bindings.Select(async binding =>
                 {
                     // Wait for the destination to be Running (declared on the broker) before binding.

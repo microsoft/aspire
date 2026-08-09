@@ -17,6 +17,12 @@ internal static class RabbitMQProvisioningExtensions
         var server = builder.Resource.VirtualHost.Parent;
         var serverBuilder = builder.ApplicationBuilder.CreateResourceBuilder(server);
 
+        // Only resources whose reconcile/probe/delete genuinely require the management HTTP API opt into it.
+        // Queues and exchanges are intentionally NOT listed here: they are declared, probed (passive declare),
+        // and deleted entirely over AMQP (see RabbitMQQueueResource/RabbitMQExchangeResource), so the documented
+        // server.AddQueue(...) / server.AddExchange(...) path works without the management plugin. When management
+        // IS enabled (e.g. because a vhost/policy/shovel needs it), those resources automatically use the richer
+        // HTTP drift probe instead — the fallback is chosen at runtime via IRabbitMQProvisioningClient.ManagementEnabled.
         switch (builder.Resource)
         {
             case RabbitMQVirtualHostResource vhost when !vhost.IsDefault:
@@ -66,9 +72,11 @@ internal static class RabbitMQProvisioningExtensions
                 "[RabbitMQ lifecycle] ResourceReadyEvent received for '{ChildName}' (parent: '{ParentName}'). Starting reconcile.",
                 child.Name, directParent.Name);
 
-            var reconcileToken = child.ReconcileGate.BeginNew(ct);
+            // The lease owns the reconcile's CTS; dispose it once StartCore has fully unwound so the CTS is
+            // released exactly once by its owner (never by a concurrent BeginNew that only cancels it).
+            using var reconcileLease = child.ReconcileGate.BeginNew(ct);
 
-            await StartCore(child, client, notifications, services, eventing, logger, reconcileToken).ConfigureAwait(false);
+            await StartCore(child, client, notifications, services, eventing, logger, reconcileLease.Token).ConfigureAwait(false);
         });
 
         builder.ApplicationBuilder.Eventing.Subscribe<ResourceStoppedEvent>(directParent, async (evt, ct) =>
@@ -196,9 +204,11 @@ internal static class RabbitMQProvisioningExtensions
 
         logger.LogDebug("[RabbitMQ command] Start command invoked for '{ResourceName}'.", child.Name);
 
-        var reconcileToken = child.ReconcileGate.BeginNew(CancellationToken.None);
+        // The lease owns the reconcile's CTS; dispose it once StartCore has fully unwound so the CTS is
+        // released exactly once by its owner (never by a concurrent BeginNew that only cancels it).
+        using var reconcileLease = child.ReconcileGate.BeginNew(CancellationToken.None);
 
-        await StartCore(child, client, notifications, services, eventing, logger, reconcileToken).ConfigureAwait(false);
+        await StartCore(child, client, notifications, services, eventing, logger, reconcileLease.Token).ConfigureAwait(false);
     }
 
     private static async Task StopCommandAsync(ExecuteCommandContext context, RabbitMQProvisionableResource child, string serverName, IDistributedApplicationEventing eventing)

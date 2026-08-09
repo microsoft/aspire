@@ -29,6 +29,8 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
     public async Task<bool> CanConnectAsync(string vhost, CancellationToken ct)
         => await _amqp.CanConnectAsync(vhost, ct).ConfigureAwait(false);
 
+    public bool ManagementEnabled => _amqp.ManagementEnabled;
+
     internal async ValueTask<IChannel> GetOrCreateChannelAsync(string vhost, CancellationToken ct)
         => await _amqp.GetOrCreateChannelAsync(vhost, ct).ConfigureAwait(false);
 
@@ -62,6 +64,30 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         await AmqpAsync(vhost,
             ch => ch.ExchangeBindAsync(destExchange, sourceExchange, routingKey, args, cancellationToken: ct),
             $"Failed to bind exchange '{destExchange}' to exchange '{sourceExchange}' on vhost '{vhost}'", ct).ConfigureAwait(false);
+    }
+
+    public async Task<bool> QueueExistsAsync(string vhost, string name, CancellationToken ct)
+        => await AmqpExistsAsync(vhost, ch => ch.QueueDeclarePassiveAsync(name, ct), ct).ConfigureAwait(false);
+
+    public async Task<bool> ExchangeExistsAsync(string vhost, string name, CancellationToken ct)
+        => await AmqpExistsAsync(vhost, ch => ch.ExchangeDeclarePassiveAsync(name, ct), ct).ConfigureAwait(false);
+
+    public async Task DeleteQueueAmqpAsync(string vhost, string name, CancellationToken ct)
+    {
+        _logger.LogDebug("Deleting queue '{Queue}' on vhost '{Vhost}' over AMQP.", name, vhost);
+        // ifUnused/ifEmpty false => unconditional delete. Deleting a non-existent queue is a no-op on the broker.
+        await AmqpAsync(vhost,
+            ch => ch.QueueDeleteAsync(name, ifUnused: false, ifEmpty: false, cancellationToken: ct),
+            $"Failed to delete queue '{name}' on vhost '{vhost}'", ct).ConfigureAwait(false);
+    }
+
+    public async Task DeleteExchangeAmqpAsync(string vhost, string name, CancellationToken ct)
+    {
+        _logger.LogDebug("Deleting exchange '{Exchange}' on vhost '{Vhost}' over AMQP.", name, vhost);
+        // ifUnused false => unconditional delete. Deleting a non-existent exchange is a no-op on the broker.
+        await AmqpAsync(vhost,
+            ch => ch.ExchangeDeleteAsync(name, ifUnused: false, cancellationToken: ct),
+            $"Failed to delete exchange '{name}' on vhost '{vhost}'", ct).ConfigureAwait(false);
     }
 
     public async Task CreateVirtualHostAsync(string vhost, CancellationToken ct)
@@ -109,7 +135,7 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         var http = await _amqp.GetOrCreateHttpClientAsync(ct).ConfigureAwait(false);
         try
         {
-            var response = await http.GetAsync($"/api/vhosts/{Uri.EscapeDataString(vhost)}", ct).ConfigureAwait(false);
+            using var response = await http.GetAsync($"/api/vhosts/{Uri.EscapeDataString(vhost)}", ct).ConfigureAwait(false);
             return response.IsSuccessStatusCode;
         }
         catch
@@ -153,26 +179,69 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
 
     private async Task AmqpAsync(string vhost, Func<IChannel, Task> action, string errorMessage, CancellationToken ct)
     {
-        var ch = await _amqp.GetOrCreateChannelAsync(vhost, ct).ConfigureAwait(false);
+        // A single per-vhost IChannel is cached and shared. The RabbitMQ .NET client requires that a shared
+        // IChannel is NOT used concurrently — overlapping operations interleave protocol frames and cause
+        // continuation failures. Aspire fires ResourceReadyEvent per resource concurrently, so declares,
+        // binds, passive-declare probes, and deletes on the same vhost can otherwise race on one channel.
+        // Serialize all channel access per vhost. See:
+        // https://www.rabbitmq.com/client-libraries/dotnet-api-guide#concurrency-channel-sharing
+        var gate = _amqp.GetChannelGate(vhost);
+        await gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            await action(ch).ConfigureAwait(false);
-        }
-        catch (Exception e) when (e is AlreadyClosedException or OperationInterruptedException)
-        {
-            ch = await _amqp.GetOrCreateChannelAsync(vhost, ct).ConfigureAwait(false);
+            var ch = await _amqp.GetOrCreateChannelAsync(vhost, ct).ConfigureAwait(false);
             try
             {
                 await action(ch).ConfigureAwait(false);
             }
-            catch (Exception retryEx)
+            catch (Exception e) when (e is AlreadyClosedException or OperationInterruptedException)
             {
-                throw new DistributedApplicationException($"{errorMessage}: {retryEx.Message}", retryEx);
+                ch = await _amqp.GetOrCreateChannelAsync(vhost, ct).ConfigureAwait(false);
+                try
+                {
+                    await action(ch).ConfigureAwait(false);
+                }
+                catch (Exception retryEx)
+                {
+                    throw new DistributedApplicationException($"{errorMessage}: {retryEx.Message}", retryEx);
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new DistributedApplicationException($"{errorMessage}: {ex.Message}", ex);
             }
         }
-        catch (Exception ex)
+        finally
         {
-            throw new DistributedApplicationException($"{errorMessage}: {ex.Message}", ex);
+            gate.Release();
+        }
+    }
+
+    // Runs an AMQP passive-declare probe under the per-vhost channel gate and maps the broker's 404 NOT_FOUND
+    // reply into a boolean. A failed passive declare closes the channel (raises OperationInterruptedException
+    // with replyCode 404); the next AmqpAsync/GetOrCreateChannelAsync transparently recreates it.
+    private async Task<bool> AmqpExistsAsync(string vhost, Func<IChannel, Task> passiveDeclare, CancellationToken ct)
+    {
+        var gate = _amqp.GetChannelGate(vhost);
+        await gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var ch = await _amqp.GetOrCreateChannelAsync(vhost, ct).ConfigureAwait(false);
+            try
+            {
+                await passiveDeclare(ch).ConfigureAwait(false);
+                return true;
+            }
+            catch (OperationInterruptedException ex) when (ex.ShutdownReason?.ReplyCode == 404)
+            {
+                // 404 NOT_FOUND: the entity does not exist. The channel is now closed by the broker;
+                // it will be recreated lazily on the next call.
+                return false;
+            }
+        }
+        finally
+        {
+            gate.Release();
         }
     }
 
@@ -181,7 +250,9 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         var http = await _amqp.GetOrCreateHttpClientAsync(ct).ConfigureAwait(false);
         try
         {
-            var response = body is null
+            // Dispose the response so its connection/content buffers are released promptly; these helpers
+            // run on repeated health probes and lifecycle commands, so leaked responses accumulate sockets.
+            using var response = body is null
                 ? await http.PutAsync(path, null, ct).ConfigureAwait(false)
                 : await http.PutAsJsonAsync(path, body, cancellationToken: ct).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
@@ -197,7 +268,7 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         var http = await _amqp.GetOrCreateHttpClientAsync(ct).ConfigureAwait(false);
         try
         {
-            var response = await http.GetAsync(path, ct).ConfigureAwait(false);
+            using var response = await http.GetAsync(path, ct).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
                 return null;
@@ -216,7 +287,7 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         var http = await _amqp.GetOrCreateHttpClientAsync(ct).ConfigureAwait(false);
         try
         {
-            var response = await http.DeleteAsync(path, ct).ConfigureAwait(false);
+            using var response = await http.DeleteAsync(path, ct).ConfigureAwait(false);
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
                 return;
@@ -233,8 +304,20 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
     private sealed class RabbitMQAmqpConnectionManager(RabbitMQServerResource server) : IAsyncDisposable
     {
         private readonly ConcurrentDictionary<string, (IConnection connection, IChannel channel)> _channels = new(StringComparer.Ordinal);
+        // One mutex per vhost guarding concurrent use of that vhost's shared IChannel. See AmqpAsync for why.
+        private readonly ConcurrentDictionary<string, SemaphoreSlim> _channelGates = new(StringComparer.Ordinal);
         private readonly SemaphoreSlim _gate = new(1, 1);
         private HttpClient? _http;
+
+        // Management is available only when the server exposes the management HTTP endpoint, which is added
+        // exclusively by WithManagementPlugin(). Queue/exchange probe+delete fall back to AMQP when it isn't.
+        public bool ManagementEnabled =>
+            server.Annotations.OfType<EndpointAnnotation>().Any(e => e.Name == RabbitMQServerResource.ManagementEndpointName);
+
+        // Returns the per-vhost channel mutex, creating it on first use. SemaphoreSlim instances are never
+        // removed for the lifetime of the manager, so the returned gate is stable across calls for a vhost.
+        public SemaphoreSlim GetChannelGate(string vhost)
+            => _channelGates.GetOrAdd(vhost, static _ => new SemaphoreSlim(1, 1));
 
         private async ValueTask<(IConnection Connection, IChannel Channel)> GetOrCreateEntryAsync(string vhost, CancellationToken ct)
         {
@@ -346,6 +429,12 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
                 }
                 _channels.Clear();
                 _http?.Dispose();
+
+                foreach (var channelGate in _channelGates.Values)
+                {
+                    channelGate.Dispose();
+                }
+                _channelGates.Clear();
             }
             finally
             {

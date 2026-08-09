@@ -143,6 +143,26 @@ public class RabbitMQPolicyResource : RabbitMQProvisionableResource, IResourceWi
             ExchangeArguments.FlattenInto(definition, $"Policy '{PolicyName}'");
         }
 
+        // Policy definitions use non-'x-' keys (e.g. "message-ttl", "alternate-exchange"). AdditionalArguments
+        // must not repeat a key that a typed property already emits, otherwise it would silently overwrite the
+        // typed value. The typed args above are validated against their own reserved *x-arg* keys, but a policy's
+        // AdditionalArguments is a separate bag keyed with policy-definition names, so detect collisions here
+        // against the policy-key forms and throw instead of clobbering the typed configuration.
+        foreach (var key in AdditionalArguments.Keys)
+        {
+            var collidesWithQueueArg = ApplyTo != RabbitMQPolicyApplyTo.Exchanges
+                && RabbitMQQueueArguments.s_reservedPolicyKeys.Contains(key);
+            var collidesWithExchangeArg = ApplyTo != RabbitMQPolicyApplyTo.Queues
+                && RabbitMQExchangeArguments.s_reservedKeys.Contains(key);
+
+            if (collidesWithQueueArg || collidesWithExchangeArg)
+            {
+                throw new DistributedApplicationException(
+                    $"Policy '{PolicyName}': '{key}' in {nameof(AdditionalArguments)} is already handled by a typed property " +
+                    $"on {nameof(QueueArguments)}/{nameof(ExchangeArguments)}. Use the corresponding typed property instead.");
+            }
+        }
+
         foreach (var (k, v) in AdditionalArguments)
         {
             definition[k] = v;

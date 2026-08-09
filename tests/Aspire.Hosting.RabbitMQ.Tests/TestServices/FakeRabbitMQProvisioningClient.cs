@@ -51,6 +51,13 @@ internal sealed class FakeRabbitMQProvisioningClient : IRabbitMQProvisioningClie
     public bool CanConnect { get; set; } = true;
 
     /// <summary>
+    /// Controls the return value of <see cref="ManagementEnabled"/>. Defaults to <see langword="true"/> so
+    /// queue/exchange probe/delete use the management (drift) path. Set to <see langword="false"/> to exercise
+    /// the AMQP-only fallback (<see cref="QueueExistsAsync"/>/<see cref="DeleteQueueAmqpAsync"/> etc.).
+    /// </summary>
+    public bool ManagementEnabled { get; set; } = true;
+
+    /// <summary>
     /// Optional rendezvous hook awaited inside <see cref="DeclareQueueAsync"/> after the call is recorded
     /// but before the declared state is stored. When set, tests can block an in-flight reconcile and observe
     /// cancellation (the awaited task is passed the reconcile's <see cref="CancellationToken"/>). When
@@ -138,6 +145,34 @@ internal sealed class FakeRabbitMQProvisioningClient : IRabbitMQProvisioningClie
             throw new DistributedApplicationException($"Simulated failure binding exchange '{destExchange}' to exchange '{sourceExchange}'.");
         }
 
+        return Task.CompletedTask;
+    }
+
+    // ── AMQP-only existence checks / deletes (used when management is disabled) ─
+
+    public Task<bool> QueueExistsAsync(string vhost, string name, CancellationToken ct)
+    {
+        Calls.Add($"QueueExistsAsync({vhost}, {name})");
+        return Task.FromResult(_queues.ContainsKey(Key(vhost, name)));
+    }
+
+    public Task<bool> ExchangeExistsAsync(string vhost, string name, CancellationToken ct)
+    {
+        Calls.Add($"ExchangeExistsAsync({vhost}, {name})");
+        return Task.FromResult(_exchanges.ContainsKey(Key(vhost, name)));
+    }
+
+    public Task DeleteQueueAmqpAsync(string vhost, string name, CancellationToken ct)
+    {
+        Calls.Add($"DeleteQueueAmqpAsync({vhost}, {name})");
+        _queues.Remove(Key(vhost, name));
+        return Task.CompletedTask;
+    }
+
+    public Task DeleteExchangeAmqpAsync(string vhost, string name, CancellationToken ct)
+    {
+        Calls.Add($"DeleteExchangeAmqpAsync({vhost}, {name})");
+        _exchanges.Remove(Key(vhost, name));
         return Task.CompletedTask;
     }
 
