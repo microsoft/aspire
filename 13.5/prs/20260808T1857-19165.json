@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Backport syncing already-processed pre-release API compatibility fixes (#19084, #19081, #18979, #18976) into release/13.5; no new user-facing change beyond what's already reflected in existing entries",
+  "mergedAt": "2026-08-08T18:57:14Z",
+  "number": 19165,
+  "runDate": "2026-08-09T00:08:42Z",
+  "status": "excluded",
+  "title": "Merge API compatibility fixes into release/13.5"
+}
