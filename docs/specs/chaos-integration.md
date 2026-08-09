@@ -10,23 +10,24 @@ This document proposes a first-class Aspire hosting integration for local fault 
 
 ### Direction established by this proposal
 
-- Every Phase 1 policy has two universal required fields, **resource + fault**, and one universal optional field, **fromResource**. The controller resolves `resource`, validates `fromResource` against declared AppHost references when present, infers a stable versioned logical profile, and uses that profile to select an enumerated, versioned `fault` discriminated union.
+- Every Phase 1 policy has two universal required fields, **resource + fault**, and one universal optional field, **fromResource**. The controller resolves `resource`, validates `fromResource` against declared AppHost references when present, rejects any selected effective proxyless path, then infers a stable versioned logical profile for an eligible path and uses that profile to select an enumerated, versioned `fault` discriminated union.
 - A policy applies exactly one fault to the selected scope until explicitly removed. Omitting `fromResource` selects all callers; supplying it selects the calling Aspire resource on an existing declared reference to `resource` or an in-scope modeled descendant. Modeled Cosmos account, database, or container resources may additionally select `read`, `write`, or `query` operations. A modeled Storage account requires the profile-specific `service` selector (`blob`, `queue`, or `table`); selecting a modeled Storage service or child resource infers that service.
 - The logical profile is derived metadata, not authored policy and not a CLR type. Aspire compiles it to DCP's internal proxy topology and matcher/response templates. Policy authors never select a profile, endpoint, route, raw HTTP method, path, header, percentage, seed, policy lifetime, priority, effect order, or policy ID.
 - The MVP shipping matrix includes `http/v1`, `cosmos-gateway/v1`, `storage/v1`, and `app-configuration/v1`. `http/v1` includes typed `latency`, `httpStatus`, and `rateLimit`; the three Azure profiles provide the typed service-specific catalogs below. Once an HTTP(S) caller is pre-routed through YARP and the destination URI is known, emulator versus deployed Azure upstream is not a data-plane capability distinction. Automatic eager mediation and identical policy payload, typed fault semantics, and eligibility rules across every supported upstream location are required MVP work. If any selected profile cannot meet that location-independent contract, the MVP release is blocked rather than shipping without it or as an emulator-only subset.
 - Capabilities that require raw matchers, arbitrary headers or bodies, probabilistic or capped activation, response-stream synthesis, or protocol-specific body parsing remain proposed post-MVP work with named safety and correctness gates; they are not exposed through an unsafe generic property bag.
 - Phase 1 admits a policy only when DCP can apply the requested fault unambiguously and completely across every relevant resource-wide path or every path for the selected declared caller reference. Otherwise, application fails with an actionable eligibility reason.
+- **MVP requires a fully Aspire-mediated path.** A selected structured reference whose effective path is proxyless remains an ordinary direct Aspire reference but is loudly ineligible for Chaos: `list-resources`, `describe-resource`, CLI, Dashboard, MCP, testing, and apply all report `Not eligible — the selected reference resolves directly through a proxyless endpoint; MVP requires an Aspire-mediated path.` The controller never silently converts the endpoint, inserts a mediation edge, or reports success while bypassing it.
 - Policy scopes conflict when both the destination scope and caller scope overlap. A resource-wide policy conflicts with every caller-specific policy on the same ordinary resource or overlapping Cosmos or Storage hierarchy; caller-specific policies for distinct callers may coexist.
 - Use one authoritative controller for CLI, dashboard, MCP, and tests. The CLI remains a client of resource commands rather than a second policy engine.
 - Use the typed JSON policy document as canonical CLI input through `--file <path>` or `--file -`; the CLI reads and validates exactly one document, then sends it as the scalar `policyJson` resource-command argument. Interactive authoring and typed test helpers produce that same payload rather than defining parallel schemas.
 - Keep DCP endpoint topology stable for the Run session and mutate fault behavior dynamically.
-- Stable listeners and caller-specific reference rewrites must exist before workload client construction. Once traffic is pre-routed, live policy revisions affect warmed clients without reconnect or restart. A policy applied to an already-direct pooled client is rejected with an actionable eligibility error; restart is not the capture contract.
+- Stable listeners and caller-specific reference rewrites for eligible non-proxyless paths must exist before workload client construction. Once traffic is pre-routed, live policy revisions affect warmed clients without reconnect or restart. A policy applied to an already-direct pooled client or a proxyless reference is rejected with an actionable eligibility error; restart and automatic endpoint conversion are not the capture contract.
 - Keep the integration run-only and publish-safe. Chaos control resources and metadata do not appear in publish output.
 - Explicit removal is the policy lifecycle. Test lease disposal removes the policy. AppHost shutdown or restart clears all policies.
 - DCP proxies force pass-through after controller-liveness loss. The absence of a configurable policy lifetime must never strand a fault.
 - Start with HTTP/1.1 and only the HTTP/2 request/response behavior proven by conformance testing. Unsupported protocols and resources fail explicitly.
 - Random campaigns are a future direction. Phase 1 agents use the same explicit add and remove operations as humans.
-- Caller-specific support faults a reference already declared in the AppHost model through optional `fromResource`. It does not ask users to select proxy topology or permit authors to invent an edge.
+- Caller-specific support faults an eligible non-proxyless reference already declared in the AppHost model through optional `fromResource`. It does not ask users to select proxy topology or permit authors or the runtime to invent an edge.
 - `cosmos-gateway/v1` is one location-independent MVP profile with protocol-correct 429 throttle, 449 Retry With, 412 precondition failed, 503 service unavailable, and latency behaviors. For every selected caller, eligibility requires runtime enforcement that no Cosmos traffic can leave through a path outside the stable mediated Gateway listener, plus pre-activation proof of Gateway mode and `LimitToEndpoint`. Experimental `RunAsPreviewEmulator` remains ineligible because its endpoint and trust lifecycle are not yet proven, not because it is an emulator. `resource` names an existing modeled account, database, or container resource, and optional `operations` selects `read`, `write`, or `query`; omitted means all operations in that resource scope except that `preconditionFailed` only fires on an ETag-conditional write.
 - Cosmos operation and conditional-write selection are hard MVP release gates, not optimistic contracts. A particular client path whose Gateway traffic cannot be classified from URI, method, and headers without request-body parsing is runtime-ineligible. If the implementation cannot prove the selected catalog and selectors against both stable emulator and Azure, MVP release is blocked rather than narrowing or demoting `cosmos-gateway/v1`.
 - `fromResource` ships only when DCP provides stable eager per-reference listener and address identity. That topology and its pooled-connection isolation proof are Phase 1 gates; headers and baggage are never used as caller identity.
@@ -41,7 +42,7 @@ The user-facing contract stays Aspire-native and intentionally small. DCP may re
 
 This proposal intentionally applies chaos to DCP. DCP does not support fault injection today: current support controls whether an endpoint is proxied and how its address is allocated. The native work therefore includes the live policy, acknowledgement, capability, liveness, and telemetry seams described below rather than routing around DCP with a second permanent proxy layer.
 
-Deployment location is not a profile or support boundary. Aspire infers a profile from modeled resource identity plus an eligible protocol, transport, and completely captured path; the same authored payload and typed wire behavior apply whether the upstream is an emulator or deployed Azure service. An emulator may be a conformance fixture, but it cannot define a smaller product tier. For the selected Storage, Cosmos Gateway, and App Configuration profiles, automatic eager mediation, trust, authentication, authority, private-endpoint, warmed-client, and complete-path proofs across every supported location are release-blocking MVP work. Workloads start normally with an empty pass-through policy set. Applying a policy through CLI, Dashboard, MCP, or `Aspire.Hosting.Testing` is explicit Run-mode consent to activate that fault, and success is returned only after every affected route acknowledges it; Publish remains byte-equivalent to the ordinary direct model.
+Deployment location is not a profile or support boundary. Aspire infers a profile from modeled resource identity plus an eligible protocol, transport, and completely captured path; the same authored payload and typed wire behavior apply whether the upstream is an emulator or deployed Azure service. An emulator may be a conformance fixture, but it cannot define a smaller product tier. For the selected Storage, Cosmos Gateway, and App Configuration profiles, automatic eager mediation, trust, authentication, authority, private-endpoint, warmed-client, and complete-path proofs across every supported location are release-blocking MVP work. Effective proxyless paths are a separate runtime eligibility exclusion, not a profile or resource-type exclusion. They retain their authored direct endpoint semantics and receive no Chaos policy in MVP. Workloads start normally with an empty pass-through policy set. Applying a policy through CLI, Dashboard, MCP, or `Aspire.Hosting.Testing` is explicit Run-mode consent to activate that fault, and success is returned only after every affected eligible route acknowledges it; Publish remains byte-equivalent to the ordinary direct model.
 
 ### Decisions still required
 
@@ -138,8 +139,8 @@ The proposal builds on current Aspire contracts rather than inventing parallel i
 - Resources are inert model objects; lifecycle and behavior belong in annotations, services, and event handlers (`docs/specs/appmodel.md`).
 - Stable endpoint annotations exist during model construction, while allocated host values resolve later (`src/Aspire.Hosting/ResourceBuilderExtensions.cs`).
 - `ProxySupportAnnotation` currently contains only `ProxyEnabled` (`src/Aspire.Hosting/ApplicationModel/ProxySupportAnnotation.cs`).
-- DCP service specs carry only address, port, protocol, and allocation mode; they have no resolved upstream URI or authority, L7 route, or TLS-termination target. `Proxyless` bypasses the proxy (`src/Aspire.Hosting/Dcp/Model/Service.cs`).
-- `DcpExecutor.PrepareServices` creates proxied or proxyless Services only for resources with `EndpointAnnotation`s and waits for effective addresses. Real Azure provisioning outputs do not create a Service/listener through this path, and no current model carries fault rules or live policy revisions (`src/Aspire.Hosting/Dcp/DcpExecutor.cs` and `src/Aspire.Hosting/Dcp/DcpModelUtilities.cs`).
+- DCP service specs carry only address, port, protocol, and allocation mode; they have no resolved upstream URI or authority, L7 route, or TLS-termination target. `Proxyless` means "don't use a proxy, instead bind to the first Endpoint" (`src/Aspire.Hosting/Dcp/Model/Service.cs` and [Proxyless endpoints](https://aspire.dev/fundamentals/networking-overview/#proxyless-endpoints)).
+- `DcpExecutor.PrepareServices` creates proxied or proxyless Services only for resources with `EndpointAnnotation`s and waits for effective addresses. Effective proxyless forms include an explicitly non-proxied endpoint, a resource with proxy support disabled, and the persistent-resource default when port randomization is disabled. DCP resolves those forms to `EndpointAnnotation.IsProxied == false` and `AddressAllocationMode.Proxyless`; callers use the workload's directly allocated endpoint rather than an Aspire reverse proxy. Real Azure provisioning outputs do not create a Service/listener through this path, and no current model carries fault rules or live policy revisions (`src/Aspire.Hosting/ApplicationModel/EndpointAnnotation.cs`, `src/Aspire.Hosting/ApplicationModel/ResourceExtensions.cs`, `src/Aspire.Hosting/Dcp/DcpExecutor.cs`, and `src/Aspire.Hosting/Dcp/DcpModelUtilities.cs`).
 - `YarpResource` is an existing explicit L7 proxy resource. Its configuration accepts `ExternalServiceResource`, string, and `Uri` destinations, so forwarding to a known deployed-service URI is already supported; it does not expose dynamic fault behavior or automatic mediation of Azure output references (`src/Aspire.Hosting.Yarp/ConfigurationBuilder/IYarpConfigurationBuilder.cs`, `src/Aspire.Hosting.Yarp/ConfigurationBuilder/YarpConfigurationBuilder.cs`, and `src/Aspire.Hosting.Yarp/ConfigurationBuilder/YarpCluster.cs`).
 
 Adding faults and automatic pre-start native mediation to DCP is new product work across Hosting and DCP, not use of an existing extension point. Prior YARP-based validation established dynamic policy updates over a statically authored edge, including Cosmos emulator Gateway traffic constrained with `LimitToEndpoint`. It did not establish automatic edge synthesis from real Azure outputs or real-service TLS, authentication, authority, private-endpoint, and complete-client-path conformance. The current gap is native synthesis and service proof, not whether a reverse proxy can reach a deployed Azure URI.
@@ -165,12 +166,14 @@ Current deployed-Azure resource behavior is direct. `AzureProvisioningResource`-
 
 The viable zero-AppHost-source extension is generic Aspire/DCP product work:
 
-1. Before workload client construction, enumerate eligible structured references and allocate one stable listener/address identity per selected reference and caller network. Host callers may use loopback transport addresses; container callers use an address reachable through their DCP network or tunnel. Distinct `fromResource` scopes receive distinct routing identities.
+1. Before workload client construction, enumerate eligible non-proxyless structured references and allocate one stable listener/address identity per selected reference and caller network. Host callers may use loopback transport addresses; container callers use an address reachable through their DCP network or tunnel. Distinct `fromResource` scopes receive distinct routing identities.
 2. During caller-aware value resolution, route only the structured endpoint/connection properties for that caller through the stable listener while preserving the original service authority in the client-visible URI and certificate identity. Do not ask AppHost code or application code to opt in, add annotations, or construct a chaos client.
 3. After Azure provisioning resolves the real service URI, bind the listener's upstream to that URI without changing the already-injected listener address.
 4. Terminate client TLS with a locally trusted leaf for the original service authority, validate upstream TLS normally, and forward that same authority in the upstream HTTP Host header and TLS SNI so routing, signatures, certificate identity, and token audience remain service-correct. Rewriting the client-visible authority to `localhost` is ineligible because App Configuration connection-string HMAC signs `host` as a required header ([HMAC authentication](https://learn.microsoft.com/azure/azure-app-configuration/rest-api-authentication-hmac)).
 5. Keep the listener pass-through with an empty policy and apply full-snapshot policy revisions live. A warmed client already using the listener observes later revisions without reconnect or restart.
 6. Reject any reference that cannot be rewritten before client construction, any client path that bypasses the listener, and any security posture that cannot protect decrypted credentials and request content.
+
+This synthesis never applies to a reference whose effective path is proxyless in MVP. Aspire preserves `IsProxied == false`, the direct allocated endpoint, fixed-port and persistent-resource behavior, and caller-visible reference values exactly as authored. It does not convert the destination to proxied, replace its endpoint, or silently insert a caller-scoped mediation edge. Future caller-scoped support remains possible only through a separately reviewed DCP/Aspire mediation contract that preserves or explicitly revises those proxyless semantics; this proposal does not promise that support.
 
 This extension is not a chaos-specific AppHost API. It is a generic automatic native edge-synthesis and structured-reference-routing capability that chaos can consume. Workloads start normally against stable pass-through routes with no active policy. Applying a policy is the uniform Run-mode consent event for fault activation and does not add an AppHost setup step, per-run enablement, or second consent boundary. Publish and Deploy continue to resolve and emit the ordinary direct values, with no listener, trust material, policy, or rewritten reference.
 
@@ -222,7 +225,7 @@ flowchart LR
 
 The architecture has four layers:
 
-1. **App-model resources, declared references, and DCP capabilities** determine whether a fault can cover a destination resource or one caller's references completely.
+1. **App-model resources, declared references, effective proxy mode, and DCP capabilities** determine whether a fault can cover a destination resource or one caller's references completely. Effective proxyless paths are excluded before profile or policy validation.
 2. **`ChaosPolicyController`** resolves the resource, validates optional caller identity against existing references, infers the resource's stable logical profile and enumerated fault catalog, validates the policy, and owns active policies, generated policy IDs, revisions, leases, acknowledgement, and bounded activation observations.
 3. **`IChaosDataPlaneAdapter`** translates the small Aspire policy and selectors validated by the inferred catalog into DCP's internal desired-state contract.
 4. **DCP proxies** inject faults and report acknowledgement, liveness, and bounded observations.
@@ -235,9 +238,9 @@ Aspire Hosting automatically adds one visible run-only `ChaosEnvironmentResource
 
 `chaos` is the preferred resource name, not a reserved name. If user code already uses it, Aspire chooses the first deterministic fallback (`aspire-chaos`, then a numeric suffix). The resolved name appears in startup logs, the dashboard, and `aspire resource list`.
 
-No `AddChaos`, special reference API, or per-resource setting is required. Every resource remains pass-through until a policy is applied. Standard resource declarations, references, and service-discovery values do not change.
+No `AddChaos`, special reference API, or per-resource setting is required. Every resource remains pass-through until a policy is applied. Standard resource declarations, references, endpoint proxy modes, and service-discovery values do not change.
 
-The automatic mediation capability is available in Run mode without AppHost setup or per-run enablement. Its semantic and performance budgets are release gates, not a reason to add a second opt-in. Publish and Deploy never materialize the capability.
+The automatic mediation capability is available in Run mode without AppHost setup or per-run enablement for eligible non-proxyless paths. It never reinterprets an effective proxyless endpoint or pre-routes a proxyless reference in MVP. Its semantic and performance budgets are release gates, not a reason to add a second opt-in. Publish and Deploy never materialize the capability.
 
 ### Resource eligibility
 
@@ -249,12 +252,15 @@ The controller validates the edge from the AppHost model before activation. Ordi
 
 If one caller has multiple declared references to the same destination resource, `fromResource` selects all of those references. DCP must cover every selected path atomically; the controller rejects an ambiguous or partially mediated set rather than choosing one reference. A caller with no declared edge is rejected. This keeps policy semantics stable if the AppHost adds another endpoint reference later.
 
-Enforcement requires DCP to eagerly allocate distinct per-reference proxy/listener/address identity for each caller network at startup. Host and container callers may require different reachable transport addresses, and distinct `fromResource` scopes require distinct routing identity. Client-visible service authority and service-discovery values must remain stable while policies mutate, including for warmed pooled connections. Phase 1 cannot ship `fromResource` until the DCP contract expresses that caller dimension and the proof gate demonstrates isolation across multiple callers and multiple references. Propagating caller identity in a header or baggage is rejected: it is spoofable, requires application changes, and does not cover Cosmos or direct protocols.
+Proxyless is evaluated on each selected reference's effective runtime path, not from one syntax or from resource type alone. If `fromResource` selects a reference that resolves directly through an effective proxyless endpoint, that selected path is not eligible. When `fromResource` is omitted, every selected modeled caller path must be eligible; one proxyless path rejects the all-callers policy atomically before activation. This scope covers modeled references only. It does not claim interception of browser traffic, raw direct inbound traffic, or any other path outside the AppHost reference model.
+
+Enforcement for eligible non-proxyless paths requires DCP to eagerly allocate distinct per-reference proxy/listener/address identity for each caller network at startup. Host and container callers may require different reachable transport addresses, and distinct `fromResource` scopes require distinct routing identity. Client-visible service authority and service-discovery values must remain stable while policies mutate, including for warmed pooled connections. Phase 1 cannot ship `fromResource` until the DCP contract expresses that caller dimension and the proof gate demonstrates isolation across multiple callers and multiple references. Propagating caller identity in a header or baggage is rejected: it is spoofable, requires application changes, and does not cover Cosmos or direct protocols.
 
 A resource is eligible for a fault only when:
 
 - the resource exists in the current AppHost model;
 - `fromResource`, when supplied, exists and is the caller side of at least one declared AppHost reference to `resource` or an in-scope modeled descendant selected by a hierarchical profile;
+- every selected reference has an effective non-proxyless path;
 - the controller can infer a supported logical profile and catalog version from that resource;
 - every relevant resource-wide path, or every declared path for `fromResource`, is mediated by a DCP proxy that supports the fault;
 - each selected caller path has stable eager listener and address identity for the Run session;
@@ -265,7 +271,7 @@ A resource is eligible for a fault only when:
 
 If any condition fails, the controller rejects the apply before activation. Diagnostics name the resource and explain what the developer can change. Example reasons include:
 
-- the resource uses a proxyless path;
+- the selected reference resolves directly through a proxyless endpoint; MVP requires an Aspire-mediated path;
 - some host or container traffic bypasses DCP;
 - the resource exposes a protocol unsupported by the requested fault;
 - HTTPS interception is not available;
@@ -273,7 +279,7 @@ If any condition fails, the controller rejects the apply before activation. Diag
 - the selected caller has no declared reference to the destination or one of its multiple references lacks stable DCP identity; or
 - the selected DCP version does not advertise the required capability.
 
-`list-resources` and `describe-resource` resolve the app model and report the inferred MVP logical profile, eligible faults, their typed required and optional parameters, profile selectors, eligible `fromResource` callers, and actionable ineligibility reasons. These commands serialize the approved MVP support matrix directly, including Azure resources outside that matrix with no active profile or faults. Candidate profile, fault, and reference information for non-MVP resources may appear only as explicitly labeled assessment diagnostics; it is never treated as an inferred supported profile, supported fault catalog, or input to policy validation. A developer does not need to guess resource names or understand CLR types, listeners, or address allocation. Each row shows:
+`list-resources` and `describe-resource` resolve the app model and first report runtime path eligibility. For eligible paths they report the inferred MVP logical profile, eligible faults, their typed required and optional parameters, profile selectors, and eligible `fromResource` callers. These commands serialize the approved MVP support matrix directly, including Azure resources outside that matrix with no active profile or faults. A selected proxyless reference is reported as `Not eligible` with the direct-path reason above and is not assigned an active profile, offered a fault set, or accepted as input to policy validation or apply. This path-level result does not remove the resource type from its profile or demote any matrix row; another non-proxyless reference to the same modeled resource is assessed independently. Candidate profile, fault, and reference information for non-MVP resources may appear only as explicitly labeled assessment diagnostics; it is never treated as an inferred supported profile, supported fault catalog, or input to policy validation. A developer does not need to guess resource names or understand CLR types, listeners, or address allocation. Each row shows:
 
 Roadmap phase and non-MVP candidate details belong in the later delivery and ranked-assessment sections; `list-resources` reports current runtime eligibility and actionable reasons, not roadmap shorthand. The example below describes the target shipped MVP after its release gates pass; at runtime, a selected profile is eligible only when the actual modeled path and transport satisfy these rules.
 
@@ -298,6 +304,7 @@ For example:
 | `orders-queue` | `AzureQueueStorageQueueResource` | `storage/v1` | `storage` -> `queues` -> `orders-queue` | `latency`, `serverBusy` | `worker` (1) | Eligible — every selected Queue path is completely mediated |
 | `tables` | `AzureTableStorageResource` | `storage/v1` | `storage` -> `tables` | `latency`, `serverBusy`, concrete-ETag `updateConditionNotSatisfied` | `api` (1) | Eligible — non-batch update/delete classification passed; `If-Match: *` and `$batch` remain excluded |
 | `settings` | `AzureAppConfigurationResource` | `app-configuration/v1` | — | `latency`, `throttle(retryAfter)` | `api` (1) | Eligible — the complete App Configuration path is mediated for the warmed client |
+| `direct-api` | Project | — | — | — | — | Not eligible — the selected reference resolves directly through a proxyless endpoint; MVP requires an Aspire-mediated path |
 | `vault` | `AzureKeyVaultResource` | — (candidate: `key-vault-https/v1`) | — | — (candidate preview: `latency`, `throttle(retryAfter)`) | — | Not eligible — add automatic listener synthesis from the resolved vault URI and prove trust delivery, authority, auth, private endpoints, complete paths, and secret handling |
 
 MVP foundation work must census representative and playground resources and record eligibility reasons. Low coverage should become explicit roadmap evidence, not an excuse to expose proxy topology in the v1 contract.
@@ -308,7 +315,7 @@ For the MVP Cosmos profile, the same `resource` field may name an existing `Azur
 
 ### Stable startup and connection semantics
 
-DCP resource-wide and per-reference proxy paths are established eagerly before workload startup whether or not a policy is active. Each selected reference receives a stable address reachable from its caller network while retaining the original service authority in the client-visible URI and certificate identity; an Azure upstream binds when its URI is available. With no policy, workloads start normally and the paths remain pass-through. Applying and removing policies after the AppHost is running never rewrites service-discovery values, pauses workload traffic, or restarts workloads.
+DCP resource-wide and per-reference proxy paths are established eagerly before workload startup whether or not a policy is active, but only for paths that are eligible and effectively non-proxyless. Each such selected reference receives a stable address reachable from its caller network while retaining the original service authority in the client-visible URI and certificate identity; an Azure upstream binds when its URI is available. Effective proxyless references keep their ordinary direct allocated endpoints and are never pre-routed, rewritten, or replaced for Chaos in MVP. With no policy, workloads start normally and eligible mediated paths remain pass-through. Applying and removing policies after the AppHost is running never rewrites service-discovery values, changes endpoint proxy mode, pauses workload traffic, or restarts workloads.
 
 Once a client is pre-routed through that listener, an acknowledged live policy revision affects its next dispatched request even when the client and connection pool are warm. A late policy cannot capture a client that was constructed from an unrevised direct Azure URI. The controller must reject that path as not pre-routed and explain which reference or client path bypassed interception; asking the developer to restart as the normal activation mechanism or silently reporting success is prohibited.
 
@@ -325,9 +332,10 @@ Conformance coverage includes headers, trailers, connection reuse, `Expect: 100-
 The recommended path extends DCP and Aspire Hosting with:
 
 - versioned capability discovery;
-- stable eager per-reference listener and caller-network-reachable address identity;
-- automatic per-reference listeners whose upstream can bind after provisioning while their caller-visible address stays fixed;
-- caller-aware structured connection/reference routing before workload startup while preserving client-visible service authority;
+- stable eager per-reference listener and caller-network-reachable address identity for eligible non-proxyless paths;
+- automatic per-reference listeners for eligible non-proxyless paths whose upstream can bind after provisioning while their caller-visible address stays fixed;
+- caller-aware structured connection/reference routing for eligible non-proxyless paths before workload startup while preserving client-visible service authority;
+- explicit pre-synthesis rejection of effective proxyless paths without changing `IsProxied`, endpoint identity, or direct reference values;
 - trusted TLS termination for the original service authority, the same upstream HTTP Host and TLS SNI, and validated upstream TLS;
 - live full-snapshot policy updates;
 - revision acknowledgement and structured rejection;
@@ -359,11 +367,13 @@ Every Phase 1 policy has these universal fields:
 | `fromResource` | Optional calling Aspire resource on an existing declared reference to `resource` or an eligible descendant inside a hierarchical scope; omitted means all callers |
 | `fault` | Required member of the inferred profile's discriminated union; `fault.type` is the discriminator |
 
-The controller resolves `resource` and optional `fromResource` against the AppHost model before interpreting `fault`. It infers a stable, versioned logical profile from `resource`, then uses `fault.type` to select one member schema from that profile's enumerated discriminated union. Each member has explicit required and optional typed parameters. Authors do not provide `resourceType`, `profile`, or a generic parameter bag. The inferred profile is not a CLR type and may evolve only through explicit catalog versioning.
+The controller resolves `resource` and optional `fromResource` against the AppHost model before interpreting `fault`. It evaluates effective path eligibility first and rejects a selected proxyless reference without active-profile inference or fault validation. For an eligible path, it infers a stable, versioned logical profile from `resource`, then uses `fault.type` to select one member schema from that profile's enumerated discriminated union. Each member has explicit required and optional typed parameters. Authors do not provide `resourceType`, `profile`, or a generic parameter bag. The inferred profile is not a CLR type and may evolve only through explicit catalog versioning.
 
 ### MVP profile contracts and shipping matrix
 
 The MVP ships `http/v1`, `cosmos-gateway/v1`, `storage/v1`, and `app-configuration/v1` together. The selected Azure profiles require typed behavior and automatic mediation across every supported upstream location before MVP release; failure blocks the release rather than removing a profile or creating an emulator-only tier. Discovery, validation, CLI prompting, Dashboard controls, MCP, and typed testing helpers all project the same enumerated schema regardless of emulator versus deployed upstream; location never adds, removes, or changes a fault. Later catalog changes use explicit profile versioning and compatibility review rather than generic fallback or location-specific variants.
+
+Every matrix row is also subject to per-reference runtime path eligibility. An effective proxyless path is ineligible for every MVP profile without changing that profile's identity, resource-type classification, schema, fault catalog, or location-independence mandate. The four profile rows remain required; the controller simply exposes no active profile or fault set for the rejected selected path.
 
 | Stable logical profile | Aspire resource types eligible for the profile | `fault.type` | Typed fault parameters | Resource-profile selectors |
 | --- | --- | --- | --- | --- |
@@ -458,6 +468,7 @@ The MVP deliberately favors deterministic, resource-scoped faults with bounded s
 | Random campaigns | Explore a broader failure space across resources | Reproducibility, budgets, exclusions, crash cleanup, freeze-to-repro, and a separate campaign design |
 | Durable Task activity/queue faults | Exercise replay races and activity completion behavior | Modeled Durable Task identity, body-parsing security review if unavoidable, finite activation budgets, and queue protocol conformance |
 | Service Bus delivery faults | Exercise duplicate delivery and broker failures | A separately reviewed AMQP profile and broker-protocol data plane |
+| Caller-scoped chaos over proxyless references | Preserve direct endpoint semantics while enabling a future caller-scoped fault plane | A separately reviewed Aspire/DCP mediation contract that preserves or explicitly revises proxyless fixed-port, persistence, direct-access, endpoint-identity, and reference-value semantics; outside MVP and not promised |
 
 Matcher, percentage, seed, policy lifetime, priority, endpoint, source, `resourceType`, `profile`, and campaign fields are not added to Phase 1. Generic HTTP method, path, header, body, or arbitrary fault-property matchers are explicitly rejected. Fields outside the universal schema or the inferred profile's enumerated selectors are rejected.
 
@@ -548,7 +559,7 @@ Every identifier that can appear in a policy — `resource` and optional `fromRe
 
 | Resource type named by `resource` | Fault scope |
 | --- | --- |
-| Ordinary project or container resource | All inbound traffic when `fromResource` is omitted; otherwise all declared references from that caller to the downstream resource |
+| Ordinary project or container resource | All eligible modeled caller paths when `fromResource` is omitted; otherwise all eligible declared references from that caller to the downstream resource |
 | `AzureCosmosDBResource` (account) | Every modeled database and container under that account, for all callers or the declared caller selected by `fromResource` |
 | `AzureCosmosDBDatabaseResource` | Every modeled container under that database, for all callers or the declared caller selected by `fromResource` |
 | `AzureCosmosDBContainerResource` | That one modeled container, for all callers or the declared caller selected by `fromResource` |
@@ -561,6 +572,8 @@ Every identifier that can appear in a policy — `resource` and optional `fromRe
 | `AzureAppConfigurationResource` | All completely mediated App Configuration data-plane calls, independent of upstream location |
 
 Physical Azure database, container, queue, and deployment names are derived from the resource's model properties and parent chain at execution time. Authors name the Aspire resource once; they never duplicate the physical child name or service endpoint in policy.
+
+These scopes describe modeled references, not every packet that could reach the destination. Browser requests, manually constructed URLs, raw direct connections, and other inbound paths outside the AppHost reference model are not covered. A modeled path is still rejected when its effective endpoint is proxyless.
 
 ### Cosmos container MVP profile contract
 
@@ -639,6 +652,7 @@ The controller rejects a policy before activation whenever its identifiers do no
 | The selected caller is not proven before activation as Gateway plus `LimitToEndpoint`, or the resource uses experimental `RunAsPreviewEmulator` whose endpoint/trust lifecycle has not passed | Rejected from `cosmos-gateway/v1` regardless of upstream location; Direct/RNTBD, regional-discovery, raw, preview-lifecycle, and other unprovable paths remain ineligible |
 | `fromResource` names something that does not exist | Rejected with an unknown-caller-resource diagnostic |
 | `fromResource` names a resource with no existing declared reference to `resource` or an eligible in-scope descendant | Rejected; caller-specific behavior only faults references the AppHost already declares, not an arbitrary caller/destination pair |
+| Any selected reference has an effective proxyless path | Rejected atomically before profile/fault validation or activation with `Not eligible — the selected reference resolves directly through a proxyless endpoint; MVP requires an Aspire-mediated path`; the controller does not convert, replace, synthesize an edge for, or bypass that reference |
 | `fromResource` has multiple eligible references in the selected scope and any path lacks stable eager DCP identity | Rejected with the uncovered references identified; the controller never chooses one path implicitly |
 | A workload client was constructed from a direct reference before stable listener substitution | Rejected as not pre-routed, with the bypassing reference/client path identified; restart is not offered as the normal policy-activation contract and success is never reported |
 
@@ -668,7 +682,7 @@ The controller owns:
 
 Use a single-reader mutation queue for changes spanning registration and proxy acknowledgement. Read-only operations use immutable snapshots and remain available during mutation.
 
-For each apply or remove, the controller validates the request, creates a new immutable desired snapshot, increments the revision, and sends the complete snapshot to every affected DCP proxy path. A resource-wide policy affects every relevant path; a caller-specific policy affects every stable per-reference path from `fromResource` to `resource`, including multiple declared references. The controller returns success only when all affected paths acknowledge the revision. A known-unavailable path rejects the mutation before it is queued. There is no internal default apply timeout: the operation remains pending until every path acknowledges, a path reports failure, or the caller cancels.
+For each apply or remove, the controller validates the request, creates a new immutable desired snapshot, increments the revision, and sends the complete snapshot to every affected DCP proxy path. A resource-wide policy affects every eligible modeled caller path; a caller-specific policy affects every stable eligible per-reference path from `fromResource` to `resource`, including multiple declared references. Before a revision is created or sent, the controller atomically rejects the apply if any selected or required path is effectively proxyless. Omitting `fromResource` requires every selected modeled caller path to pass that check; one proxyless path blocks the all-callers policy. The controller returns success only when all affected paths acknowledge the revision. A known-unavailable path rejects the mutation before it is queued. There is no internal default apply timeout: the operation remains pending until every path acknowledges, a path reports failure, or the caller cancels.
 
 ### Forward compensation
 
@@ -686,9 +700,10 @@ Applying a policy is complete only when:
 
 1. the resource and fault are valid;
 2. no active policy has an overlapping destination and caller scope;
-3. DCP confirms complete eligibility for the fault;
-4. the controller creates a new desired revision; and
-5. every affected proxy path acknowledges that revision.
+3. every selected or required reference has an effective non-proxyless path;
+4. DCP confirms complete eligibility for the fault;
+5. the controller creates a new desired revision; and
+6. every affected proxy path acknowledges that revision.
 
 The generated policy ID is returned only after successful acknowledgement.
 
@@ -719,7 +734,7 @@ The immediate CLI uses existing resource commands, but the authored JSON policy 
 
 1. `--file <path>` makes the CLI process read one UTF-8 JSON policy document from a path resolved relative to the CLI process's working directory.
 2. `--file -` makes the CLI process read one UTF-8 JSON policy document from standard input. Requiring `-` explicitly prevents an interactive invocation from unexpectedly blocking on stdin.
-3. Omitting `--file` starts an interactive resource-first builder when a terminal is available. It uses `describe-resource` to offer only declared callers, matrix-supported faults, typed parameters, and selectors, then submits the same JSON shape.
+3. Omitting `--file` starts an interactive resource-first builder when a terminal is available. It uses `describe-resource` to offer only eligible declared callers, matrix-supported faults, typed parameters, and selectors, then submits the same JSON shape. A proxyless selection shows the shared `Not eligible` reason and offers no profile or fault controls.
 
 The subcommand-local `--file` spelling follows the Aspire CLI's existing file-option convention. `-` follows the standard CLI convention for explicit stdin and avoids inventing a second payload option.
 
@@ -765,7 +780,7 @@ An account-scoped Storage Queue fault is equally explicit:
 }
 ```
 
-`describe-resource --resource storage` reports that `service` is required and lists `blob`, `queue`, and `table` with each service's exact fault union. It groups eligible callers by service without exposing upstream location as a support boundary and reports an actionable runtime reason when a selected path is not completely mediated or conformant. Data Lake remains separately ineligible because its DFS and Blob paths have not passed one complete profile contract.
+`describe-resource --resource storage` reports that `service` is required and lists `blob`, `queue`, and `table` with each service's exact fault union. It groups eligible callers by service without exposing upstream location as a support boundary and reports an actionable runtime reason when a selected path is not completely mediated or conformant. For an effective proxyless selection it reports `Not eligible — the selected reference resolves directly through a proxyless endpoint; MVP requires an Aspire-mediated path`, exposes no active profile or fault set for that path, and never offers a conversion or bypass. Data Lake remains separately ineligible because its DFS and Blob paths have not passed one complete profile contract.
 
 The command surface is:
 
@@ -782,7 +797,7 @@ aspire resource chaos describe-resource --resource storage
 
 The first two forms support repeatable automation; the third is interactive. These examples assume `chaos` is the resolved control-resource name. If user code already claimed that name, `aspire resource list` reveals the deterministic fallback.
 
-The CLI decodes exactly one UTF-8 JSON document and performs only framing and syntax validation. It sends that document as one scalar `policyJson` argument over the existing resource-command backchannel; no new backchannel method is added. The AppHost never opens a client-side path or reads CLI standard input. Interactive mode constructs and submits the same document through the same scalar argument. `ChaosPolicyController` owns AppHost resource resolution, profile inference, matrix validation, conflict checks, and DCP acknowledgement. A malformed document reports file or stdin origin plus line and column. A structurally valid but unsupported policy reports JSON Pointer paths and the resolved matrix contract, for example: `$.fault.statusCode must be an integer from 400 through 599 for http/v1`. The CLI never turns the payload into a generic property bag and never calls DCP directly.
+The CLI decodes exactly one UTF-8 JSON document and performs only framing and syntax validation. It sends that document as one scalar `policyJson` argument over the existing resource-command backchannel; no new backchannel method is added. The AppHost never opens a client-side path or reads CLI standard input. Interactive mode constructs and submits the same document through the same scalar argument. `ChaosPolicyController` owns AppHost resource resolution, effective-path eligibility before profile inference, matrix validation, conflict checks, and DCP acknowledgement. A malformed document reports file or stdin origin plus line and column. A structurally valid but unsupported policy reports JSON Pointer paths and the resolved matrix contract, for example: `$.fault.statusCode must be an integer from 400 through 599 for http/v1`. The CLI never turns the payload into a generic property bag and never calls DCP directly.
 
 `add-policy` requires confirmation before activation, with `--yes` as the orthogonal non-interactive confirmation flag for trusted automation. `--file -` without `--yes` may prompt only when the controlling terminal supports it; otherwise it fails before consuming or applying the policy with instructions to pass `--yes`.
 
@@ -889,7 +904,7 @@ await using var lease = await app.ApplyStorageChaosPolicyAsync(
     cancellationToken: cancellationToken);
 ```
 
-The method name and typed fault improve discoverability but do not author a resource profile. The optional typed parameter is named `fromResource` consistently across helpers; omitting it means all callers. `StorageService` is required only when `resource` names `AzureStorageResource`; a modeled service or child infers it and rejects a redundant value. The controller still resolves the resource, validates the declared caller reference or in-scope descendant reference, infers its catalog, and rejects a mismatch. The typed Cosmos operation overload is available only when the classifier passes its release gate; `PreconditionFailed()` also requires the internal conditional-write proof. An App Configuration helper accepts an eligible `AzureAppConfigurationResource` and only `AppConfigurationChaosFault.Latency(...)` or `Throttle(...)`, independent of upstream location. No testing API accepts raw HTTP methods, paths, endpoint names, headers, arbitrary parameter bags, response templates, or authored profile identifiers.
+The method name and typed fault improve discoverability but do not author a resource profile. The optional typed parameter is named `fromResource` consistently across helpers; omitting it means all callers. `StorageService` is required only when `resource` names `AzureStorageResource`; a modeled service or child infers it and rejects a redundant value. The controller still resolves the resource, validates the declared caller reference or in-scope descendant reference, checks effective proxy mode, infers its catalog only for eligible paths, and rejects a mismatch. Every helper receives the same typed proxyless ineligibility result before activation; no testing API can force mediation or bypass the check. The typed Cosmos operation overload is available only when the classifier passes its release gate; `PreconditionFailed()` also requires the internal conditional-write proof. An App Configuration helper accepts an eligible `AzureAppConfigurationResource` and only `AppConfigurationChaosFault.Latency(...)` or `Throttle(...)`, independent of upstream location. No testing API accepts raw HTTP methods, paths, endpoint names, headers, arbitrary parameter bags, response templates, or authored profile identifiers.
 
 Every typed apply API returns `Task<IChaosPolicyLease>`. The proposed lease surface is intentionally limited to disposal plus activation observation:
 
@@ -935,7 +950,7 @@ Assertions happen after application traffic completes. The proxy records activat
 
 ### Fixture use and isolation
 
-A policy with omitted `fromResource` affects all traffic in its selected destination scope. A caller-specific policy affects all eligible declared references from that caller to the destination or its selected hierarchical descendants, plus the selected operations for a Cosmos resource or selected service for a Storage account. Phase 1 does not claim per-request or per-test traffic isolation, and it does not split multiple references from the same caller.
+A policy with omitted `fromResource` affects all eligible modeled caller paths in its selected destination scope and is rejected if any selected path is proxyless. A caller-specific policy affects all eligible declared references from that caller to the destination or its selected hierarchical descendants, plus the selected operations for a Cosmos resource or selected service for a Storage account. Phase 1 does not claim browser, raw/direct inbound, per-request, or per-test traffic isolation, and it does not split multiple references from the same caller.
 
 Tests sharing an AppHost must serialize overlapping chaos mutations and any traffic that depends on them. Non-overlapping caller-specific policies may run concurrently, but tests that need independent behavior within one caller scope must use separate AppHost instances. The API and documentation must state this directly rather than implying isolation through distributed-context propagation.
 
@@ -1107,7 +1122,7 @@ The Phase 1 policy table shows:
 | `storage` | `worker` | `storage/v1` | Queue | Server busy (503) | Active | 2 |
 | `settings` | `api` | `app-configuration/v1` | All | Throttle (429, retry after 250ms) | Active | 4 |
 
-After resource selection, the dashboard renders an optional caller selector populated only with declared, eligible `fromResource` values, then dynamically renders only controls projected from the shipping MVP matrix. Selecting Cosmos `preconditionFailed` fixes the displayed outcome to 412, restricts `operations` to `write`, and explains that only ETag-conditional writes activate it; there is no raw status, body, path, or header editor. Selecting a Storage account requires Blob, Queue, or Table, then offers only callers and faults valid for that service. Selecting a modeled Storage service or child fixes the service automatically. App Configuration offers the same latency and throttle controls for eligible emulator and deployed Azure paths. Operations use the same canonical payload, validation, and acknowledgement path as CLI and tests. The dashboard never calls DCP directly.
+After resource selection, the dashboard renders an optional caller selector populated only with declared, eligible `fromResource` values, then dynamically renders only controls projected from the shipping MVP matrix. A selected proxyless reference displays the shared loud `Not eligible` reason and no profile, fault, or apply controls; the Dashboard cannot override or convert it. Selecting Cosmos `preconditionFailed` fixes the displayed outcome to 412, restricts `operations` to `write`, and explains that only ETag-conditional writes activate it; there is no raw status, body, path, or header editor. Selecting a Storage account requires Blob, Queue, or Table, then offers only callers and faults valid for that service. Selecting a modeled Storage service or child fixes the service automatically. App Configuration offers the same latency and throttle controls for eligible emulator and deployed Azure paths. Operations use the same canonical payload, validation, and acknowledgement path as CLI and tests. The dashboard never calls DCP directly.
 
 ### Notifications and Dashboard telemetry
 
@@ -1123,7 +1138,7 @@ MCP uses the existing `execute_resource_command` tool against the same commands 
 
 The apply resource command is marked mutating in MCP/resource-command metadata. Invoking it is the explicit consent event on the existing command trust boundary, and the invocation and result are audited. The current backchannel does not carry an authenticated principal for this command, so this design does not claim per-principal authorization: its security assumption is that an actor allowed to invoke existing resource commands for the running AppHost may invoke this mutating command. It adds no separate AppHost setup, per-run enablement, principal field, or second consent boundary.
 
-The Phase 1 agent story is explicit and inspectable: list eligible resources and their declared callers, optionally select `fromResource` in the command input, add one policy, observe telemetry, and remove that policy. An agent reproducing the Cosmos 412 scenario submits the same `preconditionFailed` payload shown above. An agent selecting `storage` sees that `service` is required and receives the Blob, Queue, and Table fault unions, then submits the same typed Queue `serverBusy` payload without a raw endpoint. It cannot author raw matchers or response templates. An agent crash cannot bypass controller-liveness pass-through.
+The Phase 1 agent story is explicit and inspectable: list eligible resources and their declared callers, optionally select `fromResource` in the command input, add one policy, observe telemetry, and remove that policy. MCP receives the same loud proxyless `Not eligible` reason and no active profile or fault set for that selected path; it cannot bypass the controller check or request endpoint conversion. An agent reproducing the Cosmos 412 scenario submits the same `preconditionFailed` payload shown above. An agent selecting `storage` sees that `service` is required and receives the Blob, Queue, and Table fault unions, then submits the same typed Queue `serverBusy` payload without a raw endpoint. It cannot author raw matchers or response templates. An agent crash cannot bypass controller-liveness pass-through.
 
 ## Random campaigns
 
@@ -1191,6 +1206,7 @@ Do not retain request bodies, authorization data, cookies, connection strings, r
 - Policies cannot specify arbitrary upstream destinations.
 - Resource-specific response bodies, content types, and headers are fixed catalog templates. Authors cannot inject arbitrary response content, ETags, or raw headers.
 - Unknown fields, unsupported faults, and ineligible resources reject the apply rather than broadening behavior.
+- Effective proxyless paths reject before activation. The controller performs no proxy-mode, endpoint, trust, certificate, or reference rewriting for the rejected path and never records a policy as active for it.
 - Inferred catalogs use explicit allowlists for fault types, parameters, and selectors; generic property bags and HTTP matchers are not accepted.
 - Management traffic is never eligible for fault injection.
 - Request and response bodies are not captured by default.
@@ -1230,8 +1246,9 @@ Chaos is run-only.
 
 - Materialize the singleton chaos control resource.
 - Keep normal DCP-proxied addresses under workload resource names.
-- Eagerly retain stable internal per-reference listener and address identity without changing service-discovery values.
-- For a graduated real-resource profile, establish each caller-network-reachable listener and route the caller's structured reference through it before client construction while preserving the original service authority in the client-visible URI and certificate identity. Bind the resolved upstream after provisioning and forward that same authority in HTTP Host and TLS SNI. Workloads start against pass-through routes without waiting for a policy.
+- Eagerly retain stable internal per-reference listener and address identity for eligible non-proxyless paths without changing service-discovery values.
+- For a graduated real-resource profile on an eligible non-proxyless path, establish each caller-network-reachable listener and route the caller's structured reference through it before client construction while preserving the original service authority in the client-visible URI and certificate identity. Bind the resolved upstream after provisioning and forward that same authority in HTTP Host and TLS SNI. Workloads start against pass-through routes without waiting for a policy.
+- Leave effective proxyless endpoints and references direct as authored. Do not synthesize a listener, replace the destination endpoint, or change proxy mode for Chaos.
 - Start the controller with an empty pass-through revision.
 - Publish one replace-all row-indicator projection from the chaos control resource for the current controller instance and presentation revision.
 - Keep supported DCP paths protocol-aware and semantically pass-through when no policy is active.
@@ -1243,6 +1260,7 @@ Chaos is run-only.
 - Emit normal resource references deterministically.
 - Do not serialize policy state, controller revisions, local management addresses, credentials, or observations.
 - Do not serialize interception trust material, certificate changes, local listeners, altered authorities, or rewritten workload references.
+- Preserve rejected proxyless paths byte-equivalent and direct, with no proxy, trust, or reference rewriting.
 - Validate that no published reference carries chaos metadata.
 - Fail publish with an actionable error if the normal reference cannot be proven.
 
@@ -1267,6 +1285,7 @@ HTTP/2 support must verify multiplexing, cancellation propagation, header and tr
 ### MVP resource profiles and explicitly deferred paths
 
 - Automatic pre-start native mediation of Azure resource references is required MVP product work, not current DCP behavior. Known-URI YARP forwarding is established. The missing work is automatic edge synthesis plus protocol, path, auth, security, and cross-location conformance for the three selected Azure profiles.
+- Automatic edge synthesis applies only to eligible non-proxyless references. Effective proxyless paths remain direct and Chaos-ineligible in MVP; they are not silently converted, bypassed, or removed from their resource profile.
 - MVP release requires stable emulator and Azure fixtures to prove the same `cosmos-gateway/v1` latency, 429, 449, conditional 412, and 503 contract with pre-activation Gateway plus `LimitToEndpoint` proof, enforced absence of caller bypass, validated trust, and complete path capture. Direct/RNTBD is ineligible everywhere. Failure blocks MVP release rather than removing Cosmos or shipping an emulator-only profile.
 - MVP release requires Azurite and Azure to prove the same `storage/v1` service-specific catalog, including exact response envelopes, conditional semantics, auth forms, private endpoints, and warmed-client coverage. Failure blocks MVP release rather than removing Storage or shipping an Azurite-only profile.
 - MVP release requires emulator and Azure to prove the same `app-configuration/v1` latency and fixed-429 contract with complete mediation and supported auth. Failure blocks MVP release rather than removing App Configuration or shipping an emulator-only profile.
@@ -1349,6 +1368,7 @@ This could provide polished syntax early, but it would make correctness depend o
 | DCP does not provide a compatible live fault-control contract | Complete the capability, desired-state, acknowledgement, liveness, and status contracts before MVP release; use YARP only as a conformance harness, not product topology |
 | Caller-specific routing changes service discovery, cannot reach host/container callers, or fails on pooled connections | Do not ship `fromResource` until stable eager per-reference identity, caller-network-reachable transport addresses, preserved client-visible authority, unchanged service-discovery values, multi-reference atomicity, and warmed-pool isolation are proven |
 | A policy is applied after a client already captured a direct Azure URI | Reject the path as not pre-routed and identify the bypass; listeners and structured rewrites must exist before client construction, while live revisions only mutate behavior on those stable paths |
+| A selected reference is effectively proxyless | Reject atomically before profile/fault validation or activation with the shared actionable reason; preserve `IsProxied == false`, fixed-port/persistence/direct-access semantics, endpoint identity, and reference values; never synthesize or bypass mediation in MVP |
 | `cosmos-gateway/v1` traffic cannot be classified safely, the runtime cannot enforce no outbound bypass for a selected caller, or TLS trust cannot be established cross-platform at every supported location | Reject the caller/profile application; if the required conformance cannot be established, block MVP release. Never claim DCP detects a raw client after bypass, narrow or demote the required profile, ship a location-specific subset, or silently no-op |
 | A fixed resource-specific response does not match the corresponding SDK's protocol expectations | Treat SDK behavior and protocol-conformance tests as catalog inputs; version stable logical profiles when wire semantics change |
 | Cosmos 412 fires on an unconditional create or unrelated write | Require ETag-conditional-write classification from method, URI, and standard headers; block `preconditionFailed` if that proof fails |
@@ -1373,6 +1393,7 @@ This could provide polished syntax early, but it would make correctness depend o
 - Prove standard references and service-discovery values are unchanged when the feature is inactive.
 - Prove the control resource and DCP capability exist only in Run mode.
 - Census representative resources with `list-resources` and actionable eligibility reasons.
+- Prove explicit endpoint-level, resource-level, and persistent-resource effective proxyless forms report the same loud ineligibility reason across list, describe, CLI, Dashboard, MCP, testing, and apply without active-profile inference, fault validation, endpoint conversion, or policy activation.
 - Prove complete resource-wide and declared-caller fault coverage across relevant host and container proxy paths without user topology selection.
 - Prove authenticated revision application, forward compensation, restart reconciliation, and controller-liveness pass-through.
 - Review the general `ResourceRowIndicatorSnapshot` contract with Dashboard owners and prove main-grid rendering beside resource names without changing lifecycle state, health, readiness, or row-click behavior.
@@ -1380,7 +1401,7 @@ This could provide polished syntax early, but it would make correctness depend o
 - Prove keyboard access, screen-reader labels, non-color-only state and scope, tooltip content, and navigation to a focused policy or policy group.
 - Prove resource-wide, concurrent caller-specific, Cosmos account/database/container, and Storage account/service/child projections mark exactly the selected destination, eligible inherited modeled descendants, and optional caller rows described by this design.
 - Run HTTP/1.1 and HTTP/2 semantic conformance tests for initial faults.
-- Add stable eager per-reference listener and address identity without changing service-discovery values.
+- Add stable eager per-reference listener and address identity for eligible non-proxyless paths without changing service-discovery values or any effective proxyless path.
 - Add and prove the generic Azure-resource seam across emulator and deployed upstreams: automatic pre-workload per-reference listener allocation, host loopback or container-network/tunnel reachability, distinct routing identity per `fromResource` scope, caller-aware structured reference routing, delayed upstream binding when needed, original client-visible service authority and leaf identity, the same upstream HTTP Host and TLS SNI, validated upstream TLS, and direct publish output.
 - Warm pools from `orders` and `frontend`; prove acknowledged caller-specific apply and remove isolate `orders -> inventory` without reconnecting either caller.
 - Prove one `fromResource` policy covers multiple declared references from the same caller atomically and rejects partial path coverage.
@@ -1409,7 +1430,7 @@ This could provide polished syntax early, but it would make correctness depend o
 - Spike Key Vault and AI Search as automatic native-mediation profiles outside the selected MVP. Known-URI YARP forwarding and existing trust delivery are reusable precedent, but each graduates only after automatic pre-start edge synthesis, upstream HTTP Host and TLS SNI derived from the resolved service authority, service auth forms, private endpoints, complete client paths, caller isolation, retry behavior, and decrypted-secret handling pass without AppHost code changes or location-specific schema.
 - Spike one cluster-wide Kusto profile across supported upstream locations without database selection or request-body parsing.
 - Record Phase 0 results for AI Search, Azure OpenAI, Service Bus, Event Hubs, Data Lake, Redis, SQL, PostgreSQL, SignalR, and Web PubSub against the ranked assessment; do not promote a partial transport path.
-- Prove Direct/RNTBD, unsupported profiles, proxy-bypass, and otherwise unprovable connection modes reject eligibility loudly regardless of upstream location rather than silently no-op.
+- Prove Direct/RNTBD, unsupported profiles, proxy-bypass, effective proxyless paths, and otherwise unprovable connection modes reject eligibility loudly regardless of upstream location rather than silently no-op, synthesize an edge, or convert the endpoint.
 - Prove a late policy against an already-direct pooled client is rejected as not pre-routed. Restart must not be suggested as normal activation, while a pre-routed warmed client must observe live policy revisions without reconnect.
 - Threat-model Azure-resource TLS termination and prove process isolation, no credential/header/body logging, bounded plaintext memory lifetime, explicit consent through the mutating apply operation, and loud security rejection on unsupported hosts or container configurations. These are conformance obligations for one profile, not a deployed-resource tier.
 
@@ -1417,8 +1438,8 @@ This could provide polished syntax early, but it would make correctness depend o
 
 - Automatically added run-only chaos control resource with deterministic fallback naming.
 - Universal authored required `resource`, optional `fromResource`, resource-profile selectors, required typed `fault`, inferred versioned fault catalogs, and generated policy IDs.
-- Complete resource and declared-caller-reference eligibility with actionable rejection.
-- Stable eager per-reference DCP listeners and addresses, with pooled-connection isolation and multi-reference atomicity proven before release.
+- Complete resource and declared-caller-reference eligibility with actionable rejection, including atomic proxyless-path exclusion before profile/fault validation or activation.
+- Stable eager per-reference DCP listeners and addresses for eligible non-proxyless paths, with pooled-connection isolation and multi-reference atomicity proven before release; proxyless references remain direct and unchanged.
 - Deterministic destination/caller conflict detection: resource-wide scopes conflict with caller-specific scopes, while distinct callers may coexist.
 - Singleton controller and DCP full-snapshot reconciliation with forward compensation.
 - Add policies from canonical typed JSON files, explicit stdin, or the interactive builder; remove and list policies; and list and describe resources with JSON results and output-only logical profile metadata.
@@ -1455,6 +1476,7 @@ This could provide polished syntax early, but it would make correctness depend o
 | Conformance fallback | Explicit YARP-compatible adapter, not product topology | Evidence that DCP sequencing blocks policy validation |
 | Availability | Automatic in Run mode with no AppHost setup or per-run enablement | Compatibility, security, latency, throughput, startup, memory, run, and publish proofs; failure blocks release |
 | Resource and caller eligibility | Cover every relevant resource-wide path or every declared path for `fromResource`; otherwise reject | Representative host/container coverage census, stable eager per-reference identity, caller-network reachability, preserved client-visible authority, multiple-reference coverage, and atomic acknowledgement proof |
+| Effective proxyless references | Exclude from Chaos in MVP while preserving ordinary direct Aspire behavior | Explicit endpoint-level, resource-level, and persistent-resource proxyless forms reject before activation across every control surface; no active profile/fault set, edge synthesis, proxy-mode change, endpoint replacement, reference rewrite, or silent bypass |
 | Initial HTTP/2 behavior | Ship only proven faults | Multiplexing, cancellation, flow-control, headers, trailers, and connection reuse |
 | Runtime persistence | None | Revisit only if restart use cases outweigh stale-fault risk |
 | Controller loss | Force pass-through after a fixed platform interval | Crash, disconnect, and recovery tests |
@@ -1477,20 +1499,20 @@ This could provide polished syntax early, but it would make correctness depend o
 
 Phase 1 must not release until the following are demonstrated:
 
-1. A reader can explain the complete Phase 1 authored policy as required `resource`, optional `fromResource`, resource-profile selectors such as Cosmos `operations`, and required typed `fault`; the controller infers a stable versioned logical profile whose enumerated `fault.type` discriminated union defines the valid typed member schemas.
+1. A reader can explain the complete Phase 1 authored policy as required `resource`, optional `fromResource`, resource-profile selectors such as Cosmos `operations`, and required typed `fault`; after effective-path eligibility passes, the controller infers a stable versioned logical profile whose enumerated `fault.type` discriminated union defines the valid typed member schemas.
 2. Existing AppHost code requires no chaos-specific setup, workloads start normally with no active policy, and neither the control resource nor policy application gates startup.
 3. CLI, dashboard, MCP, and tests all mutate the same controller instance. Apply is marked mutating, invoking it is explicit consent on the existing resource-command trust boundary, and the invocation is audited; the current backchannel carries no authenticated principal, and the design adds no second opt-in or consent boundary.
 4. After the AppHost is running, every typed testing apply API returns `Task<IChaosPolicyLease>`; apply and disposal each await acknowledgement from every affected DCP proxy path, including every declared reference selected by `fromResource`, and the lease exposes `WaitForActivationAsync(CancellationToken)`.
 5. A resource-wide policy conflicts with caller-specific policies on the same ordinary resource or overlapping Cosmos/Storage hierarchy; policies for distinct callers may coexist, and a second overlapping apply fails clearly until removal.
-6. Omitting `fromResource` affects all callers in the selected destination scope. Supplying it affects only the named caller's eligible existing declared references to that scope or its modeled descendants. Cosmos `operations` and Storage account `service` further narrow that traffic. Testing guidance requires serialized overlapping mutations or separate AppHosts.
+6. Omitting `fromResource` affects all eligible modeled caller paths in the selected destination scope and rejects atomically if any selected path is proxyless. Supplying it affects only the named caller's eligible existing declared references to that scope or its modeled descendants. Cosmos `operations` and Storage account `service` further narrow that traffic. Browser and raw/direct inbound traffic outside modeled references are not claimed. Testing guidance requires serialized overlapping mutations or separate AppHosts.
 7. Users never select proxy paths or other DCP topology details.
-8. A policy is admitted only when the requested fault maps unambiguously and completely across every relevant resource-wide path or every declared path from `fromResource`.
+8. A policy is admitted only when every selected reference is effectively non-proxyless and the requested fault maps unambiguously and completely across every relevant modeled caller path or every declared path from `fromResource`.
 9. Unknown resources, missing declared caller edges, partially covered multiple references, ineligible resources, and unsupported protocols fail with actionable diagnostics.
 10. A rejected or canceled apply never returns ordinary failure while an acknowledged fault from that attempt remains active; the controller compensates first, and no internal default apply timeout is invented.
 11. Controller-liveness loss forces pass-through without relying on user-configured expiry.
 12. Lease disposal removes only its generated policy ID and cannot clear another resource-wide or caller-specific policy.
 13. AppHost restart clears all policies, and proxy restart reconciles from the live controller.
-14. A publish snapshot emits normal references with no chaos control resource, state, or metadata.
+14. A publish snapshot emits normal direct references with no chaos control resource, state, metadata, proxy-mode change, endpoint replacement, trust material, or reference rewriting.
 15. HTTP/1.1 and every claimed HTTP/2 behavior pass semantic conformance for pass-through, apply, and remove on warmed pooled connections, with stable eager per-reference addresses isolating at least two callers. One `rateLimit` policy ID proves one shared window budget across at least two paths: all references for a selected caller or all eligible selected caller paths when `fromResource` is omitted.
 16. Dashboard policy details contain Resource, From resource (or All callers), inferred logical profile/version, derived service scope or typed operation scope when applicable, Fault, State, and activation count, while the main Resources view marks every affected row without opening those details.
 17. Snapshots and observations contain no credentials, bodies, connection strings, or raw sensitive headers.
@@ -1523,13 +1545,14 @@ Phase 1 must not release until the following are demonstrated:
 44. Storage, Cosmos Gateway, Key Vault, App Configuration, AI Search, Kusto, Azure OpenAI, Service Bus, Event Hubs, Redis, SQL, PostgreSQL, SignalR, Web PubSub, Data Lake, and excluded infrastructure remain classified by modeled identity plus eligible protocol, transport, and complete path exactly as the ranked assessment states; none silently acquires `http/v1` or a location-specific variant.
 45. Every proposed matrix member has a concrete user scenario, fixed typed schema, protocol rationale, and named release proof; post-MVP capabilities remain listed with their user value and required safety or correctness design.
 46. The spec and implementation report current real-resource support accurately: Aspire YARP accepts arbitrary URI and `ExternalServiceResource` destinations, while real Azure output references create no DCP Service/listener today, `ServiceSpec` has no dynamically bound upstream L7/TLS target, and caller values resolve before workload client construction. Known-URI proxy reachability is established; automatic native mediation remains an implementation gap.
-47. A generic zero-AppHost-source Azure-resource proof automatically allocates a stable listener/address identity per selected reference and caller network before client construction, uses loopback transport for eligible host callers and the DCP network/tunnel for container callers, preserves the original service authority in client-visible URI and certificate identity, binds the upstream when resolved, forwards the same authority in upstream HTTP Host and TLS SNI, preserves token audience, starts workloads normally with pass-through and no policy, applies later acknowledged revisions to warmed clients without pausing traffic, and leaves Publish direct and byte-equivalent.
+47. A generic zero-AppHost-source Azure-resource proof automatically allocates a stable listener/address identity per selected eligible non-proxyless reference and caller network before client construction, uses loopback transport for eligible host callers and the DCP network/tunnel for container callers, preserves the original service authority in client-visible URI and certificate identity, binds the upstream when resolved, forwards the same authority in upstream HTTP Host and TLS SNI, preserves token audience, starts workloads normally with pass-through and no policy, applies later acknowledged revisions to warmed clients without pausing traffic, and leaves Publish direct and byte-equivalent.
 48. The `storage/v1` conformance suite uses the same payload and assertions against Azurite and Azure. Its Entra-authenticated `BlobServiceClient` fixture demonstrates pre-start routing with the original Storage authority preserved, validated certificates, warmed-client live latency and fixed 503 toggles without reconnect/restart, no AppHost/application source changes, and direct publish; SharedKey, SAS, Queue, Table, secondary bypass, and private endpoint proofs pass before MVP release.
 49. `cosmos-gateway/v1` ships in the MVP only when stable emulator and Azure callers are proven before activation to use Gateway plus `LimitToEndpoint` and the runtime enforces no outbound Cosmos path outside the stable mediated listener, with identical payload and typed-fault behavior, token audience, authority, trust, regional-bypass exclusion, warmed-client, and security proofs. Direct/RNTBD, raw clients, and unprovable or unenforceable modes remain ineligible everywhere. Cosmos SDK FaultInjection is documented only as a separate client-construction integration option.
 50. A late policy cannot capture an already-direct pooled client. That path rejects as not pre-routed and identifies the bypass; pre-routed warmed clients observe live revisions, and restart is not the intended activation contract.
 51. Existing certificate trust gathering, known-URI YARP forwarding, and caller/network-aware resolution are documented as reusable precedent, while automatic listener synthesis, per-upstream-authority leaf issuance, and stable per-reference identity remain explicit implementation/proof gaps.
 52. Azure-resource TLS termination requires reviewed process isolation, no credential/header/body logging, bounded plaintext memory lifetime, explicit consent through the mutating apply operation on the existing command trust boundary, and loud rejection when the security posture cannot be met. It does not require AppHost setup, per-run enablement, or a second consent boundary. Those obligations gate the whole profile rather than creating a deployed-resource tier.
 53. No profile, schema, policy payload, fault member, selector, response template, or eligibility result differs because the upstream is an emulator or deployed service. An emulator may be a fixture, but any location-specific failure in `storage/v1`, `cosmos-gateway/v1`, or `app-configuration/v1` blocks MVP release rather than demoting the profile.
+54. A selected structured reference whose effective path is proxyless reports `Not eligible — the selected reference resolves directly through a proxyless endpoint; MVP requires an Aspire-mediated path` consistently through list, describe, CLI, Dashboard, MCP, testing, and apply. Rejection occurs atomically before active-profile inference, fault validation, desired-revision creation, or activation; omitting `fromResource` requires every selected modeled caller path to be eligible, so one proxyless path blocks the all-callers policy. Run preserves direct endpoint, fixed-port, persistence, and reference semantics without synthesized mediation or silent bypass, Publish remains byte-equivalent, and the four-profile MVP matrix is unchanged. Any future caller-scoped support requires a separate approved mediation contract and is not promised by this proposal.
 
 ## Aspire implementation touchpoints
 
