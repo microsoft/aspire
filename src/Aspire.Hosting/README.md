@@ -24,8 +24,8 @@ Key concepts include:
 
 Aspire's approach ensures flexibility, strong tooling support, and clear separation between modeling, orchestration, and execution of distributed .NET applications.
 
-For the full details and specification, see the [App Model document](https://github.com/dotnet/aspire/blob/main/docs/specs/appmodel.md).
+For the full details and specification, see the [App Model document](https://github.com/microsoft/aspire/blob/main/docs/specs/appmodel.md).
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

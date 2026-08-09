@@ -10,7 +10,7 @@
 #
 # Note: Expects self-extracting binary and NuGet artifacts to be pre-downloaded to /workspace/artifacts/
 #
-FROM mcr.microsoft.com/devcontainers/java:17
+FROM mcr.microsoft.com/devcontainers/java:25-trixie
 
 # Ensure Yarn APT repository signing key is available (base image includes Yarn repo)
 RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | gpg --dearmor | sudo tee /etc/apt/keyrings/yarn-archive-keyring.gpg > /dev/null
@@ -30,7 +30,8 @@ WORKDIR /workspace
 
 COPY setup-local-cli.sh /scripts/setup-local-cli.sh
 COPY test-java.sh /scripts/test-java.sh
-RUN chmod +x /scripts/setup-local-cli.sh /scripts/test-java.sh
+COPY test-java-playground.sh /scripts/test-java-playground.sh
+RUN chmod +x /scripts/setup-local-cli.sh /scripts/test-java.sh /scripts/test-java-playground.sh
 
 # Entrypoint: Set up Aspire CLI and run validation
 # Bundle extraction happens lazily on first command that needs the layout
@@ -40,5 +41,6 @@ ENTRYPOINT ["/bin/bash", "-c", "\
     aspire --nologo config set features:experimentalPolyglot:java true --global && \
     echo '' && \
     echo '=== Running validation ===' && \
-    /scripts/test-java.sh \
+    /scripts/test-java.sh && \
+    /scripts/test-java-playground.sh \
 "]

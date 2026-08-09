@@ -1,28 +1,69 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Cli.Configuration;
+using Aspire.Cli.Resources;
 using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Cli.Utils;
 
 internal static class ConfigurationHelper
 {
+    internal const string IntegrationCacheFolderName = "integrations";
+
+    /// <summary>
+    /// Standard options for parsing JSON that may contain non-spec features like comments and trailing commas.
+    /// </summary>
+    public static readonly JsonDocumentOptions ParseOptions = new()
+    {
+        CommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true
+    };
+
     internal static void RegisterSettingsFiles(IConfigurationBuilder configuration, DirectoryInfo workingDirectory, FileInfo globalSettingsFile)
     {
         var currentDirectory = workingDirectory;
 
-        // Find the nearest local settings file
+        // Find the nearest local settings file (prefer aspire.config.json, fall back to .aspire/settings.json)
         FileInfo? localSettingsFile = null;
 
         while (currentDirectory is not null)
         {
-            var settingsFilePath = BuildPathToSettingsJsonFile(currentDirectory.FullName);
-
-            if (File.Exists(settingsFilePath))
+            // Check for aspire.config.json first (new format)
+            var newSettingsPath = Path.Combine(currentDirectory.FullName, AspireConfigFile.FileName);
+            if (File.Exists(newSettingsPath))
             {
-                localSettingsFile = new FileInfo(settingsFilePath);
+                localSettingsFile = new FileInfo(newSettingsPath);
+                break;
+            }
+
+            // TODO: Remove legacy .aspire/settings.json fallback once confident most users have migrated.
+            // Tracked by https://github.com/microsoft/aspire/issues/15239
+            // Fall back to .aspire/settings.json (legacy format).
+            //
+            // Startup is shared by every command — including read-only ones (aspire ls, ps,
+            // doctor, describe, --version). Earlier versions eagerly migrated the legacy file
+            // to aspire.config.json here so the workspace would move forward on the user's
+            // first run of a newer CLI (https://github.com/microsoft/aspire/issues/15488),
+            // but that broke the "read commands don't mutate the working tree" contract:
+            // running aspire ls in a workspace that only had .aspire/settings.json was
+            // silently writing aspire.config.json, polluting git status and tripping CI
+            // dirty-tree checks (https://github.com/microsoft/aspire/issues/17615).
+            //
+            // Migration is now deferred to commands that already mutate the workspace
+            // (aspire run/add/init/update/etc. via ProjectLocator.CreateSettingsFileAsync ->
+            // AspireConfigFile.LoadOrCreate). Read commands continue to work against the
+            // legacy file directly: AppHostPathConfigurationPolicy.TryFindAppHostPathKey
+            // accepts both the legacy flat "appHostPath" key and the modern "appHost:path"
+            // hierarchical key, and ProjectLocator's settings-file reader has its own legacy
+            // fallback that does not write.
+            var legacySettingsPath = BuildPathToSettingsJsonFile(currentDirectory.FullName);
+            if (File.Exists(legacySettingsPath))
+            {
+                localSettingsFile = new FileInfo(legacySettingsPath);
                 break;
             }
 
@@ -45,6 +86,137 @@ internal static class ConfigurationHelper
     internal static string BuildPathToSettingsJsonFile(string workingDirectory)
     {
         return Path.Combine(workingDirectory, ".aspire", "settings.json");
+    }
+
+    internal static DirectoryInfo? GetLegacySettingsRootDirectory(FileInfo settingsFile)
+    {
+        if (!string.Equals(settingsFile.Name, AspireJsonConfiguration.FileName, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var settingsDirectory = settingsFile.Directory;
+        if (settingsDirectory is null || !string.Equals(settingsDirectory.Name, AspireJsonConfiguration.SettingsFolder, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return settingsDirectory.Parent;
+    }
+
+    internal static DirectoryInfo GetConfigRootDirectory(DirectoryInfo startDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(startDirectory);
+
+        var configPath = FindNearestConfigFilePath(startDirectory);
+        if (configPath is null)
+        {
+            return startDirectory;
+        }
+
+        var configFile = new FileInfo(configPath);
+
+        // Legacy layout: <root>/.aspire/settings.json -> <root>
+        var legacyRoot = GetLegacySettingsRootDirectory(configFile);
+        if (legacyRoot is not null)
+        {
+            return legacyRoot;
+        }
+
+        // Modern layout: <root>/aspire.config.json -> <root>
+        return configFile.Directory is { Exists: true } configDirectory
+            ? configDirectory
+            : startDirectory;
+    }
+
+    internal static DirectoryInfo GetWorkspaceAspireDirectory(DirectoryInfo startDirectory)
+    {
+        var configRoot = GetConfigRootDirectory(startDirectory);
+        return new DirectoryInfo(Path.Combine(configRoot.FullName, AspireJsonConfiguration.SettingsFolder));
+    }
+
+    internal static DirectoryInfo GetIntegrationCacheDirectory(DirectoryInfo startDirectory)
+    {
+        var workspaceAspireDirectory = GetWorkspaceAspireDirectory(startDirectory);
+        return new DirectoryInfo(Path.Combine(workspaceAspireDirectory.FullName, IntegrationCacheFolderName));
+    }
+
+    /// <summary>
+    /// Searches upward from <paramref name="startDirectory"/> for the nearest
+    /// <c>aspire.config.json</c> or legacy <c>.aspire/settings.json</c>.
+    /// </summary>
+    /// <returns>The full path to the config file, or <c>null</c> if none is found.</returns>
+    internal static string? FindNearestConfigFilePath(DirectoryInfo startDirectory)
+    {
+        var searchDir = startDirectory;
+        while (searchDir is not null)
+        {
+            var configPath = Path.Combine(searchDir.FullName, AspireConfigFile.FileName);
+            if (File.Exists(configPath))
+            {
+                return configPath;
+            }
+
+            var legacyPath = BuildPathToSettingsJsonFile(searchDir.FullName);
+            if (File.Exists(legacyPath))
+            {
+                return legacyPath;
+            }
+
+            searchDir = searchDir.Parent;
+        }
+
+        return null;
+    }
+
+    internal static bool TryLoadSettingsFile(string filePath, out IConfigurationRoot configuration)
+    {
+        configuration = new ConfigurationRoot([]);
+
+        if (!File.Exists(filePath))
+        {
+            return false;
+        }
+
+        try
+        {
+            var content = File.ReadAllText(filePath);
+
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                return false;
+            }
+
+            var node = JsonNode.Parse(content, documentOptions: ParseOptions);
+            if (node is not JsonObject)
+            {
+                return false;
+            }
+
+            var cleanJson = node.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+            var bytes = System.Text.Encoding.UTF8.GetBytes(cleanJson);
+            configuration = new ConfigurationBuilder()
+                .AddJsonStream(new MemoryStream(bytes))
+                .Build();
+
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+        catch (InvalidDataException)
+        {
+            return false;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -85,6 +257,28 @@ internal static class ConfigurationHelper
         // (e.g., both "features:key" flat entry and "features" nested object).
         TryNormalizeSettingsFile(filePath);
 
+        // Pre-process the file to handle comments and trailing commas.
+        // Microsoft.Extensions.Configuration.Json doesn't support JSON comments,
+        // so we parse with comment support and load the clean JSON via stream.
+        try
+        {
+            var content = File.ReadAllText(filePath);
+            var node = JsonNode.Parse(content, documentOptions: ParseOptions);
+            if (node is not null)
+            {
+                var cleanJson = node.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+                var bytes = System.Text.Encoding.UTF8.GetBytes(cleanJson);
+                configuration.AddJsonStream(new MemoryStream(bytes));
+                return;
+            }
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException(
+                string.Format(CultureInfo.CurrentCulture, ErrorStrings.InvalidJsonInConfigFile, filePath, ex.Message),
+                ex);
+        }
+
         configuration.AddJsonFile(filePath, optional: true);
     }
 
@@ -102,7 +296,7 @@ internal static class ConfigurationHelper
                 return false;
             }
 
-            var settings = JsonNode.Parse(content)?.AsObject();
+            var settings = JsonNode.Parse(content, documentOptions: ParseOptions)?.AsObject();
 
             if (settings is null)
             {
@@ -110,13 +304,15 @@ internal static class ConfigurationHelper
             }
 
             // Find all colon-separated keys at root level
-            var colonKeys = new List<(string key, string? value)>();
+            var colonKeys = new List<(string key, JsonNode? value)>();
 
             foreach (var kvp in settings)
             {
                 if (kvp.Key.Contains(':'))
                 {
-                    colonKeys.Add((kvp.Key, kvp.Value?.ToString()));
+                    // DeepClone preserves the original JSON type (boolean, number, etc.)
+                    // instead of converting to string via ToString().
+                    colonKeys.Add((kvp.Key, kvp.Value?.DeepClone()));
                 }
             }
 

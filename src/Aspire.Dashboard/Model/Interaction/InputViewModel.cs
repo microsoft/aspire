@@ -2,12 +2,25 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Aspire.DashboardService.Proto.V1;
 
 namespace Aspire.Dashboard.Model.Interaction;
 
 public sealed class InputViewModel
 {
+    // Fallback maximum upload size matching the server's default (100 MB).
+    // In practice the server always sends a MaxFileSize value for file inputs,
+    // so this constant is only used as a defensive safety net.
+    internal const long DefaultMaxUploadedFileBytes = 100 * 1024 * 1024; // 100 MB
+
+    private static readonly JsonSerializerOptions s_jsonSerializerOptions = new()
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
     public InteractionInput Input { get; private set; } = default!;
 
     public InputViewModel(InteractionInput input)
@@ -17,25 +30,14 @@ public sealed class InputViewModel
 
     public void SetInput(InteractionInput input)
     {
-        string value;
-        if (Input == null)
+        // Interaction updates carry a full server-side snapshot even when only one input changed. Keep
+        // local values by default so an update for a dependent choice does not clobber text the user is
+        // typing elsewhere in the dialog. ShouldUseIncomingValue captures the cases where the server is
+        // authoritative because the field is being dynamically loaded or is not currently editable.
+        if (Input is not null && !ShouldUseIncomingValue(Input, input))
         {
-            value = input.Value;
+            input.Value = Input.Value;
         }
-        else
-        {
-            // Only overwrite the local value if the input was loading and is no longer loading (update could have come from server)
-            // This avoids changes in local values being overwritten by a dynamic server update.
-            if (Input.Loading && !input.Loading)
-            {
-                value = input.Value;
-            }
-            else
-            {
-                value = Input.Value;
-            }
-        }
-        input.Value = value;
 
         Input = input;
         if (input.InputType == InputType.Choice && input.Options != null)
@@ -44,7 +46,12 @@ public sealed class InputViewModel
                 .Select(option => new SelectViewModel<string> { Id = option.Key, Name = option.Value, })
                 .ToList();
 
-            SelectOptions = optionsVM;
+            // Only update the options if they have changed to avoid unnecessarily recreating the FluentSelect component.
+            if (!OptionsEqual(SelectOptions, optionsVM))
+            {
+                SelectOptions = optionsVM;
+                ChoiceVersion++;
+            }
 
             // Default to the first option if no placeholder is set, the value is empty, and custom choice is disabled.
             // This is done so the input model value matches frontend behavior (FluentSelect defaults to the first option)
@@ -56,6 +63,19 @@ public sealed class InputViewModel
     }
 
     public List<SelectViewModel<string>> SelectOptions { get; private set; } = [];
+
+    /// <summary>
+    /// Incremented each time <see cref="SelectOptions"/> is rebuilt so Blazor
+    /// recreates the choice input component when options change, avoiding a race
+    /// where the web component clears the bound value during an options refresh.
+    /// </summary>
+    public int ChoiceVersion { get; private set; }
+
+    /// <summary>
+    /// A key unique per input that changes when <see cref="ChoiceVersion"/> changes.
+    /// Used as a Blazor <c>@key</c> on FluentSelect / FluentCombobox.
+    /// </summary>
+    public string InputKey => $"{Input.Name}_{ChoiceVersion}";
 
     public IEnumerable<SelectViewModel<string>> FilteredOptions()
     {
@@ -101,4 +121,57 @@ public sealed class InputViewModel
 
     // Used to track secret text visibility state
     public bool IsSecretTextVisible { get; set; }
+
+    // Tracks the uploaded file references for File inputs.
+    // When set, serializes successful references (Id != null) to JSON on the underlying Input.Value.
+    public List<FileReferenceViewModel> FileReferences { get; } = [];
+
+    public void SetFileReferences(IEnumerable<FileReferenceViewModel> files)
+    {
+        FileReferences.Clear();
+        FileReferences.AddRange(files);
+        var successfulRefs = FileReferences.Where(f => f.Id is not null).ToList();
+        // Use empty string (not "[]") when no files were accepted, so required-field checks work correctly.
+        Input.Value = successfulRefs.Count > 0
+            ? JsonSerializer.Serialize(successfulRefs, s_jsonSerializerOptions)
+            : string.Empty;
+    }
+
+    private static bool OptionsEqual(List<SelectViewModel<string>> existing, List<SelectViewModel<string>> incoming)
+    {
+        if (existing.Count != incoming.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < existing.Count; i++)
+        {
+            if (existing[i].Id != incoming[i].Id || existing[i].Name != incoming[i].Name)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool ShouldUseIncomingValue(InteractionInput current, InteractionInput incoming)
+    {
+        // Dynamic loading can replace both the option list and the selected value. When loading
+        // completes, the server value is the one validated against the freshly loaded options.
+        //
+        // Disabled inputs are also server-owned because the user could not have made a meaningful local
+        // edit while the control was unavailable. This includes disabled -> enabled transitions, such as
+        // Azure Subscription ID becoming editable after tenant-specific subscriptions are loaded.
+        return (current.Loading && !incoming.Loading) || current.Disabled || incoming.Disabled;
+    }
+}
+
+public sealed class FileReferenceViewModel
+{
+    public string? Id { get; set; }
+    public required string Name { get; set; }
+
+    [JsonIgnore]
+    public string? ErrorMessage { get; set; }
 }

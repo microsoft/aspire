@@ -3,6 +3,7 @@
 
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Aspire.Shared.Model.Serialization;
 #if !CLI
@@ -30,6 +31,8 @@ namespace Aspire.Otlp.Serialization;
 [JsonSerializable(typeof(OtlpInstrumentationScopeJson))]
 [JsonSerializable(typeof(OtlpEntityRefJson))]
 [JsonSerializable(typeof(OtlpResourceJson))]
+[JsonSerializable(typeof(JsonNode))]
+[JsonSerializable(typeof(Dictionary<string, JsonNode?>))]
 [JsonSerializable(typeof(OtlpTelemetryDataJson))]
 // Trace types
 [JsonSerializable(typeof(OtlpResourceSpansJson))]
@@ -64,6 +67,8 @@ namespace Aspire.Otlp.Serialization;
 [JsonSerializable(typeof(ResourceJson))]
 // Telemetry API types
 [JsonSerializable(typeof(TelemetryApiResponse))]
+[JsonSerializable(typeof(TelemetryValidateTokenRequest))]
+[JsonSerializable(typeof(TelemetryValidateTokenResponse))]
 [JsonSerializable(typeof(ResourceInfoJson))]
 [JsonSerializable(typeof(ResourceInfoJson[]))]
 #if !CLI

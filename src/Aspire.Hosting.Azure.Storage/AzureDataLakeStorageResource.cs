@@ -84,5 +84,5 @@ public class AzureDataLakeStorageResource(string name, AzureStorageResource stor
 
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["dfs"];
 
-    string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.dfs.core.windows.net";
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() => ["privatelink.dfs.core.windows.net"];
 }

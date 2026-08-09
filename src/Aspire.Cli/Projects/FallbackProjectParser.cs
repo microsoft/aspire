@@ -119,10 +119,10 @@ internal sealed partial class FallbackProjectParser
         ProjectReferenceInfo[] projectReferences)
     {
         var rootObject = new JsonObject();
-        
+
         // Items section
         var itemsObject = new JsonObject();
-        
+
         // PackageReference items
         var packageRefArray = new JsonArray();
         foreach (var pkg in packageReferences)
@@ -133,7 +133,7 @@ internal sealed partial class FallbackProjectParser
             packageRefArray.Add((JsonNode?)packageObj);
         }
         itemsObject["PackageReference"] = packageRefArray;
-        
+
         // ProjectReference items
         var projectRefArray = new JsonArray();
         foreach (var proj in projectReferences)
@@ -144,14 +144,14 @@ internal sealed partial class FallbackProjectParser
             projectRefArray.Add((JsonNode?)projectObj);
         }
         itemsObject["ProjectReference"] = projectRefArray;
-        
+
         rootObject["Items"] = itemsObject;
-        
+
         // Properties section
         var propertiesObject = new JsonObject();
         propertiesObject["AspireHostingSDKVersion"] = JsonValue.Create(aspireHostingSdkVersion);
         rootObject["Properties"] = propertiesObject;
-        
+
         // Fallback flag
         rootObject["Fallback"] = JsonValue.Create(true);
 
@@ -230,7 +230,7 @@ internal sealed partial class FallbackProjectParser
             }
 
             // Try to get version from attribute first, then from child element
-            var version = element.Attribute("Version")?.Value ?? 
+            var version = element.Attribute("Version")?.Value ??
                          element.Element("Version")?.Value;
 
             var packageRef = new PackageReferenceInfo
@@ -263,8 +263,8 @@ internal sealed partial class FallbackProjectParser
             }
 
             // Convert relative path to absolute path
-            var fullPath = Path.IsPathRooted(include) 
-                ? include 
+            var fullPath = Path.IsPathRooted(include)
+                ? include
                 : Path.GetFullPath(Path.Combine(projectFile.DirectoryName!, include));
 
             var projectRef = new ProjectReferenceInfo
@@ -287,7 +287,7 @@ internal sealed partial class FallbackProjectParser
         // Match: #:sdk Aspire.AppHost.Sdk@<version>
         // Where version can be a semantic version or wildcard (*)
         var match = SdkDirectiveRegex().Match(fileContent);
-        
+
         if (match.Success)
         {
             return match.Groups[1].Value;

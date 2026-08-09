@@ -74,11 +74,23 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
                 {
                     if (state != null)
                     {
-                        // The resource is in a terminal state, so we can stop monitoring it.
-                        state.StopResourceMonitor();
-                        lock (_resourceMonitoringStates)
+                        // Health monitors are keyed by the resource model name, but events
+                        // arrive per-replica. When a resource has multiple replicas, a single
+                        // replica entering a terminal state should not stop health monitoring
+                        // for the entire resource — other replicas may still be running and
+                        // need continued health evaluation through the shared DCP port.
+                        var resource = resourceEvent.Resource;
+                        var allReplicasTerminal = resource.GetResolvedResourceNames().All(name =>
+                            resourceNotificationService.TryGetCurrentState(name, out var evt)
+                            && KnownResourceStates.TerminalStates.Contains(evt.Snapshot.State?.Text));
+
+                        if (allReplicasTerminal)
                         {
-                            _resourceMonitoringStates.Remove(resourceName);
+                            state.StopResourceMonitor();
+                            lock (_resourceMonitoringStates)
+                            {
+                                _resourceMonitoringStates.Remove(resourceName);
+                            }
                         }
                     }
                 }
@@ -230,8 +242,8 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
             }
 
             if (checkReportSnapshot.Status != value.Status
-                || !StringComparers.HealthReportPropertyValue.Equals(checkReportSnapshot.Description, value.Description)
-                || !StringComparers.HealthReportPropertyValue.Equals(checkReportSnapshot.ExceptionText, value.Exception?.ToString()))
+                || !string.Equals(checkReportSnapshot.Description, value.Description, StringComparisons.HealthReportPropertyValue)
+                || !string.Equals(checkReportSnapshot.ExceptionText, value.Exception?.ToString(), StringComparisons.HealthReportPropertyValue))
             {
                 return true;
             }
@@ -367,7 +379,7 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
             }
 
             // Don't throw to avoid writing the thrown exception to the debug console.
-            // See https://github.com/dotnet/aspire/issues/7486
+            // See https://github.com/microsoft/aspire/issues/7486
             await delayInterruptedTask.WaitAsync(delay, cancellationToken).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
             var delayInterrupted = delayInterruptedTask.IsCompletedSuccessfully == true;
 

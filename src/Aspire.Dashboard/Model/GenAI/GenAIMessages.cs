@@ -168,6 +168,17 @@ public class GenericPart : MessagePart
 }
 
 /// <summary>
+/// Represents a message part that failed to deserialize as its expected type.
+/// This is not part of the GenAI standard. It exists to handle unexpected errors when reading JSON,
+/// allowing the remaining data to still be displayed.
+/// </summary>
+public class UnexpectedErrorPart : GenericPart
+{
+    [JsonIgnore]
+    public Exception? Error { get; set; }
+}
+
+/// <summary>
 /// A chat message containing a role and parts.
 /// </summary>
 public class ChatMessage
@@ -198,25 +209,52 @@ internal sealed class MessagePartConverter : JsonConverter<MessagePart>
     public override MessagePart? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         using var doc = JsonDocument.ParseValue(ref reader);
-        if (!doc.RootElement.TryGetProperty("type", out var typeProp))
+        string? type = null;
+        try
         {
-            throw new JsonException("Missing 'type' property.");
-        }
+            if (!doc.RootElement.TryGetProperty("type", out var typeProp))
+            {
+                throw new JsonException("Missing 'type' property.");
+            }
 
-        var type = typeProp.GetString();
-        return type switch
+            type = typeProp.GetString();
+
+            return type switch
+            {
+                MessagePart.TextType => doc.RootElement.Deserialize<TextPart>(options),
+                MessagePart.ToolCallType => TryParseStringArguments(doc.RootElement.Deserialize<ToolCallRequestPart>(options)),
+                MessagePart.ToolCallResponseType => doc.RootElement.Deserialize<ToolCallResponsePart>(options),
+                MessagePart.BlobType => doc.RootElement.Deserialize<BlobPart>(options),
+                MessagePart.FileType => doc.RootElement.Deserialize<FilePart>(options),
+                MessagePart.UriType => doc.RootElement.Deserialize<UriPart>(options),
+                MessagePart.ReasoningType => doc.RootElement.Deserialize<ReasoningPart>(options),
+                MessagePart.ServerToolCallType => TryParseServerToolCallArguments(doc.RootElement.Deserialize<ServerToolCallPart>(options)),
+                MessagePart.ServerToolCallResponseType => doc.RootElement.Deserialize<ServerToolCallResponsePart>(options),
+                _ => doc.RootElement.Deserialize<GenericPart>(options),
+            };
+        }
+        catch (JsonException ex)
         {
-            MessagePart.TextType => doc.RootElement.Deserialize<TextPart>(options),
-            MessagePart.ToolCallType => TryParseStringArguments(doc.RootElement.Deserialize<ToolCallRequestPart>(options)),
-            MessagePart.ToolCallResponseType => doc.RootElement.Deserialize<ToolCallResponsePart>(options),
-            MessagePart.BlobType => doc.RootElement.Deserialize<BlobPart>(options),
-            MessagePart.FileType => doc.RootElement.Deserialize<FilePart>(options),
-            MessagePart.UriType => doc.RootElement.Deserialize<UriPart>(options),
-            MessagePart.ReasoningType => doc.RootElement.Deserialize<ReasoningPart>(options),
-            MessagePart.ServerToolCallType => TryParseServerToolCallArguments(doc.RootElement.Deserialize<ServerToolCallPart>(options)),
-            MessagePart.ServerToolCallResponseType => doc.RootElement.Deserialize<ServerToolCallResponsePart>(options),
-            _ => doc.RootElement.Deserialize<GenericPart>(options),
-        };
+            var wrappedEx = new InvalidOperationException($"Error reading message part '{type ?? "(missing)"}': {ex.Message}", ex);
+
+            UnexpectedErrorPart? errorPart = null;
+            try
+            {
+                errorPart = doc.RootElement.Deserialize<UnexpectedErrorPart>(options);
+            }
+            catch
+            {
+                // Ignore. We rethrow the original exception.
+            }
+
+            if (errorPart is null)
+            {
+                throw wrappedEx;
+            }
+
+            errorPart.Error = wrappedEx;
+            return errorPart;
+        }
     }
 
     public override void Write(Utf8JsonWriter writer, MessagePart value, JsonSerializerOptions options)
@@ -264,6 +302,7 @@ internal sealed class MessagePartConverter : JsonConverter<MessagePart>
 [JsonSerializable(typeof(ServerToolCallPart))]
 [JsonSerializable(typeof(ServerToolCallResponsePart))]
 [JsonSerializable(typeof(GenericPart))]
+[JsonSerializable(typeof(UnexpectedErrorPart))]
 [JsonSerializable(typeof(ChatMessage))]
 [JsonSerializable(typeof(List<ChatMessage>))]
 public sealed partial class GenAIMessagesContext : JsonSerializerContext;

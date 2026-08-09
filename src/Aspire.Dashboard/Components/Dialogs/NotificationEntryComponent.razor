@@ -1,0 +1,44 @@
+﻿@using Aspire.Dashboard.Model
+@using Aspire.Dashboard.Otlp.Model
+@using Aspire.Dashboard.Resources
+@using Microsoft.FluentUI.AspNetCore.Components.Extensions
+@inject TimeProvider TimeProvider
+@inject IStringLocalizer<Dialogs> Loc
+
+<div class="notification-entry @IntentClass">
+    @* Header *@
+    <div class="notification-entry-icon">
+        <FluentIcon Value="@Icon" Color="@IconColor" />
+    </div>
+    <div class="notification-entry-message">
+        @Entry.Title
+    </div>
+    <div class="notification-entry-close">
+        <FluentButton Appearance="Appearance.Stealth"
+                      aria-label="@Loc[nameof(Dialogs.NotificationEntryDismiss)]"
+                      OnClick="@HandleDismiss">
+            <FluentIcon Value="@(new Icons.Regular.Size16.Dismiss())" Color="@Color.Neutral" />
+        </FluentButton>
+    </div>
+
+    @* Detailed content *@
+    <div class="notification-entry-content">
+        @if (!string.IsNullOrEmpty(Entry.Body))
+        {
+            @OtlpHelpers.TruncateString(Entry.Body, 500)
+        }
+        @if (Entry.PrimaryAction is { } primaryAction)
+        {
+            <FluentButton Appearance="Appearance.Neutral"
+                          OnClick="@HandlePrimaryAction"
+                          Class="notification-entry-action">
+                @primaryAction.Text
+            </FluentButton>
+        }
+    </div>
+
+    @* Timestamp *@
+    <div class="notification-entry-time">
+        @((TimeProvider.GetUtcNow() - Entry.Timestamp).ToTimeAgo())
+    </div>
+</div>

@@ -2,6 +2,18 @@
 
 The ATS capability scanner discovers attributes by their **full type name**, not by concrete type reference. This means third-party integration authors can define their own copies of the ATS attributes without taking a package reference to `Aspire.Hosting`, but the copied attributes must use the same namespace and type names as the built-in ones.
 
+## Use the official analyzer package
+
+If your integration project already references `Aspire.Hosting`, you can add the `Aspire.Hosting.Integration.Analyzers` package to get the same authoring diagnostics used by in-repo Aspire integrations:
+
+```xml
+<ItemGroup>
+  <PackageReference Include="Aspire.Hosting.Integration.Analyzers" Version="<Aspire package version>" PrivateAssets="all" />
+</ItemGroup>
+```
+
+The analyzer package applies automatically when referenced, so you do not need to set `EnableAspireIntegrationAnalyzers` when you consume it directly.
+
 ## How It Works
 
 The scanner looks for attributes with these exact full type names:
@@ -40,7 +52,7 @@ public sealed class AspireExportAttribute : Attribute
     }
 
     /// <summary>
-    /// Type export (parameterless). The type ID is derived as {AssemblyName}/{TypeName}.
+    /// Type export (parameterless). The type ID is derived as {AssemblyName}/{FullTypeName}.
     /// </summary>
     public AspireExportAttribute()
     {
@@ -189,5 +201,6 @@ public sealed class AddMyDatabaseOptions
 - **Constructor signatures must match by arity and argument type**: `()`, `(string)`, `(Type)` for `AspireExportAttribute`; `(params Type[])` for `AspireUnionAttribute`. Parameter names can differ.
 - **Property names must match exactly**: `Type`, `Description`, `MethodName`, `ExposeProperties`, `ExposeMethods`, `Reason`, `DtoTypeId`, `Types`.
 - **Namespaces must match exactly**: copied attributes need to be declared in the `Aspire.Hosting` namespace so their full names match the built-in ATS attributes.
+- For end-to-end behavior of assembly-level exports across multiple assemblies, see [Cross-Assembly Type Exports](../../../docs/specs/polyglot-apphost.md#cross-assembly-type-exports).
 - If you later add a reference to `Aspire.Hosting` and both your custom attribute and the official one are applied to the same member, both will be detected (the scanner takes the first match).
 - The scanner uses `CustomAttributeData` which reads metadata without instantiating the attribute, so your attribute types don't need to be loadable at scan time — only the full name and supported members must match.

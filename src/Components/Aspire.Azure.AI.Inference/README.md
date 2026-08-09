@@ -148,8 +148,8 @@ or by setting the "AZURE_EXPERIMENTAL_ENABLE_ACTIVITY_SOURCE" environment variab
 ## Additional documentation
 
 * https://learn.microsoft.com/dotnet/api/azure.ai.inference
-* https://github.com/dotnet/aspire/tree/main/src/Components/README.md
+* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

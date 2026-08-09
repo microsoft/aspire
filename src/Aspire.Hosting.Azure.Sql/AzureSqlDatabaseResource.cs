@@ -14,6 +14,7 @@ namespace Aspire.Hosting.Azure;
 /// <param name="name">The name of the resource.</param>
 /// <param name="databaseName">The database name.</param>
 /// <param name="parent">The Azure SQL Database (server) parent resource associated with this database.</param>
+/// <ats-summary>A resource that represents an Azure SQL database. This is a child resource of an <ats-see cref="!:type:AzureSqlServerResource" />.</ats-summary>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Database = {DatabaseName}")]
 [AspireExport(ExposeProperties = true)]
 public class AzureSqlDatabaseResource(string name, string databaseName, AzureSqlServerResource parent)

@@ -1,7 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Hosting.ApplicationModel;
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -34,7 +35,7 @@ public class AzureResourceOptionsTests(ITestOutputHelper output)
 
             // ensure that resources with a hyphen still have a hyphen in the bicep name
             var sqlDatabase = builder.AddAzureSqlServer("sql-server")
-                .RunAsContainer(x => x.WithLifetime(ContainerLifetime.Persistent))
+                .RunAsContainer(x => x.WithPersistentLifetime())
                 .AddDatabase("evadexdb").WithDefaultAzureSku();
 
             using var app = builder.Build();

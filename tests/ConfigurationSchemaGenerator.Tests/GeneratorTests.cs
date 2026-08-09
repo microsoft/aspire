@@ -1598,8 +1598,11 @@ public partial class GeneratorTests
             referenceAssemblies,
             outputPath);
 
+        var actual = File.ReadAllText(outputPath);
+        Assert.DoesNotContain("\r", actual);
+
         // Compare the two, normalizing line endings.
-        var actual = File.ReadAllText(outputPath).ReplaceLineEndings();
+        actual = actual.ReplaceLineEndings();
         var baseline = File.ReadAllText(Path.Combine("Baselines", "IntegrationTest.baseline.json")).ReplaceLineEndings();
         Assert.Equal(baseline, actual);
     }

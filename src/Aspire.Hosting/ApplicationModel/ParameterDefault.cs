@@ -76,6 +76,7 @@ public abstract class ParameterDefault
 /// log base 2 [67^x * 23^a * 23^b * 10^c * 11^d * (a + b + c + d)! / (a! * b! * c! * d!)]
 /// </code>
 /// </remarks>
+[AspireDto]
 public sealed class GenerateParameterDefault : ParameterDefault
 {
     /// <summary>

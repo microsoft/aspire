@@ -107,25 +107,25 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Manage CLI configuration including feature flags.</value>
+    <value>Manage CLI configuration including feature flags</value>
   </data>
   <data name="GetCommand_Description" xml:space="preserve">
-    <value>Get a configuration value.</value>
+    <value>Get a configuration value</value>
   </data>
   <data name="GetCommand_KeyArgumentDescription" xml:space="preserve">
-    <value>The configuration key to retrieve.</value>
+    <value>The configuration key to retrieve</value>
   </data>
   <data name="SetCommand_Description" xml:space="preserve">
-    <value>Set a configuration value.</value>
+    <value>Set a configuration value</value>
   </data>
   <data name="SetCommand_KeyArgumentDescription" xml:space="preserve">
-    <value>The configuration key to set.</value>
+    <value>The configuration key to set</value>
   </data>
   <data name="SetCommand_ValueArgumentDescription" xml:space="preserve">
-    <value>The configuration value to set.</value>
+    <value>The configuration value to set</value>
   </data>
   <data name="SetCommand_GlobalArgumentDescription" xml:space="preserve">
-    <value>Set the configuration value globally in $HOME/.aspire/settings.json instead of the local settings file.</value>
+    <value>Set the configuration value globally in $HOME/.aspire/settings.json instead of the local settings file</value>
   </data>
   <data name="ConfigurationKeySetLocally" xml:space="preserve">
     <value>Configuration '{0}' set to '{1}' locally.</value>
@@ -136,10 +136,10 @@
     <comment>{0} is the key, {1} is the value</comment>
   </data>
   <data name="ListCommand_Description" xml:space="preserve">
-    <value>List all configuration values.</value>
+    <value>List all configuration values</value>
   </data>
   <data name="ListCommand_AllOptionDescription" xml:space="preserve">
-    <value>Show all available features that can be configured.</value>
+    <value>Show all available features that can be configured</value>
   </data>
   <data name="ListCommand_AllFeaturesHint" xml:space="preserve">
     <value>Run 'aspire config list --all' to see all available feature flags.</value>
@@ -148,13 +148,13 @@
     <value>No configuration values found.</value>
   </data>
   <data name="DeleteCommand_Description" xml:space="preserve">
-    <value>Delete a configuration value.</value>
+    <value>Delete a configuration value</value>
   </data>
   <data name="DeleteCommand_KeyArgumentDescription" xml:space="preserve">
-    <value>The configuration key to delete.</value>
+    <value>The configuration key to delete</value>
   </data>
   <data name="DeleteCommand_GlobalArgumentDescription" xml:space="preserve">
-    <value>Delete the configuration value from the global $HOME/.aspire/settings.json instead of the local settings file.</value>
+    <value>Delete the configuration value from the global $HOME/.aspire/settings.json instead of the local settings file</value>
   </data>
   <data name="ConfigurationKeyDeletedLocally" xml:space="preserve">
     <value>Configuration '{0}' deleted locally.</value>
@@ -205,10 +205,10 @@
     <value>No global configuration found.</value>
   </data>
   <data name="InfoCommand_Description" xml:space="preserve">
-    <value>Display configuration file paths and available features.</value>
+    <value>Display configuration file paths and available features</value>
   </data>
   <data name="InfoCommand_JsonOptionDescription" xml:space="preserve">
-    <value>Output information in JSON format.</value>
+    <value>Output information in JSON format</value>
   </data>
   <data name="InfoCommand_LocalSettingsPath" xml:space="preserve">
     <value>Local settings path</value>

@@ -23,7 +23,8 @@ public static class AzureUserAssignedIdentityExtensions
     /// The resource is added to the infrastructure only if the application is not in run mode.
     /// </remarks>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureUserAssignedIdentityResource}"/> builder.</returns>
-    [AspireExport("addAzureUserAssignedIdentity", Description = "Adds an Azure user-assigned identity resource")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureUserAssignedIdentityResource> AddAzureUserAssignedIdentity(
         this IDistributedApplicationBuilder builder,
         string name)
@@ -47,9 +48,11 @@ public static class AzureUserAssignedIdentityExtensions
     /// Attaches an existing <see cref="AzureUserAssignedIdentityResource"/> to a compute resource, 
     /// setting it as the target identity for the builder.
     /// </summary>
+    /// <ats-summary>Associates an Azure user-assigned identity with a compute resource</ats-summary>
     /// <param name="builder">The builder for the <see cref="IComputeResource"/> the identity will be associated with.</param>
     /// <param name="identityResourceBuilder">The builder for the <see cref="AzureUserAssignedIdentityResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{IComputeResource}"/> builder.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <example>
     /// <code>
     /// var identity = builder.AddAzureUserAssignedIdentity("myIdentity");
@@ -57,7 +60,7 @@ public static class AzureUserAssignedIdentityExtensions
     ///     .WithAzureUserAssignedIdentity(identity);
     /// </code>
     /// </example>
-    [AspireExport("withUserAssignedIdentityAzureUserAssignedIdentity", MethodName = "withAzureUserAssignedIdentity", Description = "Associates an Azure user-assigned identity with a compute resource")]
+    [AspireExport("withUserAssignedIdentityAzureUserAssignedIdentity", MethodName = "withAzureUserAssignedIdentity")]
     public static IResourceBuilder<T> WithAzureUserAssignedIdentity<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureUserAssignedIdentityResource> identityResourceBuilder)

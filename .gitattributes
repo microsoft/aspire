@@ -48,6 +48,7 @@
 *.fsx text=auto
 *.hs text=auto
 *.json text=auto
+src/Components/**/ConfigurationSchema.json text eol=lf
 
 *.csproj text=auto
 *.vbproj text=auto
@@ -61,7 +62,7 @@
 # this only affects the repo's language statistics
 *.h linguist-language=C
 
-.github/workflows/*.lock.yml linguist-generated=true merge=ours
+.github/workflows/*.lock.yml linguist-generated=true
 
 # Text based Verify snapshot files are generated with LF endings and must stay
 # that way in the working tree, even on Windows. Binary snapshots are deliberately

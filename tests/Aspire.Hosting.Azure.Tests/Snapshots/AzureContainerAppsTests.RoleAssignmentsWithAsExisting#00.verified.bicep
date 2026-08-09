@@ -1,4 +1,4 @@
-@description('The location for the resource(s) to be deployed.')
+﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
 param env_outputs_azure_container_apps_environment_default_domain string
@@ -15,7 +15,7 @@ param api_identity_outputs_id string
 
 param api_identity_outputs_clientid string
 
-resource api 'Microsoft.App/containerApps@2025-02-02-preview' = {
+resource api 'Microsoft.App/containerApps@2025-10-02-preview' = {
   name: 'api'
   location: location
   properties: {

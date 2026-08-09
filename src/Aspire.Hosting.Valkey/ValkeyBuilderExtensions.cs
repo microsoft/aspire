@@ -107,7 +107,8 @@ public static class ValkeyBuilderExtensions
     /// </example>
     /// </remarks>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("addValkey", Description = "Adds a Valkey container resource")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<ValkeyResource> AddValkey(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -144,8 +145,9 @@ public static class ValkeyBuilderExtensions
             .WithEndpoint(port: port, targetPort: 6379, name: ValkeyResource.PrimaryEndpointName)
             .WithImage(ValkeyContainerImageTags.Image, ValkeyContainerImageTags.Tag)
             .WithImageRegistry(ValkeyContainerImageTags.Registry)
+            .WithIconName("Database")
             .WithHealthCheck(healthCheckKey)
-            // see https://github.com/dotnet/aspire/issues/3838 for why the password is passed this way
+            // see https://github.com/microsoft/aspire/issues/3838 for why the password is passed this way
             .WithEntrypoint("/bin/sh")
             .WithEnvironment(context =>
             {
@@ -202,8 +204,10 @@ public static class ValkeyBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withDataVolume", Description = "Adds a data volume for Valkey and enables persistence")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<ValkeyResource> WithDataVolume(
         this IResourceBuilder<ValkeyResource> builder,
         string? name = null,
@@ -240,8 +244,10 @@ public static class ValkeyBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withDataBindMount", Description = "Adds a data bind mount for Valkey and enables persistence")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<ValkeyResource> WithDataBindMount(
         this IResourceBuilder<ValkeyResource> builder,
         string source,
@@ -276,8 +282,10 @@ public static class ValkeyBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withPersistence", Description = "Configures Valkey persistence")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<ValkeyResource> WithPersistence(
         this IResourceBuilder<ValkeyResource> builder,
         TimeSpan? interval = null,

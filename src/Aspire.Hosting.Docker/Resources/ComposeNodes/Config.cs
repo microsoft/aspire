@@ -13,6 +13,7 @@ namespace Aspire.Hosting.Docker.Resources.ComposeNodes;
 /// file-based or external configurations. It includes properties to define the
 /// source file, external flag, custom name, and additional labels for the configuration.
 /// </remarks>
+[AspireExport(ExposeProperties = true)]
 [YamlSerializable]
 public sealed class Config : NamedComposeMember
 {
@@ -50,4 +51,3 @@ public sealed class Config : NamedComposeMember
     [YamlMember(Alias = "labels", DefaultValuesHandling = DefaultValuesHandling.OmitEmptyCollections)]
     public Dictionary<string, string> Labels { get; set; } = [];
 }
-

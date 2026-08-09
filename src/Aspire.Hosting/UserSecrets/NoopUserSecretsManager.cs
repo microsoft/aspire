@@ -30,6 +30,12 @@ internal sealed class NoopUserSecretsManager : IUserSecretsManager
         return false;
     }
 
+    public bool TryDeleteSecret(string name)
+    {
+        Debug.WriteLine($"User secrets are not enabled. Cannot delete secret '{name}'.");
+        return false;
+    }
+
     public void GetOrSetSecret(IConfigurationManager configuration, string name, Func<string> valueGenerator)
     {
         Debug.WriteLine($"User secrets are not enabled. Generating and adding secret '{name}' to configuration in-memory.");

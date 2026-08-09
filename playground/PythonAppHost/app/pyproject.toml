@@ -1,0 +1,13 @@
+[project]
+name = "pythonapphost-backend"
+version = "0.1.0"
+description = "Python backend for the PythonAppHost playground"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi[standard]>=0.119.0",
+    "opentelemetry-distro>=0.59b0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.38.0",
+    "opentelemetry-instrumentation-fastapi>=0.59b0",
+    "opentelemetry-instrumentation-redis>=0.59b0",
+    "redis>=6.4.0",
+]

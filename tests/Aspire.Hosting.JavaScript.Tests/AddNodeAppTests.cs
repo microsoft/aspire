@@ -3,15 +3,25 @@
 
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only
 
+using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Hosting.JavaScript.Tests;
 
-public class AddNodeAppTests
+public class AddNodeAppTests(ITestOutputHelper outputHelper)
 {
+    private static readonly MethodInfo s_polyglotWithReferenceMethod = typeof(ResourceBuilderExtensions)
+        .GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
+        .Single(m => m.Name == nameof(ResourceBuilderExtensions.WithReference)
+            && m.IsGenericMethodDefinition
+            && m.GetParameters() is { Length: 5 } parameters
+            && parameters[1].ParameterType == typeof(IResourceBuilder<IResource>));
+
     [Fact]
     public async Task VerifyManifest()
     {
@@ -86,10 +96,10 @@ public class AddNodeAppTests
     [InlineData(false)]
     public async Task VerifyDockerfile(bool includePackageJson)
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "js");
+        var appDir = Path.Combine(workspace.Path, "js");
         Directory.CreateDirectory(appDir);
 
         if (includePackageJson)
@@ -100,9 +110,9 @@ public class AddNodeAppTests
 
         var nodeApp = builder.AddNodeApp("js", appDir, "app.js");
 
-        await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(nodeApp.Resource, workspace.Path);
 
-        var dockerfilePath = Path.Combine(tempDir.Path, "js.Dockerfile");
+        var dockerfilePath = Path.Combine(workspace.Path, "js.Dockerfile");
         var dockerfileContents = File.ReadAllText(dockerfilePath);
         var expectedDockerfile = includePackageJson ?
             """
@@ -154,10 +164,10 @@ public class AddNodeAppTests
     [Fact]
     public async Task VerifyDockerfileWithBuildScript()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "js");
+        var appDir = Path.Combine(workspace.Path, "js");
         Directory.CreateDirectory(appDir);
         File.WriteAllText(Path.Combine(appDir, "package.json"), "{}");
 
@@ -169,9 +179,9 @@ public class AddNodeAppTests
             .WithAnnotation(new JavaScriptInstallCommandAnnotation(["myinstall"]))
             .WithBuildScript("mybuild");
 
-        await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(nodeApp.Resource, workspace.Path);
 
-        var dockerfilePath = Path.Combine(tempDir.Path, "js.Dockerfile");
+        var dockerfilePath = Path.Combine(workspace.Path, "js.Dockerfile");
         var dockerfileContents = File.ReadAllText(dockerfilePath);
         var expectedDockerfile = $"""
             FROM node:22-alpine AS build
@@ -201,10 +211,10 @@ public class AddNodeAppTests
     [Fact]
     public async Task VerifyDockerfileWithCustomBaseImage()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "js");
+        var appDir = Path.Combine(workspace.Path, "js");
         Directory.CreateDirectory(appDir);
         File.WriteAllText(Path.Combine(appDir, "package.json"), "{}");
 
@@ -214,10 +224,10 @@ public class AddNodeAppTests
             .WithNpm(install: true)
             .WithDockerfileBaseImage(customBuildImage, customRuntimeImage);
 
-        await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(nodeApp.Resource, workspace.Path);
 
         // Verify the Dockerfile contains the custom base image
-        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "js.Dockerfile"));
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
         Assert.Contains($"FROM {customBuildImage}", dockerfileContents);
         Assert.Contains($"FROM {customRuntimeImage}", dockerfileContents);
     }
@@ -225,12 +235,12 @@ public class AddNodeAppTests
     [Fact]
     public void AddNodeApp_DoesNotAddNpmWhenNoPackageJson()
     {
-        var tempDir = new TestTempDirectory();
-        File.WriteAllText(Path.Combine(tempDir.Path, "app.js"), "{}");
+        var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.Path, "app.js"), "{}");
 
         var builder = DistributedApplication.CreateBuilder();
 
-        builder.AddNodeApp("nodeapp", tempDir.Path, "app.js");
+        builder.AddNodeApp("nodeapp", workspace.Path, "app.js");
 
         using var app = builder.Build();
 
@@ -252,12 +262,12 @@ public class AddNodeAppTests
     [Fact]
     public void AddNodeApp_AddsNpmWhenPackageJsonExists()
     {
-        var tempDir = new TestTempDirectory();
-        File.WriteAllText(Path.Combine(tempDir.Path, "package.json"), "{}");
+        var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.Path, "package.json"), "{}");
 
         var builder = DistributedApplication.CreateBuilder();
 
-        builder.AddNodeApp("nodeapp", tempDir.Path, "app.js");
+        builder.AddNodeApp("nodeapp", workspace.Path, "app.js");
 
         using var app = builder.Build();
 
@@ -307,9 +317,10 @@ public class AddNodeAppTests
     [Fact]
     public async Task VerifyNodeAppWithContainerFilesGeneratesCorrectDockerfile()
     {
-        using var sourceDir = new TestTempDirectory();
-        using var outputDir = new TestTempDirectory();
-        var appDirectory = sourceDir.Path;
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        var outputDir = workspace.CreateDirectory("output");
+        var appDirectory = sourceDir.FullName;
 
         // Create a simple Node.js app
         var packageJsonContent = """
@@ -329,7 +340,7 @@ public class AddNodeAppTests
         File.WriteAllText(Path.Combine(appDirectory, "package.json"), packageJsonContent);
         File.WriteAllText(Path.Combine(appDirectory, "app.js"), appContent);
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
 
         var nodeApp = builder.AddNodeApp("nodeapp", appDirectory, "app.js");
 
@@ -352,7 +363,7 @@ public class AddNodeAppTests
         await app.RunAsync();
 
         // Verify that Dockerfile was generated for the NodeApp
-        var nodeDockerfilePath = Path.Combine(outputDir.Path, "nodeapp.Dockerfile");
+        var nodeDockerfilePath = Path.Combine(outputDir.FullName, "nodeapp.Dockerfile");
         Assert.True(File.Exists(nodeDockerfilePath), "Dockerfile should be generated for NodeApp");
 
         var dockerfileContent = File.ReadAllText(nodeDockerfilePath);
@@ -363,9 +374,10 @@ public class AddNodeAppTests
     [Fact]
     public async Task VerifyNodeAppWithContainerFilesFromResourceWithDashesGeneratesCorrectDockerfile()
     {
-        using var sourceDir = new TestTempDirectory();
-        using var outputDir = new TestTempDirectory();
-        var appDirectory = sourceDir.Path;
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        var outputDir = workspace.CreateDirectory("output");
+        var appDirectory = sourceDir.FullName;
 
         // Create a simple Node.js app
         var packageJsonContent = """
@@ -385,7 +397,7 @@ public class AddNodeAppTests
         File.WriteAllText(Path.Combine(appDirectory, "package.json"), packageJsonContent);
         File.WriteAllText(Path.Combine(appDirectory, "app.js"), appContent);
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
 
         var nodeApp = builder.AddNodeApp("nodeapp", appDirectory, "app.js");
 
@@ -408,7 +420,7 @@ public class AddNodeAppTests
         await app.RunAsync();
 
         // Verify that Dockerfile was generated for the NodeApp
-        var nodeDockerfilePath = Path.Combine(outputDir.Path, "nodeapp.Dockerfile");
+        var nodeDockerfilePath = Path.Combine(outputDir.FullName, "nodeapp.Dockerfile");
         Assert.True(File.Exists(nodeDockerfilePath), "Dockerfile should be generated for NodeApp");
 
         var dockerfileContent = File.ReadAllText(nodeDockerfilePath);
@@ -420,14 +432,15 @@ public class AddNodeAppTests
         : ExecutableResource(name, command, workingDirectory), IResourceWithContainerFiles;
 
 #pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREJAVASCRIPT001 // Type is for evaluation purposes only
 
     [Fact]
     public void NodeApp_WithVSCodeDebugging_AddsSupportsDebuggingAnnotation()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var nodeApp = builder.AddNodeApp("nodeapp", tempDir.Path, "app.js");
+        var nodeApp = builder.AddNodeApp("nodeapp", workspace.Path, "app.js");
 
         var annotation = nodeApp.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
@@ -438,9 +451,9 @@ public class AddNodeAppTests
     public void NodeApp_WithVSCodeDebugging_DoesNotAddAnnotationInPublishMode()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var nodeApp = builder.AddNodeApp("nodeapp", tempDir.Path, "app.js");
+        var nodeApp = builder.AddNodeApp("nodeapp", workspace.Path, "app.js");
 
         var annotation = nodeApp.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
         Assert.Null(annotation);
@@ -450,9 +463,9 @@ public class AddNodeAppTests
     public void ViteApp_WithVSCodeDebugging_AddsSupportsDebuggingAnnotation()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var viteApp = builder.AddViteApp("viteapp", tempDir.Path);
+        var viteApp = builder.AddViteApp("viteapp", workspace.Path);
 
         var annotation = viteApp.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
@@ -463,9 +476,9 @@ public class AddNodeAppTests
     public void ViteApp_WithBrowserDebugger_CreatesChildResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var viteApp = builder.AddViteApp("viteapp", tempDir.Path)
+        var viteApp = builder.AddViteApp("viteapp", workspace.Path)
             .WithBrowserDebugger();
 
         using var app = builder.Build();
@@ -490,9 +503,9 @@ public class AddNodeAppTests
     public void ViteApp_WithBrowserDebugger_DefaultsToEdgeBrowser()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var viteApp = builder.AddViteApp("viteapp", tempDir.Path)
+        var viteApp = builder.AddViteApp("viteapp", workspace.Path)
             .WithBrowserDebugger();
 
         using var app = builder.Build();
@@ -507,9 +520,9 @@ public class AddNodeAppTests
     public void ViteApp_WithBrowserDebugger_UsesSpecifiedBrowser()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var viteApp = builder.AddViteApp("viteapp", tempDir.Path)
+        var viteApp = builder.AddViteApp("viteapp", workspace.Path)
             .WithBrowserDebugger(browser: "chrome");
 
         using var app = builder.Build();
@@ -523,10 +536,10 @@ public class AddNodeAppTests
     public void ViteApp_WithBrowserDebugger_WithoutEndpoint_DeferredValidation()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         // Create a minimal JavaScriptAppResource without endpoints
-        var resource = new JavaScriptAppResource("jsapp", "npm", tempDir.Path);
+        var resource = new JavaScriptAppResource("jsapp", "npm", workspace.Path);
         var jsApp = builder.AddResource(resource);
 
         // WithBrowserDebugger no longer throws immediately; endpoint validation is deferred
@@ -541,5 +554,91 @@ public class AddNodeAppTests
         Assert.NotNull(browserDebuggerResource);
     }
 
+    [Fact]
+    public async Task WithReferenceDispatchesNodeAppServiceReference()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        File.WriteAllText(Path.Combine(workspace.Path, "app.js"), "console.log('hello');");
+
+        var nodeApp = builder.AddNodeApp("nodeapp", workspace.Path, "app.js")
+            .WithHttpEndpoint(port: 5031, env: "PORT")
+            .WithEndpoint("http", e =>
+            {
+                e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 5031);
+                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "nodeapp.dev.internal", 5031, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+            });
+        var consumer = builder.AddContainer("consumer", "fake");
+
+        InvokeWithReference(consumer, nodeApp, name: "custom-name");
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(consumer.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        Assert.Equal("http://nodeapp.dev.internal:5031", config["services__custom-name__http__0"]);
+        Assert.Equal("http://nodeapp.dev.internal:5031", config["custom_name_HTTP"]);
+    }
+
+    private static IResourceBuilder<TDestination> InvokeWithReference<TDestination>(
+        IResourceBuilder<TDestination> builder,
+        IResourceBuilder<IResource> source,
+        string? connectionName = null,
+        bool optional = false,
+        string? name = null)
+        where TDestination : IResourceWithEnvironment
+    {
+        return (IResourceBuilder<TDestination>)s_polyglotWithReferenceMethod
+            .MakeGenericMethod(typeof(TDestination))
+            .Invoke(null, [builder, source, connectionName, optional, name])!;
+    }
+
+    [Fact]
+    public async Task NodeApp_DirectFile_ProducesNodeRuntimeExecutable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var nodeApp = builder.AddNodeApp("nodeapp", workspace.Path, "app.js");
+
+        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(nodeApp.Resource);
+
+        Assert.Equal("node", launchConfig.Type);
+        Assert.Equal("node", launchConfig.RuntimeExecutable);
+        Assert.Equal("direct", launchConfig.LaunchMethod);
+        Assert.Equal(Path.GetFullPath("app.js", workspace.Path), launchConfig.ScriptPath);
+    }
+
+    [Fact]
+    public async Task ViteApp_DevServer_ProducesPackageManagerRuntimeExecutable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var viteApp = builder.AddViteApp("viteapp", workspace.Path);
+
+        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(viteApp.Resource);
+
+        // Vite/Next.js/AddJavaScriptApp always debug through the Node adapter via a package-manager dev
+        // server. With no package.json present, the runtime executable falls back to "npm".
+        Assert.Equal("node", launchConfig.Type);
+        Assert.Equal("npm", launchConfig.RuntimeExecutable);
+        Assert.Equal("package-manager", launchConfig.LaunchMethod);
+        Assert.Equal(string.Empty, launchConfig.ScriptPath);
+    }
+
+    private static async Task<JavaScriptLaunchConfiguration> InvokeLaunchConfigurationAnnotatorAsync(IResource resource)
+    {
+        Assert.True(resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
+
+        var exe = Executable.Create("test", "node");
+        await supportsDebugging.LaunchConfigurationAnnotator(exe, ExecutableLaunchMode.Debug, CancellationToken.None);
+
+        Assert.True(exe.TryGetAnnotationAsObjectList<JavaScriptLaunchConfiguration>(
+            Executable.LaunchConfigurationsAnnotation,
+            out var launchConfigs));
+        return Assert.Single(launchConfigs);
+    }
+
 #pragma warning restore ASPIREEXTENSION001 // Type is for evaluation purposes only
+#pragma warning restore ASPIREJAVASCRIPT001 // Type is for evaluation purposes only
 }

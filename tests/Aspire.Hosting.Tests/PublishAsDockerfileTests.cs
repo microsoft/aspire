@@ -9,18 +9,18 @@ using Microsoft.AspNetCore.InternalTesting;
 namespace Aspire.Hosting.Tests;
 
 [Trait("Partition", "5")]
-public class PublishAsDockerfileTests
+public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task PublishAsDockerFileConfiguresManifestWithoutBuildArgs()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        using var tempDir = CreateDirectoryWithDockerFile();
+        using var workspace = CreateDirectoryWithDockerFile();
 
-        var path = tempDir.Path;
+        var path = workspace.WorkspaceRoot.FullName;
 
-        var frontend = builder.AddJavaScriptApp("frontend", path, "watch")
+        var frontend = builder.AddJavaScriptApp("frontend", path)
             .PublishAsDockerFile();
 
         // There should be an equivalent container resource with the same name
@@ -54,12 +54,12 @@ public class PublishAsDockerfileTests
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        using var tempDir = CreateDirectoryWithDockerFile();
+        using var workspace = CreateDirectoryWithDockerFile();
 
-        var path = tempDir.Path;
+        var path = workspace.WorkspaceRoot.FullName;
 
 #pragma warning disable CS0618 // Type or member is obsolete
-        var frontend = builder.AddJavaScriptApp("frontend", path, "watch")
+        var frontend = builder.AddJavaScriptApp("frontend", path)
             .PublishAsDockerFile(buildArgs: [
                 new DockerBuildArg("SOME_STRING", "Test"),
                 new DockerBuildArg("SOME_BOOL", true),
@@ -107,12 +107,12 @@ public class PublishAsDockerfileTests
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        using var tempDir = CreateDirectoryWithDockerFile();
+        using var workspace = CreateDirectoryWithDockerFile();
 
-        var path = tempDir.Path;
+        var path = workspace.WorkspaceRoot.FullName;
 
 #pragma warning disable CS0618 // Type or member is obsolete
-        var frontend = builder.AddJavaScriptApp("frontend", path, "watch")
+        var frontend = builder.AddJavaScriptApp("frontend", path)
             .PublishAsDockerFile(buildArgs: [
                 new DockerBuildArg("SOME_ARG")
             ]);
@@ -152,13 +152,13 @@ public class PublishAsDockerfileTests
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        using var tempDir = CreateDirectoryWithDockerFile();
+        using var workspace = CreateDirectoryWithDockerFile();
 
-        var path = tempDir.Path;
+        var path = workspace.WorkspaceRoot.FullName;
 
         var secret = builder.AddParameter("secret", secret: true);
 
-        var frontend = builder.AddJavaScriptApp("frontend", path, "watch")
+        var frontend = builder.AddJavaScriptApp("frontend", path)
             .WithArgs("/usr/foo")
             .PublishAsDockerFile(c =>
             {
@@ -214,9 +214,9 @@ public class PublishAsDockerfileTests
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        using var tempDir = CreateDirectoryWithDockerFile();
+        using var workspace = CreateDirectoryWithDockerFile();
 
-        var path = tempDir.Path;
+        var path = workspace.WorkspaceRoot.FullName;
         var projectPath = Path.Combine(path, "project.csproj");
 
         var project = builder.AddProject("project", projectPath, o => o.ExcludeLaunchProfile = true)
@@ -270,8 +270,8 @@ public class PublishAsDockerfileTests
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        using var tempDir = CreateDirectoryWithDockerFile();
-        var path = tempDir.Path;
+        using var workspace = CreateDirectoryWithDockerFile();
+        var path = workspace.WorkspaceRoot.FullName;
         var projectPath = Path.Combine(path, "project.csproj");
 
         var project = builder.AddProject("project", projectPath, o => o.ExcludeLaunchProfile = true)
@@ -287,8 +287,8 @@ public class PublishAsDockerfileTests
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        using var tempDir = CreateDirectoryWithDockerFile();
-        var path = tempDir.Path;
+        using var workspace = CreateDirectoryWithDockerFile();
+        var path = workspace.WorkspaceRoot.FullName;
         var projectPath = Path.Combine(path, "project.csproj");
 
         var project = builder.AddProject("project", projectPath, o => o.ExcludeLaunchProfile = true)
@@ -307,8 +307,8 @@ public class PublishAsDockerfileTests
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        using var tempDir = CreateDirectoryWithDockerFile();
-        var path = tempDir.Path;
+        using var workspace = CreateDirectoryWithDockerFile();
+        var path = workspace.WorkspaceRoot.FullName;
         var projectPath = Path.Combine(path, "project.csproj");
 
         var project = builder.AddProject("project", projectPath, o => o.ExcludeLaunchProfile = true)
@@ -330,8 +330,8 @@ public class PublishAsDockerfileTests
     public void PublishProjectAsDockerFile_WithLaunchSettingsHttpAndHttps_EndpointsGetDefaultTargetPort()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        using var tempDir = CreateDirectoryWithDockerFile();
-        var path = tempDir.Path;
+        using var workspace = CreateDirectoryWithDockerFile();
+        var path = workspace.WorkspaceRoot.FullName;
         var projectPath = Path.Combine(path, "project.csproj");
 
         var project = builder.AddProject<TestProjectWithHttpAndHttpsProfile>("project", o => o.LaunchProfileName = "https")
@@ -360,10 +360,10 @@ public class PublishAsDockerfileTests
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        using var tempDir = CreateDirectoryWithDockerFile();
-        var path = tempDir.Path;
+        using var workspace = CreateDirectoryWithDockerFile();
+        var path = workspace.WorkspaceRoot.FullName;
 
-        var frontend = builder.AddJavaScriptApp("frontend", path, "watch")
+        var frontend = builder.AddJavaScriptApp("frontend", path)
             .PublishAsDockerFile()
             .PublishAsDockerFile(); // Call again - should not throw
 
@@ -377,11 +377,11 @@ public class PublishAsDockerfileTests
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        using var tempDir = CreateDirectoryWithDockerFile();
-        var path = tempDir.Path;
+        using var workspace = CreateDirectoryWithDockerFile();
+        var path = workspace.WorkspaceRoot.FullName;
 
         var callbackCount = 0;
-        var frontend = builder.AddJavaScriptApp("frontend", path, "watch")
+        var frontend = builder.AddJavaScriptApp("frontend", path)
             .PublishAsDockerFile(c =>
             {
                 callbackCount++;
@@ -406,8 +406,8 @@ public class PublishAsDockerfileTests
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        using var tempDir = CreateDirectoryWithDockerFile();
-        var path = tempDir.Path;
+        using var workspace = CreateDirectoryWithDockerFile();
+        var path = workspace.WorkspaceRoot.FullName;
         var projectPath = Path.Combine(path, "project.csproj");
 
         var project = builder.AddProject("project", projectPath, o => o.ExcludeLaunchProfile = true)
@@ -423,8 +423,8 @@ public class PublishAsDockerfileTests
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        using var tempDir = CreateDirectoryWithDockerFile();
-        var path = tempDir.Path;
+        using var workspace = CreateDirectoryWithDockerFile();
+        var path = workspace.WorkspaceRoot.FullName;
 
         var projectPath = Path.Combine(path, "project.csproj");
 
@@ -448,11 +448,72 @@ public class PublishAsDockerfileTests
         Assert.Equal(2, callbackCount);
     }
 
-    private static TestTempDirectory CreateDirectoryWithDockerFile()
+    [Fact]
+    public void WithBuildArgWithoutDockerfileIncludesResourceName()
     {
-        var tempDir = new TestTempDirectory();
-        File.WriteAllText(Path.Join(tempDir.Path, "Dockerfile"), "this does not matter");
-        return tempDir;
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var container = builder.AddContainer("api", "api:latest");
+
+        var exception = Assert.Throws<InvalidOperationException>(() => container.WithBuildArg("ARG1", "value1"));
+
+        Assert.Equal("The resource 'api' does not have a Dockerfile build annotation. Call WithDockerfile before calling WithBuildArg.", exception.Message);
+    }
+
+    [Fact]
+    public void WithBuildArgWithSecretParameterIncludesResourceName()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        using var workspace = CreateDirectoryWithDockerFile();
+
+        var secret = builder.AddParameter("secret-param", secret: true);
+        var container = builder.AddContainer("api", "api:latest")
+            .WithDockerfile(workspace.WorkspaceRoot.FullName);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => container.WithBuildArg("ARG1", secret));
+
+        Assert.Equal("Cannot add secret parameter 'secret-param' as build argument 'ARG1' while configuring resource 'api'. Use WithBuildSecret instead.", exception.Message);
+    }
+
+    [Fact]
+    public void WithBuildSecretWithoutDockerfileIncludesResourceName()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var secret = builder.AddParameter("secret-param", secret: true);
+        var container = builder.AddContainer("api", "api:latest");
+
+        var exception = Assert.Throws<InvalidOperationException>(() => container.WithBuildSecret("SECRET1", secret));
+
+        Assert.Equal("The resource 'api' does not have a Dockerfile build annotation. Call WithDockerfile before calling WithBuildSecret.", exception.Message);
+    }
+
+    [Fact]
+    public async Task ManifestPublishingProjectWithoutMetadataIncludesResourceName()
+    {
+        var project = new ProjectResource("project-without-metadata");
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => ManifestUtils.GetManifest(project));
+
+        Assert.Equal("Project metadata was not found for resource 'project-without-metadata'.", exception.Message);
+    }
+
+    [Fact]
+    public async Task ManifestPublishingContainerWithoutImageNameIncludesResourceName()
+    {
+        var container = new ContainerResource("container-without-image");
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => ManifestUtils.GetManifest(container));
+
+        Assert.Equal("Could not get the container image name for resource 'container-without-image'.", exception.Message);
+    }
+
+    private TemporaryWorkspace CreateDirectoryWithDockerFile()
+    {
+        var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Join(workspace.Path, "Dockerfile"), "this does not matter");
+        return workspace;
     }
 
     private sealed class TestProject : IProjectMetadata

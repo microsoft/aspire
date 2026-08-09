@@ -1,0 +1,39 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetRids Condition="'$(TargetRids)' == ''">$([System.Runtime.InteropServices.RuntimeInformation]::RuntimeIdentifier)</TargetRids>
+  </PropertyGroup>
+
+  <!-- Keep this condition in sync with the native and bundle dependency project selection
+       in eng/Build.props. This target packs Aspire.Cli.Tool from the native archive output,
+       which depends on those projects being included in the build. -->
+  <Target Name="_PackCliDotnetToolAfterPack"
+          BeforeTargets="Pack"
+          Condition="'$(SkipNativeBuild)' != 'true' and '$(BuildBundleDepsOnly)' != 'true'">
+    <ItemGroup>
+      <_CliToolPackRid Include="$(TargetRids.Split(':'))" />
+      <_CliToolPackProject Include="@(_CliToolPackRid -> '$(RepoRoot)eng\clipack\Aspire.Cli.%(Identity).csproj')" />
+      <_MissingCliToolPackProject Include="@(_CliToolPackProject)" Condition="!Exists('%(Identity)')" />
+    </ItemGroup>
+
+    <Error Condition="@(_MissingCliToolPackProject) != ''"
+           Text="Missing CLI dotnet tool pack project(s): @(_MissingCliToolPackProject, ', ')" />
+
+    <Message Importance="High"
+             Text="Packing CLI dotnet tool package(s) from native archive output for TargetRids=$(TargetRids)." />
+
+    <ItemGroup>
+      <_CliToolPackProperties Include="Configuration=$(Configuration)" />
+      <_CliToolPackProperties Include="ContinuousIntegrationBuild=$(ContinuousIntegrationBuild)" />
+      <_CliToolPackProperties Condition="'$(VersionSuffix)' != ''" Include="VersionSuffix=$(VersionSuffix)" />
+      <_CliToolPackProperties Condition="'$(OfficialBuildId)' != ''" Include="OfficialBuildId=$(OfficialBuildId)" />
+      <_CliToolPackProperties Condition="'$(TreatWarningsAsErrors)' != ''" Include="TreatWarningsAsErrors=$(TreatWarningsAsErrors)" />
+    </ItemGroup>
+
+    <MSBuild Projects="@(_CliToolPackProject)"
+             Targets="PackDotnetTool"
+             Properties="@(_CliToolPackProperties)"
+             BuildInParallel="false" />
+  </Target>
+
+</Project>

@@ -3,8 +3,18 @@
   <file datatype="xml" source-language="en" target-language="zh-Hans" original="../PsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>List running apphosts.</source>
-        <target state="translated">列出正在运行的 apphosts。</target>
+        <source>List running AppHosts</source>
+        <target state="needs-review-translation">列出正在运行的 Aspire AppHost。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FollowOptionDescription">
+        <source>Keep running and emit updates as running AppHosts change. JSON output is emitted as newline-delimited full snapshots.</source>
+        <target state="new">Keep running and emit updates as running AppHosts change. JSON output is emitted as newline-delimited full snapshots.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FollowRequiresJson">
+        <source>The --follow option only supports JSON output. Use --format json.</source>
+        <target state="new">The --follow option only supports JSON output. Use --format json.</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderCliPid">
@@ -27,14 +37,14 @@
         <target state="translated">PID</target>
         <note />
       </trans-unit>
-      <trans-unit id="JsonOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">输出格式(表格或 Json)。</target>
+      <trans-unit id="HeaderSdk">
+        <source>SDK</source>
+        <target state="new">SDK</target>
         <note />
       </trans-unit>
-      <trans-unit id="ResourcesOptionDescription">
-        <source>Include resource details for each running app host. Only applies to JSON output.</source>
-        <target state="translated">包括每个正在运行的应用主机的资源详细信息。仅适用于 JSON 输出。</target>
+      <trans-unit id="JsonOptionDescription">
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">以 JSON 格式输出。</target>
         <note />
       </trans-unit>
       <trans-unit id="UnknownPath">

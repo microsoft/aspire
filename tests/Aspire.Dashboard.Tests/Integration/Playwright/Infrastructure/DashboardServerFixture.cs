@@ -3,6 +3,7 @@
 
 using System.Reflection;
 using Aspire.Dashboard.Configuration;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
@@ -20,6 +21,8 @@ public class DashboardServerFixture : IAsyncLifetime
     // Can't have multiple fixtures when one is generic. Workaround by nesting playwright fixture.
     public PlaywrightFixture PlaywrightFixture { get; }
 
+    protected virtual IReadOnlyList<ResourceViewModel>? Resources => null;
+
     public DashboardServerFixture()
     {
         PlaywrightFixture = new PlaywrightFixture();
@@ -29,8 +32,7 @@ public class DashboardServerFixture : IAsyncLifetime
             [DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = "http://127.0.0.1:0",
             [DashboardConfigNames.DashboardOtlpHttpUrlName.ConfigKey] = "http://127.0.0.1:0",
             [DashboardConfigNames.DashboardOtlpAuthModeName.ConfigKey] = nameof(OtlpAuthMode.Unsecured),
-            [DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = nameof(FrontendAuthMode.Unsecured),
-            [DashboardConfigNames.DashboardMcpAuthModeName.ConfigKey] = nameof(McpAuthMode.Unsecured)
+            [DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = nameof(FrontendAuthMode.Unsecured)
         };
     }
 
@@ -57,7 +59,7 @@ public class DashboardServerFixture : IAsyncLifetime
             preConfigureBuilder: builder =>
             {
                 builder.Configuration.AddConfiguration(config);
-                builder.Services.AddSingleton<IDashboardClient, MockDashboardClient>();
+                builder.Services.AddSingleton<IDashboardClient>(new MockDashboardClient(Resources));
             });
 
         await DashboardApp.StartAsync();

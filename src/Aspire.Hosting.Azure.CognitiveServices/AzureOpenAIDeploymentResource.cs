@@ -97,15 +97,11 @@ public class AzureOpenAIDeploymentResource : Resource, IResourceWithParent<Azure
     /// <summary>
     /// Gets the parent Azure OpenAI resource.
     /// </summary>
-    /// <remarks>This property is not available in polyglot app hosts.</remarks>
-    [AspireExportIgnore]
     public AzureOpenAIResource Parent { get; }
 
     /// <summary>
     /// Gets the connection string expression for the Azure OpenAI Deployment resource.
     /// </summary>
-    /// <remarks>This property is not available in polyglot app hosts.</remarks>
-    [AspireExportIgnore]
     public ReferenceExpression ConnectionStringExpression => Parent.GetConnectionString(DeploymentName);
 
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()

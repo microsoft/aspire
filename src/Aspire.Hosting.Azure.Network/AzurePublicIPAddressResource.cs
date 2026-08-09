@@ -26,7 +26,7 @@ public class AzurePublicIPAddressResource(string name, Action<AzureResourceInfra
     /// <summary>
     /// Gets the "name" output reference for the resource.
     /// </summary>
-    public BicepOutputReference NameOutput => new("name", this);
+    public BicepOutputReference NameOutputReference => new("name", this);
 
     /// <summary>
     /// Gets the "ipAddress" output reference containing the allocated IP address for the resource.
@@ -50,7 +50,7 @@ public class AzurePublicIPAddressResource(string name, Action<AzureResourceInfra
 
         if (!TryApplyExistingResourceAnnotation(this, infra, pip))
         {
-            pip.Name = NameOutput.AsProvisioningParameter(infra);
+            pip.Name = NameOutputReference.AsProvisioningParameter(infra);
         }
 
         infra.Add(pip);

@@ -314,9 +314,7 @@ public class AzurePostgresFlexibleServerResource(string name, Action<AzureResour
         return propertiesDictionary;
     }
 
-    BicepOutputReference IAzurePrivateEndpointTarget.Id => Id;
-
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["postgresqlServer"];
 
-    string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.postgres.database.azure.com";
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() => ["privatelink.postgres.database.azure.com"];
 }

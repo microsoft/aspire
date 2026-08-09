@@ -3,7 +3,6 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
-using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Resources;
 
@@ -14,7 +13,7 @@ internal static class LaunchProfileExtensions
     // Allow list of command names that are supported by Aspire
     private static readonly string[] s_allowedCommandNames = ["Project", "Executable"];
 
-    internal static LaunchSettings? GetLaunchSettings(this ProjectResource projectResource)
+    internal static LaunchSettings? GetLaunchSettings(this IResource projectResource)
     {
         if (!projectResource.TryGetLastAnnotation<IProjectMetadata>(out var projectMetadata))
         {
@@ -31,7 +30,7 @@ internal static class LaunchProfileExtensions
         return projectMetadata.GetLaunchSettings(projectResource.Name);
     }
 
-    internal static NamedLaunchProfile? GetEffectiveLaunchProfile(this ProjectResource projectResource, bool throwIfNotFound = false)
+    internal static NamedLaunchProfile? GetEffectiveLaunchProfile(this IResource projectResource, bool throwIfNotFound = false)
     {
         string? launchProfileName = projectResource.SelectLaunchProfileName();
         if (string.IsNullOrEmpty(launchProfileName))
@@ -48,7 +47,7 @@ internal static class LaunchProfileExtensions
         return new NamedLaunchProfile(launchProfileName, launchProfile);
     }
 
-    internal static LaunchProfile? GetLaunchProfile(this ProjectResource projectResource, string launchProfileName, bool throwIfNotFound = false)
+    internal static LaunchProfile? GetLaunchProfile(this IResource projectResource, string launchProfileName, bool throwIfNotFound = false)
     {
         var profiles = projectResource.GetLaunchSettings()?.Profiles;
         if (profiles is null)
@@ -109,19 +108,7 @@ internal static class LaunchProfileExtensions
             }
         }
 
-        using var stream = File.OpenRead(launchSettingsFilePath);
-
-        try
-        {
-            var settings = JsonSerializer.Deserialize(stream, LaunchSettingsSerializerContext.Default.LaunchSettings);
-            return settings;
-        }
-        catch (JsonException ex)
-        {
-            var message = $"Failed to get effective launch profile for project resource '{resourceName}'. There is malformed JSON in the project's launch settings file at '{launchSettingsFilePath}'.";
-            throw new DistributedApplicationException(message, ex);
-        }
-
+        return LaunchSettingsReader.ReadLaunchSettingsFile(launchSettingsFilePath, $"project resource '{resourceName}'");
     }
 
     private static readonly LaunchProfileSelector[] s_launchProfileSelectors =
@@ -131,7 +118,7 @@ internal static class LaunchProfileExtensions
         TrySelectLaunchProfileByOrder
     ];
 
-    private static bool TrySelectLaunchProfileByOrder(ProjectResource projectResource, [NotNullWhen(true)] out string? launchProfileName)
+    private static bool TrySelectLaunchProfileByOrder(IResource projectResource, [NotNullWhen(true)] out string? launchProfileName)
     {
         var launchSettings = GetLaunchSettings(projectResource);
 
@@ -155,7 +142,7 @@ internal static class LaunchProfileExtensions
         return false;
     }
 
-    private static bool TrySelectLaunchProfileFromDefaultAnnotation(ProjectResource projectResource, [NotNullWhen(true)] out string? launchProfileName)
+    private static bool TrySelectLaunchProfileFromDefaultAnnotation(IResource projectResource, [NotNullWhen(true)] out string? launchProfileName)
     {
         if (!projectResource.TryGetLastAnnotation<DefaultLaunchProfileAnnotation>(out var launchProfileAnnotation))
         {
@@ -181,7 +168,7 @@ internal static class LaunchProfileExtensions
         return true;
     }
 
-    private static bool TrySelectLaunchProfileFromAnnotation(ProjectResource projectResource, [NotNullWhen(true)] out string? launchProfileName)
+    private static bool TrySelectLaunchProfileFromAnnotation(IResource projectResource, [NotNullWhen(true)] out string? launchProfileName)
     {
         if (projectResource.TryGetLastAnnotation<LaunchProfileAnnotation>(out var launchProfileAnnotation))
         {
@@ -195,7 +182,7 @@ internal static class LaunchProfileExtensions
         }
     }
 
-    internal static string? SelectLaunchProfileName(this ProjectResource projectResource)
+    internal static string? SelectLaunchProfileName(this IResource projectResource)
     {
         // ExcludeLaunchProfileAnnotation takes precedence over all other launch profile selectors.
         if (projectResource.TryGetLastAnnotation<ExcludeLaunchProfileAnnotation>(out _))
@@ -217,4 +204,4 @@ internal static class LaunchProfileExtensions
 
 internal sealed record class NamedLaunchProfile(string Name, LaunchProfile LaunchProfile);
 
-internal delegate bool LaunchProfileSelector(ProjectResource project, out string? launchProfile);
+internal delegate bool LaunchProfileSelector(IResource project, out string? launchProfile);

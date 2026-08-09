@@ -18,7 +18,7 @@ internal sealed class AgentEnvironmentApplicator
     /// <param name="promptGroup">The prompt group this applicator belongs to. Defaults to AgentEnvironments.</param>
     /// <param name="priority">The priority within the prompt group (lower numbers first). Defaults to 0.</param>
     public AgentEnvironmentApplicator(
-        string description, 
+        string description,
         Func<CancellationToken, Task> applyCallback,
         McpInitPromptGroup? promptGroup = null,
         int priority = 0)

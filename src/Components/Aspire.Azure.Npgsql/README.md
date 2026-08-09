@@ -136,10 +136,10 @@ builder.AddAzureNpgsqlDataSource("db", configureDataSourceBuilder:
 
 * https://aspire.dev/integrations/cloud/azure/azure-postgresql/
 * https://www.npgsql.org/doc/basic-usage.html
-* https://github.com/dotnet/aspire/tree/main/src/Components/README.md
+* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire
 
 _*Postgres, PostgreSQL and the Slonik Logo are trademarks or registered trademarks of the PostgreSQL Community Association of Canada, and used with their permission._

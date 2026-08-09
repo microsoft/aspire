@@ -6,6 +6,7 @@ using Aspire.Hosting.Dcp.Model;
 using k8s;
 using System.Threading.Channels;
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text;
@@ -25,13 +26,20 @@ internal sealed class TestKubernetesService : IKubernetesService
     public ConcurrentQueue<string> DeletedResources { get; } = [];
 
     private readonly List<Channel<(WatchEventType, CustomResource)>> _watchChannels = [];
-    private readonly Func<CustomResource, string, Stream> _startStream;
+    private readonly Func<CustomResource, string, bool?, Stream> _startStream;
     private readonly bool _ignoreDeletes;
     private int _nextPort = StartOfAutoPortRange;
+    private int _nextResourceVersion;
 
-    public TestKubernetesService(Func<CustomResource, string, Stream>? startStream = null, bool ignoreDeletes = false)
+    public TestKubernetesService(
+        Func<CustomResource, string, Stream>? startStream = null,
+        bool ignoreDeletes = false,
+        Func<CustomResource, string, bool?, Stream>? startStreamWithFollow = null)
     {
-        _startStream = startStream ?? ((obj, logStreamType) => new MemoryStream(Encoding.UTF8.GetBytes($"Logs for {obj.Metadata.Name} ({logStreamType})")));
+        _startStream = startStreamWithFollow ??
+            (startStream is not null
+                ? (obj, logStreamType, follow) => startStream(obj, logStreamType)
+                : (obj, logStreamType, follow) => new MemoryStream(Encoding.UTF8.GetBytes($"Logs for {obj.Metadata.Name} ({logStreamType})")));
         _ignoreDeletes = ignoreDeletes;
     }
 
@@ -58,47 +66,174 @@ internal sealed class TestKubernetesService : IKubernetesService
 
     public Task<T> CreateAsync<T>(T obj, CancellationToken cancellationToken = default) where T : CustomResource, IKubernetesStaticMetadata
     {
-        static T Clone(T r)
-        {
-            var serialized = JsonSerializer.Serialize(r);
-            var clone = JsonSerializer.Deserialize<T>(serialized);
-            return clone!;
-        }
-
-        var res = Clone(obj);
+        var res = Copy(obj);
 
         // "Allocate" port for a service.
         if (res is Service svc)
         {
-            if (svc.Status is null)
+            // Container tunnel client services are proxyless, but unlike dynamic
+            // container endpoints they must be ready before the dependent container starts.
+            if (svc.Spec.AddressAllocationMode != AddressAllocationModes.Proxyless ||
+                svc.Spec.Port is not null ||
+                svc.Metadata.Annotations?.ContainsKey(CustomResource.ContainerTunnelInstanceName) is true)
             {
-                svc.Status = new ServiceStatus();
+                if (svc.Status is null)
+                {
+                    svc.Status = new ServiceStatus();
+                }
+                svc.Status.EffectiveAddress = svc.Spec.Address ?? "localhost";
+                svc.Status.EffectivePort = svc.Spec.Port ?? Interlocked.Increment(ref _nextPort);
             }
-            svc.Status.EffectiveAddress = svc.Spec.Address ?? "localhost";
-            svc.Status.EffectivePort = svc.Spec.Port ?? Interlocked.Increment(ref _nextPort);
+        }
+
+        // Simulate proxy startup by marking it as running immediately.
+        if (res is ContainerNetworkTunnelProxy proxy)
+        {
+            if (proxy.Status is null)
+            {
+                proxy.Status = new ContainerNetworkTunnelProxyStatus();
+            }
+            proxy.Status.State = ContainerNetworkTunnelProxyState.Running;
+            proxy.Status.TunnelConfigurationVersion = 1;
+            proxy.Status.TunnelStatuses = CreateReadyTunnelStatuses(proxy.Spec.Tunnels);
         }
 
         lock (CreatedResources)
         {
+            var modifiedResources = AllocateProxylessContainerServicePorts(res);
+            StampResourceVersion(res);
             CreatedResources.Enqueue(res);
             foreach (var c in _watchChannels)
             {
-                c.Writer.TryWrite((WatchEventType.Added, res));
+                // Deliver a copy. A real DCP watch event carries an object deserialized from the
+                // response body, so it is never affected by later changes to the stored resource.
+                // Handing out the stored instance instead would let a test that mutates a resource
+                // change the content of events that were already queued.
+                c.Writer.TryWrite((WatchEventType.Added, Copy(res)));
+                foreach (var modifiedResource in modifiedResources)
+                {
+                    c.Writer.TryWrite((WatchEventType.Modified, Copy(modifiedResource)));
+                }
             }
         }
 
         return Task.FromResult(res);
     }
 
+    /// <summary>
+    /// Delivers a resource to the watchers as a <see cref="WatchEventType.Modified"/> event, recording
+    /// it as a change by assigning a new resource version.
+    /// </summary>
     public void PushResourceModified(CustomResource resource)
+    {
+        lock (CreatedResources)
+        {
+            StampResourceVersion(resource);
+
+            foreach (var c in _watchChannels)
+            {
+                // Deliver a copy so the event content is fixed at the moment of the push, the same
+                // way a real DCP watch event is. Tests routinely mutate a resource and push it again,
+                // and without this the later mutation would also be seen by the earlier event.
+                c.Writer.TryWrite((WatchEventType.Modified, Copy(resource)));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Re-delivers a resource to the watchers without recording a change, so the event carries the
+    /// resource version the resource already has.
+    /// </summary>
+    public void PushResourceUnchanged(CustomResource resource, WatchEventType eventType = WatchEventType.Modified)
     {
         lock (CreatedResources)
         {
             foreach (var c in _watchChannels)
             {
-                c.Writer.TryWrite((WatchEventType.Modified, resource));
+                c.Writer.TryWrite((eventType, Copy(resource)));
             }
         }
+    }
+
+    /// <summary>
+    /// Delivers a resource to the watchers as a <see cref="WatchEventType.Deleted"/> event without
+    /// assigning a new resource version.
+    /// </summary>
+    public void PushResourceDeleted(CustomResource resource)
+    {
+        PushResourceUnchanged(resource, WatchEventType.Deleted);
+    }
+
+    /// <summary>
+    /// Replays every existing resource to the watchers as an <see cref="WatchEventType.Added"/> event,
+    /// each carrying the resource version it already has.
+    /// </summary>
+    /// <remarks>
+    /// A DCP watch is backed by a list-and-watch request, so whenever the watch is re-established
+    /// every object that currently exists is delivered again. Aspire re-establishes its watches
+    /// periodically, which is what made https://github.com/microsoft/aspire/issues/18869 visible.
+    /// </remarks>
+    public void SimulateWatchRestart()
+    {
+        lock (CreatedResources)
+        {
+            foreach (var res in CreatedResources.Where(r => !DeletedResources.Contains(r.Metadata.Name)))
+            {
+                foreach (var c in _watchChannels)
+                {
+                    c.Writer.TryWrite((WatchEventType.Added, Copy(res)));
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Assigns the next resource version to a resource, the way an API server does when it stores a
+    /// change. Real DCP populates this on every object it returns; the value is opaque to clients and
+    /// is only ever compared for equality.
+    /// </summary>
+    private void StampResourceVersion(CustomResource resource)
+    {
+        resource.Metadata.ResourceVersion = Interlocked.Increment(ref _nextResourceVersion).ToString(CultureInfo.InvariantCulture);
+    }
+
+    private static T Copy<T>(T resource) where T : CustomResource
+    {
+        // Serialize against the runtime type so this also works when T is an abstract base type.
+        var type = resource.GetType();
+        return (T)JsonSerializer.Deserialize(JsonSerializer.Serialize(resource, type), type)!;
+    }
+
+    private List<CustomResource> AllocateProxylessContainerServicePorts(CustomResource resource)
+    {
+        if (resource is not Container container ||
+            container.TryGetAnnotationAsObjectList<ServiceProducerAnnotation>(CustomResource.ServiceProducerAnnotation, out var servicesProduced) is not true)
+        {
+            return [];
+        }
+
+        var modifiedResources = new List<CustomResource>();
+        foreach (var serviceProduced in servicesProduced)
+        {
+            var service = CreatedResources.OfType<Service>().FirstOrDefault(s => s.Metadata.Name == serviceProduced.ServiceName);
+            if (service?.Spec.AddressAllocationMode != AddressAllocationModes.Proxyless || service.Spec.Port is not null || service.Status?.EffectivePort is not null)
+            {
+                continue;
+            }
+
+            var hostPort = container.Spec.Ports?.FirstOrDefault(port => port.ContainerPort == serviceProduced.Port)?.HostPort;
+
+            service.Status ??= new ServiceStatus();
+            service.Status.EffectiveAddress = service.Spec.Address ?? "localhost";
+            service.Status.EffectivePort = hostPort ?? Interlocked.Increment(ref _nextPort);
+
+            // Made a change to the service, so it needs a new resource version.
+            StampResourceVersion(service);
+
+            modifiedResources.Add(service);
+        }
+
+        return modifiedResources;
     }
 
     public async Task<T> DeleteAsync<T>(string name, string? namespaceParameter = null, CancellationToken cancellationToken = default) where T : CustomResource, IKubernetesStaticMetadata
@@ -138,7 +273,9 @@ internal sealed class TestKubernetesService : IKubernetesService
             _watchChannels.Add(chan);
             foreach (var res in CreatedResources.OfType<T>())
             {
-                chan.Writer.TryWrite((WatchEventType.Added, res));
+                // Deliver a copy, the same way the other fan-out sites do, so the content of this event is
+                // fixed at the moment it is produced instead of tracking later changes to the resource.
+                chan.Writer.TryWrite((WatchEventType.Added, Copy(res)));
             }
         }
 
@@ -174,13 +311,13 @@ internal sealed class TestKubernetesService : IKubernetesService
         long? skip = null
     ) where T : CustomResource, IKubernetesStaticMetadata
     {
-        return Task.FromResult(_startStream(obj, logStreamType));
+        return Task.FromResult(_startStream(obj, logStreamType, follow));
     }
 
     public Task<T> PatchAsync<T>(T obj, V1Patch patch, CancellationToken cancellationToken = default) where T : CustomResource, IKubernetesStaticMetadata
     {
-        // Not a complete implementation, but Aspire is using patching only to stop resources,
-        // so this is good enough.
+        // Not a complete implementation; tests currently use patching to stop resources
+        // and to update container tunnel proxy configuration.
 
         if (patch.Type == V1Patch.PatchType.JsonPatch)
         {
@@ -197,8 +334,19 @@ internal sealed class TestKubernetesService : IKubernetesService
 
             var result = jsonPatch.Apply<T, T>(res);
 
+            // A patch changes the stored object, so it needs a new resource version. No watch event is
+            // emitted here - tests push one themselves when they need it - but leaving the version behind
+            // would make a later replay of this object look unchanged and be discarded by the watcher.
             if (res is Executable exe && result is Executable eu)
             {
+                var changed = false;
+
+                if (eu.Spec.Start is not null)
+                {
+                    exe.Spec.Start = eu.Spec.Start;
+                    changed = true;
+                }
+
                 if (eu.Spec.Stop == true)
                 {
                     exe.Spec.Stop = true;
@@ -207,11 +355,25 @@ internal sealed class TestKubernetesService : IKubernetesService
                         exe.Status = new ExecutableStatus();
                     }
                     exe.Status.State = ExecutableState.Finished;
+                    changed = true;
+                }
+
+                if (changed)
+                {
+                    StampResourceVersion(exe);
                 }
             }
 
             if (res is Container ctr && result is Container cu)
             {
+                var changed = false;
+
+                if (cu.Spec.Start is not null)
+                {
+                    ctr.Spec.Start = cu.Spec.Start;
+                    changed = true;
+                }
+
                 if (cu.Spec.Stop == true)
                 {
                     ctr.Spec.Stop = true;
@@ -220,7 +382,23 @@ internal sealed class TestKubernetesService : IKubernetesService
                         ctr.Status = new ContainerStatus();
                     }
                     ctr.Status.State = ContainerState.Exited;
+                    changed = true;
                 }
+
+                if (changed)
+                {
+                    StampResourceVersion(ctr);
+                }
+            }
+
+            if (res is ContainerNetworkTunnelProxy proxy && result is ContainerNetworkTunnelProxy updatedProxy)
+            {
+                proxy.Spec = updatedProxy.Spec;
+                proxy.Status ??= new ContainerNetworkTunnelProxyStatus();
+                proxy.Status.State = ContainerNetworkTunnelProxyState.Running;
+                proxy.Status.TunnelConfigurationVersion++;
+                proxy.Status.TunnelStatuses = CreateReadyTunnelStatuses(proxy.Spec.Tunnels);
+                PushResourceModified(proxy);
             }
 
             return Task.FromResult(res);
@@ -248,5 +426,15 @@ internal sealed class TestKubernetesService : IKubernetesService
     public Task CleanupResourcesAsync(CancellationToken cancellationToken = default)
     {
         return StopServerAsync("Full", cancellationToken);
+    }
+
+    private static List<TunnelStatus>? CreateReadyTunnelStatuses(List<TunnelConfiguration>? tunnels)
+    {
+        return tunnels?.Select(t => new TunnelStatus
+        {
+            Name = t.Name,
+            State = TunnelState.Ready,
+            Timestamp = DateTime.UtcNow
+        }).ToList();
     }
 }

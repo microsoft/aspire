@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "Aspire.Managed": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:50500;http://localhost:50501"
+    }
+  }
+}

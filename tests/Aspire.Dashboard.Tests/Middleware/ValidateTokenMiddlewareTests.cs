@@ -63,6 +63,32 @@ public class ValidateTokenMiddlewareTests
         Assert.Equal("/test", response.Headers.Location?.OriginalString);
     }
 
+    [Theory]
+    [InlineData("https://evil.com")]
+    [InlineData("http://evil.com")]
+    [InlineData("//evil.com")]
+    [InlineData("//evil.com/path")]
+    [InlineData("/\\evil.com")]
+    public async Task ValidateToken_NotBrowserTokenAuth_AbsoluteReturnUrl_RedirectsToHomepage(string returnUrl)
+    {
+        using var host = await SetUpHostAsync(FrontendAuthMode.Unsecured, string.Empty).DefaultTimeout();
+        var response = await host.GetTestClient().GetAsync($"/login?t=test&returnUrl={Uri.EscapeDataString(returnUrl)}").DefaultTimeout();
+        Assert.Equal("/", response.Headers.Location?.OriginalString);
+    }
+
+    [Theory]
+    [InlineData("https://evil.com")]
+    [InlineData("http://evil.com")]
+    [InlineData("//evil.com")]
+    [InlineData("//evil.com/path")]
+    [InlineData("/\\evil.com")]
+    public async Task ValidateToken_BrowserTokenAuth_RightToken_AbsoluteReturnUrl_RedirectsToHomepage(string returnUrl)
+    {
+        using var host = await SetUpHostAsync(FrontendAuthMode.BrowserToken, "token").DefaultTimeout();
+        var response = await host.GetTestClient().GetAsync($"/login?t=token&returnUrl={Uri.EscapeDataString(returnUrl)}").DefaultTimeout();
+        Assert.Equal("/", response.Headers.Location?.OriginalString);
+    }
+
     private static async Task<IHost> SetUpHostAsync(FrontendAuthMode authMode, string expectedToken)
     {
         return await new HostBuilder()

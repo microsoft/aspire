@@ -1,0 +1,415 @@
+import * as assert from 'assert';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { getAppHostTargetVersion, summarizeAppHostTargetVersions } from '../utils/appHostTargetVersion';
+import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
+
+function candidate(path: string, language: string | null): CandidateAppHostDisplayInfo {
+    return { path, language, status: 'buildable' };
+}
+
+suite('appHostTargetVersion', () => {
+    const tempDirs: string[] = [];
+    const tempParent = join(process.cwd(), '.test-tmp');
+
+    function makeTempDir(): string {
+        mkdirSync(tempParent, { recursive: true });
+        const dir = mkdtempSync(join(tempParent, 'apphost-target-version-'));
+        tempDirs.push(dir);
+        return dir;
+    }
+
+    teardown(() => {
+        for (const dir of tempDirs) {
+            if (existsSync(dir)) {
+                rmSync(dir, { recursive: true, force: true });
+            }
+        }
+        tempDirs.length = 0;
+    });
+
+    suiteTeardown(() => {
+        if (existsSync(tempParent)) {
+            rmSync(tempParent, { recursive: true, force: true });
+        }
+    });
+
+    test('summarizes no AppHost candidates as none', async () => {
+        assert.strictEqual(await summarizeAppHostTargetVersions([]), 'none');
+    });
+
+    function writeProjectWithSdkVersion(directory: string, fileName: string, version: string): string {
+        const appHostPath = join(directory, fileName);
+        writeFileSync(appHostPath, `<Project Sdk="Aspire.AppHost.Sdk/${version}" />`);
+        return appHostPath;
+    }
+
+    test('summarizes candidate target versions from project files', async () => {
+        const dir = makeTempDir();
+        const candidates = [
+            candidate(writeProjectWithSdkVersion(dir, 'AppHost.csproj', '13.5.0'), 'csharp'),
+            candidate(writeProjectWithSdkVersion(dir, 'Other.AppHost.csproj', '13.5.0'), 'csharp'),
+        ];
+
+        assert.strictEqual(await summarizeAppHostTargetVersions(candidates), '13.5.0');
+    });
+
+    test('buckets multiple distinct target versions from project files', async () => {
+        const dir = makeTempDir();
+        const candidates = [
+            candidate(writeProjectWithSdkVersion(dir, 'AppHost.csproj', '13.5.0-preview.1'), 'csharp'),
+            candidate(writeProjectWithSdkVersion(dir, 'Other.AppHost.csproj', '13.5.0-pr.18457.gabcdef'), 'csharp'),
+        ];
+
+        assert.strictEqual(await summarizeAppHostTargetVersions(candidates), 'multiple');
+    });
+
+    test('accepts bounded prerelease target version segments', async () => {
+        const dir = makeTempDir();
+        const candidates = [
+            candidate(writeProjectWithSdkVersion(dir, 'AppHost.csproj', '13.5.0-abcdefghijklmnopqrst'), 'csharp'),
+        ];
+
+        assert.strictEqual(await summarizeAppHostTargetVersions(candidates), '13.5.0-abcdefghijklmnopqrst');
+    });
+
+    test('maps missing target versions to unknown', async () => {
+        const candidates = [
+            candidate('/does/not/exist/apphost.ts', 'typescript'),
+            candidate('/also/does/not/exist/AppHost.csproj', 'csharp'),
+        ];
+
+        assert.strictEqual(await summarizeAppHostTargetVersions(candidates), 'unknown');
+    });
+
+    test('buckets mixed known and unknown target versions as multiple', async () => {
+        const dir = makeTempDir();
+        const candidates = [
+            candidate(writeProjectWithSdkVersion(dir, 'AppHost.csproj', '13.5.0'), 'csharp'),
+            candidate('/does/not/exist/apphost.ts', 'typescript'),
+        ];
+
+        assert.strictEqual(await summarizeAppHostTargetVersions(candidates), 'multiple');
+    });
+
+    test('uses project parsing for candidate target versions', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'AppHost.csproj');
+        writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk/13.5.1" />');
+
+        assert.strictEqual(await summarizeAppHostTargetVersions([candidate(appHostPath, 'csharp')]), '13.5.1');
+    });
+
+    test('keeps the target version summary bounded for many distinct target versions', async () => {
+        const dir = makeTempDir();
+        const candidates = [
+            ...Array.from({ length: 100 }, (_, index) => candidate(writeProjectWithSdkVersion(dir, `AppHost${index}.csproj`, `13.${index}.0`), 'csharp')),
+        ];
+        const result = await summarizeAppHostTargetVersions(candidates);
+
+        assert.strictEqual(result, 'multiple');
+        assert.ok(result.length <= 16);
+    });
+
+    test('reads the C# project SDK version', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'AppHost.csproj');
+        writeFileSync(appHostPath, `<Project Sdk="Microsoft.NET.Sdk; Aspire.AppHost.Sdk/13.5.1">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+</Project>
+`);
+
+        assert.strictEqual(await getAppHostTargetVersion(appHostPath), '13.5.1');
+    });
+
+    test('reads F# and Visual Basic project SDK versions', async () => {
+        const dir = makeTempDir();
+        const fsharpAppHostPath = join(dir, 'AppHost.fsproj');
+        const visualBasicAppHostPath = join(dir, 'AppHost.vbproj');
+        writeFileSync(fsharpAppHostPath, '<Project Sdk="Aspire.AppHost.Sdk/13.5.1" />');
+        writeFileSync(visualBasicAppHostPath, '<Project Sdk="Aspire.AppHost.Sdk/13.5.2" />');
+
+        assert.strictEqual(await getAppHostTargetVersion(fsharpAppHostPath), '13.5.1');
+        assert.strictEqual(await getAppHostTargetVersion(visualBasicAppHostPath), '13.5.2');
+    });
+
+    test('ignores commented C# project SDK versions', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'AppHost.csproj');
+        writeFileSync(appHostPath, `<!-- <Project Sdk="Aspire.AppHost.Sdk/1.2.3"> -->
+<Project Sdk="Microsoft.NET.Sdk; Aspire.AppHost.Sdk/13.5.1">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+</Project>
+`);
+
+        assert.strictEqual(await getAppHostTargetVersion(appHostPath), '13.5.1');
+    });
+
+    test('ignores commented C# SDK element and property versions', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'AppHost.csproj');
+        writeFileSync(appHostPath, `<Project Sdk="Microsoft.NET.Sdk">
+  <!-- <Sdk Name="Aspire.AppHost.Sdk" Version="1.2.3" /> -->
+  <!-- <AspireHostingSDKVersion>2.3.4</AspireHostingSDKVersion> -->
+  <Sdk Name="Aspire.AppHost.Sdk" Version="13.5.1" />
+</Project>
+`);
+
+        assert.strictEqual(await getAppHostTargetVersion(appHostPath), '13.5.1');
+    });
+
+    test('rejects malformed C# project SDK versions', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'AppHost.csproj');
+        writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk/C:\\Users\\me\\AppHost" />');
+
+        assert.strictEqual(await getAppHostTargetVersion(appHostPath), undefined);
+    });
+
+    test('does not use polyglot config as the version for an unversioned C# project SDK', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'AppHost.csproj');
+        writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk" />');
+        writeFileSync(join(dir, 'aspire.config.json'), JSON.stringify({ sdk: { version: '13.4.2' } }));
+
+        assert.strictEqual(await getAppHostTargetVersion(appHostPath), undefined);
+    });
+
+    test('reads the older C# AppHost package reference version', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'AppHost.csproj');
+        writeFileSync(appHostPath, `<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="8.2.1" />
+  </ItemGroup>
+</Project>
+`);
+
+        assert.strictEqual(await getAppHostTargetVersion(appHostPath), '8.2.1');
+    });
+
+    test('reads the centrally managed older C# AppHost package reference version', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'AppHost.csproj');
+        writeFileSync(appHostPath, `<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting" />
+  </ItemGroup>
+</Project>
+`);
+        writeFileSync(join(dir, 'Directory.Packages.props'), `<Project>
+  <ItemGroup>
+    <PackageVersion Include="Aspire.Hosting" Version="8.2.2" />
+  </ItemGroup>
+</Project>
+`);
+
+        assert.strictEqual(await getAppHostTargetVersion(appHostPath), '8.2.2');
+    });
+
+    test('reads an unversioned C# project SDK version from global.json msbuild-sdks', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'AppHost.csproj');
+        writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk" />');
+        writeFileSync(join(dir, 'global.json'), JSON.stringify({
+            'msbuild-sdks': {
+                'Aspire.AppHost.Sdk': '13.5.2',
+            },
+        }));
+
+        assert.strictEqual(await getAppHostTargetVersion(appHostPath), '13.5.2');
+    });
+
+    test('summarizes a BOM-prefixed unversioned C# project SDK version from global.json msbuild-sdks', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'AppHost.csproj');
+        writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk" />');
+        writeFileSync(join(dir, 'global.json'), `\uFEFF${JSON.stringify({
+            'msbuild-sdks': {
+                'Aspire.AppHost.Sdk': '13.5.2',
+            },
+        })}`);
+
+        assert.strictEqual(await summarizeAppHostTargetVersions([candidate(appHostPath, 'csharp')]), '13.5.2');
+    });
+
+    test('reads an unversioned C# project Sdk element version from global.json msbuild-sdks', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'AppHost.csproj');
+        writeFileSync(appHostPath, '<Project><Sdk Name="Aspire.AppHost.Sdk" /></Project>');
+        writeFileSync(join(dir, 'global.json'), JSON.stringify({
+            'msbuild-sdks': {
+                'Aspire.AppHost.Sdk': '13.5.3',
+            },
+        }));
+
+        assert.strictEqual(await getAppHostTargetVersion(appHostPath), '13.5.3');
+    });
+
+    test('does not use polyglot config as the version for an unversioned C# project directory', async () => {
+        const dir = makeTempDir();
+        writeFileSync(join(dir, 'AppHost.csproj'), '<Project Sdk="Aspire.AppHost.Sdk" />');
+        writeFileSync(join(dir, 'aspire.config.json'), JSON.stringify({ sdk: { version: '13.4.2' } }));
+
+        assert.strictEqual(await getAppHostTargetVersion(dir), undefined);
+    });
+
+    test('buckets multiple project SDK versions from a directory', async () => {
+        const dir = makeTempDir();
+        writeFileSync(join(dir, 'New.AppHost.csproj'), '<Project Sdk="Aspire.AppHost.Sdk/13.6.0" />');
+        writeFileSync(join(dir, 'Old.AppHost.csproj'), '<Project Sdk="Aspire.AppHost.Sdk/13.5.0" />');
+
+        assert.strictEqual(await getAppHostTargetVersion(dir), 'multiple');
+    });
+
+    test('buckets mixed known and unknown project SDK versions from a directory as multiple', async () => {
+        const dir = makeTempDir();
+        writeFileSync(join(dir, 'Versioned.AppHost.csproj'), '<Project Sdk="Aspire.AppHost.Sdk/13.6.0" />');
+        writeFileSync(join(dir, 'Unversioned.AppHost.csproj'), '<Project Sdk="Aspire.AppHost.Sdk" />');
+
+        assert.strictEqual(await getAppHostTargetVersion(dir), 'multiple');
+    });
+
+    test('reads the C# single-file SDK directive version', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'apphost.cs');
+        writeFileSync(appHostPath, `#:sdk Aspire.AppHost.Sdk@13.6.0-preview.1
+
+var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
+`);
+
+        assert.strictEqual(await getAppHostTargetVersion(appHostPath), '13.6.0-preview.1');
+    });
+
+    test('reads a BOM-prefixed C# single-file SDK directive version', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'apphost.cs');
+        writeFileSync(appHostPath, `\uFEFF#:sdk Aspire.AppHost.Sdk@13.6.0
+
+var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
+`);
+
+        assert.strictEqual(await getAppHostTargetVersion(appHostPath), '13.6.0');
+    });
+
+    test('does not use polyglot config for a BOM-prefixed C# single-file AppHost directory', async () => {
+        const dir = makeTempDir();
+        writeFileSync(join(dir, 'apphost.cs'), `\uFEFF#:sdk Aspire.AppHost.Sdk@13.6.0
+
+var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
+`);
+        writeFileSync(join(dir, 'aspire.config.json'), JSON.stringify({ sdk: { version: '13.4.2' } }));
+
+        assert.strictEqual(await getAppHostTargetVersion(dir), '13.6.0');
+    });
+
+    test('reads the polyglot SDK version from aspire.config.json', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'apphost.ts');
+        writeFileSync(appHostPath, 'import { aspire } from "@microsoft/aspire";');
+        writeFileSync(join(dir, 'aspire.config.json'), `{
+  // JSONC comments are allowed in Aspire config files.
+  "sdk": {
+    "version": "13.4.2"
+  }
+}`);
+
+        assert.strictEqual(await getAppHostTargetVersion(appHostPath), '13.4.2');
+        assert.strictEqual(await getAppHostTargetVersion(dir), '13.4.2');
+    });
+
+    test('summarizes a BOM-prefixed polyglot SDK version from aspire.config.json', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'apphost.ts');
+        writeFileSync(appHostPath, 'import { aspire } from "@microsoft/aspire";');
+        writeFileSync(join(dir, 'aspire.config.json'), `\uFEFF${JSON.stringify({ sdk: { version: '13.4.2' } })}`);
+
+        assert.strictEqual(await summarizeAppHostTargetVersions([candidate(appHostPath, 'typescript')]), '13.4.2');
+    });
+
+    test('reads the polyglot SDK version from a directory with non-AppHost C# files', async () => {
+        const dir = makeTempDir();
+        writeFileSync(join(dir, 'apphost.ts'), 'import { aspire } from "@microsoft/aspire";');
+        writeFileSync(join(dir, 'helper.cs'), '#:sdk Aspire.AppHost.Sdk@13.5.0\npublic static class Helper { }');
+        writeFileSync(join(dir, 'Helper.csproj'), '<Project Sdk="Microsoft.NET.Sdk" />');
+        writeFileSync(join(dir, 'aspire.config.json'), JSON.stringify({ sdk: { version: '13.4.2' } }));
+
+        assert.strictEqual(await getAppHostTargetVersion(dir), '13.4.2');
+    });
+
+    test('reads the polyglot SDK version from JSONC config with a trailing comma', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'apphost.ts');
+        writeFileSync(appHostPath, 'import { aspire } from "@microsoft/aspire";');
+        writeFileSync(join(dir, 'aspire.config.json'), `{
+  "sdk": {
+    "version": "13.4.2",
+  },
+}`);
+
+        assert.strictEqual(await getAppHostTargetVersion(appHostPath), '13.4.2');
+    });
+
+    test('does not read ancestor polyglot config past a nearer aspire.config.json', async () => {
+        const dir = makeTempDir();
+        const appHostDir = join(dir, 'src', 'AppHost');
+        mkdirSync(appHostDir, { recursive: true });
+        writeFileSync(join(dir, 'aspire.config.json'), JSON.stringify({ sdk: { version: '13.4.2' } }));
+        writeFileSync(join(appHostDir, 'aspire.config.json'), JSON.stringify({}));
+        writeFileSync(join(appHostDir, 'apphost.ts'), 'import { aspire } from "@microsoft/aspire";');
+
+        assert.strictEqual(await getAppHostTargetVersion(appHostDir), undefined);
+    });
+
+    test('does not read same-directory legacy settings when aspire.config.json has no SDK version', async () => {
+        const dir = makeTempDir();
+        mkdirSync(join(dir, '.aspire'), { recursive: true });
+        writeFileSync(join(dir, 'aspire.config.json'), JSON.stringify({}));
+        writeFileSync(join(dir, '.aspire', 'settings.json'), JSON.stringify({ sdk: { version: '13.3.0' } }));
+        writeFileSync(join(dir, 'apphost.ts'), 'import { aspire } from "@microsoft/aspire";');
+
+        assert.strictEqual(await getAppHostTargetVersion(dir), undefined);
+    });
+
+    test('ignores malformed polyglot SDK versions from config', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'apphost.ts');
+        writeFileSync(appHostPath, 'import { aspire } from "@microsoft/aspire";');
+        writeFileSync(join(dir, 'aspire.config.json'), JSON.stringify({ sdk: { version: '../arbitrary/path' } }));
+
+        assert.strictEqual(await getAppHostTargetVersion(appHostPath), undefined);
+    });
+
+    test('falls back to the legacy sdkVersion config key', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'apphost.ts');
+        writeFileSync(appHostPath, 'import { aspire } from "@microsoft/aspire";');
+        writeFileSync(join(dir, 'aspire.config.json'), JSON.stringify({ sdkVersion: '13.3.1' }));
+
+        assert.strictEqual(await getAppHostTargetVersion(appHostPath), '13.3.1');
+    });
+
+    test('does not read ancestor global.json past a nearer global.json', async () => {
+        const dir = makeTempDir();
+        const appHostDir = join(dir, 'src', 'AppHost');
+        mkdirSync(appHostDir, { recursive: true });
+        writeFileSync(join(dir, 'global.json'), JSON.stringify({
+            'msbuild-sdks': {
+                'Aspire.AppHost.Sdk': '13.5.2',
+            },
+        }));
+        writeFileSync(join(appHostDir, 'global.json'), JSON.stringify({}));
+        const appHostPath = join(appHostDir, 'AppHost.csproj');
+        writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk" />');
+
+        assert.strictEqual(await getAppHostTargetVersion(appHostPath), undefined);
+    });
+
+    test('returns unknown when candidates have no available target version', async () => {
+        assert.strictEqual(await summarizeAppHostTargetVersions([candidate('/does/not/exist/apphost.ts', 'typescript')]), 'unknown');
+    });
+});

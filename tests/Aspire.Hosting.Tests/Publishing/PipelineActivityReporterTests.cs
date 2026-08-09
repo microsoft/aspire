@@ -2,10 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREINTERACTION001
 
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -17,6 +17,7 @@ namespace Aspire.Hosting.Tests.Publishing;
 public class PublishingActivityReporterTests
 {
     private readonly InteractionService _interactionService = CreateInteractionService();
+    private readonly TestFileUploadStore _fileUploadStore = new();
 
     [Fact]
     public async Task CreateStepAsync_CreatesStepAndEmitsActivity()
@@ -47,6 +48,54 @@ public class PublishingActivityReporterTests
         Assert.False(activity.Data.IsError);
         Assert.False(activity.Data.IsWarning);
         Assert.Null(activity.Data.StepId);
+    }
+
+    [Fact]
+    public async Task CreateStepAsync_WithHierarchyMetadata_EmitsMetadataOnCreateAndComplete()
+    {
+        // Arrange
+        var reporter = CreatePublishingReporter();
+
+        // Act
+        var step = await reporter.CreateStepAsync("Child Step", "parent-step-id", 2, CancellationToken.None);
+
+        // Assert
+        var stepInternal = Assert.IsType<ReportingStep>(step);
+        Assert.Equal("parent-step-id", stepInternal.ParentStepId);
+        Assert.Equal(2, stepInternal.HierarchyLevel);
+
+        var activityReader = reporter.ActivityItemUpdated.Reader;
+        Assert.True(activityReader.TryRead(out var createActivity));
+        Assert.Equal("parent-step-id", createActivity.Data.ParentStepId);
+        Assert.Equal(2, createActivity.Data.HierarchyLevel);
+
+        await step.CompleteAsync("Done", CompletionState.Completed, CancellationToken.None);
+
+        Assert.True(activityReader.TryRead(out var completeActivity));
+        Assert.Equal("parent-step-id", completeActivity.Data.ParentStepId);
+        Assert.Equal(2, completeActivity.Data.HierarchyLevel);
+    }
+
+    [Fact]
+    public async Task CreateStepAsync_WithParentStepTitle_ResolvesParentStepId()
+    {
+        // Arrange
+        var reporter = CreatePublishingReporter();
+        var parentStep = Assert.IsType<ReportingStep>(await reporter.CreateStepAsync("Parent Step", CancellationToken.None));
+
+        // Clear the parent step creation activity
+        reporter.ActivityItemUpdated.Reader.TryRead(out _);
+
+        // Act
+        var childStep = Assert.IsType<ReportingStep>(await reporter.CreateStepAsync("Child Step", "Parent Step", 1, CancellationToken.None));
+
+        // Assert
+        Assert.Equal(parentStep.Id, childStep.ParentStepId);
+
+        var activityReader = reporter.ActivityItemUpdated.Reader;
+        Assert.True(activityReader.TryRead(out var createActivity));
+        Assert.Equal(parentStep.Id, createActivity.Data.ParentStepId);
+        Assert.Equal(1, createActivity.Data.HierarchyLevel);
     }
 
     [Fact]
@@ -1275,7 +1324,7 @@ public class PublishingActivityReporterTests
 
     private PipelineActivityReporter CreatePublishingReporter()
     {
-        return new PipelineActivityReporter(_interactionService, NullLogger<PipelineActivityReporter>.Instance);
+        return new PipelineActivityReporter(_interactionService, _fileUploadStore, NullLogger<PipelineActivityReporter>.Instance);
     }
 
     internal static InteractionService CreateInteractionService()

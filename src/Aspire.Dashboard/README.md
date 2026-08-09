@@ -130,4 +130,4 @@ The software may collect information about you and your use of the software and 
 
 ### Opting out of data collection
 
-The Aspire dashboard collects usage telemetry. Learn [what's collected and why](https://aka.ms/dotnet/aspire/microsoft-collected-telemetry).  To opt out of dashboard telemetry, set the environment variable `ASPIRE_DASHBOARD_TELEMETRY_OPTOUT` to `true` or disable telemetry in Visual Studio or Visual Studio Code.
+The Aspire dashboard collects usage telemetry. Learn [what's collected and why](https://aka.ms/aspire/microsoft-collected-telemetry).  To opt out of dashboard telemetry, set the environment variable `ASPIRE_DASHBOARD_TELEMETRY_OPTOUT` to `true` or disable telemetry in Visual Studio or Visual Studio Code.

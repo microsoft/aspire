@@ -1,0 +1,12 @@
+{
+  "appHost": {
+    "path": "apphost.py",
+    "language": "python"
+  },
+  "features": {
+    "experimentalPolyglot:python": true
+  },
+  "packages": {
+    "Aspire.Hosting.RabbitMQ": ""
+  }
+}

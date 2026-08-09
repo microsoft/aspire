@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "outDir": "./dist/apphost",
+    "rootDir": ".",
+    "strict": true
+  },
+  "include": [
+    "apphost.mts",
+    ".aspire/modules/aspire.mts",
+    ".aspire/modules/base.mts",
+    ".aspire/modules/transport.mts"
+  ],
+  "exclude": ["node_modules"]
+}

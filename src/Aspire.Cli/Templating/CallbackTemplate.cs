@@ -8,13 +8,15 @@ namespace Aspire.Cli.Templating;
 internal class CallbackTemplate(
     string name,
     string description,
-    Func<string, string> pathDeriverCallback,
+    Func<CliExecutionContext, string, string> pathDeriverCallback,
     Action<Command> applyOptionsCallback,
     Func<CallbackTemplate, TemplateInputs, ParseResult, CancellationToken, Task<TemplateResult>> applyTemplateCallback,
     TemplateRuntime runtime = TemplateRuntime.DotNet,
+    string? languageId = null,
     Func<string, bool>? supportsLanguageCallback = null,
     IReadOnlyList<string>? selectableAppHostLanguages = null,
-    bool isEmpty = false) : ITemplate
+    bool isEmpty = false,
+    bool showInPrompt = true) : ITemplate
 {
     public string Name => name;
 
@@ -22,16 +24,25 @@ internal class CallbackTemplate(
 
     public bool IsEmpty => isEmpty;
 
+    public bool ShowInPrompt => showInPrompt;
+
     public TemplateRuntime Runtime => runtime;
 
-    public Func<string, string> PathDeriver => pathDeriverCallback;
+    public Func<CliExecutionContext, string, string> PathDeriver => pathDeriverCallback;
+
+    public string? LanguageId => languageId;
+
+    public IReadOnlyList<string> SelectableAppHostLanguages { get; } = selectableAppHostLanguages ?? [];
 
     public bool SupportsLanguage(string languageId)
     {
-        return supportsLanguageCallback?.Invoke(languageId) ?? true;
-    }
+        if (supportsLanguageCallback is not null)
+        {
+            return supportsLanguageCallback(languageId);
+        }
 
-    public IReadOnlyList<string> SelectableAppHostLanguages { get; } = selectableAppHostLanguages ?? [];
+        return LanguageId is null || LanguageId.Equals(languageId, StringComparison.OrdinalIgnoreCase);
+    }
 
     public void ApplyOptions(Command command)
     {

@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Aspire.TestUtilities;
 using Xunit;
 
 namespace Infrastructure.Tests;
@@ -54,7 +55,7 @@ public sealed class PowerShellCommand : IDisposable
 
     public async Task<CommandResult> ExecuteAsync(params string[] args)
     {
-        CancellationTokenSource cts = new();
+        using CancellationTokenSource cts = new();
         if (_timeout is not null)
         {
             cts.CancelAfter((int)_timeout.Value.TotalMilliseconds);
@@ -293,38 +294,5 @@ public class CommandException : Exception
     public CommandException(string message, CommandResult result) : base(message)
     {
         Result = result;
-    }
-}
-
-/// <summary>
-/// Extension methods for Process handling.
-/// </summary>
-internal static class ProcessExtensions
-{
-    public static bool TryGetHasExited(this Process process)
-    {
-        try
-        {
-            return process.HasExited;
-        }
-        catch (InvalidOperationException ie) when (ie.Message.Contains("No process is associated with this object"))
-        {
-            return true;
-        }
-    }
-
-    public static void CloseAndKillProcessIfRunning(this Process? process)
-    {
-        if (process is null || process.TryGetHasExited())
-        {
-            return;
-        }
-
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            process.CloseMainWindow();
-        }
-        process.Kill(entireProcessTree: true);
-        process.Dispose();
     }
 }

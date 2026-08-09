@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Xunit;
 
@@ -15,46 +14,40 @@ namespace Aspire.Cli.EndToEnd.Tests;
 public sealed class PythonReactTemplateTests(ITestOutputHelper output)
 {
     [Fact]
+    [CaptureWorkspaceOnFailure]
     public async Task CreateAndRunPythonReactProject()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, mountDockerSocket: true, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
-        var waitForCtrlCMessage = new CellPatternSearcher()
-            .Find($"Press CTRL+C to stop the apphost and exit.");
-
-        // The purpose of this is to keep track of the number of actual shell commands we have
-        // executed. This is important because we customize the shell prompt to show either
-        // "[n OK] $ " or "[n ERR:exitcode] $ ". This allows us to deterministically wait for a
-        // command to complete and for the shell to be ready for more input rather than relying
-        // on arbitrary timeouts of mid-command strings.
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
         var counter = new SequenceCounter();
-        var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
-        sequenceBuilder.PrepareDockerEnvironment(counter, workspace);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
-        sequenceBuilder.InstallAspireCliInDocker(installMode, counter);
+        // Step 1: Create project using aspire new, selecting the FastAPI/React template
+        await auto.AspireNewAsync("AspirePyReactApp", counter, template: AspireTemplate.PythonReact, useRedisCache: false);
 
-        sequenceBuilder.AspireNew("AspirePyReactApp", counter, template: AspireTemplate.PythonReact, useRedisCache: false);
+        GitIgnoreAssertions.AssertContainsEntry(
+            Path.Combine(workspace.WorkspaceRoot.FullName, "AspirePyReactApp"),
+            ".aspire/");
 
-        sequenceBuilder
-            .Type("aspire run")
-            .Enter()
-            .WaitUntil(s => waitForCtrlCMessage.Search(s).Count > 0, TimeSpan.FromMinutes(2))
-            .Ctrl().Key(Hex1b.Input.Hex1bKey.C)
-            .WaitForSuccessPrompt(counter)
-            .Type("exit")
-            .Enter();
+        // Step 2: Navigate into the project directory so config resolution finds the
+        // project-level aspire.config.json (which has the packages section).
+        // See https://github.com/microsoft/aspire/issues/15623
+        await auto.TypeAsync("cd AspirePyReactApp");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
-        var sequence = sequenceBuilder.Build();
+        // Step 3: Verify the generated TypeScript AppHost builds successfully.
+        await auto.RunCommandAsync("npm run build", counter, TimeSpan.FromMinutes(2));
 
-        await sequence.ApplyAsync(terminal, TestContext.Current.CancellationToken);
-
-        await pendingRun;
+        // Step 4: Start and stop the project
+        await auto.AspireStartAsync(counter);
+        await auto.AspireStopAsync(counter);
     }
 }

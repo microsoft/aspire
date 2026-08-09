@@ -54,18 +54,30 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
     private readonly ActivitySource _activitySource = new(nameof(ExtensionBackchannel));
     private readonly TaskCompletionSource<JsonRpc> _rpcTaskCompletionSource = new();
+    private readonly object _connectionSetupLock = new();
     private readonly string _token;
 
     private TaskCompletionSource? _connectionSetupTcs;
     private readonly ILogger<ExtensionBackchannel> _logger;
     private readonly IExtensionRpcTarget _target;
     private readonly IConfiguration _configuration;
+    private readonly Func<CancellationToken, Task>? _connectCoreAsyncOverride;
 
     public ExtensionBackchannel(ILogger<ExtensionBackchannel> logger, IExtensionRpcTarget target, IConfiguration configuration)
+        : this(logger, target, configuration, connectCoreAsyncOverride: null)
+    {
+    }
+
+    internal ExtensionBackchannel(
+        ILogger<ExtensionBackchannel> logger,
+        IExtensionRpcTarget target,
+        IConfiguration configuration,
+        Func<CancellationToken, Task>? connectCoreAsyncOverride)
     {
         _logger = logger;
         _target = target;
         _configuration = configuration;
+        _connectCoreAsyncOverride = connectCoreAsyncOverride;
         _token = configuration[KnownConfigNames.ExtensionToken]
                       ?? throw new InvalidOperationException(ErrorStrings.ExtensionTokenMustBeSet);
 
@@ -86,76 +98,142 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
     public async Task ConnectAsync(CancellationToken cancellationToken)
     {
-        if (_connectionSetupTcs is not null)
+        TaskCompletionSource connectionSetupTcs;
+        var shouldConnect = false;
+
+        lock (_connectionSetupLock)
         {
-            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            var cancellationTask = Task.Delay(Timeout.Infinite, linkedCts.Token);
-            await Task.WhenAny(_connectionSetupTcs.Task, cancellationTask).ConfigureAwait(false);
-            return;
+            if (_connectionSetupTcs is null)
+            {
+                _connectionSetupTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                shouldConnect = true;
+            }
+
+            connectionSetupTcs = _connectionSetupTcs;
         }
 
-        _connectionSetupTcs = new TaskCompletionSource();
+        while (!shouldConnect)
+        {
+            try
+            {
+                await connectionSetupTcs.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+                return;
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                // The active connector owns the setup task until its token cancels. Waiters with live
+                // tokens take over by installing a new setup task, while the reference check avoids
+                // clearing a replacement task already installed by another waiter.
+                lock (_connectionSetupLock)
+                {
+                    if (ReferenceEquals(_connectionSetupTcs, connectionSetupTcs))
+                    {
+                        _connectionSetupTcs = null;
+                    }
+
+                    if (_connectionSetupTcs is null)
+                    {
+                        _connectionSetupTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                        shouldConnect = true;
+                    }
+
+                    connectionSetupTcs = _connectionSetupTcs;
+                }
+            }
+        }
 
         var endpoint = _configuration[KnownConfigNames.ExtensionEndpoint];
         Debug.Assert(endpoint is not null);
 
-        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(50));
-        var connectionAttempts = 0;
-        _logger.LogDebug("Starting backchannel connection to Aspire extension at {Endpoint}", endpoint);
-
-        var startTime = DateTimeOffset.UtcNow;
-
-        do
+        try
         {
-            connectionAttempts++;
+            using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(50));
+            var connectionAttempts = 0;
+            _logger.LogDebug("Starting backchannel connection to Aspire extension at {Endpoint}", endpoint);
 
-            try
+            var startTime = DateTimeOffset.UtcNow;
+
+            do
             {
-                await ConnectCoreAsync().ConfigureAwait(false);
-                _logger.LogDebug("Connected to ExtensionBackchannel at {Endpoint}", endpoint);
-                _connectionSetupTcs.SetResult();
-                return;
-            }
-            catch (SocketException ex)
-            {
-                var waitingFor = DateTimeOffset.UtcNow - startTime;
-                if (waitingFor > TimeSpan.FromSeconds(10))
+                connectionAttempts++;
+
+                try
                 {
-                    _logger.LogDebug("Slow polling for backchannel connection (attempt {ConnectionAttempts}), {SocketException}", connectionAttempts, ex);
-                    await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
+                    await ConnectCoreAsync().ConfigureAwait(false);
+                    _logger.LogDebug("Connected to ExtensionBackchannel at {Endpoint}", endpoint);
+                    connectionSetupTcs.TrySetResult();
+                    return;
                 }
-                else
+                catch (SocketException ex)
                 {
-                    // We don't want to spam the logs with our early connection attempts.
+                    var waitingFor = DateTimeOffset.UtcNow - startTime;
+                    if (waitingFor > TimeSpan.FromSeconds(10))
+                    {
+                        _logger.LogDebug("Slow polling for backchannel connection (attempt {ConnectionAttempts}), {SocketException}", connectionAttempts, ex);
+                        await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        // We don't want to spam the logs with our early connection attempts.
+                    }
                 }
-            }
-            catch (ExtensionIncompatibleException ex)
-            {
-                _logger.LogError(
-                    "The Aspire extension is incompatible with the CLI and must be updated to a version that supports the {RequiredCapability} capability.",
-                    ex.RequiredCapability
-                    );
+                catch (ExtensionIncompatibleException ex)
+                {
+                    _logger.LogError(
+                        "The Aspire extension is incompatible with the CLI and must be updated to a version that supports the {RequiredCapability} capability.",
+                        ex.RequiredCapability
+                        );
 
-                // If the extension is incompatible then there is no point
-                // trying to reconnect, we should propogate the exception
-                // up to the code that needs to back channel so it can display
-                // and error message to the user.
-                _connectionSetupTcs.SetException(ex);
+                    // Keep the faulted setup task in place for incompatible extensions. This is
+                    // a terminal state for the current CLI process, so future callers should see
+                    // the same compatibility error instead of electing another connector and
+                    // retrying the same unsupported protocol.
+                    connectionSetupTcs.TrySetException(ex);
 
-                throw;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "An unexpected error occurred while trying to connect to the backchannel.");
-                _connectionSetupTcs.SetException(ex);
-                throw;
-            }
-        } while (await timer.WaitForNextTickAsync(cancellationToken));
+                    throw;
+                }
+                catch (OperationCanceledException ex)
+                {
+                    connectionSetupTcs.TrySetCanceled(ex.CancellationToken);
+                    ClearConnectionSetupIfCurrent(connectionSetupTcs);
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "An unexpected error occurred while trying to connect to the backchannel.");
+                    connectionSetupTcs.TrySetException(ex);
+                    ClearConnectionSetupIfCurrent(connectionSetupTcs);
+                    throw;
+                }
+            } while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false));
+        }
+        catch (ExtensionIncompatibleException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException ex)
+        {
+            connectionSetupTcs.TrySetCanceled(ex.CancellationToken);
+            ClearConnectionSetupIfCurrent(connectionSetupTcs);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            connectionSetupTcs.TrySetException(ex);
+            ClearConnectionSetupIfCurrent(connectionSetupTcs);
+            throw;
+        }
 
         return;
 
         async Task ConnectCoreAsync()
         {
+            if (_connectCoreAsyncOverride is not null)
+            {
+                await _connectCoreAsyncOverride(cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
             try
             {
                 using var activity = _activitySource.StartActivity();
@@ -243,6 +321,17 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
                         KnownCapabilities.Baseline),
                     KnownCapabilities.Baseline
                 );
+            }
+        }
+    }
+
+    private void ClearConnectionSetupIfCurrent(TaskCompletionSource connectionSetupTcs)
+    {
+        lock (_connectionSetupLock)
+        {
+            if (ReferenceEquals(_connectionSetupTcs, connectionSetupTcs))
+            {
+                _connectionSetupTcs = null;
             }
         }
     }
@@ -415,7 +504,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         var choicesList = choices.ToList();
         // this will throw if formatting results in non-distinct values. that should happen because we cannot send the formatter over the wire.
-        var choicesByFormattedValue = choicesList.ToDictionary(choice => choiceFormatter(choice).RemoveSpectreFormatting(), choice => choice);
+        var choicesByFormattedValue = choicesList.ToDictionary(choice => StringUtils.RemoveMarkup(choiceFormatter(choice)), choice => choice);
 
         using var activity = _activitySource.StartActivity();
 
@@ -445,7 +534,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         var choicesList = choices.ToList();
         // this will throw if formatting results in non-distinct values. that should happen because we cannot send the formatter over the wire.
-        var choicesByFormattedValue = choicesList.ToDictionary(choice => choiceFormatter(choice).RemoveSpectreFormatting(), choice => choice);
+        var choicesByFormattedValue = choicesList.ToDictionary(choice => StringUtils.RemoveMarkup(choiceFormatter(choice)), choice => choice);
 
         using var activity = _activitySource.StartActivity();
 

@@ -12,15 +12,15 @@ internal sealed class FakeAcrLoginService : IAcrLoginService
 {
     private const string AcrUsername = "00000000-0000-0000-0000-000000000000";
     
-    private readonly IContainerRuntime _containerRuntime;
+    private readonly IContainerRuntimeResolver _containerRuntimeResolver;
 
     public bool WasLoginCalled { get; private set; }
     public string? LastRegistryEndpoint { get; private set; }
     public string? LastTenantId { get; private set; }
 
-    public FakeAcrLoginService(IContainerRuntime containerRuntime)
+    public FakeAcrLoginService(IContainerRuntimeResolver containerRuntimeResolver)
     {
-        _containerRuntime = containerRuntime ?? throw new ArgumentNullException(nameof(containerRuntime));
+        _containerRuntimeResolver = containerRuntimeResolver ?? throw new ArgumentNullException(nameof(containerRuntimeResolver));
     }
 
     public async Task LoginAsync(
@@ -33,8 +33,7 @@ internal sealed class FakeAcrLoginService : IAcrLoginService
         LastRegistryEndpoint = registryEndpoint;
         LastTenantId = tenantId;
         
-        // Call the container runtime to match real implementation behavior
-        // This allows tests to verify the container runtime was called
-        await _containerRuntime.LoginToRegistryAsync(registryEndpoint, AcrUsername, "fake-refresh-token", cancellationToken);
+        var containerRuntime = await _containerRuntimeResolver.ResolveAsync(cancellationToken);
+        await containerRuntime.LoginToRegistryAsync(registryEndpoint, AcrUsername, "fake-refresh-token", cancellationToken);
     }
 }

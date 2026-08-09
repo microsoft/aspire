@@ -12,17 +12,18 @@ namespace Infrastructure.Tests;
 /// </summary>
 public class ExpandTestMatrixGitHubTests : IDisposable
 {
-    private readonly TestTempDirectory _tempDir = new();
+    private readonly TemporaryWorkspace _workspace;
     private readonly string _scriptPath;
     private readonly ITestOutputHelper _output;
 
     public ExpandTestMatrixGitHubTests(ITestOutputHelper output)
     {
         _output = output;
-        _scriptPath = Path.Combine(FindRepoRoot(), "eng", "scripts", "expand-test-matrix-github.ps1");
+        _workspace = TemporaryWorkspace.Create(output);
+        _scriptPath = Path.Combine(RepoRoot.Path, "eng", "scripts", "expand-test-matrix-github.ps1");
     }
 
-    public void Dispose() => _tempDir.Dispose();
+    public void Dispose() => _workspace.Dispose();
 
     [Fact]
     [RequiresTools(["pwsh"])]
@@ -35,10 +36,10 @@ public class ExpandTestMatrixGitHubTests : IDisposable
             testProjectPath: "tests/TestProject/TestProject.csproj",
             supportedOSes: ["windows"]);
 
-        var canonicalMatrix = Path.Combine(_tempDir.Path, "canonical.json");
+        var canonicalMatrix = Path.Combine(_workspace.Path, "canonical.json");
         TestDataBuilder.CreateCanonicalMatrixJson(canonicalMatrix, tests: [entry]);
 
-        var outputFile = Path.Combine(_tempDir.Path, "expanded.json");
+        var outputFile = Path.Combine(_workspace.Path, "expanded.json");
 
         // Act
         var result = await RunScript(canonicalMatrix, outputMatrixFile: outputFile);
@@ -62,10 +63,10 @@ public class ExpandTestMatrixGitHubTests : IDisposable
             testProjectPath: "tests/TestProject/TestProject.csproj",
             supportedOSes: ["linux"]);
 
-        var canonicalMatrix = Path.Combine(_tempDir.Path, "canonical.json");
+        var canonicalMatrix = Path.Combine(_workspace.Path, "canonical.json");
         TestDataBuilder.CreateCanonicalMatrixJson(canonicalMatrix, tests: [entry]);
 
-        var outputFile = Path.Combine(_tempDir.Path, "expanded.json");
+        var outputFile = Path.Combine(_workspace.Path, "expanded.json");
 
         // Act
         var result = await RunScript(canonicalMatrix, outputMatrixFile: outputFile);
@@ -88,10 +89,10 @@ public class ExpandTestMatrixGitHubTests : IDisposable
             testProjectPath: "tests/TestProject/TestProject.csproj",
             supportedOSes: ["macos"]);
 
-        var canonicalMatrix = Path.Combine(_tempDir.Path, "canonical.json");
+        var canonicalMatrix = Path.Combine(_workspace.Path, "canonical.json");
         TestDataBuilder.CreateCanonicalMatrixJson(canonicalMatrix, tests: [entry]);
 
-        var outputFile = Path.Combine(_tempDir.Path, "expanded.json");
+        var outputFile = Path.Combine(_workspace.Path, "expanded.json");
 
         var result = await RunScript(canonicalMatrix, outputMatrixFile: outputFile);
 
@@ -112,10 +113,10 @@ public class ExpandTestMatrixGitHubTests : IDisposable
             testProjectPath: "tests/MultiOSProject/MultiOSProject.csproj",
             supportedOSes: ["windows", "linux", "macos"]);
 
-        var canonicalMatrix = Path.Combine(_tempDir.Path, "canonical.json");
+        var canonicalMatrix = Path.Combine(_workspace.Path, "canonical.json");
         TestDataBuilder.CreateCanonicalMatrixJson(canonicalMatrix, tests: [entry]);
 
-        var outputFile = Path.Combine(_tempDir.Path, "expanded.json");
+        var outputFile = Path.Combine(_workspace.Path, "expanded.json");
 
         var result = await RunScript(canonicalMatrix, outputMatrixFile: outputFile);
 
@@ -138,10 +139,10 @@ public class ExpandTestMatrixGitHubTests : IDisposable
             testProjectPath: "tests/TestProject/TestProject.csproj",
             supportedOSes: ["linux"]);
 
-        var canonicalMatrix = Path.Combine(_tempDir.Path, "canonical.json");
+        var canonicalMatrix = Path.Combine(_workspace.Path, "canonical.json");
         TestDataBuilder.CreateCanonicalMatrixJson(canonicalMatrix, tests: [entry]);
 
-        var outputFile = Path.Combine(_tempDir.Path, "expanded.json");
+        var outputFile = Path.Combine(_workspace.Path, "expanded.json");
 
         var result = await RunScript(canonicalMatrix, outputMatrixFile: outputFile);
 
@@ -165,10 +166,10 @@ public class ExpandTestMatrixGitHubTests : IDisposable
             testProjectPath: "tests/TestProject/TestProject.csproj",
             supportedOSes: ["windows"]);
 
-        var canonicalMatrix = Path.Combine(_tempDir.Path, "canonical.json");
+        var canonicalMatrix = Path.Combine(_workspace.Path, "canonical.json");
         TestDataBuilder.CreateCanonicalMatrixJson(canonicalMatrix, tests: [entry]);
 
-        var outputFile = Path.Combine(_tempDir.Path, "expanded.json");
+        var outputFile = Path.Combine(_workspace.Path, "expanded.json");
 
         var result = await RunScript(canonicalMatrix, outputMatrixFile: outputFile);
 
@@ -196,10 +197,10 @@ public class ExpandTestMatrixGitHubTests : IDisposable
             testProjectPath: "tests/TestProject/TestProject.csproj",
             supportedOSes: ["linux"]);
 
-        var canonicalMatrix = Path.Combine(_tempDir.Path, "canonical.json");
+        var canonicalMatrix = Path.Combine(_workspace.Path, "canonical.json");
         TestDataBuilder.CreateCanonicalMatrixJson(canonicalMatrix, tests: [entry]);
 
-        var outputFile = Path.Combine(_tempDir.Path, "expanded.json");
+        var outputFile = Path.Combine(_workspace.Path, "expanded.json");
 
         var result = await RunScript(canonicalMatrix, outputMatrixFile: outputFile);
 
@@ -231,14 +232,13 @@ public class ExpandTestMatrixGitHubTests : IDisposable
             workitemprefix: "FullProject_Part",
             collection: "MyPartition",
             extraTestArgs: "--filter-trait \"Partition=MyPartition\"",
-            testSessionTimeout: "30m",
-            testHangTimeout: "15m",
+            mtpBaseArgs: "--hangdump-timeout 15m --timeout 30m",
             supportedOSes: ["linux"]);
 
-        var canonicalMatrix = Path.Combine(_tempDir.Path, "canonical.json");
+        var canonicalMatrix = Path.Combine(_workspace.Path, "canonical.json");
         TestDataBuilder.CreateCanonicalMatrixJson(canonicalMatrix, tests: [entry]);
 
-        var outputFile = Path.Combine(_tempDir.Path, "expanded.json");
+        var outputFile = Path.Combine(_workspace.Path, "expanded.json");
 
         var result = await RunScript(canonicalMatrix, outputMatrixFile: outputFile);
 
@@ -254,8 +254,7 @@ public class ExpandTestMatrixGitHubTests : IDisposable
         Assert.Equal("FullProject_Part", expandedEntry.Workitemprefix);
         Assert.Equal("MyPartition", expandedEntry.Collection);
         Assert.Equal("--filter-trait \"Partition=MyPartition\"", expandedEntry.ExtraTestArgs);
-        Assert.Equal("30m", expandedEntry.TestSessionTimeout);
-        Assert.Equal("15m", expandedEntry.TestHangTimeout);
+        Assert.Equal("--hangdump-timeout 15m --timeout 30m", expandedEntry.MtpBaseArgs);
         Assert.Equal("ubuntu-latest", expandedEntry.RunsOn);
     }
 
@@ -263,10 +262,10 @@ public class ExpandTestMatrixGitHubTests : IDisposable
     [RequiresTools(["pwsh"])]
     public async Task HandlesEmptyMatrix()
     {
-        var canonicalMatrix = Path.Combine(_tempDir.Path, "canonical.json");
+        var canonicalMatrix = Path.Combine(_workspace.Path, "canonical.json");
         TestDataBuilder.CreateCanonicalMatrixJson(canonicalMatrix);
 
-        var outputFile = Path.Combine(_tempDir.Path, "expanded.json");
+        var outputFile = Path.Combine(_workspace.Path, "expanded.json");
 
         var result = await RunScript(canonicalMatrix, outputMatrixFile: outputFile);
 
@@ -280,8 +279,8 @@ public class ExpandTestMatrixGitHubTests : IDisposable
     [RequiresTools(["pwsh"])]
     public async Task FailsWhenCanonicalMatrixNotFound()
     {
-        var nonExistentFile = Path.Combine(_tempDir.Path, "does-not-exist.json");
-        var outputFile = Path.Combine(_tempDir.Path, "expanded.json");
+        var nonExistentFile = Path.Combine(_workspace.Path, "does-not-exist.json");
+        var outputFile = Path.Combine(_workspace.Path, "expanded.json");
 
         var result = await RunScript(nonExistentFile, outputMatrixFile: outputFile);
 
@@ -299,10 +298,10 @@ public class ExpandTestMatrixGitHubTests : IDisposable
             testProjectPath: "tests/NoOsSpecified/NoOsSpecified.csproj",
             supportedOSes: []);
 
-        var canonicalMatrix = Path.Combine(_tempDir.Path, "canonical.json");
+        var canonicalMatrix = Path.Combine(_workspace.Path, "canonical.json");
         TestDataBuilder.CreateCanonicalMatrixJson(canonicalMatrix, tests: [entry]);
 
-        var outputFile = Path.Combine(_tempDir.Path, "expanded.json");
+        var outputFile = Path.Combine(_workspace.Path, "expanded.json");
 
         var result = await RunScript(canonicalMatrix, outputMatrixFile: outputFile);
 
@@ -325,10 +324,10 @@ public class ExpandTestMatrixGitHubTests : IDisposable
             testProjectPath: "tests/BadOs/BadOs.csproj",
             supportedOSes: ["linux", "invalid-os"]);
 
-        var canonicalMatrix = Path.Combine(_tempDir.Path, "canonical.json");
+        var canonicalMatrix = Path.Combine(_workspace.Path, "canonical.json");
         TestDataBuilder.CreateCanonicalMatrixJson(canonicalMatrix, tests: [entry]);
 
-        var outputFile = Path.Combine(_tempDir.Path, "expanded.json");
+        var outputFile = Path.Combine(_workspace.Path, "expanded.json");
 
         var result = await RunScript(canonicalMatrix, outputMatrixFile: outputFile);
 
@@ -351,10 +350,10 @@ public class ExpandTestMatrixGitHubTests : IDisposable
             testProjectPath: "tests/CasedOs/CasedOs.csproj",
             supportedOSes: ["WINDOWS", "Linux", "MacOS"]);
 
-        var canonicalMatrix = Path.Combine(_tempDir.Path, "canonical.json");
+        var canonicalMatrix = Path.Combine(_workspace.Path, "canonical.json");
         TestDataBuilder.CreateCanonicalMatrixJson(canonicalMatrix, tests: [entry]);
 
-        var outputFile = Path.Combine(_tempDir.Path, "expanded.json");
+        var outputFile = Path.Combine(_workspace.Path, "expanded.json");
 
         var result = await RunScript(canonicalMatrix, outputMatrixFile: outputFile);
 
@@ -384,10 +383,10 @@ public class ExpandTestMatrixGitHubTests : IDisposable
             testProjectPath: "tests/RegularProject/RegularProject.csproj",
             supportedOSes: ["linux"]);
 
-        var canonicalMatrix = Path.Combine(_tempDir.Path, "canonical.json");
+        var canonicalMatrix = Path.Combine(_workspace.Path, "canonical.json");
         TestDataBuilder.CreateCanonicalMatrixJson(canonicalMatrix, tests: [splitEntry, regularEntry]);
 
-        var outputFile = Path.Combine(_tempDir.Path, "expanded.json");
+        var outputFile = Path.Combine(_workspace.Path, "expanded.json");
 
         var result = await RunScript(canonicalMatrix, outputMatrixFile: outputFile);
 
@@ -411,10 +410,10 @@ public class ExpandTestMatrixGitHubTests : IDisposable
             supportedOSes: ["windows", "linux", "macos"],
             runners: new Dictionary<string, string> { ["macos"] = "macos-latest-xlarge" });
 
-        var canonicalMatrix = Path.Combine(_tempDir.Path, "canonical.json");
+        var canonicalMatrix = Path.Combine(_workspace.Path, "canonical.json");
         TestDataBuilder.CreateCanonicalMatrixJson(canonicalMatrix, tests: [entry]);
 
-        var outputFile = Path.Combine(_tempDir.Path, "expanded.json");
+        var outputFile = Path.Combine(_workspace.Path, "expanded.json");
 
         // Act
         var result = await RunScript(canonicalMatrix, outputMatrixFile: outputFile);
@@ -450,10 +449,10 @@ public class ExpandTestMatrixGitHubTests : IDisposable
                 ["macos"] = "macos-latest-xlarge"
             });
 
-        var canonicalMatrix = Path.Combine(_tempDir.Path, "canonical.json");
+        var canonicalMatrix = Path.Combine(_workspace.Path, "canonical.json");
         TestDataBuilder.CreateCanonicalMatrixJson(canonicalMatrix, tests: [entry]);
 
-        var outputFile = Path.Combine(_tempDir.Path, "expanded.json");
+        var outputFile = Path.Combine(_workspace.Path, "expanded.json");
 
         // Act
         var result = await RunScript(canonicalMatrix, outputMatrixFile: outputFile);
@@ -484,10 +483,10 @@ public class ExpandTestMatrixGitHubTests : IDisposable
             testProjectPath: "tests/DefaultRunners/DefaultRunners.csproj",
             supportedOSes: ["windows", "linux", "macos"]);
 
-        var canonicalMatrix = Path.Combine(_tempDir.Path, "canonical.json");
+        var canonicalMatrix = Path.Combine(_workspace.Path, "canonical.json");
         TestDataBuilder.CreateCanonicalMatrixJson(canonicalMatrix, tests: [entry]);
 
-        var outputFile = Path.Combine(_tempDir.Path, "expanded.json");
+        var outputFile = Path.Combine(_workspace.Path, "expanded.json");
 
         // Act
         var result = await RunScript(canonicalMatrix, outputMatrixFile: outputFile);
@@ -507,7 +506,7 @@ public class ExpandTestMatrixGitHubTests : IDisposable
     public async Task FullPipeline_SplitTestsExpandPerOS()
     {
         // Validates the full pipeline: build-test-matrix → expand-test-matrix-github → split-test-matrix-by-deps
-        var artifactsDir = Path.Combine(_tempDir.Path, "artifacts");
+        var artifactsDir = Path.Combine(_workspace.Path, "artifacts");
         Directory.CreateDirectory(artifactsDir);
 
         TestDataBuilder.CreateTestsMetadataJson(
@@ -545,8 +544,8 @@ public class ExpandTestMatrixGitHubTests : IDisposable
             supportedOSes: ["linux"]);
 
         // Run build-test-matrix.ps1
-        var buildMatrixScript = Path.Combine(FindRepoRoot(), "eng", "scripts", "build-test-matrix.ps1");
-        var canonicalFile = Path.Combine(_tempDir.Path, "canonical.json");
+        var buildMatrixScript = Path.Combine(RepoRoot.Path, "eng", "scripts", "build-test-matrix.ps1");
+        var canonicalFile = Path.Combine(_workspace.Path, "canonical.json");
 
         using var buildCmd = new PowerShellCommand(buildMatrixScript, _output)
             .WithTimeout(TimeSpan.FromMinutes(2));
@@ -556,13 +555,13 @@ public class ExpandTestMatrixGitHubTests : IDisposable
         buildResult.EnsureSuccessful("build-test-matrix.ps1 failed");
 
         // Run expand-test-matrix-github.ps1 → single output file
-        var expandedFile = Path.Combine(_tempDir.Path, "expanded.json");
+        var expandedFile = Path.Combine(_workspace.Path, "expanded.json");
         var expandResult = await RunScript(canonicalFile, outputMatrixFile: expandedFile);
         expandResult.EnsureSuccessful("expand-test-matrix-github.ps1 failed");
 
         // Run split-test-matrix-by-deps.ps1
-        var splitScriptPath = Path.Combine(FindRepoRoot(), "eng", "scripts", "split-test-matrix-by-deps.ps1");
-        var githubOutputFile = Path.Combine(_tempDir.Path, "github_output.txt");
+        var splitScriptPath = Path.Combine(RepoRoot.Path, "eng", "scripts", "split-test-matrix-by-deps.ps1");
+        var githubOutputFile = Path.Combine(_workspace.Path, "github_output.txt");
         File.WriteAllText(githubOutputFile, "");
 
         using var splitCmd = new PowerShellCommand(splitScriptPath, _output)
@@ -599,13 +598,13 @@ public class ExpandTestMatrixGitHubTests : IDisposable
         var e2eEntries = nugetsLinux.Include.Where(e => e.ProjectName == "LinuxE2E").ToArray();
         Assert.Single(e2eEntries);
         Assert.Equal("ubuntu-latest", e2eEntries[0].RunsOn);
-        Assert.True(e2eEntries[0].RequiresNugets);
+        Assert.True(e2eEntries[0].Properties.GetValueOrDefault("requiresNugets"));
 
         // CLI E2E: 1 project × 1 OS = 1, in requires-cli-archive matrix
         var cliE2eEntries = cliArchiveMatrix.Include.Where(e => e.ProjectName == "CliE2E").ToArray();
         Assert.Single(cliE2eEntries);
         Assert.Equal("ubuntu-latest", cliE2eEntries[0].RunsOn);
-        Assert.True(cliE2eEntries[0].RequiresCliArchive);
+        Assert.True(cliE2eEntries[0].Properties.GetValueOrDefault("requiresCliArchive"));
 
         // Total no-nugets: 3 + 6 = 9, Total nugets: 1 (linux only), Total cli-archive: 1
         Assert.Equal(9, allNoNugets.Length);
@@ -689,19 +688,5 @@ public class ExpandTestMatrixGitHubTests : IDisposable
         }
 
         return new GitHubActionsMatrix { Include = entries };
-    }
-
-    private static string FindRepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "Aspire.slnx")))
-            {
-                return dir.FullName;
-            }
-            dir = dir.Parent;
-        }
-        throw new InvalidOperationException("Could not find repository root");
     }
 }

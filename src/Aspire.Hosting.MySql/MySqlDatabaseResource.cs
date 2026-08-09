@@ -14,6 +14,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <param name="name">The name of the resource.</param>
 /// <param name="databaseName">The database name.</param>
 /// <param name="parent">The MySQL parent resource associated with this database.</param>
+/// <ats-summary>A resource that represents a MySQL database. This is a child resource of a <ats-see cref="!:type:MySqlServerResource" />.</ats-summary>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Database = {DatabaseName}")]
 [AspireExport(ExposeProperties = true)]
 public class MySqlDatabaseResource(string name, string databaseName, MySqlServerResource parent)

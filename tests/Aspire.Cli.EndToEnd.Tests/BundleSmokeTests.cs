@@ -1,9 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
+using Hex1b.Input;
 using Xunit;
 
 namespace Aspire.Cli.EndToEnd.Tests;
@@ -15,57 +16,258 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class BundleSmokeTests(ITestOutputHelper output)
 {
+    [CaptureWorkspaceOnFailure]
     [Fact]
     public async Task CreateAndRunAspireStarterProjectWithBundle()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
 
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, mountDockerSocket: true, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
-        // Verify the dashboard is actually reachable, not just that the URL was printed.
-        // When the dashboard path bug was present, the URL appeared on screen but curling
-        // it returned connection refused because the dashboard process failed to start.
-        var waitForDashboardCurlSuccess = new CellPatternSearcher()
-            .Find("dashboard-http-200");
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
         var counter = new SequenceCounter();
-        var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
-        sequenceBuilder.PrepareDockerEnvironment(counter, workspace);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
-        sequenceBuilder.InstallAspireCliInDocker(installMode, counter);
+        await auto.AspireNewAsync("BundleStarterApp", counter);
 
-        sequenceBuilder.AspireNew("BundleStarterApp", counter)
-            // Start AppHost in detached mode and capture JSON output
-            .Type("aspire start --format json | tee /tmp/aspire-detach.json")
-            .Enter()
-            .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(3))
-            // Verify the dashboard is reachable by extracting the URL from the detach output
-            // and curling it. Extract just the base URL (https://localhost:PORT) using sed, which is
-            // portable across macOS (BSD) and Linux (GNU) unlike grep -oP.
-            .Type("DASHBOARD_URL=$(sed -n 's/.*\"dashboardUrl\"[[:space:]]*:[[:space:]]*\"\\(https:\\/\\/localhost:[0-9]*\\).*/\\1/p' /tmp/aspire-detach.json | head -1)")
-            .Enter()
-            .WaitForSuccessPrompt(counter)
-            .Type("curl -ksSL -o /dev/null -w 'dashboard-http-%{http_code}' \"$DASHBOARD_URL\" || echo 'dashboard-http-failed'")
-            .Enter()
-            .WaitUntil(s => waitForDashboardCurlSuccess.Search(s).Count > 0, TimeSpan.FromSeconds(15))
-            .WaitForSuccessPrompt(counter)
-            // Clean up: use aspire stop to gracefully shut down the detached AppHost.
-            .Type("aspire stop")
-            .Enter()
-            .WaitForSuccessPrompt(counter)
-            .Type("exit")
-            .Enter();
+        await auto.AspireStartAsync(counter);
+        await auto.AspireStopAsync(counter);
+    }
 
-        var sequence = sequenceBuilder.Build();
+    [CaptureWorkspaceOnFailure]
+    [Fact]
+    public async Task DotNetRunProjectAppHostUsesAspireCliBundle()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var projectName = "DotNetRunBundleApp";
 
-        await sequence.ApplyAsync(terminal, TestContext.Current.CancellationToken);
+        var workspace = TemporaryWorkspace.Create(output);
 
-        await pendingRun;
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        await auto.AspireNewAsync(projectName, counter, useRedisCache: false);
+
+        var projectRoot = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
+        var appHostDirectory = Path.Combine(projectRoot, $"{projectName}.AppHost");
+        var appHostProjectPath = Path.Combine(appHostDirectory, $"{projectName}.AppHost.csproj");
+        var appHostSourcePath = Path.Combine(appHostDirectory, "AppHost.cs");
+        var argsOutputPath = Path.Combine(projectRoot, "apphost-args.txt");
+        var containerArgsOutputPath = CliE2ETestHelpers.ToContainerPath(argsOutputPath, workspace);
+
+        Assert.True(File.Exists(appHostProjectPath), $"Expected AppHost project file to exist at: {appHostProjectPath}");
+        Assert.True(File.Exists(appHostSourcePath), $"Expected AppHost source file to exist at: {appHostSourcePath}");
+
+        var appHostProject = File.ReadAllText(appHostProjectPath);
+        Assert.Contains("<Nullable>enable</Nullable>", appHostProject);
+        Assert.DoesNotContain("AspireUseCliBundle", appHostProject);
+        appHostProject = appHostProject.Replace(
+            "<Nullable>enable</Nullable>",
+            """
+            <Nullable>enable</Nullable>
+                <AspireUseCliBundle>true</AspireUseCliBundle>
+            """,
+            StringComparison.Ordinal);
+        File.WriteAllText(appHostProjectPath, appHostProject);
+
+        File.WriteAllText(
+            appHostSourcePath,
+            $$"""
+            File.WriteAllText({{JsonSerializer.Serialize(containerArgsOutputPath)}}, string.Join("|", args));
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            builder.Build().Run();
+            """);
+
+        var appHostProjectRelativePath = Path.GetRelativePath(workspace.WorkspaceRoot.FullName, appHostProjectPath);
+        var quotedAppHostProjectPath = AspireCliShellCommandHelpers.QuoteBashArg(appHostProjectRelativePath);
+
+        await auto.TypeAsync($"dotnet run --no-launch-profile --project {quotedAppHostProjectPath} -- --from-dotnet-run");
+        await auto.EnterAsync();
+
+        await auto.WaitUntilAsync(
+            s => s.ContainsText("Press CTRL+C to stop the AppHost and exit."),
+            timeout: CliE2EAutomatorHelpers.AspireRunReadyTimeout,
+            description: "Press CTRL+C message from aspire run");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.C);
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        Assert.True(File.Exists(argsOutputPath), $"Expected AppHost to write forwarded args to: {argsOutputPath}");
+        Assert.Equal("--from-dotnet-run", File.ReadAllText(argsOutputPath));
+    }
+
+    [CaptureWorkspaceOnFailure]
+    [Fact]
+    public async Task DotNetRunProjectAppHostRestoresAndUsesAspireCliThroughDnx()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        Assert.SkipUnless(
+            strategy.Mode is CliInstallMode.LocalHive or CliInstallMode.LocalArchive,
+            "Real DNX delegation requires a locally built Aspire CLI package hive.");
+
+        const string ProjectName = "DotNetRunDnxBundleApp";
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.AspireNewAsync(ProjectName, counter, useRedisCache: false);
+
+        var projectRoot = Path.Combine(workspace.WorkspaceRoot.FullName, ProjectName);
+        var appHostDirectory = Path.Combine(projectRoot, $"{ProjectName}.AppHost");
+        var appHostProjectPath = Path.Combine(appHostDirectory, $"{ProjectName}.AppHost.csproj");
+        var appHostSourcePath = Path.Combine(appHostDirectory, "AppHost.cs");
+        var argsOutputPath = Path.Combine(projectRoot, "apphost-dnx-args.txt");
+        var containerArgsOutputPath = CliE2ETestHelpers.ToContainerPath(argsOutputPath, workspace);
+
+        Assert.True(File.Exists(appHostProjectPath), $"Expected AppHost project file to exist at: {appHostProjectPath}");
+        Assert.True(File.Exists(appHostSourcePath), $"Expected AppHost source file to exist at: {appHostSourcePath}");
+
+        var appHostProject = File.ReadAllText(appHostProjectPath);
+        appHostProject = appHostProject.Replace(
+            "<Nullable>enable</Nullable>",
+            """
+            <Nullable>enable</Nullable>
+                <AspireUseCliBundle>true</AspireUseCliBundle>
+            """,
+            StringComparison.Ordinal);
+        File.WriteAllText(appHostProjectPath, appHostProject);
+
+        var appHostSource = File.ReadAllText(appHostSourcePath);
+        File.WriteAllText(
+            appHostSourcePath,
+            appHostSource.Replace(
+                "var builder = DistributedApplication.CreateBuilder(args);",
+                $$"""
+                File.WriteAllText({{JsonSerializer.Serialize(containerArgsOutputPath)}}, string.Join("|", args));
+
+                var builder = DistributedApplication.CreateBuilder(args);
+                """,
+                StringComparison.Ordinal));
+
+        await auto.RunCommandAsync($"cd {AspireCliShellCommandHelpers.QuoteBashArg(ProjectName)}", counter);
+        await auto.RunCommandAsync("test ! -e .config/dotnet-tools.json", counter);
+
+        // The PR/local-hive installer places the exact locally built packages under this hive.
+        // Ensuring it is registered in the app's NuGet.config makes the target's pinned DNX package
+        // reference resolve the same Aspire.Cli build as the AppHost SDK without relying on a tool manifest.
+        await auto.RunCommandAsync(
+            "DNX_HIVE=$(find \"$HOME/.aspire/hives\" -mindepth 2 -maxdepth 2 -type d -name packages -print -quit); " +
+            "test -n \"$DNX_HIVE\"; " +
+            "NUGET_CONFIG=$(find . -maxdepth 1 -type f -iname nuget.config -print -quit); " +
+            "if [ -z \"$NUGET_CONFIG\" ]; then NUGET_CONFIG=NuGet.config; dotnet new nugetconfig; fi; " +
+            "dotnet nuget list source --configfile \"$NUGET_CONFIG\" | grep -F \"$DNX_HIVE\" >/dev/null || " +
+            "dotnet nuget add source \"$DNX_HIVE\" --name aspire-dnx-local --configfile \"$NUGET_CONFIG\"",
+            counter);
+
+        // Remove both supported Aspire installation locations while leaving the SDK-adjacent DNX
+        // executable available. This forces the automatic fallback rather than PATH CLI delegation.
+        await auto.RunCommandAsync(
+            "export PATH=\"${PATH#\"$HOME/.aspire/bin:\"}\"; " +
+            "export PATH=\"${PATH#\"$HOME/.aspire:\"}\"; " +
+            "hash -r; ! command -v aspire; command -v dnx",
+            counter);
+
+        var appHostProjectRelativePath = Path.GetRelativePath(projectRoot, appHostProjectPath);
+        await auto.TypeAsync(
+            $"dotnet run --no-launch-profile --project {AspireCliShellCommandHelpers.QuoteBashArg(appHostProjectRelativePath)} -- --from-real-dnx");
+        await auto.EnterAsync();
+
+        await auto.WaitUntilAsync(
+            s => s.ContainsText("Press CTRL+C to stop the AppHost and exit."),
+            timeout: CliE2EAutomatorHelpers.AspireRunReadyTimeout,
+            description: "Press CTRL+C message from Aspire CLI restored through DNX");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.C);
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        Assert.True(File.Exists(argsOutputPath), $"Expected AppHost to write forwarded args to: {argsOutputPath}");
+        Assert.Equal("--from-real-dnx", File.ReadAllText(argsOutputPath));
+    }
+
+    [CaptureWorkspaceOnFailure]
+    [Fact]
+    public async Task DotNetRunFileBasedAppHostUsesAspireCliBundle()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var projectName = "DotNetRunFileBundleApp";
+
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        await auto.AspireNewCSharpEmptyAppHostAsync(projectName, counter);
+
+        var projectRoot = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
+        var appHostSourcePath = Path.Combine(projectRoot, "apphost.cs");
+        var argsOutputPath = Path.Combine(projectRoot, "apphost-file-args.txt");
+        var containerArgsOutputPath = CliE2ETestHelpers.ToContainerPath(argsOutputPath, workspace);
+
+        Assert.True(File.Exists(appHostSourcePath), $"Expected AppHost source file to exist at: {appHostSourcePath}");
+
+        var appHostSource = File.ReadAllText(appHostSourcePath);
+        var sdkDirective = File.ReadLines(appHostSourcePath).First();
+        Assert.StartsWith("#:sdk Aspire.AppHost.Sdk@", sdkDirective);
+        Assert.Contains("var builder = DistributedApplication.CreateBuilder(args);", appHostSource);
+        Assert.DoesNotContain("AspireUseCliBundle", appHostSource);
+        appHostSource = appHostSource.Replace(
+            sdkDirective,
+            $"{sdkDirective}{Environment.NewLine}#:property AspireUseCliBundle=true",
+            StringComparison.Ordinal);
+
+        File.WriteAllText(
+            appHostSourcePath,
+            appHostSource.Replace(
+                "var builder = DistributedApplication.CreateBuilder(args);",
+                $$"""
+                File.WriteAllText({{JsonSerializer.Serialize(containerArgsOutputPath)}}, string.Join("|", args));
+
+                var builder = DistributedApplication.CreateBuilder(args);
+                """));
+
+        await auto.RunCommandAsync($"cd {AspireCliShellCommandHelpers.QuoteBashArg(projectName)}", counter);
+
+        await auto.TypeAsync("dotnet run apphost.cs -- --from-dotnet-run-file");
+        await auto.EnterAsync();
+
+        await auto.WaitUntilAsync(
+            s => s.ContainsText("Press CTRL+C to stop the AppHost and exit."),
+            timeout: CliE2EAutomatorHelpers.AspireRunReadyTimeout,
+            description: "Press CTRL+C message from aspire run");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.C);
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        Assert.True(File.Exists(argsOutputPath), $"Expected AppHost to write forwarded args to: {argsOutputPath}");
+        Assert.Equal("--from-dotnet-run-file", File.ReadAllText(argsOutputPath));
     }
 }

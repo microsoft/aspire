@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsAspireHost>true</IsAspireHost>
-    <UserSecretsId>ca78455c-cd68-43fd-aed3-af99bb533e79</UserSecretsId>
+    <UserSecretsId>ca78455c-cd68-43fd-aed3-af99bb533e7a</UserSecretsId>
     <NoWarn>$(NoWarn);ASPIRECOMPUTE001;ASPIREPIPELINES001;ASPIREAZURE001;ASPIREPIPELINES003</NoWarn>
   </PropertyGroup>
 

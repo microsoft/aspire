@@ -4,7 +4,6 @@
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
-using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -12,36 +11,34 @@ namespace Aspire.Cli.Templating;
 
 internal sealed partial class CliTemplateFactory
 {
-    private async Task<TemplateResult> ApplyEmptyAppHostTemplateAsync(CallbackTemplate _, TemplateInputs inputs, System.CommandLine.ParseResult parseResult, CancellationToken cancellationToken)
+    private async Task<TemplateResult> ApplyEmptyAppHostTemplateAsync(CallbackTemplate template, TemplateInputs inputs, System.CommandLine.ParseResult parseResult, CancellationToken cancellationToken)
     {
         var languageId = inputs.Language;
         if (string.IsNullOrWhiteSpace(languageId))
         {
             _interactionService.DisplayError("Language selection is required.");
-            return new TemplateResult(ExitCodeConstants.InvalidCommand);
+            return new TemplateResult(CliExitCodes.InvalidCommand);
         }
 
         var language = _languageDiscovery.GetLanguageById(languageId);
         if (language is null)
         {
             _interactionService.DisplayError($"Unknown language: '{languageId}'");
-            return new TemplateResult(ExitCodeConstants.InvalidCommand);
+            return new TemplateResult(CliExitCodes.InvalidCommand);
         }
 
         var projectName = inputs.Name;
         if (string.IsNullOrWhiteSpace(projectName))
         {
-            var defaultName = _executionContext.WorkingDirectory.Name;
-            projectName = await _prompter.PromptForProjectNameAsync(defaultName, cancellationToken);
+            var defaultName = template.Name;
+            projectName = await _prompter.PromptForProjectNameAsync(defaultName, parseResult, cancellationToken);
         }
 
-        var outputPath = inputs.Output;
-        if (string.IsNullOrWhiteSpace(outputPath))
+        var outputPath = await ResolveOutputPathAsync(inputs, template.PathDeriver, projectName, parseResult, cancellationToken);
+        if (outputPath is null)
         {
-            var defaultOutputPath = $"./{projectName}";
-            outputPath = await _prompter.PromptForOutputPath(defaultOutputPath, cancellationToken);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
         }
-        outputPath = Path.GetFullPath(outputPath, _executionContext.WorkingDirectory.FullName);
 
         _logger.LogDebug("Applying empty AppHost template. LanguageId: {LanguageId}, Language: {LanguageDisplayName}, ProjectName: {ProjectName}, OutputPath: {OutputPath}.", languageId, language.DisplayName, projectName, outputPath);
 
@@ -59,12 +56,15 @@ internal sealed partial class CliTemplateFactory
             if (isCsharp)
             {
                 // Do this first so there is no prompt while status is displayed for creating project.
-                await _templateNuGetConfigService.PromptToCreateOrUpdateNuGetConfigAsync(inputs.Channel, outputPath, cancellationToken);
+                if (!await _templateNuGetConfigService.CreateOrUpdateNuGetConfigForSourceOverrideAsync(inputs.Source, inputs.Channel, outputPath, cancellationToken))
+                {
+                    await _templateNuGetConfigService.PromptToCreateOrUpdateNuGetConfigAsync(inputs.Channel, outputPath, cancellationToken);
+                }
             }
 
             templateResult = await _interactionService.ShowStatusAsync(
                 TemplatingStrings.CreatingNewProject,
-                async () =>
+                (Func<Task<TemplateResult>>)(async () =>
                 {
                     if (isCsharp)
                     {
@@ -74,8 +74,17 @@ internal sealed partial class CliTemplateFactory
                     else
                     {
                         _logger.LogDebug("Using scaffolding service for language '{LanguageDisplayName}' in '{OutputPath}'.", language.DisplayName, outputPath);
-                        var context = new ScaffoldContext(language, new DirectoryInfo(outputPath), projectName);
-                        await _scaffoldingService.ScaffoldAsync(context, cancellationToken);
+                        var context = new ScaffoldContext(
+                            language,
+                            new DirectoryInfo(outputPath),
+                            projectName,
+                            SdkVersion: inputs.Version,
+                            Channel: inputs.Channel,
+                            PackageSourceOverride: inputs.Source);
+                        if (!await _scaffoldingService.ScaffoldAsync(context, cancellationToken))
+                        {
+                            return new TemplateResult((int)CliExitCodes.FailedToCreateNewProject);
+                        }
 
                         if (useLocalhostTld)
                         {
@@ -83,18 +92,23 @@ internal sealed partial class CliTemplateFactory
                         }
                     }
 
-                    return new TemplateResult(ExitCodeConstants.Success, outputPath);
-                }, emoji: KnownEmojis.Rocket);
+                    return new TemplateResult((int)CliExitCodes.Success, outputPath);
+                }), emoji: KnownEmojis.Rocket);
 
-            if (templateResult.ExitCode != ExitCodeConstants.Success)
+            if (templateResult.ExitCode != CliExitCodes.Success)
             {
                 return templateResult;
+            }
+
+            if (!isCsharp)
+            {
+                await _templateNuGetConfigService.CreateOrUpdateNuGetConfigForSourceOverrideAsync(inputs.Source, inputs.Channel, outputPath, cancellationToken);
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _interactionService.DisplayError($"Failed to create project files: {ex.Message}");
-            return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
         }
 
         _interactionService.DisplaySuccess($"Created {language.DisplayName.EscapeMarkup()} project at {outputPath.EscapeMarkup()}");
@@ -105,59 +119,44 @@ internal sealed partial class CliTemplateFactory
 
     private async Task<bool> ResolveUseLocalhostTldAsync(System.CommandLine.ParseResult parseResult, CancellationToken cancellationToken)
     {
-        var localhostTldOptionSpecified = parseResult.Tokens.Any(token =>
-            string.Equals(token.Value, "--localhost-tld", StringComparisons.CliInputOrOutput));
-        var useLocalhostTld = parseResult.GetValue(s_localhostTldOption);
-        if (!localhostTldOptionSpecified)
-        {
-            if (!_hostEnvironment.SupportsInteractiveInput)
-            {
-                return false;
-            }
+        var binding = PromptBinding.CreateBoolConfirm(parseResult, _localhostTldOption, defaultValue: false);
 
-            useLocalhostTld = await _interactionService.PromptForSelectionAsync(
-                TemplatingStrings.UseLocalhostTld_Prompt,
-                [TemplatingStrings.No, TemplatingStrings.Yes],
-                choice => choice,
-                cancellationToken) switch
-            {
-                var choice when string.Equals(choice, TemplatingStrings.Yes, StringComparisons.CliInputOrOutput) => true,
-                var choice when string.Equals(choice, TemplatingStrings.No, StringComparisons.CliInputOrOutput) => false,
-                _ => throw new InvalidOperationException(TemplatingStrings.UseLocalhostTld_UnexpectedChoice)
-            };
+        var useLocalhostTld = await _interactionService.PromptConfirmAsync(
+            TemplatingStrings.UseLocalhostTld_Prompt,
+            binding: binding,
+            cancellationToken: cancellationToken);
+
+        if (useLocalhostTld)
+        {
+            _interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, TemplatingStrings.UseLocalhostTld_UsingLocalhostTld);
         }
 
-        if (useLocalhostTld ?? false)
-        {
-            _interactionService.DisplayMessage(KnownEmojis.CheckMark, TemplatingStrings.UseLocalhostTld_UsingLocalhostTld);
-        }
-
-        return useLocalhostTld ?? false;
+        return useLocalhostTld;
     }
 
     private async Task ApplyLocalhostTldToScaffoldedRunProfileAsync(string outputPath, string projectName, CancellationToken cancellationToken)
     {
-        var appHostRunProfilePath = Path.Combine(outputPath, "apphost.run.json");
-        if (!File.Exists(appHostRunProfilePath))
+        var hostName = $"{projectName.ToLowerInvariant()}.dev.localhost";
+
+        var aspireConfigPath = Path.Combine(outputPath, Configuration.AspireConfigFile.FileName);
+        if (!File.Exists(aspireConfigPath))
         {
-            _logger.LogDebug("Skipping localhost TLD update because '{RunProfilePath}' was not found.", appHostRunProfilePath);
+            _logger.LogDebug("Skipping localhost TLD update because aspire.config.json was not found in '{OutputPath}'.", outputPath);
             return;
         }
 
-        var hostName = $"{projectName.ToLowerInvariant()}.dev.localhost";
-        var content = await File.ReadAllTextAsync(appHostRunProfilePath, cancellationToken);
+        var content = await File.ReadAllTextAsync(aspireConfigPath, cancellationToken);
         var updatedContent = content.Replace("://localhost", $"://{hostName}", StringComparison.Ordinal);
-
         if (!string.Equals(content, updatedContent, StringComparison.Ordinal))
         {
-            await File.WriteAllTextAsync(appHostRunProfilePath, updatedContent, cancellationToken);
+            await File.WriteAllTextAsync(aspireConfigPath, updatedContent, cancellationToken);
         }
     }
 
     private async Task WriteCSharpEmptyAppHostAsync(string? templateVersion, string outputPath, string projectName, bool useLocalhostTld, CancellationToken cancellationToken)
     {
         var aspireVersion = string.IsNullOrWhiteSpace(templateVersion)
-            ? VersionHelper.GetDefaultTemplateVersion()
+            ? _executionContext.IdentitySdkVersion
             : templateVersion;
         var projectNameLower = projectName.ToLowerInvariant();
         var ports = GenerateRandomPorts();

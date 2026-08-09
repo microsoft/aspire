@@ -9,6 +9,7 @@ namespace Aspire.Hosting.GitHub.Models;
 /// <summary>
 /// Represents a GitHub Model resource.
 /// </summary>
+[Obsolete(GitHubModelsDeprecation.Message)]
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Model = {Model}")]
 public class GitHubModelResource : Resource, IResourceWithConnectionString
 {

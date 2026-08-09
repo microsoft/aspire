@@ -63,6 +63,37 @@ class CancellationToken {
     private volatile boolean cancelled = false;
     private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
 
+    // Remote token id supplied by the AppHost when this token is materialized for a
+    // callback argument. Null for locally-created tokens. Retained so cancellation can
+    // be correlated back to the AppHost if needed.
+    private final String remoteTokenId;
+
+    CancellationToken() {
+        this.remoteTokenId = null;
+    }
+
+    private CancellationToken(String remoteTokenId) {
+        this.remoteTokenId = remoteTokenId;
+    }
+
+    /**
+     * Materializes a cancellation token from a transport value sent by the AppHost.
+     * When the AppHost invokes a callback that accepts a CancellationToken it passes a
+     * remote token id (a string); generated code calls this to turn that wire value into
+     * a CancellationToken instance. Mirrors the TypeScript/Go SDK behavior.
+     */
+    static CancellationToken fromValue(Object value) {
+        if (value instanceof CancellationToken token) {
+            return token;
+        }
+        if (value instanceof String tokenId) {
+            return new CancellationToken(tokenId);
+        }
+        return new CancellationToken();
+    }
+
+    String getRemoteTokenId() { return remoteTokenId; }
+
     void cancel() {
         cancelled = true;
         for (Runnable listener : listeners) {
@@ -78,6 +109,10 @@ class CancellationToken {
             listener.run();
         }
     }
+}
+
+interface JsonSerializable {
+    Map<String, Object> toMap();
 }
 
 /**
@@ -162,7 +197,7 @@ class AspireClient {
         
         Map<String, Object> params = new HashMap<>();
         params.put("capabilityId", capabilityId);
-        params.put("args", args);
+        params.put("args", marshalTransportValue(args));
 
         Map<String, Object> request = new HashMap<>();
         request.put("jsonrpc", "2.0");
@@ -178,6 +213,70 @@ class AspireClient {
         } catch (IOException e) {
             handleDisconnect();
             throw new RuntimeException("Failed to invoke capability: " + e.getMessage(), e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Object marshalTransportValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+
+        if (value instanceof Function<?, ?> function) {
+            Function<Object, Object> typedFunction = (Function<Object, Object>) function;
+            return registerCallback(args -> typedFunction.apply(args.length > 0 ? args[0] : null));
+        }
+
+        Object serialized = serializeValue(value);
+        if (serialized instanceof Map) {
+            Map<String, Object> map = (Map<String, Object>) serialized;
+            Map<String, Object> result = new HashMap<>();
+            for (Map.Entry<String, Object> entry : map.entrySet()) {
+                result.put(entry.getKey(), marshalTransportValue(entry.getValue()));
+            }
+            return result;
+        }
+        if (serialized instanceof List) {
+            List<Object> list = (List<Object>) serialized;
+            List<Object> result = new ArrayList<>();
+            for (Object item : list) {
+                result.add(marshalTransportValue(item));
+            }
+            return result;
+        }
+        if (serialized instanceof Object[] array) {
+            List<Object> result = new ArrayList<>();
+            for (Object item : array) {
+                result.add(marshalTransportValue(item));
+            }
+            return result;
+        }
+
+        return serialized;
+    }
+
+    public void authenticate(String token) {
+        int id = requestId.incrementAndGet();
+
+        List<Object> params = List.of(token);
+
+        Map<String, Object> request = new HashMap<>();
+        request.put("jsonrpc", "2.0");
+        request.put("id", id);
+        request.put("method", "authenticate");
+        request.put("params", params);
+
+        debug("Sending request authenticate with id=" + id);
+
+        try {
+            sendMessage(request);
+            Object result = readResponse(id);
+            if (!(result instanceof Boolean authenticated) || !authenticated) {
+                throw new RuntimeException("Failed to authenticate to the AppHost server.");
+            }
+        } catch (IOException e) {
+            handleDisconnect();
+            throw new RuntimeException("Failed to authenticate: " + e.getMessage(), e);
         }
     }
 
@@ -289,7 +388,7 @@ class AspireClient {
     private void handleServerRequest(Map<String, Object> request) throws IOException {
         String method = (String) request.get("method");
         Object idObj = request.get("id");
-        Map<String, Object> params = (Map<String, Object>) request.get("params");
+        Object params = request.get("params");
 
         debug("Received server request: " + method);
 
@@ -298,25 +397,33 @@ class AspireClient {
 
         try {
             if ("invokeCallback".equals(method)) {
-                String callbackId = (String) params.get("callbackId");
-                List<Object> args = (List<Object>) params.get("args");
-                
-                Function<Object[], Object> callback = callbacks.get(callbackId);
-                if (callback != null) {
-                    Object[] unwrappedArgs = args.stream()
-                        .map(this::unwrapResult)
-                        .toArray();
-                    result = callback.apply(unwrappedArgs);
+                String callbackId = getCallbackId(params);
+                if (callbackId == null) {
+                    error = createError(-32602, "Invalid params: callbackId is required.");
                 } else {
-                    error = createError(-32601, "Callback not found: " + callbackId);
+                    List<Object> args = getCallbackArgs(params);
+
+                    Function<Object[], Object> callback = callbacks.get(callbackId);
+                    if (callback != null) {
+                        Object[] unwrappedArgs = args.stream()
+                            .map(this::unwrapResult)
+                            .toArray();
+                        result = awaitValue(callback.apply(unwrappedArgs));
+                    } else {
+                        error = createError(-32601, "Callback not found: " + callbackId);
+                    }
                 }
             } else if ("cancel".equals(method)) {
-                String cancellationId = (String) params.get("cancellationId");
-                Consumer<Void> handler = cancellations.get(cancellationId);
-                if (handler != null) {
-                    handler.accept(null);
+                String cancellationId = getCancellationId(params);
+                if (cancellationId == null) {
+                    error = createError(-32602, "Invalid params: cancellationId is required.");
+                } else {
+                    Consumer<Void> handler = cancellations.get(cancellationId);
+                    if (handler != null) {
+                        handler.accept(null);
+                    }
+                    result = true;
                 }
-                result = true;
             } else {
                 error = createError(-32601, "Unknown method: " + method);
             }
@@ -335,6 +442,64 @@ class AspireClient {
         }
         
         sendMessage(response);
+    }
+
+    @SuppressWarnings("unchecked")
+    private String getCallbackId(Object params) {
+        if (params instanceof List<?> list && !list.isEmpty()) {
+            return asString(list.get(0));
+        }
+
+        if (params instanceof Map<?, ?> map) {
+            return asString(map.get("callbackId"));
+        }
+
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Object> getCallbackArgs(Object params) {
+        Object args = null;
+        if (params instanceof List<?> list && list.size() > 1) {
+            args = list.get(1);
+        } else if (params instanceof Map<?, ?> map) {
+            args = map.get("args");
+        }
+
+        if (args instanceof Map<?, ?> map) {
+            List<Object> positionalArgs = new ArrayList<>();
+            for (var i = 0; ; i++) {
+                var key = "p" + i;
+                if (map.containsKey(key)) {
+                    positionalArgs.add(map.get(key));
+                } else {
+                    break;
+                }
+            }
+            return positionalArgs;
+        }
+
+        if (args instanceof List<?> list) {
+            return (List<Object>) list;
+        }
+
+        return args == null ? List.of() : List.of(args);
+    }
+
+    private String getCancellationId(Object params) {
+        if (params instanceof List<?> list && !list.isEmpty()) {
+            return asString(list.get(0));
+        }
+
+        if (params instanceof Map<?, ?> map) {
+            return asString(map.get("cancellationId"));
+        }
+
+        return null;
+    }
+
+    private String asString(Object value) {
+        return value instanceof String string ? string : null;
     }
 
     private Map<String, Object> createError(int code, String message) {
@@ -413,6 +578,13 @@ class AspireClient {
         return id;
     }
 
+    public static Object awaitValue(Object value) {
+        if (value instanceof CompletionStage<?> stage) {
+            return stage.toCompletableFuture().join();
+        }
+        return value;
+    }
+
     // Simple JSON serialization (no external dependencies)
     public static Object serializeValue(Object value) {
         if (value == null) {
@@ -426,6 +598,12 @@ class AspireClient {
         }
         if (value instanceof ReferenceExpression) {
             return ((ReferenceExpression) value).toJson();
+        }
+        if (value instanceof AspireUnion union) {
+            return serializeValue(union.getValue());
+        }
+        if (value instanceof JsonSerializable jsonSerializable) {
+            return jsonSerializable.toMap();
         }
         if (value instanceof Map) {
             @SuppressWarnings("unchecked")
@@ -452,6 +630,9 @@ class AspireClient {
                 result.add(serializeValue(item));
             }
             return result;
+        }
+        if (value instanceof WireValueEnum wireValueEnum) {
+            return wireValueEnum.getValue();
         }
         if (value instanceof Enum) {
             return ((Enum<?>) value).name();

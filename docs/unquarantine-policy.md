@@ -8,7 +8,7 @@ Tests that have been quarantined (marked with `[QuarantinedTest]`) must meet str
 
 A quarantined test can be unquarantined when it has **zero failures across ALL operating systems (Windows, Linux, macOS) for at least 21 consecutive days** in the quarantine CI runs.
 
-The quarantine CI workflow (`tests-quarantine.yml`) runs every 6 hours. The failure tracking data in each test's GitHub issue (linked from meta-issue https://github.com/dotnet/aspire/issues/8813) records per-OS pass/fail rates.
+The quarantine CI workflow (`tests-quarantine.yml`) runs every 6 hours. The failure tracking data in each test's GitHub issue (linked from meta-issue https://github.com/microsoft/aspire/issues/8813) records per-OS pass/fail rates.
 
 ## What This Means for Fixing Flaky Tests
 

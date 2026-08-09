@@ -55,6 +55,7 @@ public sealed class GenAIItemPartViewModel
         return new GenAIItemPartViewModel
         {
             MessagePart = part,
+            ErrorMessage = part is UnexpectedErrorPart errorPart ? errorPart.Error?.Message : null,
             TextVisualizerViewModel = CreateMessagePartVisualizer(part),
             AdditionalProperties = part is GenericPart genericPart
                 ? genericPart.AdditionalProperties?.Select(p => new GenAIPartPropertyViewModel { Name = p.Key, Value = p.Value.ToString() ?? string.Empty }).ToList()

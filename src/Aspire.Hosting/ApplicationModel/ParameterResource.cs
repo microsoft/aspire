@@ -2,14 +2,16 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.Resources;
+using static Aspire.Hosting.Resources.MessageStrings;
 
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
 /// Represents a parameter resource.
 /// </summary>
-public class ParameterResource : Resource, IManifestExpressionProvider, IValueProvider
+public class ParameterResource : Resource, IExpressionValue
 {
     private readonly Lazy<string> _lazyValue;
     private readonly Func<ParameterDefault?, string> _valueGetter;
@@ -89,6 +91,17 @@ public class ParameterResource : Resource, IManifestExpressionProvider, IValuePr
     /// </summary>
     internal TaskCompletionSource<string>? WaitForValueTcs { get; set; }
 
+    internal ResourcePropertySnapshot CreateValueSnapshotProperty(string value)
+    {
+        return new(KnownProperties.Parameter.Value, value)
+        {
+            IsSensitive = Secret,
+            DisplayName = ResourcePropertyParameterValueDisplayName,
+            IsHighlighted = true,
+            SortOrder = 0
+        };
+    }
+
     /// <summary>
     /// Gets the value of the parameter asynchronously, waiting if necessary for the value to be set.
     /// </summary>
@@ -127,25 +140,40 @@ public class ParameterResource : Resource, IManifestExpressionProvider, IValuePr
     /// </summary>
     public bool EnableDescriptionMarkdown { get; set; }
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-    internal InteractionInput CreateInput()
+    internal InteractionInput CreateInput(string? name = null, bool? required = null, InputLoadOptions? dynamicLoading = null)
     {
         if (this.TryGetLastAnnotation<InputGeneratorAnnotation>(out var annotation))
         {
-            // If the annotation is present, use it to create the input.
-            return annotation.InputGenerator(this);
+            var generatedInput = annotation.InputGenerator(this);
+            if (name is not null)
+            {
+                generatedInput.SetName(name);
+            }
+
+            if (required is not null)
+            {
+                generatedInput.SetRequired(required.Value);
+            }
+
+            if (dynamicLoading is not null)
+            {
+                generatedInput.SetDynamicLoading(dynamicLoading);
+            }
+
+            return generatedInput;
         }
 
         var input = new InteractionInput
         {
-            Name = Name,
+            Name = name ?? Name,
             InputType = Secret ? InputType.SecretText : InputType.Text,
             Label = Name,
             Description = Description,
             EnableDescriptionMarkdown = EnableDescriptionMarkdown,
+            Required = required ?? false,
+            DynamicLoading = dynamicLoading,
             Placeholder = string.Format(CultureInfo.CurrentCulture, InteractionStrings.ParametersInputsParameterPlaceholder, Name)
         };
         return input;
     }
-#pragma warning restore ASPIREINTERACTION001
 }

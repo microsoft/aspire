@@ -2,8 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
+using Hex1b.Input;
 using Xunit;
 
 namespace Aspire.Cli.EndToEnd.Tests;
@@ -15,62 +15,40 @@ namespace Aspire.Cli.EndToEnd.Tests;
 public sealed class JsReactTemplateTests(ITestOutputHelper output)
 {
     [Fact]
+    [CaptureWorkspaceOnFailure]
     public async Task CreateAndRunJsReactProject()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, mountDockerSocket: true, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
-        var waitForCtrlCMessage = new CellPatternSearcher()
-            .Find($"Press CTRL+C to stop the apphost and exit.");
-
-        // Regression test for https://github.com/dotnet/aspire/issues/13971
-        // If this prompt appears, it means multiple apphosts were incorrectly detected
-        // (e.g., AppHost.cs was incorrectly treated as a single-file apphost)
-        var unexpectedAppHostSelectionPrompt = new CellPatternSearcher()
-            .Find("Select an apphost to use:");
-
-        // The purpose of this is to keep track of the number of actual shell commands we have
-        // executed. This is important because we customize the shell prompt to show either
-        // "[n OK] $ " or "[n ERR:exitcode] $ ". This allows us to deterministically wait for a
-        // command to complete and for the shell to be ready for more input rather than relying
-        // on arbitrary timeouts of mid-command strings.
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
         var counter = new SequenceCounter();
-        var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
-        sequenceBuilder.PrepareDockerEnvironment(counter, workspace);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
-        sequenceBuilder.InstallAspireCliInDocker(installMode, counter);
+        await auto.AspireNewAsync("AspireJsReactApp", counter, template: AspireTemplate.JsReact, useRedisCache: false);
 
-        sequenceBuilder.AspireNew("AspireJsReactApp", counter, template: AspireTemplate.JsReact, useRedisCache: false);
+        // Run the project with aspire run
+        await auto.TypeAsync("aspire run");
+        await auto.EnterAsync();
 
-        sequenceBuilder
-            .Type("aspire run")
-            .Enter()
-            .WaitUntil(s =>
+        // Regression test for https://github.com/microsoft/aspire/issues/13971
+        await auto.WaitUntilAsync(s =>
+        {
+            if (s.ContainsText("Select an AppHost to use:"))
             {
-                // Fail immediately if we see the apphost selection prompt (means duplicate detection)
-                if (unexpectedAppHostSelectionPrompt.Search(s).Count > 0)
-                {
-                    throw new InvalidOperationException(
-                        "Unexpected apphost selection prompt detected! " +
-                        "This indicates multiple apphosts were incorrectly detected.");
-                }
-                return waitForCtrlCMessage.Search(s).Count > 0;
-            }, TimeSpan.FromMinutes(2))
-            .Ctrl().Key(Hex1b.Input.Hex1bKey.C)
-            .WaitForSuccessPrompt(counter)
-            .Type("exit")
-            .Enter();
+                throw new InvalidOperationException(
+                    "Unexpected apphost selection prompt detected! " +
+                    "This indicates multiple apphosts were incorrectly detected.");
+            }
+            return s.ContainsText("Press CTRL+C to stop the AppHost and exit.");
+        }, timeout: TimeSpan.FromMinutes(2), description: "Press CTRL+C message (aspire run started)");
 
-        var sequence = sequenceBuilder.Build();
-
-        await sequence.ApplyAsync(terminal, TestContext.Current.CancellationToken);
-
-        await pendingRun;
+        await auto.Ctrl().KeyAsync(Hex1bKey.C);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 }

@@ -65,7 +65,6 @@ public class BrowserSecurityHeadersMiddlewareTests
     [Theory]
     [InlineData(ConnectionType.OtlpGrpc)]
     [InlineData(ConnectionType.OtlpHttp)]
-    [InlineData(ConnectionType.Mcp)]
     public async Task InvokeAsync_Otlp_NotAdded(ConnectionType connectionType)
     {
         // Arrange

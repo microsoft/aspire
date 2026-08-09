@@ -3,7 +3,6 @@
 
 using System.Reflection;
 using System.Runtime.Versioning;
-using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Testing;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Testing;
@@ -16,7 +15,7 @@ internal static class AnalyzerTest
         where TAnalyzer : DiagnosticAnalyzer, new()
         => Create<TAnalyzer>(source, expectedDiagnostics, includeAspireHostingReference: true);
 
-    public static CSharpAnalyzerTest<TAnalyzer, DefaultVerifier> Create<TAnalyzer>(string source, IEnumerable<DiagnosticResult> expectedDiagnostics, bool includeAspireHostingReference)
+    public static CSharpAnalyzerTest<TAnalyzer, DefaultVerifier> Create<TAnalyzer>(string source, IEnumerable<DiagnosticResult> expectedDiagnostics, bool includeAspireHostingReference, string? isAspirePolyglotCompatible = "false")
         where TAnalyzer : DiagnosticAnalyzer, new()
     {
         var test = new CSharpAnalyzerTest<TAnalyzer, DefaultVerifier>
@@ -27,21 +26,23 @@ internal static class AnalyzerTest
                 // This is required to allow the use of top-level statements in the test source.
                 OutputKind = Microsoft.CodeAnalysis.OutputKind.ConsoleApplication
             },
-            ReferenceAssemblies = GetReferenceAssemblies(includeAspireHostingReference),
-            // Suppress ASPIREATS001 (experimental API) warnings in test code
-            SolutionTransforms =
-            {
-                (solution, projectId) =>
-                {
-                    var project = solution.GetProject(projectId)!;
-                    var compilationOptions = project.CompilationOptions!;
-                    var specificDiagnosticOptions = compilationOptions.SpecificDiagnosticOptions
-                        .Add("ASPIREATS001", ReportDiagnostic.Suppress);
-                    compilationOptions = compilationOptions.WithSpecificDiagnosticOptions(specificDiagnosticOptions);
-                    return solution.WithProjectCompilationOptions(projectId, compilationOptions);
-                }
-            }
+            ReferenceAssemblies = GetReferenceAssemblies(includeAspireHostingReference)
         };
+
+        // Surface the <IsAspirePolyglotCompatible> build property to the analyzer the same way MSBuild
+        // does (via a CompilerVisibleProperty -> build_property.* global analyzer config option). The
+        // marker is opt-out, so tests default to "false" (opted out) to keep ASPIREEXPORT017 from firing
+        // for sources that target an unrelated rule and may have no [AspireExport] coverage; the dedicated
+        // ASPIREEXPORT017 tests pass an explicit value, and pass null to omit the property entirely.
+        if (isAspirePolyglotCompatible is not null)
+        {
+            test.TestState.AnalyzerConfigFiles.Add(("/.globalconfig", $"""
+                is_global = true
+                build_property.IsAspirePolyglotCompatible = {isAspirePolyglotCompatible}
+
+                """));
+        }
+
         test.ExpectedDiagnostics.AddRange(expectedDiagnostics);
         return test;
     }

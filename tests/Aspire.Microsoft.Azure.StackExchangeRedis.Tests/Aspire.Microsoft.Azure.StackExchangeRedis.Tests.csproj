@@ -3,7 +3,6 @@
   <PropertyGroup>
     <TargetFrameworks>$(AllTargetFrameworks)</TargetFrameworks>
   </PropertyGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\..\src\Components\Aspire.Microsoft.Azure.StackExchangeRedis\Aspire.Microsoft.Azure.StackExchangeRedis.csproj" />
     <ProjectReference Include="..\Aspire.Components.Common.TestUtilities\Aspire.Components.Common.TestUtilities.csproj" />

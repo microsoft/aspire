@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Azure;
 using Azure.Core;
+using Azure.ResourceManager;
 using Azure.ResourceManager.Resources;
 
 namespace Aspire.Hosting.Azure.Provisioning.Internal;
@@ -17,5 +19,16 @@ internal sealed class DefaultResourceGroupResource(ResourceGroupResource resourc
     public IArmDeploymentCollection GetArmDeployments()
     {
         return new DefaultArmDeploymentCollection(resourceGroupResource.GetArmDeployments());
+    }
+
+    public Task<ArmOperation> DeleteAsync(WaitUntil waitUntil, CancellationToken cancellationToken = default) =>
+        resourceGroupResource.DeleteAsync(waitUntil, cancellationToken: cancellationToken);
+
+    public async IAsyncEnumerable<(string Name, string ResourceType)> GetResourcesAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        await foreach (var resource in resourceGroupResource.GetGenericResourcesAsync(cancellationToken: cancellationToken).ConfigureAwait(false))
+        {
+            yield return (resource.Data.Name, resource.Data.ResourceType.ToString());
+        }
     }
 }

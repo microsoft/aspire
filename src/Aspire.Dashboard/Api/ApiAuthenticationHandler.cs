@@ -3,7 +3,6 @@
 
 using System.Security.Claims;
 using System.Text.Encodings.Web;
-using Aspire.Dashboard.Authentication;
 using Aspire.Dashboard.Configuration;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
@@ -11,12 +10,10 @@ using Microsoft.Extensions.Options;
 namespace Aspire.Dashboard.Api;
 
 /// <summary>
-/// Authentication handler for the Dashboard API that supports API key auth
-/// and falls back to frontend auth (browser token, OIDC, or unsecured based on configuration).
+/// Authentication handler for the Dashboard API that supports API key authentication.
 /// </summary>
 /// <remarks>
-/// When Api.AuthMode is ApiKey, the API key is required for programmatic access.
-/// Browser-based access can still use frontend auth (browser token, OIDC).
+/// When Api.AuthMode is ApiKey, all requests must include a valid API key via the x-api-key header.
 /// When Api.AuthMode is Unsecured, no authentication is required.
 /// </remarks>
 public sealed class ApiAuthenticationHandler(
@@ -31,7 +28,7 @@ public sealed class ApiAuthenticationHandler(
     /// </summary>
     public const string ApiKeyHeaderName = "x-api-key";
 
-    protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
+    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         var currentOptions = dashboardOptions.CurrentValue;
         var apiAuthMode = currentOptions.Api.AuthMode;
@@ -40,7 +37,7 @@ public sealed class ApiAuthenticationHandler(
         if (apiAuthMode is ApiAuthMode.Unsecured)
         {
             var id = new ClaimsIdentity([new Claim(ClaimName, bool.TrueString)], AuthenticationScheme);
-            return AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(id), Scheme.Name));
+            return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(id), Scheme.Name)));
         }
 
         // If API auth requires API key
@@ -49,10 +46,9 @@ public sealed class ApiAuthenticationHandler(
             var apiKeyBytes = currentOptions.Api.GetPrimaryApiKeyBytesOrNull();
 
             // If ApiKey mode is set but no key is configured, fail authentication
-            // rather than silently falling through to frontend auth
             if (apiKeyBytes is null)
             {
-                return AuthenticateResult.Fail("API key authentication is enabled but no API key is configured.");
+                return Task.FromResult(AuthenticateResult.Fail("API key authentication is enabled but no API key is configured."));
             }
 
             if (Context.Request.Headers.TryGetValue(ApiKeyHeaderName, out var apiKeyHeader))
@@ -60,20 +56,20 @@ public sealed class ApiAuthenticationHandler(
                 // There must be exactly one header with the API key.
                 if (apiKeyHeader.Count != 1)
                 {
-                    return AuthenticateResult.Fail("Invalid API key header.");
+                    return Task.FromResult(AuthenticateResult.Fail("Invalid API key header."));
                 }
 
                 var providedApiKey = apiKeyHeader.ToString();
                 if (string.IsNullOrEmpty(providedApiKey))
                 {
-                    return AuthenticateResult.Fail("Invalid API key header.");
+                    return Task.FromResult(AuthenticateResult.Fail("Invalid API key header."));
                 }
 
                 // Check primary key
                 if (CompareHelpers.CompareKey(apiKeyBytes, providedApiKey))
                 {
                     var id = new ClaimsIdentity([new Claim(ClaimName, bool.TrueString)], AuthenticationScheme);
-                    return AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(id), Scheme.Name));
+                    return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(id), Scheme.Name)));
                 }
 
                 // Check secondary key (for key rotation)
@@ -81,56 +77,18 @@ public sealed class ApiAuthenticationHandler(
                     CompareHelpers.CompareKey(secondaryBytes, providedApiKey))
                 {
                     var id = new ClaimsIdentity([new Claim(ClaimName, bool.TrueString)], AuthenticationScheme);
-                    return AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(id), Scheme.Name));
+                    return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(id), Scheme.Name)));
                 }
 
-                return AuthenticateResult.Fail("Authentication failed.");
+                return Task.FromResult(AuthenticateResult.Fail("Authentication failed."));
             }
-
-            // API key header not provided - fall through to frontend auth for browser access
+            else
+            {
+                return Task.FromResult(AuthenticateResult.Fail($"API key from '{ApiKeyHeaderName}' header is missing."));
+            }
         }
 
-        // Try frontend authentication (for browser-based access)
-        var frontendResult = await Context.AuthenticateAsync(FrontendCompositeAuthenticationDefaults.AuthenticationScheme).ConfigureAwait(false);
-        if (frontendResult.Succeeded)
-        {
-            return frontendResult;
-        }
-
-        // Return frontend failure if present
-        if (frontendResult.Failure is not null)
-        {
-            return frontendResult;
-        }
-
-        return AuthenticateResult.NoResult();
-    }
-
-    protected override Task HandleChallengeAsync(AuthenticationProperties properties)
-    {
-        // If an API key was provided (but was wrong), return 401 instead of redirecting
-        if (Context.Request.Headers.ContainsKey(ApiKeyHeaderName))
-        {
-            Context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            return Task.CompletedTask;
-        }
-
-        // For browser-based access without API key, redirect to login
-        var frontendAuthMode = dashboardOptions.CurrentValue.Frontend.AuthMode;
-        var scheme = frontendAuthMode switch
-        {
-            FrontendAuthMode.OpenIdConnect => FrontendAuthenticationDefaults.AuthenticationSchemeOpenIdConnect,
-            FrontendAuthMode.BrowserToken => FrontendAuthenticationDefaults.AuthenticationSchemeBrowserToken,
-            _ => null
-        };
-
-        if (scheme != null)
-        {
-            return Context.ChallengeAsync(scheme);
-        }
-
-        Context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-        return Task.CompletedTask;
+        return Task.FromResult(AuthenticateResult.NoResult());
     }
 
     public const string AuthenticationScheme = "Api";

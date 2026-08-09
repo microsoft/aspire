@@ -14,7 +14,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Aspire.Hosting.Foundry;
 
 /// <summary>
-/// The Azure Cognitive Services project resource that can be used for Microsoft Foundry AI agents.
+/// The Microsoft Foundry project resource that can be used for Microsoft Foundry AI agents.
 ///
 /// This also functions as an Aspire compute environment resource for deployment.
 /// </summary>
@@ -24,7 +24,7 @@ public class AzureCognitiveServicesProjectResource :
     IAzureComputeEnvironmentResource
 {
     /// <summary>
-    /// Creates a new Azure Cognitive Services project resource.
+    /// Creates a new Microsoft Foundry project resource.
     /// </summary>
     /// <param name="name">The name of the resource.</param>
     /// <param name="configureInfrastructure">Configures the underlying Azure resource using Azure.Provisioning.</param>
@@ -42,6 +42,28 @@ public class AzureCognitiveServicesProjectResource :
         {
             var model = factoryContext.PipelineContext.Model;
             var steps = new List<PipelineStep>();
+
+            var removeDefaultContainerRegistryStep = new PipelineStep
+            {
+                Name = $"prepare-foundry-project-{name}",
+                Description = $"Prepares Microsoft Foundry project {name} for deployment.",
+                Action = context =>
+                {
+                    if (DefaultContainerRegistry is not null &&
+                        (this.HasAnnotationOfType<ContainerRegistryReferenceAnnotation>() ||
+                         !this.HasAnnotationOfType<RequiresHostedAgentRegistryAnnotation>()))
+                    {
+                        context.Model.Resources.Remove(DefaultContainerRegistry);
+                        DefaultContainerRegistry = null;
+                    }
+
+                    return Task.CompletedTask;
+                },
+                Resource = this,
+                DependsOnSteps = [AzureEnvironmentResource.PrepareResourcesStepName, WellKnownPipelineSteps.ValidateComputeEnvironments],
+                RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
+            };
+            steps.Add(removeDefaultContainerRegistryStep);
 
             var computeUrls = new PipelineStep
             {
@@ -101,7 +123,7 @@ public class AzureCognitiveServicesProjectResource :
     public ReferenceExpression UriExpression => ReferenceExpression.Create($"{Endpoint}");
 
     /// <summary>
-    /// Gets the "endpoint" output reference from the Azure Cognitive Services project resource.
+    /// Gets the "endpoint" output reference from the Microsoft Foundry project resource.
     ///
     /// This will be used to instantiate the AI project clients.
     ///
@@ -147,7 +169,7 @@ public class AzureCognitiveServicesProjectResource :
             {
                 throw new InvalidOperationException(
                     $"The container registry configured for the Azure Cognitive Services project '{Name}' is not an Azure Container Registry. " +
-                    $"Only Azure Container Registry resources are supported. Use '.WithContainerRegistry()' to configure an Azure Container Registry.");
+                    $"Only Azure Container Registry resources are supported. Use '.WithAzureContainerRegistry()' to configure an Azure Container Registry.");
             }
 
             return azureRegistry;
@@ -190,19 +212,60 @@ public class AzureCognitiveServicesProjectResource :
     /// Get the address for the particular agent's endpoint.
     /// </summary>
     ReferenceExpression IComputeEnvironmentResource.GetHostAddressExpression(EndpointReference endpointReference)
+        => GetAgentAddressExpression(endpointReference);
+
+    /// <summary>
+    /// Produces the endpoint property expression for a hosted agent endpoint owned by this Foundry project.
+    /// </summary>
+    /// <remarks>
+    /// The agent address is already a fully-qualified <c>https</c> URL
+    /// (for example <c>https://{account}.services.ai.azure.com/.../agents/{name}</c>), so it is
+    /// returned directly for URL-shaped properties. The default
+    /// <see cref="IComputeEnvironmentResource.GetEndpointPropertyExpression"/> implementation composes
+    /// <c>{scheme}://{host}</c>, which would produce a malformed double-scheme value
+    /// (for example <c>http://https://...</c>). Only the properties that <c>WithReference</c> emits for a
+    /// hosted agent endpoint are supported.
+    /// </remarks>
+    ReferenceExpression IComputeEnvironmentResource.GetEndpointPropertyExpression(EndpointReferenceExpression endpointReferenceExpression)
+    {
+        ArgumentNullException.ThrowIfNull(endpointReferenceExpression);
+
+        var property = endpointReferenceExpression.Property;
+        return property switch
+        {
+            EndpointProperty.Url => GetAgentAddressExpression(endpointReferenceExpression.Endpoint),
+            EndpointProperty.Scheme => ReferenceExpression.Create($"https"),
+            _ => throw new InvalidOperationException(
+                $"The endpoint property '{property}' is not supported for Foundry hosted agent endpoints. Only 'Url' and 'Scheme' are supported.")
+        };
+    }
+
+    private ReferenceExpression GetAgentAddressExpression(EndpointReference endpointReference)
     {
         var resource = endpointReference.Resource;
-        return ReferenceExpression.Create($"{Endpoint}/agents/{resource.Name}");
+
+        // For hosted agents, deployment creates the Foundry agent version using the wrapper
+        // AzureHostedAgentResource.Name (e.g. "agent-ha" for a target named "agent"), not the
+        // target resource name. The published cross-environment URL must point at that deployed
+        // agent name, so prefer the hosted-agent deployment target's name when one exists and fall
+        // back to the resource name for plain (non-hosted) agents.
+        var agentName = resource.GetDeploymentTargetAnnotation(this)?.DeploymentTarget is AzureHostedAgentResource hostedAgent
+            ? hostedAgent.Name
+            : resource.Name;
+
+        return ReferenceExpression.Create($"{Endpoint}/agents/{agentName}");
     }
 
     /// <summary>
     /// This is the encoding that the Microsoft Foundry web portal uses in their URLs, for some reason
     /// </summary>
+    // Foundry portal URLs use big-endian (RFC 4122) GUID encoding, not .NET's mixed-endian ToByteArray().
     internal static string EncodeSubscriptionId(string subscriptionId)
     {
         var guid = Guid.Parse(subscriptionId);
-        var encoded = Base64Url.EncodeToString(guid.ToByteArray());
-        return encoded.TrimEnd('=');
+        // Convert hex pairs from the canonical GUID string to bytes (preserves display order)
+        var bytes = Convert.FromHexString(guid.ToString("N"));
+        return Base64Url.EncodeToString(bytes).TrimEnd('=');
     }
 
     /// <summary>
@@ -226,7 +289,14 @@ public class AzureCognitiveServicesProjectResource :
 }
 
 /// <summary>
-/// Configuration for an Azure Cognitive Services capability host.
+/// Marks a Foundry project as needing container registry provisioning for hosted agent deployment.
+/// </summary>
+internal sealed class RequiresHostedAgentRegistryAnnotation : IResourceAnnotation
+{
+}
+
+/// <summary>
+/// Configuration for a Microsoft Foundry capability host.
 /// </summary>
 /// <param name="name">The name of the capability host.</param>
 public class CapabilityHostConfiguration(string name)
@@ -279,7 +349,7 @@ public class CapabilityHostConfiguration(string name)
 }
 
 /// <summary>
-/// A fluent builder for configuring a capability host on an Azure Cognitive Services project.
+/// A fluent builder for configuring a capability host on a Microsoft Foundry project.
 /// </summary>
 public class CapabilityHostBuilder(IResourceBuilder<AzureCognitiveServicesProjectResource> projectBuilder, CapabilityHostConfiguration configuration)
 {

@@ -29,7 +29,7 @@ OUTPUT_DIR="/tmp/cli-e2e-recordings"
 PLAY_RECORDING=false
 LIST_ONLY=false
 BRANCH=""
-REPO="dotnet/aspire"
+REPO="microsoft/aspire"
 
 # Show help
 show_help() {

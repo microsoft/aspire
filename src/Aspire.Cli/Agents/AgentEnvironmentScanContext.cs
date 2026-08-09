@@ -9,8 +9,8 @@ namespace Aspire.Cli.Agents;
 internal sealed class AgentEnvironmentScanContext
 {
     private readonly List<AgentEnvironmentApplicator> _applicators = [];
-    private readonly HashSet<string> _skillFileApplicatorPaths = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _skillBaseDirectories = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<AgentClientKind> _detectedClients = [];
 
     /// <summary>
     /// Gets the working directory being scanned.
@@ -29,25 +29,6 @@ internal sealed class AgentEnvironmentScanContext
     /// This is used to ensure only one applicator for Playwright is added across all scanners.
     /// </summary>
     public bool PlaywrightApplicatorAdded { get; set; }
-
-    /// <summary>
-    /// Checks if a skill file applicator has already been added for the specified path.
-    /// </summary>
-    /// <param name="skillRelativePath">The relative path to the skill file.</param>
-    /// <returns>True if an applicator has already been added for this path.</returns>
-    public bool HasSkillFileApplicator(string skillRelativePath)
-    {
-        return _skillFileApplicatorPaths.Contains(skillRelativePath);
-    }
-
-    /// <summary>
-    /// Marks a skill file path as having an applicator added.
-    /// </summary>
-    /// <param name="skillRelativePath">The relative path to the skill file.</param>
-    public void MarkSkillFileApplicatorAdded(string skillRelativePath)
-    {
-        _skillFileApplicatorPaths.Add(skillRelativePath);
-    }
 
     /// <summary>
     /// Adds an applicator to the collection of detected agent environments.
@@ -78,4 +59,20 @@ internal sealed class AgentEnvironmentScanContext
     /// Gets the registered skill base directories for all detected agent environments.
     /// </summary>
     public IReadOnlyCollection<string> SkillBaseDirectories => _skillBaseDirectories;
+
+    /// <summary>
+    /// Records that an agent client was detected as present in the environment. Used to scope
+    /// telemetry hook registration to the clients the user actually has, independent of whether the
+    /// Aspire MCP server still needs configuring.
+    /// </summary>
+    /// <param name="client">The detected agent client.</param>
+    public void AddDetectedClient(AgentClientKind client)
+    {
+        _detectedClients.Add(client);
+    }
+
+    /// <summary>
+    /// Gets the set of agent clients detected as present in the environment.
+    /// </summary>
+    public IReadOnlyCollection<AgentClientKind> DetectedClients => _detectedClients;
 }

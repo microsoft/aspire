@@ -1,0 +1,19 @@
+{
+  "name": "azure-functions-typescript",
+  "version": "1.0.0",
+  "description": "Azure Functions TypeScript E2E sample for Aspire",
+  "main": "dist/src/index.js",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "prestart": "npm run build",
+    "start": "func start"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0"
+  }
+}

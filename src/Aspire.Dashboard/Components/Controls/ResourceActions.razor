@@ -1,42 +1,43 @@
 ﻿@namespace Aspire.Dashboard.Components
 @using Aspire.Dashboard.Resources
 
-@if (ViewportInformation.IsDesktop)
-{
-    // Either display commands or a spacer.
-    // Spacer keeps a consistent placing of following buttons if there are less highlighted commands for this resource.
-    @for (var i = 0; i < MaxHighlightedCount; i++)
+<div class="resource-actions">
+    @if (ViewportInformation.IsDesktop)
     {
-        if (i < _highlightedCommands.Count)
+        @* Render every highlighted-command position as a fixed-width slot: a button when the resource has a
+           command at this index, otherwise an empty spacer of the same width. Buttons and spacers previously
+           had different intrinsic widths (28px vs 32px), so any row that mixed them shifted the trailing
+           console-logs, divider, and overflow-menu controls out of column. Uniform slot widths keep every
+           action icon aligned in the same column across all rows, regardless of how many highlighted commands
+           a given resource exposes. *@
+        @for (var i = 0; i < MaxHighlightedCount; i++)
         {
-            var highlightedCommand = _highlightedCommands[i];
+            <div class="resource-action-slot">
+                @if (i < _highlightedCommands.Count)
+                {
+                    var highlightedCommand = _highlightedCommands[i];
 
-            <FluentButton Appearance="Appearance.Lightweight" Title="@(!string.IsNullOrEmpty(highlightedCommand.GetDisplayDescription()) ? highlightedCommand.GetDisplayDescription() : highlightedCommand.GetDisplayName())" OnClick="@(() => CommandSelected.InvokeAsync(highlightedCommand))" Disabled="@(highlightedCommand.State == CommandViewModelState.Disabled || IsCommandExecuting(Resource, highlightedCommand))">
-                @if (!string.IsNullOrEmpty(highlightedCommand.IconName) && IconResolver.ResolveIconName(highlightedCommand.IconName, IconSize.Size16, highlightedCommand.IconVariant) is { } icon)
-                {
-                    <FluentIcon Value="@icon" Width="16px" />
+                    <FluentButton Appearance="Appearance.Lightweight" Title="@(!string.IsNullOrEmpty(highlightedCommand.GetDisplayDescription()) ? highlightedCommand.GetDisplayDescription() : highlightedCommand.GetDisplayName())" OnClick="@(() => CommandSelected.InvokeAsync(highlightedCommand))" Disabled="@(highlightedCommand.State == CommandViewModelState.Disabled || IsCommandExecuting(Resource, highlightedCommand))">
+                        <FluentIcon Value="@IconResolver.ResolveHighlightedCommandIcon(highlightedCommand.IconName, highlightedCommand.IconVariant)" Width="16px" />
+                    </FluentButton>
                 }
-                else
-                {
-                    @highlightedCommand.GetDisplayName()
-                }
+            </div>
+        }
+
+        <div class="resource-action-slot">
+            <FluentButton Appearance="Appearance.Lightweight" Title="@Loc[nameof(Resources.ResourceActionConsoleLogsText)]" OnClick="@(() => NavigationManager.NavigateTo(Aspire.Dashboard.Utils.DashboardUrls.ConsoleLogsUrl(resource: ResourceViewModel.GetResourceName(Resource, ResourceByName))))">
+                <FluentIcon Value="@s_consoleLogsIcon" Width="16px" />
             </FluentButton>
-        }
-        else
-        {
-            <div style="display:inline-block; width:32px;"></div>
-        }
+        </div>
+
+        <FluentDivider Class="action-divider" Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />
     }
 
-    <FluentButton Appearance="Appearance.Lightweight" Title="@Loc[nameof(Resources.ResourceActionConsoleLogsText)]" OnClick="@(() => NavigationManager.NavigateTo(Aspire.Dashboard.Utils.DashboardUrls.ConsoleLogsUrl(resource: ResourceViewModel.GetResourceName(Resource, ResourceByName))))">
-        <FluentIcon Value="@s_consoleLogsIcon" />
-    </FluentButton>
-
-    <FluentDivider Class="action-divider" Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />
-}
-
-<AspireMenuButton ButtonAppearance="Appearance.Lightweight"
-                  Icon="@(new Icons.Regular.Size20.MoreHorizontal())"
-                  Items="@_menuItems"
-                  @ref="_menuButton"
-                  Title="@ControlLoc[nameof(ControlsStrings.ActionsButtonText)]" />
+    <div class="resource-action-slot">
+        <AspireMenuButton ButtonAppearance="Appearance.Lightweight"
+                          Icon="@(new Icons.Regular.Size20.MoreHorizontal())"
+                          ItemsProvider="GetMenuItems"
+                          @ref="_menuButton"
+                          Title="@ControlLoc[nameof(ControlsStrings.ActionsButtonText)]" />
+    </div>
+</div>

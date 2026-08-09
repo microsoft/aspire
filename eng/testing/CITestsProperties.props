@@ -1,0 +1,22 @@
+<Project>
+  <!--
+    Single source of truth for CI test property names, their corresponding
+    MSBuild property names, and default values.
+
+    Consumers:
+      - MSBuild .targets files (import + iterate @(CITestsProperty) for JSON emission)
+      - PowerShell scripts (parse XML for defaults and property names)
+      - C# tests (parse XML for validation)
+
+    To add a new boolean test property:
+      1. Add a CITestsProperty item below
+      2. Set the MSBuild property in the test project's .csproj (or Directory.Build.props)
+      3. Add behavioral logic in the GitHub Actions workflow YAML
+  -->
+  <ItemGroup>
+    <CITestsProperty Include="requiresNugets" MSBuildProp="RequiresNugets" Default="false" />
+    <CITestsProperty Include="requiresTestSdk" MSBuildProp="RequiresTestSdk" Default="false" />
+    <CITestsProperty Include="requiresCliArchive" MSBuildProp="RequiresCliArchive" Default="false" />
+    <CITestsProperty Include="enablePlaywrightInstall" MSBuildProp="EnablePlaywrightInstall" Default="false" />
+  </ItemGroup>
+</Project>

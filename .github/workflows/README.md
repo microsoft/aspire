@@ -34,17 +34,17 @@ The `apply-test-attributes.yml` workflow allows repository maintainers to quaran
 
 #### Quarantine a flaky test (creates new PR)
 ```
-/quarantine-test MyTestClass.MyTestMethod https://github.com/dotnet/aspire/issues/1234
+/quarantine-test MyTestClass.MyTestMethod https://github.com/microsoft/aspire/issues/1234
 ```
 
 #### Quarantine multiple tests
 ```
-/quarantine-test TestMethod1 TestMethod2 TestMethod3 https://github.com/dotnet/aspire/issues/1234
+/quarantine-test TestMethod1 TestMethod2 TestMethod3 https://github.com/microsoft/aspire/issues/1234
 ```
 
 #### Quarantine a test and push to an existing PR
 ```
-/quarantine-test MyTestMethod https://github.com/dotnet/aspire/issues/1234 --target-pr https://github.com/dotnet/aspire/pull/5678
+/quarantine-test MyTestMethod https://github.com/microsoft/aspire/issues/1234 --target-pr https://github.com/microsoft/aspire/pull/5678
 ```
 
 #### Unquarantine a test (creates new PR)
@@ -54,12 +54,12 @@ The `apply-test-attributes.yml` workflow allows repository maintainers to quaran
 
 #### Unquarantine and push to an existing PR
 ```
-/unquarantine-test MyTestMethod --target-pr https://github.com/dotnet/aspire/pull/5678
+/unquarantine-test MyTestMethod --target-pr https://github.com/microsoft/aspire/pull/5678
 ```
 
 #### Disable a test due to an active issue
 ```
-/disable-test MyTestMethod https://github.com/dotnet/aspire/issues/1234
+/disable-test MyTestMethod https://github.com/microsoft/aspire/issues/1234
 ```
 
 #### Enable a previously disabled test
@@ -102,7 +102,7 @@ The workflow uses concurrency groups based on the issue/PR number to prevent rac
 
 ## Backmerge Release Workflow
 
-The `backmerge-release.yml` workflow automatically creates PRs to merge changes from `release/13.2` back into `main`.
+The `backmerge-release.yml` workflow automatically creates PRs to merge changes from `release/13.3` back into `main`.
 
 ### Schedule
 
@@ -110,8 +110,8 @@ Runs daily at 00:00 UTC (4pm PT during standard time, 5pm PT during daylight sav
 
 ### Behavior
 
-1. **Change Detection**: Checks if `release/13.2` has commits not in `main`
-2. **PR Creation**: If changes exist, creates a PR to merge `release/13.2` → `main`
+1. **Change Detection**: Checks if `release/13.3` has commits not in `main`
+2. **PR Creation**: If changes exist, creates a PR to merge `release/13.3` → `main`
 3. **Auto-merge**: Enables GitHub's auto-merge feature, so the PR merges automatically once approved
 4. **Conflict Handling**: If merge conflicts occur, creates an issue instead of a PR
 

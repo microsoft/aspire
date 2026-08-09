@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "Mongo.AppHost/Mongo.AppHost.csproj"
+  }
+}

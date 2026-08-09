@@ -19,7 +19,7 @@ public class NuGetUtilsTests
     [InlineData("osx-arm64", "osx-arm64")]
 
     //Compatible RID cases
-    [InlineData("rhel.8-x64", "linux-x64")] // https://github.com/dotnet/aspire/issues/5486
+    [InlineData("rhel.8-x64", "linux-x64")] // https://github.com/microsoft/aspire/issues/5486
     [InlineData("ubuntu.23.04-x64", "linux-x64")]
     [InlineData("fedora.39-x64", "linux-x64")]
     [InlineData("linux-musl-x64", "linux-x64")]

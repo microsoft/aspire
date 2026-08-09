@@ -126,7 +126,7 @@ public class AzurePrivateEndpointExtensionsTests
 
         var target = (IAzurePrivateEndpointTarget)blobs.Resource;
         Assert.Equal(["blob"], target.GetPrivateLinkGroupIds());
-        Assert.Equal("privatelink.blob.core.windows.net", target.GetPrivateDnsZoneName());
+        Assert.Equal(["privatelink.blob.core.windows.net"], target.GetPrivateDnsZoneNames());
     }
 
     [Fact]
@@ -141,7 +141,7 @@ public class AzurePrivateEndpointExtensionsTests
 
         var target = (IAzurePrivateEndpointTarget)queues.Resource;
         Assert.Equal(["queue"], target.GetPrivateLinkGroupIds());
-        Assert.Equal("privatelink.queue.core.windows.net", target.GetPrivateDnsZoneName());
+        Assert.Equal(["privatelink.queue.core.windows.net"], target.GetPrivateDnsZoneNames());
     }
 
     [Fact]
@@ -208,4 +208,35 @@ public class AzurePrivateEndpointExtensionsTests
         // Each DNS Zone should have one VNet Link
         Assert.All(dnsZones, z => Assert.Single(z.VNetLinks));
     }
+
+    [Fact]
+    public async Task AddPrivateEndpoint_CreatesMultipleDnsZones_ForMultiZoneTarget()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
+        var foundry = builder.AddFoundry("foundry");
+
+        var pe = subnet.AddPrivateEndpoint(foundry);
+
+        // Foundry returns 3 DNS zone names
+        var dnsZones = builder.Resources.OfType<AzurePrivateDnsZoneResource>().ToList();
+        Assert.Equal(3, dnsZones.Count);
+        Assert.Contains(dnsZones, z => z.ZoneName == "privatelink.services.ai.azure.com");
+        Assert.Contains(dnsZones, z => z.ZoneName == "privatelink.openai.azure.com");
+        Assert.Contains(dnsZones, z => z.ZoneName == "privatelink.cognitiveservices.azure.com");
+
+        // Each DNS Zone should have one VNet Link
+        Assert.All(dnsZones, z => Assert.Single(z.VNetLinks));
+
+        // The PE resource should reference all 3 DNS zones
+        Assert.Equal(3, pe.Resource.DnsZones.Count);
+
+        // Verify the bicep for the PE resource
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(pe.Resource);
+
+        await Verify(manifest.BicepText, extension: "bicep");
+    }
+
 }

@@ -12,7 +12,7 @@ public class CircularBufferTests
     [Fact]
     public void LargeData_AddWhenFull_KeepOrder()
     {
-        // The data here was reproduced from this issue: https://github.com/dotnet/aspire/issues/7854
+        // The data here was reproduced from this issue: https://github.com/microsoft/aspire/issues/7854
         var values = new long[10_000];
         for (var i = 0; i < values.Length; i++)
         {
@@ -666,6 +666,38 @@ public class CircularBufferTests
             i => Assert.Equal("10", i),
             i => Assert.Equal("11", i),
             i => Assert.Equal("12", i));
+    }
+
+    [Fact]
+    public void AddWhenFull_WithDuplicateOldestValue_KeepsRemainingDuplicate()
+    {
+        var b = CreateBuffer(3);
+
+        b.Add("0");
+        b.Add("0");
+        b.Add("1");
+        b.Add("2");
+
+        Assert.Collection(b,
+            i => Assert.Equal("0", i),
+            i => Assert.Equal("1", i),
+            i => Assert.Equal("2", i));
+    }
+
+    [Fact]
+    public void InsertWhenFull_WithDuplicateOldestValue_KeepsRemainingDuplicate()
+    {
+        var b = CreateBuffer(3);
+
+        b.Add("0");
+        b.Add("0");
+        b.Add("1");
+        b.Insert(1, "x");
+
+        Assert.Collection(b,
+            i => Assert.Equal("x", i),
+            i => Assert.Equal("0", i),
+            i => Assert.Equal("1", i));
     }
 
     [Fact]

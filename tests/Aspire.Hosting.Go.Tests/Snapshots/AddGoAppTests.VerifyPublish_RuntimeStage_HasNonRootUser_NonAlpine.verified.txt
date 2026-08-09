@@ -1,0 +1,17 @@
+﻿FROM golang:1.24-alpine AS build
+WORKDIR /app
+ENV CGO_ENABLED=0
+ENV GOOS=linux
+COPY go.mod ./
+RUN --mount=type=cache,target=/root/go/pkg/mod \
+    go mod download
+COPY . .
+RUN --mount=type=cache,target=/root/.cache/go-build --mount=type=cache,target=/root/go/pkg/mod \
+    go build -o /app/api .
+
+FROM debian:bookworm-slim
+RUN groupadd --system --gid 999 app && useradd --system --gid 999 --uid 999 --no-create-home app
+WORKDIR /app
+COPY --from=build /app/api /app/api
+USER app
+ENTRYPOINT ["/app/api"]

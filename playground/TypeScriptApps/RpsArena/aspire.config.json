@@ -1,0 +1,15 @@
+{
+  "appHost": {
+    "path": "apphost.mts"
+  },
+  "packages": {
+    "Aspire.Hosting.Python": "13.3.0-preview.1.26167.8",
+    "Aspire.Hosting.PostgreSQL": "13.3.0-preview.1.26167.8",
+    "Aspire.Hosting.JavaScript": "13.3.0-preview.1.26167.8"
+  },
+  "profiles": {
+    "https": {
+      "applicationUrl": "https://rpsarena.dev.localhost:16323;http://rpsarena.dev.localhost:15163",
+    }
+  }
+}

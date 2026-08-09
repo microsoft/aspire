@@ -1,0 +1,77 @@
+name: Update Aspire Skills Bundle
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Aspire skills release version to embed. Defaults to the currently pinned version."
+        required: false
+        type: string
+  schedule:
+    - cron: '0 17 * * *' # 9am PT / 17:00 UTC
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-and-pr:
+    runs-on: ubuntu-latest
+    if: ${{ github.repository_owner == 'microsoft' }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Generate GitHub App Token for bundle update
+        id: update-token
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        with:
+          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+
+      - name: Update embedded Aspire skills bundle
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ steps.update-token.outputs.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:VERSION)) {
+            ./eng/scripts/update-aspire-skills-bundle.ps1
+          }
+          else {
+            ./eng/scripts/update-aspire-skills-bundle.ps1 -Version $env:VERSION
+          }
+
+      - name: Restore solution
+        run: ./restore.sh
+
+      - name: Test Aspire skills installer
+        run: >
+          dotnet test --project tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj
+          --no-launch-profile
+          --
+          --filter-class "*.AspireSkillsInstallerTests"
+          --filter-class "*.AspireSkillsBundleTests"
+          --filter-class "*.AgentInitCommandTests"
+          --filter-not-trait "quarantined=true"
+          --filter-not-trait "outerloop=true"
+
+      - name: Generate GitHub App Token for pull request
+        id: pr-token
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        with:
+          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+
+      - name: Create or update pull request
+        uses: ./.github/actions/create-pull-request
+        with:
+          token: ${{ steps.pr-token.outputs.token }}
+          branch: update-aspire-skills-bundle
+          base: main
+          draft: true
+          commit-message: "[Automated] Update Aspire skills bundle"
+          labels: |
+            area-cli
+            area-engineering-systems
+          title: "[Automated] Update Aspire skills bundle"
+          body: "Auto-generated update to refresh the embedded Aspire skills bundle fallback used by the Aspire CLI."

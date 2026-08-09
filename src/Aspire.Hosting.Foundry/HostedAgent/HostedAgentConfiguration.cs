@@ -1,23 +1,27 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Azure.AI.Projects;
-using Azure.AI.Projects.OpenAI;
+using System.Globalization;
+using System.Text.RegularExpressions;
+using Azure.AI.Projects.Agents;
 
 namespace Aspire.Hosting.Foundry;
 
 /// <summary>
-/// A configuration helper for Python hosted agents.
-///
-/// This is used instead of AzureAgentVersionCreationOptions to provide better static
-/// typing of the agent definition.
+/// A configuration helper for hosted agents.
 /// </summary>
-public class HostedAgentConfiguration(string image)
+/// <remarks>
+/// This type is used instead of <see cref="ProjectsAgentVersionCreationOptions"/> to provide a strongly typed
+/// configuration surface for hosted agent definitions. When used from polyglot app hosts, only the
+/// ATS-compatible properties are exported; Azure SDK-specific members remain .NET-only.
+/// </remarks>
+[AspireExport(ExposeProperties = true)]
+public partial class HostedAgentConfiguration(string image)
 {
     /// <summary>
     /// The description of the hosted agent.
     /// </summary>
-    public string Description { get; set; } = "Python Hosted Agent";
+    public string Description { get; set; } = "Hosted Agent";
 
     /// <summary>
     /// Additional metadata to associate with the hosted agent.
@@ -25,25 +29,30 @@ public class HostedAgentConfiguration(string image)
     public IDictionary<string, string> Metadata { get; init; } = new Dictionary<string, string>()
     {
         { "DeployedBy", "Aspire Hosting Framework" },
-        { "DeployedOn", DateTime.UtcNow.ToString("o") }
+        { "DeployedOn", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture) }
     };
 
     /// <summary>
     /// Configuration for Responsible AI (RAI) content filtering and safety features.
     /// </summary>
+    [AspireExportIgnore(Reason = "Azure SDK-specific type not usable from polyglot hosts.")]
     public ContentFilterConfiguration? ContentFilterConfiguration { get; set; }
 
     /// <summary>
     /// Tools available to the hosted agent.
     /// </summary>
-    public IList<AgentTool> Tools { get; init; } = [];
+    [AspireExportIgnore(Reason = "Azure SDK-specific type not usable from polyglot hosts.")]
+    public IList<ProjectsAgentTool> Tools { get; init; } = [];
 
     /// <summary>
     /// The protocols that the agent supports for ingress communication of the containers.
     /// </summary>
-    public IList<ProtocolVersionRecord> ContainerProtocolVersions { get; init; } = [
-        new ProtocolVersionRecord(AgentCommunicationMethod.Responses, "v1")
-    ];
+    /// <remarks>
+    /// This collection has no configuration-level default. The <c>AsHostedAgent</c> overloads add the selected
+    /// protocol version before deployment, and the C# convenience overload defaults that selection to Responses 2.0.0.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Azure SDK-specific type not usable from polyglot hosts.")]
+    public IList<ProtocolVersionRecord> ProtocolVersions { get; init; } = [];
 
     private decimal _cpu = 2.0m;
 
@@ -66,7 +75,8 @@ public class HostedAgentConfiguration(string image)
     /// <summary>
     /// CPU allocation as a string.
     /// </summary>
-    public string CpuString { get => _cpu.ToString(System.Globalization.CultureInfo.InvariantCulture); }
+    [AspireExportIgnore(Reason = "Derived formatting property used internally by Azure provisioning.")]
+    public string CpuString { get => _cpu.ToString(CultureInfo.InvariantCulture); }
 
     /// <summary>
     /// Memory allocation for each hosted agent instance, in GiB.
@@ -88,7 +98,8 @@ public class HostedAgentConfiguration(string image)
     /// <summary>
     /// Memory allocation as a string.
     /// </summary>
-    public string MemoryString { get => Memory.ToString(System.Globalization.CultureInfo.InvariantCulture) + "Gi"; }
+    [AspireExportIgnore(Reason = "Derived formatting property used internally by Azure provisioning.")]
+    public string MemoryString { get => Memory.ToString(CultureInfo.InvariantCulture) + "Gi"; }
 
     /// <summary>
     /// Environment variables to set in the hosted agent container.
@@ -98,19 +109,28 @@ public class HostedAgentConfiguration(string image)
     /// <summary>
     /// The fully qualified container image name for the hosted agent.
     /// </summary>
+    [AspireExportIgnore(Reason = "Image comes from the executable resource and is not configured from polyglot hosted agent callbacks.")]
     public string Image { get; set; } = image;
 
     /// <summary>
-    /// Converts this configuration to an <see cref="AgentVersionCreationOptions"/> instance.
+    /// Converts this configuration to an <see cref="ProjectsAgentVersionCreationOptions"/> instance.
     /// </summary>
-    public AgentVersionCreationOptions ToAgentVersionCreationOptions()
+    internal ProjectsAgentVersionCreationOptions ToProjectsAgentVersionCreationOptions(string targetResourceName)
     {
-        var def = new ImageBasedHostedAgentDefinition(
-            ContainerProtocolVersions,
+        ValidateEnvironmentVariableNames(EnvironmentVariables.Keys, targetResourceName);
+        ValidateEnvironmentVariableNamesAreNotReserved(EnvironmentVariables.Keys, targetResourceName);
+        ValidateProtocolVersions(targetResourceName);
+
+        var def = new HostedAgentDefinition(
             cpu: CpuString,
-            memory: MemoryString,
-            image: Image
-        );
+            memory: MemoryString)
+        {
+            ContainerConfiguration = new ContainerConfiguration(Image)
+        };
+        foreach (var protocolVersion in ProtocolVersions)
+        {
+            def.ProtocolVersions.Add(protocolVersion);
+        }
         if (ContentFilterConfiguration is not null)
         {
             def.ContentFilterConfiguration = ContentFilterConfiguration;
@@ -123,7 +143,7 @@ public class HostedAgentConfiguration(string image)
         {
             def.EnvironmentVariables[envVar.Key] = envVar.Value;
         }
-        var options = new AgentVersionCreationOptions(def)
+        var options = new ProjectsAgentVersionCreationOptions(def)
         {
             Description = Description,
         };
@@ -133,4 +153,58 @@ public class HostedAgentConfiguration(string image)
         }
         return options;
     }
+
+    private void ValidateProtocolVersions(string? targetResourceName)
+    {
+        if (ProtocolVersions.Count == 0)
+        {
+            throw new DistributedApplicationException($"Foundry hosted agent for target resource '{targetResourceName}' must declare at least one protocol version.");
+        }
+    }
+
+    private static void ValidateEnvironmentVariableNames(IEnumerable<string> environmentVariableNames, string? targetResourceName)
+    {
+        var invalidNames = environmentVariableNames
+            .Where(static name => !EnvironmentVariableNameRegex().IsMatch(name))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        if (invalidNames.Length == 0)
+        {
+            return;
+        }
+
+        throw new DistributedApplicationException(
+            $"Foundry hosted agent for target resource '{targetResourceName}' contains environment variable names that are not supported by Foundry Hosted Agents. " +
+            $"Environment variable names must contain only ASCII letters, digits, or underscores. " +
+            $"Invalid name(s): '{string.Join("', '", invalidNames)}'");
+    }
+
+    private static void ValidateEnvironmentVariableNamesAreNotReserved(IEnumerable<string> environmentVariableNames, string? targetResourceName)
+    {
+        var reservedNames = environmentVariableNames
+            .Where(IsReservedEnvironmentVariableName)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        if (reservedNames.Length == 0)
+        {
+            return;
+        }
+
+        throw new DistributedApplicationException(
+            $"Foundry hosted agent for target resource '{targetResourceName}' contains environment variable names that are reserved by Foundry Hosted Agents. " +
+            $"Reserved name(s): '{string.Join("', '", reservedNames)}'");
+    }
+
+    internal static bool IsReservedEnvironmentVariableName(string name)
+    {
+        return string.Equals(name, "PORT", StringComparison.OrdinalIgnoreCase) ||
+            name.StartsWith("FOUNDRY_", StringComparison.OrdinalIgnoreCase) ||
+            name.StartsWith("AGENT_", StringComparison.OrdinalIgnoreCase);
+    }
+
+    // hosted agent environment variables must contain only letters, digits, or underscores.
+    [GeneratedRegex("^[A-Za-z0-9_]+$")]
+    private static partial Regex EnvironmentVariableNameRegex();
 }

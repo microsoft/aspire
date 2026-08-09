@@ -234,6 +234,15 @@ public sealed class Service : NamedComposeMember
     public string? Ipc { get; set; }
 
     /// <summary>
+    /// Gets or sets the size of the <c>/dev/shm</c> partition for the container.
+    /// </summary>
+    /// <remarks>
+    /// The value is emitted as the Docker Compose <c>shm_size</c> service property, for example <c>128mb</c>.
+    /// </remarks>
+    [YamlMember(Alias = "shm_size")]
+    public string? ShmSize { get; set; }
+
+    /// <summary>
     /// Specifies a custom MAC (Media Access Control) address for the container's network interface.
     /// </summary>
     /// <remarks>
@@ -251,6 +260,13 @@ public sealed class Service : NamedComposeMember
     /// </summary>
     [YamlMember(Alias = "pid")]
     public string? Pid { get; set; }
+
+    /// <summary>
+    /// Indicates whether the container should run in privileged mode.
+    /// When set to true, the container is granted extended Linux capabilities and device access.
+    /// </summary>
+    [YamlMember(Alias = "privileged")]
+    public bool? Privileged { get; set; }
 
     /// <summary>
     /// Specifies a list of Linux capabilities to add to the container.

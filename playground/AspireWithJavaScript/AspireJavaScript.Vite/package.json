@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
   "scripts": {
     "dev": "vite",
     "start": "vite",
@@ -18,13 +21,22 @@
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
-    "@typescript-eslint/eslint-plugin": "^8.48.1",
-    "@typescript-eslint/parser": "^8.48.1",
-    "@vitejs/plugin-react": "^5.1.1",
+    "@typescript-eslint/eslint-plugin": "8.48.1",
+    "@typescript-eslint/parser": "8.48.1",
+    "@vitejs/plugin-react": "^6.0.0",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "typescript": "~5.9.3",
-    "vite": "^7.2.6"
+    "vite": "^8.0.16"
+  },
+  "overrides": {
+    "postcss": "8.5.23",
+    "esbuild": "0.28.1",
+    "@babel/core": "7.29.6",
+    "js-yaml": "4.3.0",
+    "minimatch@3.1.5": {
+      "brace-expansion": "2.1.3"
+    }
   }
 }

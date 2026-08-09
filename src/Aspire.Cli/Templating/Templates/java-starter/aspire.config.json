@@ -1,0 +1,26 @@
+{
+  "appHost": {
+    "path": "AppHost.java",
+    "language": "java"
+  },
+  "packages": {
+    "Aspire.Hosting.JavaScript": "{{aspireVersion}}"
+  },
+  "profiles": {
+    "https": {
+      "applicationUrl": "https://{{hostName}}:{{httpsPort}};http://{{hostName}}:{{httpPort}}",
+      "environmentVariables": {
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://{{hostName}}:{{otlpHttpsPort}}",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://{{hostName}}:{{resourceHttpsPort}}"
+      }
+    },
+    "http": {
+      "applicationUrl": "http://{{hostName}}:{{httpPort}}",
+      "environmentVariables": {
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://{{hostName}}:{{otlpHttpPort}}",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://{{hostName}}:{{resourceHttpPort}}",
+        "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true"
+      }
+    }
+  }
+}

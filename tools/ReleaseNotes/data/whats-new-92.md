@@ -11,7 +11,7 @@ ms.date: 04/10/2025
 - .NET 8.0 Long Term Support (LTS)
 - .NET 9.0 Standard Term Support (STS)
 
-If you have feedback, questions, or want to contribute to Aspire, collaborate with us on [:::image type="icon" source="../media/github-mark.svg" border="false"::: GitHub](https://github.com/dotnet/aspire) or join us on [:::image type="icon" source="../media/discord-icon.svg" border="false"::: Discord](https://discord.com/invite/h87kDAHQgJ) to chat with team members.
+If you have feedback, questions, or want to contribute to Aspire, collaborate with us on [:::image type="icon" source="../media/github-mark.svg" border="false"::: GitHub](https://github.com/microsoft/aspire) or join us on [:::image type="icon" source="../media/discord-icon.svg" border="false"::: Discord](https://discord.com/invite/h87kDAHQgJ) to chat with team members.
 
 It's important to note that Aspire releases out-of-band from .NET releases. While major versions of Aspire align with .NET major versions, minor versions are released more frequently. For more information on .NET and Aspire version support, see:
 
@@ -50,7 +50,7 @@ Moving between minor releases of Aspire is simple:
     > [!IMPORTANT]
     > The `IsAspireHost` property is no longer required in the project file. For more information, see [🚧 Project file changes](#-project-file-changes).
 
-    For more information, see [Aspire SDK](xref:dotnet/aspire/sdk).
+    For more information, see [Aspire SDK](xref:microsoft/aspire/sdk).
 
 1. Check for any NuGet package updates, either using the NuGet Package Manager in Visual Studio or the **Update NuGet Package** command in VS Code.
 1. Update to the latest [Aspire templates](../fundamentals/aspire-sdk-templates.md) by running the following .NET command line:
@@ -70,7 +70,7 @@ The [app host](../fundamentals/app-host-overview.md) is the core of Aspire, prov
 
 ### 🚧 Project file changes
 
-The Aspire app host project file no longer requires the `IsAspireHost` property. This property was moved to the `Aspire.AppHost.Sdk` SDK, therefore, you can remove it from your project file. For more information, see [dotnet/aspire issue #8144](https://github.com/dotnet/aspire/pull/8144).
+The Aspire app host project file no longer requires the `IsAspireHost` property. This property was moved to the `Aspire.AppHost.Sdk` SDK, therefore, you can remove it from your project file. For more information, see [microsoft/aspire issue #8144](https://github.com/microsoft/aspire/pull/8144).
 
 ### 🔗 Define custom resource URLs
 
@@ -209,7 +209,7 @@ The Redis, Valkey, and Garnet containers enable password authentication by defau
 
 ### 💾 Automatic database creation support
 
-There's [plenty of feedback and confusion](https://github.com/dotnet/aspire/issues/7101) around the `AddDatabase` API. The name implies that it adds a database, but it didn't actually create the database. In Aspire 9.2, the `AddDatabase` API now creates a database for the following hosting integrations:
+There's [plenty of feedback and confusion](https://github.com/microsoft/aspire/issues/7101) around the `AddDatabase` API. The name implies that it adds a database, but it didn't actually create the database. In Aspire 9.2, the `AddDatabase` API now creates a database for the following hosting integrations:
 
 | Hosting integration | API reference |
 |--|--|

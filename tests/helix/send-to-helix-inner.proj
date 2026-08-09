@@ -10,7 +10,7 @@
     <DotNetCliPackageType>sdk</DotNetCliPackageType>
     <NeedsCreateDotNetDevScripts Condition="'$(OS)' != 'Windows_NT'">true</NeedsCreateDotNetDevScripts>
     <HasDocker Condition="'$(OS)' != 'Windows_NT'">true</HasDocker>
-    <!-- Disable playwright tests on helix/linux. Issue: https://github.com/dotnet/aspire/issues/4921 -->
+    <!-- Disable playwright tests on helix/linux. Issue: https://github.com/microsoft/aspire/issues/4921 -->
     <DisablePlaywrightTests Condition="'$(OS)' != 'Windows_NT'">true</DisablePlaywrightTests>
 
     <DotNetCliVersion>$(DotNetSdkPreviousVersionForTesting)</DotNetCliVersion>
@@ -62,7 +62,7 @@
 
   <ItemGroup>
     <_TestBlameArguments Include="--hangdump" />
-    <_TestBlameArguments Include="--hangdump-type Full" />
+    <_TestBlameArguments Include="--hangdump-type none" />
     <_TestBlameArguments Include="--hangdump-timeout 20m" />
     <_TestBlameArguments Include="--crashdump" />
     <_TestBlameArguments Include="--crashdump-type Full" />
@@ -144,10 +144,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Issue: https://github.com/dotnet/aspire/pull/6181 -->
+    <!-- Issue: https://github.com/microsoft/aspire/pull/6181 -->
     <HelixPreCommand Include="$(_EnvVarSetKeyword) MSBUILDDEBUGPATH=$(_HelixCorrelationPayloadEnvVar)/msbuild-debug" />
 
     <HelixPreCommand Condition="'$(OS)' == 'Windows_NT'" Include="dotnet dev-certs https --trust" />
+
+    <!-- Set console code page to UTF-8 on Windows to ensure log files are saved in UTF-8 format -->
+    <HelixPreCommand Condition="'$(OS)' == 'Windows_NT'" Include="chcp 65001 >NUL" />
 
     <!-- Set the DCP env -->
     <HelixPreCommand Include="$(_EnvVarSetKeyword) DCP_DIAGNOSTICS_LOG_LEVEL=debug" />

@@ -3,7 +3,8 @@
 
 using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Ats;
+using Aspire.Hosting.RemoteHost;
+using Aspire.TypeSystem;
 using Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes;
 
 namespace Aspire.Hosting.CodeGeneration.Rust.Tests;
@@ -38,6 +39,23 @@ public class AtsRustCodeGeneratorTests
 
         await Verify(files["aspire.rs"], extension: "rs")
             .UseFileName("AtsGeneratedAspire");
+    }
+
+    [Fact]
+    public void GenerateDistributedApplication_WithTestTypes_IncludesExportedValues()
+    {
+        var atsContext = CreateContextFromTestAssembly();
+
+        Assert.Contains(atsContext.ExportedValues, value => string.Join(".", value.PathSegments) == "TestConfigs.Default");
+        Assert.Contains(atsContext.ExportedValues, value => string.Join(".", value.PathSegments) == "TestConfigs.Profiles.Development");
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireRs = files["aspire.rs"];
+
+        Assert.Contains("pub mod test_configs", aspireRs);
+        Assert.Contains("pub fn default() -> TestConfigDto", aspireRs);
+        Assert.Contains("pub mod profiles", aspireRs);
+        Assert.Contains("pub fn development() -> TestConfigDto", aspireRs);
     }
 
     [Fact]

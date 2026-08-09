@@ -5,4 +5,4 @@ accountableOwners:
 routing:
   defaultAreaPath:
     org: devdiv
-    path: DevDiv\ASP.NET Core
+    path: DevDiv\ASP.NET Core\Aspire

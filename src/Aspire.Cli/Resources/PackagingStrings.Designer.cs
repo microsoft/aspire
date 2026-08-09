@@ -64,5 +64,32 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("BasedOnNuGetConfig", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The 'staging' channel cannot be resolved from a CLI with identity '{0}'. Daily, local, and per-PR CLI builds do not have a deterministic staging feed. Install a staging or stable Aspire CLI, or set 'overrideStagingFeed' (for example: aspire config set -g overrideStagingFeed &lt;feed-url&gt;) to point at the staging feed you want to use.
+        /// </summary>
+        internal static string StagingChannelUnavailableOnDailyCli {
+            get {
+                return ResourceManager.GetString("StagingChannelUnavailableOnDailyCli", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The Aspire CLI packages override directory '{0}' does not exist. Set ASPIRE_CLI_PACKAGES (or the install sidecar 'packages' field) to a directory that contains the .nupkg files to resolve Aspire* packages from.
+        /// </summary>
+        internal static string PackagesOverrideDirectoryNotFound {
+            get {
+                return ResourceManager.GetString("PackagesOverrideDirectoryNotFound", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The Aspire CLI packages override directory '{0}' contains more than one version of the same Aspire package, which is ambiguous because the highest version would be selected silently. Clean the directory so each Aspire* package appears exactly once. Conflicts: {1}.
+        /// </summary>
+        internal static string PackagesOverrideDirectoryHasDuplicateVersions {
+            get {
+                return ResourceManager.GetString("PackagesOverrideDirectoryHasDuplicateVersions", resourceCulture);
+            }
+        }
     }
 }

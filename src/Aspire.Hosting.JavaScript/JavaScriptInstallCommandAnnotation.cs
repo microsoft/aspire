@@ -18,4 +18,12 @@ public sealed class JavaScriptInstallCommandAnnotation(string[] args) : IResourc
     /// Gets the command-line arguments supplied to the JavaScript package manager.
     /// </summary>
     public string[] Args { get; } = args;
+
+    /// <summary>
+    /// Gets or sets the additional arguments for installing production-only dependencies (excluding devDependencies).
+    /// This flag is appended to the base install command (from <see cref="Args"/>) when generating the
+    /// production dependencies stage in the Dockerfile. Each package manager sets its own flag
+    /// (e.g. npm uses <c>--omit=dev</c>, yarn uses <c>--production</c>, pnpm uses <c>--prod</c>).
+    /// </summary>
+    public string? ProductionInstallArgs { get; init; }
 }

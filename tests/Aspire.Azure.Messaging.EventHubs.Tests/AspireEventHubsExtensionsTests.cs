@@ -566,7 +566,7 @@ public class AspireEventHubsExtensionsTests
 
         using var host = builder.Build();
 
-        // Unkeyed services don't work with keyed services. See https://github.com/dotnet/aspire/issues/3890
+        // Unkeyed services don't work with keyed services. See https://github.com/microsoft/aspire/issues/3890
         //var client1 = RetrieveClient(key: null, clientIndex, host);
         var client2 = RetrieveClient(key: "eh2", clientIndex, host);
         var client3 = RetrieveClient(key: "eh3", clientIndex, host);

@@ -1,0 +1,9 @@
+﻿services:
+  api:
+    image: "my-api:latest"
+    networks:
+      - "aspire"
+    privileged: true
+networks:
+  aspire:
+    driver: "bridge"

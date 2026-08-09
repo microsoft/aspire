@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Nodes;
-using Aspire.Hosting.Ats;
+using Aspire.TypeSystem;
 using Aspire.Hosting.RemoteHost.Ats;
 using Xunit;
 
@@ -147,6 +147,31 @@ public class CallbackProxyTests
     }
 
     [Fact]
+    public async Task InvokedProxy_MarshalsHandleArgumentWithDeclaredType()
+    {
+        var invoker = new TestCallbackInvoker();
+        using var factory = CreateFactory(invoker, handleTypes:
+        [
+            new AtsTypeInfo
+            {
+                AtsTypeId = AtsTypeMapping.DeriveTypeId(typeof(ITestCallbackHandle)),
+                ClrType = typeof(ITestCallbackHandle),
+                IsInterface = true
+            }
+        ]);
+
+        var proxy = (TestCallbackWithHandle)factory.CreateProxy("test-callback", typeof(TestCallbackWithHandle))!;
+
+        await proxy(new TestCallbackHandle());
+
+        Assert.Single(invoker.Invocations);
+        var args = Assert.IsAssignableFrom<JsonObject>(invoker.Invocations[0].Args);
+        var handle = Assert.IsAssignableFrom<JsonObject>(args["p0"]);
+        Assert.NotNull(handle["$handle"]?.GetValue<string>());
+        Assert.Equal(AtsTypeMapping.DeriveTypeId(typeof(ITestCallbackHandle)), handle["$type"]?.GetValue<string>());
+    }
+
+    [Fact]
     public async Task InvokedProxy_WithResultReturnsCorrectValue()
     {
         var invoker = new TestCallbackInvoker { ResultToReturn = JsonValue.Create("result-value") };
@@ -173,9 +198,30 @@ public class CallbackProxyTests
         Assert.Single(invoker.Invocations);
         var args = invoker.Invocations[0].Args as JsonObject;
         Assert.NotNull(args);
-        // Arguments are passed with positional keys (p0, p1, p2, ...)
-        // CancellationToken is not included in positional args, but added as $cancellationToken if not None
         Assert.Equal("test", args["p0"]?.GetValue<string>());
+        var tokenId = args["p1"]?.GetValue<string>();
+        Assert.NotNull(tokenId);
+        Assert.StartsWith("ct_", tokenId);
+        Assert.Equal(tokenId, args["$cancellationToken"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task InvokedProxy_WithOnlyCancellationToken_UsesPositionalTokenId()
+    {
+        var invoker = new TestCallbackInvoker();
+        using var factory = CreateFactory(invoker);
+        using var cts = new CancellationTokenSource();
+
+        var proxy = (TestCallbackWithOnlyCancellation)factory.CreateProxy("test-callback", typeof(TestCallbackWithOnlyCancellation))!;
+
+        await proxy(cts.Token);
+
+        Assert.Single(invoker.Invocations);
+        var args = invoker.Invocations[0].Args as JsonObject;
+        Assert.NotNull(args);
+        var tokenId = args["p0"]?.GetValue<string>();
+        Assert.NotNull(tokenId);
+        Assert.Equal(tokenId, args["$cancellationToken"]?.GetValue<string>());
     }
 
     // Callback error handling tests
@@ -338,7 +384,7 @@ public class CallbackProxyTests
         Assert.Equal(20, dto2.Count);
     }
 
-    private static AtsCallbackProxyFactory CreateFactory(ICallbackInvoker? invoker = null, bool registerDtoTypes = false)
+    private static AtsCallbackProxyFactory CreateFactory(ICallbackInvoker? invoker = null, bool registerDtoTypes = false, IReadOnlyList<AtsTypeInfo>? handleTypes = null)
     {
         var handles = new HandleRegistry();
         var ctRegistry = new CancellationTokenRegistry();
@@ -348,7 +394,7 @@ public class CallbackProxyTests
                 new() { TypeId = "test/TestCallbackDto", Name = "TestCallbackDto", ClrType = typeof(TestCallbackDto), Properties = [] }
             }
             : [];
-        var context = new AtsContext { Capabilities = [], HandleTypes = [], DtoTypes = dtoTypes, EnumTypes = [] };
+        var context = new AtsContext { Capabilities = [], HandleTypes = handleTypes ?? [], DtoTypes = dtoTypes, EnumTypes = [] };
         var marshaller = new AtsMarshaller(handles, context, ctRegistry, new Lazy<AtsCallbackProxyFactory>(() => throw new NotImplementedException()));
         return new AtsCallbackProxyFactory(invoker ?? new TestCallbackInvoker(), handles, ctRegistry, marshaller);
     }
@@ -364,9 +410,13 @@ public class CallbackProxyTests
 
     public delegate Task TestCallbackWithMultipleParams(string name, int count);
 
+    public delegate Task TestCallbackWithHandle(ITestCallbackHandle handle);
+
     public delegate Task<string> TestCallbackWithStringResult(string input);
 
     public delegate Task TestCallbackWithCancellation(string value, CancellationToken cancellationToken);
+
+    public delegate Task TestCallbackWithOnlyCancellation(CancellationToken cancellationToken);
 
     public delegate void TestSyncVoidCallbackWithDto(TestCallbackDto dto);
 
@@ -381,6 +431,14 @@ public class CallbackProxyTests
     {
         public string? Name { get; set; }
         public int Count { get; set; }
+    }
+
+    public interface ITestCallbackHandle
+    {
+    }
+
+    private sealed class TestCallbackHandle : ITestCallbackHandle
+    {
     }
 }
 

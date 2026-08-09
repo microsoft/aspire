@@ -4,7 +4,7 @@
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
-/// Specifies how resource dependencies are discovered.
+/// Represents the mode for discovering resource dependencies.
 /// </summary>
 public enum ResourceDependencyDiscoveryMode
 {
@@ -20,5 +20,5 @@ public enum ResourceDependencyDiscoveryMode
     /// and from environment variables and command-line arguments, but does not recurse
     /// into the dependencies of those dependencies.
     /// </summary>
-    DirectOnly
+    DirectOnly,
 }

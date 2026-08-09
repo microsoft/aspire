@@ -18,6 +18,8 @@ namespace Aspire.Hosting.Azure;
 /// <remarks>
 /// Use <see cref="AzureProvisioningResourceExtensions.ConfigureInfrastructure{T}(ApplicationModel.IResourceBuilder{T}, Action{AzureResourceInfrastructure})"/> to configure specific <see cref="Azure.Provisioning"/> properties.
 /// </remarks>
+/// <ats-remarks />
+/// <ats-summary>Represents a Service Bus Subscription. Initializes a new instance of the <ats-see cref="!:type:AzureServiceBusSubscriptionResource" /> class.</ats-summary>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Subscription = {SubscriptionName}")]
 [AspireExport(ExposeProperties = true)]
 public class AzureServiceBusSubscriptionResource(string name, string subscriptionName, AzureServiceBusTopicResource parent)
@@ -37,15 +39,11 @@ public class AzureServiceBusSubscriptionResource(string name, string subscriptio
     /// <summary>
     /// Gets the parent Azure Service Bus Topic resource.
     /// </summary>
-    /// <remarks>This property is not available in polyglot app hosts.</remarks>
-    [AspireExportIgnore]
     public AzureServiceBusTopicResource Parent { get; } = parent ?? throw new ArgumentNullException(nameof(parent));
 
     /// <summary>
     /// Gets the connection string expression for the Azure Service Bus Subscription.
     /// </summary>
-    /// <remarks>This property is not available in polyglot app hosts.</remarks>
-    [AspireExportIgnore]
     public ReferenceExpression ConnectionStringExpression => Parent.Parent.GetConnectionString(Parent.TopicName, SubscriptionName);
 
     /// <summary>

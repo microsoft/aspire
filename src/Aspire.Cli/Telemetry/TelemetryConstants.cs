@@ -49,6 +49,11 @@ internal static class TelemetryConstants
         public const string ProcessExecutableName = "process.executable.name";
 
         /// <summary>
+        /// Tag for the resolved process executable path.
+        /// </summary>
+        public const string ProcessExecutablePath = "process.executable.path";
+
+        /// <summary>
         /// Tag for the process exit code.
         /// </summary>
         public const string ProcessExitCode = "process.exit.code";
@@ -67,6 +72,52 @@ internal static class TelemetryConstants
         /// Tag for the CLI build identifier, such as the file version or build ID.
         /// </summary>
         public const string CliBuildId = "aspire.cli.build_id";
+
+        /// <summary>
+        /// Tag for the CLI's effective identity version. This is the version the CLI is
+        /// behaving as — which honors <c>ASPIRE_CLI_VERSION</c> / the sidecar config — and may
+        /// differ from <see cref="CliVersion"/> (the physical binary's assembly version) when the
+        /// CLI is emulating another build for reproduction/diagnosis. See
+        /// docs/specs/cli-identity-sidecar.md.
+        /// </summary>
+        public const string IdentityVersion = "aspire.cli.identity.version";
+
+        /// <summary>
+        /// Tag for the CLI's effective identity commit (honors <c>ASPIRE_CLI_COMMIT</c> / sidecar).
+        /// May differ from the physical binary's commit when emulating another build.
+        /// </summary>
+        public const string IdentityCommit = "aspire.cli.identity.commit";
+
+        /// <summary>
+        /// Tag for the CLI's effective identity channel (honors <c>ASPIRE_CLI_CHANNEL</c> / sidecar).
+        /// </summary>
+        public const string IdentityChannel = "aspire.cli.identity.channel";
+
+        /// <summary>
+        /// Tag for the detected coding agent that invoked the CLI process.
+        /// </summary>
+        public const string CodingAgent = "process.coding_agent";
+
+        /// <summary>
+        /// Tag indicating whether the current user or machine appears to be Microsoft internal.
+        /// </summary>
+        public const string InternalMicrosoft = "aspire.cli.is_microsoft_internal";
+
+        /// <summary>
+        /// Source that populates the <see cref="InternalMicrosoft"/> tag, used to differentiate between
+        /// different heuristics or signals used to determine if the user/machine is Microsoft internal.
+        /// </summary>
+        public const string InternalMicrosoftSource = "aspire.cli.microsoft_internal_source";
+
+        /// <summary>
+        /// Alias extracted by the probe that populates the <see cref="InternalMicrosoft"/> tag.
+        /// </summary>
+        public const string InternalMicrosoftAlias = "aspire.cli.microsoft_internal_alias";
+
+        /// <summary>
+        /// Active Directory domain extracted by the probe that populates the <see cref="InternalMicrosoft"/> tag.
+        /// </summary>
+        public const string InternalMicrosoftDomain = "aspire.cli.microsoft_internal_domain";
 
         /// <summary>
         /// Tag for the deployment environment name ("ci" or "local").
@@ -102,6 +153,68 @@ internal static class TelemetryConstants
         /// Tag for the operating system version.
         /// </summary>
         public const string OsVersion = "os.version";
+
+        /// <summary>
+        /// Tag for the app host language identifier.
+        /// </summary>
+        public const string AppHostLanguage = "aspire.cli.apphost.language";
+
+        /// <summary>
+        /// Tag indicating whether the app host was launched in detached mode.
+        /// </summary>
+        public const string AppHostDetached = "aspire.cli.apphost.detached";
+
+        /// <summary>
+        /// Tag indicating whether the app host was launched in isolated mode.
+        /// </summary>
+        public const string AppHostIsolated = "aspire.cli.apphost.isolated";
+
+        /// <summary>
+        /// Tag for the error type when the operation fails.
+        /// Set to the exception type name or a descriptive error category.
+        /// Absence of this tag indicates success.
+        /// </summary>
+        public const string ErrorType = "error.type";
+
+        /// <summary>
+        /// Tag for the AI agent telemetry event type forwarded by the hook scripts.
+        /// One of <c>skill_invocation</c>, <c>tool_invocation</c>, or <c>reference_file_read</c>.
+        /// </summary>
+        public const string AgentEventType = "aspire.cli.agent.event_type";
+
+        /// <summary>
+        /// Tag for the AI agent client that produced the event (for example <c>copilot-cli</c>,
+        /// <c>claude-code</c>, or <c>vscode</c>).
+        /// </summary>
+        public const string AgentClientName = "aspire.cli.agent.client_name";
+
+        /// <summary>
+        /// Tag for the AI agent session identifier. This is an opaque per-session GUID and does
+        /// not identify a user or machine.
+        /// </summary>
+        public const string AgentSessionId = "aspire.cli.agent.session_id";
+
+        /// <summary>
+        /// Tag for the Aspire skill name associated with a <c>skill_invocation</c> event.
+        /// </summary>
+        public const string AgentSkillName = "aspire.cli.agent.skill_name";
+
+        /// <summary>
+        /// Tag for the Aspire MCP tool name associated with a <c>tool_invocation</c> event.
+        /// </summary>
+        public const string AgentToolName = "aspire.cli.agent.tool_name";
+
+        /// <summary>
+        /// Tag for the Aspire skills-relative reference file path associated with a
+        /// <c>reference_file_read</c> event. Only the path after the <c>skills/</c> segment is
+        /// recorded so that no absolute path, repository name, or user name is captured.
+        /// </summary>
+        public const string AgentFileReference = "aspire.cli.agent.file_reference";
+
+        /// <summary>
+        /// Tag for the timestamp the hook recorded for the AI agent event.
+        /// </summary>
+        public const string AgentEventTimestamp = "aspire.cli.agent.event_timestamp";
     }
 
     /// <summary>
@@ -118,6 +231,17 @@ internal static class TelemetryConstants
         /// Activity name for ensuring the SDK is installed.
         /// </summary>
         public const string EnsureSdkInstalled = "aspire/cli/ensure_sdk_installed";
+
+        /// <summary>
+        /// Activity name for running an app host.
+        /// </summary>
+        public const string RunAppHost = "aspire/cli/run_apphost";
+
+        /// <summary>
+        /// Activity name for an AI agent skill/tool/reference telemetry event forwarded by the
+        /// agent telemetry hook scripts.
+        /// </summary>
+        public const string AgentTelemetry = "aspire/cli/agent_telemetry";
     }
 
     /// <summary>

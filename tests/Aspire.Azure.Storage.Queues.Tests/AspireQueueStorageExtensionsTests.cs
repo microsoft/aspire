@@ -141,7 +141,7 @@ public class AspireQueueStorageExtensionsTests
 
         using var host = builder.Build();
 
-        // Unkeyed services don't work with keyed services. See https://github.com/dotnet/aspire/issues/3890
+        // Unkeyed services don't work with keyed services. See https://github.com/microsoft/aspire/issues/3890
         //var client1 = host.Services.GetRequiredService<QueueServiceClient>();
         var client2 = host.Services.GetRequiredKeyedService<QueueServiceClient>("queue2");
         var client3 = host.Services.GetRequiredKeyedService<QueueServiceClient>("queue3");

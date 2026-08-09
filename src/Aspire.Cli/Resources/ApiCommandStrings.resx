@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="Description" xml:space="preserve">
+    <value>Browse and search Aspire API reference documentation from aspire.dev</value>
+  </data>
+  <data name="ListDescription" xml:space="preserve">
+    <value>List API entries under a parent scope</value>
+  </data>
+  <data name="SearchDescription" xml:space="preserve">
+    <value>Search Aspire API reference documentation by keywords</value>
+  </data>
+  <data name="GetDescription" xml:space="preserve">
+    <value>Get the markdown for an API reference item by its identifier</value>
+  </data>
+  <data name="ScopeArgumentDescription" xml:space="preserve">
+    <value>The parent API scope to browse (for example, 'csharp' or 'typescript/aspire.hosting.azure.appconfiguration')</value>
+  </data>
+  <data name="QueryArgumentDescription" xml:space="preserve">
+    <value>The search query</value>
+  </data>
+  <data name="IdArgumentDescription" xml:space="preserve">
+    <value>The API identifier (for example, 'csharp/aspire.azure.ai.inference/aspireazureaiinferenceextensions')</value>
+  </data>
+  <data name="FormatOptionDescription" xml:space="preserve">
+    <value>Output format (Table or Json)</value>
+  </data>
+  <data name="LimitOptionDescription" xml:space="preserve">
+    <value>Maximum number of search results to return (default: 5, max: 10)</value>
+  </data>
+  <data name="LanguageOptionDescription" xml:space="preserve">
+    <value>Limit results to a specific API language</value>
+  </data>
+  <data name="LoadingApiDocumentation" xml:space="preserve">
+    <value>Loading API documentation...</value>
+  </data>
+  <data name="NoApiEntriesFound" xml:space="preserve">
+    <value>No API entries found under '{0}'.</value>
+  </data>
+  <data name="NoResultsFound" xml:space="preserve">
+    <value>No API results found for '{0}'. Try different search terms.</value>
+  </data>
+  <data name="ApiNotFound" xml:space="preserve">
+    <value>API item '{0}' not found. Use 'aspire docs api search' or 'aspire docs api list &lt;scope&gt;' to find available identifiers.</value>
+  </data>
+  <data name="FoundApiEntries" xml:space="preserve">
+    <value>Found {0} API entries under '{1}'.</value>
+  </data>
+  <data name="FoundSearchResults" xml:space="preserve">
+    <value>Found {0} API results for '{1}'.</value>
+  </data>
+  <data name="HeaderName" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="HeaderId" xml:space="preserve">
+    <value>Id</value>
+  </data>
+  <data name="HeaderLanguage" xml:space="preserve">
+    <value>Language</value>
+  </data>
+  <data name="HeaderKind" xml:space="preserve">
+    <value>Kind</value>
+  </data>
+  <data name="HeaderGroup" xml:space="preserve">
+    <value>Group</value>
+  </data>
+  <data name="HeaderScore" xml:space="preserve">
+    <value>Score</value>
+  </data>
+</root>

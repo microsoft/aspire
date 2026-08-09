@@ -21,11 +21,13 @@ internal static class SdkInstallHelper
     /// <param name="interactionService">The interaction service for user communication.</param>
     /// <param name="telemetry">The telemetry service for tracking SDK installation operations.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="displayError">Whether to display an error message when the SDK is missing.</param>
     /// <returns>True if the SDK is available, false if it's missing.</returns>
     public static async Task<bool> EnsureSdkInstalledAsync(
         IDotNetSdkInstaller sdkInstaller,
         IInteractionService interactionService,
         AspireCliTelemetry telemetry,
+        bool displayError = true,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(sdkInstaller);
@@ -44,7 +46,7 @@ internal static class SdkInstallHelper
         activity?.SetTag(TelemetryConstants.Tags.SdkMinimumRequiredVersion, minimumRequiredVersion.ToString());
         activity?.SetTag(TelemetryConstants.Tags.SdkCheckResult, ToTelemetryString(checkResult));
 
-        if (!success)
+        if (!success && displayError)
         {
             var sdkErrorMessage = string.Format(CultureInfo.InvariantCulture,
                 ErrorStrings.MinimumSdkVersionNotMet,

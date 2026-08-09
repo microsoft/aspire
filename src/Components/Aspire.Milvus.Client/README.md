@@ -98,10 +98,10 @@ builder.AddMilvusClient("milvus");
 ## Additional documentation
 
 * https://github.com/milvus-io/milvus-sdk-csharp
-* https://github.com/dotnet/aspire/tree/main/src/Components/README.md
+* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire
 
 _*Milvus and the Milvus logo are used with permission from the Milvus project. All rights reserved by LF AI & Data foundation._

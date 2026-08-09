@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "AzureVirtualNetworkEndToEnd.AppHost/AzureVirtualNetworkEndToEnd.AppHost.csproj"
+  }
+}

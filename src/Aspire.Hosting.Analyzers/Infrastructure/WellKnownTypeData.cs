@@ -19,6 +19,8 @@ internal static class WellKnownTypeData
         Aspire_Hosting_IDistributedApplicationBuilder,
         System_Threading_Tasks_Task,
         System_Threading_Tasks_Task_1,
+        System_Threading_Tasks_ValueTask,
+        System_Threading_Tasks_ValueTask_1,
 
         // Date/time and scalar types
         System_DateTimeOffset,
@@ -52,6 +54,8 @@ internal static class WellKnownTypeData
         "Aspire.Hosting.IDistributedApplicationBuilder",
         "System.Threading.Tasks.Task",
         "System.Threading.Tasks.Task`1",
+        "System.Threading.Tasks.ValueTask",
+        "System.Threading.Tasks.ValueTask`1",
 
         // Date/time and scalar types
         "System.DateTimeOffset",

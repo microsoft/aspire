@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Xunit;
 
@@ -17,88 +16,59 @@ public sealed class SecretDotNetAppHostTests(ITestOutputHelper output)
     public async Task SecretCrudOnDotNetAppHost()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
         var counter = new SequenceCounter();
-        var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
-        sequenceBuilder.PrepareDockerEnvironment(counter, workspace);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        sequenceBuilder.InstallAspireCliInDocker(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Create an Empty AppHost project interactively
-        sequenceBuilder.AspireNew("TestSecrets", counter, template: AspireTemplate.EmptyAppHost);
+        await auto.AspireNewAsync("TestSecrets", counter, template: AspireTemplate.EmptyAppHost);
 
         // cd into the project
-        sequenceBuilder
-            .Type("cd TestSecrets")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("cd TestSecrets");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Set secrets
-        var waitingForSetSuccess = new CellPatternSearcher()
-            .Find("set successfully");
+        await auto.TypeAsync("aspire secret set Azure:Location eastus2");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("set successfully", timeout: TimeSpan.FromSeconds(60));
+        await auto.WaitForSuccessPromptAsync(counter);
 
-        sequenceBuilder
-            .Type("aspire secret set Azure:Location eastus2")
-            .Enter()
-            .WaitUntil(s => waitingForSetSuccess.Search(s).Count > 0, TimeSpan.FromSeconds(60))
-            .WaitForSuccessPrompt(counter);
-
-        sequenceBuilder
-            .Type("aspire secret set Parameters:db-password s3cret")
-            .Enter()
-            .WaitUntil(s => waitingForSetSuccess.Search(s).Count > 0, TimeSpan.FromSeconds(30))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire secret set Parameters:db-password s3cret");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("set successfully", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Get
-        var waitingForGetValue = new CellPatternSearcher()
-            .Find("eastus2");
-
-        sequenceBuilder
-            .Type("aspire secret get Azure:Location")
-            .Enter()
-            .WaitUntil(s => waitingForGetValue.Search(s).Count > 0, TimeSpan.FromSeconds(30))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire secret get Azure:Location");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("eastus2", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // List
-        var waitingForListOutput = new CellPatternSearcher()
-            .Find("db-password");
-
-        sequenceBuilder
-            .Type("aspire secret list")
-            .Enter()
-            .WaitUntil(s => waitingForListOutput.Search(s).Count > 0, TimeSpan.FromSeconds(30))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire secret list");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("db-password", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Delete
-        var waitingForDeleteSuccess = new CellPatternSearcher()
-            .Find("deleted successfully");
-
-        sequenceBuilder
-            .Type("aspire secret delete Azure:Location")
-            .Enter()
-            .WaitUntil(s => waitingForDeleteSuccess.Search(s).Count > 0, TimeSpan.FromSeconds(30))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire secret delete Azure:Location");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("deleted successfully", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Verify deletion
-        sequenceBuilder
-            .Type("aspire secret list")
-            .Enter()
-            .WaitUntil(s => waitingForListOutput.Search(s).Count > 0, TimeSpan.FromSeconds(30))
-            .WaitForSuccessPrompt(counter);
-
-        sequenceBuilder
-            .Type("exit")
-            .Enter();
-
-        var sequence = sequenceBuilder.Build();
-        await sequence.ApplyAsync(terminal, TestContext.Current.CancellationToken);
-        await pendingRun;
+        await auto.TypeAsync("aspire secret list");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("db-password", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 }

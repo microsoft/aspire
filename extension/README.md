@@ -1,110 +1,70 @@
+# Aspire for Visual Studio Code
 
-# Aspire VS Code Extension
+The official Aspire extension for VS Code. Run, debug, and deploy your Aspire apps without leaving the editor, with debugging support for C#, Python, Node.js, Go, and more.
 
-The Aspire VS Code extension provides a set of commands and tools to help you work with Aspire and Aspire AppHost projects directly from Visual Studio Code.
+Aspire helps you build distributed apps — microservices, databases, containers, frontends, and any complex application topology — by providing declarative APIs to wire your resources together in code.
 
-## Commands
+---
 
-The extension adds the following commands to VS Code:
+## Getting Started
 
-| Command | Description |
-|---------|-------------|
-| Aspire: New Aspire project | Create a new Aspire apphost or starter app from a template. |
-| Aspire: Initialize Aspire | Initialize Aspire in an existing project. |
-| Aspire: Add an integration | Add a hosting integration (`Aspire.Hosting.*`) to the Aspire apphost. |
-| Aspire: Update integrations | Update hosting integrations and Aspire SDK in the apphost. |
-| Aspire: Publish deployment artifacts | Generate deployment artifacts for an Aspire apphost. |
-| Aspire: Deploy app | Deploy the contents of an Aspire apphost to its defined deployment targets. |
-| Aspire: Execute pipeline step (aspire do) | Execute a specific pipeline step and its dependencies. |
-| Aspire: Configure launch.json file | Add the default Aspire debugger launch configuration to your workspace's `launch.json`. |
-| Aspire: Extension settings | Open Aspire extension settings. |
-| Aspire: Open local Aspire settings | Open the local `.aspire/settings.json` file for the current workspace. |
-| Aspire: Open global Aspire settings | Open the global `~/.aspire/globalsettings.json` file. |
-| Aspire: Open Aspire terminal | Open an Aspire VS Code terminal for working with Aspire projects. |
+Open your Aspire project in VS Code, or create one with **Aspire: New Aspire project** from the Command Palette. Run **Aspire: Configure launch.json file** to set up the debug configuration, then press **F5**. The Aspire extension will build your apphost, start your services, attach debuggers, and print the dashboard URL. Open the dashboard from the Aspire panel when you need it, or opt into auto-launch with the `aspire.dashboardBrowser` setting.
 
-All commands are available from the Command Palette (`Cmd+Shift+P` or `Ctrl+Shift+P`) and are grouped under the "Aspire" category.
+There's also a built-in walkthrough at **Help → Get Started → Get started with Aspire** that covers the basics step by step.
 
-## Debugging
+The core flow is:
 
-To run an Aspire application using the Aspire VS Code extension, you must be using Aspire 9.5 or higher. Some features are only available when certain VS Code extensions are installed and available. See the feature matrix below:
+1. Open an Aspire repo or create a starter with **Aspire: New Aspire project**.
+2. Let the Aspire view discover the AppHost.
+3. Press **F5**, or use **Run Aspire apphost** / **Debug Aspire apphost** from the editor.
+4. Inspect resources in the Aspire view and open the dashboard when you need logs, traces, metrics, or endpoint URLs.
 
-| Feature | Requirement | Notes |
-|---------|-------------|-------|
-| Debug C# projects | [C# Dev Kit](https://marketplace.visualstudio.com/items?itemName=ms-dotnettools.csdevkit) or [C# for Visual Studio Code](https://marketplace.visualstudio.com/items?itemName=ms-dotnettools.csharp) | The C# extension is required for debugging .NET projects. Apphosts will be built in VS Code if C# Dev Kit is available. |
-| Debug Python projects | [Python extension](https://marketplace.visualstudio.com/items?itemName=ms-python.python) | Required for debugging Python projects |
+Learn more in the [Aspire VS Code extension documentation](https://aspire.dev/get-started/aspire-vscode-extension/).
 
-To run and debug your Aspire application, add an entry to the workspace `launch.json`. You can change the apphost to run by setting the `program` field to an apphost project file based on the below example:
+---
+
+## Running and Debugging
+
+### Launch configuration
+
+Add an entry to `.vscode/launch.json` pointing at your apphost:
 
 ```json
 {
     "type": "aspire",
     "request": "launch",
-    "name": "Aspire: Launch MyAppHost",
-    "program": "${workspaceFolder}/MyAppHost/MyAppHost.csproj"
+    "name": "Aspire: Launch TypeScript starter",
+    "program": "${workspaceFolder}/AppHost/apphost.mts"
 }
 ```
 
-You can also use the `command` property to run deploy, publish, or pipeline step commands with the debugger attached:
+When you hit **F5**, the extension builds the apphost, starts all the resources (services, containers, databases) in the right order, hooks up debuggers based on each service's language, and prints the dashboard URL.
+
+You can also right-click an AppHost file in the Explorer and pick **Run Aspire apphost** or **Debug Aspire apphost**.
+
+![VS Code running and debugging an Aspire AppHost with resource debug sessions.](https://raw.githubusercontent.com/microsoft/aspire/main/extension/resources/vscode-extension-debug-session.png)
+
+### Deploy, publish, and pipeline steps
+
+The `command` property in the launch config lets you do more than just run:
+
+- **`deploy`** — push to your defined deployment targets.
+- **`publish`** — generate deployment artifacts (manifests, Bicep files, etc.).
+- **`do`** — run a specific pipeline step. Set `step` to the step name.
 
 ```json
 {
     "type": "aspire",
     "request": "launch",
-    "name": "Aspire: Deploy MyAppHost",
-    "program": "${workspaceFolder}/MyAppHost/MyAppHost.csproj",
+    "name": "Aspire: Deploy TypeScript starter",
+    "program": "${workspaceFolder}/AppHost/apphost.mts",
     "command": "deploy"
 }
 ```
 
-Supported values for `command` are `run` (default), `deploy`, `publish`, and `do`. When using `do`, you can optionally set the `step` property to specify the pipeline step to execute:
+### Customizing debugger settings per language
 
-```json
-{
-    "type": "aspire",
-    "request": "launch",
-    "name": "Aspire: Run pipeline step",
-    "program": "${workspaceFolder}/MyAppHost/MyAppHost.csproj",
-    "command": "do",
-    "step": "my-custom-step"
-}
-```
-
-## Requirements
-
-### Aspire CLI
-
-The [Aspire CLI](https://aspire.dev/get-started/install-cli/) must be installed and available on the path. You can install using the following scripts.
-
-On Windows:
-
-```powershell
-irm https://aspire.dev/install.ps1 | iex
-```
-
-On Linux or macOS:
-
-```sh
-curl -sSL https://aspire.dev/install.sh | bash
-```
-
-### .NET
-
-[.NET 8+](https://dotnet.microsoft.com/en-us/download) must be installed.
-
-## Feedback and Issues
-
-Please report [issues](https://github.com/dotnet/aspire/issues/new?template=10_bug_report.yml&labels=area-extension) or [feature requests](https://github.com/dotnet/aspire/issues/new?template=20_feature-request.yml&labels=area-extension) on the Aspire [GitHub repository](https://github.com/dotnet/aspire/issues) using the label `area-extension`.
-
-## Customizing debugger attributes for resources
-
-| Language | Debugger entry |
-|----------|-----------------|
-| C# | project |
-| Python | python |
-
-The debuggers property stores common debug configuration properties for different types of Aspire services.
-C#-based services have common debugging properties under `project`. Python-based services have their common properties under `python`.
-There is also a special entry for the apphost (`apphost`). For example:
+The `debuggers` property lets you pass debug config specific to a language. Use `project` for C#/.NET services, `python` for Python, and `apphost` for the apphost itself:
 
 ```json
 {
@@ -115,9 +75,7 @@ There is also a special entry for the apphost (`apphost`). For example:
     "debuggers": {
         "project": {
             "console": "integratedTerminal",
-            "logging": {
-                "moduleLoad": false
-            }
+            "logging": { "moduleLoad": false }
         },
         "apphost": {
             "stopAtEntry": true
@@ -125,6 +83,60 @@ There is also a special entry for the apphost (`apphost`). For example:
     }
 }
 ```
+
+---
+
+## The Aspire Panel
+
+The extension adds an **Aspire** panel to the Activity Bar. It shows a live tree of your resources. In **Workspace** mode you see resources from the apphost in your current workspace, updating in real time. Switch to **Global** mode with the toggle in the panel header to see every running apphost on your machine.
+
+Right-click a resource to start, stop, or restart it, view its logs, run resource-specific commands, or open the dashboard.
+
+![Aspire view discovering a workspace AppHost and showing resources with live state.](https://raw.githubusercontent.com/microsoft/aspire/main/extension/resources/vscode-extension-apphost-view.png)
+
+---
+
+## The Aspire Dashboard
+
+The dashboard gives you a live view of your running app — all your resources and their health, endpoint URLs, console logs from every service, structured logs (via OpenTelemetry), distributed traces across services, and metrics. By default, the dashboard URL is printed to the debug console when your app starts and stays available from the Aspire panel.
+
+![Aspire Dashboard showing running resources](https://raw.githubusercontent.com/microsoft/aspire/main/extension/resources/aspire-dashboard-dark.png)
+
+---
+
+## Language and Debugger Support
+
+The extension figures out what language each resource uses and attaches the right debugger. Some languages need a companion extension:
+
+| Language | Debugger | Extension needed |
+|----------|----------|------------------|
+| C# / .NET | coreclr | [C# Dev Kit](https://marketplace.visualstudio.com/items?itemName=ms-dotnettools.csdevkit) or [C#](https://marketplace.visualstudio.com/items?itemName=ms-dotnettools.csharp) |
+| Python | debugpy | [Python](https://marketplace.visualstudio.com/items?itemName=ms-python.python) |
+| Node.js | js-debug (built-in) | None |
+| Browser apps | js-debug (built-in) | None |
+| Azure Functions | varies by language | [Azure Functions](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-azurefunctions) + language extension |
+
+---
+
+## Feedback and Issues
+
+Found a bug or have an idea? File it on the [microsoft/aspire](https://github.com/microsoft/aspire/issues) repo:
+
+- [Report a bug](https://github.com/microsoft/aspire/issues/new?template=10_bug_report.yml&labels=area-vscode-extension)
+- [Request a feature](https://github.com/microsoft/aspire/issues/new?template=20_feature-request.yml&labels=area-vscode-extension)
+
+### Contributing
+
+See [CONTRIBUTING.md](https://github.com/microsoft/aspire/blob/main/extension/CONTRIBUTING.md) for setup, project layout, the extension-only inner loop, and running tests. Good first issues are tagged [`area-vscode-extension` + `good first issue`](https://github.com/microsoft/aspire/issues?q=is%3Aissue+is%3Aopen+label%3Aarea-vscode-extension+label%3A%22good+first+issue%22).
+
+### Learn more
+
+- [Aspire docs](https://aspire.dev/docs/)
+- [Integration gallery](https://aspire.dev/integrations/gallery/)
+- [Dashboard overview](https://aspire.dev/dashboard/overview/)
+- [Discord](https://discord.com/invite/raNPcaaSj8)
+
+---
 
 ## License
 

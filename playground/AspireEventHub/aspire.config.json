@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "EventHubs.AppHost/EventHubs.AppHost.csproj"
+  }
+}

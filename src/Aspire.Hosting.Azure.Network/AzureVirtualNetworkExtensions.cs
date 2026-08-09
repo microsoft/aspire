@@ -28,7 +28,7 @@ public static class AzureVirtualNetworkExtensions
     /// var subnet = vnet.AddSubnet("pe-subnet", "10.0.1.0/24");
     /// </code>
     /// </example>
-    [AspireExport("addAzureVirtualNetwork", Description = "Adds an Azure Virtual Network resource to the application model.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addAzureVirtualNetwork dispatcher export.")]
     public static IResourceBuilder<AzureVirtualNetworkResource> AddAzureVirtualNetwork(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -59,7 +59,7 @@ public static class AzureVirtualNetworkExtensions
     /// var subnet = vnet.AddSubnet("pe-subnet", "10.0.1.0/24");
     /// </code>
     /// </example>
-    [AspireExport("addAzureVirtualNetworkFromParameter", MethodName = "addAzureVirtualNetwork", Description = "Adds an Azure Virtual Network resource to the application model with a parameterized address prefix.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addAzureVirtualNetwork dispatcher export.")]
     public static IResourceBuilder<AzureVirtualNetworkResource> AddAzureVirtualNetwork(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -76,6 +76,26 @@ public static class AzureVirtualNetworkExtensions
         return AddAzureVirtualNetworkCore(builder, resource);
     }
 
+    /// <summary>
+    /// Adds an Azure Virtual Network resource to the application model.
+    /// </summary>
+    [AspireExport("addAzureVirtualNetwork")]
+    internal static IResourceBuilder<AzureVirtualNetworkResource> AddAzureVirtualNetworkForPolyglot(
+        this IDistributedApplicationBuilder builder,
+        [ResourceName] string name,
+        [AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object? addressPrefix = null)
+    {
+        return addressPrefix switch
+        {
+            null => AddAzureVirtualNetwork(builder, name),
+            string addressPrefixValue => AddAzureVirtualNetwork(builder, name, addressPrefixValue),
+            IResourceBuilder<ParameterResource> addressPrefixParameter => AddAzureVirtualNetwork(builder, name, addressPrefixParameter),
+            _ => throw new ArgumentException(
+                "Address prefix must be omitted, a string, or a parameter resource builder.",
+                nameof(addressPrefix))
+        };
+    }
+
     private static IResourceBuilder<AzureVirtualNetworkResource> AddAzureVirtualNetworkCore(
         IDistributedApplicationBuilder builder,
         AzureVirtualNetworkResource resource)
@@ -86,7 +106,8 @@ public static class AzureVirtualNetworkExtensions
             return builder.CreateResourceBuilder(resource);
         }
 
-        return builder.AddResource(resource);
+        return builder.AddResource(resource)
+            .WithIconName("Router");
     }
 
     private static void ConfigureVirtualNetwork(AzureResourceInfrastructure infra)
@@ -167,7 +188,7 @@ public static class AzureVirtualNetworkExtensions
     /// var subnet = vnet.AddSubnet("my-subnet", "10.0.1.0/24");
     /// </code>
     /// </example>
-    [AspireExport("addSubnet", Description = "Adds an Azure subnet resource to an Azure Virtual Network resource.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addSubnet dispatcher export.")]
     public static IResourceBuilder<AzureSubnetResource> AddSubnet(
         this IResourceBuilder<AzureVirtualNetworkResource> builder,
         [ResourceName] string name,
@@ -201,7 +222,7 @@ public static class AzureVirtualNetworkExtensions
     /// var subnet = vnet.AddSubnet("my-subnet", subnetPrefix);
     /// </code>
     /// </example>
-    [AspireExport("addSubnetFromParameter", MethodName = "addSubnet", Description = "Adds an Azure subnet resource with a parameterized address prefix to an Azure Virtual Network resource.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addSubnet dispatcher export.")]
     public static IResourceBuilder<AzureSubnetResource> AddSubnet(
         this IResourceBuilder<AzureVirtualNetworkResource> builder,
         [ResourceName] string name,
@@ -219,6 +240,28 @@ public static class AzureVirtualNetworkExtensions
         return AddSubnetCore(builder, subnet);
     }
 
+    /// <summary>
+    /// Adds an Azure subnet resource to an Azure Virtual Network resource.
+    /// </summary>
+    [AspireExport("addSubnet")]
+    internal static IResourceBuilder<AzureSubnetResource> AddSubnetForPolyglot(
+        this IResourceBuilder<AzureVirtualNetworkResource> builder,
+        [ResourceName] string name,
+        [AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object addressPrefix,
+        string? subnetName = null)
+    {
+        ArgumentNullException.ThrowIfNull(addressPrefix);
+
+        return addressPrefix switch
+        {
+            string addressPrefixValue => AddSubnet(builder, name, addressPrefixValue, subnetName),
+            IResourceBuilder<ParameterResource> addressPrefixParameter => AddSubnet(builder, name, addressPrefixParameter, subnetName),
+            _ => throw new ArgumentException(
+                "Address prefix must be a string or a parameter resource builder.",
+                nameof(addressPrefix))
+        };
+    }
+
     private static IResourceBuilder<AzureSubnetResource> AddSubnetCore(
         IResourceBuilder<AzureVirtualNetworkResource> builder,
         AzureSubnetResource subnet)
@@ -232,6 +275,7 @@ public static class AzureVirtualNetworkExtensions
         }
 
         return builder.ApplicationBuilder.AddResource(subnet)
+            .WithIconName("Router")
             .ExcludeFromManifest();
     }
 
@@ -242,9 +286,13 @@ public static class AzureVirtualNetworkExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="subnet">The subnet to associate with the resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the resource is already associated with a different delegated subnet or the subnet is delegated to a different service.</exception>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method automatically configures the subnet with the appropriate service delegation
-    /// for the target resource type (e.g., "Microsoft.App/environments" for Azure Container Apps).
+    /// for the target resource type (for example, "Microsoft.App/environments" for Azure Container Apps
+    /// and "Microsoft.Web/serverFarms" for Azure App Service).
+    /// A resource can only be associated with one delegated subnet. Repeating the call with the same subnet is idempotent.
     /// </remarks>
     /// <example>
     /// This example configures an Azure Container App Environment to use a subnet:
@@ -256,7 +304,7 @@ public static class AzureVirtualNetworkExtensions
     ///     .WithDelegatedSubnet(subnet);
     /// </code>
     /// </example>
-    [AspireExport("withSubnetDelegatedSubnet", MethodName = "withDelegatedSubnet", Description = "Associates a delegated Azure subnet resource with an Azure resource that supports subnet delegation.")]
+    [AspireExport("withSubnetDelegatedSubnet", MethodName = "withDelegatedSubnet")]
     public static IResourceBuilder<T> WithDelegatedSubnet<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureSubnetResource> subnet)
@@ -267,16 +315,94 @@ public static class AzureVirtualNetworkExtensions
 
         var target = builder.Resource;
 
-        // Store the subnet ID reference on the target resource via annotation
-        builder.WithAnnotation(
-            new DelegatedSubnetAnnotation(ReferenceExpression.Create($"{subnet.Resource.Id}")));
+        var subnetId = ReferenceExpression.Create($"{subnet.Resource.Id}");
+        if (target.TryGetLastAnnotation<DelegatedSubnetAnnotation>(out var previousAnnotation) &&
+            previousAnnotation.SubnetId.ValueExpression != subnetId.ValueExpression)
+        {
+            throw new InvalidOperationException(
+                $"The resource '{target.Name}' is already associated with a different delegated subnet. A resource can use only one delegated subnet.");
+        }
 
-        // Add service delegation annotation to the subnet
-        subnet.WithAnnotation(new AzureSubnetServiceDelegationAnnotation(
-            target.DelegatedSubnetServiceName,
-            target.DelegatedSubnetServiceName));
+        // AzureSubnetResource emits only the last service-delegation annotation. Older annotations may
+        // still be present when callers appended the public annotation directly, so only that effective
+        // delegation can conflict with the target. Azure service identifiers are case-insensitive.
+        var existingDelegation = subnet.Resource.Annotations
+            .OfType<AzureSubnetServiceDelegationAnnotation>()
+            .LastOrDefault();
+        if (existingDelegation is not null
+            && !string.Equals(
+                existingDelegation.ServiceName,
+                target.DelegatedSubnetServiceName,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"The subnet '{subnet.Resource.Name}' is already delegated to '{existingDelegation.ServiceName}' and cannot also be delegated to '{target.DelegatedSubnetServiceName}'.");
+        }
+
+        builder.WithAnnotation(
+            new DelegatedSubnetAnnotation(subnetId),
+            ResourceAnnotationMutationBehavior.Replace);
+
+        // Delegate the subnet to the target's service. Routed through WithServiceDelegation so every
+        // service-delegation producer shares the same last-write-wins behavior and duplicate
+        // normalization, ensuring the subnet retains a single delegation annotation.
+        subnet.WithServiceDelegation(target.DelegatedSubnetServiceName);
 
         return builder;
+    }
+
+    /// <summary>
+    /// Delegates the subnet to the specified Azure service.
+    /// </summary>
+    /// <param name="builder">The subnet resource builder.</param>
+    /// <param name="serviceName">The service name to delegate the subnet to (e.g., "Microsoft.App/environments"). See <see cref="AzureSubnetServiceDelegations"/> for well-known values.</param>
+    /// <param name="name">The name of the service delegation. If not specified, defaults to <paramref name="serviceName"/>.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{AzureSubnetResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>
+    /// Service delegation grants the specified Azure service permission to create service-specific
+    /// resources in the subnet. Azure subnets can carry more than one delegation, but Aspire models a
+    /// subnet with a single delegation and emits only the most recent one. Calling this multiple times,
+    /// or combining it with <see cref="WithDelegatedSubnet{T}"/>, therefore replaces any previously
+    /// configured delegation with the latest value (last-write-wins).
+    /// </remarks>
+    /// <example>
+    /// This example delegates a subnet to Azure Container Instances using a well-known value from
+    /// <see cref="AzureSubnetServiceDelegations"/>:
+    /// <code>
+    /// var vnet = builder.AddAzureVirtualNetwork("vnet");
+    /// var subnet = vnet.AddSubnet("aci-subnet", "10.0.0.0/23")
+    ///     .WithServiceDelegation(AzureSubnetServiceDelegations.ContainerInstances);
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IResourceBuilder<AzureSubnetResource> WithServiceDelegation(
+        this IResourceBuilder<AzureSubnetResource> builder,
+        string serviceName,
+        string? name = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(serviceName);
+
+        // The delegation name defaults to the service name so callers don't have to repeat the
+        // value. Validate after defaulting so an explicitly empty name is rejected here rather
+        // than surfacing as an invalid (empty) delegation name at deployment time.
+        name ??= serviceName;
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        // AzureSubnetServiceDelegationAnnotation is public, so a subnet may already carry one or more
+        // delegation annotations that were appended directly (for example, before this helper existed,
+        // or via another producer). ResourceAnnotationMutationBehavior.Replace relies on SingleOrDefault
+        // internally and throws when more than one annotation is present, so a plain Replace can't be
+        // used here. Collapse any pre-existing delegations first, then append the replacement so the
+        // subnet ends with exactly one delegation (last-write-wins), matching AzureSubnetResource, which
+        // emits only the last delegation.
+        foreach (var existing in builder.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>().ToArray())
+        {
+            builder.Resource.Annotations.Remove(existing);
+        }
+
+        return builder.WithAnnotation(new AzureSubnetServiceDelegationAnnotation(name, serviceName));
     }
 
     /// <summary>
@@ -285,6 +411,7 @@ public static class AzureVirtualNetworkExtensions
     /// <param name="builder">The subnet resource builder.</param>
     /// <param name="natGateway">The NAT Gateway to associate with the subnet.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureSubnetResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// A NAT Gateway provides outbound internet connectivity for resources in the subnet.
     /// A subnet can have at most one NAT Gateway.
@@ -298,7 +425,7 @@ public static class AzureVirtualNetworkExtensions
     ///     .WithNatGateway(natGateway);
     /// </code>
     /// </example>
-    [AspireExport("withNatGateway", Description = "Associates an Azure NAT Gateway resource with an Azure subnet resource.")]
+    [AspireExport]
     public static IResourceBuilder<AzureSubnetResource> WithNatGateway(
         this IResourceBuilder<AzureSubnetResource> builder,
         IResourceBuilder<AzureNatGatewayResource> natGateway)
@@ -316,6 +443,7 @@ public static class AzureVirtualNetworkExtensions
     /// <param name="builder">The subnet resource builder.</param>
     /// <param name="nsg">The Network Security Group to associate with the subnet.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureSubnetResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <example>
     /// This example creates a subnet with an associated Network Security Group:
     /// <code>
@@ -330,7 +458,7 @@ public static class AzureVirtualNetworkExtensions
     /// (<see cref="AllowInbound"/>, <see cref="DenyInbound"/>, <see cref="AllowOutbound"/>, <see cref="DenyOutbound"/>).
     /// Use either shorthand methods or an explicit NSG, not both.
     /// </exception>
-    [AspireExport("withNetworkSecurityGroup", Description = "Associates an Azure Network Security Group resource with an Azure subnet resource.")]
+    [AspireExport]
     public static IResourceBuilder<AzureSubnetResource> WithNetworkSecurityGroup(
         this IResourceBuilder<AzureSubnetResource> builder,
         IResourceBuilder<AzureNetworkSecurityGroupResource> nsg)
@@ -361,6 +489,7 @@ public static class AzureVirtualNetworkExtensions
     /// <param name="priority">The rule priority (100-4096). If not specified, auto-increments from 100 by 100.</param>
     /// <param name="name">The rule name. If not specified, auto-generated from parameters.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureSubnetResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// If no Network Security Group has been associated with the subnet, one is automatically created.
     /// </remarks>
@@ -372,7 +501,7 @@ public static class AzureVirtualNetworkExtensions
     ///     .DenyInbound(from: AzureServiceTags.Internet);
     /// </code>
     /// </example>
-    [AspireExport("allowInbound", Description = "Adds an inbound allow rule to the Azure subnet resource's Network Security Group.")]
+    [AspireExport]
     public static IResourceBuilder<AzureSubnetResource> AllowInbound(
         this IResourceBuilder<AzureSubnetResource> builder,
         string? port = null,
@@ -396,10 +525,11 @@ public static class AzureVirtualNetworkExtensions
     /// <param name="priority">The rule priority (100-4096). If not specified, auto-increments from 100 by 100.</param>
     /// <param name="name">The rule name. If not specified, auto-generated from parameters.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureSubnetResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// If no Network Security Group has been associated with the subnet, one is automatically created.
     /// </remarks>
-    [AspireExport("denyInbound", Description = "Adds an inbound deny rule to the Azure subnet resource's Network Security Group.")]
+    [AspireExport]
     public static IResourceBuilder<AzureSubnetResource> DenyInbound(
         this IResourceBuilder<AzureSubnetResource> builder,
         string? port = null,
@@ -423,10 +553,11 @@ public static class AzureVirtualNetworkExtensions
     /// <param name="priority">The rule priority (100-4096). If not specified, auto-increments from 100 by 100.</param>
     /// <param name="name">The rule name. If not specified, auto-generated from parameters.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureSubnetResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// If no Network Security Group has been associated with the subnet, one is automatically created.
     /// </remarks>
-    [AspireExport("allowOutbound", Description = "Adds an outbound allow rule to the Azure subnet resource's Network Security Group.")]
+    [AspireExport]
     public static IResourceBuilder<AzureSubnetResource> AllowOutbound(
         this IResourceBuilder<AzureSubnetResource> builder,
         string? port = null,
@@ -450,10 +581,11 @@ public static class AzureVirtualNetworkExtensions
     /// <param name="priority">The rule priority (100-4096). If not specified, auto-increments from 100 by 100.</param>
     /// <param name="name">The rule name. If not specified, auto-generated from parameters.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureSubnetResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// If no Network Security Group has been associated with the subnet, one is automatically created.
     /// </remarks>
-    [AspireExport("denyOutbound", Description = "Adds an outbound deny rule to the Azure subnet resource's Network Security Group.")]
+    [AspireExport]
     public static IResourceBuilder<AzureSubnetResource> DenyOutbound(
         this IResourceBuilder<AzureSubnetResource> builder,
         string? port = null,

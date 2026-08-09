@@ -1,0 +1,82 @@
+.notification-entry {
+    font-family: var(--body-font);
+    color: var(--neutral-foreground-rest);
+    display: grid;
+    grid-template-columns: 24px 1fr auto;
+    width: 100%;
+    min-height: 36px;
+    padding: 0 8px;
+    column-gap: 4px;
+    border-top: calc(var(--stroke-width) * 1px) solid var(--neutral-stroke-divider-rest);
+}
+
+.notification-entry.intent-info {
+    fill: var(--info);
+}
+
+.notification-entry.intent-warning {
+    fill: var(--warning);
+}
+
+.notification-entry.intent-error {
+    fill: var(--error);
+}
+
+.notification-entry.intent-success {
+    fill: var(--success);
+}
+
+.notification-entry-icon {
+    grid-column: 1;
+    grid-row: 1;
+    display: flex;
+    justify-content: center;
+    align-self: center;
+}
+
+.notification-entry-message {
+    grid-column: 2;
+    grid-row: 1;
+    padding: 10px 0;
+    align-self: center;
+    font-weight: 600;
+    font-size: 12px;
+    line-height: 16px;
+    white-space: unset;
+}
+
+.notification-entry-close {
+    grid-column: 3;
+    grid-row: 1;
+    padding: 4px;
+    display: flex;
+    justify-content: center;
+    justify-self: center;
+    cursor: pointer;
+}
+
+.notification-entry-content {
+    grid-column: 1 / 4;
+    grid-row: 2;
+    padding: 6px 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12px;
+    word-break: break-word;
+}
+
+.notification-entry-time {
+    grid-column: 2 / 4;
+    grid-row: 3;
+    font-size: 12px;
+    text-align: right;
+    padding: 4px 4px 8px 0px;
+    color: var(--foreground-subtext-rest);
+}
+
+::deep .notification-entry-action {
+    height: 24px;
+    font-size: 12px;
+}

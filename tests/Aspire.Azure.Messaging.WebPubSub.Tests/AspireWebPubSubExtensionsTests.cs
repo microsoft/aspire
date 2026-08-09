@@ -1,9 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Components.Common.TestUtilities;
+using Azure.Core.Extensions;
 using Azure.Messaging.WebPubSub;
+using Microsoft.Extensions.Azure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Xunit;
 
@@ -258,5 +262,43 @@ public class AspireWebPubSubExtensionsTests
 
         Assert.Equal(ConformanceTests.Endpoint, client.Endpoint.AbsoluteUri);
         Assert.Equal("explicit-hub", client.Hub);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AddAzureWebPubSubServiceClient_HealthCheckReportsConnectionFailureDescription(bool useKeyed)
+    {
+        var endpoint = ComponentTestUrls.CreateUnavailableHttpsUri();
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Configuration.AddInMemoryCollection([
+            new KeyValuePair<string, string?>("ConnectionStrings:wps", $"Endpoint={endpoint};AccessKey=fake;Hub=hub1;")
+        ]);
+
+        static void ConfigureClientBuilder(IAzureClientBuilder<WebPubSubServiceClient, WebPubSubServiceClientOptions> clientBuilder)
+        {
+            clientBuilder.ConfigureOptions(options => options.Retry.MaxRetries = 0);
+        }
+
+        if (useKeyed)
+        {
+            builder.AddKeyedAzureWebPubSubServiceClient("wps", configureClientBuilder: ConfigureClientBuilder);
+        }
+        else
+        {
+            builder.AddAzureWebPubSubServiceClient("wps", configureClientBuilder: ConfigureClientBuilder);
+        }
+
+        using var host = builder.Build();
+        var healthCheckService = host.Services.GetRequiredService<HealthCheckService>();
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var healthCheckReport = await healthCheckService.CheckHealthAsync(cts.Token);
+        var healthCheckName = useKeyed ? "Azure_WebPubSubServiceClient_wps" : "Azure_WebPubSubServiceClient";
+        Assert.True(healthCheckReport.Entries.TryGetValue(healthCheckName, out var entry));
+
+        Assert.Equal(HealthStatus.Unhealthy, entry.Status);
+        Assert.Equal("Failed to connect to Azure Web PubSub service.", entry.Description);
+        Assert.NotNull(entry.Exception);
     }
 }

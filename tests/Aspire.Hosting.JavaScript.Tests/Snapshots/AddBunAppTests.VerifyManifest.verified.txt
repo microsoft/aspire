@@ -1,0 +1,21 @@
+﻿{
+  "type": "executable.v0",
+  "workingDirectory": ".",
+  "command": "bun",
+  "args": [
+    "server.ts"
+  ],
+  "env": {
+    "NODE_ENV": "production",
+    "PORT": "{bunapp.bindings.http.targetPort}"
+  },
+  "bindings": {
+    "http": {
+      "scheme": "http",
+      "protocol": "tcp",
+      "transport": "http",
+      "port": 5033,
+      "targetPort": 8000
+    }
+  }
+}

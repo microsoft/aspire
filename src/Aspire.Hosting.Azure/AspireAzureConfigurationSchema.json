@@ -37,6 +37,12 @@
             "Default"
           ],
           "default": "Default"
+        },
+        "CredentialProcessTimeoutSeconds": {
+          "description": "Timeout in seconds for credential process operations (e.g., Azure CLI, PowerShell). Increase this value if credential validation times out on machines where the Azure CLI is slow to respond. When not set, the Azure SDK's default timeout is used.",
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 600
         }
       }
     }

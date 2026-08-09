@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "FoundryAgents.AppHost/FoundryAgents.AppHost.csproj"
+  }
+}

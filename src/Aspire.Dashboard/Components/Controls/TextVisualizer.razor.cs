@@ -2,10 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Utils;
+using Aspire.Shared.ConsoleLogs;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web.Virtualization;
+using Microsoft.Extensions.Localization;
 using Microsoft.JSInterop;
+using System.Net;
 
 namespace Aspire.Dashboard.Components.Controls;
 
@@ -22,6 +26,9 @@ public partial class TextVisualizer : ComponentBase, IAsyncDisposable
     [Inject]
     public required IJSRuntime JS { get; init; }
 
+    [Inject]
+    public required IStringLocalizer<ControlsStrings> Loc { get; init; }
+
     [Parameter]
     public required TextVisualizerViewModel ViewModel { get; set; }
 
@@ -33,6 +40,8 @@ public partial class TextVisualizer : ComponentBase, IAsyncDisposable
 
     [Parameter]
     public bool Virtualize { get; set; } = true;
+
+    private bool IsUnformatted => DisplayUnformatted || ViewModel.FormatKind is DashboardUIHelpers.PlaintextFormat;
 
     private Virtualize<StringLogLine>? VirtualizeRef
     {
@@ -108,6 +117,16 @@ public partial class TextVisualizer : ComponentBase, IAsyncDisposable
     {
         // we support light (a11y-light-min) and dark (a11y-dark-min) themes.
         // syntax to force a theme for highlight.js is "theme-{themeName}"
-        return $"log-content highlight-line language-{ViewModel.FormatKind} theme-a11y-{ThemeManager.EffectiveTheme.ToLower()}-min";
+        return $"log-content highlight-line language-{ViewModel.FormatKind} theme-a11y-{ThemeManager.EffectiveTheme.ToLowerInvariant()}-min";
+    }
+
+    private static MarkupString GetFormattedPlaintext(StringLogLine line)
+    {
+        if (UrlParser.TryParse(line.Content, WebUtility.HtmlEncode, out var formattedText))
+        {
+            return (MarkupString)formattedText;
+        }
+
+        return (MarkupString)WebUtility.HtmlEncode(line.Content);
     }
 }

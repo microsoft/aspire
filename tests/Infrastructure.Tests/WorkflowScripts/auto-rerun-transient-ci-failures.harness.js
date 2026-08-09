@@ -1,4 +1,5 @@
 const fs = require('node:fs/promises');
+const path = require('node:path');
 const rerunWorkflow = require('../../../.github/workflows/auto-rerun-transient-ci-failures.js');
 
 class SummaryRecorder {
@@ -18,6 +19,16 @@ class SummaryRecorder {
 
     addRaw(text, addEol = false) {
         this.events.push({ type: 'raw', text, addEol });
+        return this;
+    }
+
+    addLink(text, href) {
+        this.events.push({ type: 'link', text, href });
+        return this;
+    }
+
+    addBreak() {
+        this.events.push({ type: 'break' });
         return this;
     }
 
@@ -41,11 +52,30 @@ async function main() {
 async function dispatch(operation, payload) {
     switch (operation) {
         case 'analyzeFailedJobs':
-            return rerunWorkflow.analyzeFailedJobs({
-                jobs: payload.jobs ?? [],
-                getAnnotationsForJob: async job => payload.annotationTextByJobId?.[String(job.id)] ?? '',
-                getJobLogTextForJob: async job => payload.jobLogTextByJobId?.[String(job.id)] ?? '',
-            });
+            {
+                const logRequestJobIds = [];
+                const result = await rerunWorkflow.analyzeFailedJobs({
+                    jobs: payload.jobs ?? [],
+                    getAnnotationsForJob: async job => payload.annotationTextByJobId?.[String(job.id)] ?? '',
+                    getJobLogTextForJob: async job => {
+                        logRequestJobIds.push(job.id);
+                        return payload.jobLogTextByJobId?.[String(job.id)] ?? '';
+                    },
+                    maxRetryableJobs: payload.maxRetryableJobs,
+                    retryPatternsConfig: payload.retryPatternsConfig ?? null,
+                });
+
+                return { ...result, logRequestJobIds };
+            }
+
+        case 'formatMatchedPatternForMarkdown':
+            return rerunWorkflow.formatMatchedPatternForMarkdown(payload.matchedPattern);
+
+        case 'promoteTestExecutionFailureJobs':
+            return rerunWorkflow.promoteTestExecutionFailureJobs(
+                payload.retryableJobs ?? [],
+                payload.skippedJobs ?? [],
+                payload.allMatchedTests ?? []);
 
         case 'getCheckRunIdForJob':
             return rerunWorkflow.getCheckRunIdForJob({
@@ -53,8 +83,65 @@ async function dispatch(operation, payload) {
                 getJobForWorkflowRun: payload.workflowJob ? async () => payload.workflowJob : undefined,
             });
 
+        case 'getAssociatedPullRequestNumbers': {
+            const requests = [];
+            const github = createGitHubRecorder(payload, requests);
+            const pullRequestNumbers = await rerunWorkflow.getAssociatedPullRequestNumbers({
+                github,
+                owner: payload.owner ?? 'dotnet',
+                repo: payload.repo ?? 'aspire',
+                workflowRun: payload.workflowRun,
+            });
+
+            return { pullRequestNumbers, requests };
+        }
+
         case 'computeRerunEligibility':
             return rerunWorkflow.computeRerunEligibility(payload);
+
+        case 'computeRerunExecutionEligibility':
+            return rerunWorkflow.computeRerunExecutionEligibility(payload);
+
+        case 'validateRetryPatternsConfig':
+            return rerunWorkflow.validateRetryPatternsConfig(payload.config);
+
+        case 'loadRetryPatternsConfig':
+            return rerunWorkflow.loadRetryPatternsConfig(payload.configPath);
+
+        case 'extractFailedTestsFromTrx':
+            return rerunWorkflow.extractFailedTestsFromTrx(payload.trxContent);
+
+        case 'matchesRetryPattern':
+            return rerunWorkflow.matchesRetryPattern(payload.text, payload.patternValue);
+
+        case 'matchTestFailurePatterns':
+            return rerunWorkflow.matchTestFailurePatterns(
+                payload.failedTests,
+                payload.testProject,
+                payload.patterns);
+
+        case 'matchJobLogPattern':
+            return rerunWorkflow.matchJobLogPattern(
+                payload.jobName,
+                payload.jobLogText,
+                payload.patterns);
+
+        case 'analyzeTrxFiles':
+            return rerunWorkflow.analyzeTrxFiles(
+                payload.trxFileContents,
+                payload.testFailurePatterns);
+
+        case 'selectTestResultsArtifact':
+            return rerunWorkflow.selectTestResultsArtifact(payload.artifacts);
+
+        case 'hasTestExecutionFailureStep':
+            return rerunWorkflow.hasTestExecutionFailureStep(payload.failedSteps ?? []);
+
+        case 'validateRetryPatternsConfigFromFile': {
+            const configPath = path.resolve(payload.configPath);
+            const result = rerunWorkflow.loadRetryPatternsConfig(configPath);
+            return result;
+        }
 
         case 'writeAnalysisSummary': {
             const summary = new SummaryRecorder();
@@ -107,6 +194,36 @@ function createGitHubRecorder(payload, requests) {
                 return {
                     data: {
                         run_attempt: payload.latestRunAttempt ?? null,
+                    },
+                };
+            }
+
+            if (route === 'GET /repos/{owner}/{repo}/pulls') {
+                if (payload.failPullRequestLookup) {
+                    throw new Error(payload.failPullRequestLookup);
+                }
+
+                const page = Number(requestPayload.page ?? 1);
+                const pullRequestPages = payload.pullRequestsByHeadPages?.[requestPayload.head];
+                const pullRequests = pullRequestPages
+                    ? pullRequestPages[page - 1] ?? []
+                    : payload.pullRequestsByHead?.[requestPayload.head] ?? [];
+                const hasNextPage = Array.isArray(pullRequestPages) && page < pullRequestPages.length;
+
+                return {
+                    data: pullRequests,
+                    headers: {
+                        link: hasNextPage ? '<https://api.github.com/next>; rel="next"' : '',
+                    },
+                };
+            }
+            if (route === 'POST /repos/{owner}/{repo}/issues/{issue_number}/comments') {
+                const issueNumber = String(requestPayload.issue_number);
+                const htmlUrl = payload.commentHtmlUrlByNumber?.[issueNumber] ?? null;
+
+                return {
+                    data: {
+                        html_url: htmlUrl,
                     },
                 };
             }

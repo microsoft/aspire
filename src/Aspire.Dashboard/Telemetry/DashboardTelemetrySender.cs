@@ -118,12 +118,12 @@ public sealed class DashboardTelemetrySender : IDashboardTelemetrySender
         {
             if (_options.Value.DebugSession.TelemetryOptOut is not true)
             {
-                client = DebugSessionHelpers.CreateHttpClient(debugSessionUri, token, certificate, CreateHandler);
+                client = DebugSessionHelpers.CreateHttpClient(debugSessionUri, token, certificate, CreateHandler, _options.Value.DebugSession.DcpInstanceId);
                 return true;
             }
         }
 
-        _logger.LogInformation("Telemetry is not configured.");
+        _logger.LogDebug("Telemetry is not configured.");
         client = null;
         return false;
     }

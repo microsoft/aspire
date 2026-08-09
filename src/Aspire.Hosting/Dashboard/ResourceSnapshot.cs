@@ -33,22 +33,22 @@ internal abstract class ResourceSnapshot
     public required string? IconName { get; init; }
     public required IconVariant? IconVariant { get; init; }
 
-    protected abstract IEnumerable<(string Key, Value Value, bool IsSensitive)> GetProperties();
+    protected abstract IEnumerable<(string Key, Value Value, bool IsSensitive, string? DisplayName, bool IsHighlighted, int? SortOrder)> GetProperties();
 
-    public IEnumerable<(string Name, Value Value, bool IsSensitive)> Properties
+    public IEnumerable<(string Name, Value Value, bool IsSensitive, string? DisplayName, bool IsHighlighted, int? SortOrder)> Properties
     {
         get
         {
-            yield return (KnownProperties.Resource.Uid, Value.ForString(Uid), IsSensitive: false);
-            yield return (KnownProperties.Resource.Name, Value.ForString(Name), IsSensitive: false);
-            yield return (KnownProperties.Resource.Type, Value.ForString(ResourceType), IsSensitive: false);
-            yield return (KnownProperties.Resource.DisplayName, Value.ForString(DisplayName), IsSensitive: false);
-            yield return (KnownProperties.Resource.State, State is null ? Value.ForNull() : Value.ForString(State), IsSensitive: false);
-            yield return (KnownProperties.Resource.ExitCode, ExitCode is null ? Value.ForNull() : Value.ForString(ExitCode.Value.ToString("D", CultureInfo.InvariantCulture)), IsSensitive: false);
-            yield return (KnownProperties.Resource.CreateTime, CreationTimeStamp is null ? Value.ForNull() : Value.ForString(CreationTimeStamp.Value.ToString("O")), IsSensitive: false);
-            yield return (KnownProperties.Resource.StartTime, StartTimeStamp is null ? Value.ForNull() : Value.ForString(StartTimeStamp.Value.ToString("O")), IsSensitive: false);
-            yield return (KnownProperties.Resource.StopTime, StopTimeStamp is null ? Value.ForNull() : Value.ForString(StopTimeStamp.Value.ToString("O")), IsSensitive: false);
-            yield return (KnownProperties.Resource.HealthState, CustomResourceSnapshot.ComputeHealthStatus(HealthReports, State) is not { } healthStatus ? Value.ForNull() : Value.ForString(healthStatus.ToString()), IsSensitive: false);
+            yield return (KnownProperties.Resource.Uid, Value.ForString(Uid), IsSensitive: false, DisplayName: null, IsHighlighted: false, SortOrder: null);
+            yield return (KnownProperties.Resource.Name, Value.ForString(Name), IsSensitive: false, DisplayName: null, IsHighlighted: false, SortOrder: null);
+            yield return (KnownProperties.Resource.Type, Value.ForString(ResourceType), IsSensitive: false, DisplayName: null, IsHighlighted: false, SortOrder: null);
+            yield return (KnownProperties.Resource.DisplayName, Value.ForString(DisplayName), IsSensitive: false, DisplayName: null, IsHighlighted: false, SortOrder: null);
+            yield return (KnownProperties.Resource.State, State is null ? Value.ForNull() : Value.ForString(State), IsSensitive: false, DisplayName: null, IsHighlighted: false, SortOrder: null);
+            yield return (KnownProperties.Resource.ExitCode, ExitCode is null ? Value.ForNull() : Value.ForString(ExitCode.Value.ToString("D", CultureInfo.InvariantCulture)), IsSensitive: false, DisplayName: null, IsHighlighted: false, SortOrder: null);
+            yield return (KnownProperties.Resource.CreateTime, CreationTimeStamp is null ? Value.ForNull() : Value.ForString(CreationTimeStamp.Value.ToString("O")), IsSensitive: false, DisplayName: null, IsHighlighted: false, SortOrder: null);
+            yield return (KnownProperties.Resource.StartTime, StartTimeStamp is null ? Value.ForNull() : Value.ForString(StartTimeStamp.Value.ToString("O")), IsSensitive: false, DisplayName: null, IsHighlighted: false, SortOrder: null);
+            yield return (KnownProperties.Resource.StopTime, StopTimeStamp is null ? Value.ForNull() : Value.ForString(StopTimeStamp.Value.ToString("O")), IsSensitive: false, DisplayName: null, IsHighlighted: false, SortOrder: null);
+            yield return (KnownProperties.Resource.HealthState, CustomResourceSnapshot.ComputeHealthStatus(HealthReports, State) is not { } healthStatus ? Value.ForNull() : Value.ForString(healthStatus.ToString()), IsSensitive: false, DisplayName: null, IsHighlighted: false, SortOrder: null);
 
             foreach (var property in GetProperties())
             {

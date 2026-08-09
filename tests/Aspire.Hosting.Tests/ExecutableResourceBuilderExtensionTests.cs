@@ -2,9 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
 #pragma warning disable IDE0005 // Using directive is unnecessary.
 
+using System.Text.Json;
 using Aspire.Hosting.Dcp.Model;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Tests;
@@ -73,7 +76,18 @@ public class ExecutableResourceBuilderExtensionTests
     }
 
     [Fact]
-    public void WithDebugSupportAddsAnnotationInRunMode()
+    public void WithPersistentLifetimeAddsPersistenceAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var executable = builder.AddExecutable("myexe", "command", "workingdirectory")
+            .WithPersistentLifetime();
+
+        var annotation = executable.Resource.Annotations.OfType<PersistenceAnnotation>().Single();
+        Assert.Equal(PersistenceMode.Persistent, annotation.Mode);
+    }
+
+    [Fact]
+    public async Task WithDebugSupportAddsAnnotationInRunMode()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         var launchConfig = new ExecutableLaunchConfiguration("python");
@@ -83,7 +97,7 @@ public class ExecutableResourceBuilderExtensionTests
         var annotation = executable.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
         var exe = new Executable(new ExecutableSpec());
-        annotation.LaunchConfigurationAnnotator(exe, "NoDebug");
+        await annotation.LaunchConfigurationAnnotator(exe, "NoDebug", CancellationToken.None);
         Assert.Equal("ms-python.python", annotation.LaunchConfigurationType);
 
         Assert.True(exe.TryGetAnnotationAsObjectList<ExecutableLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var annotations));
@@ -101,4 +115,151 @@ public class ExecutableResourceBuilderExtensionTests
         var annotation = executable.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
         Assert.Null(annotation);
     }
+
+    [Fact]
+    public async Task WithDebugSupportAsynchronousProducerProducesTheSameAnnotationAsTheSynchronousOne()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var syncExecutable = builder.AddExecutable("sync", "command", "workingdirectory")
+            .WithDebugSupport(mode => new ExecutableLaunchConfiguration("go") { Mode = mode }, "go");
+        var asyncExecutable = builder.AddExecutable("async", "command", "workingdirectory")
+            .WithDebugSupport(async (mode, ct) =>
+            {
+                await Task.Yield();
+                return new ExecutableLaunchConfiguration("go") { Mode = mode };
+            }, "go");
+
+        var syncConfiguration = Assert.IsType<ExecutableLaunchConfiguration>(await syncExecutable.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.Debug));
+        var asyncConfiguration = Assert.IsType<ExecutableLaunchConfiguration>(await asyncExecutable.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.Debug));
+
+        Assert.Equal(asyncConfiguration.Type, syncConfiguration.Type);
+        Assert.Equal(asyncConfiguration.Mode, syncConfiguration.Mode);
+    }
+
+    [Fact]
+    public void WithDebugSupportRejectsATaskReturningSynchronousProducer()
+    {
+        // `mode => Task.FromResult(...)` binds to the synchronous overload (overload resolution only
+        // looks at the lambda's parameter count) with TLaunchConfiguration inferred as Task<T>, so the
+        // task itself would be serialized as the launch configuration. It must be rejected up front.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var executable = builder.AddExecutable("myexe", "command", "workingdirectory");
+
+        var exception = Assert.Throws<ArgumentException>(
+            () => executable.WithDebugSupport(mode => Task.FromResult(new ExecutableLaunchConfiguration("go") { Mode = mode }), "go"));
+
+        Assert.Equal("launchConfigurationProducer", exception.ParamName);
+        Assert.Contains(nameof(CancellationToken), exception.Message);
+    }
+
+    [Fact]
+    public void WithDebugSupportRejectsAValueTaskReturningSynchronousProducer()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var executable = builder.AddExecutable("myexe", "command", "workingdirectory");
+
+        var exception = Assert.Throws<ArgumentException>(
+            () => executable.WithDebugSupport(mode => ValueTask.FromResult(new ExecutableLaunchConfiguration("go") { Mode = mode }), "go"));
+
+        Assert.Equal("launchConfigurationProducer", exception.ParamName);
+    }
+
+    [Fact]
+    public async Task WithDebugSupportArgsCallbackRunsWhenItsAnnotationIsActive()
+    {
+        // A single WithDebugSupport call whose annotation is active (last) must run its
+        // argument-rewriting callback. This verifies the normal single-integration path
+        // independently of the multiple-annotation behavior below.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
+        builder.Configuration["DEBUG_SESSION_INFO"] = JsonSerializer.Serialize(new RunSessionInfo
+        {
+            ProtocolsSupported = ["test"],
+            SupportedLaunchConfigurations = ["go"]
+        });
+
+        var executable = builder.AddExecutable("myexe", "command", "workingdirectory")
+            .WithArgs("base-arg")
+            .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go", ctx => ctx.Args.Add("rewritten-arg"));
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(executable.Resource);
+
+        Assert.Collection(args,
+            arg => Assert.Equal("base-arg", arg),
+            arg => Assert.Equal("rewritten-arg", arg));
+    }
+
+    [Fact]
+    public async Task WithDebugSupportArgsCallbackDoesNotRunWhenLaterDebugSupportSupersedesIt()
+    {
+        // WithDebugSupport is append-only and SupportsDebugging() only consults the LAST
+        // SupportsDebuggingAnnotation. A resource can gain debug support from more than one caller: e.g. a
+        // Go/Python integration that rewrites the entrypoint args (rewritesArgumentsForDebugging: true),
+        // followed by a second WithDebugSupport that does not. Once the later annotation supersedes the
+        // first, the first call's arg-rewriting callback must NOT fire; otherwise it would strip/append
+        // args while the active annotation reports RewritesArgumentsForDebugging == false and
+        // ExecutableCreator would offer a Process fallback built from the mangled arguments.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
+        builder.Configuration["DEBUG_SESSION_INFO"] = JsonSerializer.Serialize(new RunSessionInfo
+        {
+            ProtocolsSupported = ["test"],
+            SupportedLaunchConfigurations = ["go", "project"]
+        });
+
+        var executable = builder.AddExecutable("myexe", "command", "workingdirectory")
+            .WithArgs("base-arg")
+            .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go", ctx => ctx.Args.Add("rewritten-arg"))
+            .WithDebugSupport(_ => new ExecutableLaunchConfiguration("project"), "project");
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(executable.Resource);
+
+        Assert.Collection(args,
+            arg => Assert.Equal("base-arg", arg));
+    }
+
+    [Fact]
+    public void WithDebugSupportReportsRewritesArgumentsWhenResourceSupportsArgs()
+    {
+        // A resource that carries command-line arguments (IResourceWithArgs) actually gets the
+        // arg-rewriting callback attached, so the annotation must advertise that it rewrites args.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var executable = builder.AddExecutable("myexe", "command", "workingdirectory")
+            .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go", ctx => ctx.Args.Add("rewritten-arg"));
+
+        var annotation = executable.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Single();
+        Assert.True(annotation.RewritesArgumentsForDebugging);
+    }
+
+    [Fact]
+    public void WithDebugSupportDoesNotReportRewritesArgumentsWhenResourceHasNoArgs()
+    {
+        // If a caller supplies an argsCallback for a resource that is not IResourceWithArgs, the callback
+        // is never registered and the arguments are left unchanged. The annotation must therefore report
+        // RewritesArgumentsForDebugging == false so ExecutableCreator still offers the Process fallbacks.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var resource = builder.AddResource(new DebuggableResourceWithoutArgs("noargs"))
+            .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go", ctx => ctx.Args.Add("rewritten-arg"));
+
+        var annotation = resource.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Single();
+        Assert.False(annotation.RewritesArgumentsForDebugging);
+    }
+
+    [Fact]
+    public void WithDebugSupportDoesNotReportRewritesArgumentsWhenNoArgsCallbackProvided()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var executable = builder.AddExecutable("myexe", "command", "workingdirectory")
+            .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go");
+
+        var annotation = executable.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Single();
+        Assert.False(annotation.RewritesArgumentsForDebugging);
+    }
+
+    private sealed class DebuggableResourceWithoutArgs(string name) : Resource(name);
 }

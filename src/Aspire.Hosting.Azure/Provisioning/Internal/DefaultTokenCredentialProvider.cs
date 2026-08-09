@@ -50,48 +50,24 @@ internal class DefaultTokenCredentialProvider : ITokenCredentialProvider
     private TokenCredential CreateCredential(string? tenantId)
     {
         var credentialSetting = _options.Value.CredentialSource;
+        var processTimeout = _options.Value.CredentialProcessTimeoutSeconds is { } timeoutSeconds
+            ? TimeSpan.FromSeconds(timeoutSeconds)
+            : (TimeSpan?)null;
 
         TokenCredential credential = credentialSetting switch
         {
-            "AzureCli" => new AzureCliCredential(new()
-            {
-                TenantId = tenantId,
-                AdditionallyAllowedTenants = { "*" }
-            }),
-            "AzurePowerShell" => new AzurePowerShellCredential(new()
-            {
-                TenantId = tenantId,
-                AdditionallyAllowedTenants = { "*" }
-            }),
-            "VisualStudio" => new VisualStudioCredential(new()
-            {
-                TenantId = tenantId,
-                AdditionallyAllowedTenants = { "*" }
-            }),
-            "AzureDeveloperCli" => new AzureDeveloperCliCredential(new()
-            {
-                TenantId = tenantId,
-                AdditionallyAllowedTenants = { "*" }
-            }),
+            "AzureCli" => new AzureCliCredential(CreateAzureCliOptions(tenantId, processTimeout)),
+            "AzurePowerShell" => new AzurePowerShellCredential(CreateAzurePowerShellOptions(tenantId, processTimeout)),
+            "VisualStudio" => new VisualStudioCredential(CreateVisualStudioOptions(tenantId, processTimeout)),
+            "AzureDeveloperCli" => new AzureDeveloperCliCredential(CreateAzureDeveloperCliOptions(tenantId, processTimeout)),
             "InteractiveBrowser" => new InteractiveBrowserCredential(new InteractiveBrowserCredentialOptions()
             {
                 TenantId = tenantId
             }),
             // Use AzureCli as default for publish mode when no explicit credential source is set
-            null or "Default" when _distributedApplicationExecutionContext.IsPublishMode => new AzureCliCredential(new()
-            {
-                TenantId = tenantId,
-                AdditionallyAllowedTenants = { "*" }
-            }),
-            _ => new DefaultAzureCredential(new DefaultAzureCredentialOptions()
-            {
-                TenantId = tenantId,
-                ExcludeManagedIdentityCredential = true,
-                ExcludeWorkloadIdentityCredential = true,
-                ExcludeAzurePowerShellCredential = true,
-                CredentialProcessTimeout = TimeSpan.FromSeconds(15),
-                AdditionallyAllowedTenants = { "*" }
-            })
+            null or "Default" when _distributedApplicationExecutionContext.IsPublishMode =>
+                new AzureCliCredential(CreateAzureCliOptions(tenantId, processTimeout)),
+            _ => CreateDefaultAzureCredential(tenantId, processTimeout)
         };
 
         return credential;
@@ -101,5 +77,62 @@ internal class DefaultTokenCredentialProvider : ITokenCredentialProvider
     {
         var credential = TokenCredential;
         _logger.LogInformation("Using {credentialType} for provisioning.", credential.GetType().Name);
+    }
+
+    private static AzureCliCredentialOptions CreateAzureCliOptions(string? tenantId, TimeSpan? processTimeout)
+    {
+        var options = new AzureCliCredentialOptions { TenantId = tenantId, AdditionallyAllowedTenants = { "*" } };
+        if (processTimeout.HasValue)
+        {
+            options.ProcessTimeout = processTimeout.Value;
+        }
+        return options;
+    }
+
+    private static AzurePowerShellCredentialOptions CreateAzurePowerShellOptions(string? tenantId, TimeSpan? processTimeout)
+    {
+        var options = new AzurePowerShellCredentialOptions { TenantId = tenantId, AdditionallyAllowedTenants = { "*" } };
+        if (processTimeout.HasValue)
+        {
+            options.ProcessTimeout = processTimeout.Value;
+        }
+        return options;
+    }
+
+    private static VisualStudioCredentialOptions CreateVisualStudioOptions(string? tenantId, TimeSpan? processTimeout)
+    {
+        var options = new VisualStudioCredentialOptions { TenantId = tenantId, AdditionallyAllowedTenants = { "*" } };
+        if (processTimeout.HasValue)
+        {
+            options.ProcessTimeout = processTimeout.Value;
+        }
+        return options;
+    }
+
+    private static AzureDeveloperCliCredentialOptions CreateAzureDeveloperCliOptions(string? tenantId, TimeSpan? processTimeout)
+    {
+        var options = new AzureDeveloperCliCredentialOptions { TenantId = tenantId, AdditionallyAllowedTenants = { "*" } };
+        if (processTimeout.HasValue)
+        {
+            options.ProcessTimeout = processTimeout.Value;
+        }
+        return options;
+    }
+
+    private static DefaultAzureCredential CreateDefaultAzureCredential(string? tenantId, TimeSpan? processTimeout)
+    {
+        var options = new DefaultAzureCredentialOptions
+        {
+            TenantId = tenantId,
+            ExcludeManagedIdentityCredential = true,
+            ExcludeWorkloadIdentityCredential = true,
+            ExcludeAzurePowerShellCredential = true,
+            AdditionallyAllowedTenants = { "*" }
+        };
+        if (processTimeout.HasValue)
+        {
+            options.CredentialProcessTimeout = processTimeout.Value;
+        }
+        return new DefaultAzureCredential(options);
     }
 }

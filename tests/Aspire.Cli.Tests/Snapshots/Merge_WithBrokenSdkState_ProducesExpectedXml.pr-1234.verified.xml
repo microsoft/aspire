@@ -10,7 +10,6 @@
     </packageSource>
     <packageSource key="{PR_HIVE}/packages">
       <package pattern="Aspire*" />
-      <package pattern="*" />
     </packageSource>
   </packageSourceMapping>
 </configuration>

@@ -179,6 +179,28 @@ public class UserSecretsParameterDefaultTests
     }
 
     [Fact]
+    public void TryDeleteUserSecret_RemovesOnlyRequestedSecret()
+    {
+        var userSecretsId = Guid.NewGuid().ToString("N");
+        ClearUsersSecrets(userSecretsId);
+
+        var testAssembly = AssemblyBuilder.DefineDynamicAssembly(
+            new("TestAssembly"), AssemblyBuilderAccess.RunAndCollect, [new CustomAttributeBuilder(s_userSecretsIdAttrCtor, [userSecretsId])]);
+        var factory = CreateFactory();
+        var manager = factory.GetOrCreate(testAssembly);
+
+        Assert.True(manager.TrySetSecret("Parameters:sql-password", "SqlPassword123!"));
+        Assert.True(manager.TrySetSecret("Parameters:rabbit-password", "RabbitPassword456!"));
+        Assert.True(manager.TryDeleteSecret("Parameters:sql-password"));
+
+        var userSecrets = GetUserSecrets(userSecretsId);
+        Assert.False(userSecrets.ContainsKey("Parameters:sql-password"));
+        Assert.Equal("RabbitPassword456!", userSecrets["Parameters:rabbit-password"]);
+
+        DeleteUserSecretsFile(userSecretsId);
+    }
+
+    [Fact]
     public async Task TrySetUserSecret_ConcurrentWritesSameKey_LastWriteWins()
     {
         var userSecretsId = Guid.NewGuid().ToString("N");
@@ -317,6 +339,35 @@ public class UserSecretsParameterDefaultTests
             Assert.True(userSecrets.ContainsKey(paramKey), $"Parameter '{paramKey}' was not found in user secrets");
             Assert.Equal(values[i], userSecrets[paramKey]);
         }
+
+        DeleteUserSecretsFile(userSecretsId);
+    }
+
+    [Fact]
+    public void TrySetSecret_PreservesSpecialCharactersVerbatim()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/5537
+        // Characters like & and + were being escaped as \u0026 and \u002B
+        var userSecretsId = Guid.NewGuid().ToString("N");
+        ClearUsersSecrets(userSecretsId);
+
+        var testAssembly = AssemblyBuilder.DefineDynamicAssembly(
+            new("TestAssembly"), AssemblyBuilderAccess.RunAndCollect, [new CustomAttributeBuilder(s_userSecretsIdAttrCtor, [userSecretsId])]);
+        var factory = CreateFactory();
+        var manager = factory.GetOrCreate(testAssembly);
+
+        Assert.True(manager.TrySetSecret("Parameters:token", "some=thing&looking=url&like=true"));
+        Assert.True(manager.TrySetSecret("Parameters:password", "P+qMWNzkn*xm1rhXNF5st0"));
+
+        // Verify the raw file preserves special characters verbatim
+        var json = File.ReadAllText(manager.FilePath);
+        var expectedJson = """
+            {
+              "Parameters:token": "some=thing&looking=url&like=true",
+              "Parameters:password": "P+qMWNzkn*xm1rhXNF5st0"
+            }
+            """;
+        Assert.Equal(expectedJson, json, ignoreLineEndingDifferences: true);
 
         DeleteUserSecretsFile(userSecretsId);
     }

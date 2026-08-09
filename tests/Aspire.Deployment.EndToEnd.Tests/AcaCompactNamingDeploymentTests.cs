@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Tests.Utils;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
 using Xunit;
@@ -30,6 +29,20 @@ public sealed class AcaCompactNamingDeploymentTests(ITestOutputHelper output)
             cts.Token, TestContext.Current.CancellationToken);
 
         await DeployWithCompactNamingFixesStorageCollisionCore(linkedCts.Token);
+    }
+
+    /// <summary>
+    /// Verifies that deploying two ACA environments in the same resource group creates
+    /// two distinct managed environments.
+    /// </summary>
+    [Fact]
+    public async Task DeployWithMultipleContainerAppEnvironmentsCreatesDistinctManagedEnvironments()
+    {
+        using var cts = new CancellationTokenSource(s_testTimeout);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+            cts.Token, TestContext.Current.CancellationToken);
+
+        await DeployWithMultipleContainerAppEnvironmentsCreatesDistinctManagedEnvironmentsCore(linkedCts.Token);
     }
 
     private async Task DeployWithCompactNamingFixesStorageCollisionCore(CancellationToken cancellationToken)
@@ -66,116 +79,96 @@ public sealed class AcaCompactNamingDeploymentTests(ITestOutputHelper output)
             using var terminal = DeploymentE2ETestHelpers.CreateTestTerminal();
             var pendingRun = terminal.RunAsync(cancellationToken);
 
-            var waitingForInitComplete = new CellPatternSearcher()
-                .Find("Aspire initialization complete");
-
-            var waitingForVersionSelectionPrompt = new CellPatternSearcher()
-                .Find("(based on NuGet.config)");
-
-            var waitingForPipelineSucceeded = new CellPatternSearcher()
-                .Find("PIPELINE SUCCEEDED");
-
             var counter = new SequenceCounter();
-            var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+            var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
             // Step 1: Prepare environment
             output.WriteLine("Step 1: Preparing environment...");
-            sequenceBuilder.PrepareEnvironment(workspace, counter);
+            await auto.PrepareEnvironmentAsync(workspace, counter);
 
             // Step 2: Set up CLI
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                output.WriteLine("Step 2: Using pre-installed Aspire CLI...");
-                sequenceBuilder.SourceAspireCliEnvironment(counter);
-            }
+            await auto.InstallCurrentBuildAspireCliAsync(counter, output);
 
             // Step 3: Create single-file AppHost
             output.WriteLine("Step 3: Creating single-file AppHost...");
-            sequenceBuilder.Type("aspire init --language csharp")
-                .Enter()
-                .Wait(TimeSpan.FromSeconds(5))
-                .Enter()
-                .WaitUntil(s => waitingForInitComplete.Search(s).Count > 0, TimeSpan.FromMinutes(2))
-                .DeclineAgentInitPrompt()
-                .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(2));
+            await auto.AspireInitAsync(counter);
 
             // Step 4: Add required packages
             output.WriteLine("Step 4: Adding Azure Container Apps package...");
-            sequenceBuilder.Type("aspire add Aspire.Hosting.Azure.AppContainers")
-                .Enter();
+            await auto.TypeAsync("aspire add Aspire.Hosting.Azure.AppContainers");
+            await auto.EnterAsync();
 
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                sequenceBuilder
-                    .WaitUntil(s => waitingForVersionSelectionPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(60))
-                    .Enter();
-            }
-
-            sequenceBuilder.WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForAspireAddCompletionAsync(counter);
 
             // Step 5: Modify apphost.cs with a long environment name and a container with volume.
             // Use WithCompactResourceNaming() so the storage account name preserves the uniqueString.
-            sequenceBuilder.ExecuteCallback(() =>
-            {
-                var appHostFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
-                var content = File.ReadAllText(appHostFilePath);
+            var appHostFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
+            var content = File.ReadAllText(appHostFilePath);
 
-                var buildRunPattern = "builder.Build().Run();";
-                var replacement = """
+            var buildRunPattern = "builder.Build().Run();";
+            var replacement = """
 // Long env name (16 chars) would truncate uniqueString without compact naming
 builder.AddAzureContainerAppEnvironment("my-long-env-name")
        .WithCompactResourceNaming();
 
 // Container with a volume triggers storage account creation
-builder.AddContainer("worker", "mcr.microsoft.com/dotnet/samples", "aspnetapp")
+// Use the Azure Container Instances "hello world" sample as a generic linux container.
+// We previously used mcr.microsoft.com/dotnet/samples:aspnetapp, but per
+// https://github.com/dotnet/dotnet-docker/blob/main/README.samples.md#support those images
+// are not stable and can break at any time (see dotnet/dotnet-docker#7191). The Azure
+// container demo image is owned by a different team and has stable multi-arch manifests.
+// Also pin the image digest so the test cannot break if the tag is republished.
+builder.AddContainer("worker", "mcr.microsoft.com/azuredocs/aci-helloworld", "latest")
+       .WithImageSHA256("456a1150aa41340a14c7be1342deda2cde9e6e7df9fde6b8a69de0ae04f92fad")
        .WithVolume("data", "/app/data");
 
 builder.Build().Run();
 """;
 
-                content = content.Replace(buildRunPattern, replacement);
+            content = content.Replace(buildRunPattern, replacement);
 
-                // Suppress experimental diagnostic for WithCompactResourceNaming
-                content = "#pragma warning disable ASPIREACANAMING001\n" + content;
+            // Suppress experimental diagnostic for WithCompactResourceNaming
+            content = "#pragma warning disable ASPIREACANAMING001\n" + content;
 
-                File.WriteAllText(appHostFilePath, content);
+            File.WriteAllText(appHostFilePath, content);
 
-                output.WriteLine($"Modified apphost.cs with long env name + compact naming + volume");
-            });
+            output.WriteLine($"Modified apphost.cs with long env name + compact naming + volume");
 
             // Step 6: Set environment variables for deployment
-            sequenceBuilder.Type($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}")
-                .Enter()
-                .WaitForSuccessPrompt(counter);
+            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
 
             // Step 7: Deploy
             output.WriteLine("Step 7: Deploying with compact naming...");
-            sequenceBuilder
-                .Type("aspire deploy --clear-cache")
-                .Enter()
-                .WaitUntil(s => waitingForPipelineSucceeded.Search(s).Count > 0, TimeSpan.FromMinutes(30))
-                .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(2));
+            await auto.TypeAsync("aspire deploy --clear-cache");
+            await auto.EnterAsync();
+            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(30));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             // Step 8: Verify storage account was created and name contains uniqueString
             output.WriteLine("Step 8: Verifying storage account naming...");
-            sequenceBuilder
-                .Type($"STORAGE_NAMES=$(az storage account list -g \"{resourceGroupName}\" --query \"[].name\" -o tsv) && " +
-                      "echo \"Storage accounts: $STORAGE_NAMES\" && " +
-                      "STORAGE_COUNT=$(echo \"$STORAGE_NAMES\" | wc -l) && " +
-                      "echo \"Count: $STORAGE_COUNT\" && " +
-                      // Verify each storage name contains 'sv' (compact naming marker)
-                      "for name in $STORAGE_NAMES; do " +
-                      "if echo \"$name\" | grep -q 'sv'; then echo \"✅ $name uses compact naming\"; " +
-                      "else echo \"⚠️ $name does not use compact naming (may be ACR storage)\"; fi; " +
-                      "done")
-                .Enter()
-                .WaitForSuccessPrompt(counter, TimeSpan.FromSeconds(30));
+            await auto.TypeAsync(
+                $"STORAGE_NAMES=$(az storage account list -g \"{resourceGroupName}\" --query \"[].name\" -o tsv) && " +
+                "echo \"Storage accounts: $STORAGE_NAMES\" && " +
+                "STORAGE_COUNT=$(echo \"$STORAGE_NAMES\" | wc -l) && " +
+                "echo \"Count: $STORAGE_COUNT\" && " +
+                // Verify each storage name contains 'sv' (compact naming marker)
+                "for name in $STORAGE_NAMES; do " +
+                "if echo \"$name\" | grep -q 'sv'; then echo \"✅ $name uses compact naming\"; " +
+                "else echo \"⚠️ $name does not use compact naming (may be ACR storage)\"; fi; " +
+                "done");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
-            // Step 9: Exit
-            sequenceBuilder.Type("exit").Enter();
+            // Step 9: Clean up Azure resources using aspire destroy
+            output.WriteLine("Step 9: Destroying Azure deployment...");
+            await auto.AspireDestroyAsync(counter);
 
-            var sequence = sequenceBuilder.Build();
-            await sequence.ApplyAsync(terminal, cancellationToken);
+            // Step 10: Exit
+            await auto.TypeAsync("exit");
+            await auto.EnterAsync();
+
             await pendingRun;
 
             var duration = DateTime.UtcNow - startTime;
@@ -193,6 +186,150 @@ builder.Build().Run();
 
             DeploymentReporter.ReportDeploymentFailure(
                 nameof(DeployWithCompactNamingFixesStorageCollision),
+                resourceGroupName,
+                ex.Message,
+                ex.StackTrace);
+
+            throw;
+        }
+        finally
+        {
+            output.WriteLine($"Cleaning up resource group: {resourceGroupName}");
+            await CleanupResourceGroupAsync(resourceGroupName);
+        }
+    }
+
+    private async Task DeployWithMultipleContainerAppEnvironmentsCreatesDistinctManagedEnvironmentsCore(CancellationToken cancellationToken)
+    {
+        var subscriptionId = AzureAuthenticationHelpers.TryGetSubscriptionId();
+        if (string.IsNullOrEmpty(subscriptionId))
+        {
+            Assert.Skip("Azure subscription not configured. Set ASPIRE_DEPLOYMENT_TEST_SUBSCRIPTION.");
+        }
+
+        if (!AzureAuthenticationHelpers.IsAzureAuthAvailable())
+        {
+            if (DeploymentE2ETestHelpers.IsRunningInCI)
+            {
+                Assert.Fail("Azure authentication not available in CI. Check OIDC configuration.");
+            }
+            else
+            {
+                Assert.Skip("Azure authentication not available. Run 'az login' to authenticate.");
+            }
+        }
+
+        using var workspace = TemporaryWorkspace.Create(output);
+        var startTime = DateTime.UtcNow;
+        var resourceGroupName = DeploymentE2ETestHelpers.GenerateResourceGroupName("aca-multi-env");
+
+        output.WriteLine($"Test: {nameof(DeployWithMultipleContainerAppEnvironmentsCreatesDistinctManagedEnvironments)}");
+        output.WriteLine($"Resource Group: {resourceGroupName}");
+        output.WriteLine($"Subscription: {subscriptionId[..8]}...");
+        output.WriteLine($"Workspace: {workspace.WorkspaceRoot.FullName}");
+
+        try
+        {
+            using var terminal = DeploymentE2ETestHelpers.CreateTestTerminal();
+            var pendingRun = terminal.RunAsync(cancellationToken);
+
+            var counter = new SequenceCounter();
+            var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+
+            output.WriteLine("Step 1: Preparing environment...");
+            await auto.PrepareEnvironmentAsync(workspace, counter);
+
+            await auto.InstallCurrentBuildAspireCliAsync(counter, output);
+
+            output.WriteLine("Step 3: Creating single-file AppHost...");
+            await auto.AspireInitAsync(counter);
+
+            output.WriteLine("Step 4: Adding Azure Container Apps package...");
+            await auto.TypeAsync("aspire add Aspire.Hosting.Azure.AppContainers");
+            await auto.EnterAsync();
+
+            await auto.WaitForAspireAddCompletionAsync(counter);
+
+            var appHostFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
+            var content = File.ReadAllText(appHostFilePath);
+
+            var buildRunPattern = "builder.Build().Run();";
+            var replacement = """
+var cae1 = builder.AddAzureContainerAppEnvironment("cae1")
+                  .WithUniqueResourceNaming();
+var cae2 = builder.AddAzureContainerAppEnvironment("cae2")
+                  .WithUniqueResourceNaming();
+
+builder.AddContainer("api1", "mcr.microsoft.com/azuredocs/aci-helloworld", "latest")
+       .WithImageSHA256("456a1150aa41340a14c7be1342deda2cde9e6e7df9fde6b8a69de0ae04f92fad")
+       .WithComputeEnvironment(cae1);
+
+builder.AddContainer("api2", "mcr.microsoft.com/azuredocs/aci-helloworld", "latest")
+       .WithImageSHA256("456a1150aa41340a14c7be1342deda2cde9e6e7df9fde6b8a69de0ae04f92fad")
+       .WithComputeEnvironment(cae2);
+
+builder.Build().Run();
+""";
+
+            // Fail loudly if the AppHost template no longer contains the expected entry point, otherwise the
+            // Replace below would silently no-op and the test would deploy an unmodified AppHost, appearing to
+            // pass without ever exercising the multi-environment scenario.
+            Assert.Contains(buildRunPattern, content, StringComparison.Ordinal);
+            content = content.Replace(buildRunPattern, replacement, StringComparison.Ordinal);
+
+            // WithUniqueResourceNaming is experimental, so suppress the diagnostic in the generated AppHost.
+            content = "#pragma warning disable ASPIREACANAMING002\n" + content;
+
+            File.WriteAllText(appHostFilePath, content);
+
+            output.WriteLine("Modified apphost.cs with two Azure Container App environments");
+
+            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            output.WriteLine("Step 7: Deploying two Azure Container App environments...");
+            await auto.TypeAsync("aspire deploy --clear-cache");
+            await auto.EnterAsync();
+            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(30));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+            output.WriteLine("Step 8: Verifying managed environments...");
+            await auto.TypeAsync(
+                $"RG_NAME=\"{resourceGroupName}\" && " +
+                "ENV_NAMES=$(az containerapp env list -g \"$RG_NAME\" --query \"[].name\" -o tsv) && " +
+                "echo \"Managed environments:\" && printf '%s\\n' \"$ENV_NAMES\" && " +
+                "ENV_COUNT=$(printf '%s\\n' \"$ENV_NAMES\" | sed '/^$/d' | wc -l | tr -d ' ') && " +
+                "UNIQUE_ENV_COUNT=$(printf '%s\\n' \"$ENV_NAMES\" | sed '/^$/d' | sort -u | wc -l | tr -d ' ') && " +
+                "echo \"Count: $ENV_COUNT, unique count: $UNIQUE_ENV_COUNT\" && " +
+                "if [ \"$ENV_COUNT\" -ne 2 ]; then echo \"❌ Expected 2 managed environments\"; exit 1; fi && " +
+                "if [ \"$UNIQUE_ENV_COUNT\" -ne 2 ]; then echo \"❌ Expected 2 distinct managed environment names\"; exit 1; fi");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+
+            output.WriteLine("Step 9: Destroying Azure deployment...");
+            await auto.AspireDestroyAsync(counter);
+
+            await auto.TypeAsync("exit");
+            await auto.EnterAsync();
+
+            await pendingRun;
+
+            var duration = DateTime.UtcNow - startTime;
+            output.WriteLine($"✅ Test completed in {duration}");
+
+            DeploymentReporter.ReportDeploymentSuccess(
+                nameof(DeployWithMultipleContainerAppEnvironmentsCreatesDistinctManagedEnvironments),
+                resourceGroupName,
+                new Dictionary<string, string>(),
+                duration);
+        }
+        catch (Exception ex)
+        {
+            output.WriteLine($"❌ Test failed: {ex.Message}");
+
+            DeploymentReporter.ReportDeploymentFailure(
+                nameof(DeployWithMultipleContainerAppEnvironmentsCreatesDistinctManagedEnvironments),
                 resourceGroupName,
                 ex.Message,
                 ex.StackTrace);

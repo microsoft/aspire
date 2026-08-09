@@ -2,17 +2,16 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIRECONTAINERRUNTIME001
 
 using System.Globalization;
 using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Docker.Resources.ComposeNodes;
 using Aspire.Hosting.Docker.Resources.ServiceNodes;
 using Aspire.Hosting.Pipelines;
-using Aspire.Hosting.Utils;
+using Aspire.Hosting.Publishing;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Docker;
@@ -325,8 +324,6 @@ public class DockerComposeServiceResource : Resource, IResourceWithParent<Docker
 
     private async Task PrintEndpointsAsync(PipelineStepContext context, DockerComposeEnvironmentResource environment)
     {
-        var outputPath = PublishingContextUtils.GetEnvironmentOutputPath(context, environment);
-
         // No external endpoints configured - this is valid for internal-only services
         var externalEndpointMappings = EndpointMappings.Values.Where(m => m.IsExternal).ToList();
         if (externalEndpointMappings.Count == 0)
@@ -337,10 +334,13 @@ public class DockerComposeServiceResource : Resource, IResourceWithParent<Docker
             return;
         }
 
-        // Query the running container for its published ports
-        var outputLines = await RunDockerComposePsAsync(context, environment, outputPath).ConfigureAwait(false);
-        var endpoints = outputLines is not null
-            ? ParseServiceEndpoints(outputLines, externalEndpointMappings, context.Logger)
+        // Query the running containers for published ports
+        var runtime = await context.Services.GetRequiredService<IContainerRuntimeResolver>().ResolveAsync(context.CancellationToken).ConfigureAwait(false);
+        var composeContext = environment.CreateComposeOperationContext(context);
+        var services = await runtime.ComposeListServicesAsync(composeContext, context.CancellationToken).ConfigureAwait(false);
+
+        var endpoints = services is not null
+            ? ParseServiceEndpoints(services, externalEndpointMappings, context.Logger)
             : [];
 
         if (endpoints.Count > 0)
@@ -351,7 +351,7 @@ public class DockerComposeServiceResource : Resource, IResourceWithParent<Docker
         }
         else
         {
-            // No published ports found in docker compose ps output.
+            // No published ports found in compose output.
             context.ReportingStep.Log(LogLevel.Information,
                 new MarkdownString($"Successfully deployed **{TargetResource.Name}** to Docker Compose environment **{environment.Name}**."));
             context.Summary.Add(TargetResource.Name, "No public endpoints");
@@ -359,152 +359,55 @@ public class DockerComposeServiceResource : Resource, IResourceWithParent<Docker
     }
 
     /// <summary>
-    /// Runs 'docker compose ps --format json' to get container status and port mappings.
+    /// Extracts endpoint URLs from compose service info, matching against configured external endpoint mappings.
     /// </summary>
-    /// <returns>List of JSON output lines, or null if the command failed.</returns>
-    private static async Task<List<string>?> RunDockerComposePsAsync(
-        PipelineStepContext context,
-        DockerComposeEnvironmentResource environment,
-        string outputPath)
-    {
-        var arguments = DockerComposeEnvironmentResource.GetDockerComposeArguments(context, environment);
-        arguments += " ps --format json";
-
-        var outputLines = new List<string>();
-
-        var spec = new ProcessSpec("docker")
-        {
-            Arguments = arguments,
-            WorkingDirectory = outputPath,
-            ThrowOnNonZeroReturnCode = false,
-            InheritEnv = true,
-            OnOutputData = output =>
-            {
-                if (!string.IsNullOrWhiteSpace(output))
-                {
-                    outputLines.Add(output);
-                }
-            },
-            OnErrorData = error =>
-            {
-                if (!string.IsNullOrWhiteSpace(error))
-                {
-                    context.Logger.LogDebug("docker compose ps (stderr): {Error}", error);
-                }
-            }
-        };
-
-        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
-
-        await using (processDisposable)
-        {
-            var processResult = await pendingProcessResult
-                .WaitAsync(context.CancellationToken)
-                .ConfigureAwait(false);
-
-            if (processResult.ExitCode != 0)
-            {
-                context.Logger.LogDebug("docker compose ps failed with exit code {ExitCode}", processResult.ExitCode);
-                return null;
-            }
-        }
-
-        return outputLines;
-    }
-
-    /// <summary>
-    /// Parses the JSON output from 'docker compose ps' to extract endpoint URLs for this service.
-    /// </summary>
-    /// <example>
-    /// Example JSON line from 'docker compose ps --format json':
-    /// <code>
-    /// {"Service":"myservice","State":"running","Publishers":[{"URL":"","TargetPort":80,"PublishedPort":8080,"Protocol":"tcp"}]}
-    /// </code>
-    /// Note: PublishedPort is 0 when the port is exposed but not mapped to the host.
-    /// </example>
     private HashSet<string> ParseServiceEndpoints(
-        List<string> outputLines,
+        IReadOnlyList<ComposeServiceInfo> services,
         List<EndpointMapping> externalEndpointMappings,
-        ILogger logger)
+        ILogger _)
     {
         var endpoints = new HashSet<string>(StringComparers.EndpointAnnotationName);
         var serviceName = TargetResource.Name.ToLowerInvariant();
 
-        foreach (var line in outputLines)
+        foreach (var serviceInfo in services)
         {
-            try
+            // Skip if not our service
+            if (serviceInfo.Service is null ||
+                !string.Equals(serviceInfo.Service, serviceName, StringComparisons.ResourceName))
             {
-                var serviceInfo = JsonSerializer.Deserialize(line, DockerComposeJsonContext.Default.DockerComposeServiceInfo);
-
-                // Skip if not our service
-                if (serviceInfo is null ||
-                    !string.Equals(serviceInfo.Service, serviceName, StringComparisons.ResourceName))
-                {
-                    continue;
-                }
-
-                // Skip if no published ports
-                if (serviceInfo.Publishers is not { Count: > 0 })
-                {
-                    continue;
-                }
-
-                foreach (var publisher in serviceInfo.Publishers)
-                {
-                    // Skip ports that aren't actually published (port 0 or null means not exposed)
-                    if (publisher.PublishedPort is not > 0)
-                    {
-                        continue;
-                    }
-
-                    // Try to find a matching external endpoint to get the scheme
-                    // Match by internal port (numeric) or by exposed port
-                    // InternalPort may be a placeholder like ${API_PORT} for projects, so also check ExposedPort
-                    var targetPortStr = publisher.TargetPort?.ToString(CultureInfo.InvariantCulture);
-                    var endpointMapping = externalEndpointMappings
-                        .FirstOrDefault(m => m.InternalPort == targetPortStr || m.ExposedPort == publisher.TargetPort);
-
-                    // If we found a matching endpoint, use its scheme; otherwise default to http for external ports
-                    var scheme = endpointMapping.Scheme ?? "http";
-
-                    // Only add if we found a matching external endpoint OR if scheme is http/https
-                    // (published ports are external by definition in docker compose)
-                    if (endpointMapping.IsExternal || scheme is "http" or "https")
-                    {
-                        var endpoint = $"{scheme}://localhost:{publisher.PublishedPort}";
-                        endpoints.Add(endpoint);
-                    }
-                }
+                continue;
             }
-            catch (JsonException ex)
+
+            // Skip if no published ports
+            if (serviceInfo.Publishers is not { Count: > 0 })
             {
-                logger.LogDebug(ex, "Failed to parse docker compose ps output line: {Line}", line);
+                continue;
+            }
+
+            foreach (var publisher in serviceInfo.Publishers)
+            {
+                // Skip ports that aren't actually published (port 0 or null means not exposed)
+                if (publisher.PublishedPort is not > 0)
+                {
+                    continue;
+                }
+
+                // Try to find a matching external endpoint to get the scheme
+                var targetPortStr = publisher.TargetPort?.ToString(CultureInfo.InvariantCulture);
+                var endpointMapping = externalEndpointMappings
+                    .FirstOrDefault(m => m.InternalPort == targetPortStr || m.ExposedPort == publisher.TargetPort);
+
+                var scheme = endpointMapping.Scheme ?? "http";
+
+                if (endpointMapping.IsExternal || scheme is "http" or "https")
+                {
+                    var endpoint = $"{scheme}://localhost:{publisher.PublishedPort}";
+                    endpoints.Add(endpoint);
+                }
             }
         }
 
         return endpoints;
     }
 
-    /// <summary>
-    /// Represents the JSON output from docker compose ps --format json.
-    /// </summary>
-    internal sealed class DockerComposeServiceInfo
-    {
-        public string? Service { get; set; }
-        public List<DockerComposePublisher>? Publishers { get; set; }
-    }
-
-    /// <summary>
-    /// Represents a port publisher in docker compose ps output.
-    /// </summary>
-    internal sealed class DockerComposePublisher
-    {
-        public int? PublishedPort { get; set; }
-        public int? TargetPort { get; set; }
-    }
-}
-
-[JsonSerializable(typeof(DockerComposeServiceResource.DockerComposeServiceInfo))]
-internal sealed partial class DockerComposeJsonContext : JsonSerializerContext
-{
 }

@@ -3,6 +3,8 @@
 
 #pragma warning disable ASPIREPIPELINES003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
+using Aspire.Dashboard.Model;
+using Aspire.Hosting.Ats;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,6 +14,26 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "2")]
 public class ResourceExtensionsTests
 {
+    [Fact]
+    public void GetResourceTypeReturnsProjectForExecutableResourceWithProjectMetadata()
+    {
+        // An annotation-based project (e.g. DotnetProjectResource) derives from ExecutableResource but
+        // carries IProjectMetadata, so it must be classified as a project. This is what seeds the initial
+        // CustomResourceSnapshot.ResourceType with "Project" instead of "Executable".
+        var resource = new ExecutableResource("proj", "dotnet", "/app");
+        resource.Annotations.Add(new TestProjectMetadata());
+
+        Assert.Equal(KnownResourceTypes.Project, resource.GetResourceType());
+    }
+
+    [Fact]
+    public void GetResourceTypeReturnsExecutableForExecutableResourceWithoutProjectMetadata()
+    {
+        var resource = new ExecutableResource("exe", "dotnet", "/app");
+
+        Assert.Equal(KnownResourceTypes.Executable, resource.GetResourceType());
+    }
+
     [Fact]
     public void TryGetAnnotationsOfTypeReturnsFalseWhenNoAnnotations()
     {
@@ -142,6 +164,25 @@ public class ResourceExtensionsTests
         Assert.True(parent.Resource.HasAnnotationIncludingAncestorsOfType<DummyAnnotation>());
         Assert.True(grandchild.Resource.TryGetAnnotationsIncludingAncestorsOfType<DummyAnnotation>(out var annotations));
         Assert.Equal(3, annotations.Count());
+    }
+
+    [Fact]
+    public void GetDeploymentTargetAnnotation_ReturnsNullForDifferentTargetComputeEnvironment()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var requestedEnvironment = builder.AddResource(new ComputeEnvironmentResource("env1"));
+        var annotationEnvironment = builder.AddResource(new ComputeEnvironmentResource("env2"));
+        var deploymentTarget = builder.AddResource(new ParentResource("target"));
+
+        var resource = builder.AddResource(new ParentResource("resource"))
+            .WithAnnotation(new DeploymentTargetAnnotation(deploymentTarget.Resource)
+            {
+                ComputeEnvironment = annotationEnvironment.Resource
+            });
+
+        var annotation = resource.Resource.GetDeploymentTargetAnnotation(requestedEnvironment.Resource);
+
+        Assert.Null(annotation);
     }
 
     [Fact]
@@ -483,6 +524,49 @@ public class ResourceExtensionsTests
             a => Assert.Equal("src/override2", a.SourcePath));
     }
 
+    [Fact]
+    public void WithContainerFilesExport_AcceptsDecimalFormNumericOptions()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var resource = builder.AddContainer("test-container", "nginx")
+            .WithContainerFilesExport("/app", ".", new ContainerFilesOptions
+            {
+                DefaultOwner = 1000.0,
+                DefaultGroup = 18.0,
+                Umask = 18.0
+            });
+
+        var annotation = Assert.Single(resource.Resource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>());
+        Assert.Equal(1000, annotation.DefaultOwner);
+        Assert.Equal(18, annotation.DefaultGroup);
+        Assert.Equal((UnixFileMode)18, annotation.Umask);
+    }
+
+    [Theory]
+    [InlineData(double.NaN, nameof(ContainerFilesOptions.DefaultOwner))]
+    [InlineData(double.PositiveInfinity, nameof(ContainerFilesOptions.DefaultOwner))]
+    [InlineData(1000.5, nameof(ContainerFilesOptions.DefaultOwner))]
+    [InlineData(-1.0, nameof(ContainerFilesOptions.DefaultOwner))]
+    [InlineData(-1.0, nameof(ContainerFilesOptions.DefaultGroup))]
+    [InlineData(4096.0, nameof(ContainerFilesOptions.Umask))]
+    public void WithContainerFilesExport_RejectsInvalidNumericOptions(double value, string optionName)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var options = optionName switch
+        {
+            nameof(ContainerFilesOptions.DefaultOwner) => new ContainerFilesOptions { DefaultOwner = value },
+            nameof(ContainerFilesOptions.DefaultGroup) => new ContainerFilesOptions { DefaultGroup = value },
+            nameof(ContainerFilesOptions.Umask) => new ContainerFilesOptions { Umask = value },
+            _ => throw new InvalidOperationException($"Unexpected option '{optionName}'.")
+        };
+
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            builder.AddContainer("test-container", "nginx").WithContainerFilesExport("/app", ".", options));
+
+        Assert.Equal(optionName, exception.ParamName);
+    }
+
     private sealed class ComputeEnvironmentResource(string name) : Resource(name), IComputeEnvironmentResource
     {
     }
@@ -505,6 +589,11 @@ public class ResourceExtensionsTests
     private sealed class AnotherDummyAnnotation : IResourceAnnotation
     {
 
+    }
+
+    private sealed class TestProjectMetadata : IProjectMetadata
+    {
+        public string ProjectPath => "/app/project.csproj";
     }
 
     private sealed class TestContainerFilesResource(string name) : ContainerResource(name), IResourceWithContainerFiles

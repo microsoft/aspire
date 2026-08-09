@@ -1,4 +1,4 @@
-@description('The location for the resource(s) to be deployed.')
+﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
 param env_outputs_azure_container_apps_environment_default_domain string
@@ -13,7 +13,7 @@ param project1_containerimage string
 
 param project1_containerport string
 
-resource project1 'Microsoft.App/containerApps@2025-02-02-preview' = {
+resource project1 'Microsoft.App/containerApps@2025-10-02-preview' = {
   name: 'project1'
   location: location
   properties: {

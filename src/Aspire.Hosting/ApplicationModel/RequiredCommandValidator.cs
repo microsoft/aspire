@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREINTERACTION001
 #pragma warning disable ASPIRECOMMAND001
 
 using System.Collections.Concurrent;
@@ -21,8 +20,8 @@ internal sealed class RequiredCommandValidator : IRequiredCommandValidator, IDis
     private readonly IInteractionService _interactionService;
     private readonly ILogger<RequiredCommandValidator> _logger;
 
-    // Track validation state per command to coalesce notifications
-    private readonly ConcurrentDictionary<string, CommandValidationState> _commandStates = new(StringComparer.OrdinalIgnoreCase);
+    // Track validation state per command/callback pair to coalesce notifications and validation work.
+    private readonly ConcurrentDictionary<CommandValidationCacheKey, CommandValidationState> _commandStates = new();
 
     public RequiredCommandValidator(
         IServiceProvider serviceProvider,
@@ -59,8 +58,9 @@ internal sealed class RequiredCommandValidator : IRequiredCommandValidator, IDis
             throw new InvalidOperationException($"Required command on resource '{resource.Name}' cannot be null or empty.");
         }
 
-        // Get or create state for this command
-        var state = _commandStates.GetOrAdd(command, _ => new CommandValidationState());
+        // Get or create state for this command/callback combination.
+        var cacheKey = new CommandValidationCacheKey(command, annotation.ValidationCallback);
+        var state = _commandStates.GetOrAdd(cacheKey, _ => new CommandValidationState());
 
         await state.Gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -180,6 +180,13 @@ internal sealed class RequiredCommandValidator : IRequiredCommandValidator, IDis
     }
 
     /// <summary>
+    /// Cache key for command validation state.
+    /// </summary>
+    private readonly record struct CommandValidationCacheKey(
+        string Command,
+        Func<RequiredCommandValidationContext, Task<RequiredCommandValidationResult>>? Callback);
+
+    /// <summary>
     /// Attempts to resolve a command (file name or path) to a full path.
     /// </summary>
     /// <param name="command">The command string.</param>
@@ -198,4 +205,3 @@ internal sealed class RequiredCommandValidator : IRequiredCommandValidator, IDis
     }
 }
 
-#pragma warning restore ASPIREINTERACTION001

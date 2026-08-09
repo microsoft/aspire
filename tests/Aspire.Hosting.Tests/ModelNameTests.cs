@@ -109,4 +109,14 @@ public class ModelNameTests
     {
         ModelName.ValidateName(nameof(Resource), name);
     }
+
+    [Fact]
+    public void ProjectRebuilderResource_LongName_DoesNotThrow()
+    {
+        var longName = new string('a', 64) + "-rebuilder";
+        var parent = new ProjectResource("parent");
+        var rebuilder = new ProjectRebuilderResource(longName, parent, "/some/project.csproj");
+
+        Assert.Equal(longName, rebuilder.Name);
+    }
 }

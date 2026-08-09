@@ -68,15 +68,27 @@ public abstract class AzureProvisionableAspireResource<T>(string name, Action<Az
 /// <summary>
 /// An AzureProvisionableAspireResource that also is IResourceWithParent.
 /// </summary>
-public abstract class AzureProvisionableAspireResourceWithParent<T, P>(string name, Action<AzureResourceInfrastructure> configureInfrastructure, P parent) :
-    AzureProvisionableAspireResource<T>(name, configureInfrastructure), IResourceWithParent<P>
+public abstract class AzureProvisionableAspireResourceWithParent<T, P> :
+    AzureProvisionableAspireResource<T>, IResourceWithParent<P>
     where T : ProvisionableResource
     where P : AzureProvisioningResource
 {
     /// <summary>
+    /// Initializes a new instance of the <see cref="AzureProvisionableAspireResourceWithParent{T, P}"/> class.
+    /// </summary>
+    /// <param name="name">The name of the resource.</param>
+    /// <param name="configureInfrastructure">Configures the underlying Azure resource using Azure.Provisioning.</param>
+    /// <param name="parent">The parent Azure provisioning resource.</param>
+    protected AzureProvisionableAspireResourceWithParent(string name, Action<AzureResourceInfrastructure> configureInfrastructure, P parent)
+        : base(name, configureInfrastructure)
+    {
+        Parent = parent ?? throw new ArgumentNullException(nameof(parent));
+    }
+
+    /// <summary>
     /// Gets the parent resource.
     /// </summary>
-    public P Parent { get; } = parent ?? throw new ArgumentNullException(nameof(parent));
+    public P Parent { get; }
 }
 
 /// <summary>

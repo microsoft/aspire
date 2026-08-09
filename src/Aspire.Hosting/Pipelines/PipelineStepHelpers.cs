@@ -84,7 +84,7 @@ internal static class PipelineStepHelpers
                     : resource.Name.ToLowerInvariant();
 
                 // Only tag the image, don't push to a remote registry
-                var containerRuntime = context.Services.GetRequiredService<IContainerRuntime>();
+                var containerRuntime = await context.Services.GetRequiredService<IContainerRuntimeResolver>().ResolveAsync(context.CancellationToken).ConfigureAwait(false);
                 await containerRuntime.TagImageAsync(localImageName, targetTag, context.CancellationToken).ConfigureAwait(false);
 
                 await tagTask.CompleteAsync(

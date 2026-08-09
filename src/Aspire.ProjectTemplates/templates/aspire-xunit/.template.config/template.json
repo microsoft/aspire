@@ -1,6 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/template",
   "author": "Microsoft",
+  "generatorVersions": "1.0.0.0",
   "classifications": [
     "Common",
     "Aspire",
@@ -49,6 +50,10 @@
         {
           "choice": "net10.0",
           "description": "Target net10.0"
+        },
+        {
+          "choice": "net11.0",
+          "description": "Target net11.0"
         }
       ],
       "replaces": "net8.0",

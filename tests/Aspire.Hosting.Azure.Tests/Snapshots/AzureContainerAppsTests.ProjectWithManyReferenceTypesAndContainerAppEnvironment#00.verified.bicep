@@ -47,7 +47,7 @@ resource pg_kv_connectionstrings__db 'Microsoft.KeyVault/vaults/secrets@2024-11-
   parent: pg_kv
 }
 
-resource api 'Microsoft.App/containerApps@2025-02-02-preview' = {
+resource api 'Microsoft.App/containerApps@2025-10-02-preview' = {
   name: 'api'
   location: location
   properties: {

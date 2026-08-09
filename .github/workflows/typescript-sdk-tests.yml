@@ -1,0 +1,32 @@
+# TypeScript SDK Unit Tests
+# Validates the static TypeScript files (transport.ts, base.ts) that are part of the
+# polyglot TypeScript AppHost SDK. These files are not generated — they contain core
+# transport, serialization, and type logic that should be covered by fast unit tests.
+name: TypeScript SDK Unit Tests
+
+on:
+  workflow_call:
+
+jobs:
+  typescript_unit_tests:
+    name: TypeScript SDK Tests Job
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: tests/Aspire.Hosting.CodeGeneration.TypeScript.JsTests
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npx vitest run --reporter=verbose

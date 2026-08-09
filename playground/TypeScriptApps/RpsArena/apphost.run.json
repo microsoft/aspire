@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "https": {
+      "applicationUrl": "https://rpsarena.dev.localhost:16323;http://rpsarena.dev.localhost:15163",
+      "environmentVariables": {
+      }
+    }
+  }
+}

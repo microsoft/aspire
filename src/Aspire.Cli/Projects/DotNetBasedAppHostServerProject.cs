@@ -9,8 +9,10 @@ using System.Xml.Linq;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Projects;
@@ -22,37 +24,12 @@ namespace Aspire.Cli.Projects;
 internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
 {
     private const string ProjectHashFileName = ".projecthash";
-    private const string FolderPrefix = ".aspire";
     private const string AppsFolder = "hosts";
     public const string ProjectFileName = "AppHostServer.csproj";
     private const string ProjectDllName = "AppHostServer.dll";
     internal const string TargetFramework = "net10.0";
     public const string BuildFolder = "build";
     private const string AssemblyName = "AppHostServer";
-
-    /// <summary>
-    /// Gets the default Aspire SDK version based on the CLI version.
-    /// </summary>
-    public static string DefaultSdkVersion => GetEffectiveVersion();
-
-    private static string GetEffectiveVersion()
-    {
-        var version = VersionHelper.GetDefaultTemplateVersion();
-
-        // Strip the commit SHA suffix (e.g., "9.2.0+abc123" -> "9.2.0")
-        var plusIndex = version.IndexOf('+');
-        if (plusIndex > 0)
-        {
-            version = version[..plusIndex];
-        }
-
-        // Dev versions (e.g., "13.2.0-dev") don't exist on NuGet, fall back to latest stable
-        if (version.EndsWith("-dev", StringComparison.OrdinalIgnoreCase))
-        {
-            return "13.1.0";
-        }
-        return version;
-    }
 
     private readonly string _projectModelPath;
     private readonly string _appPath;
@@ -61,8 +38,10 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     private readonly string _repoRoot;
     private readonly IDotNetCliRunner _dotNetCliRunner;
     private readonly IPackagingService _packagingService;
-    private readonly IConfigurationService _configurationService;
+    private readonly IProcessExecutionFactory _processExecutionFactory;
+    private readonly IEnvironment _environment;
     private readonly ILogger _logger;
+    private readonly string? _logFilePath;
 
     public DotNetBasedAppHostServerProject(
         string appPath,
@@ -70,9 +49,11 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         string repoRoot,
         IDotNetCliRunner dotNetCliRunner,
         IPackagingService packagingService,
-        IConfigurationService configurationService,
+        IProcessExecutionFactory processExecutionFactory,
+        IEnvironment environment,
         ILogger<DotNetBasedAppHostServerProject> logger,
-        string? projectModelPath = null)
+        string? projectModelPath = null,
+        string? logFilePath = null)
     {
         _appPath = Path.GetFullPath(appPath);
         _appPath = new Uri(_appPath).LocalPath;
@@ -81,8 +62,10 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         _repoRoot = Path.GetFullPath(repoRoot) + Path.DirectorySeparatorChar;
         _dotNetCliRunner = dotNetCliRunner;
         _packagingService = packagingService;
-        _configurationService = configurationService;
+        _processExecutionFactory = processExecutionFactory;
+        _environment = environment;
         _logger = logger;
+        _logFilePath = logFilePath;
 
         var pathHash = SHA256.HashData(Encoding.UTF8.GetBytes(_appPath));
 
@@ -93,20 +76,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         else
         {
             var pathDir = Convert.ToHexString(pathHash)[..12].ToLowerInvariant();
-            var tempPath = Path.GetTempPath();
-            // On macOS, /var is a symlink to /private/var. MSBuild resolves symlinks when
-            // computing relative paths between projects, but then tries to resolve those
-            // relative paths from the original (unresolved) directory. This mismatch causes
-            // transitive project references to fail. Using the canonical path ensures consistency.
-            if (OperatingSystem.IsMacOS() && tempPath.StartsWith("/var/", StringComparison.Ordinal))
-            {
-                var canonical = "/private" + tempPath;
-                if (Directory.Exists(canonical))
-                {
-                    tempPath = canonical;
-                }
-            }
-            _projectModelPath = Path.Combine(tempPath, FolderPrefix, AppsFolder, pathDir);
+            _projectModelPath = Path.Combine(CliPathHelper.GetAspireHomeDirectory(), AppsFolder, pathDir);
         }
 
         // Create a stable UserSecretsId based on the app path hash
@@ -116,11 +86,13 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     }
 
     /// <inheritdoc />
-    public string AppPath => _appPath;
+    public string AppDirectoryPath => _appPath;
 
     public string ProjectModelPath => _projectModelPath;
     public string UserSecretsId => _userSecretsId;
     public string BuildPath => Path.Combine(_projectModelPath, BuildFolder);
+
+    internal string? LogFilePath => _logFilePath;
 
     /// <summary>
     /// Gets the full path to the AppHost server project file.
@@ -177,6 +149,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
                     <RepoRoot>{_repoRoot}</RepoRoot>
                     <SkipValidateAspireHostProjectResources>true</SkipValidateAspireHostProjectResources>
                     <SkipAddAspireDefaultReferences>true</SkipAddAspireDefaultReferences>
+                    <SkipAspireIntegrationAnalyzersReference>true</SkipAspireIntegrationAnalyzersReference>
                     <AspireHostingSDKVersion>42.42.42</AspireHostingSDKVersion>
                     <!-- DCP and Dashboard paths for local development -->
                     <DcpDir>$([MSBuild]::EnsureTrailingSlash('$(NuGetPackageRoot)')){dcpPackageName}/{dcpVersion}/tools/</DcpDir>
@@ -290,6 +263,8 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     /// </summary>
     public async Task<(string ProjectPath, string? ChannelName)> CreateProjectFilesAsync(
         IEnumerable<IntegrationReference> integrations,
+        string? requestedChannel = null,
+        string? packageSourceOverride = null,
         CancellationToken cancellationToken = default)
     {
         // Clean obj folder to ensure fresh NuGet restore
@@ -356,14 +331,10 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
             File.Copy(userNugetConfig, nugetConfigPath, overwrite: true);
         }
 
-        var channels = await _packagingService.GetChannelsAsync(cancellationToken);
-        var localConfig = AspireJsonConfiguration.Load(_appPath);
-        var configuredChannelName = localConfig?.Channel;
-
-        if (string.IsNullOrEmpty(configuredChannelName))
-        {
-            configuredChannelName = await _configurationService.GetConfigurationAsync("channel", cancellationToken);
-        }
+        var configuredChannelName = requestedChannel
+            ?? AspireConfigFile.Load(_appPath)?.Channel
+            ?? AspireJsonConfiguration.Load(_appPath)?.Channel;
+        var channels = await _packagingService.GetChannelsAsync(cancellationToken, configuredChannelName);
 
         // Resolve channel sources and add them via RestoreAdditionalProjectSources
         // This is additive — it preserves the user's nuget.config and adds channel-specific sources
@@ -385,6 +356,20 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
                     }
                 }
             }
+        }
+
+        // Thread an explicit `--source` override into the restore sources so the dogfood
+        // `aspire new --source <pr-hive>` flow is honored in dev mode (in-repo). Prepending
+        // makes the override the first source NuGet evaluates, which matters when the same
+        // Aspire package version exists in both the hive and a channel feed. Note: unlike
+        // PrebuiltAppHostServer this path does not emit Package Source Mappings, so NuGet
+        // may still consult other sources if the override does not satisfy a request — the
+        // override is best-effort here, sufficient for the in-repo developer scenario where
+        // most Aspire.* dependencies come from ProjectReference, not PackageReference.
+        if (!string.IsNullOrWhiteSpace(packageSourceOverride) &&
+            !channelSources.Contains(packageSourceOverride, StringComparer.OrdinalIgnoreCase))
+        {
+            channelSources.Insert(0, packageSourceOverride);
         }
 
         // Create the project file
@@ -428,7 +413,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         var projectFileName = Path.Combine(_projectModelPath, ProjectFileName);
 
         // Log the full project XML for debugging
-        _logger.LogDebug("Generated AppHostServer project file:\n{ProjectXml}", doc.ToString());
+        _logger.LogTrace("Generated AppHostServer project file:\n{ProjectXml}", doc.ToString());
 
         doc.Save(projectFileName);
 
@@ -443,7 +428,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         var outputCollector = new OutputCollector();
         var projectFile = new FileInfo(Path.Combine(_projectModelPath, ProjectFileName));
 
-        var options = new DotNetCliRunnerInvocationOptions
+        var options = new ProcessInvocationOptions
         {
             StandardOutputCallback = outputCollector.AppendOutput,
             StandardErrorCallback = outputCollector.AppendError
@@ -458,9 +443,11 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     public async Task<AppHostServerPrepareResult> PrepareAsync(
         string sdkVersion,
         IEnumerable<IntegrationReference> integrations,
+        string? requestedChannel = null,
+        string? packageSourceOverride = null,
         CancellationToken cancellationToken = default)
     {
-        var (_, channelName) = await CreateProjectFilesAsync(integrations, cancellationToken);
+        var (_, channelName) = await CreateProjectFilesAsync(integrations, requestedChannel, packageSourceOverride, cancellationToken);
         var (buildSuccess, buildOutput) = await BuildAsync(cancellationToken);
 
         if (!buildSuccess)
@@ -483,15 +470,19 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     public string GetInstanceIdentifier() => GetProjectFilePath();
 
     /// <inheritdoc />
-    public (string SocketPath, Process Process, OutputCollector OutputCollector) Run(
+    public async Task<AppHostServerRunResult> RunAsync(
         int hostPid,
-        IReadOnlyDictionary<string, string>? environmentVariables = null,
-        string[]? additionalArgs = null,
-        bool debug = false)
+        IReadOnlyDictionary<string, string>? environmentVariables,
+        string[]? additionalArgs,
+        bool debug,
+        AppHostServerRunControl? runControl)
     {
         var assemblyPath = Path.Combine(BuildPath, ProjectDllName);
-        var dotnetExe = OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet";
+        var dotnetExe = _environment.IsWindows() ? "dotnet.exe" : "dotnet";
 
+        // Build the canonical ProcessStartInfo first, then translate to IsolatedProcessStartInfo
+        // only if the isolated path is requested. Sharing the env/arg construction avoids drift
+        // between the two branches — every env var and argument lives in exactly one place.
         var startInfo = new ProcessStartInfo(dotnetExe)
         {
             WorkingDirectory = _projectModelPath,
@@ -512,12 +503,35 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         }
 
         startInfo.Environment["REMOTE_APP_HOST_SOCKET_PATH"] = _socketPath;
-        startInfo.Environment["REMOTE_APP_HOST_PID"] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        startInfo.Environment[KnownConfigNames.CliProcessId] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        startInfo.Environment[KnownConfigNames.CliLogFilePath] = _logFilePath;
+
+        // Stamp the launching CLI (hostPid) as the parent under both the RemoteHost and generic CLI
+        // key pairs. Resolve the start time once and pair it with the PID so the RemoteHost orphan
+        // detector verifies both and does not keep the server alive against a recycled PID.
+        var hostStartedUnix = ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(hostPid);
+        OrphanDetectionEnvironment.Apply(startInfo.Environment, hostPid, hostStartedUnix, KnownConfigNames.RemoteAppHostProcessId, KnownConfigNames.RemoteAppHostProcessStarted);
+        OrphanDetectionEnvironment.Apply(startInfo.Environment, hostPid, hostStartedUnix, KnownConfigNames.CliProcessId, KnownConfigNames.CliProcessStarted);
 
         // Dev mode uses debug builds which require Development environment
         // for the dashboard to resolve static web assets correctly
-        startInfo.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
+        startInfo.Environment[KnownAspNetCoreConfigNames.Environment] = "Development";
+
+        // Wire WithTerminal() for guest/polyglot AppHosts running from the repo. The
+        // generated AppHostServer references Aspire.Hosting from the repo and DCP resolves
+        // the terminal host via ASPIRE_TERMINAL_HOST_PATH or assembly metadata. No per-RID
+        // NuGet stamps the metadata path today, so without this env var the AppHostServer
+        // would always resolve to <unresolved-aspire-terminalhost> in repo mode.
+        // Mirrors the same injection that DotNetAppHostProject performs for .NET AppHosts.
+        // Skipped when the caller pre-populates the path so a user-side override always wins.
+        if (BundleDiscovery.TryGetRepoLocalManagedPath(_repoRoot) is { } terminalHostPath
+            && !ContainsKey(environmentVariables, BundleDiscovery.TerminalHostPathEnvVar))
+        {
+            startInfo.Environment[BundleDiscovery.TerminalHostPathEnvVar] = terminalHostPath;
+            if (!ContainsKey(environmentVariables, BundleDiscovery.TerminalHostInvocationArgsEnvVar))
+            {
+                startInfo.Environment[BundleDiscovery.TerminalHostInvocationArgsEnvVar] = "terminalhost";
+            }
+        }
 
         if (environmentVariables is not null)
         {
@@ -529,36 +543,61 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
 
         if (debug)
         {
-            startInfo.Environment["Logging__LogLevel__Default"] = "Debug";
+            startInfo.Environment[KnownConfigNames.AspireLogLevel] = "Debug";
             _logger.LogDebug("Enabling debug logging for AppHostServer");
         }
 
         startInfo.RedirectStandardOutput = true;
         startInfo.RedirectStandardError = true;
 
-        var process = Process.Start(startInfo)!;
-
         var outputCollector = new OutputCollector();
-        process.OutputDataReceived += (sender, e) =>
-        {
-            if (e.Data is not null)
-            {
-                _logger.LogDebug("AppHostServer({ProcessId}) stdout: {Line}", process.Id, e.Data);
-                outputCollector.AppendOutput(e.Data);
-            }
-        };
-        process.ErrorDataReceived += (sender, e) =>
-        {
-            if (e.Data is not null)
-            {
-                _logger.LogDebug("AppHostServer({ProcessId}) stderr: {Line}", process.Id, e.Data);
-                outputCollector.AppendError(e.Data);
-            }
-        };
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
 
-        return (_socketPath, process, outputCollector);
+        // The execution local is forward-referenced by the log callbacks so they can read the
+        // child's pid per line. ProcessInvocationOptions.StandardOutputCallback is Action<string>
+        // (line only), but the AppHost wants the pid in each trace line (#16729). ProcessExecution
+        // publishes the child pid before it starts stdout/stderr pumps so immediate output can read
+        // ProcessId.
+        IProcessExecution execution = null!;
+
+        void OnStdout(string line)
+        {
+            _logger.LogTrace("AppHostServer({ProcessId}) stdout: {Line}", execution.ProcessId, line);
+            outputCollector.AppendOutput(line);
+        }
+
+        void OnStderr(string line)
+        {
+            _logger.LogTrace("AppHostServer({ProcessId}) stderr: {Line}", execution.ProcessId, line);
+            outputCollector.AppendError(line);
+        }
+
+        var options = new ProcessInvocationOptions
+        {
+            StandardOutputCallback = OnStdout,
+            StandardErrorCallback = OnStderr,
+            IsolateConsole = runControl?.IsolateConsole ?? false,
+            KillOnParentExit = runControl?.KillOnParentExit ?? false,
+            GracefulShutdownSignaler = runControl?.GracefulShutdownSignaler,
+            ShutdownService = runControl?.ShutdownService,
+            // The graceful ladder always tree-kills on escalation; this fallback only matters when
+            // graceful services were not wired (non-Run callers), where it preserves the old session
+            // behavior of force-killing the tree on Unix but only the root on Windows.
+            KillEntireProcessTreeOnCancel = !_environment.IsWindows(),
+        };
+
+        execution = _processExecutionFactory.CreateExecution(startInfo, options);
+
+        try
+        {
+            await execution.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        catch
+        {
+            await execution.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
+
+        return new AppHostServerRunResult(_socketPath, outputCollector, execution);
     }
 
     private static string? FindNuGetConfig(string workingDirectory)
@@ -619,10 +658,10 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         }
     }
 
-    private static (string Os, string Arch) GetBuildPlatform()
+    private (string Os, string Arch) GetBuildPlatform()
     {
-        var os = OperatingSystem.IsLinux() ? "linux"
-            : OperatingSystem.IsMacOS() ? "darwin"
+        var os = _environment.IsLinux() ? "linux"
+            : _environment.IsMacOS() ? "darwin"
             : "windows";
 
         var arch = RuntimeInformation.OSArchitecture switch
@@ -659,5 +698,10 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         {
             return fallbackVersion;
         }
+    }
+
+    private static bool ContainsKey(IReadOnlyDictionary<string, string>? env, string key)
+    {
+        return env is not null && env.ContainsKey(key);
     }
 }

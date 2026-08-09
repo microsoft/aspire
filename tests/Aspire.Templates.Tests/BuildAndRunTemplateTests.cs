@@ -182,7 +182,7 @@ public partial class BuildAndRunTemplateTests : TemplateTestsBase
     [Fact]
     [RequiresFeature(TestFeature.Playwright)]
     [OuterloopTest("playwright test")]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/9155", typeof(PlatformDetection), nameof(PlatformDetection.IsMacOS))]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/9155", typeof(PlatformDetection), nameof(PlatformDetection.IsMacOS))]
     public async Task ProjectWithNoHTTPSRequiresExplicitOverrideWithEnvironmentVariable()
     {
         string id = GetNewProjectId(prefix: "aspire");

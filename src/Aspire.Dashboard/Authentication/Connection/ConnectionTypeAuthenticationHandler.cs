@@ -35,7 +35,6 @@ public static class ConnectionTypeAuthenticationDefaults
 {
     public const string AuthenticationSchemeFrontend = "ConnectionFrontend";
     public const string AuthenticationSchemeOtlp = "ConnectionOtlp";
-    public const string AuthenticationSchemeMcp = "ConnectionMcp";
 }
 
 public sealed class ConnectionTypeAuthenticationHandlerOptions : AuthenticationSchemeOptions

@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Dashboard.Model.Serialization;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Otlp.Serialization;
@@ -584,7 +585,7 @@ public sealed class TelemetryExportService
                     TimeUnixNano = OtlpHelpers.DateTimeToUnixNanoseconds(value.End),
                     Count = histogramValue.Count,
                     Sum = histogramValue.Sum,
-                    BucketCounts = histogramValue.Values.Select(v => v.ToString(CultureInfo.InvariantCulture)).ToArray(),
+                    BucketCounts = histogramValue.Values,
                     ExplicitBounds = histogramValue.ExplicitBounds,
                     Exemplars = value.HasExemplars ? ConvertExemplars(value.Exemplars) : null
                 };
@@ -725,6 +726,7 @@ public sealed class TelemetryExportService
             ResourceType = resource.ResourceType,
             Uid = resource.Uid,
             State = resource.State,
+            WaitingFor = resource.TryGetResolvedWaitingForDependencies(allResources, out var waitingForDependencies) ? [.. waitingForDependencies] : null,
             CreationTimestamp = resource.CreationTimeStamp,
             StartTimestamp = resource.StartTimeStamp,
             StopTimestamp = resource.StopTimeStamp,
@@ -762,7 +764,7 @@ public sealed class TelemetryExportService
             Properties = resource.Properties.Count > 0
                 ? resource.Properties.OrderBy(p => p.Key).ToDistinctDictionary(
                     p => p.Key,
-                    p => p.Value.Value.TryConvertToString(out var value) ? value : null)
+                    p => ConvertPropertyValueToJsonNode(p.Value.Value))
                 : null,
             Relationships = relationshipsJson,
             Commands = resource.Commands.Length > 0
@@ -773,6 +775,7 @@ public sealed class TelemetryExportService
                         c => c.Name,
                         c => new ResourceCommandJson
                         {
+                            DisplayName = c.GetDisplayName(),
                             Description = c.GetDisplayDescription()
                         })
                 : null,
@@ -780,6 +783,37 @@ public sealed class TelemetryExportService
         };
 
         return resourceJson;
+    }
+
+    private static JsonNode? ConvertPropertyValueToJsonNode(Google.Protobuf.WellKnownTypes.Value value)
+    {
+        if (value.TryConvertToString(out var stringValue))
+        {
+            return JsonValue.Create(stringValue);
+        }
+
+        if (value.HasNumberValue)
+        {
+            return JsonValue.Create(value.NumberValue);
+        }
+
+        if (value.HasBoolValue)
+        {
+            return JsonValue.Create(value.BoolValue);
+        }
+
+        if (value.ListValue is not null)
+        {
+            var array = new JsonArray();
+            foreach (var element in value.ListValue.Values)
+            {
+                array.Add(ConvertPropertyValueToJsonNode(element));
+            }
+
+            return array;
+        }
+
+        return null;
     }
 
     /// <summary>

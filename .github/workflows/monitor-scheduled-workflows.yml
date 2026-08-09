@@ -1,0 +1,50 @@
+name: Monitor Scheduled Workflows
+
+# Watches the currently-silent scheduled/automation workflows and files, updates,
+# or closes a single deduplicated `automation-broken` GitHub issue per workflow.
+# A scheduled workflow that fails (generate/refresh/update/cleanup) otherwise has
+# no visibility — GitHub only emails the last person to touch the workflow file.
+#
+# Logic lives in ./.github/workflows/monitor-scheduled-workflows.js (pure, tested
+# by tests/Infrastructure.Tests/WorkflowScripts/MonitorScheduledWorkflowsTests.cs).
+# Full contract: docs/ci/monitor-scheduled-workflows.md.
+
+on:
+  schedule:
+    - cron: '0 */2 * * *' # every 2 hours
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Inspect and log intended issue actions without mutating GitHub'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read   # checkout to require the local .js module
+  actions: read    # list workflow runs / conclusions
+  issues: write    # file / comment / close automation-broken issues
+
+# One watchdog run at a time; a backlog would only re-evaluate the same state.
+concurrency:
+  group: monitor-scheduled-workflows
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    if: ${{ github.repository_owner == 'microsoft' }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Evaluate scheduled workflows
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        with:
+          script: |
+            const dryRun = process.env.DRY_RUN === 'true';
+            await require('./.github/workflows/monitor-scheduled-workflows.js').run({ github, context, core, dryRun });

@@ -11,7 +11,6 @@ internal static partial class HelmExtensions
     private const string StatefulSetKey = "statefulset";
     private const string ServiceKey = "service";
     private const string PvcKey = "pvc";
-    private const string PvKey = "pv";
     private const string ValuesSegment = ".Values";
     public const string ParametersKey = "parameters";
     public const string SecretsKey = "secrets";
@@ -45,7 +44,7 @@ internal static partial class HelmExtensions
         => $"{ValuesSegment}.{ConfigKey}.{resourceName}.{parameterName}".ToHelmValuesSectionName().ToHelmExpression();
 
     public static string ToHelmChartName(this string applicationName)
-        => applicationName.ToLower().Replace("_", "-").Replace(".", "-");
+        => applicationName.ToLowerInvariant().Replace("_", "-").Replace(".", "-");
 
     /// <summary>
     /// Converts the specified resource name into a Kubernetes resource name.
@@ -74,9 +73,6 @@ internal static partial class HelmExtensions
 
     public static string ToPvcName(this string resourceName, string volumeName)
         => $"{resourceName.ToKubernetesResourceName()}-{volumeName}-{PvcKey}";
-
-    public static string ToPvName(this string resourceName, string volumeName)
-        => $"{resourceName.ToKubernetesResourceName()}-{volumeName}-{PvKey}";
 
     public static bool ContainsHelmExpression(this string value)
         => ExpressionPattern().IsMatch(value);
@@ -116,11 +112,26 @@ internal static partial class HelmExtensions
         return (true, null);
     }
 
+    /// <summary>
+    /// Preserves numeric Helm conversions while ensuring the rendered value is written as a string.
+    /// </summary>
+    public static string EnsureStringOutput(this string value)
+    {
+        return EndWithNonStringTypePattern().Replace(value, match =>
+        {
+            var endDelimiterIndex = match.Value.LastIndexOf(EndDelimiter, StringComparison.Ordinal);
+
+            return endDelimiterIndex >= 0
+                ? $"{match.Value[..endDelimiterIndex].TrimEnd()} {PipelineDelimiter} toString {EndDelimiter}"
+                : match.Value;
+        });
+    }
+
     [GeneratedRegex(@"^\{\{\s*if\b")]
     internal static partial Regex HelmFlowControlPattern();
 
     [GeneratedRegex(@"\{\{[^}]*\|\s*(int|int64|float64)\s*\}\}")]
-    private static partial Regex EndWithNonStringTypePattern();
+    internal static partial Regex EndWithNonStringTypePattern();
 
     [GeneratedRegex(@"((?<=^\{\{\s*)(?:[^{}]+?)(?=(?:\}\}$)))")]
     internal static partial Regex ScalarExpressionPattern();

@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Serialization;
-using Aspire.Hosting.Dcp.Model;
+using Aspire.Hosting.ApplicationModel;
+
+#pragma warning disable ASPIREEXTENSION001 // Launch configuration types are experimental.
 
 namespace Aspire.Hosting.Python;
 
@@ -16,4 +18,7 @@ internal sealed class PythonLaunchConfiguration() : ExecutableLaunchConfiguratio
 
     [JsonPropertyName("interpreter_path")]
     public string InterpreterPath { get; set; } = string.Empty;
+
+    [JsonPropertyName("working_directory")]
+    public string WorkingDirectory { get; set; } = string.Empty;
 }
