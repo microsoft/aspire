@@ -56,7 +56,7 @@ Verified: TestClass.Method.verified.txt
 ## Rules
 
 - **Never hand-edit `.verified.*` files** to make tests pass. Always let Verify generate the correct output by running the test.
-- Snapshot files live next to the test source file. For a test in `Tests/MyTests.cs`, look for `Tests/MyTests.MethodName.verified.txt`.
+- Do not infer the snapshot location from the test source file path. This repo customizes `DerivePathInfo`, so snapshots live in a `Snapshots` directory at the root of the test project (e.g. `tests/Aspire.Hosting.Tests/Snapshots/MyTests.MethodName.verified.txt`), not beside the `.cs` file. Always use the `Directory:` value from the exception message as the base path for the reported file names.
 
 ## Scrubbed values
 
