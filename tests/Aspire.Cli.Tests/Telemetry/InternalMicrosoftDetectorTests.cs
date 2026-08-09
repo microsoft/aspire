@@ -470,10 +470,29 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     public async Task CheckCopilotCliAsync_UsesOverallGitHubTokenCandidateTimeout()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var concurrencyLock = new Lock();
+        var inFlightRequests = 0;
+        var peakInFlightRequests = 0;
         var handler = new TestGitHubHttpMessageHandler(async (_, cancellationToken) =>
         {
-            await Task.Delay(TimeSpan.FromMinutes(1), cancellationToken);
-            return new HttpResponseMessage(HttpStatusCode.OK);
+            lock (concurrencyLock)
+            {
+                inFlightRequests++;
+                peakInFlightRequests = Math.Max(peakInFlightRequests, inFlightRequests);
+            }
+
+            try
+            {
+                await Task.Delay(TimeSpan.FromMinutes(1), cancellationToken);
+                return new HttpResponseMessage(HttpStatusCode.OK);
+            }
+            finally
+            {
+                lock (concurrencyLock)
+                {
+                    inFlightRequests--;
+                }
+            }
         });
         var environmentVariables = Enumerable.Range(0, 7)
             .ToDictionary(index => $"COPILOT_GH_ACCOUNT_{index}", index => (string?)CreateGitHubToken(index));
@@ -498,15 +517,24 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
 
         Assert.False(result.IsInternalMicrosoft);
 
-        // CheckAnyGitHubMembershipCandidateAsync starts all five candidate probes concurrently under a
-        // single CancellationTokenSource(_gitHubCandidateTimeout), so the budget is one overall 100ms
-        // window shared by every probe - not 100ms per candidate, and not serial. The handler blocks for
-        // a minute per request, so an unenforced budget shows up as >= 1 minute. The bound therefore only
-        // has to separate "enforced" (~100ms plus cancellation, drain, and scheduling overhead) from
-        // "not enforced" (>= 1 minute), and a tight bound buys no extra proof while genuinely failing:
-        // at 2 seconds this flaked on a loaded windows-latest runner at 2s 064ms while macOS and ubuntu
+        // Two independent regressions have to be ruled out here, and the wall clock alone cannot do it.
+        //
+        // "No budget at all" is what the elapsed bound catches. The handler blocks for a minute per
+        // request, so an unenforced budget shows up as >= 1 minute. The bound therefore only has to
+        // separate "enforced" (~100ms plus cancellation, drain, and scheduling overhead) from "not
+        // enforced" (>= 1 minute), and a tight bound buys no extra proof while genuinely failing: at
+        // 2 seconds this flaked on a loaded windows-latest runner at 2s 064ms while macOS and ubuntu
         // passed on the same commit (https://github.com/microsoft/aspire/issues/19181).
+        //
+        // "A fresh budget per candidate, applied serially" is invisible to that bound: five sequential
+        // probes each cancelled after 100ms would finish in roughly half a second, issue all five
+        // requests, and pass comfortably. Peak overlap separates the two without a clock, because a
+        // serial implementation can never have more than one request in flight. Every request blocks
+        // until the shared budget cancels it, so all five that reach the handler necessarily overlap;
+        // this asserts the same count as the request assertion below and so adds no timing sensitivity
+        // of its own.
         Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(10), $"Elapsed {stopwatch.Elapsed} exceeded the overall candidate timeout budget.");
+        Assert.Equal(5, peakInFlightRequests);
         Assert.Equal(5, handler.GetRequestPaths().Count(path => path == "/user"));
     }
 
