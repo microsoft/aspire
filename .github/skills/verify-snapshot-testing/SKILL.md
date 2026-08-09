@@ -43,15 +43,20 @@ Verified: TestClass.Method.verified.txt
 
 ### Step 2: Read the files
 
-1. Read the `.received.*` file to see the actual output.
-2. Read the `.verified.*` file (if it exists) to see the expected output.
-3. Compare the two to understand the difference.
+This repo runs with `VerifierSettings.AutoVerify(includeBuildServer: false, throwException: true)` (see `tests/Shared/TestModuleInitializer.cs`), so a local run behaves differently from CI:
+
+- **Locally**: the `.verified.*` file has *already been overwritten* with the new output, and the test still fails. There is usually no `.received.*` file to read. Inspect the change with `git diff` on the `.verified.*` file — the "before" side is the old approved snapshot, the "after" side is the actual output.
+- **On the build server**: auto-accept is off, so a `.received.*` file is written alongside the `.verified.*` file. Read both and compare.
+
+The `FileContent:` section of the exception message also contains both sides, and is available either way.
 
 ### Step 3: Determine the action
 
-- **If the change is expected** (due to an intentional code change): copy the `.received.*` file over the `.verified.*` file to accept the new snapshot.
-- **If it is a new test** (no `.verified.*` file): accept the `.received.*` file as the new snapshot by renaming it to `.verified.*`.
-- **If the change is a bug**: fix the code, not the snapshot. Re-run the test to confirm the fix.
+- **If the change is expected** (due to an intentional code change): keep the rewritten `.verified.*` file and commit it. If any `.received.*` files are still pending, run `dotnet verify accept -y` to accept them.
+- **If it is a new test** (no `.verified.*` file existed): the newly created `.verified.*` file is the snapshot — review it line by line before committing, since nothing was there to diff against.
+- **If the change is a bug**: fix the code, not the snapshot, and `git checkout` the `.verified.*` file to restore the approved content. Re-run the test to confirm it passes against the original snapshot.
+
+Never commit a `.verified.*` change you have not read. Auto-accept means a wrong snapshot lands silently in the working tree, so `git diff` before every commit that touches one.
 
 ## Rules
 
@@ -70,6 +75,4 @@ Do not treat these placeholders as errors.
 
 ## Verified file conventions
 
-- Encoding: UTF-8 with BOM
-- Line endings: LF (not CRLF)
-- No trailing newline
+Verify writes `.verified.*` files as UTF-8 with BOM, LF line endings, and no trailing newline. The root `.editorconfig` has no override for these files, so an editor honouring `charset = utf-8` / `insert_final_newline = true` may try to strip the BOM or append a newline. Do not let it — that reformatting causes spurious diffs and failing tests. Leave `.verified.*` files exactly as Verify wrote them.
