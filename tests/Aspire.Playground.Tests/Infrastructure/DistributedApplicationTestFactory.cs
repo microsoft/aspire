@@ -57,8 +57,9 @@ internal static class DistributedApplicationTestFactory
         string[] args,
         Action<IDistributedApplicationTestingBuilder>? configureBuilder)
     {
-        // DistributedApplicationTestingBuilder.CreateAsync(Type) forwards to CreateAsync(entryPoint, [], ct),
-        // so passing empty args here is the same code path the no-args callers had before.
+        // Route both empty and explicit argument lists through the same overload so the testing
+        // builder preserves its construction-time defaults while still letting scenario tests supply
+        // AppHost command-line configuration.
         var builder = await DistributedApplicationTestingBuilder.CreateAsync(appHostProgramType, args);
 
         // Custom hook needed because we want to only override the registry when
