@@ -84,8 +84,12 @@ public static class GitHubActionsApi
         return artifacts;
     }
 
+    // Job logs for CLI end-to-end tests embed the raw terminal recording, so they routinely contain ANSI
+    // control characters. `gh api` refuses to write those to a non-TTY stdout and fails the call with
+    // "the response contains terminal escape sequences; pass --allow-escape-sequences to output it anyway",
+    // which previously made this tool unable to file an issue for any terminal-driven test.
     public static Task<string> DownloadJobLogAsync(string repository, long jobId, CancellationToken cancellationToken)
-        => GitHubCli.GetStringAsync($"repos/{repository}/actions/jobs/{jobId}/logs", cancellationToken);
+        => GitHubCli.GetStringAsync($"repos/{repository}/actions/jobs/{jobId}/logs", allowEscapeSequences: true, cancellationToken);
 
     public static Task DownloadArtifactZipAsync(string repository, long artifactId, string outputPath, CancellationToken cancellationToken)
         => GitHubCli.DownloadFileAsync($"repos/{repository}/actions/artifacts/{artifactId}/zip", outputPath, cancellationToken);

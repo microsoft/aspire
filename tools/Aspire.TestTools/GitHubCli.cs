@@ -20,6 +20,14 @@ public static class GitHubCli
     }
 
     public static Task<string> GetStringAsync(string endpoint, CancellationToken cancellationToken)
+        => GetStringAsync(endpoint, allowEscapeSequences: false, cancellationToken);
+
+    /// <param name="allowEscapeSequences">
+    /// When <see langword="true"/>, passes <c>--allow-escape-sequences</c> to <c>gh api</c>. Required for
+    /// endpoints whose payload can contain terminal control characters; <c>gh</c> refuses to write those to
+    /// a non-TTY stdout otherwise and fails the whole call.
+    /// </param>
+    public static Task<string> GetStringAsync(string endpoint, bool allowEscapeSequences, CancellationToken cancellationToken)
     {
         if (TryGetFixturePath(endpoint, ".json", out var fixturePath))
         {
@@ -36,7 +44,15 @@ public static class GitHubCli
             return Task.FromException<string>(new InvalidOperationException(File.ReadAllText(fixturePath)));
         }
 
-        return RunGhAsync(["api", "-H", "Accept: application/vnd.github+json", endpoint], cancellationToken);
+        List<string> arguments = ["api", "-H", "Accept: application/vnd.github+json"];
+        if (allowEscapeSequences)
+        {
+            arguments.Add("--allow-escape-sequences");
+        }
+
+        arguments.Add(endpoint);
+
+        return RunGhAsync(arguments, cancellationToken);
     }
 
     public static async Task DownloadFileAsync(string endpoint, string outputPath, CancellationToken cancellationToken)
