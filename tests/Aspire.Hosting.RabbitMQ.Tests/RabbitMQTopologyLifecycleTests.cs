@@ -2,8 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.RabbitMQ.Provisioning;
 using Aspire.Hosting.RabbitMQ.Tests.TestServices;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace Aspire.Hosting.RabbitMQ.Tests;
 
@@ -249,5 +252,81 @@ public class RabbitMQTopologyLifecycleTests
 
         // Binding must be re-applied after restart.
         Assert.Contains("BindQueueAsync(vh, ex, q, )", host.Client.Calls);
+    }
+
+    [Fact]
+    public async Task Lifecycle_ExchangeBindingCancelledMidFlight_DoesNotRecordPermanentBindingFailure()
+    {
+        // Regression: a superseded startup pass cancels the reconcile token, so BindExchangeAsync throws
+        // OperationCanceledException. The reconciler must abandon the pass (not record it as a permanent
+        // "Binding failures" error) and re-apply the binding on the next ResourceReadyEvent.
+        var builder = DistributedApplication.CreateBuilder();
+        var server = builder.AddRabbitMQ("rabbit");
+        var vhost = server.AddVirtualHost("vh");
+        var downstream = vhost.AddExchange("downstream-ex");
+        var upstream = vhost.AddExchange("upstream-ex").WithBinding(downstream);
+
+        // Rendezvous: the first binding attempt blocks until we cancel the reconcile token, surfacing the same
+        // OperationCanceledException the per-vhost gate throws in production; later attempts complete normally.
+        var bindingStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseCancellation = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var failFirstBinding = true;
+        var client = new FakeRabbitMQProvisioningClient
+        {
+            OnBindExchange = async ct =>
+            {
+                if (!Volatile.Read(ref failFirstBinding))
+                {
+                    return;
+                }
+
+                bindingStarted.TrySetResult();
+                await releaseCancellation.Task.ConfigureAwait(false);
+                ct.ThrowIfCancellationRequested();
+            }
+        };
+
+        // Register the fake keyed under the server name (last keyed registration wins), so the reconciler's
+        // GetRequiredKeyedService<IRabbitMQProvisioningClient>(server) resolves it from the built provider.
+        builder.Services.AddKeyedSingleton<IRabbitMQProvisioningClient>(server.Resource.Name, client);
+
+        using var app = builder.Build();
+
+        // The binding reconciler waits for the destination to be Running before calling BindExchangeAsync.
+        await app.ResourceNotifications.PublishUpdateAsync(
+            downstream.Resource, s => s with { State = KnownResourceStates.Running });
+
+        var healthCheckService = app.Services.GetRequiredService<HealthCheckService>();
+        var bindingsCheckName = $"{upstream.Resource.Name}_bindings_check";
+
+        // First pass: fire the exchange's ReadyEvent under a token we then cancel while BindExchangeAsync is
+        // in flight, reproducing a superseded reconcile.
+        using var firstPass = new CancellationTokenSource();
+        var firstReady = builder.Eventing.PublishAsync(
+            new ResourceReadyEvent(upstream.Resource, app.Services), firstPass.Token);
+
+        await bindingStarted.Task.DefaultTimeout();
+        firstPass.Cancel();
+        releaseCancellation.SetResult();
+        await firstReady.DefaultTimeout();
+
+        // The cancelled pass must report the pre-apply "not yet applied" message (retriable), never a
+        // "Binding failures ..." message that would stick until a manual restart.
+        var afterCancel = await healthCheckService.CheckHealthAsync(
+            r => r.Name == bindingsCheckName, CancellationToken.None).DefaultTimeout();
+        var afterCancelEntry = afterCancel.Entries[bindingsCheckName];
+        Assert.Equal(HealthStatus.Unhealthy, afterCancelEntry.Status);
+        Assert.Equal(
+            $"Bindings for exchange '{upstream.Resource.ExchangeName}' are not yet applied.",
+            afterCancelEntry.Description);
+
+        // Second pass: let the binding succeed. The exchange must recover to Healthy without any manual restart.
+        Volatile.Write(ref failFirstBinding, false);
+        await builder.Eventing.PublishAsync(
+            new ResourceReadyEvent(upstream.Resource, app.Services)).DefaultTimeout();
+
+        var afterRetry = await healthCheckService.CheckHealthAsync(
+            r => r.Name == bindingsCheckName, CancellationToken.None).DefaultTimeout();
+        Assert.Equal(HealthStatus.Healthy, afterRetry.Entries[bindingsCheckName].Status);
     }
 }

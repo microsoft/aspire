@@ -201,10 +201,21 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
                 {
                     await action(ch).ConfigureAwait(false);
                 }
+                // Let cancellation flow through unwrapped so callers can distinguish a superseded reconcile /
+                // shutdown from a genuine broker failure. Wrapping it caused exchange bindings to be recorded
+                // as permanent failures on a superseded startup pass. See RabbitMQExchangeBindingReconciler.
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
                 catch (Exception retryEx)
                 {
                     throw new DistributedApplicationException($"{errorMessage}: {retryEx.Message}", retryEx);
                 }
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {

@@ -76,6 +76,13 @@ internal static class RabbitMQExchangeBindingReconciler
                             binding.MatchHeaders,
                             ct).ConfigureAwait(false);
                     }
+                    // Cancellation (superseded reconcile / shutdown) is not a binding failure. Rethrow so the
+                    // outer handler abandons this pass without setting bindingsDone; the next ResourceReadyEvent
+                    // re-applies the bindings. Recording it would leave the exchange permanently Unhealthy.
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                    {
+                        throw;
+                    }
                     catch (Exception bindEx)
                     {
                         bindingErrors.Add(

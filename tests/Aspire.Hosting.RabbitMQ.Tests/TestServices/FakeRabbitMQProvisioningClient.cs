@@ -65,6 +65,14 @@ internal sealed class FakeRabbitMQProvisioningClient : IRabbitMQProvisioningClie
     /// </summary>
     public Func<CancellationToken, Task>? OnDeclareQueue { get; set; }
 
+    /// <summary>
+    /// Optional rendezvous hook awaited inside <see cref="BindExchangeAsync"/> after the call is recorded
+    /// but before it completes. When set, tests can block or fail an in-flight binding and observe how the
+    /// exchange binding reconciler reacts (e.g. to a cancelled reconcile token). When <see langword="null"/>
+    /// (the default) the behavior is unchanged, so existing tests are unaffected.
+    /// </summary>
+    public Func<CancellationToken, Task>? OnBindExchange { get; set; }
+
     // In-memory live state keyed by "vhost/name". Populated by write methods and by the Seed* helpers.
     private readonly Dictionary<string, RabbitMQQueueDefinition> _queues = new(StringComparer.Ordinal);
     private readonly Dictionary<string, RabbitMQExchangeDefinition> _exchanges = new(StringComparer.Ordinal);
@@ -137,7 +145,7 @@ internal sealed class FakeRabbitMQProvisioningClient : IRabbitMQProvisioningClie
         return Task.CompletedTask;
     }
 
-    public Task BindExchangeAsync(string vhost, string sourceExchange, string destExchange, string routingKey, IDictionary<string, object?>? args, CancellationToken ct)
+    public async Task BindExchangeAsync(string vhost, string sourceExchange, string destExchange, string routingKey, IDictionary<string, object?>? args, CancellationToken ct)
     {
         Calls.Add($"BindExchangeAsync({vhost}, {sourceExchange}, {destExchange}, {routingKey})");
         if (FailBindingSourceExchangeNames.Contains(sourceExchange))
@@ -145,7 +153,12 @@ internal sealed class FakeRabbitMQProvisioningClient : IRabbitMQProvisioningClie
             throw new DistributedApplicationException($"Simulated failure binding exchange '{destExchange}' to exchange '{sourceExchange}'.");
         }
 
-        return Task.CompletedTask;
+        // Optional rendezvous point so a test can block/cancel an in-flight exchange→exchange binding.
+        // Default (unset) keeps this synchronous-completing, so existing callers see no behavior change.
+        if (OnBindExchange is { } gate)
+        {
+            await gate(ct).ConfigureAwait(false);
+        }
     }
 
     // ── AMQP-only existence checks / deletes (used when management is disabled) ─
