@@ -44,9 +44,26 @@ public class GodotPlaygroundTests(ITestOutputHelper testOutput)
         var executionContext = app.Services.GetRequiredService<DistributedApplicationExecutionContext>();
         var executionConfiguration = await ExecutionConfigurationBuilder.Create(godotServer)
             .WithEnvironmentVariablesConfig()
+            .WithArgumentsConfig()
             .BuildAsync(executionContext);
 
         Assert.Null(executionConfiguration.Exception);
+
+        // The invocation itself is what makes this playground run: Godot needs the project directory as its
+        // working directory to resolve `--script server.gd`, so a typo in any of these values leaves the
+        // resource model intact but breaks the only thing a user does with it.
+        Assert.Equal(
+            ["--headless", "--script", "server.gd"],
+            executionConfiguration.Arguments.Select(argument => argument.Value));
+
+        // AddExecutable resolves the working directory against the AppHost directory, so assert against the
+        // files Godot actually loads rather than the literal "../GameServer" the AppHost passes in.
+        Assert.True(
+            File.Exists(Path.Combine(godotServer.WorkingDirectory, "project.godot")),
+            $"Expected a Godot project at the resource's working directory '{godotServer.WorkingDirectory}'.");
+        Assert.True(
+            File.Exists(Path.Combine(godotServer.WorkingDirectory, "server.gd")),
+            $"Expected server.gd at the resource's working directory '{godotServer.WorkingDirectory}'.");
 
         var environmentVariables = executionConfiguration.EnvironmentVariables.ToDictionary();
         Assert.True(

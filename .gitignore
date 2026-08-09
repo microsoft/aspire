@@ -145,6 +145,11 @@ playground/**/*.class
 tests/PolyglotAppHosts/**/.java-build/
 tests/PolyglotAppHosts/**/Java/**/*.class
 
+# Godot import/project cache, written into the project directory the first time the editor or a
+# headless run opens it. A per-project .gitignore cannot cover this because /playground/**/.gitignore
+# is itself ignored below.
+**/.godot/
+
 # Ignore cache created with the Angular CLI.
 .angular/
 
