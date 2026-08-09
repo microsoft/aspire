@@ -22,11 +22,9 @@ public static class GitHubCli
     public static Task<string> GetStringAsync(string endpoint, CancellationToken cancellationToken)
         => GetStringAsync(endpoint, allowEscapeSequences: false, cancellationToken);
 
-    /// <param name="allowEscapeSequences">
-    /// When <see langword="true"/>, passes <c>--allow-escape-sequences</c> to <c>gh api</c>. Required for
-    /// endpoints whose payload can contain terminal control characters; <c>gh</c> refuses to write those to
-    /// a non-TTY stdout otherwise and fails the whole call.
-    /// </param>
+    // allowEscapeSequences passes `--allow-escape-sequences` to `gh api`. Required for endpoints whose
+    // payload can contain terminal control characters; `gh` refuses to write those to a non-TTY stdout
+    // and fails the whole call otherwise.
     public static Task<string> GetStringAsync(string endpoint, bool allowEscapeSequences, CancellationToken cancellationToken)
     {
         if (TryGetFixturePath(endpoint, ".json", out var fixturePath))
@@ -226,8 +224,19 @@ public static class GitHubCli
 
     private static readonly TimeSpan s_defaultProcessTimeout = TimeSpan.FromMinutes(5);
 
+    /// <summary>
+    /// Test seam that replaces the <c>gh</c> invocation so tests can observe the argument list that would
+    /// be passed to the process. Production code never sets this.
+    /// </summary>
+    internal static Func<IReadOnlyList<string>, CancellationToken, Task<string>>? GhInvokerOverride { get; set; }
+
     private static async Task<string> RunGhAsync(IReadOnlyList<string> arguments, CancellationToken cancellationToken)
     {
+        if (GhInvokerOverride is { } invoker)
+        {
+            return await invoker(arguments, cancellationToken).ConfigureAwait(false);
+        }
+
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(s_defaultProcessTimeout);
 
