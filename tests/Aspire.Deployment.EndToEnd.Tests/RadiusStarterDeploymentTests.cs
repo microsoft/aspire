@@ -30,6 +30,7 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
     private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(55);
 
     [Fact]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/19172")]
     public async Task DeployStarterTemplateToRadiusOnAks()
     {
         using var cts = new CancellationTokenSource(s_testTimeout);
@@ -212,7 +213,7 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
 
             output.WriteLine("Step 3: Creating resource group...");
-            await auto.TypeAsync($"az group create --name {resourceGroupName} --location centralus --output table");
+            await auto.TypeAsync($"az group create --name {resourceGroupName} --location westus3 --output table");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
@@ -235,7 +236,7 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
                   $"--resource-group {resourceGroupName} " +
                   $"--name {clusterName} " +
                   $"--node-count 1 " +
-                  $"--node-vm-size Standard_D2s_v5 " +
+                  $"--node-vm-size Standard_D2as_v5 " +
                   // The test never SSHes into the nodes, so configure no SSH key at all. This avoids
                   // `--generate-ssh-keys`, which would write ~/.ssh/id_rsa[.pub] on a local run and
                   // mutate the developer's SSH state (the test isolates kube/rad/docker config in

@@ -104,13 +104,13 @@ public sealed class AksBlazorRedisDeploymentTests(ITestOutputHelper output)
             var content = File.ReadAllText(appHostFilePath);
 
             // Insert the Azure Kubernetes Environment before builder.Build().Run();
-            // Use DASv4 VM SKUs for both system and user pools.
+            // Use DASv5 VM SKUs for both system and user pools.
             var buildRunPattern = "builder.Build().Run();";
             var replacement = """
-// Add Azure Kubernetes Environment for deployment with DASv4 SKUs
+// Add Azure Kubernetes Environment for deployment with DASv5 SKUs
 var aks = builder.AddAzureKubernetesEnvironment("aks")
-    .WithSystemNodePool("Standard_D2as_v4");
-aks.AddNodePool("workload", "Standard_D2as_v4", 1, 3);
+    .WithSystemNodePool("Standard_D2as_v5");
+aks.AddNodePool("workload", "Standard_D2as_v5", 1, 3);
 
 builder.Build().Run();
 """;
@@ -130,9 +130,9 @@ builder.Build().Run();
             // - Unset ASPIRE_PLAYGROUND to avoid conflicts
             // - Unset the job-level Azure__Location=westus3 the CI workflow injects: on Linux it coexists
             //   with AZURE__LOCATION (case-sensitive env) and .NET config may bind the inherited westus3 instead
-            // - Set Azure location to Australia East (DASv4 SKU availability)
+            // - Set Azure location to West US 3 (DASv5 SKU availability)
             // - Set AZURE__RESOURCEGROUP to use our unique resource group name
-            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && unset Azure__Location && export AZURE__LOCATION=australiaeast && export AZURE__RESOURCEGROUP={resourceGroupName}");
+            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && unset Azure__Location && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 
