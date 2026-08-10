@@ -662,7 +662,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             foreach (var endpoint in sp.Endpoints)
             {
                 endpoint.SetResolvedIsProxied(GetEffectiveIsProxied(sp.ModelResource, endpoint, _options.Value.RandomizePorts));
-                ValidateEndpointBeforeDynamicPublicPortAllocation(sp.ModelResource, endpoint);
+                DcpModelUtilities.ValidateEndpointPorts(sp.ModelResource, endpoint);
 
                 if (TryGetEffectiveFixedPublicPort(sp.ModelResource, endpoint, _options.Value.RandomizePorts, out var fixedPublicPort))
                 {
@@ -780,7 +780,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
     /// </remarks>
     private static bool TryGetEffectiveFixedPublicPort(IResource resource, EndpointAnnotation endpoint, bool randomizePorts, out int publicPort)
     {
-        var effectivePublicPort = resource.IsContainer() ? endpoint.SpecifiedPort : endpoint.Port;
+        var effectivePublicPort = EndpointAnnotation.NormalizePort(resource.IsContainer() ? endpoint.SpecifiedPort : endpoint.Port);
 
         // When port randomization is enabled, proxied endpoints intentionally ignore the defined public
         // port so DCP can allocate one dynamically instead.
@@ -790,7 +790,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             return false;
         }
 
-        if (effectivePublicPort is int fixedPublicPort and not 0)
+        if (effectivePublicPort is int fixedPublicPort)
         {
             publicPort = fixedPublicPort;
             return true;
@@ -868,14 +868,6 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         // Schema suggested by https://github.com/microsoft/aspire/issues/13597:
         // Resources:<resource-name>:<endpoint-name>:port
         return $"Resources:{resource.Name}:{endpoint.Name}:port";
-    }
-
-    private static void ValidateEndpointBeforeDynamicPublicPortAllocation(IResource resource, EndpointAnnotation endpoint)
-    {
-        if (resource.IsContainer() && endpoint.TargetPort is null)
-        {
-            throw new InvalidOperationException($"The endpoint '{endpoint.Name}' for container resource '{resource.Name}' must specify the {nameof(EndpointAnnotation.TargetPort)} value");
-        }
     }
 
     internal static void SetInitialResourceState(IResource resource, IAnnotationHolder annotationHolder)
