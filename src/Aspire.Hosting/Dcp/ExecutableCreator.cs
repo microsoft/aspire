@@ -439,10 +439,10 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 {
                     exe.Spec.ExecutionType = ExecutionType.Process;
 
-                    // Some ProjectResource subtypes, such as MAUI platform resources, intentionally
-                    // provide their own executable command and SDK-shaped app host args. Do not prefix
-                    // those args with Aspire's default `dotnet run --project ...` wrapper.
-                    if (executableAnnotation is null)
+                    // Some ProjectResource subtypes provide their own executable command, and WithLaunchToolArgs
+                    // replaces the implicit project invocation even when its callback resolves empty. Do not prefix
+                    // either shape with Aspire's default `dotnet run --project ...` wrapper.
+                    if (executableAnnotation is null && !HasLaunchToolArgsDeclaration(project))
                     {
                         var projectLaunchConfiguration = new ProjectLaunchConfiguration
                         {
@@ -721,6 +721,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         // Follows behavior in the IDE execution spec when in IDE execution mode:
         // https://github.com/microsoft/aspire/blob/main/docs/specs/IDE-execution.md#project-launch-configuration-type-project
         var appHostArgList = appHostArgs.ToList();
+        var hasLaunchToolArgsDeclaration = HasLaunchToolArgsDeclaration(er.ModelResource);
 #pragma warning disable ASPIREPROJECTS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         var hasProjectLaunchArgsOverride = er.ModelResource.TryGetLastAnnotation<ProjectLaunchArgsOverrideAnnotation>(out var projectLaunchArgsOverride);
 #pragma warning restore ASPIREPROJECTS001
@@ -738,6 +739,8 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         var launchArgs = new List<LaunchArgument>();
         var nextExecutableArgumentIndex = executableArgumentStartIndex;
         var firstVisibleAppHostArgumentIndex = 0;
+        List<string>? projectLaunchProfileArgs = null;
+        var includeProfileArgsInSpec = false;
 
         LaunchArgument CreateLaunchArgument(string value, bool isSensitive, bool executable, bool display)
         {
@@ -755,16 +758,15 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             {
                 // When the .NET project is launched from an IDE the launch profile args are automatically added.
                 // We still want to display the args in the dashboard so only add them to the custom arg annotations.
-                var executableArg = spec.ExecutionType != ExecutionType.IDE;
+                includeProfileArgsInSpec = spec.ExecutionType != ExecutionType.IDE;
 
-                var launchProfileArgs = GetLaunchProfileArgs(project.GetEffectiveLaunchProfile()?.LaunchProfile);
-                if (launchProfileArgs.Count > 0 && appHostArgList.Count > 0)
+                projectLaunchProfileArgs = GetLaunchProfileArgs(project.GetEffectiveLaunchProfile()?.LaunchProfile);
+                if (projectLaunchProfileArgs.Count > 0 && appHostArgList.Count > 0 && !hasLaunchToolArgsDeclaration)
                 {
-                    // If there are app host args, add a double-dash to separate them from the launch args.
-                    launchProfileArgs.Insert(0, "--");
+                    // The implicit `dotnet run` scaffold needs a double-dash before application arguments. A custom
+                    // launch-tool declaration owns its complete invocation, including any separator its tool requires.
+                    projectLaunchProfileArgs.Insert(0, "--");
                 }
-
-                launchArgs.AddRange(launchProfileArgs.Select(a => CreateLaunchArgument(a, isSensitive: false, executableArg, display: true)));
             }
         }
         else if (er.ModelResource is DotnetToolResource)
@@ -779,9 +781,15 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             firstVisibleAppHostArgumentIndex = argSeparatorIndex + 1;
         }
 
-        // In the situation where args are combined (process execution) the app host args are added after the launch
-        // profile args. Launch tool arguments (the tool-invocation prefix such as `run ./cmd/api`) are always the
-        // leading app host args, and the two decisions about them are independent:
+        // Project launch-profile arguments are application arguments. When a custom launch-tool declaration replaces
+        // the implicit `dotnet run` scaffold, keep its prefix first and insert profile arguments before ordinary
+        // app-host arguments. Without such a declaration, preserve the existing profile-before-app-host ordering.
+        var projectLaunchProfileArgumentInsertIndex = hasLaunchToolArgsDeclaration
+            ? Math.Min(launchToolArgumentCount, appHostArgList.Count)
+            : 0;
+
+        // Launch tool arguments (the tool-invocation prefix such as `run ./cmd/api`) are the leading app-host args,
+        // and the two decisions about them are independent:
         //
         // - Executable: withheld only when the active IDE launch configuration performs the tool invocation itself,
         //   because passing it on would run it twice.
@@ -789,17 +797,29 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         //   still shown, because it is absent from the process's effective args and hiding it here too would leave
         //   the dashboard showing a bare `go` plus the program arguments — the same treatment project launch-profile
         //   args get above.
-        launchArgs.AddRange(appHostArgList.Select((a, i) =>
+        for (var i = 0; i <= appHostArgList.Count; i++)
         {
+            if (i == projectLaunchProfileArgumentInsertIndex && projectLaunchProfileArgs is not null)
+            {
+                launchArgs.AddRange(projectLaunchProfileArgs.Select(
+                    a => CreateLaunchArgument(a, isSensitive: false, includeProfileArgsInSpec, display: true)));
+            }
+
+            if (i == appHostArgList.Count)
+            {
+                break;
+            }
+
+            var a = appHostArgList[i];
             var isLaunchToolArg = i < launchToolArgumentCount;
-            return CreateLaunchArgument(
+            launchArgs.Add(CreateLaunchArgument(
                 a.Value,
                 a.IsSensitive,
                 executable: i >= omittedLaunchToolArgumentCount,
                 display: isLaunchToolArg
                     ? showLaunchToolArgsInCommandLine
-                    : i >= firstVisibleAppHostArgumentIndex);
-        }));
+                    : i >= firstVisibleAppHostArgumentIndex));
+        }
 
         return launchArgs;
     }
@@ -893,6 +913,11 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 #pragma warning disable ASPIREPROJECTS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         return resource.TryGetLastAnnotation<ProjectLaunchArgsOverrideAnnotation>(out _);
 #pragma warning restore ASPIREPROJECTS001
+    }
+
+    private static bool HasLaunchToolArgsDeclaration(IResource resource)
+    {
+        return resource.TryGetLastAnnotation<LaunchToolArgsCallbackAnnotation>(out _);
     }
 
     private static void ReindexExecutableLaunchArgs(List<LaunchArgument> launchArgs, int executableArgumentStartIndex)
