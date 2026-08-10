@@ -606,6 +606,19 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
             }
         )
 
+        def complete_progress_work(progress_context):
+            _progress_cancellation_token = progress_context.cancellation_token()
+
+        progress = interaction_service.prompt_progress(
+            "Completing **work**...",
+            title="Progress",
+            options={
+                "PrimaryButtonText": "Cancel",
+                "EnableMessageMarkdown": True,
+                "Work": complete_progress_work,
+            },
+        )
+
         text_input = interaction_service.create_text_input(
             "name",
             options={
@@ -676,6 +689,7 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
                    and confirmation.get("Value", False)
                    and not message_box.get("Canceled", False)
                    and not notification.get("Canceled", False)
+                   and not progress.get("Canceled", False)
                    and not single.get("Canceled", False)
                    and not multi_canceled)
 

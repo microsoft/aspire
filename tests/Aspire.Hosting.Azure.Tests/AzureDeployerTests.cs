@@ -192,7 +192,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.ContainerImageBuild)]
     public async Task DeployAsync_WithAzureStorageResourcesWorks()
     {
         // Arrange
@@ -849,7 +849,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.ContainerImageBuild)]
     public async Task DeployAsync_WithSingleRedisCache_CallsDeployingComputeResources()
     {
         // Arrange

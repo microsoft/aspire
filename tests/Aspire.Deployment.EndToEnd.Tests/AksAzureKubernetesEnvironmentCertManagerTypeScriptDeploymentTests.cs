@@ -148,8 +148,8 @@ const albSubnet = await vnet.addSubnet("alb-public", "10.100.4.0/24");
 
 const aks = await builder.addAzureKubernetesEnvironment("aks");
 await aks.withSubnet(aksSubnet);
-await aks.withSystemNodePool({ vmSize: "Standard_D2s_v5" });
-await aks.addNodePool("workload", { vmSize: "Standard_D2s_v5", minCount: 1, maxCount: 3 });
+await aks.withSystemNodePool({ vmSize: "Standard_D2as_v5" });
+await aks.addNodePool("workload", { vmSize: "Standard_D2as_v5", minCount: 1, maxCount: 3 });
 
 const publicLb = await aks.addLoadBalancer("public", albSubnet);
 
@@ -198,7 +198,7 @@ await builder.build().run();
             // with AZURE__LOCATION (case-sensitive env) and .NET config may bind the inherited westus3 instead.
             await auto.TypeAsync(
                 $"unset ASPIRE_PLAYGROUND && unset Azure__Location && " +
-                $"export AZURE__LOCATION=centralus && " +
+                $"export AZURE__LOCATION=westus3 && " +
                 $"export AZURE__RESOURCEGROUP={resourceGroupName} && " +
                 $"export Parameters__acmeemail={acmeEmail}");
             await auto.EnterAsync();

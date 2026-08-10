@@ -49,13 +49,20 @@ card shows are driven by its lane and its signal pills:
 
 - **Review mode** — buckets every open PR across your watched repos into lanes:
   Needs your review, Ready to merge, CI failing, Unresolved feedback, and Your PRs.
-- **Issues mode** — Assigned to you, Your issues, Needs triage, Recently active.
+- **Issues mode** — Assigned to you, Your issues, Needs triage, Recently active,
+  with linked pull requests shown directly on issue cards and opened in in-app
+  browser tabs.
 - **Ship mode** — PRs in the current release milestone grouped into Ready to ship,
   In progress, and Blocked.
 - **Signal pills** — Draft, CI failing, Merge conflicts, Changes requested,
   N unresolved, Approved, Ready to merge, Needs review, Quick win, Stalled.
 - **Notifications** — review requested, your PR ready to merge, changes requested,
   CI failing, with per-category preferences. Live updates over SSE.
+- **Stable background refresh** — GitHub data is assembled into a complete snapshot
+  while the current board remains visible, then applied in one update. The compact
+  **Auto** toolbar switch can pause automatic UI updates; when paused, an **Apply
+  update** pill appears only after changed data is ready. The refresh button tooltip
+  counts down to the next background data check.
 - **Multiple GitHub accounts** — every detected credential (gh CLI, environment,
   Copilot) appears on the Accounts screen. Activate any number of them and their
   results **interleave across every tab**, de-duplicated by PR/issue URL. Each
@@ -72,14 +79,14 @@ card shows are driven by its lane and its signal pills:
 | File | Responsibility |
 | --- | --- |
 | `extension.mjs` | Wiring: `joinSession` + `createCanvas`, agent-facing actions. |
-| `server.mjs` | Per-instance loopback HTTP server, JSON API, SSE refresh, multi-account interleave. |
+| `server.mjs` | Per-instance loopback HTTP server, complete-snapshot cache, background polling, SSE refresh, multi-account interleave. |
 | `accounts.mjs` | Credential discovery, per-account repo-access probing, host/enterprise detection. |
 | `github.mjs` | GraphQL queries, lane bucketing, signals, avatars, cross-account merge. |
 | `model.mjs` | Attention buckets, focus queue, core-team / community classification. |
 | `constants.mjs` | Configuration: core-team members, release milestone, personal picks. |
 | `render.mjs` | Iframe HTML / CSS / client JS, styled with Copilot theme tokens. |
 | `agent.mjs` | Card-action prompt/log builders (Test, Review, Resolve conflicts, Address review, Evaluate CI failures, Discuss review, Address feedback) with untrusted-PR hardening. |
-| `state.mjs` | Durable per-account preferences (watched repos, active flag, notifications). |
+| `state.mjs` | Durable preferences (watched repos, active accounts, notifications, refresh behavior). |
 
 The canvas reads each account's token from `GH_TOKEN` / `GITHUB_TOKEN`, the
 per-account Copilot credentials, or `gh auth token`, and queries the matching

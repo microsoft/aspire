@@ -17,7 +17,7 @@ namespace Aspire.Hosting.Azure.Tests;
 public class AzureStorageEmulatorFunctionalTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyWaitForOnAzureStorageEmulatorForBlobsBlocksDependentResources()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
@@ -66,7 +66,7 @@ public class AzureStorageEmulatorFunctionalTests(ITestOutputHelper testOutputHel
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyWaitForOnAzureStorageEmulatorForBlobContainersBlocksDependentResources()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
@@ -109,7 +109,7 @@ public class AzureStorageEmulatorFunctionalTests(ITestOutputHelper testOutputHel
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyWaitForOnAzureStorageEmulatorForQueueBlocksDependentResources()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
@@ -152,7 +152,7 @@ public class AzureStorageEmulatorFunctionalTests(ITestOutputHelper testOutputHel
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyAzureStorageEmulatorResource()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
@@ -208,7 +208,7 @@ public class AzureStorageEmulatorFunctionalTests(ITestOutputHelper testOutputHel
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyAzureStorageEmulator_blobcontainer_auto_created()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
@@ -248,7 +248,7 @@ public class AzureStorageEmulatorFunctionalTests(ITestOutputHelper testOutputHel
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyAzureStorageEmulator_queue_auto_created()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
@@ -286,7 +286,7 @@ public class AzureStorageEmulatorFunctionalTests(ITestOutputHelper testOutputHel
         Assert.Equal(blobNameAndContent, peekMessage.Value.Body.ToString());
     }
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public Task AzureStorageEmulator_WithPersistentLifetime_ReusesContainersAndPorts()
     {
         return PersistentContainerTestHelpers.AssertResourcesReuseContainersAsync(

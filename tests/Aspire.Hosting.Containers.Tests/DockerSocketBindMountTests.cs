@@ -10,7 +10,7 @@ namespace Aspire.Hosting.Containers.Tests;
 public class DockerSocketBindMountTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
-    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.Docker | TestFeature.ContainerImageBuild)]
     public async Task WithDockerSocketBindMountAllowsDockerCliInContainer()
     {
         var dockerfile = """
