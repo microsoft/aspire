@@ -1,0 +1,29 @@
+{
+  "run_id": 31362242749,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/31362242749",
+  "analyzed_at": "2026-08-10T07:03:21Z",
+  "verdict": "transient-infra",
+  "pr": {
+    "number": 19010,
+    "title": "Stabilize Azure deployment test infrastructure",
+    "author": "mitchdenny",
+    "state": "closed",
+    "head_branch": "mitchdenny-mitchdenny-probe-deployment-quota",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19010"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Playground / Playground (ubuntu-latest)",
+      "id": 93373635812,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31362242749/job/93373635812",
+      "classification": "transient-infra",
+      "reason": "Install Azure Functions Core Tools step failed because npm could not download the Azure.Functions.Cli.linux-x64 zip from cdn.functions.azure.com (HTTP 404). This is an external CDN availability issue unrelated to PR changes (which only touch deployment test files and workflow YAML for Azure/AKS deployment tests).",
+      "failed_steps": ["Install Azure Functions Core Tools"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["azure-functions-core-tools-cdn-404"]
+}

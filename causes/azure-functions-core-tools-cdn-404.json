@@ -10,6 +10,13 @@
       "job": "Tests / Azure.Messaging.ServiceBus / Azure.Messaging.ServiceBus (ubuntu-latest)",
       "pr_number": 19139,
       "observed_at": "2026-08-08T18:15:07Z"
+    },
+    {
+      "run_id": 31362242749,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/31362242749",
+      "job": "Tests / Playground / Playground (ubuntu-latest)",
+      "pr_number": 19010,
+      "observed_at": "2026-08-10T07:03:21Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19166"
