@@ -18,6 +18,7 @@ public sealed class AcaManagedRedisDeploymentTests(ITestOutputHelper output)
     private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(40);
 
     [Fact]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/19174")]
     public async Task DeployStarterWithManagedRedisToAzureContainerApps()
     {
         using var cts = new CancellationTokenSource(s_testTimeout);
@@ -159,11 +160,12 @@ builder.Build().Run();
             await auto.RunCommandAsync($"cd {AspireCliShellCommandHelpers.QuoteBashArg($"{projectName}.AppHost")}", counter);
 
             // Step 11: Set environment variables for deployment
-            // Use eastus for Azure Managed Redis availability zone support.
+            // Use eastus2 for Azure Managed Redis availability zone support. East US returned
+            // InsufficientCapacity for the Balanced B0 SKU during deployment test runs.
             // Unset the job-level Azure__Location=westus3 the CI workflow injects first: on Linux it coexists
             // with AZURE__LOCATION (case-sensitive env) and .NET config may bind the inherited westus3 instead.
             await auto.RunCommandAsync(
-                $"unset ASPIRE_PLAYGROUND && unset Azure__Location && export AZURE__LOCATION=eastus AZURE__RESOURCEGROUP={AspireCliShellCommandHelpers.QuoteBashArg(resourceGroupName)}",
+                $"unset ASPIRE_PLAYGROUND && unset Azure__Location && export AZURE__LOCATION=eastus2 AZURE__RESOURCEGROUP={AspireCliShellCommandHelpers.QuoteBashArg(resourceGroupName)}",
                 counter);
 
             // Step 12: Deploy to Azure Container Apps

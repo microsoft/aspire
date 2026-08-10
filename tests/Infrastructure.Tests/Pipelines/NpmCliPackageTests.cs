@@ -418,6 +418,18 @@ public sealed class NpmCliPackageTests : IDisposable
     }
 
     [Fact]
+    public async Task RunTestsInstallsAzureFunctionsCoreToolsFromPinnedGitHubRelease()
+    {
+        var workflow = await ReadRepoFileAsync(".github/workflows/run-tests.yml");
+
+        Assert.DoesNotContain("npm i -g azure-functions-core-tools@4", workflow);
+        Assert.Contains("core_tools_version='4.12.1'", workflow);
+        Assert.Contains("https://github.com/Azure/azure-functions-core-tools/releases/download/${core_tools_version}/Azure.Functions.Cli.linux-x64.${core_tools_version}.zip", workflow);
+        Assert.Contains("sha256sum --check -", workflow);
+        Assert.Contains("func --version", workflow);
+    }
+
+    [Fact]
     public async Task NpmSigningScopeCoversNestedTarballPayloads()
     {
         var signingProps = XDocument.Parse(await ReadRepoFileAsync("eng/Signing.props"));
