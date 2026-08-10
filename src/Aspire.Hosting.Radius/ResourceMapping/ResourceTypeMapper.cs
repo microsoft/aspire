@@ -56,9 +56,17 @@ internal sealed class ResourceTypeMapper
             RadiusResourceTypes.LegacyRedisCaches,
             RadiusResourceTypes.LegacyApiVersion),
 
+        // SQL Server stays on the legacy portable type. The contrib UDT is
+        // Radius.Data/sqlServerDatabases (not sqlDatabases), and its Kubernetes recipe
+        // (kube-recipes/sqlserverdatabases) is not published yet, so emitting the UDT would fail
+        // recipe resolution at deploy time. The legacy type has a published recipe
+        // (recipes/local-dev/sqldatabases) and a listSecrets() action, so the credentials the recipe
+        // generates can still be projected to consumers. Drop the fallback once the UDT recipe ships.
         ["SqlServerServerResource"] = new(
-            RadiusResourceTypes.SqlDatabases,
-            RadiusResourceTypes.RadiusApiVersion),
+            RadiusResourceTypes.SqlServerDatabases,
+            RadiusResourceTypes.RadiusApiVersion,
+            RadiusResourceTypes.LegacySqlDatabases,
+            RadiusResourceTypes.LegacyApiVersion),
 
         ["PostgresServerResource"] = new(
             RadiusResourceTypes.PostgreSqlDatabases,
