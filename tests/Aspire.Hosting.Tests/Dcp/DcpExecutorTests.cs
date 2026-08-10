@@ -6435,6 +6435,56 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PlainExecutable_ExtensionMode_RestartLaunchConfigCancellationIsPropagated()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var callbackCount = 0;
+        using var restartCancellation = new CancellationTokenSource();
+
+        var resource = new TestExecutableResource("test-working-directory");
+        builder.AddResource(resource)
+            .WithArgs("app-arg")
+            .WithDebugSupport(
+                (mode, cancellationToken) =>
+                {
+                    if (Interlocked.Increment(ref callbackCount) == 2)
+                    {
+                        restartCancellation.Cancel();
+                        cancellationToken.ThrowIfCancellationRequested();
+                    }
+
+                    return Task.FromResult(new ExecutableLaunchConfiguration("test") { Mode = mode });
+                },
+                "test");
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo { ProtocolsSupported = ["test"], SupportedLaunchConfigurations = ["test"] }),
+            [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234"
+        };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = Assert.Single(GetCreatedExecutablesForResource(kubernetesService, "TestExecutable"));
+        var reference = appExecutor.GetResource(exe.Metadata.Name);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => appExecutor.StartResourceAsync(reference, restartCancellation.Token));
+
+        Assert.Equal(2, callbackCount);
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        Assert.Single(GetCreatedExecutablesForResource(kubernetesService, "TestExecutable"));
+        Assert.Equal([exe.Metadata.Name], kubernetesService.DeletedResources);
+    }
+
+    [Fact]
     public async Task PlainExecutable_ExtensionMode_NullLaunchToolArgument_DoesNotOmitApplicationArgument()
     {
         // Launch tool argument values can resolve to null and disappear from the final argument list. The resolved prefix

@@ -184,10 +184,11 @@ public static class DotnetProjectHostingExtensions
 
         List<string> GetLaunchProfileArguments(IResource resource)
         {
+            // Project launch configurations carry the selected launch profile, so the IDE applies its command-line arguments.
             if (!builder.ExecutionContext.IsRunMode
                 || options.ExcludeLaunchProfile
                 || (resource.SupportsDebugging(builder.Configuration, out var debugAnnotation)
-                    && (debugAnnotation.LaunchConfigurationType is KnownLaunchConfigurationTypes.Project || resource.HasLaunchToolArgsOwnedBy(debugAnnotation))))
+                    && debugAnnotation.LaunchConfigurationType is KnownLaunchConfigurationTypes.Project))
             {
                 return [];
             }

@@ -281,8 +281,10 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         Assert.Equal(["tool", "exec", "package", "--yes", "--", "--config", "prod.yaml"], args);
     }
 
-    [Fact]
-    public async Task AddDotnetProject_CustomLaunchToolArgs_PreserveLaunchProfileArguments()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AddDotnetProject_CustomLaunchToolArgs_PreserveLaunchProfileArguments(bool inDebugSession)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var projectDir = Directory.CreateDirectory(Path.Combine(workspace.Path, "MyService"));
@@ -302,6 +304,16 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
             """);
 
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        if (inDebugSession)
+        {
+            builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
+            builder.Configuration["DEBUG_SESSION_INFO"] = JsonSerializer.Serialize(new RunSessionInfo
+            {
+                ProtocolsSupported = ["test"],
+                SupportedLaunchConfigurations = ["custom"]
+            });
+        }
+
         var app = builder.AddDotnetProject("svc", projectPath)
                          .WithArgs("--config", "prod.yaml")
                          .WithLaunchToolArgs(AddCustomLaunchToolArgs, ownedByLaunchConfigurationType: "custom")
