@@ -994,15 +994,17 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Equal(allocatedPort, int.Parse(envVarVal, CultureInfo.InvariantCulture));
     }
 
-    [Fact]
-    public async Task PersistentProxylessExecutableWithoutPortPersistsAllocatedPort()
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0)]
+    public async Task PersistentProxylessExecutableWithUnspecifiedPortPersistsAllocatedPort(int? port)
     {
         var (allocatedPort, _) = GetAvailableConsecutivePortPair();
         var builder = DistributedApplication.CreateBuilder();
 
         builder.AddExecutable("CoolProgram", "cool", Environment.CurrentDirectory, "--alpha", "--bravo")
             .WithPersistentLifetime()
-            .WithEndpoint(name: "http", env: "HTTP_PORT", isProxied: false);
+            .WithEndpoint(name: "http", port: port, env: "HTTP_PORT");
 
         var configDict = new Dictionary<string, string?>
         {
@@ -1024,12 +1026,15 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         await appExecutor.RunApplicationAsync();
 
         var svc = kubernetesService.CreatedResources.OfType<Service>().Single(s => s.Name() == "CoolProgram");
+        Assert.Equal(AddressAllocationModes.Proxyless, svc.Spec.AddressAllocationMode);
         Assert.Equal(allocatedPort, svc.Status?.EffectivePort);
         Assert.Equal(allocatedPort.ToString(CultureInfo.InvariantCulture), userSecretsManager.Secrets["Resources:CoolProgram:http:port"]);
     }
 
-    [Fact]
-    public async Task PersistentProxylessContainerWithoutPortPersistsAllocatedPort()
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0)]
+    public async Task PersistentProxylessContainerWithUnspecifiedPortPersistsAllocatedPort(int? port)
     {
         var (allocatedPort, _) = GetAvailableConsecutivePortPair();
         var builder = DistributedApplication.CreateBuilder();
@@ -1037,7 +1042,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         const int targetPort = TestKubernetesService.StartOfAutoPortRange - 999;
         builder.AddContainer("database", "image")
             .WithPersistentLifetime()
-            .WithEndpoint(name: "http", targetPort: targetPort, isProxied: false);
+            .WithEndpoint(name: "http", port: port, targetPort: targetPort);
 
         var configDict = new Dictionary<string, string?>
         {
@@ -1058,9 +1063,12 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration, dcpOptions: dcpOptions, userSecretsManager: userSecretsManager);
         await appExecutor.RunApplicationAsync();
 
+        var dcpCtr = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
         var svc = kubernetesService.CreatedResources.OfType<Service>().Single(s => s.Name() == "database");
+        Assert.Equal(AddressAllocationModes.Proxyless, svc.Spec.AddressAllocationMode);
         Assert.Equal(allocatedPort, svc.Status?.EffectivePort);
         Assert.Equal(allocatedPort, svc.Spec.Port);
+        Assert.Contains(dcpCtr.Spec.Ports!, p => p.HostPort == allocatedPort && p.ContainerPort == targetPort);
         Assert.Equal(allocatedPort.ToString(CultureInfo.InvariantCulture), userSecretsManager.Secrets["Resources:database:http:port"]);
     }
 

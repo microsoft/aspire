@@ -772,6 +772,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
     /// Use this when deciding whether DCP should bind a service to a known public port. Proxied endpoints
     /// with randomized ports deliberately do not report a fixed port so DCP can allocate the public port
     /// instead of reserving the configured value.
+    /// Port 0 requests dynamic allocation and therefore does not count as a fixed public port.
     /// Container endpoint definitions keep the public host port separate from the target container port, so
     /// only an explicitly specified public port counts as fixed. Executable endpoint definitions use the same
     /// port value for the process and the public endpoint, so the effective public port can come from either
@@ -789,7 +790,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             return false;
         }
 
-        if (effectivePublicPort is int fixedPublicPort)
+        if (effectivePublicPort is int fixedPublicPort and not 0)
         {
             publicPort = fixedPublicPort;
             return true;
