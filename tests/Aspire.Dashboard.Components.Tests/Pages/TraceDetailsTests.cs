@@ -85,6 +85,64 @@ public partial class TraceDetailsTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task Render_LogQueryPending_PageTitleRendered()
+    {
+        SetupTraceDetailsServices();
+
+        var queryStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var continueQuery = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Services.AddSingleton<ITelemetryRepository>(services =>
+        {
+            var inner = services.GetRequiredService<SqliteTelemetryRepository>();
+            return new TestTelemetryRepository(inner)
+            {
+                GetLogSummariesAsyncHandler = async (context, cancellationToken) =>
+                {
+                    queryStarted.SetResult();
+                    await continueQuery.Task.WaitAsync(cancellationToken);
+                    return await inner.GetLogSummariesAsync(context, cancellationToken);
+                }
+            };
+        });
+
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
+
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(10))
+                        }
+                    }
+                }
+            }
+        });
+
+        var traceId = Convert.ToHexString(Encoding.UTF8.GetBytes("1"));
+        var cut = RenderComponent<TraceDetail>(builder =>
+        {
+            builder.Add(p => p.TraceId, traceId);
+            builder.AddCascadingValue(viewport);
+        });
+
+        await queryStarted.Task.WaitAsync(DefaultWaitTimeout);
+        Assert.NotEmpty(Assert.IsType<string>(cut.Instance.GetPageTitle()));
+
+        continueQuery.SetResult();
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindComponent<FluentDataGrid<SpanWaterfallViewModel>>().FindAll(".fluent-data-grid-row").Count));
+    }
+
+    [Fact]
     public async Task Render_FocusesAccessibleScrollContainerOnInitialRender()
     {
         SetupTraceDetailsServices();

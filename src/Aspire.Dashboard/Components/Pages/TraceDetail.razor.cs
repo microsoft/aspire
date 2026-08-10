@@ -178,7 +178,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         return TraceDetailPageViewModel.ApplySpanFilters(PageViewModel.SpanWaterfallViewModels, PageViewModel.Filter, PageViewModel.SelectedSpanType.Id?.Filter, PageViewModel.Filters, GetResourceName);
     }
 
-    private string? GetPageTitle()
+    internal string? GetPageTitle()
     {
         if (_trace is null)
         {
@@ -255,6 +255,9 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         {
             Logger.LogInformation("Getting trace '{TraceId}'.", traceId);
             trace = TelemetryRepository.GetTrace(traceId);
+            // The asynchronous log query below allows an intermediate render. Publish resources before the trace so
+            // page title rendering never observes a trace without the resource list used to format its source name.
+            _resources = resources;
             _trace = trace;
         }
 
