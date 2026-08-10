@@ -49,7 +49,7 @@
     "webpack-dev-server": "5.2.6",
     "tmp": "0.2.7",
     "tar": "7.5.22",
-    "hono": "4.12.31",
+    "hono": "4.12.34",
     "@hono/node-server": "2.0.12",
     "ws": "8.21.0",
     "piscina": "5.2.0",
