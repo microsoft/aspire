@@ -44,7 +44,6 @@
   "overrides": {
     "vite": "7.3.5",
     "fast-uri": "3.1.5",
-    "js-yaml": "5.2.2",
     "postcss": "8.5.23",
     "uuid": "14.0.0",
     "webpack-dev-server": "5.2.6",

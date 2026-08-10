@@ -63,6 +63,29 @@ public class TemplatePackageLockTests
         Assert.Equal(["registry.npmjs.org"], registryHosts);
     }
 
+    [Theory]
+    [InlineData("ts-starter")]
+    [InlineData("py-starter")]
+    [InlineData("java-starter")]
+    public void StarterFrontendPackageLock_DoesNotIncludeLegacyEslintYamlLoader(string templateName)
+    {
+        var filePath = Path.Combine(
+            GetRepoRoot(),
+            "src",
+            "Aspire.Cli",
+            "Templating",
+            "Templates",
+            templateName,
+            "frontend",
+            "package-lock.json");
+
+        using var packageLock = JsonDocument.Parse(File.ReadAllText(filePath));
+        var packages = packageLock.RootElement.GetProperty("packages");
+
+        Assert.False(packages.TryGetProperty("node_modules/@eslint/eslintrc", out _));
+        Assert.False(packages.TryGetProperty("node_modules/js-yaml", out _));
+    }
+
     private static string GetRepoRoot()
         => Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 }
