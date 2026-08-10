@@ -210,8 +210,9 @@ for **both** run modes:
 1. Collect and de-duplicate all project-based `DotnetProjectResource` `.csproj` entrypoints. As an optional
    optimization, evaluate each file-based entrypoint with
    `dotnet build <app.cs> --no-restore -getItem:ProjectReference -getResultOutputFile:<path>`. Read the
-   structured item output, take `FullPath` only for evaluated `.csproj` references, normalize/de-duplicate
-   those paths into the same set, and reject malformed output rather than guessing from raw directive text.
+   structured item output, discard synthetic `#:ref` items (whose evaluated `FullPath` also ends in
+   `.csproj` but does not exist on disk), then normalize/de-duplicate only existing on-disk `.csproj`
+   `FullPath` values into the same set. Reject malformed output rather than guessing from raw directive text.
    The query performs MSBuild evaluation without executing the build, so directory-form and relative
    `#:project` references are resolved consistently with the generated file-app project. Generate a temp
    `.slnx` (`Microsoft.VisualStudio.SolutionPersistence`) from that set and run one coordinated `dotnet build`;
