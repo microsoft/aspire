@@ -56,9 +56,11 @@ public class ContainerEnvironmentEmissionTests
 
         var bicep = Generate(model, radiusEnv);
 
-        // Standard service-discovery variable plus a cluster FQDN that includes the namespace segment.
+        // Standard service-discovery variable plus a cluster FQDN that includes the namespace
+        // segment. The host is the recipe Service name ({name}-{name}) and the URL carries the
+        // container port (the recipe Service listens on the container port, not port 80).
         Assert.Contains("services__backend__http__0: {", bicep);
-        Assert.Contains("value: 'http://backend.default.svc.cluster.local'", bicep);
+        Assert.Contains("value: 'http://backend-backend.default.svc.cluster.local:8080'", bicep);
     }
 
     [Fact]
@@ -77,7 +79,7 @@ public class ContainerEnvironmentEmissionTests
 
         var bicep = Generate(model, radiusEnv);
 
-        Assert.Contains("value: 'http://backend.custom-ns.svc.cluster.local'", bicep);
+        Assert.Contains("value: 'http://backend-backend.custom-ns.svc.cluster.local:8080'", bicep);
     }
 
     [Fact]
@@ -104,8 +106,8 @@ public class ContainerEnvironmentEmissionTests
         var bicep = Generate(model, frontend);
 
         // The api container lives in frontend-ns but must reach backend in data-ns.
-        Assert.Contains("value: 'http://backend.data-ns.svc.cluster.local'", bicep);
-        Assert.DoesNotContain("backend.frontend-ns.svc.cluster.local", bicep, StringComparison.Ordinal);
+        Assert.Contains("value: 'http://backend-backend.data-ns.svc.cluster.local:8080'", bicep);
+        Assert.DoesNotContain("backend-backend.frontend-ns.svc.cluster.local", bicep, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -127,6 +129,31 @@ public class ContainerEnvironmentEmissionTests
         Assert.Contains("http: {", bicep);
         Assert.Contains("containerPort: 5000", bicep);
         Assert.Contains("protocol: 'TCP'", bicep);
+    }
+
+    [Fact]
+    public void EndpointsResolvingToSamePort_EmitSingleDeduplicatedContainerPort()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddRadiusEnvironment("myenv");
+        // Two endpoints that resolve to the same container port/protocol. The recipe would reject a
+        // Service with two identical (port, protocol) entries, so ResolvePorts must dedup them,
+        // matching the Kubernetes publisher. See: https://github.com/microsoft/aspire/issues/14029
+        builder.AddContainer("api", "myapp/api", "latest")
+            .WithHttpEndpoint(targetPort: 8080, name: "http")
+            .WithHttpEndpoint(targetPort: 8080, name: "http2");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+
+        var bicep = Generate(model, radiusEnv);
+
+        // Exactly one container port entry survives the (port, protocol) dedup: the first endpoint.
+        Assert.Contains("http: {", bicep);
+        Assert.DoesNotContain("http2: {", bicep);
+        var occurrences = bicep.Split("containerPort: 8080").Length - 1;
+        Assert.Equal(1, occurrences);
     }
 
     [Fact]

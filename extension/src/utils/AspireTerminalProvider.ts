@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as childProcess from 'child_process';
-import { aspireTerminalName, dcpServerNotInitialized, rpcServerNotInitialized, terminalCommandArgumentControlCharacters, terminalCommandUnsafeLiteral } from '../loc/strings';
+import { aspireTerminalName, dcpServerNotInitialized, rpcServerNotInitialized, terminalCommandUnsafeLiteral } from '../loc/strings';
 import { extensionLogOutputChannel } from './logging';
 import { RpcServerConnectionInfo } from '../server/AspireRpcServer';
 import { DcpServerConnectionInfo } from '../dcp/types';
@@ -9,6 +9,10 @@ import { EnvironmentVariables, getEnvironmentWithoutE2EBridgeVariables } from '.
 import { resolveCliPath } from './cliPath';
 import { ASPIRE_CLI_PATH_ENV_VAR, getForwardableAspireCliPath } from './cliPathEnvironment';
 import path from 'path';
+import { assertNoTerminalControlCharacters } from './cmdShim';
+
+// Re-exported so existing importers keep a single implementation of the guard.
+export { assertNoTerminalControlCharacters };
 
 export const enum AnsiColors {
     Green = '\x1b[32m',
@@ -109,6 +113,7 @@ export function shellArg(value: string): ShellArg {
 
 export class AspireTerminalProvider implements vscode.Disposable {
     private _terminalByDebugSessionId: Map<string | null, AspireTerminal> = new Map();
+    private _invalidatedSharedTerminals = new Set<vscode.Terminal>();
     private _rpcServerConnectionInfo?: RpcServerConnectionInfo;
     private _dcpServerConnectionInfo?: DcpServerConnectionInfo;
     private _windowsPowerShellPath?: string;
@@ -121,6 +126,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
         private readonly _isPowerShell7Available = isPowerShell7Available,
     ) {
         subscriptions.push(vscode.window.onDidCloseTerminal(closedTerminal => {
+            this._invalidatedSharedTerminals.delete(closedTerminal);
             for (const [debugSessionId, terminal] of this._terminalByDebugSessionId.entries()) {
                 if (terminal.terminal === closedTerminal) {
                     this._terminalByDebugSessionId.delete(debugSessionId);
@@ -269,6 +275,19 @@ export class AspireTerminalProvider implements vscode.Disposable {
         this._terminalByDebugSessionId.set(null, aspireTerminal);
 
         return aspireTerminal;
+    }
+
+    invalidateSharedAspireTerminal(): void {
+        const existingTerminal = this._terminalByDebugSessionId.get(null);
+        if (!existingTerminal) {
+            return;
+        }
+
+        // The terminal may be running a long-lived command, so leave it open. Stop reusing it
+        // so the next Aspire command gets a new terminal with the current environment.
+        extensionLogOutputChannel.info('Invalidating shared Aspire terminal environment');
+        this._terminalByDebugSessionId.delete(null);
+        this._invalidatedSharedTerminals.add(existingTerminal.terminal);
     }
 
     private createAspireEditorTerminal(): AspireTerminal {
@@ -421,12 +440,17 @@ export class AspireTerminalProvider implements vscode.Disposable {
         }
 
         this._terminalByDebugSessionId.clear();
+        this._invalidatedSharedTerminals.clear();
     }
 
     dispose() {
         for (const terminal of this._terminalByDebugSessionId.values()) {
             terminal.dispose();
         }
+        for (const terminal of this._invalidatedSharedTerminals) {
+            terminal.dispose();
+        }
+        this._invalidatedSharedTerminals.clear();
         this._onDidSendAspireCommand.dispose();
     }
 
@@ -537,16 +561,6 @@ function isE2eTerminalCommandExecutionSuppressed(): boolean {
         process.env.ASPIRE_EXTENSION_E2E_SUPPRESS_TERMINAL_COMMAND_EXECUTION === 'true';
 }
 
-export function assertNoTerminalControlCharacters(value: string): void {
-    // Shell quoting protects shell metacharacters after the command reaches the
-    // shell. C0 controls are terminal input first: in sendText fallback, ETX can
-    // abort the current line and CR/LF can submit following text as another
-    // command before shell parsing can make those bytes inert. Tab is allowed
-    // because shells treat it as ordinary whitespace inside quotes.
-    if (/[\x00-\x08\x0A-\x1F\x7F]/.test(value)) {
-        throw new Error(terminalCommandArgumentControlCharacters);
-    }
-}
 
 function validateLiteralSubcommandPart(value: string): string {
     if (!/^-{0,2}[A-Za-z0-9][-A-Za-z0-9]*$/.test(value)) {

@@ -37,15 +37,21 @@
   },
   "overrides": {
     "uuid": "14.0.0",
-    "protobufjs": "8.6.0",
+    "protobufjs": "8.6.6",
     "qs": "^6.15.2",
-    "@opentelemetry/core": "2.8.0"
+    "@opentelemetry/core": "2.8.0",
+    "@opentelemetry/propagator-jaeger": "2.9.0",
+    "brace-expansion": "5.0.8",
+    "body-parser": "2.3.0"
   },
   "pnpm": {
     "overrides": {
-      "protobufjs": "8.6.0",
+      "protobufjs": "8.6.6",
       "@opentelemetry/core": "2.8.0",
-      "esbuild": "0.28.1"
+      "@opentelemetry/propagator-jaeger": "2.9.0",
+      "esbuild": "0.28.1",
+      "brace-expansion": "5.0.8",
+      "body-parser": "2.3.0"
     }
   }
 }

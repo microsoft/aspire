@@ -101,7 +101,9 @@ internal static class InteractionExports
     /// <summary>
     /// Displays a progress dialog with an indeterminate progress indicator.
     /// </summary>
-    [AspireExport]
+    // Progress prompts can invoke Work callbacks that re-enter the remote host through ATS, so the synchronous
+    // invocation path must run on a background thread to keep the JSON-RPC loop processing nested callbacks.
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static async Task<BoolInteractionResult> PromptProgress(
         this IInteractionService interactionService,
         string message,
@@ -554,6 +556,7 @@ internal sealed class CreateInteractionInputOptions
 
     /// <summary>
     /// Gets or sets the file type filter for file inputs. Uses the same format as the HTML accept attribute.
+    /// The CLI validates only dot-prefixed extension filters and does not validate MIME type patterns such as "image/*".
     /// </summary>
     public string? FileFilter { get; init; }
 }

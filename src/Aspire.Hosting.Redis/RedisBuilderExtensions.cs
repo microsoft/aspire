@@ -96,6 +96,7 @@ public static class RedisBuilderExtensions
             .WithEndpoint(port: port, targetPort: 6379, name: RedisResource.PrimaryEndpointName, scheme: RedisResource.StandardRedisScheme)
             .WithImage(RedisContainerImageTags.Image, RedisContainerImageTags.Tag)
             .WithImageRegistry(RedisContainerImageTags.Registry)
+            .WithIconName("Database")
             .WithHealthCheck(healthCheckKey)
             // see https://github.com/microsoft/aspire/issues/3838 for why the password is passed this way
             .WithEntrypoint("/bin/sh")
@@ -240,6 +241,7 @@ public static class RedisBuilderExtensions
             var resourceBuilder = builder.ApplicationBuilder.AddResource(resource)
                                       .WithImage(RedisContainerImageTags.RedisCommanderImage, RedisContainerImageTags.RedisCommanderTag)
                                       .WithImageRegistry(RedisContainerImageTags.RedisCommanderRegistry)
+                                      .WithIconName("WindowDatabase")
                                       .WithHttpEndpoint(targetPort: 8081, name: "http")
                                       .ExcludeFromManifest();
 
@@ -319,6 +321,7 @@ public static class RedisBuilderExtensions
             var resourceBuilder = builder.ApplicationBuilder.AddResource(resource)
                 .WithImage(RedisContainerImageTags.RedisInsightImage, RedisContainerImageTags.RedisInsightTag)
                 .WithImageRegistry(RedisContainerImageTags.RedisInsightRegistry)
+                .WithIconName("WindowDatabase")
                 .WithHttpEndpoint(targetPort: 5540, name: "http")
                 .WithEnvironment(context =>
                 {

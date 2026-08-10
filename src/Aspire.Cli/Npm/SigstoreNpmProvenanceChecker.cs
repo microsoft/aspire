@@ -9,14 +9,52 @@ using Sigstore;
 namespace Aspire.Cli.Npm;
 
 /// <summary>
+/// Verifies a Sigstore bundle after the caller constructs the expected identity policy.
+/// </summary>
+internal delegate Task<(bool Success, VerificationResult? Result)> SigstoreBundleVerificationHandler(
+    SigstoreVerifier verifier,
+    SigstoreBundle bundle,
+    VerificationPolicy policy,
+    string? sriIntegrity,
+    CancellationToken cancellationToken);
+
+/// <summary>
 /// Verifies npm package provenance by cryptographically verifying Sigstore bundles
-/// from the npm registry attestations API using the Sigstore .NET library.
+/// from the public npm registry attestations API using the Sigstore .NET library.
 /// Uses Fulcio certificate extensions and in-toto statement APIs for attestation analysis.
 /// </summary>
-internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogger<SigstoreNpmProvenanceChecker> logger) : INpmProvenanceChecker
+internal sealed class SigstoreNpmProvenanceChecker : INpmProvenanceChecker
 {
+    private readonly HttpClient _httpClient;
+    private readonly ILogger<SigstoreNpmProvenanceChecker> _logger;
+    private readonly SigstoreBundleVerificationHandler _verifyBundleWithPolicyAsync;
+
     internal const string NpmRegistryAttestationsBaseUrl = "https://registry.npmjs.org/-/npm/v1/attestations";
     internal const string SlsaProvenancePredicateType = "https://slsa.dev/provenance/v1";
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="SigstoreNpmProvenanceChecker"/> class.
+    /// </summary>
+    public SigstoreNpmProvenanceChecker(
+        HttpClient httpClient,
+        ILogger<SigstoreNpmProvenanceChecker> logger)
+        : this(httpClient, logger, VerifyBundleWithPolicyAsync)
+    {
+    }
+
+    internal SigstoreNpmProvenanceChecker(
+        HttpClient httpClient,
+        ILogger<SigstoreNpmProvenanceChecker> logger,
+        SigstoreBundleVerificationHandler verifyBundleWithPolicyAsync)
+    {
+        ArgumentNullException.ThrowIfNull(httpClient);
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(verifyBundleWithPolicyAsync);
+
+        _httpClient = httpClient;
+        _logger = logger;
+        _verifyBundleWithPolicyAsync = verifyBundleWithPolicyAsync;
+    }
 
     /// <inheritdoc />
     public async Task<ProvenanceVerificationResult> VerifyProvenanceAsync(
@@ -29,12 +67,12 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
         string? sriIntegrity,
         CancellationToken cancellationToken)
     {
-        logger.LogDebug("Verifying provenance for {PackageSpecifier} from {ExpectedSourceRepository}", NpmPackageInfo.FormatPackageSpecifier(packageName, version), expectedSourceRepository);
+        _logger.LogDebug("Verifying provenance for {PackageSpecifier} from {ExpectedSourceRepository}", NpmPackageInfo.FormatPackageSpecifier(packageName, version), expectedSourceRepository);
 
         var json = await FetchAttestationJsonAsync(packageName, version, cancellationToken).ConfigureAwait(false);
         if (json is null)
         {
-            logger.LogDebug("Attestation fetch failed for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
+            _logger.LogDebug("Attestation fetch failed for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
             return new ProvenanceVerificationResult { Outcome = ProvenanceVerificationOutcome.AttestationFetchFailed };
         }
 
@@ -45,7 +83,7 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
             var outcome = parseFailed
                     ? ProvenanceVerificationOutcome.AttestationParseFailed
                     : ProvenanceVerificationOutcome.SlsaProvenanceNotFound;
-            logger.LogDebug("SLSA bundle extraction failed for {PackageSpecifier}: {Outcome}", NpmPackageInfo.FormatPackageSpecifier(packageName, version), outcome);
+            _logger.LogDebug("SLSA bundle extraction failed for {PackageSpecifier}: {Outcome}", NpmPackageInfo.FormatPackageSpecifier(packageName, version), outcome);
             return new ProvenanceVerificationResult
             {
                 Outcome = outcome
@@ -59,7 +97,7 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
         }
         catch (Exception ex)
         {
-            logger.LogDebug(ex, "Failed to deserialize Sigstore bundle for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
+            _logger.LogDebug(ex, "Failed to deserialize Sigstore bundle for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
             return new ProvenanceVerificationResult { Outcome = ProvenanceVerificationOutcome.AttestationParseFailed };
         }
 
@@ -74,11 +112,25 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
             return sigstoreFailure;
         }
 
+        var subjectOutcome = VerifyNpmSubject(
+            verificationResult?.Statement,
+            packageName,
+            version,
+            sriIntegrity);
+        if (subjectOutcome is not ProvenanceVerificationOutcome.Verified)
+        {
+            _logger.LogDebug(
+                "Signed npm subject verification failed for {PackageSpecifier}: {Outcome}",
+                NpmPackageInfo.FormatPackageSpecifier(packageName, version),
+                subjectOutcome);
+            return new ProvenanceVerificationResult { Outcome = subjectOutcome };
+        }
+
         // Extract provenance from the verified result's in-toto statement and certificate extensions.
         var provenance = ExtractProvenanceFromResult(verificationResult!);
         if (provenance is null)
         {
-            logger.LogDebug("Failed to extract provenance data from verified result for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
+            _logger.LogDebug("Failed to extract provenance data from verified result for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
             return new ProvenanceVerificationResult { Outcome = ProvenanceVerificationOutcome.AttestationParseFailed };
         }
 
@@ -86,13 +138,13 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
             provenance, expectedSourceRepository, expectedWorkflowPath,
             expectedBuildType, validateWorkflowRef);
 
-        logger.LogDebug("Provenance verification for {PackageSpecifier} completed with outcome {Outcome}", NpmPackageInfo.FormatPackageSpecifier(packageName, version), result.Outcome);
+        _logger.LogDebug("Provenance verification for {PackageSpecifier} completed with outcome {Outcome}", NpmPackageInfo.FormatPackageSpecifier(packageName, version), result.Outcome);
 
         return result;
     }
 
     /// <summary>
-    /// Fetches the attestation JSON from the npm registry for the given package and version.
+    /// Fetches the attestation JSON from the public npm registry for the given package and version.
     /// </summary>
     private async Task<string?> FetchAttestationJsonAsync(
         string packageName, string version, CancellationToken cancellationToken)
@@ -102,12 +154,12 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
             var encodedPackage = Uri.EscapeDataString(packageName);
             var url = $"{NpmRegistryAttestationsBaseUrl}/{encodedPackage}@{version}";
 
-            logger.LogDebug("Fetching attestations from {Url}", url);
-            var response = await httpClient.GetAsync(url, cancellationToken).ConfigureAwait(false);
+            _logger.LogDebug("Fetching attestations from {Url}", url);
+            var response = await _httpClient.GetAsync(url, cancellationToken).ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)
             {
-                logger.LogDebug("Failed to fetch attestations: HTTP {StatusCode}", response.StatusCode);
+                _logger.LogDebug("Failed to fetch attestations: HTTP {StatusCode}", response.StatusCode);
                 return null;
             }
 
@@ -115,14 +167,14 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
         }
         catch (HttpRequestException ex)
         {
-            logger.LogDebug(ex, "Failed to fetch attestations for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
+            _logger.LogDebug(ex, "Failed to fetch attestations for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
             return null;
         }
     }
 
     /// <summary>
     /// Extracts the Sigstore bundle JSON string for the SLSA provenance attestation
-    /// from the npm registry attestations API response.
+    /// from the public npm registry attestations API response.
     /// Returns the bundle JSON on success, or <c>null</c> if the JSON is malformed or
     /// no SLSA provenance attestation is found.
     /// </summary>
@@ -199,7 +251,7 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
     {
         if (!TryParseGitHubOwnerRepo(expectedSourceRepository, out var owner, out var repo))
         {
-            logger.LogWarning("Could not parse GitHub owner/repo from expected source repository: {ExpectedSourceRepository}", expectedSourceRepository);
+            _logger.LogWarning("Could not parse GitHub owner/repo from expected source repository: {ExpectedSourceRepository}", expectedSourceRepository);
             return (new ProvenanceVerificationResult { Outcome = ProvenanceVerificationOutcome.SourceRepositoryMismatch }, null);
         }
 
@@ -212,18 +264,18 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
 
         try
         {
-            var (success, result) = await VerifyBundleWithPolicyAsync(
+            var (success, result) = await _verifyBundleWithPolicyAsync(
                 verifier, bundle, policy, sriIntegrity, cancellationToken).ConfigureAwait(false);
 
             if (!success)
             {
-                logger.LogWarning(
+                _logger.LogWarning(
                     "Sigstore verification failed for {PackageSpecifier}: {FailureReason}",
                     NpmPackageInfo.FormatPackageSpecifier(packageName, version), result?.FailureReason);
                 return (new ProvenanceVerificationResult { Outcome = ProvenanceVerificationOutcome.AttestationParseFailed }, null);
             }
 
-            logger.LogDebug(
+            _logger.LogDebug(
                 "Sigstore verification passed for {PackageSpecifier}. Signed by: {Signer}",
                 NpmPackageInfo.FormatPackageSpecifier(packageName, version), result?.SignerIdentity?.SubjectAlternativeName);
 
@@ -231,7 +283,7 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Sigstore verification threw an exception for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
+            _logger.LogWarning(ex, "Sigstore verification threw an exception for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
             return (new ProvenanceVerificationResult { Outcome = ProvenanceVerificationOutcome.AttestationParseFailed }, null);
         }
     }
@@ -267,6 +319,55 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
 
         return await verifier.TryVerifyAsync(
             bundle.DsseEnvelope.Payload, bundle, policy, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Verifies that the signed in-toto subject identifies the expected npm package archive.
+    /// </summary>
+    internal static ProvenanceVerificationOutcome VerifyNpmSubject(
+        InTotoStatement? statement,
+        string packageName,
+        string version,
+        string? sriIntegrity)
+    {
+        if (statement?.Subject is not [var subject])
+        {
+            return ProvenanceVerificationOutcome.PackageIdentityMismatch;
+        }
+
+        // npm-package-arg encodes the leading '@' in scoped package names when creating the
+        // provenance PURL: @playwright/cli@0.1.1 => pkg:npm/%40playwright/cli@0.1.1.
+        // See https://github.com/npm/npm-package-arg/blob/main/lib/npa.js.
+        var purlPackageName = packageName.StartsWith('@')
+            ? $"%40{packageName[1..]}"
+            : packageName;
+        var expectedSubjectName = $"pkg:npm/{purlPackageName}@{version}";
+        if (!string.Equals(subject.Name, expectedSubjectName, StringComparison.Ordinal))
+        {
+            return ProvenanceVerificationOutcome.PackageIdentityMismatch;
+        }
+
+        if (sriIntegrity is null ||
+            !sriIntegrity.StartsWith("sha512-", StringComparison.OrdinalIgnoreCase) ||
+            !subject.Digest.TryGetValue("sha512", out var subjectDigest))
+        {
+            return ProvenanceVerificationOutcome.PackageDigestMismatch;
+        }
+
+        string expectedDigest;
+        try
+        {
+            var digestBytes = Convert.FromBase64String(sriIntegrity["sha512-".Length..]);
+            expectedDigest = Convert.ToHexStringLower(digestBytes);
+        }
+        catch (FormatException)
+        {
+            return ProvenanceVerificationOutcome.PackageDigestMismatch;
+        }
+
+        return string.Equals(subjectDigest, expectedDigest, StringComparison.Ordinal)
+            ? ProvenanceVerificationOutcome.Verified
+            : ProvenanceVerificationOutcome.PackageDigestMismatch;
     }
 
     /// <summary>

@@ -21,7 +21,7 @@ public class MobileNavMenuTests : DashboardTestContext
     {
         var cut = RenderMobileNavMenu(DashboardUrls.StructuredLogsUrl());
 
-        AssertMenuItemIsActive(cut, Resources.Layout.NavMenuStructuredLogsTab);
+        AssertMenuItemIsActive(cut, Resources.StructuredLogs.StructuredLogsHeader);
     }
 
     [Fact]
@@ -29,7 +29,7 @@ public class MobileNavMenuTests : DashboardTestContext
     {
         var cut = RenderMobileNavMenu(DashboardUrls.StructuredLogsUrl(logLevel: "warning"));
 
-        AssertMenuItemIsActive(cut, Resources.Layout.NavMenuStructuredLogsTab);
+        AssertMenuItemIsActive(cut, Resources.StructuredLogs.StructuredLogsHeader);
     }
 
     [Fact]

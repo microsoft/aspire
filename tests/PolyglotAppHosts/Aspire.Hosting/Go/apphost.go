@@ -750,6 +750,20 @@ ENTRYPOINT ["dotnet", "App.dll"]
 			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
 		}
 
+		progress, err := interactionService.PromptProgress("Completing **work**...", &aspire.PromptProgressOptions{
+			Title: aspire.StringPtr("Progress"),
+			Options: &aspire.InteractionProgressOptions{
+				PrimaryButtonText:     aspire.StringPtr("Cancel"),
+				EnableMessageMarkdown: aspire.BoolPtr(true),
+				Work: func(progressContext aspire.ProgressContext) {
+					_, _ = progressContext.CancellationToken()
+				},
+			},
+		})
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+
 		textInput := interactionService.CreateTextInput("name", &aspire.CreateInteractionInputOptions{
 			Label:                     aspire.StringPtr("Name"),
 			Description:               aspire.StringPtr("Your **name**"),
@@ -826,6 +840,7 @@ ENTRYPOINT ["dotnet", "App.dll"]
 			confirmation.Value != nil && *confirmation.Value &&
 			!messageBox.Canceled &&
 			!notification.Canceled &&
+			!progress.Canceled &&
 			!single.Canceled &&
 			!multiCanceled
 

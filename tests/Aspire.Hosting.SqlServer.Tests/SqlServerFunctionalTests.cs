@@ -21,7 +21,7 @@ namespace Aspire.Hosting.SqlServer.Tests;
 public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyWaitForOnSqlServerBlocksDependentResources()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
@@ -59,7 +59,7 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifySqlServerResource()
     {
         const string databaseName = "newdb";
@@ -122,7 +122,7 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task WithDataShouldPersistStateBetweenUsages(bool useVolume)
     {
         const string databaseName = "db";
@@ -335,7 +335,7 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task AddDatabaseCreatesDatabaseWithCustomScript()
     {
         const string databaseName = "newdb";
@@ -408,7 +408,7 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task AddDatabaseCreatesDatabaseWithSpecialNames()
     {
         const string databaseName = "!'][\"";
@@ -458,7 +458,7 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task AddDatabaseCreatesDatabaseResiliently()
     {
         // Creating the database multiple times should not fail
@@ -542,7 +542,7 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task AddDatabaseCreatesMultipleDatabases()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
@@ -589,7 +589,7 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
         }
     }
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public Task SqlServer_WithPersistentLifetime_ReusesContainer()
     {
         return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(

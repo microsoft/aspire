@@ -383,6 +383,15 @@ void main() throws Exception {
             var notification = interactionService.promptNotification("Heads up", "Something happened.",
                 new PromptNotificationOptions().options(notificationOptions));
 
+            var progressOptions = new InteractionProgressOptions();
+            progressOptions.setPrimaryButtonText("Cancel");
+            progressOptions.setEnableMessageMarkdown(true);
+            progressOptions.setWork((progressContext) -> {
+                var _progressCancellationToken = progressContext.cancellationToken();
+            });
+            var progress = interactionService.promptProgress("Completing **work**...",
+                new PromptProgressOptions().title("Progress").options(progressOptions));
+
             var textOptions = new CreateInteractionInputOptions();
             textOptions.setLabel("Name");
             textOptions.setDescription("Your **name**");
@@ -460,6 +469,7 @@ void main() throws Exception {
                 && Boolean.TRUE.equals(confirmation.getValue())
                 && !messageBox.getCanceled()
                 && !notification.getCanceled()
+                && !progress.getCanceled()
                 && !single.getCanceled()
                 && !multiCanceled;
 

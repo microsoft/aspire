@@ -67,6 +67,12 @@ public partial class FoundryModel
         public static readonly FoundryModel ClaudeOpus48 = new() { Name = "claude-opus-4-8", Version = "2", Format = "Anthropic" };
 
         /// <summary>
+        /// Claude Opus 5 is Anthropic's most advanced Opus model, powering long-running agents while delivering improvements in coding and professional work. It brings near-Fable intelligence to the model teams rely on daily for long-horizon coding and complex agenti
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel ClaudeOpus5 = new() { Name = "claude-opus-5", Version = "2", Format = "Anthropic" };
+
+        /// <summary>
         /// Claude Sonnet 4.5 is Anthropic's most capable model for complex agents and an industry leader for coding and computer use.
         /// </summary>
         [AspireValue("FoundryModels")]
@@ -244,7 +250,7 @@ public partial class FoundryModel
         /// Llama 4 Maverick 17B 128E Instruct FP8 is great at precise image understanding and creative writing, offering high quality at a lower price compared to Llama 3.3 70B
         /// </summary>
         [AspireValue("FoundryModels")]
-        public static readonly FoundryModel Llama4Maverick17B128EInstructFP8 = new() { Name = "Llama-4-Maverick-17B-128E-Instruct-FP8", Version = "4", Format = "Meta" };
+        public static readonly FoundryModel Llama4Maverick17B128EInstructFP8 = new() { Name = "Llama-4-Maverick-17B-128E-Instruct-FP8", Version = "5", Format = "Meta" };
 
         /// <summary>
         /// Llama 4 Scout 17B 16E Instruct is great at multi-document summarization, parsing extensive user activity for personalized tasks, and reasoning over vast codebases.
@@ -1399,6 +1405,12 @@ public partial class FoundryModel
         public static readonly FoundryModel MaiVoice2 = new() { Name = "MAI-Voice-2", Version = "2026-06-02", Format = "Microsoft" };
 
         /// <summary>
+        /// MAI-Voice-2-Flash is a text-to-speech (TTS) model built for ultra-fast, low-latency generation. It delivers high-fidelity, natural, and expressive speech across 15 languages, while being optimized for real-time responsiveness for voice agents, assistants,
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel MaiVoice2Flash = new() { Name = "MAI-Voice-2-Flash", Version = "2026-07-22", Format = "Microsoft" };
+
+        /// <summary>
         /// Model router is a deployable AI model that is trained to select the most suitable large language model (LLM) for a given prompt.
         /// </summary>
         [AspireValue("FoundryModels")]
@@ -2299,6 +2311,12 @@ public partial class FoundryModel
         public static readonly FoundryModel GptImage2 = new() { Name = "gpt-image-2", Version = "2026-04-21", Format = "OpenAI" };
 
         /// <summary>
+        /// A new real-time speech-to-text (STT) model with enhanced transcription accuracy and low-latency streaming capabilities.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel GptLiveTranscribe = new() { Name = "gpt-live-transcribe", Version = "2026-07-28", Format = "OpenAI" };
+
+        /// <summary>
         /// Push the open model frontier with GPT-OSS models, released under the permissive Apache 2.0 license, allowing anyone to use, modify, and deploy them freely.
         /// </summary>
         [AspireValue("FoundryModels")]
@@ -2357,6 +2375,12 @@ public partial class FoundryModel
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel GptRealtimeWhisper = new() { Name = "gpt-realtime-whisper", Version = "2026-05-07", Format = "OpenAI" };
+
+        /// <summary>
+        /// A new real-time speech-to-text (STT) model with enhanced transcription accuracy and low-latency streaming capabilities.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel GptTranscribe = new() { Name = "gpt-transcribe", Version = "2026-07-28", Format = "OpenAI" };
 
         /// <summary>
         /// Focused on advanced reasoning and solving complex problems, including math and science tasks. Ideal for applications that require deep contextual understanding and agentic workflows.

@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
 using Aspire.Cli.Backchannel;
@@ -27,7 +29,7 @@ namespace Aspire.Cli.Projects;
 /// <summary>
 /// Handler for .NET AppHost projects (.csproj and single-file .cs).
 /// </summary>
-internal sealed class DotNetAppHostProject : IAppHostProject
+internal sealed partial class DotNetAppHostProject : IAppHostProject
 {
     private readonly IDotNetCliRunner _runner;
     private readonly IInteractionService _interactionService;
@@ -190,13 +192,33 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     {
         if (!TryLoadProjectRoot(projectFile.FullName, out var root) || root is null)
         {
-            // The file is missing, unreadable, or not well-formed XML. Fall back to the name heuristic so a
-            // broken AppHost project is still treated as a candidate (and can later surface as unbuildable).
+            // The file is missing, unreadable, or not well-formed XML. Before falling back to the
+            // name heuristic, still consult ancestor Directory.Build.* markers — those can promote
+            // an ordinary-named broken project to a real AppHost candidate, which should flow to
+            // MSBuild as "possibly unbuildable" rather than be silently rejected here.
+            if (AncestorDirectoryContainsAppHostMarker(projectFile.Directory))
+            {
+                return true;
+            }
             return MatchesAppHostNameHeuristics(projectFile);
         }
 
         // 1) An Aspire AppHost marker declared inline in the project file itself.
         if (ContainsAppHostMarker(root))
+        {
+            return true;
+        }
+
+        // 1b) The project file itself can also pull in a marker via a dynamic walk-up Import — for
+        //     example
+        //       <Import Project="$([MSBuild]::GetPathOfFileAbove('Aspire.Common.props', ...))" />
+        //     where the resolved file sets <IsAspireHost>true</IsAspireHost> or imports
+        //     Aspire.AppHost.Sdk. The same fragility that prevents us from following these statically
+        //     in ancestor Directory.Build.* files applies here, so apply the same narrow fallback:
+        //     dynamic walk-up imports → candidate, ordinary static or unrelated-SDK imports → still
+        //     filtered out by the cheap pre-check. Skipping this check leaves a regression hole where
+        //     a normal-named project gets silently rejected before MSBuild evaluation runs.
+        if (ContainsDynamicWalkUpImport(root))
         {
             return true;
         }
@@ -208,7 +230,15 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         //    element is detected while a mere *consumer* of the property
         //    (Condition="'$(IsAspireHost)' == 'true'") is ignored. A loose substring match would instead
         //    over-promote every sibling that only reads the property.
-        if (DirectoryContainsAppHostMarker(projectFile.Directory))
+        //
+        //    MSBuild walks up the directory tree to import Directory.Build.props/.targets from the nearest
+        //    ancestor that has one (see
+        //    https://learn.microsoft.com/visualstudio/msbuild/customize-by-directory#search-scope), and that
+        //    ancestor commonly chains to further parents via $(DirectoryBuildPropsPath)-style imports. Walk
+        //    *all* ancestors here rather than stopping at the project's own directory: missing an ancestor
+        //    marker would falsely reject a legal AppHost before MSBuild ever runs, which is the exact failure
+        //    mode that broke `aspire run` against explicit/settings AppHost paths.
+        if (AncestorDirectoryContainsAppHostMarker(projectFile.Directory))
         {
             return true;
         }
@@ -231,29 +261,987 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         }
     }
 
-    private static bool DirectoryContainsAppHostMarker(DirectoryInfo? directory)
+    private static bool AncestorDirectoryContainsAppHostMarker(DirectoryInfo? directory)
     {
-        if (directory is null)
-        {
-            return false;
-        }
+        // MSBuild imports only the NEAREST Directory.Build.props and the NEAREST Directory.Build.targets,
+        // discovered by walking parent directories up to the filesystem root. That discovery has NO .git
+        // boundary (see https://learn.microsoft.com/visualstudio/msbuild/customize-by-directory), so a
+        // valid AppHost inside a nested repo, submodule, or worktree can still inherit a marker from above
+        // its inner .git. Crucially, MSBuild does NOT import every ancestor: an outer file is invisible to
+        // the project unless the nearest file explicitly chains to its parent. Verified against real
+        // MSBuild:
+        //   outer/Directory.Build.props        <IsAspireHost>true</IsAspireHost>
+        //   outer/repo/Directory.Build.props   (no marker, does NOT import its parent)
+        //   outer/repo/proj/proj.csproj  =>  dotnet msbuild -getProperty:IsAspireHost prints EMPTY
+        // Adding <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', ...))" /> to the
+        // nested file makes the same command print `true`. Walking every ancestor and accepting any marker
+        // would report a false positive for the first layout and force MSBuild evaluation for every ordinary
+        // project below a shadowed marker — the exact "evaluation storm" this prefilter exists to prevent.
+        //
+        // props and targets are searched independently because MSBuild resolves them independently: a marker
+        // in the nearest Directory.Build.targets counts even when the nearest Directory.Build.props does not
+        // chain, and vice versa.
+        return NearestDirectoryBuildFileChainContainsMarker(directory, DirectoryBuildPropsName)
+            || NearestDirectoryBuildFileChainContainsMarker(directory, DirectoryBuildTargetsName);
+    }
 
-        foreach (var fileName in new[] { DirectoryBuildPropsName, DirectoryBuildTargetsName })
+    private static bool NearestDirectoryBuildFileChainContainsMarker(DirectoryInfo? directory, string fileName)
+    {
+        // Walk up from the project directory following MSBuild's "nearest file, then explicit chain" rule
+        // for a single Directory.Build.* file name. At the first level that actually has the file we stop —
+        // unless that file has no marker but chains to its parent (continue up), or pulls in content we
+        // cannot resolve statically (conservatively treat the project as a candidate).
+        for (var current = directory; current is not null; current = current.Parent)
         {
-            var filePath = Path.Combine(directory.FullName, fileName);
+            var filePath = Path.Combine(current.FullName, fileName);
             if (!File.Exists(filePath))
             {
                 continue;
             }
 
-            if (TryLoadProjectRoot(filePath, out var root) && root is not null && ContainsAppHostMarker(root))
+            if (!TryLoadProjectRoot(filePath, out var root) || root is null)
             {
+                // The nearest file exists but can't be read/parsed. MSBuild would still evaluate it and it
+                // could set <IsAspireHost>true</IsAspireHost> or import Aspire.AppHost.Sdk, so keep the
+                // project as a candidate rather than silently rejecting it.
+                return true;
+            }
+
+            if (ContainsAppHostMarker(root))
+            {
+                return true;
+            }
+
+            // No marker in the nearest file. Whether MSBuild ever imports an OUTER file of the same name
+            // depends entirely on whether this file chains to its parent.
+            switch (ClassifyDirectoryBuildChaining(root, fileName))
+            {
+                case DirectoryBuildChaining.Uncertain:
+                    // The file pulls in content we cannot resolve statically (a walk-up import to a
+                    // non-conventional or out-of-tree target, or one we cannot parse). A marker could live
+                    // behind it, so let the authoritative MSBuild evaluation decide.
+                    return true;
+                case DirectoryBuildChaining.ChainsToParent:
+                    // This file imports its parent of the same name, so MSBuild keeps reading upward.
+                    // Continue the walk to the next nearest file to look for the marker there.
+                    continue;
+                case DirectoryBuildChaining.StopsHere:
+                default:
+                    // MSBuild imports only this nearest file for this name and it declares no marker; any
+                    // outer file is shadowed and never evaluated. Promoting the project here would be a
+                    // false positive, so stop.
+                    return false;
+            }
+        }
+
+        return false;
+    }
+
+    private enum DirectoryBuildChaining
+    {
+        // The nearest marker-less file terminates the import chain for this name — MSBuild imports nothing
+        // further up, so any outer marker is shadowed.
+        StopsHere,
+
+        // The file imports its parent of the same name, so the walk should continue to the next file up.
+        ChainsToParent,
+
+        // The file pulls in content we cannot resolve statically; a marker could hide behind it.
+        Uncertain,
+    }
+
+    private static IEnumerable<string> SplitImportProjectEntries(string projectAttributeValue)
+    {
+        // MSBuild accepts import lists such as:
+        //   <Import Project="../Directory.Build.props;Shared.props" />
+        // Each entry resolves independently, so classifying the unsplit value as one path can hide a
+        // conventional parent-chain import behind an unrelated entry.
+        return projectAttributeValue.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
+
+    private static DirectoryBuildChaining ClassifyDirectoryBuildChaining(XElement root, string chainFileName)
+    {
+        // Decide, for a marker-less Directory.Build.<props|targets> file, whether MSBuild would keep
+        // importing an OUTER file of the same name (ChainsToParent), whether it pulls in unresolvable
+        // content that could hide a marker (Uncertain), or whether it terminates the chain for this name
+        // (StopsHere). Only imports that provably reach the parent-of-same-name advance the chain; ordinary
+        // shared infrastructure imports (Arcade, analyzer polyfills, Directory.Packages.props, ...) are
+        // inert here — otherwise essentially every project in a .NET repo would be promoted.
+        var chains = false;
+
+        foreach (var import in root.Descendants().Where(e => e.Name.LocalName.Equals("Import", StringComparison.Ordinal)))
+        {
+            var projectAttributeValue = import.Attribute("Project")?.Value;
+            if (projectAttributeValue is null)
+            {
+                continue;
+            }
+
+            foreach (var project in SplitImportProjectEntries(projectAttributeValue))
+            {
+                if (WalkUpFunctionCallStartRegex().IsMatch(project))
+                {
+                    // A tree-walking import: $([MSBuild]::GetPathOfFileAbove/GetDirectoryNameOfFileAbove(...)).
+                    if (TryGetWalkUpImport(project, out var walkUpImport) && IsAlreadyEnumeratedDirectoryBuildChain(walkUpImport))
+                    {
+                        // Immediate-parent chaining import of a conventional Directory.Build.* file: its target
+                        // is the nearest file at or above this file's parent — the exact next level this walk
+                        // visits by name. This shortcut is only valid for the same-name chain. A props file can
+                        // explicitly import a parent targets file while a nearer targets file shadows the
+                        // normal targets pass, so cross-name imports must remain uncertain.
+                        if (walkUpImport.AnchorFileName.Equals(chainFileName, StringComparison.Ordinal))
+                        {
+                            chains = true;
+                            continue;
+                        }
+
+                        return DirectoryBuildChaining.Uncertain;
+                    }
+
+                    // Walk-up import to a non-conventional target, a level-skipping or out-of-tree starting
+                    // directory, or one we cannot parse — MSBuild may import a file this loop would never reach,
+                    // so the whole file is uncertain and the project stays a candidate.
+                    return DirectoryBuildChaining.Uncertain;
+                }
+
+                switch (ClassifyStaticImportChaining(project, chainFileName).Chaining)
+                {
+                    case DirectoryBuildChaining.Uncertain:
+                        return DirectoryBuildChaining.Uncertain;
+                    case DirectoryBuildChaining.ChainsToParent:
+                        chains = true;
+                        break;
+                    case DirectoryBuildChaining.StopsHere:
+                    default:
+                        break;
+                }
+            }
+        }
+
+        return chains ? DirectoryBuildChaining.ChainsToParent : DirectoryBuildChaining.StopsHere;
+    }
+
+    /// <summary>
+    /// Result of classifying one ordinary (non-walk-up) <c>&lt;Import Project="..."&gt;</c>.
+    /// </summary>
+    /// <param name="Chaining">How the import affects the Directory.Build.* chain walk.</param>
+    /// <param name="UncertainTargetPath">
+    /// When <paramref name="Chaining"/> is <see cref="DirectoryBuildChaining.Uncertain"/>, the imported path
+    /// as written after expanding <c>$(MSBuildThisFileDirectory)</c> — relative to the importing file's
+    /// directory, or rooted. <see langword="null"/> when the target cannot be resolved without MSBuild
+    /// (an unexpandable property/item reference, or a wildcard). Callers that need to fingerprint the
+    /// admitted dependency use this to tell "exact file" apart from "unknowable file".
+    /// </param>
+    private readonly record struct StaticImportClassification(
+        DirectoryBuildChaining Chaining,
+        string? UncertainTargetPath);
+
+    private static StaticImportClassification ClassifyStaticImportChaining(string projectAttributeValue, string chainFileName)
+    {
+        // Classify one ordinary (non-walk-up) <Import Project="..."> inside a marker-less
+        // Directory.Build.<props|targets>. Raw values seen in the wild, and how each is treated:
+        //
+        //   "../Directory.Build.props"                              -> ChainsToParent (verified under real MSBuild)
+        //   "$(MSBuildThisFileDirectory)..\Directory.Build.props"   -> ChainsToParent; $(MSBuildThisFileDirectory)
+        //                                                             is a reserved property that always expands
+        //                                                             to THIS file's directory plus a trailing
+        //                                                             slash, so the target is statically knowable
+        //   "$(MSBuildThisFileDirectory)../../Directory.Build.props"-> Uncertain (skips the level this walk
+        //                                                             visits next, so an outer marker could be
+        //                                                             imported that the walk never sees)
+        //   "$(RepoRoot)Directory.Build.props"                      -> Uncertain (conventional name, but at a
+        //                                                             directory only MSBuild can compute)
+        //   "$(RepositoryEngineeringDir)NullablePolyfill.targets"   -> StopsHere (ordinary shared infrastructure)
+        //   "Sdk.props" / "../Versions.props"                       -> StopsHere (ordinary static import)
+        //
+        // Only imports that provably reach the parent-of-same-name advance the chain. Ordinary shared
+        // infrastructure imports stay inert — following those would over-promote essentially every project in
+        // a .NET repo (this repo's own root Directory.Build.targets imports
+        // $(RepositoryEngineeringDir)/NullablePolyfill.targets). But an import that lands on a *conventional*
+        // Directory.Build.* file at a location we cannot pin down must NOT be treated as inert: MSBuild
+        // resolves it and can see an outer marker there, while reporting StopsHere would reject the project.
+        var trimmed = projectAttributeValue.Trim();
+        if (trimmed.Length == 0)
+        {
+            return new StaticImportClassification(DirectoryBuildChaining.StopsHere, null);
+        }
+
+        // $(MSBuildThisFileDirectory) is the one property we can expand ourselves: MSBuild defines it as the
+        // directory of the file containing the import, with a trailing slash.
+        // https://learn.microsoft.com/visualstudio/msbuild/msbuild-reserved-and-well-known-properties
+        const string thisFileDirectory = "$(MSBuildThisFileDirectory)";
+        var startsWithThisFileDirectory = trimmed.StartsWith(thisFileDirectory, StringComparison.OrdinalIgnoreCase);
+        var relativePath = startsWithThisFileDirectory
+            ? trimmed[thisFileDirectory.Length..].TrimStart('/', '\\')
+            : trimmed;
+
+        if (relativePath.Contains('$') || relativePath.Contains('@'))
+        {
+            // An unexpandable property/item reference remains. The literal tail of the final path segment is
+            // often still readable (e.g. "$(RepoRoot)Directory.Build.props"), and that is enough to tell an
+            // inert infrastructure import apart from one that could pull in an outer Directory.Build.* marker.
+            // The directory it lands in is still unknown, so there is no path to fingerprint.
+            var expressionFileName = GetLiteralFileNameSuffix(GetFinalPathSegment(relativePath));
+            return CanMatchConventionalDirectoryBuildFileName(expressionFileName)
+                ? new StaticImportClassification(DirectoryBuildChaining.Uncertain, null)
+                : new StaticImportClassification(DirectoryBuildChaining.StopsHere, null);
+        }
+
+        var fileName = GetFinalPathSegment(relativePath);
+        var uncertainTargetPath = ContainsWildcard(relativePath) ? null : relativePath;
+        if (!IsConventionalDirectoryBuildFileName(fileName))
+        {
+            // A differently-cased conventional name can resolve to the same file on Windows, or to a
+            // distinct explicitly imported file on a case-sensitive filesystem. Wildcards can also match
+            // one of those files. Any such target can carry the marker, so it is not safe to classify the
+            // import as unrelated.
+            return CanMatchConventionalDirectoryBuildFileName(fileName)
+                ? new StaticImportClassification(DirectoryBuildChaining.Uncertain, uncertainTargetPath)
+                : new StaticImportClassification(DirectoryBuildChaining.StopsHere, null);
+        }
+
+        // A wildcard import expands to every match at evaluation time, so the imported set is not a single
+        // knowable path. IsConventionalDirectoryBuildFileName above already rejects a wildcard in the file
+        // name itself, so only the directory portion can still hold one (e.g. "../*/Directory.Build.props").
+        if (Path.IsPathRooted(relativePath))
+        {
+            // An absolute path can point at a Directory.Build.* anywhere on disk, including outside this
+            // project's ancestor chain, so the walk cannot prove the outer file is shadowed.
+            return new StaticImportClassification(
+                DirectoryBuildChaining.Uncertain,
+                startsWithThisFileDirectory ? null : uncertainTargetPath);
+        }
+
+        // Count how many levels up the directory portion travels. Anything other than "exactly one level up"
+        // either cannot advance this walk correctly or leaves the enumerated chain entirely.
+        var upLevels = 0;
+        var directorySegments = relativePath.Split('/', '\\');
+        for (var i = 0; i < directorySegments.Length - 1; i++)
+        {
+            switch (directorySegments[i].Trim())
+            {
+                case "" or ".":
+                    continue;
+                case "..":
+                    upLevels++;
+                    continue;
+                default:
+                    // A named segment descends into a directory this walk never enumerates.
+                    return new StaticImportClassification(DirectoryBuildChaining.Uncertain, uncertainTargetPath);
+            }
+        }
+
+        return upLevels switch
+        {
+            // Same directory: a same-name import is a self-import, which MSBuild ignores. A cross-name
+            // sibling import is not necessarily covered by the other pass because that pass can stop at a
+            // file nearer to the project before reaching this directory.
+            0 => fileName.Equals(chainFileName, StringComparison.Ordinal)
+                ? new StaticImportClassification(DirectoryBuildChaining.StopsHere, null)
+                : new StaticImportClassification(DirectoryBuildChaining.Uncertain, uncertainTargetPath),
+            // Immediate parent: advances the chain when it targets THIS name. A cross-name import is not
+            // covered by the other pass because that pass starts at the project directory and can stop at a
+            // nearer marker-less file before reaching the explicitly imported parent file.
+            1 => fileName.Equals(chainFileName, StringComparison.Ordinal)
+                ? new StaticImportClassification(DirectoryBuildChaining.ChainsToParent, null)
+                : new StaticImportClassification(DirectoryBuildChaining.Uncertain, uncertainTargetPath),
+            // Two or more levels up jumps over the file this walk visits next, exactly like a level-skipping
+            // GetPathOfFileAbove start, so an outer marker could be imported that this walk never reaches.
+            _ => new StaticImportClassification(DirectoryBuildChaining.Uncertain, uncertainTargetPath),
+        };
+    }
+
+    private static bool ContainsWildcard(string path) => path.Contains('*') || path.Contains('?');
+
+    private static string GetFinalPathSegment(string path)
+    {
+        var trimmed = path.Trim();
+        var lastSeparator = Math.Max(trimmed.LastIndexOf('/'), trimmed.LastIndexOf('\\'));
+        return lastSeparator >= 0 ? trimmed[(lastSeparator + 1)..].Trim() : trimmed;
+    }
+
+    private static string GetLiteralFileNameSuffix(string segment)
+    {
+        // Recover the literal file name from a path segment that may begin with an MSBuild expression. The
+        // expression itself expands to a directory prefix, so only the text after its closing parenthesis
+        // names the file:
+        //   "$(RepoRoot)Directory.Build.props"   -> "Directory.Build.props"
+        //   "Directory.Build.props"              -> "Directory.Build.props"
+        //   "$(Flavor).props"                    -> ".props"
+        //   "$(SharedPropsFileName)"             -> "" (nothing literal left to identify)
+        var lastExpressionEnd = segment.LastIndexOf(')');
+        var tail = (lastExpressionEnd >= 0 ? segment[(lastExpressionEnd + 1)..] : segment).Trim();
+        return tail.Contains('$') || tail.Contains('@') ? string.Empty : tail;
+    }
+
+    private static bool IsImmediateParentChainStart(string? startDirectoryArg)
+    {
+        // A conventional Directory.Build.* walk-up import only lets this ancestor walk keep going upward when
+        // its search begins at the importing file's IMMEDIATE parent directory — the exact
+        // '$(MSBuildThisFileDirectory)../' shape MSBuild's own Directory.Build.* chaining uses (verified: it
+        // is the shape in this repo's src/ and tests/ Directory.Build.* files). GetPathOfFileAbove searches
+        // the starting directory AND every directory above it, so starting at the immediate parent means
+        // "nearest Directory.Build.* at or above the parent" — exactly the next file this loop visits by name.
+        //
+        // Two other shapes must NOT advance the loop:
+        //  * A level-skipping start ('$(MSBuildThisFileDirectory)../../', etc.) begins the search ABOVE the
+        //    immediate parent, so MSBuild can jump over an intervening marker-less Directory.Build.props and
+        //    import a marker farther up. This loop would instead visit that skipped intermediate next and
+        //    stop there, producing a false negative. Verified against real MSBuild: with a '../../' start and
+        //    a marker two levels up, `dotnet msbuild -getProperty:IsAspireHost` prints `true`, while a
+        //    nearest-file walk that stops at the intermediate would say false.
+        //  * An omitted or same-directory start ('$(MSBuildThisFileDirectory)') resolves to the importing
+        //    file's own directory. GetPathOfFileAbove includes the starting directory, so it finds THIS file
+        //    (a self-import) and never reaches the parent — it does not chain upward at all.
+        // GetPathOfFileAbove / GetDirectoryNameOfFileAbove also accept an ARBITRARY starting directory, e.g.
+        //   $([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(ExternalBuildRoot)'))
+        // which resolves a Directory.Build.props this walk never inspects (verified to pull in an external
+        // IsAspireHost=true under real MSBuild). Any of these non-immediate-parent shapes is left to the
+        // caller as "uncertain", keeping the project a candidate rather than risking a false negative.
+        if (string.IsNullOrWhiteSpace(startDirectoryArg))
+        {
+            return false;
+        }
+
+        var start = StripQuotes(startDirectoryArg).Trim();
+        const string thisFileDirectory = "$(MSBuildThisFileDirectory)";
+        if (!start.StartsWith(thisFileDirectory, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        // The remainder must resolve to exactly one directory level up: a single '..' segment, plus any
+        // number of '.'/empty no-op segments. A second '..' skips past the immediate parent, and any named
+        // segment could descend or jump out of the enumerated chain — both disqualify the shortcut.
+        var upLevels = 0;
+        foreach (var rawSegment in start[thisFileDirectory.Length..].Split('/', '\\'))
+        {
+            switch (rawSegment.Trim())
+            {
+                case "" or ".":
+                    continue;
+                case "..":
+                    if (++upLevels > 1)
+                    {
+                        return false;
+                    }
+                    continue;
+                default:
+                    return false;
+            }
+        }
+
+        return upLevels == 1;
+    }
+
+    private static bool IsAlreadyEnumeratedDirectoryBuildChain(in WalkUpImport import)
+    {
+        // Decide whether a walk-up import provably resolves to a file the ancestor walk already enumerates
+        // by name, so skipping it cannot hide a marker. That is true for exactly one shape:
+        //
+        //   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+        //
+        // GetPathOfFileAbove(file, start) returns the nearest <file> at or above <start>, so with an
+        // immediate-parent start and a conventional name the target is literally "the next Directory.Build.*
+        // of this name the walk visits". Three restrictions keep the shortcut sound:
+        //
+        //  * Only GetPathOfFileAbove. GetDirectoryNameOfFileAbove(start, anchor) returns the DIRECTORY that
+        //    holds <anchor>, and the imported file is whatever is appended after the call. The anchor — not
+        //    the appended name — selects the directory, so
+        //      $([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildThisFileDirectory)../', 'Repo.marker'))/Directory.Build.props
+        //    imports Directory.Build.props from whichever ancestor carries Repo.marker. That can be far above
+        //    a nearer marker-less Directory.Build.props which shadows the ordinary chain, so the walk would
+        //    stop early and reject a project MSBuild promotes.
+        //  * No appended path. Once anything is concatenated onto the call, the anchor argument stops being
+        //    the imported file for GetPathOfFileAbove too (e.g. `))/../Directory.Build.props`), which brings
+        //    back the same anchor/target confusion.
+        //  * A conventional target name and an immediate-parent start (see IsImmediateParentChainStart).
+        return import.IsGetPathOfFileAbove
+            && !import.HasAppendedPath
+            && IsConventionalDirectoryBuildFileName(import.AnchorFileName)
+            && IsImmediateParentChainStart(import.StartDirectoryArg);
+    }
+
+    /// <summary>
+    /// Files outside the conventional <c>Directory.Build.*</c> / <c>Directory.Packages.*</c> set that the
+    /// prefilter allowed to decide whether a project is an AppHost candidate.
+    /// </summary>
+    /// <param name="AncestorSearchFileNames">
+    /// File names reached by accepted walk-up imports, ordinal-sorted and de-duplicated. A walk-up import
+    /// binds to the nearest file of that name at or above the importing file, so statting each name at every
+    /// ancestor level covers every file MSBuild could bind it to.
+    /// </param>
+    /// <param name="ExactFilePaths">
+    /// Absolute paths of accepted static imports, ordinal-sorted and de-duplicated. Unlike walk-up imports
+    /// these name exactly one file, so they are statted directly — including targets outside the project's
+    /// ancestor chain, such as <c>../shared/Directory.Build.props</c>.
+    /// </param>
+    /// <param name="HasUnfingerprintableImport">
+    /// <see langword="true"/> when at least one accepted import resolves somewhere no filesystem fingerprint
+    /// can cover: an MSBuild expression where the file name belongs, a walk-up rooted outside the ancestor
+    /// chain, an appended path that does not name a single file in the resolved directory, or a wildcard.
+    /// </param>
+    internal readonly record struct AppHostImportDependencies(
+        IReadOnlyCollection<string> AncestorSearchFileNames,
+        IReadOnlyCollection<string> ExactFilePaths,
+        bool HasUnfingerprintableImport);
+
+    /// <summary>
+    /// Reports the custom imports that <see cref="IsLikelyAppHost"/> honors for <paramref name="projectFile"/>,
+    /// so <c>AppHostInfoDiskCache</c> can either fingerprint them or refuse to cache. Those imports are the
+    /// paths by which a marker reaches MSBuild without touching any file the cache's conventional walk
+    /// already stats — for example <c>$([MSBuild]::GetPathOfFileAbove('Aspire.Common.props'))</c> or
+    /// <c>&lt;Import Project="$(MSBuildThisFileDirectory)../shared/Directory.Build.props" /&gt;</c>, where
+    /// flipping <c>IsAspireHost</c> inside the imported file changes the answer while leaving every tracked
+    /// mtime untouched.
+    /// </summary>
+    internal static AppHostImportDependencies CollectImportDependencies(FileInfo projectFile)
+    {
+        var builder = new ImportDependencyBuilder();
+
+        // Mirror IsLikelyAppHost exactly: it consults the project file's own walk-up imports (step 1b) and
+        // then the NEAREST Directory.Build.props / Directory.Build.targets chain (step 2). Files outside
+        // those reachable chains are shadowed — MSBuild never evaluates them — so an unresolvable import
+        // sitting in one must not disable caching for this project.
+        if (TryLoadProjectRoot(projectFile.FullName, out var projectRoot) && projectRoot is not null)
+        {
+            CollectFileImportDependencies(projectRoot, projectFile.Directory, DirectoryBuildPropsName, builder, staticImportsAdmitProject: false);
+        }
+
+        CollectDirectoryBuildChainDependencies(projectFile.Directory, DirectoryBuildPropsName, builder);
+        CollectDirectoryBuildChainDependencies(projectFile.Directory, DirectoryBuildTargetsName, builder);
+
+        return builder.Build();
+    }
+
+    private static void CollectDirectoryBuildChainDependencies(DirectoryInfo? directory, string fileName, ImportDependencyBuilder builder)
+    {
+        // Replay NearestDirectoryBuildFileChainContainsMarker's traversal for one conventional file name and
+        // record what each visited file lets the classifier accept. Anything the walk does not visit cannot
+        // have contributed to the verdict, so it contributes no cache dependency either.
+        for (var current = directory; current is not null; current = current.Parent)
+        {
+            var filePath = Path.Combine(current.FullName, fileName);
+            if (!File.Exists(filePath))
+            {
+                continue;
+            }
+
+            if (!TryLoadProjectRoot(filePath, out var root) || root is null || ContainsAppHostMarker(root))
+            {
+                // The verdict was decided by this file, whose own mtime the conventional walk already
+                // fingerprints. Nothing further up is imported for this name.
+                return;
+            }
+
+            CollectFileImportDependencies(root, current, fileName, builder, staticImportsAdmitProject: true);
+
+            switch (ClassifyDirectoryBuildChaining(root, fileName))
+            {
+                case DirectoryBuildChaining.ChainsToParent:
+                    continue;
+                case DirectoryBuildChaining.Uncertain:
+                case DirectoryBuildChaining.StopsHere:
+                default:
+                    return;
+            }
+        }
+    }
+
+    private static void CollectFileImportDependencies(
+        XElement root,
+        DirectoryInfo? containingDirectory,
+        string chainFileName,
+        ImportDependencyBuilder builder,
+        bool staticImportsAdmitProject)
+    {
+        foreach (var import in root.Descendants().Where(e => e.Name.LocalName.Equals("Import", StringComparison.Ordinal)))
+        {
+            var projectAttributeValue = import.Attribute("Project")?.Value;
+            if (projectAttributeValue is null)
+            {
+                continue;
+            }
+
+            foreach (var project in SplitImportProjectEntries(projectAttributeValue))
+            {
+                if (WalkUpFunctionCallStartRegex().IsMatch(project))
+                {
+                    RecordWalkUpImportDependency(project, builder);
+                    continue;
+                }
+
+                if (!staticImportsAdmitProject)
+                {
+                    // Only ContainsDynamicWalkUpImport runs over the .csproj itself, so a static import there
+                    // never admits the project and cannot make the prefilter's answer depend on that file.
+                    continue;
+                }
+
+                var classification = ClassifyStaticImportChaining(project, chainFileName);
+                if (classification.Chaining is not DirectoryBuildChaining.Uncertain)
+                {
+                    // ChainsToParent lands on the next file this walk visits by name, which the conventional
+                    // fingerprint already stats; StopsHere means the import never contributed to the verdict.
+                    continue;
+                }
+
+                if (classification.UncertainTargetPath is not { } targetPath
+                    || containingDirectory is null
+                    || !TryResolveImportPath(containingDirectory.FullName, targetPath, out var resolvedPath))
+                {
+                    builder.MarkUnfingerprintable();
+                    continue;
+                }
+
+                builder.AddExactPath(resolvedPath);
+            }
+        }
+    }
+
+    private static void RecordWalkUpImportDependency(string projectAttributeValue, ImportDependencyBuilder builder)
+    {
+        if (!TryGetWalkUpImport(projectAttributeValue, out var walkUpImport))
+        {
+            builder.MarkUnfingerprintable();
+            return;
+        }
+
+        if (IsAlreadyEnumeratedDirectoryBuildChain(walkUpImport))
+        {
+            // Conventional Directory.Build.* chaining resolves to files the cache already stats at every
+            // ancestor level.
+            return;
+        }
+
+        if (walkUpImport.AnchorFileName.Length == 0
+            || ContainsWildcard(walkUpImport.AnchorFileName)
+            || !IsAncestorChainSearchStart(walkUpImport.StartDirectoryArg))
+        {
+            // The searched file name is an MSBuild expression or a glob, or the search starts outside this
+            // project's ancestor chain (e.g. '$(ExternalBuildRoot)'). Either way the resolved file is not
+            // reachable by the ancestor walk that produces the fingerprint.
+            builder.MarkUnfingerprintable();
+            return;
+        }
+
+        // The anchor is tracked even when it is not the imported file: it is what selects WHICH ancestor
+        // directory the import resolves in, so creating or deleting an anchor changes the resolved import.
+        builder.AddAncestorSearchName(walkUpImport.AnchorFileName);
+
+        if (!walkUpImport.HasAppendedPath)
+        {
+            return;
+        }
+
+        if (!TryGetAppendedImportFileName(walkUpImport, out var appendedFileName))
+        {
+            builder.MarkUnfingerprintable();
+            return;
+        }
+
+        builder.AddAncestorSearchName(appendedFileName);
+    }
+
+    private static bool TryGetAppendedImportFileName(in WalkUpImport import, out string fileName)
+    {
+        // Work out the single file name an appended suffix produces, which differs per helper because the
+        // two return different things. Raw values and the file MSBuild ends up importing:
+        //
+        //   $([MSBuild]::GetPathOfFileAbove('Aspire.Common', '$(MSBuildThisFileDirectory)../')).props
+        //     -> GetPathOfFileAbove returns "<dir>/Aspire.Common", so the text concatenates onto the FILE
+        //        NAME and the import is "<dir>/Aspire.Common.props".
+        //   $([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildThisFileDirectory)../', 'Repo.marker'))/Custom.props
+        //     -> GetDirectoryNameOfFileAbove returns "<dir>" with no trailing separator, so the suffix must
+        //        start with one and the import is "<dir>/Custom.props".
+        //
+        // Anything else — an expression, a glob, a nested sub-directory, or a suffix whose separator usage
+        // does not match the helper (which would treat a file as a directory, or splice a directory name and
+        // a file name together) — cannot be reduced to one name that statting ancestor directories covers.
+        // Docs: https://learn.microsoft.com/visualstudio/msbuild/property-functions#msbuild-property-functions
+        fileName = string.Empty;
+        var appended = import.AppendedPath;
+        if (appended.Length == 0 || appended.Contains('$') || appended.Contains('@') || ContainsWildcard(appended))
+        {
+            return false;
+        }
+
+        if (import.IsGetPathOfFileAbove)
+        {
+            if (appended.AsSpan().IndexOfAny('/', '\\') >= 0)
+            {
+                return false;
+            }
+
+            fileName = import.AnchorFileName + appended;
+            return true;
+        }
+
+        if (appended[0] is not ('/' or '\\'))
+        {
+            return false;
+        }
+
+        var remainder = appended[1..];
+        if (remainder.Length == 0 || remainder.AsSpan().IndexOfAny('/', '\\') >= 0)
+        {
+            return false;
+        }
+
+        fileName = remainder;
+        return true;
+    }
+
+    private static bool TryResolveImportPath(string containingDirectory, string importPath, out string fullPath)
+    {
+        try
+        {
+            // MSBuild accepts '\' as a separator on every platform and normalizes it, but Path.GetFullPath
+            // only does so on Windows — so "..\shared\Directory.Build.props" would collapse into a single
+            // bogus segment on macOS/Linux. Normalize first so both spellings resolve identically.
+            var normalized = importPath.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
+            fullPath = Path.GetFullPath(Path.Combine(containingDirectory, normalized));
+            return true;
+        }
+        catch (Exception ex) when (ex is ArgumentException or PathTooLongException or NotSupportedException or IOException)
+        {
+            fullPath = string.Empty;
+            return false;
+        }
+    }
+
+    private sealed class ImportDependencyBuilder
+    {
+        private readonly SortedSet<string> _ancestorSearchFileNames = new(StringComparer.Ordinal);
+        private readonly SortedSet<string> _exactFilePaths = new(StringComparer.Ordinal);
+        private bool _hasUnfingerprintableImport;
+
+        public void AddAncestorSearchName(string fileName) => _ancestorSearchFileNames.Add(fileName);
+
+        public void AddExactPath(string fullPath) => _exactFilePaths.Add(fullPath);
+
+        public void MarkUnfingerprintable() => _hasUnfingerprintableImport = true;
+
+        public AppHostImportDependencies Build()
+            => new(_ancestorSearchFileNames, _exactFilePaths, _hasUnfingerprintableImport);
+    }
+
+    private static bool IsAncestorChainSearchStart(string? startDirectoryArg)
+    {
+        // Whether a walk-up search is guaranteed to land on a directory the ancestor walk enumerates. Unlike
+        // IsImmediateParentChainStart this accepts ANY number of '..' levels, because every one of them is
+        // still an ancestor of the importing file (and therefore of the project). Raw forms:
+        //   null / ''                              -> defaults to $(MSBuildThisFileDirectory): in chain
+        //   '$(MSBuildThisFileDirectory)../'       -> in chain
+        //   '$(MSBuildThisFileDirectory)../../'    -> in chain
+        //   '$(MSBuildThisFileDirectory)../peer/'  -> NOT in chain (a named segment leaves the ancestor path)
+        //   '$(ExternalBuildRoot)' / '/abs/path'   -> NOT in chain
+        if (startDirectoryArg is null)
+        {
+            return true;
+        }
+
+        var start = StripQuotes(startDirectoryArg).Trim();
+        if (start.Length == 0)
+        {
+            return true;
+        }
+
+        const string thisFileDirectory = "$(MSBuildThisFileDirectory)";
+        if (!start.StartsWith(thisFileDirectory, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        foreach (var rawSegment in start[thisFileDirectory.Length..].Split('/', '\\'))
+        {
+            switch (rawSegment.Trim())
+            {
+                case "" or "." or "..":
+                    continue;
+                default:
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool ContainsDynamicWalkUpImport(XElement root)
+    {
+        // Match <Import Project="..."> values that use MSBuild's tree-walking path helpers:
+        //   $([MSBuild]::GetPathOfFileAbove('<filename>', '<starting-dir>'))
+        //   $([MSBuild]::GetDirectoryNameOfFileAbove('<starting-dir>', '<filename>'))
+        // These resolve at evaluation time by walking parent directories, and they routinely point at
+        // files (RepoTesting.props, custom shared targets) that we do not enumerate by name in the
+        // ancestor walk. A statically-named Import like <Import Project="NullablePolyfill.targets" />
+        // does NOT match — it points at a fixed file the project author already named, and treating
+        // those as uncertain would over-promote every project in a repo whose root Directory.Build.*
+        // imports Arcade or common polyfills. The Sdk attribute is intentionally not consulted here:
+        // <Import Sdk="Aspire.AppHost.Sdk" .../> is already recognized as a positive marker by
+        // ContainsAppHostMarker, and any other <Import Sdk="..."> brings in an unrelated SDK whose
+        // contents will not declare Aspire markers.
+        //
+        // Match case-insensitively because MSBuild property function names are themselves
+        // case-insensitive — `$([MSBuild]::getpathoffileabove(...))` and
+        // `$([MSBuild]::GetPathOfFileAbove(...))` resolve to the same path at evaluation time, so a
+        // case-sensitive substring check here would silently filter out the lower/mixed-case variants
+        // and re-open the false-negative window this fallback is meant to close.
+        //
+        // Do not apply the conventional Directory.Build.* chaining shortcut here. That shortcut is sound
+        // only while following a Directory.Build.* file: a project-file import can start at its parent,
+        // bypass a nearer marker-less auto-import, and explicitly reach an outer marker-bearing file.
+        // Docs: https://learn.microsoft.com/visualstudio/msbuild/property-functions#msbuild-property-functions
+        foreach (var import in root.Descendants().Where(e => e.Name.LocalName.Equals("Import", StringComparison.Ordinal)))
+        {
+            var projectAttributeValue = import.Attribute("Project")?.Value;
+            if (projectAttributeValue is null)
+            {
+                continue;
+            }
+
+            foreach (var project in SplitImportProjectEntries(projectAttributeValue))
+            {
+                // Match the function-call *shape* (name followed by `(`) rather than a raw substring — a static
+                // import like <Import Project="build/GetPathOfFileAbove.props" /> contains the helper name as
+                // path text but is not a function call, and treating it as uncertain would over-promote ordinary
+                // projects.
+                if (!WalkUpFunctionCallStartRegex().IsMatch(project))
+                {
+                    continue;
+                }
+
+                // Either a walk-up we cannot resolve statically (the arguments are themselves MSBuild
+                // expressions, the call is malformed) or one that lands somewhere the ancestor walk does not
+                // enumerate. Be conservative and treat the project as a candidate.
                 return true;
             }
         }
 
         return false;
     }
+
+    /// <summary>
+    /// One parsed <c>$([MSBuild]::GetPathOfFileAbove(...))</c> / <c>$([MSBuild]::GetDirectoryNameOfFileAbove(...))</c>
+    /// import, split into the pieces the classifier and the cache fingerprint need.
+    /// </summary>
+    /// <param name="IsGetPathOfFileAbove">
+    /// <see langword="true"/> for the file-returning helper, <see langword="false"/> for the
+    /// directory-returning one. The two differ in which argument is the anchor and in whether the call alone
+    /// identifies an imported file.
+    /// </param>
+    /// <param name="AnchorFileName">
+    /// The file name the walk-up searches for — argument 1 of <c>GetPathOfFileAbove(file, start)</c> and
+    /// argument 2 of <c>GetDirectoryNameOfFileAbove(start, file)</c>. Empty when it is not statically
+    /// determinable (for example <c>GetPathOfFileAbove($(SharedPropsName))</c>).
+    /// </param>
+    /// <param name="StartDirectoryArg">
+    /// The directory the search starts from, or <see langword="null"/> when omitted — in which case
+    /// <c>GetPathOfFileAbove</c> defaults to <c>$(MSBuildThisFileDirectory)</c>.
+    /// </param>
+    /// <param name="AppendedPath">
+    /// Raw path text concatenated after the call, or empty when there is none. It is kept verbatim rather
+    /// than reduced to a file name because how it combines with the call result depends on the helper — see
+    /// <see cref="TryGetAppendedImportFileName"/>.
+    /// </param>
+    private readonly record struct WalkUpImport(
+        bool IsGetPathOfFileAbove,
+        string AnchorFileName,
+        string? StartDirectoryArg,
+        string AppendedPath)
+    {
+        public bool HasAppendedPath => AppendedPath.Length > 0;
+    }
+
+    private static bool TryGetWalkUpImport(string projectAttributeValue, out WalkUpImport import)
+    {
+        // Parse one MSBuild property-function walk-up call out of the Import Project value. Raw forms:
+        //   $([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))
+        //   $([MSBuild]::GetPathOfFileAbove('Aspire.Common.props'))
+        //   $([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildThisFileDirectory)..', 'Directory.Build.props'))/Custom.props
+        //   $([MSBuild]::getpathoffileabove(Directory.Packages.props, $(MSBuildThisFileDirectory)..))
+        // Arguments may be single-quoted, double-quoted, or unquoted, and the helper names are matched
+        // case-insensitively because MSBuild property function names are case-insensitive.
+        //
+        // The imported file is NOT always the anchor argument: when path text follows the call, that
+        // appended text names the imported file and the anchor only selects the directory. Callers need both
+        // parts, so they are reported separately instead of being collapsed into a single "target".
+        //
+        // Returns false when no walk-up call is recognized or when the call is malformed (unbalanced
+        // parentheses); callers treat that as "uncertain".
+        import = default;
+        var callMatch = WalkUpFunctionCallStartRegex().Match(projectAttributeValue);
+        if (!callMatch.Success || projectAttributeValue[..callMatch.Index].Trim().Length > 0)
+        {
+            return false;
+        }
+
+        var isGetPathOfFileAbove = callMatch.Groups[1].Value.Equals("GetPathOfFileAbove", StringComparison.OrdinalIgnoreCase);
+        var argsStart = callMatch.Index + callMatch.Length;
+
+        if (!TryParseFunctionCallArgs(projectAttributeValue, argsStart, out var args, out var afterCloseParen))
+        {
+            return false;
+        }
+
+        // The anchor file name and the starting directory sit in opposite argument slots for the two helpers.
+        var anchorArg = isGetPathOfFileAbove
+            ? (args.Count >= 1 ? args[0] : null)
+            : (args.Count >= 2 ? args[1] : null);
+        var startDirectoryArg = isGetPathOfFileAbove
+            ? (args.Count >= 2 ? args[1] : null)
+            : (args.Count >= 1 ? args[0] : null);
+
+        var anchorFileName = anchorArg is null ? string.Empty : StripQuotes(anchorArg).Trim();
+        if (anchorFileName.Contains('$') || anchorFileName.Contains('@'))
+        {
+            // The anchor is itself an MSBuild expression; only MSBuild knows which file is searched for.
+            anchorFileName = string.Empty;
+        }
+
+        // The supported fingerprintable shape is a standalone $([MSBuild]::...) expression with an
+        // optional literal suffix. Prefixes or enclosing property functions can change the imported path
+        // in ways this parser cannot model, so callers must treat them as unfingerprintable.
+        var suffixStart = afterCloseParen;
+        while (suffixStart < projectAttributeValue.Length && char.IsWhiteSpace(projectAttributeValue[suffixStart]))
+        {
+            suffixStart++;
+        }
+        if (suffixStart >= projectAttributeValue.Length || projectAttributeValue[suffixStart] != ')')
+        {
+            return false;
+        }
+        suffixStart++;
+
+        var appendedPath = suffixStart < projectAttributeValue.Length
+            ? projectAttributeValue[suffixStart..].Trim()
+            : string.Empty;
+        if (appendedPath.Contains('(') || appendedPath.Contains(')'))
+        {
+            return false;
+        }
+
+        import = new WalkUpImport(
+            isGetPathOfFileAbove,
+            anchorFileName,
+            startDirectoryArg,
+            appendedPath);
+        return true;
+    }
+
+    private static bool TryParseFunctionCallArgs(string text, int startIndex, out List<string> args, out int afterCloseParen)
+    {
+        // Hand-rolled comma-splitter with balanced-paren and quote awareness. MSBuild property-
+        // function arguments can be:
+        //   * Single-quoted strings ('like this')
+        //   * Double-quoted strings ("like this")
+        //   * Unquoted scalars (Directory.Build.props)
+        //   * MSBuild property references that contain parens, e.g. $(MSBuildThisFileDirectory)..
+        //   * Other nested function calls
+        // We need to find the top-level commas separating arguments and the `)` that closes the
+        // call we started inside. Regex with `[^,)]` would prematurely terminate on the `)` inside
+        // a $(...) reference; a tiny state machine handles this correctly.
+        args = new List<string>();
+        var current = new StringBuilder();
+        var depth = 1;
+        var inSingleQuote = false;
+        var inDoubleQuote = false;
+
+        for (var i = startIndex; i < text.Length; i++)
+        {
+            var c = text[i];
+
+            if (inSingleQuote)
+            {
+                if (c == '\'')
+                {
+                    inSingleQuote = false;
+                }
+                current.Append(c);
+                continue;
+            }
+            if (inDoubleQuote)
+            {
+                if (c == '"')
+                {
+                    inDoubleQuote = false;
+                }
+                current.Append(c);
+                continue;
+            }
+
+            switch (c)
+            {
+                case '\'':
+                    inSingleQuote = true;
+                    current.Append(c);
+                    break;
+                case '"':
+                    inDoubleQuote = true;
+                    current.Append(c);
+                    break;
+                case '(':
+                    depth++;
+                    current.Append(c);
+                    break;
+                case ')':
+                    depth--;
+                    if (depth == 0)
+                    {
+                        args.Add(current.ToString().Trim());
+                        afterCloseParen = i + 1;
+                        return true;
+                    }
+                    current.Append(c);
+                    break;
+                case ',' when depth == 1:
+                    args.Add(current.ToString().Trim());
+                    current.Clear();
+                    break;
+                default:
+                    current.Append(c);
+                    break;
+            }
+        }
+
+        afterCloseParen = text.Length;
+        return false;
+    }
+
+    private static string StripQuotes(string value)
+    {
+        var trimmed = value.Trim();
+        if (trimmed.Length >= 2
+            && ((trimmed[0] == '\'' && trimmed[^1] == '\'')
+                || (trimmed[0] == '"' && trimmed[^1] == '"')))
+        {
+            return trimmed[1..^1];
+        }
+        return trimmed;
+    }
+
+    private static bool IsConventionalDirectoryBuildFileName(string fileName)
+    {
+        // Only skip dynamic walk-up imports for the exact file names the ancestor walk probes.
+        // On case-sensitive filesystems, differently-cased names can resolve to different files;
+        // keep those candidates flowing to MSBuild instead of assuming we already inspected them.
+        return fileName.Equals(DirectoryBuildPropsName, StringComparison.Ordinal)
+            || fileName.Equals(DirectoryBuildTargetsName, StringComparison.Ordinal);
+    }
+
+    private static bool CanMatchConventionalDirectoryBuildFileName(string fileName)
+        => System.IO.Enumeration.FileSystemName.MatchesSimpleExpression(fileName, DirectoryBuildPropsName, ignoreCase: true)
+            || System.IO.Enumeration.FileSystemName.MatchesSimpleExpression(fileName, DirectoryBuildTargetsName, ignoreCase: true);
+
+    // Strict MSBuild property-function call shape: the full $([MSBuild]::Function( prefix. Static
+    // import paths that merely contain the helper name as text (e.g.
+    // "build/GetPathOfFileAbove('Shared.props').props") do NOT match because they lack the
+    // $([MSBuild]::...) wrapper that MSBuild requires for property-function invocation.
+    // Docs: https://learn.microsoft.com/visualstudio/msbuild/property-functions#calling-static-methods
+    [GeneratedRegex(
+        @"\$\(\s*\[MSBuild\]\s*::\s*(GetPathOfFileAbove|GetDirectoryNameOfFileAbove)\s*\(",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex WalkUpFunctionCallStartRegex();
 
     private static bool ContainsAppHostMarker(XElement root)
     {
@@ -288,12 +1276,33 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             return true;
         }
 
-        // 3) Explicit <IsAspireHost>true</IsAspireHost> property element. The Aspire.AppHost.Sdk sets this
+        // 3) <Import> form of an SDK reference, e.g.:
+        //      <Import Project="Sdk.props" Sdk="Aspire.AppHost.Sdk" Version="9.0.0" />
+        //      <Import Project="Sdk.targets" Sdk="Aspire.AppHost.Sdk" />
+        //    This is functionally equivalent to the previous two forms — it lets a project import an SDK's
+        //    Sdk.props/Sdk.targets at a specific point in the file. Missing it means an AppHost using this
+        //    form is silently rejected by the cheap pre-check. See:
+        //    https://learn.microsoft.com/visualstudio/msbuild/how-to-use-project-sdk#import-an-sdk-into-your-project
+        var hasImportSdk = root.Descendants()
+            .Any(e => e.Name.LocalName.Equals("Import", StringComparison.Ordinal)
+                && string.Equals(e.Attribute("Sdk")?.Value, AspireAppHostSdkName, StringComparison.OrdinalIgnoreCase));
+        if (hasImportSdk)
+        {
+            return true;
+        }
+
+        // 4) Explicit <IsAspireHost>true</IsAspireHost> property element. The Aspire.AppHost.Sdk sets this
         //    during evaluation, but it can also appear literally in a project or build file. Matching on the
         //    element (rather than a substring) means a consumer condition such as
         //    Condition="'$(IsAspireHost)' == 'true'" is correctly not treated as a marker.
+        //
+        //    Match the element name case-insensitively because MSBuild property names are themselves
+        //    case-insensitive — `<isaspirehost>true</isaspirehost>` sets `$(IsAspireHost)` to `true` at
+        //    evaluation time just as the PascalCase form does, so a case-sensitive comparison here would
+        //    silently reject a real AppHost using lower- or mixed-case marker syntax.
+        //    Docs: https://learn.microsoft.com/visualstudio/msbuild/msbuild-properties
         return root.Descendants()
-            .Any(e => e.Name.LocalName.Equals(IsAspireHostProperty, StringComparison.Ordinal)
+            .Any(e => e.Name.LocalName.Equals(IsAspireHostProperty, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(e.Value.Trim(), "true", StringComparison.OrdinalIgnoreCase));
     }
 

@@ -187,7 +187,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to An error occurred while connecting to the apphost. The apphost possibly crashed before it was available: {0}..
+        ///   Looks up a localized string similar to An error occurred while connecting to the AppHost: {0}.
         /// </summary>
         public static string ErrorConnectingToAppHost {
             get {
@@ -196,7 +196,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to An error occurred while connecting to the apphost. The apphost possibly crashed before it was available: {0}..
+        ///   Looks up a localized string similar to The connection to the AppHost was lost: {0}.
         /// </summary>
         public static string AppHostConnectionLost {
             get {

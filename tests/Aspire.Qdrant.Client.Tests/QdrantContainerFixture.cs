@@ -29,7 +29,7 @@ public sealed class QdrantContainerFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        if (RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker))
+        if (RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers))
         {
             Container = new ContainerBuilder()
               .WithImage($"{ComponentTestConstants.AspireTestContainerRegistry}/{QdrantContainerImageTags.Image}:{QdrantContainerImageTags.Tag}")

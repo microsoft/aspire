@@ -281,7 +281,10 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
         if (Scope is not null)
         {
             context.Writer.WriteStartObject("scope");
-            WriteScopeValue(context, "resourceGroup", Scope.ResourceGroup);
+            if (Scope.HasResourceGroup)
+            {
+                WriteScopeValue(context, "resourceGroup", Scope.ResourceGroup);
+            }
             WriteScopeValue(context, "subscription", Scope.Subscription);
             if (Scope.IsTenantScope)
             {

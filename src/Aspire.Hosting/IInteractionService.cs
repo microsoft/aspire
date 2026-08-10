@@ -378,7 +378,7 @@ public sealed class InteractionInput
     public bool AllowCustomChoice { get; init; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether a custom choice is allowed. Only used by <see cref="InputType.Choice"/> inputs.
+    /// Gets or sets a value indicating whether the input is disabled.
     /// </summary>
     public bool Disabled { get; set; }
 
@@ -407,7 +407,8 @@ public sealed class InteractionInput
     /// <summary>
     /// Gets or sets the file type filter for <see cref="InputType.File"/> inputs.
     /// Uses the same format as the HTML <c>accept</c> attribute, e.g. <c>".pem,.pfx,.crt"</c> or <c>"image/*"</c>.
-    /// When set, the file picker restricts selectable files and the CLI validates that chosen files match.
+    /// When set, the file picker restricts selectable files. The CLI validates only dot-prefixed extension filters
+    /// and does not validate MIME type patterns such as <c>"image/*"</c>.
     /// </summary>
     public string? FileFilter { get; init; }
 

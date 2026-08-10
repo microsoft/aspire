@@ -82,6 +82,7 @@ public static class AzureAppConfigurationExtensions
 
         var resource = new AzureAppConfigurationResource(name, configureInfrastructure);
         return builder.AddResource(resource)
+            .WithIconName("Settings")
             .WithDefaultRoleAssignments(AppConfigurationBuiltInRole.GetBuiltInRoleName,
                 AppConfigurationBuiltInRole.AppConfigurationDataOwner);
     }

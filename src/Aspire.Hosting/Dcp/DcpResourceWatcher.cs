@@ -39,6 +39,16 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
 
     private readonly ConcurrentDictionary<string, (CancellationTokenSource Cancellation, Task Task)> _logStreams = new();
     private readonly ConcurrentDictionary<string, PendingFollowLogDeduplication> _pendingFollowLogDeduplications = new();
+
+    // Last resource version seen for each DCP object, keyed by (object kind, object name). Used to
+    // recognize and drop watch replays. See ProcessResourceChange.
+    private readonly ConcurrentDictionary<(string Kind, string Name), string?> _resourceVersions = new();
+
+    // Holds names of resources that reached terminal state and logs have already been flushed for them. 
+    // Prevents re-reading DCP's log store every time an already-terminal resource is reported again.
+    // Point-in-time FailedToStart reads and incomplete attempts are intentionally not recorded so a later terminal
+    // notification can retry them.
+    private readonly ConcurrentDictionary<string, bool> _allLogsFlushed = new();
     private Task? _resourceWatchTask;
 
     private readonly record struct LogInformationEntry(string ResourceName, bool? LogsAvailable, bool? HasSubscribers);
@@ -265,6 +275,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                     }
 
                     _pendingFollowLogDeduplications.TryRemove(resource.Metadata.Name, out _);
+                    _allLogsFlushed.TryRemove(resource.Metadata.Name, out _);
 
                     // TODO: Handle resource deletion
                     if (_logger.IsEnabled(LogLevel.Trace))
@@ -293,12 +304,28 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                     // Only do this when a subscriber is active. Without subscribers there is no caller
                     // depending on the ordering, and GetAllAsync can still query DCP's external log
                     // store later without this extra read on every terminal transition.
-                    if (HasLogsAvailable(resource) &&
-                        status.State is not null &&
-                        KnownResourceStates.TerminalStates.Contains(status.State) &&
-                        _loggerService.HasActiveSubscribers(resource.Metadata.Name))
+                    //
+                    // A successfully completed follow stream needs to run only once per terminal period.
+                    // The flush is awaited while holding the watcher's single output semaphore, so repeating
+                    // a completed flush would stall all resource watches. Point-in-time FailedToStart reads
+                    // and incomplete attempts remain retryable because they cannot guarantee all logs were read.
+                    // The marker is cleared below if the resource is restarted.
+                    if (status.State is not null && KnownResourceStates.TerminalStates.Contains(status.State))
                     {
-                        await FlushCurrentLogsAsync(resource, status, _shutdownToken).ConfigureAwait(false);
+                        if (HasLogsAvailable(resource) &&
+                            _loggerService.HasActiveSubscribers(resource.Metadata.Name) &&
+                            !_allLogsFlushed.ContainsKey(resource.Metadata.Name))
+                        {
+                            var completed = await FlushCurrentLogsAsync(resource, status, _shutdownToken).ConfigureAwait(false);
+                            if (completed)
+                            {
+                                _allLogsFlushed.TryAdd(resource.Metadata.Name, true);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        _allLogsFlushed.TryRemove(resource.Metadata.Name, out _);
                     }
 
                     await _executorEvents.PublishAsync(new OnResourceChangedContext(_shutdownToken, resourceType, appModelResource, resource.Metadata.Name, status, s => snapshotFactory(resource, s))).ConfigureAwait(false);
@@ -339,10 +366,13 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         }
     }
 
-    private async Task FlushCurrentLogsAsync<T>(T resource, ResourceStatus status, CancellationToken cancellationToken)
+    private async Task<bool> FlushCurrentLogsAsync<T>(T resource, ResourceStatus status, CancellationToken cancellationToken)
         where T : CustomResource, IKubernetesStaticMetadata
     {
         var logEntries = new List<LogEntry>();
+        var follow = status.State != KnownResourceStates.FailedToStart;
+        var completed = false;
+
         // The resource watcher serializes all resource-change handling through one semaphore in
         // Start(). A follow stream gives the strongest DCP guarantee for terminal logs, but it is
         // still an external stream: if DCP stalls or the resource disappears mid-stream, waiting
@@ -359,10 +389,9 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
             // race with DCP's own cleanup/log-drain work.
             //
             // FailedToStart is different: the process never starts, so there may be no completing
-            // process log stream to follow. DCP emits the system failure logs before the FailedToStart
-            // state is observed, so use a current snapshot there to avoid blocking terminal state
-            // publication indefinitely.
-            var follow = status.State != KnownResourceStates.FailedToStart;
+            // process log stream to follow. Use a current snapshot there to avoid blocking terminal
+            // state publication indefinitely. A later resource notification retries the snapshot
+            // because, unlike a completed follow stream, it cannot prove all logs were drained.
             var logSource = new ResourceLogSource<T>(_logger, _kubernetesService, resource, follow: follow);
 
             // Treat the flush as best-effort: logs collected before the timeout are still forwarded
@@ -371,6 +400,11 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
             {
                 logEntries.AddRange(CreateLogEntries(batch));
             }
+
+            // ResourceLogSource treats cancellation as an expected stream shutdown, so explicitly
+            // distinguish that from DCP completing every follow stream.
+            timeoutCts.Token.ThrowIfCancellationRequested();
+            completed = true;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -394,6 +428,9 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         // the same DCP log source again.
         SetPendingFollowLogDeduplication(resource.Metadata.Name, logEntries);
         _loggerService.AddLogEntries(resource.Metadata.Name, logEntries, inMemorySource: false, skipExisting: true);
+
+        // Only normal completion of a follow stream proves DCP has no more logs to deliver.
+        return follow && completed;
     }
 
     private static bool HasLogsAvailable(CustomResource resource)
@@ -710,20 +747,55 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         }
     }
 
-    private static bool ProcessResourceChange<T>(ConcurrentDictionary<string, T> map, WatchEventType watchEventType, T resource)
-            where T : CustomResource
+    private bool ProcessResourceChange<T>(ConcurrentDictionary<string, T> map, WatchEventType watchEventType, T resource)
+            where T : CustomResource, IKubernetesStaticMetadata
     {
+        var resourceKey = (T.ObjectKind, resource.Metadata.Name);
+
         switch (watchEventType)
         {
             case WatchEventType.Added:
-                map.TryAdd(resource.Metadata.Name, resource);
-                break;
-
             case WatchEventType.Modified:
+                // DCP watches are torn down and re-established every few minutes (see
+                // KubernetesService.WatchAsync, which wraps the watch in PeriodicRestartAsyncEnumerable).
+                // A watch is backed by a list-and-watch request, so each fresh watch re-delivers every
+                // object that currently exists, and those replays are indistinguishable from real
+                // updates. Without this check a resource that never changes again - a container stuck
+                // in FailedToStart, for example - keeps producing snapshot versions and keeps re-reading
+                // DCP's log store for as long as the AppHost runs.
+                // See https://github.com/microsoft/aspire/issues/18869.
+                //
+                // resourceVersion is the standard mechanism for detecting this: the server changes it
+                // whenever the stored object changes and leaves it alone otherwise, so a replay of an
+                // unchanged object carries the version we have already seen.
+                // https://kubernetes.io/docs/reference/using-api/api-concepts/#resource-versions
+                var resourceVersion = resource.Metadata.ResourceVersion;
+
+                // The value is opaque, so it is only compared for equality; ordering is explicitly not defined. 
+                // An empty value means the server did not supply one, which is treated as "cannot tell", 
+                // so the event is processed rather than risk suppressing a real change.
+                if (!string.IsNullOrEmpty(resourceVersion) &&
+                    _resourceVersions.TryGetValue(resourceKey, out var previousResourceVersion) &&
+                    string.Equals(previousResourceVersion, resourceVersion, StringComparison.Ordinal))
+                {
+                    if (_logger.IsEnabled(LogLevel.Trace))
+                    {
+                        _logger.LogTrace("Ignoring {ResourceKind} resource {ResourceName} reported by the DCP watch because its resource version {ResourceVersion} is unchanged.", T.ObjectKind, resource.Metadata.Name, resourceVersion);
+                    }
+
+                    return false;
+                }
+
+                // Added is treated like Modified rather than using TryAdd. A watch restart replays
+                // existing objects as Added, and if such an object changed while the watch was down,
+                // keeping the stale instance would leave the map disagreeing with both the version
+                // recorded here and the snapshot published to subscribers.
+                _resourceVersions[resourceKey] = resourceVersion;
                 map[resource.Metadata.Name] = resource;
                 break;
 
             case WatchEventType.Deleted:
+                _resourceVersions.TryRemove(resourceKey, out _);
                 map.Remove(resource.Metadata.Name, out _);
                 break;
 

@@ -141,6 +141,9 @@
   <data name="StartingDashboard" xml:space="preserve">
     <value>Starting dashboard...</value>
   </data>
+  <data name="EnsuringDashboardBundle" xml:space="preserve">
+    <value>Preparing dashboard bits...</value>
+  </data>
   <data name="DashboardStartTimedOut" xml:space="preserve">
     <value>Dashboard did not become ready within the expected time.</value>
   </data>

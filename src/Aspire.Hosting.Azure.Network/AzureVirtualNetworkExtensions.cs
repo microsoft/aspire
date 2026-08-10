@@ -106,7 +106,8 @@ public static class AzureVirtualNetworkExtensions
             return builder.CreateResourceBuilder(resource);
         }
 
-        return builder.AddResource(resource);
+        return builder.AddResource(resource)
+            .WithIconName("Router");
     }
 
     private static void ConfigureVirtualNetwork(AzureResourceInfrastructure infra)
@@ -274,6 +275,7 @@ public static class AzureVirtualNetworkExtensions
         }
 
         return builder.ApplicationBuilder.AddResource(subnet)
+            .WithIconName("Router")
             .ExcludeFromManifest();
     }
 
@@ -321,31 +323,86 @@ public static class AzureVirtualNetworkExtensions
                 $"The resource '{target.Name}' is already associated with a different delegated subnet. A resource can use only one delegated subnet.");
         }
 
-        var conflictingDelegation = subnet.Resource.Annotations
+        // AzureSubnetResource emits only the last service-delegation annotation. Older annotations may
+        // still be present when callers appended the public annotation directly, so only that effective
+        // delegation can conflict with the target. Azure service identifiers are case-insensitive.
+        var existingDelegation = subnet.Resource.Annotations
             .OfType<AzureSubnetServiceDelegationAnnotation>()
-            .FirstOrDefault(annotation => !string.Equals(
-                annotation.ServiceName,
+            .LastOrDefault();
+        if (existingDelegation is not null
+            && !string.Equals(
+                existingDelegation.ServiceName,
                 target.DelegatedSubnetServiceName,
-                StringComparison.OrdinalIgnoreCase));
-        if (conflictingDelegation is not null)
+                StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                $"The subnet '{subnet.Resource.Name}' is already delegated to '{conflictingDelegation.ServiceName}' and cannot also be delegated to '{target.DelegatedSubnetServiceName}'.");
+                $"The subnet '{subnet.Resource.Name}' is already delegated to '{existingDelegation.ServiceName}' and cannot also be delegated to '{target.DelegatedSubnetServiceName}'.");
         }
 
         builder.WithAnnotation(
             new DelegatedSubnetAnnotation(subnetId),
             ResourceAnnotationMutationBehavior.Replace);
 
-        // The subnet provisioner emits a single delegation, so replacing prevents duplicate annotations
-        // when the same subnet is configured repeatedly.
-        subnet.WithAnnotation(
-            new AzureSubnetServiceDelegationAnnotation(
-                target.DelegatedSubnetServiceName,
-                target.DelegatedSubnetServiceName),
-            ResourceAnnotationMutationBehavior.Replace);
+        // Delegate the subnet to the target's service. Routed through WithServiceDelegation so every
+        // service-delegation producer shares the same last-write-wins behavior and duplicate
+        // normalization, ensuring the subnet retains a single delegation annotation.
+        subnet.WithServiceDelegation(target.DelegatedSubnetServiceName);
 
         return builder;
+    }
+
+    /// <summary>
+    /// Delegates the subnet to the specified Azure service.
+    /// </summary>
+    /// <param name="builder">The subnet resource builder.</param>
+    /// <param name="serviceName">The service name to delegate the subnet to (e.g., "Microsoft.App/environments"). See <see cref="AzureSubnetServiceDelegations"/> for well-known values.</param>
+    /// <param name="name">The name of the service delegation. If not specified, defaults to <paramref name="serviceName"/>.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{AzureSubnetResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>
+    /// Service delegation grants the specified Azure service permission to create service-specific
+    /// resources in the subnet. Azure subnets can carry more than one delegation, but Aspire models a
+    /// subnet with a single delegation and emits only the most recent one. Calling this multiple times,
+    /// or combining it with <see cref="WithDelegatedSubnet{T}"/>, therefore replaces any previously
+    /// configured delegation with the latest value (last-write-wins).
+    /// </remarks>
+    /// <example>
+    /// This example delegates a subnet to Azure Container Instances using a well-known value from
+    /// <see cref="AzureSubnetServiceDelegations"/>:
+    /// <code>
+    /// var vnet = builder.AddAzureVirtualNetwork("vnet");
+    /// var subnet = vnet.AddSubnet("aci-subnet", "10.0.0.0/23")
+    ///     .WithServiceDelegation(AzureSubnetServiceDelegations.ContainerInstances);
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IResourceBuilder<AzureSubnetResource> WithServiceDelegation(
+        this IResourceBuilder<AzureSubnetResource> builder,
+        string serviceName,
+        string? name = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(serviceName);
+
+        // The delegation name defaults to the service name so callers don't have to repeat the
+        // value. Validate after defaulting so an explicitly empty name is rejected here rather
+        // than surfacing as an invalid (empty) delegation name at deployment time.
+        name ??= serviceName;
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        // AzureSubnetServiceDelegationAnnotation is public, so a subnet may already carry one or more
+        // delegation annotations that were appended directly (for example, before this helper existed,
+        // or via another producer). ResourceAnnotationMutationBehavior.Replace relies on SingleOrDefault
+        // internally and throws when more than one annotation is present, so a plain Replace can't be
+        // used here. Collapse any pre-existing delegations first, then append the replacement so the
+        // subnet ends with exactly one delegation (last-write-wins), matching AzureSubnetResource, which
+        // emits only the last delegation.
+        foreach (var existing in builder.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>().ToArray())
+        {
+            builder.Resource.Annotations.Remove(existing);
+        }
+
+        return builder.WithAnnotation(new AzureSubnetServiceDelegationAnnotation(name, serviceName));
     }
 
     /// <summary>

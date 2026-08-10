@@ -609,6 +609,24 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Environment check &apos;{0}&apos; timed out after {1} seconds..
+        /// </summary>
+        public static string EnvironmentCheckTimedOutMessageFormat {
+            get {
+                return ResourceManager.GetString("EnvironmentCheckTimedOutMessageFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Environment checks timed out after {0} seconds..
+        /// </summary>
+        public static string EnvironmentChecksTimedOutMessageFormat {
+            get {
+                return ResourceManager.GetString("EnvironmentChecksTimedOutMessageFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to No trusted developer certificate was available for the Developer Control Plane (DCP) developer certificate connection check.
         /// </summary>
         public static string DcpDeveloperCertificateUnavailableMessage {
@@ -875,6 +893,15 @@ namespace Aspire.Cli.Resources {
         public static string InstallationDiscoveryFailedReason {
             get {
                 return ResourceManager.GetString("InstallationDiscoveryFailedReason", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Install discovery timed out after {0} seconds. See the Aspire CLI logs for details..
+        /// </summary>
+        public static string InstallationDiscoveryTimedOutReasonFormat {
+            get {
+                return ResourceManager.GetString("InstallationDiscoveryTimedOutReasonFormat", resourceCulture);
             }
         }
 

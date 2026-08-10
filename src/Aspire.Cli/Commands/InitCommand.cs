@@ -35,6 +35,8 @@ internal sealed class InitCommand : BaseCommand
 
     protected override bool UpdateNotificationsEnabled => true;
 
+    internal override bool PrefetchesTemplatePackageMetadata => true;
+
     private readonly CliExecutionContext _executionContext;
     private readonly ILanguageService _languageService;
     private readonly ISolutionLocator _solutionLocator;

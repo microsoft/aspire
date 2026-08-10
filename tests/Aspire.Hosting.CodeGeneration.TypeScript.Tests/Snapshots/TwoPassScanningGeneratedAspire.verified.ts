@@ -935,7 +935,7 @@ export interface CreateInteractionInputOptions {
     maxFileSize?: number | null;
     /** Gets or sets a value indicating whether multiple files can be selected. Only used by file inputs. */
     allowMultipleFiles?: boolean | null;
-    /** Gets or sets the file type filter for file inputs. Uses the same format as the HTML accept attribute. */
+    /** Gets or sets the file type filter for file inputs. Uses the same format as the HTML accept attribute. The CLI validates only dot-prefixed extension filters and does not validate MIME type patterns such as "image/*". */
     fileFilter?: string | null;
 }
 
@@ -1296,6 +1296,22 @@ export interface ResourceUrlAnnotation {
     endpoint?: EndpointReference;
     /** Locations where this URL should be shown on the dashboard. Defaults to `SummaryAndDetails`. */
     displayLocation?: UrlDisplayLocation;
+}
+
+/**
+ * Holds settings applicable to the AppHost run mode (when `Operation` is `Run`).
+ *
+ * Integrations use it to vary how their resources are launched without changing the core hosting behavior.
+ * In `Publish` mode every property holds its default value.
+ */
+export interface RunConfiguration {
+    /**
+     * Indicates that resources should start in watch mode if able.
+     *
+     * Integrations that support watch can launch their resources so that source changes are hot-reloaded.
+     * This is a hint: integrations that cannot watch their resources should start them in normal fashion.
+     */
+    watchEnabled?: boolean;
 }
 
 /** Test DTO to verify [AspireDto] generates TypeScript interfaces. */
@@ -3644,6 +3660,8 @@ export interface DistributedApplicationExecutionContext {
     };
     /** The operation currently being performed by the AppHost. */
     operation(): Promise<DistributedApplicationOperation>;
+    /** Describes how the AppHost is being run. Only meaningful when `Operation` is `Run`; otherwise every aspect holds its default value. */
+    runConfiguration(): Promise<RunConfiguration>;
     /** The `IServiceProvider` for the AppHost. */
     serviceProvider(): ServiceProviderPromise;
     /** The `IServiceProvider` for the AppHost. */
@@ -3657,6 +3675,8 @@ export interface DistributedApplicationExecutionContext {
 export interface DistributedApplicationExecutionContextPromise extends PromiseLike<DistributedApplicationExecutionContext> {
     /** The operation currently being performed by the AppHost. */
     operation(): Promise<DistributedApplicationOperation>;
+    /** Describes how the AppHost is being run. Only meaningful when `Operation` is `Run`; otherwise every aspect holds its default value. */
+    runConfiguration(): Promise<RunConfiguration>;
     /** The `IServiceProvider` for the AppHost. */
     serviceProvider(): ServiceProviderPromise;
     /** The `IServiceProvider` for the AppHost. */
@@ -3696,6 +3716,13 @@ class DistributedApplicationExecutionContextImpl implements DistributedApplicati
     async operation(): Promise<DistributedApplicationOperation> {
         return await this._client.invokeCapability<DistributedApplicationOperation>(
             'Aspire.Hosting/DistributedApplicationExecutionContext.operation',
+            { context: this._handle }
+        );
+    }
+
+    async runConfiguration(): Promise<RunConfiguration> {
+        return await this._client.invokeCapability<RunConfiguration>(
+            'Aspire.Hosting/DistributedApplicationExecutionContext.runConfiguration',
             { context: this._handle }
         );
     }
@@ -3755,6 +3782,10 @@ class DistributedApplicationExecutionContextPromiseImpl implements DistributedAp
 
     operation(): Promise<DistributedApplicationOperation> {
         return this._promise.then(obj => obj.operation());
+    }
+
+    runConfiguration(): Promise<RunConfiguration> {
+        return this._promise.then(obj => obj.runConfiguration());
     }
 
     serviceProvider(): ServiceProviderPromise {

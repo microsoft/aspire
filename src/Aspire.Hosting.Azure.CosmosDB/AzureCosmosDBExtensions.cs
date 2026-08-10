@@ -39,6 +39,7 @@ public static class AzureCosmosExtensions
 
         var resource = new AzureCosmosDBResource(name, ConfigureCosmosDBInfrastructure);
         return builder.AddResource(resource)
+            .WithIconName("DatabaseMultiple")
             .WithAnnotation(new DefaultRoleAssignmentsAnnotation(new HashSet<RoleDefinition>()));
     }
 
@@ -317,7 +318,8 @@ public static class AzureCosmosExtensions
         var database = new AzureCosmosDBDatabaseResource(name, databaseName, builder.Resource);
         builder.Resource.Databases.Add(database);
 
-        return builder.ApplicationBuilder.AddResource(database);
+        return builder.ApplicationBuilder.AddResource(database)
+            .WithIconName("Database");
     }
 
     /// <summary>
@@ -341,7 +343,8 @@ public static class AzureCosmosExtensions
         var container = new AzureCosmosDBContainerResource(name, containerName, partitionKeyPath, builder.Resource);
         builder.Resource.Containers.Add(container);
 
-        return builder.ApplicationBuilder.AddResource(container);
+        return builder.ApplicationBuilder.AddResource(container)
+            .WithIconName("Box");
     }
 
     /// <summary>
@@ -398,7 +401,8 @@ public static class AzureCosmosExtensions
 
         builder.Resource.Containers.Add(container);
 
-        return builder.ApplicationBuilder.AddResource(container);
+        return builder.ApplicationBuilder.AddResource(container)
+            .WithIconName("Box");
     }
 
     /// <summary>

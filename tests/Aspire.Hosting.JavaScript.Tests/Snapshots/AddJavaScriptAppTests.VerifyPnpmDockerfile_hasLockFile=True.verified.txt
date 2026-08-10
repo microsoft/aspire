@@ -1,6 +1,7 @@
 ﻿FROM node:22-slim
 WORKDIR /app
-RUN corepack enable pnpm
+ARG NPM_REGISTRY=https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
+RUN npm install --global --registry "$NPM_REGISTRY" pnpm@10.30.1
 COPY package.json pnpm-lock.yaml ./
 RUN --mount=type=cache,target=/pnpm/store pnpm install --prefer-frozen-lockfile
 COPY . .

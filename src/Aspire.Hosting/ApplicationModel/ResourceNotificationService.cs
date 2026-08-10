@@ -585,14 +585,14 @@ public class ResourceNotificationService : IDisposable
             .Distinct(StringComparers.ResourceName)
             .ToArray();
 
-        // Only transition replicas that are actually starting up to "Waiting".
-        // Replicas already in a Running or terminal state should not be clobbered,
-        // as this broadcast targets ALL replicas of the resource (model-level update),
-        // not just the specific replica being started.
+        // Explicit-start resources should not auto-transition to Waiting even if they have dependencies
+        // (they should be considered Waiting only after an attempt is made to start them).
+        // Resources with no instances managed by Aspire do not "start" from Aspire's perspective, 
+        // so they are always allowed to transition to Waiting if they are waiting on dependencies.
+        var allowNotStarted = !resource.HasAnnotationOfType<ExplicitStartupAnnotation>() || !resource.TryGetInstances(out _);
+
         return PublishUpdateAsync(resource, s =>
-            s.State?.Text is null
-            || s.State?.Text == KnownResourceStates.Starting
-            || s.State?.Text == KnownResourceStates.Waiting
+            CanTransitionToWaiting(s.State?.Text, allowNotStarted)
                 ? s with
                 {
                     State = KnownResourceStates.Waiting,
@@ -600,6 +600,12 @@ public class ResourceNotificationService : IDisposable
                 }
                 : s);
     }
+
+    private static bool CanTransitionToWaiting(string? state, bool allowNotStarted) =>
+        state is null
+        || (allowNotStarted && state == KnownResourceStates.NotStarted)
+        || state == KnownResourceStates.Starting
+        || state == KnownResourceStates.Waiting;
 
     private Task ClearWaitingForDependenciesAsync(IResource resource)
     {
@@ -799,6 +805,10 @@ public class ResourceNotificationService : IDisposable
     /// <param name="resource">The resource to update</param>
     /// <param name="resourceId"> The id of the resource.</param>
     /// <param name="stateFactory">A factory that creates the new state based on the previous state.</param>
+    /// <remarks>
+    /// If the resulting snapshot has the same content as the current snapshot, the update is not
+    /// published and the snapshot version is not incremented.
+    /// </remarks>
     public Task PublishUpdateAsync(IResource resource, string resourceId, Func<CustomResourceSnapshot, CustomResourceSnapshot> stateFactory)
     {
         var notificationState = GetResourceNotificationState(resourceId, resource);
@@ -821,9 +831,6 @@ public class ResourceNotificationService : IDisposable
                 };
             }
 
-            // Increment the snapshot version, this is a per resource version.
-            newState = newState with { Version = notificationState.GetNextVersion() };
-
             newState = UpdateCommands(resource, newState);
 
             newState = UpdateIcons(resource, newState);
@@ -837,6 +844,26 @@ public class ResourceNotificationService : IDisposable
                     Properties = newState.Properties.SetResourceProperty(KnownProperties.Resource.ExcludeFromMcp, true)
                 };
             }
+
+            // Producers can recompute a snapshot that is identical to the one already published. DCP is
+            // the common case: its watches are periodically torn down and re-established, and each fresh
+            // watch replays every object that exists, so a resource that never changes again keeps
+            // arriving here. Publishing those would bump the version and wake every subscriber without
+            // anything having changed. Subscribers that start watching later are still seeded from
+            // LastSnapshot, so suppressing here cannot cost anyone an update.
+            // See https://github.com/microsoft/aspire/issues/18869.
+            if (notificationState.LastSnapshot is { } lastSnapshot && lastSnapshot.ContentEquals(newState))
+            {
+                if (_logger.IsEnabled(LogLevel.Trace))
+                {
+                    _logger.LogTrace("Resource {ResourceName}/{ResourceId} update skipped because the snapshot is unchanged.", resource.Name, resourceId);
+                }
+
+                return Task.CompletedTask;
+            }
+
+            // Increment the snapshot version, this is a per resource version.
+            newState = newState with { Version = notificationState.GetNextVersion() };
 
             notificationState.LastSnapshot = newState;
 
@@ -1179,6 +1206,10 @@ public class ResourceNotificationService : IDisposable
     /// </summary>
     /// <param name="resource">The resource to update</param>
     /// <param name="stateFactory">A factory that creates the new state based on the previous state.</param>
+    /// <remarks>
+    /// If the resulting snapshot has the same content as the current snapshot, the update is not
+    /// published and the snapshot version is not incremented.
+    /// </remarks>
     public async Task PublishUpdateAsync(IResource resource, Func<CustomResourceSnapshot, CustomResourceSnapshot> stateFactory)
     {
         var resourceNames = resource.GetResolvedResourceNames();

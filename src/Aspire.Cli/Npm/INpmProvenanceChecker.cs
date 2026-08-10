@@ -35,6 +35,16 @@ internal enum ProvenanceVerificationOutcome
     PayloadDecodeFailed,
 
     /// <summary>
+    /// The attestation subject does not identify the expected npm package and version.
+    /// </summary>
+    PackageIdentityMismatch,
+
+    /// <summary>
+    /// The attestation subject digest does not match the downloaded package archive.
+    /// </summary>
+    PackageDigestMismatch,
+
+    /// <summary>
     /// The source repository could not be extracted from the provenance statement.
     /// </summary>
     SourceRepositoryNotFound,
@@ -185,8 +195,8 @@ internal interface INpmProvenanceChecker
     /// </param>
     /// <param name="sriIntegrity">
     /// An SRI integrity string (e.g., "sha512-...") for the package tarball, or null if unavailable.
-    /// When provided, implementations that perform cryptographic verification can verify
-    /// that the attestation covers this specific artifact digest.
+    /// The package identity and digest in the signed attestation subject are verified against
+    /// this exact artifact.
     /// </param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>A <see cref="ProvenanceVerificationResult"/> indicating the outcome and any extracted provenance data.</returns>

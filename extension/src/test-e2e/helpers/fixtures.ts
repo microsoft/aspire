@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
 import type { AspireExtensionE2EControlCommand, AspireExtensionE2EControlStatus } from '../../types/extensionApi';
+import { lsJsonStreamCapability, type ConfigInfo } from '../../types/configInfo';
 import { applyE2eControl, isSamePath, readStateFile, sleepSynchronously, waitForExtensionState } from './assertions';
 import { getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getRunRoot, getWorkspaceRoot } from './paths';
 import { ProcessError, runProcess } from './process';
@@ -10,6 +11,17 @@ const csharpFileHeader = `// Licensed to the .NET Foundation under one or more a
 // The .NET Foundation licenses this file to you under the MIT license.
 
 `;
+
+function createConfigInfo(capabilities: string[] = []): ConfigInfo {
+    return {
+        localSettingsPath: path.join(getWorkspaceRoot(), 'aspire.config.json'),
+        globalSettingsPath: path.join(getWorkspaceRoot(), 'global-aspire.config.json'),
+        availableFeatures: [],
+        localSettingsSchema: { properties: [] },
+        globalSettingsSchema: { properties: [] },
+        capabilities,
+    };
+}
 
 export function getWorkspaceSettingsPath(): string {
     return path.join(getWorkspaceRoot(), '.vscode', 'settings.json');
@@ -73,6 +85,22 @@ export async function executeE2eControlCommand(
 ): Promise<AspireExtensionE2EControlStatus> {
     const timeoutMs = options?.timeoutMs ?? (command.name === 'stopDebugging' ? 180000 : undefined);
     return await applyE2eControl({ command }, options?.waitFor ?? 'applied', timeoutMs);
+}
+
+export async function snapshotClipboardForE2E(): Promise<void> {
+    await executeE2eControlCommand({ name: 'snapshotClipboard' });
+}
+
+export async function restoreClipboardSnapshotForE2E(): Promise<void> {
+    await executeE2eControlCommand({ name: 'restoreClipboardSnapshot' });
+}
+
+export async function captureWorkspaceAppHostPathClipboardExpectationForE2E(): Promise<void> {
+    await executeE2eControlCommand({ name: 'captureWorkspaceAppHostPathClipboardExpectation' });
+}
+
+export async function assertClipboardMatchesLastExpectationForE2E(): Promise<void> {
+    await executeE2eControlCommand({ name: 'assertClipboardMatchesLastExpectation' });
 }
 
 export async function runE2eTeardown(cleanups: ReadonlyArray<() => unknown | Promise<unknown>>, failureMessage: string): Promise<void> {
@@ -189,14 +217,7 @@ export function removePrimaryAppHostFixture(): void {
 
 export function writeNoCapabilitiesCliWrapper(name = 'aspire-no-capabilities'): string {
     return writeCliWrapper(name, {
-        configInfoJson: {
-            localSettingsPath: path.join(getWorkspaceRoot(), 'aspire.config.json'),
-            globalSettingsPath: path.join(getWorkspaceRoot(), 'global-aspire.config.json'),
-            availableFeatures: [],
-            localSettingsSchema: { properties: [] },
-            globalSettingsSchema: { properties: [] },
-            capabilities: [],
-        },
+        configInfoJson: createConfigInfo(),
     });
 }
 
@@ -205,6 +226,78 @@ export function writeConfigInfoUnsupportedCliWrapper(name = 'aspire-no-config-in
         configInfoExitCode: 42,
         configInfoStderr: 'config info is not available in this simulated old CLI',
     });
+}
+
+export function writeStreamingDiscoveryCliWrapper(delayMs = 5_000, initialDelayMs = 1_500): string {
+    return writeCliWrapper('aspire-streaming-discovery', {
+        configInfoJson: createConfigInfo([lsJsonStreamCapability]),
+        streamedLsCandidate: {
+            path: getPrimaryAppHostProjectPath(),
+            language: 'csharp',
+            status: 'buildable',
+            selected: true,
+        },
+        streamedLsDelayMs: delayMs,
+        streamedLsInitialDelayMs: initialDelayMs,
+    });
+}
+
+export function writeTrackedStreamingDiscoveryCliWrapper(delayMs = 4_000, initialDelayMs = 500): { cliPath: string; invocationLogPath: string } {
+    const invocationLogPath = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers', 'streaming-discovery-invocations.log');
+    removePath(invocationLogPath, { force: true });
+    const cliPath = writeCliWrapper('aspire-tracked-streaming-discovery', {
+        configInfoJson: createConfigInfo([lsJsonStreamCapability]),
+        streamedLsCandidate: {
+            path: getPrimaryAppHostProjectPath(),
+            language: 'csharp',
+            status: 'buildable',
+            selected: true,
+        },
+        streamedLsDelayMs: delayMs,
+        streamedLsInitialDelayMs: initialDelayMs,
+        streamedLsInvocationLogPath: invocationLogPath,
+    });
+    return { cliPath, invocationLogPath };
+}
+
+export function getCliWrapperInvocationCount(invocationLogPath: string): number {
+    if (!fs.existsSync(invocationLogPath)) {
+        return 0;
+    }
+
+    return fs.readFileSync(invocationLogPath, 'utf8')
+        .split(/\r?\n/)
+        .filter(line => line.length > 0)
+        .length;
+}
+
+export function touchPrimaryAppHostProject(): void {
+    fs.appendFileSync(getPrimaryAppHostProjectPath(), '\n');
+}
+
+export function writeDelayedPsCliWrapper(delayMs = 1_500): string {
+    return writeCliWrapper('aspire-delayed-ps', { psSnapshotDelayMs: delayMs });
+}
+
+export function writeTrackedDelayedPsCliWrapper(delayMs = 1_500): { cliPath: string; invocationLogPath: string } {
+    const invocationLogPath = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers', 'delayed-ps-invocations.log');
+    removePath(invocationLogPath, { force: true });
+    const cliPath = writeCliWrapper('aspire-tracked-delayed-ps', {
+        invocationLogPath,
+        psSnapshotDelayMs: delayMs,
+    });
+    return { cliPath, invocationLogPath };
+}
+
+export function getCliWrapperInvocations(invocationLogPath: string): string[][] {
+    if (!fs.existsSync(invocationLogPath)) {
+        return [];
+    }
+
+    return fs.readFileSync(invocationLogPath, 'utf8')
+        .split(/\r?\n/)
+        .filter(line => line.length > 0)
+        .map(line => JSON.parse(line) as string[]);
 }
 
 export async function restoreWorkspaceCliPath(): Promise<void> {
@@ -636,7 +729,17 @@ function getLegacyAspireSettingsPath(): string {
 
 function writeCliWrapper(
     name: string,
-    options: { configInfoJson?: unknown; configInfoExitCode?: number; configInfoStderr?: string },
+    options: {
+        configInfoJson?: unknown;
+        configInfoExitCode?: number;
+        configInfoStderr?: string;
+        streamedLsCandidate?: unknown;
+        streamedLsDelayMs?: number;
+        streamedLsInitialDelayMs?: number;
+        streamedLsInvocationLogPath?: string;
+        invocationLogPath?: string;
+        psSnapshotDelayMs?: number;
+    },
 ): string {
     const wrapperDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers');
     fs.mkdirSync(wrapperDirectory, { recursive: true });
@@ -646,6 +749,7 @@ function writeCliWrapper(
 const { spawnSync } = require('child_process');
 const realCli = ${JSON.stringify(getCliPath())};
 const args = process.argv.slice(2);
+${options.invocationLogPath === undefined ? '' : `require('fs').appendFileSync(${JSON.stringify(options.invocationLogPath)}, JSON.stringify(args) + '\\n');`}
 
 if (args.includes('--include-disabled-commands')) {
   console.error('simulated old CLI does not support --include-disabled-commands');
@@ -658,6 +762,25 @@ ${options.configInfoJson === undefined
   process.exit(${options.configInfoExitCode ?? 1});`
         : `  console.log(${JSON.stringify(JSON.stringify(options.configInfoJson))});
   process.exit(0);`}
+}
+
+${options.streamedLsCandidate === undefined
+        ? ''
+        : `if (args[0] === 'ls') {
+${options.streamedLsInvocationLogPath === undefined ? '' : `  require('fs').appendFileSync(${JSON.stringify(options.streamedLsInvocationLogPath)}, 'ls\\n');`}
+  if (!args.includes('--format') || args[args.indexOf('--format') + 1] !== 'json' || !args.includes('--stream')) {
+    console.error('Expected AppHost discovery to use ls --format json --stream.');
+    process.exit(126);
+  }
+
+  setTimeout(() => {
+    console.log(${JSON.stringify(JSON.stringify(options.streamedLsCandidate))});
+    setTimeout(() => process.exit(0), ${options.streamedLsDelayMs ?? 5_000});
+  }, ${options.streamedLsInitialDelayMs ?? 0});
+}
+else {`}
+if (args[0] === 'ps' && !args.includes('--follow')) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ${options.psSnapshotDelayMs ?? 0});
 }
 
 const result = spawnSync(realCli, args, {
@@ -673,6 +796,7 @@ if (result.error) {
 }
 
 process.exit(result.status ?? (result.signal ? 1 : 0));
+${options.streamedLsCandidate === undefined ? '' : '}'}
 `);
     fs.chmodSync(scriptPath, 0o755);
 

@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { EventEmitter } from "vscode";
 import { promises as fs } from "fs";
 import { createDebugAdapterTracker, AppHostOutputHandler, AppHostRestartHandler } from "./adapterTracker";
-import { AspireResourceExtendedDebugConfiguration, AspireResourceDebugSession, EnvVar, AspireExtendedDebugConfiguration, NodeLaunchConfiguration, ProjectLaunchConfiguration, StartAppHostOptions } from "../dcp/types";
+import { AspireResourceExtendedDebugConfiguration, AspireResourceDebugSession, EnvVar, AspireExtendedDebugConfiguration, NodeLaunchConfiguration, ProcessRestartedNotification, ProjectLaunchConfiguration, SessionTerminatedNotification, StartAppHostOptions } from "../dcp/types";
 import { extensionLogOutputChannel } from "../utils/logging";
 import AspireDcpServer, { generateDcpIdPrefix } from "../dcp/AspireDcpServer";
 import { spawnCliProcess } from "./languages/cli";
@@ -14,7 +14,7 @@ import { nodeDebuggerExtension } from "./languages/node";
 import { cleanupRun } from "./runCleanupRegistry";
 import { runWithRunStartWrappers } from "./runStartRegistry";
 import AspireRpcServer from "../server/AspireRpcServer";
-import { createDebugSessionConfiguration } from "./debuggerExtensions";
+import { AlreadyStartedResourceDebugSession, createDebugSessionConfiguration } from "./debuggerExtensions";
 import { AspireTerminalProvider } from "../utils/AspireTerminalProvider";
 import { ICliRpcClient } from "../server/rpcClient";
 import path from "path";
@@ -73,6 +73,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
   private readonly _onDidChangeState = new EventEmitter<void>();
   private readonly _disposables: vscode.Disposable[] = [];
   private _disposed = false;
+  private _parentStopPromise: Thenable<void> | undefined;
   // Timestamp for the `debug/apphost/end` duration measurement. Captured the first
   // time we observe a `launch` request so it covers the actual user-visible session
   // lifetime, not the moment the AspireDebugSession object was constructed.
@@ -123,7 +124,29 @@ export class AspireDebugSession implements vscode.DebugAdapter {
   }
 
   async stopDebugging(): Promise<void> {
-    await vscode.debug.stopDebugging(this._session);
+    // Global/E2E stop requests target the synthetic Aspire session. Stop the real
+    // AppHost session explicitly first so we do not rely on VS Code cascading
+    // termination from the parent session before the AppHost registry refresh runs.
+    try {
+      await this._appHostDebugSession?.stopSession();
+    }
+    finally {
+      await this.stopParentDebugSessionOnce();
+    }
+  }
+
+  private stopParentDebugSessionOnce(): Thenable<void> {
+    if (this._parentStopPromise) {
+      return this._parentStopPromise;
+    }
+
+    // stopDebugging() and dispose() can race depending on when VS Code delivers
+    // the AppHost termination event. Record the request before calling VS Code
+    // so the Aspire parent has a single stop owner in either ordering, and
+    // return the original Thenable so callers still wait for the in-flight stop.
+    this._parentStopPromise = vscode.debug.stopDebugging(this._session);
+
+    return this._parentStopPromise;
   }
 
   handleMessage(message: any): void {
@@ -232,7 +255,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     this._appHostTargetVersionAtLaunch = 'unknown';
     this._appHostTargetVersionAtLaunchPromise = this.resolveAppHostTargetVersionAtLaunch(appHostTelemetryTargetPath ?? appHostPath);
     this._appHostIsDirectoryAtLaunch = 'unknown';
-    sendTelemetryEvent('debug/apphost/start', {
+    sendTelemetryEvent('aspire/vscode/debug/apphost/start', {
       mode: this._appHostModeAtLaunch,
       apphost_language: this._appHostLanguageAtLaunch,
       command: bucketAspireCommand(command),
@@ -279,14 +302,15 @@ export class AspireDebugSession implements vscode.DebugAdapter {
 
     const args = buildAspireCommandArgs(command, commandArgs, extensionArgs);
     const commandLabel = `aspire ${command}`;
+    const sessionType = noDebug ? 'run' : 'debug';
 
     if (appHostIsDirectory) {
-      this.sendMessageWithEmoji("📁", launchingWithDirectory(appHostPath));
+      this.sendMessageWithEmoji("📁", launchingWithDirectory(sessionType, appHostPath));
 
       void this.spawnAspireCommand(args, appHostPath, noDebug, commandLabel);
     }
     else {
-      this.sendMessageWithEmoji("📂", launchingWithAppHost(appHostPath));
+      this.sendMessageWithEmoji("📂", launchingWithAppHost(sessionType, appHostPath));
 
       const workspaceFolder = path.dirname(appHostPath);
       void this.spawnAspireCommand(args, workspaceFolder, noDebug, commandLabel);
@@ -548,6 +572,50 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     }
   }
 
+  trackAlreadyStartedResourceSession(debugConfig: AspireResourceExtendedDebugConfiguration, resourceDebugSession: AlreadyStartedResourceDebugSession): AspireResourceDebugSession | undefined {
+    if (this._disposed) {
+      resourceDebugSession.stopSession();
+      return undefined;
+    }
+
+    if (debugConfig.debugSessionId === null) {
+      extensionLogOutputChannel.warn(`Unable to report process start for run ${debugConfig.runId} because the DCP session ID is missing.`);
+    }
+    else {
+      const notification: ProcessRestartedNotification = {
+        notification_type: 'processRestarted',
+        session_id: debugConfig.runId,
+        dcp_id: debugConfig.debugSessionId,
+        pid: resourceDebugSession.processId
+      };
+
+      this._dcpServer.sendNotification(notification);
+    }
+
+    void resourceDebugSession.termination.then(exitCode => {
+      if (debugConfig.debugSessionId === null) {
+        extensionLogOutputChannel.warn(`Unable to report termination for run ${debugConfig.runId} because the DCP session ID is missing.`);
+        return;
+      }
+
+      const notification: SessionTerminatedNotification = {
+        notification_type: 'sessionTerminated',
+        session_id: debugConfig.runId,
+        dcp_id: debugConfig.debugSessionId,
+        exit_code: exitCode
+      };
+
+      this._dcpServer.sendNotification(notification);
+    });
+
+    this._resourceDebugSessions.push(resourceDebugSession);
+    this._disposables.push({
+      dispose: resourceDebugSession.stopSession
+    });
+
+    return resourceDebugSession;
+  }
+
   async startAndGetDebugSession(debugConfig: AspireResourceExtendedDebugConfiguration): Promise<AspireResourceDebugSession | undefined> {
     return new Promise(async (resolve) => {
       const logConfig = getLoggableDebugConfiguration(debugConfig, this._terminalProvider.isDebugConfigEnvironmentLoggingEnabled());
@@ -569,12 +637,19 @@ export class AspireDebugSession implements vscode.DebugAdapter {
             return;
           }
 
+          let stopSessionPromise: Thenable<void> | undefined;
           const disposalFunction = () => {
+            if (stopSessionPromise) {
+              return stopSessionPromise;
+            }
+
             extensionLogOutputChannel.info(`Stopping debug session: ${session.name} (run id: ${session.configuration.runId})`);
-            vscode.debug.stopDebugging(session);
+            stopSessionPromise = vscode.debug.stopDebugging(session);
 
             // Run any cleanup registered by resource-type extensions (e.g. func host for Azure Functions)
             cleanupRun(debugConfig.runId);
+
+            return stopSessionPromise;
           };
 
           const vsCodeDebugSession: AspireResourceDebugSession = {
@@ -765,7 +840,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     // be missed and the summary would under-report failures.
     this._disposables.forEach(disposable => disposable.dispose());
     this._trackedDebugAdapters = [];
-    vscode.debug.stopDebugging(this._session);
+    void this.stopParentDebugSessionOnce();
     this._onDidSendDebugConsoleOutput.dispose();
 
     // Telemetry: emit `debug/apphost/end` after a short grace window so any
@@ -783,7 +858,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
           const resolvedLanguage = await languagePromise ?? language;
           const resolvedTargetVersion = await targetVersionPromise ?? targetVersion;
           const aggregate = dcpServer.takeDebugSessionAggregateStats(debugSessionId);
-          sendTelemetryEvent('debug/apphost/end', {
+          sendTelemetryEvent('aspire/vscode/debug/apphost/end', {
             mode,
             apphost_language: resolvedLanguage,
             apphost_target_version: resolvedTargetVersion,

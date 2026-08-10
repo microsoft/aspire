@@ -6,13 +6,43 @@ import {
     neutralLayerL2,
     neutralPalette,
     DesignToken,
-    neutralFillLayerRestDelta
+    neutralFillLayerRestDelta,
+    bodyFont,
+    controlCornerRadius,
+    layerCornerRadius,
+    typeRampMinus2FontSize,
+    typeRampMinus2LineHeight,
+    typeRampMinus1FontSize,
+    typeRampMinus1LineHeight,
+    typeRampBaseFontSize,
+    typeRampBaseLineHeight,
+    typeRampPlus1FontSize,
+    typeRampPlus1LineHeight,
+    typeRampPlus2FontSize,
+    typeRampPlus2LineHeight,
+    typeRampPlus3FontSize,
+    typeRampPlus3LineHeight,
+    typeRampPlus4FontSize,
+    typeRampPlus4LineHeight,
+    typeRampPlus5FontSize,
+    typeRampPlus5LineHeight,
+    typeRampPlus6FontSize,
+    typeRampPlus6LineHeight,
+    baseHeightMultiplier,
+    baseHorizontalSpacingMultiplier,
+    designUnit,
+    strokeWidth,
+    focusStrokeWidth,
+    focusStrokeOuter,
+    focusStrokeInner,
+    disabledOpacity,
+    PaletteRGB
 } from "/_content/Microsoft.FluentUI.AspNetCore.Components/Microsoft.FluentUI.AspNetCore.Components.lib.module.js";
 
 const currentThemeCookieName = "currentTheme";
 const themeSettingDark = "Dark";
 const themeSettingLight = "Light";
-const darkThemeLuminance = 0.19;
+const darkThemeLuminance = 0.17;
 const lightThemeLuminance = 1.0;
 const darknessLuminanceTarget = (-0.1 + Math.sqrt(0.21)) / 2;
 
@@ -167,12 +197,29 @@ function setFillColor() {
 }
 
 /**
+ * Sets the base of the neutral ramp. Light mode remains neutral, while dark mode uses a restrained
+ * blue-violet undertone so its surfaces do not read brown. Fluent regenerates every neutral layer,
+ * stroke and fill from this midpoint, keeping the ramp cohesive.
+ * @param {string} theme The theme to use. Should be Light or Dark
+ */
+function setNeutralBaseColor(theme) {
+    const baseColor = theme === themeSettingDark
+        ? { r: 0x7D / 255.0, g: 0x79 / 255.0, b: 0x86 / 255.0 }
+        : { r: 0x7D / 255.0, g: 0x7D / 255.0, b: 0x7D / 255.0 };
+
+    neutralPalette.withDefault(PaletteRGB.from(SwatchRGB.create(baseColor.r, baseColor.g, baseColor.b)));
+}
+
+/**
  * Applies the Light or Dark theme to the entire site
  * @param {string} theme The theme to use. Should be Light or Dark
  */
 function applyTheme(theme) {
     setBaseLayerLuminance(theme);
     setAccentColor();
+    // Set the neutral ramp base before deriving the fill color, since the body fill is taken
+    // from neutralLayerL2 (which is generated from the neutral palette we're adjusting here).
+    setNeutralBaseColor(theme);
     setFillColor();
     setThemeOnDocument(theme);
 }
@@ -262,6 +309,54 @@ function createAdditionalDesignTokens() {
     );
 }
 
+/**
+ * Wires Fluent's design tokens to the --aspire-* CSS variables defined in
+ * tokens.css. Fluent applies these tokens through a constructable stylesheet in
+ * document.adoptedStyleSheets, which wins the cascade over <link>ed CSS, so they
+ * can't be overridden from tokens.css directly. Pointing each Fluent token at a
+ * var() reference keeps the real values in tokens.css while ensuring they win.
+ */
+function wireAspireDesignTokens() {
+    bodyFont.withDefault("var(--aspire-font-sans)");
+    controlCornerRadius.withDefault("var(--aspire-radius-control)");
+    layerCornerRadius.withDefault("var(--aspire-radius-layer)");
+
+    // Typography ramp: wire every Fluent type-ramp step to its --aspire-type-* var
+    // (tokens.css). Fluent's ramp steps are independent tokens, so each one must be
+    // wired individually for the single --aspire-type-scale knob to rescale the whole
+    // ramp. Both font-size and line-height are wired so vertical rhythm scales too.
+    typeRampMinus2FontSize.withDefault("var(--aspire-type-minus-2-size)");
+    typeRampMinus2LineHeight.withDefault("var(--aspire-type-minus-2-line-height)");
+    typeRampMinus1FontSize.withDefault("var(--aspire-type-minus-1-size)");
+    typeRampMinus1LineHeight.withDefault("var(--aspire-type-minus-1-line-height)");
+    typeRampBaseFontSize.withDefault("var(--aspire-type-base-size)");
+    typeRampBaseLineHeight.withDefault("var(--aspire-type-base-line-height)");
+    typeRampPlus1FontSize.withDefault("var(--aspire-type-plus-1-size)");
+    typeRampPlus1LineHeight.withDefault("var(--aspire-type-plus-1-line-height)");
+    typeRampPlus2FontSize.withDefault("var(--aspire-type-plus-2-size)");
+    typeRampPlus2LineHeight.withDefault("var(--aspire-type-plus-2-line-height)");
+    typeRampPlus3FontSize.withDefault("var(--aspire-type-plus-3-size)");
+    typeRampPlus3LineHeight.withDefault("var(--aspire-type-plus-3-line-height)");
+    typeRampPlus4FontSize.withDefault("var(--aspire-type-plus-4-size)");
+    typeRampPlus4LineHeight.withDefault("var(--aspire-type-plus-4-line-height)");
+    typeRampPlus5FontSize.withDefault("var(--aspire-type-plus-5-size)");
+    typeRampPlus5LineHeight.withDefault("var(--aspire-type-plus-5-line-height)");
+    typeRampPlus6FontSize.withDefault("var(--aspire-type-plus-6-size)");
+    typeRampPlus6LineHeight.withDefault("var(--aspire-type-plus-6-line-height)");
+
+    // Control geometry: wire the remaining sizing/stroke recipes to their --aspire-*
+    // vars. Fluent consumes these purely as CSS custom properties (no JS height-number
+    // recipe exists in Fluent Blazor 4.14), so a var() default is safe here.
+    baseHeightMultiplier.withDefault("var(--aspire-height-multiplier)");
+    baseHorizontalSpacingMultiplier.withDefault("var(--aspire-horizontal-spacing-multiplier)");
+    designUnit.withDefault("var(--aspire-design-unit)");
+    strokeWidth.withDefault("var(--aspire-stroke-width)");
+    focusStrokeWidth.withDefault("var(--aspire-focus-stroke-width)");
+    focusStrokeOuter.withDefault("var(--dash-focus-ring-color)");
+    focusStrokeInner.withDefault("var(--dash-focus-ring-color)");
+    disabledOpacity.withDefault("var(--aspire-disabled-opacity)");
+}
+
 function initializeTheme() {
     const themeCookieValue = getThemeCookieValue();
     const effectiveTheme = getEffectiveTheme(themeCookieValue);
@@ -275,5 +370,6 @@ function initializeTheme() {
     }
 }
 
+wireAspireDesignTokens();
 createAdditionalDesignTokens();
 initializeTheme();

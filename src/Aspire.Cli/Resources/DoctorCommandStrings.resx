@@ -104,6 +104,14 @@
   <data name="CheckingPrerequisites" xml:space="preserve">
     <value>Checking Aspire environment...</value>
   </data>
+  <data name="EnvironmentCheckTimedOutMessageFormat" xml:space="preserve">
+    <value>Environment check '{0}' timed out after {1} seconds.</value>
+    <comment>{0} is the environment check name. {1} is the timeout in seconds.</comment>
+  </data>
+  <data name="EnvironmentChecksTimedOutMessageFormat" xml:space="preserve">
+    <value>Environment checks timed out after {0} seconds.</value>
+    <comment>{0} is the total timeout in seconds.</comment>
+  </data>
   <data name="OperatingSystemMessageFormat" xml:space="preserve">
     <value>Operating system: {0}</value>
     <comment>{0} is the operating system display name and version, for example "Windows 10.0.22631", "macOS 26.0", or "Linux Ubuntu 24.04".</comment>
@@ -356,6 +364,10 @@
   </data>
   <data name="InstallationDiscoveryFailedReason" xml:space="preserve">
     <value>Install discovery failed. See the Aspire CLI logs for details.</value>
+  </data>
+  <data name="InstallationDiscoveryTimedOutReasonFormat" xml:space="preserve">
+    <value>Install discovery timed out after {0} seconds. See the Aspire CLI logs for details.</value>
+    <comment>{0} is the timeout in seconds.</comment>
   </data>
   <data name="LegacySettingsDetectedMessageFormat" xml:space="preserve">
     <value>Legacy .aspire/settings.json detected at {0}</value>

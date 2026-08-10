@@ -7,8 +7,8 @@
 // github.mjs; durable preferences in state.mjs.
 
 import { joinSession, createCanvas, CanvasError } from "@github/copilot-sdk/extension";
-import { startInstance, stopInstance, forceRefresh, getDashboard, rescanAccounts, toggleAccount, setReposFor, setAgentSend } from "./server.mjs";
-import { loadPrefs, savePrefs } from "./state.mjs";
+import { startInstance, stopInstance, forceRefresh, getDashboard, rescanAccounts, toggleAccount, setReposFor, setAgentSend, setBrowserOpen } from "./server.mjs";
+import { updatePrefs } from "./state.mjs";
 import { accountId } from "./accounts.mjs";
 
 function resolveAccountId(ref) {
@@ -54,9 +54,7 @@ const session = await joinSession({
             if (!["review", "issues", "ship"].includes(mode)) {
               throw new CanvasError("invalid_mode", "mode must be review, issues, or ship");
             }
-            const prefs = await loadPrefs();
-            prefs.mode = mode;
-            await savePrefs(prefs);
+            await updatePrefs((prefs) => { prefs.mode = mode; });
             const { dashboard } = await forceRefresh();
             return { mode: dashboard.mode, counts: dashboard.counts ?? null };
           },
@@ -208,4 +206,19 @@ setAgentSend(async ({ prompt, log }) => {
   } finally {
     sendsInFlight--;
   }
+});
+
+setBrowserOpen(async (pr) => {
+  const instanceId = `aspire-team-app-pr-${pr.repository}-${pr.number}`
+    .replace(/[^a-zA-Z0-9._-]/g, "-")
+    .slice(0, 128);
+  return session.rpc.canvas.open({
+    canvasId: "browser",
+    instanceId,
+    input: {
+      url: pr.url,
+      title: `${pr.repository} #${pr.number}`,
+      placement: { surface: "panel", focus: true },
+    },
+  });
 });

@@ -18,7 +18,7 @@ namespace Aspire.Hosting.Azure.Tests;
 public class AzureCosmosDBEmulatorFunctionalTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyWaitForOnCosmosDBEmulatorBlocksDependentResources()
     {
         // Cosmos can be pretty slow to spin up, lets give it plenty of time.
@@ -58,7 +58,7 @@ public class AzureCosmosDBEmulatorFunctionalTests(ITestOutputHelper testOutputHe
     }
 
     [Fact(Skip = "Using CosmosDB emulator in integration tests leads to flaky tests - https://github.com/microsoft/aspire/issues/5820")]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyCosmosResource()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
@@ -126,7 +126,7 @@ public class AzureCosmosDBEmulatorFunctionalTests(ITestOutputHelper testOutputHe
     }
 
     [Fact(Skip = "Using CosmosDB emulator in integration tests leads to flaky tests - https://github.com/microsoft/aspire/issues/5820")]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task WithDataVolumeShouldPersistStateBetweenUsages()
     {
         // Use a volume to do a snapshot save
@@ -261,7 +261,7 @@ public class AzureCosmosDBEmulatorFunctionalTests(ITestOutputHelper testOutputHe
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/7178")]
     public async Task AddAzureCosmosDB_RunAsEmulator_CreatesDatabase()
     {

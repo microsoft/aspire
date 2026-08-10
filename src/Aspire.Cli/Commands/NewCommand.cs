@@ -5,6 +5,7 @@ using System.CommandLine;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.RegularExpressions;
+using Aspire.Cli.Bundles;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
@@ -18,15 +19,18 @@ using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Commands;
 
-internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
+internal sealed class NewCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
 
     protected override bool UpdateNotificationsEnabled => true;
 
+    internal override bool PrefetchesTemplatePackageMetadata => true;
+
     private readonly INewCommandPrompter _prompter;
     private readonly ITemplateProvider _templateProvider;
     private readonly ITemplate[] _templates;
+    private readonly IBundleService _bundleService;
     private readonly IPackagingService _packagingService;
     private readonly AgentInitCommand _agentInitCommand;
     private readonly ICliHostEnvironment _hostEnvironment;
@@ -61,19 +65,10 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
     private readonly Option<string?> _channelOption;
     private readonly Option<string?> _languageOption;
 
-    /// <summary>
-    /// NewCommand prefetches both template and CLI package metadata.
-    /// </summary>
-    public bool PrefetchesTemplatePackageMetadata => true;
-
-    /// <summary>
-    /// NewCommand prefetches CLI package metadata for update notifications.
-    /// </summary>
-    public bool PrefetchesCliPackageMetadata => true;
-
     public NewCommand(
         INewCommandPrompter prompter,
         ITemplateProvider templateProvider,
+        IBundleService bundleService,
         IPackagingService packagingService,
         AgentInitCommand agentInitCommand,
         ICliHostEnvironment hostEnvironment,
@@ -83,6 +78,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
     {
         _prompter = prompter;
         _templateProvider = templateProvider;
+        _bundleService = bundleService;
         _packagingService = packagingService;
         _agentInitCommand = agentInitCommand;
         _hostEnvironment = hostEnvironment;
@@ -522,6 +518,13 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             Language = selectedLanguageId
         };
         var templateResult = await template.ApplyTemplateAsync(inputs, parseResult, cancellationToken);
+
+        // Generated AppHosts can be run directly by dotnet, which cannot trigger lazy bundle
+        // extraction. Ensure the bundle is ready instead of relying on best-effort prefetching.
+        if (templateResult.ExitCode == CliExitCodes.Success)
+        {
+            await _bundleService.EnsureExtractedAsync(cancellationToken);
+        }
 
         var workspaceRoot = new DirectoryInfo(templateResult.OutputPath ?? ExecutionContext.WorkingDirectory.FullName);
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, s_suppressAgentInitOption, defaultValue: true);

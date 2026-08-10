@@ -70,6 +70,7 @@ public static class KeycloakResourceBuilderExtensions
             .WithImage(KeycloakContainerImageTags.Image)
             .WithImageRegistry(KeycloakContainerImageTags.Registry)
             .WithImageTag(KeycloakContainerImageTags.Tag)
+            .WithIconName("PersonLock")
             .WithHttpEndpoint(port: port, targetPort: DefaultContainerPort)
             .WithHttpEndpoint(targetPort: ManagementInterfaceContainerPort, name: ManagementEndpointName)
             .WithEndpoint(ManagementEndpointName, e => e.ExcludeReferenceEndpoint = true)

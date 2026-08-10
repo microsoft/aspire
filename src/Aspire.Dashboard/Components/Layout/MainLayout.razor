@@ -4,21 +4,25 @@
 @inject IStringLocalizer<Dialogs> DialogsLoc
 @inherits LayoutComponentBase
 
-<div class="layout" style="@(_isNavMenuOpen ? "overflow: hidden;" : string.Empty)">
-    <div class="aspire-icon">
-        <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo"
-                      title="@Loc[nameof(Layout.MainLayoutAspire)]"
-                      aria-label="@Loc[nameof(Layout.MainLayoutAspire)]">
-            <FluentIcon Value="@(new AspireIcons.Size24.Logo())"/>
-        </FluentAnchor>
-    </div>
-
+<div class="layout @(_isNavMenuExpanded ? "nav-expanded" : "nav-collapsed")" style="@(_isNavMenuOpen ? "overflow: hidden;" : string.Empty)">
     @if (ViewportInformation.IsDesktop)
     {
+        @* Full-width top header. The Aspire logo leads the header so the logo, app name, and page
+           title form a single brand lockup pinned to the top-left. Because the header spans both grid
+           columns (it is no longer confined to the column beside the rail), the lockup keeps a fixed
+           left edge when the nav rail below collapses/expands instead of shifting with the rail width. *@
         <FluentHeader>
+            <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo brand-logo"
+                          title="@Loc[nameof(Layout.MainLayoutAspire)]"
+                          aria-label="@Loc[nameof(Layout.MainLayoutAspire)]">
+                <FluentIcon Value="@(new AspireIcons.Size24.Logo())"/>
+            </FluentAnchor>
             <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo">
                 <ApplicationName/>
             </FluentAnchor>
+            <div class="page-title-slot">
+                <SectionOutlet SectionName="@DashboardUIHelpers.PageTitleTopBarSection" />
+            </div>
             <div class="flex-filler"></div>
             <FluentAnchor Class="header-button"
                           Appearance="Appearance.Stealth"
@@ -50,10 +54,38 @@
             <UserProfile/>
         </FluentHeader>
 
-        <DesktopNavMenu/>
+        @* The nav rail is a flex column so DesktopNavMenu fills the available space while the collapse/expand
+           toggle stays pinned to the bottom, matching the common sidebar pattern. Toggle state/persistence
+           still lives in MainLayout. *@
+        <div class="desktop-nav-rail">
+            <DesktopNavMenu/>
+            <FluentButton Class="nav-toggle-button nav-toggle-bottom"
+                          Appearance="Appearance.Stealth" OnClick="@ToggleNavMenuExpandedAsync"
+                          Title="@(_isNavMenuExpanded ? Loc[nameof(Layout.NavMenuToggleCollapse)] : Loc[nameof(Layout.NavMenuToggleExpand)])"
+                          aria-label="@(_isNavMenuExpanded ? Loc[nameof(Layout.NavMenuToggleCollapse)] : Loc[nameof(Layout.NavMenuToggleExpand)])">
+                <span class="nav-toggle-content">
+                    @* The glyph mirrors the action the toggle performs so it reads as a real collapse/expand
+                       control rather than a static hamburger: when the rail is expanded, show the "contract"
+                       panel icon (arrow pointing into the panel = collapse); when collapsed, show the "expand"
+                       panel icon (arrow pointing out = expand). This stays in sync with the dynamic Title/aria-label.
+                       No visible text label: the icon plus the dynamic Title/aria-label carry the meaning, and a
+                       written "Collapse sidebar" beside it read as redundant chrome (review feedback). *@
+                    <FluentIcon Value="@(_isNavMenuExpanded
+                        ? new Icons.Regular.Size24.PanelLeftContract()
+                        : (Icon)new Icons.Regular.Size24.PanelLeftExpand())" Color="Color.Neutral"/>
+                </span>
+            </FluentButton>
+        </div>
     }
     else
     {
+        <div class="aspire-icon">
+            <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo"
+                          title="@Loc[nameof(Layout.MainLayoutAspire)]"
+                          aria-label="@Loc[nameof(Layout.MainLayoutAspire)]">
+                <FluentIcon Value="@(new AspireIcons.Size24.Logo())"/>
+            </FluentAnchor>
+        </div>
         <FluentHeader>
             <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo">
                 <ApplicationName/>

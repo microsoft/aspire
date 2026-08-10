@@ -359,14 +359,14 @@ public class AddBunAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void BunApp_DirectFile_ProducesBunRuntimeExecutable()
+    public async Task BunApp_DirectFile_ProducesBunRuntimeExecutable()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var bunApp = builder.AddBunApp("bunapp", workspace.Path, "server.ts");
 
-        var launchConfig = InvokeLaunchConfigurationAnnotator(bunApp.Resource);
+        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(bunApp.Resource);
 
         Assert.Equal("bun", launchConfig.Type);
         Assert.Equal("bun", launchConfig.RuntimeExecutable);
@@ -375,7 +375,7 @@ public class AddBunAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void BunApp_WithRunScriptAndPackageManager_ProducesBunRuntimeExecutable()
+    public async Task BunApp_WithRunScriptAndPackageManager_ProducesBunRuntimeExecutable()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -387,19 +387,19 @@ public class AddBunAppTests(ITestOutputHelper outputHelper)
         var bunApp = builder.AddBunApp("bunapp", workspace.Path, "server.ts")
             .WithRunScript("dev");
 
-        var launchConfig = InvokeLaunchConfigurationAnnotator(bunApp.Resource);
+        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(bunApp.Resource);
 
         Assert.Equal("bun", launchConfig.Type);
         Assert.Equal("bun", launchConfig.RuntimeExecutable);
         Assert.Equal("package-manager", launchConfig.LaunchMethod);
     }
 
-    private static JavaScriptLaunchConfiguration InvokeLaunchConfigurationAnnotator(IResource resource)
+    private static async Task<JavaScriptLaunchConfiguration> InvokeLaunchConfigurationAnnotatorAsync(IResource resource)
     {
         Assert.True(resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
 
         var exe = Executable.Create("test", "bun");
-        supportsDebugging.LaunchConfigurationAnnotator(exe, ExecutableLaunchMode.Debug);
+        await supportsDebugging.LaunchConfigurationAnnotator(exe, ExecutableLaunchMode.Debug, CancellationToken.None);
 
         Assert.True(exe.TryGetAnnotationAsObjectList<JavaScriptLaunchConfiguration>(
             Executable.LaunchConfigurationsAnnotation,

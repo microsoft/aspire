@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { ChildProcessWithoutNullStreams, spawn as spawnProcess } from 'child_process';
-import { spawnCliProcess } from '../debugger/languages/cli';
+import { ChildProcessWithoutNullStreams } from 'child_process';
+import { spawnCliProcess, terminateCliProcess } from '../debugger/languages/cli';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
-import { appHostDescribeMayNotBeSupported, appHostPathMustBeNonEmptyAbsolute, aspireCliCommandFailed, aspireCliCommandTimedOut, aspireCliDescribeNotSupported, aspireCliOutputParseFailed, aspireCommandOutputTruncated, aspireDescribeMinimumVersion, errorFetchingAppHosts, workspaceViewSelectedMultipleAppHosts, workspaceViewSelectedSingleAppHost } from '../loc/strings';
-import { AppHostCandidate, AppHostDiscoveryService, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate } from '../utils/appHostDiscovery';
+import { appHostDescribeMayNotBeSupported, appHostDiscoveryProgress, appHostPathMustBeNonEmptyAbsolute, aspireCliCommandFailed, aspireCliCommandTimedOut, aspireCliDescribeNotSupported, aspireCliOutputParseFailed, aspireCommandOutputTruncated, aspireDescribeMinimumVersion, errorFetchingAppHosts, workspaceViewSelectedMultipleAppHosts, workspaceViewSelectedSingleAppHost } from '../loc/strings';
+import { AppHostCandidate, AppHostDiscoveryService, CandidateAppHostDisplayInfo, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate } from '../utils/appHostDiscovery';
 import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from '../utils/cliCompatibility';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { describeIncludeDisabledCommandsCapability } from '../types/configInfo';
@@ -185,11 +185,12 @@ interface RunCliCommandOptions {
 }
 
 export class AppHostDataRepository {
-    private static readonly _processShutdownGracePeriodMs = 5000;
     private static readonly _appHostStopRefreshDelayMs = 400;
     private static readonly _appHostStopRefreshMaxAttempts = 75;
     private static readonly _oneShotCommandTimeoutMs = 30000;
     private static readonly _oneShotOutputBufferLimit = oneShotOutputBufferLimit;
+    private static readonly _streamedCandidateUpdateDebounceMs = 50;
+    private static readonly _streamedCandidateUpdateMaxWaitMs = 250;
 
     private readonly _onDidChangeData = new vscode.EventEmitter<void>();
     readonly onDidChangeData = this._onDidChangeData.event;
@@ -251,6 +252,8 @@ export class AppHostDataRepository {
     private _workspaceAppHostDiscoveryVersion = 0;
     private _workspaceAppHostDiscoveryInProgress = false;
     private _workspaceAppHostDiscoveryRefreshQueued = false;
+    private _workspaceAppHostDiscoveryForceRefreshQueued = false;
+    private _workspaceAppHostDiscoveryProgressResolve: (() => void) | undefined;
     private _workspaceAppHostDiscoveryCancellationSource: vscode.CancellationTokenSource | undefined;
     private readonly _appHostDiscoveryChangeDisposable: vscode.Disposable;
     private readonly _workspaceFoldersChangeDisposable: vscode.Disposable;
@@ -273,23 +276,23 @@ export class AppHostDataRepository {
     private readonly _configChangeDisposable: vscode.Disposable;
     private _disposed = false;
 
-    constructor(private readonly _terminalProvider: AspireTerminalProvider, appHostDiscoveryService?: AppHostDiscoveryService) {
-        this._appHostDiscoveryService = appHostDiscoveryService ?? new AppHostDiscoveryService(_terminalProvider);
+    constructor(private readonly _terminalProvider: AspireTerminalProvider, appHostDiscoveryService?: AppHostDiscoveryService, configInfoProvider?: ConfigInfoProvider) {
+        this._configInfoProvider = configInfoProvider ?? new ConfigInfoProvider(_terminalProvider);
+        this._appHostDiscoveryService = appHostDiscoveryService ?? new AppHostDiscoveryService(_terminalProvider, this._configInfoProvider);
         this._ownsAppHostDiscoveryService = appHostDiscoveryService === undefined;
-        this._configInfoProvider = new ConfigInfoProvider(_terminalProvider);
         this._appHostDiscoveryChangeDisposable = this._appHostDiscoveryService.onDidChangeCandidates(workspaceFolder => {
             const rootFolder = vscode.workspace.workspaceFolders?.[0];
             if (rootFolder?.uri.toString() === workspaceFolder.uri.toString()) {
+                this._markWorkspaceAppHostDiscoveryPending();
                 this._fetchWorkspaceAppHost();
             }
         });
         this._workspaceFoldersChangeDisposable = vscode.workspace.onDidChangeWorkspaceFolders(() => {
             this._stopAllDescribes();
             this._stopPolling();
-            this._workspaceAppHostDiscoveryComplete = false;
-            this._clearWorkspaceAppHostDiscovery();
+            this._cancelWorkspaceAppHostDiscovery();
+            this._markWorkspaceAppHostDiscoveryPending();
             this._clearErrors();
-            this._updateWorkspaceContext();
             this._syncPolling();
             this._fetchWorkspaceAppHost({ forceRefresh: true });
         });
@@ -374,6 +377,11 @@ export class AppHostDataRepository {
             return;
         }
         this._viewMode = mode;
+        if (mode === 'workspace') {
+            this._showWorkspaceAppHostDiscoveryProgress();
+        } else {
+            this._hideWorkspaceAppHostDiscoveryProgress();
+        }
         vscode.commands.executeCommand('setContext', 'aspire.viewMode', mode);
         this._clearErrors();
         // Re-scope the current `aspire ps` snapshot for the new view
@@ -388,6 +396,11 @@ export class AppHostDataRepository {
         }
         const wasDataActive = this._dataActive;
         this._panelVisible = visible;
+        if (visible) {
+            this._showWorkspaceAppHostDiscoveryProgress();
+        } else {
+            this._hideWorkspaceAppHostDiscoveryProgress();
+        }
         const becameDataActive = !wasDataActive && this._dataActive;
         const resumedFromInactive = becameDataActive && this._hasEverBeenDataActive;
         if (this._dataActive) {
@@ -428,15 +441,16 @@ export class AppHostDataRepository {
 
     refresh(): void {
         this._clearErrors();
-        this._runtimeSnapshotAfterWorkspaceDiscovery = false;
-        // A user-triggered refresh should observe AppHost/config files written by tools
-        // even when the file watcher has not delivered an invalidation event yet.
-        // Refresh only needs to re-pull discovery + the authoritative `ps` snapshot and let
-        // reconcile preserve streams for still-rendered hosts.
-        this._workspaceAppHostDiscoveryComplete = false;
-        this._clearWorkspaceAppHostDiscovery();
-        this._updateWorkspaceContext();
-        this._fetchWorkspaceAppHost({ forceRefresh: true });
+        this._setGlobalLoading(true);
+        if (this._viewMode === 'workspace') {
+            this._runtimeSnapshotAfterWorkspaceDiscovery = false;
+            // A workspace refresh should observe AppHost/config files written by tools even when
+            // the file watcher has not delivered an invalidation event yet.
+            this._markWorkspaceAppHostDiscoveryPending();
+            this._fetchWorkspaceAppHost({ forceRefresh: true });
+        } else {
+            this._loadingWorkspace = true;
+        }
         this._reconcileDescribes();
         if (this._dataActive) {
             this._refreshAppHostsFromAuthoritativeSnapshot();
@@ -694,6 +708,7 @@ export class AppHostDataRepository {
 
         if (this._workspaceAppHostDiscoveryInProgress) {
             this._workspaceAppHostDiscoveryRefreshQueued = true;
+            this._workspaceAppHostDiscoveryForceRefreshQueued ||= options?.forceRefresh === true;
             // Let the current discovery finish so we don't start overlapping CLI work, but
             // prevent its now-stale result from briefly restoring old AppHost candidates.
             this._workspaceAppHostDiscoveryVersion++;
@@ -708,8 +723,58 @@ export class AppHostDataRepository {
         const cancellationSource = new vscode.CancellationTokenSource();
         this._workspaceAppHostDiscoveryInProgress = true;
         this._workspaceAppHostDiscoveryCancellationSource = cancellationSource;
+        this._showWorkspaceAppHostDiscoveryProgress();
+        const streamedCandidates: CandidateAppHostDisplayInfo[] = [];
+        let incrementalCandidateUpdateTimer: ReturnType<typeof setTimeout> | undefined;
+        let incrementalCandidateMaxWaitTimer: ReturnType<typeof setTimeout> | undefined;
+        const cancelIncrementalCandidateUpdate = (): void => {
+            if (incrementalCandidateUpdateTimer) {
+                clearTimeout(incrementalCandidateUpdateTimer);
+                incrementalCandidateUpdateTimer = undefined;
+            }
+            if (incrementalCandidateMaxWaitTimer) {
+                clearTimeout(incrementalCandidateMaxWaitTimer);
+                incrementalCandidateMaxWaitTimer = undefined;
+            }
+        };
+        const applyIncrementalCandidateUpdates = (): void => {
+            cancelIncrementalCandidateUpdate();
+            if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
+                return;
+            }
 
-        this._appHostDiscoveryService.discover(rootFolder, options?.forceRefresh, cancellationSource.token).then(appHosts => {
+            const result = getWorkspaceAppHostProjectSearchResult(rootFolder, streamedCandidates);
+            const buildableAppHostCandidates = result.app_host_candidates.filter(isBuildableAppHostCandidate);
+            if (buildableAppHostCandidates.length > 0) {
+                this._setWorkspaceAppHostCandidatePaths(buildableAppHostCandidates);
+                this._updateWorkspaceContext();
+            }
+        };
+        const onIncrementalCandidate = (candidate: CandidateAppHostDisplayInfo): void => {
+            if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
+                return;
+            }
+
+            const existingCandidateIndex = streamedCandidates.findIndex(existingCandidate => isMatchingAppHostPath(existingCandidate.path, candidate.path));
+            if (existingCandidateIndex >= 0) {
+                streamedCandidates[existingCandidateIndex] = candidate;
+            } else {
+                streamedCandidates.push(candidate);
+            }
+
+            // Use a trailing debounce to coalesce short bursts, but start the maximum-wait timer
+            // only for the first candidate so a dense stream cannot postpone every tree update.
+            if (!incrementalCandidateMaxWaitTimer) {
+                incrementalCandidateMaxWaitTimer = setTimeout(applyIncrementalCandidateUpdates, AppHostDataRepository._streamedCandidateUpdateMaxWaitMs);
+            }
+            if (incrementalCandidateUpdateTimer) {
+                clearTimeout(incrementalCandidateUpdateTimer);
+            }
+            incrementalCandidateUpdateTimer = setTimeout(applyIncrementalCandidateUpdates, AppHostDataRepository._streamedCandidateUpdateDebounceMs);
+        };
+
+        this._appHostDiscoveryService.discover(rootFolder, options?.forceRefresh, cancellationSource.token, onIncrementalCandidate).then(appHosts => {
+            cancelIncrementalCandidateUpdate();
             if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
                 return;
             }
@@ -718,7 +783,12 @@ export class AppHostDataRepository {
             this._workspaceAppHostDiscoveryComplete = true;
             this._handleWorkspaceAppHostCandidates(result.app_host_candidates, result.selected_project_file);
         }).catch(error => {
+            cancelIncrementalCandidateUpdate();
             if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
+                return;
+            }
+
+            if (error instanceof vscode.CancellationError) {
                 return;
             }
 
@@ -730,6 +800,7 @@ export class AppHostDataRepository {
             this._updateWorkspaceContext({ clearLoading: true });
             this._syncPolling();
         }).finally(() => {
+            cancelIncrementalCandidateUpdate();
             cancellationSource.dispose();
             if (this._workspaceAppHostDiscoveryCancellationSource !== cancellationSource) {
                 return;
@@ -737,20 +808,65 @@ export class AppHostDataRepository {
 
             this._workspaceAppHostDiscoveryCancellationSource = undefined;
             this._workspaceAppHostDiscoveryInProgress = false;
+            this._hideWorkspaceAppHostDiscoveryProgress();
             if (this._workspaceAppHostDiscoveryRefreshQueued && !this._disposed) {
+                const forceRefresh = this._workspaceAppHostDiscoveryForceRefreshQueued;
                 this._workspaceAppHostDiscoveryRefreshQueued = false;
-                this._fetchWorkspaceAppHost({ forceRefresh: true });
+                this._workspaceAppHostDiscoveryForceRefreshQueued = false;
+                this._fetchWorkspaceAppHost({ forceRefresh });
             }
         });
     }
 
     private _cancelWorkspaceAppHostDiscovery(): void {
         this._workspaceAppHostDiscoveryRefreshQueued = false;
+        this._workspaceAppHostDiscoveryForceRefreshQueued = false;
         this._runtimeSnapshotAfterWorkspaceDiscovery = false;
         this._workspaceAppHostDiscoveryCancellationSource?.cancel();
         this._workspaceAppHostDiscoveryCancellationSource?.dispose();
         this._workspaceAppHostDiscoveryCancellationSource = undefined;
         this._workspaceAppHostDiscoveryInProgress = false;
+        this._hideWorkspaceAppHostDiscoveryProgress();
+    }
+
+    private _showWorkspaceAppHostDiscoveryProgress(): void {
+        if (this._viewMode !== 'workspace'
+            || !this._panelVisible
+            || !this._workspaceAppHostDiscoveryInProgress
+            || this._workspaceAppHostDiscoveryProgressResolve) {
+            return;
+        }
+
+        void vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: appHostDiscoveryProgress,
+            cancellable: false,
+        }, () => new Promise<void>(resolve => {
+            if (this._viewMode !== 'workspace'
+                || !this._panelVisible
+                || !this._workspaceAppHostDiscoveryInProgress) {
+                resolve();
+                return;
+            }
+
+            this._workspaceAppHostDiscoveryProgressResolve = resolve;
+        }));
+    }
+
+    private _hideWorkspaceAppHostDiscoveryProgress(): void {
+        const resolve = this._workspaceAppHostDiscoveryProgressResolve;
+        this._workspaceAppHostDiscoveryProgressResolve = undefined;
+        resolve?.();
+    }
+
+    private _markWorkspaceAppHostDiscoveryPending(): void {
+        this._workspaceAppHostDiscoveryComplete = false;
+        this._clearWorkspaceAppHostDiscovery();
+        this._loadingWorkspace = true;
+        if (this._viewMode === 'workspace') {
+            this._updateLoadingContext();
+            this._updateWorkspaceContext({ clearLoading: false });
+        }
     }
 
     private _handleWorkspaceAppHostCandidates(appHostCandidates: readonly AppHostCandidate[], selectedAppHostPath: string | null): void {
@@ -783,35 +899,33 @@ export class AppHostDataRepository {
             }
             this._workspaceAppHostDescription = workspaceViewSelectedMultipleAppHosts(buildableAppHostCandidates.length);
             extensionLogOutputChannel.info(`Workspace contains ${buildableAppHostCandidates.length} buildable AppHosts`);
-            this._syncPolling();
-            // Re-scope the current `aspire ps` snapshot now that discovery has resolved the workspace
-            // candidate paths. This refreshes the view AND clears the workspace "Searching…" loading
-            // state immediately (discovery is now complete). Without it, loading would linger until the
-            // next `aspire ps --follow` change, which may never arrive when the running set is already
-            // stable — leaving the workspace view stuck on "Searching…" until the user toggles view mode.
-            this._handlePsSnapshot(this._appHosts, { force: true });
-            return;
-        }
+        } else {
+            const selectedAppHostCandidate = selectedAppHostPath
+                ? buildableAppHostCandidates.find(candidate => isMatchingAppHostPath(candidate.path, selectedAppHostPath))
+                : buildableAppHostCandidates[0];
+            if (!selectedAppHostCandidate) {
+                this._clearWorkspaceAppHostDiscovery();
+                this._syncPolling();
+                this._updateWorkspaceContext({ clearLoading: true });
+                return;
+            }
 
-        const selectedAppHostCandidate = selectedAppHostPath
-            ? buildableAppHostCandidates.find(candidate => isMatchingAppHostPath(candidate.path, selectedAppHostPath))
-            : buildableAppHostCandidates[0];
-        if (selectedAppHostCandidate) {
             this._setWorkspaceAppHostCandidatePaths(buildableAppHostCandidates);
             this._setWorkspaceAppHostPath(selectedAppHostCandidate.path, buildableAppHostCandidates);
             this._workspaceAppHostDescription = workspaceViewSelectedSingleAppHost(formatAppHostLanguage(selectedAppHostCandidate.language));
             extensionLogOutputChannel.info(`Workspace apphost resolved: ${selectedAppHostCandidate.path} (${selectedAppHostCandidate.language}, ${selectedAppHostCandidate.status})`);
-            this._syncPolling();
-            // Force a re-scope so the workspace view refreshes and the loading state clears immediately
-            // once discovery resolves the candidate, without waiting for the next ps change (see the
-            // multi-candidate branch above for the full rationale).
-            this._handlePsSnapshot(this._appHosts, { force: true });
-            return;
         }
 
-        this._clearWorkspaceAppHostDiscovery();
         this._syncPolling();
-        this._updateWorkspaceContext({ clearLoading: true });
+        const workspaceLoadingChanged = this._loadingWorkspace;
+        this._loadingWorkspace = false;
+        if (this._viewMode === 'workspace') {
+            // Re-scope the stable ps snapshot now that discovery has resolved the candidates.
+            this._handlePsSnapshot(this._appHosts, { force: true });
+            if (workspaceLoadingChanged) {
+                this._updateLoadingContext();
+            }
+        }
     }
 
     private _isCurrentWorkspaceDiscovery(discoveryVersion: number, workspaceFolder: vscode.WorkspaceFolder): boolean {
@@ -837,7 +951,9 @@ export class AppHostDataRepository {
     }
 
     private _setWorkspaceAppHostCandidatePaths(appHostCandidates: readonly AppHostCandidate[]): void {
-        this._workspaceAppHostCandidatePaths = appHostCandidates.map(candidate => candidate.path);
+        this._workspaceAppHostCandidatePaths = appHostCandidates
+            .map(candidate => candidate.path)
+            .sort((left, right) => left < right ? -1 : left > right ? 1 : 0);
     }
 
     private _clearWorkspaceAppHostSelection(): void {
@@ -923,6 +1039,7 @@ export class AppHostDataRepository {
 
             stream.receivedData = false;
             const describeProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
+                createProcessGroup: true,
                 noExtensionVariables: true,
                 lineCallback: (line) => {
                     if (this._describeStreams.get(appHostPath) !== stream || stream.process !== describeProcess) {
@@ -1277,7 +1394,7 @@ export class AppHostDataRepository {
                 if (cliProcess) {
                     this._oneShotProcesses.delete(cliProcess);
                     if (cliProcess.exitCode === null && !cliProcess.killed) {
-                        this._terminateProcess(cliProcess, command);
+                        terminateCliProcess(cliProcess, command);
                     }
                 }
                 callback();
@@ -1294,6 +1411,7 @@ export class AppHostDataRepository {
             });
 
             cliProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
+                createProcessGroup: true,
                 noExtensionVariables: true,
                 env: options.env,
                 stdoutCallback: (data) => { stdout.append(data); },
@@ -1329,7 +1447,7 @@ export class AppHostDataRepository {
 
     private _stopOneShotProcesses(): void {
         for (const process of this._oneShotProcesses) {
-            this._terminateProcess(process, 'one-shot aspire command');
+            terminateCliProcess(process, 'one-shot aspire command');
         }
         this._oneShotProcesses.clear();
     }
@@ -1348,7 +1466,7 @@ export class AppHostDataRepository {
         if (stream.process) {
             const childProcess = stream.process;
             stream.process = undefined;
-            this._terminateProcess(childProcess, `aspire describe --follow (${appHostPath})`, { suppressTimeoutWarning: true });
+            terminateCliProcess(childProcess, `aspire describe --follow (${appHostPath})`, { suppressTimeoutWarning: true });
         }
     }
 
@@ -1370,11 +1488,19 @@ export class AppHostDataRepository {
             || selectedResources.some(resource => Boolean(resource.dashboardUrl))
             || workspaceAppHosts.some(appHost => Boolean(appHost.dashboardUrl));
         const hasWorkspaceCandidates = this._workspaceAppHostCandidatePaths.length > 0;
+        const clearLoading = options?.clearLoading ?? (hasResources || hasWorkspaceAppHost || hasRunningAppHosts || hasWorkspaceCandidates);
+
+        if (this._viewMode !== 'workspace') {
+            if (clearLoading) {
+                this._loadingWorkspace = false;
+            }
+            return;
+        }
+
         vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', !hasWorkspaceAppHost && !hasResources && !hasRunningAppHosts && !hasWorkspaceCandidates);
         // Keep this distinct from `noAppHosts`, which also considers discovered idle
         // candidates that have no live dashboard URL.
         vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasDashboardUrl);
-        const clearLoading = options?.clearLoading ?? (hasResources || hasWorkspaceAppHost || hasRunningAppHosts || hasWorkspaceCandidates);
         if (this._loadingWorkspace && clearLoading) {
             this._loadingWorkspace = false;
             this._updateLoadingContext();
@@ -1385,7 +1511,11 @@ export class AppHostDataRepository {
     // ── ps polling ──
 
     private _startPsPolling(): void {
-        this._stopPolling();
+        // Restarting `ps` polling is routine while the workspace AppHost discovery result settles, the
+        // polling interval changes, or the view resumes. Keep explicit post-stop refreshes alive across
+        // those restarts; otherwise a debug-session stop can lose the authoritative `aspire ps` snapshot
+        // that clears a stale global AppHost row.
+        this._stopPolling({ clearPostStopRefreshTimers: false });
         if (this._supportsPsFollow) {
             this._startPsFollow();
             return;
@@ -1411,7 +1541,9 @@ export class AppHostDataRepository {
         }, intervalMs);
     }
 
-    private _stopPolling(): void {
+    // Most callers are leaving the polling lifecycle and should cancel post-stop refreshes. Internal
+    // restarts keep those timers so a pending AppHost-stop reconciliation is not lost.
+    private _stopPolling(options?: { clearPostStopRefreshTimers?: boolean }): void {
         this._psPollingGeneration++;
         this._psFetchVersion++;
         this._fetchInProgress = false;
@@ -1420,14 +1552,16 @@ export class AppHostDataRepository {
         this._authoritativeSnapshotPending = false;
         this._authoritativeSnapshotPendingForce = false;
         this._activeAuthoritativeSnapshotRequestId = undefined;
-        this._clearPostStopRefreshTimers();
+        if (options?.clearPostStopRefreshTimers ?? true) {
+            this._clearPostStopRefreshTimers();
+        }
         if (this._pollingInterval) {
             clearInterval(this._pollingInterval);
             this._pollingInterval = undefined;
             extensionLogOutputChannel.info(`aspire ps polling stopped`);
         }
         for (const psProcess of this._psProcesses) {
-            this._terminateProcess(psProcess, 'aspire ps');
+            terminateCliProcess(psProcess, 'aspire ps');
         }
         this._psProcesses.clear();
     }
@@ -1452,7 +1586,7 @@ export class AppHostDataRepository {
                 const errorMessage = errorFetchingAppHosts(String(error));
                 extensionLogOutputChannel.warn(errorMessage);
                 this._setPsError(errorMessage);
-                this._clearLoadingForCurrentView();
+                this._clearLoading();
                 this._supportsPsFollow = false;
                 this._startPsIntervalPolling(false);
             }
@@ -1478,6 +1612,7 @@ export class AppHostDataRepository {
         const psFollowStderr = new LimitedOutputBuffer(AppHostDataRepository._oneShotOutputBufferLimit);
 
         psProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
+            createProcessGroup: true,
             noExtensionVariables: true,
             stdoutCallback: (data) => {
                 psFollowStdout.append(data);
@@ -1488,7 +1623,7 @@ export class AppHostDataRepository {
                 }
 
                 this._setPsError(undefined);
-                this._handlePsOutput(line);
+                this._handlePsOutput(line, false);
             },
             stderrCallback: (data) => {
                 psFollowStderr.append(data);
@@ -1537,7 +1672,12 @@ export class AppHostDataRepository {
         }
 
         this._psFollowStartPending = false;
-        this._clearGlobalLoading();
+        this._setGlobalLoading(false);
+        if (this._viewMode === 'global') {
+            const hasDashboardUrl = this._appHosts.some(appHost => Boolean(appHost.dashboardUrl));
+            vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', this._appHosts.length === 0);
+            vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasDashboardUrl);
+        }
     }
 
     private _fetchAppHosts(): void {
@@ -1551,9 +1691,9 @@ export class AppHostDataRepository {
         this._runPsCommand(args, (code, stdout, stderr) => {
             if (code === 0) {
                 this._setPsError(undefined);
-                this._handlePsOutput(stdout);
+                this._handlePsOutput(stdout, true);
             } else {
-                this._clearLoadingForCurrentView();
+                this._clearLoading();
                 this._setPsError(errorFetchingAppHosts(stderr || `exit code ${code}`));
             }
             this._fetchInProgress = false;
@@ -1593,9 +1733,9 @@ export class AppHostDataRepository {
             if (!this._disposed && (force || this._dataActive)) {
                 if (code === 0) {
                     this._setPsError(undefined);
-                    this._handlePsOutput(stdout);
+                    this._handlePsOutput(stdout, true);
                 } else {
-                    this._clearLoadingForCurrentView();
+                    this._clearLoading();
                     this._setPsError(errorFetchingAppHosts(stderr || `exit code ${code}`));
                 }
             }
@@ -1620,23 +1760,27 @@ export class AppHostDataRepository {
         vscode.commands.executeCommand('setContext', 'aspire.loading', isLoading);
     }
 
-    private _clearGlobalLoading(): void {
-        if (this._viewMode !== 'global' || !this._loadingGlobal) {
+    private _setGlobalLoading(isLoading: boolean): void {
+        const loadingChanged = this._loadingGlobal !== isLoading;
+        this._loadingGlobal = isLoading;
+        if (this._viewMode !== 'global') {
             return;
         }
 
-        const hasDashboardUrl = this._appHosts.some(appHost => Boolean(appHost.dashboardUrl));
-        this._loadingGlobal = false;
+        if (loadingChanged) {
+            this._onDidChangeData.fire();
+        }
         this._updateLoadingContext();
-        vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', this._appHosts.length === 0);
-        vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasDashboardUrl);
     }
 
-    private _clearLoadingForCurrentView(): void {
-        if (this._viewMode === 'workspace') {
-            this._loadingWorkspace = false;
-        } else {
-            this._loadingGlobal = false;
+    private _clearLoading(): void {
+        const loadingChanged = this._viewMode === 'workspace'
+            ? this._loadingWorkspace
+            : this._loadingGlobal;
+        this._loadingWorkspace = false;
+        this._loadingGlobal = false;
+        if (loadingChanged) {
+            this._onDidChangeData.fire();
         }
         this._updateLoadingContext();
     }
@@ -1696,16 +1840,36 @@ export class AppHostDataRepository {
         }
     }
 
-    private _handlePsOutput(stdout: string): void {
+    private _handlePsOutput(stdout: string, canCompleteGlobalLoading: boolean): void {
         try {
             const parsed: AppHostDisplayInfo[] | AppHostDisplayInfo = JSON.parse(stdout);
             const appHosts = Array.isArray(parsed)
                 ? parsed
                 : this._applyPsDelta(parsed);
 
-            this._handlePsSnapshot(appHosts);
+            const completesGlobalLoading = canCompleteGlobalLoading && this._loadingGlobal;
+            // A fresh ps result wins the workspace loading race when it finds a workspace host,
+            // or when discovery has finished and an empty result is therefore authoritative.
+            const completesWorkspaceLoading = this._loadingWorkspace
+                && (this._workspaceAppHostDiscoveryComplete || appHosts.some(appHost => this._isWorkspaceAppHost(appHost)));
+            if (completesWorkspaceLoading) {
+                this._loadingWorkspace = false;
+            }
+            this._handlePsSnapshot(appHosts, { force: completesWorkspaceLoading && this._viewMode === 'workspace' });
+            if (completesWorkspaceLoading && this._viewMode === 'workspace') {
+                this._updateLoadingContext();
+            }
+            if (completesGlobalLoading) {
+                // Clear the loading context only after the tree has been invalidated with the fresh
+                // snapshot, otherwise VS Code can briefly render a blank global view.
+                this._setGlobalLoading(false);
+            }
         } catch (e) {
             extensionLogOutputChannel.warn(`Failed to parse aspire ps output: ${e}`);
+            if (canCompleteGlobalLoading) {
+                this._clearLoading();
+                this._setPsError(errorFetchingAppHosts(String(e)));
+            }
         }
     }
 
@@ -1767,15 +1931,10 @@ export class AppHostDataRepository {
         this._appHostsSnapshot = appHostsSnapshot;
 
         if (this._viewMode === 'workspace') {
-            const discoveryPending = !this._workspaceAppHostDiscoveryComplete;
             if (appHostsChanged || workspaceAppHostChanged || force || this._loadingWorkspace) {
-                this._updateWorkspaceContext({ clearLoading: !discoveryPending || workspaceAppHosts.length > 0 });
+                this._updateWorkspaceContext({ clearLoading: false });
             }
         } else {
-            if (this._loadingGlobal) {
-                this._loadingGlobal = false;
-                this._updateLoadingContext();
-            }
             if (appHostsChanged || force) {
                 const hasDashboardUrl = this._appHosts.some(appHost => Boolean(appHost.dashboardUrl));
                 vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', this._appHosts.length === 0);
@@ -1838,6 +1997,7 @@ export class AppHostDataRepository {
         };
 
         psProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
+            createProcessGroup: true,
             noExtensionVariables: true,
             stdoutCallback: (data) => { stdout += data; },
             stderrCallback: (data) => { stderr += data; },
@@ -1874,85 +2034,6 @@ export class AppHostDataRepository {
         }
     }
 
-    private _terminateProcess(childProcess: ChildProcessWithoutNullStreams, description: string, options?: { suppressTimeoutWarning?: boolean }): void {
-        let exited = childProcess.exitCode !== null || childProcess.signalCode !== null;
-        let forceKillTimer: ReturnType<typeof setTimeout> | undefined;
-        const cleanup = () => {
-            exited = true;
-            childProcess.off('close', cleanup);
-            childProcess.off('exit', cleanup);
-            if (forceKillTimer) {
-                clearTimeout(forceKillTimer);
-                forceKillTimer = undefined;
-            }
-        };
-
-        if (!exited) {
-            childProcess.once('close', cleanup);
-            childProcess.once('exit', cleanup);
-        } else {
-            return;
-        }
-
-        try {
-            if (!childProcess.killed) {
-                const signalSent = this._terminateProcessTree(childProcess, false);
-                if (!signalSent) {
-                    cleanup();
-                    return;
-                }
-            }
-        } catch (error) {
-            extensionLogOutputChannel.warn(`Failed to stop ${description}: ${error}`);
-            cleanup();
-            return;
-        }
-
-        if (!exited) {
-            forceKillTimer = setTimeout(() => {
-                if (exited) {
-                    return;
-                }
-
-                if (!options?.suppressTimeoutWarning) {
-                    extensionLogOutputChannel.warn(`${description} did not exit within ${AppHostDataRepository._processShutdownGracePeriodMs}ms; forcing termination.`);
-                }
-                try {
-                    const signalSent = this._terminateProcessTree(childProcess, true);
-                    if (!signalSent) {
-                        cleanup();
-                    }
-                } catch (error) {
-                    extensionLogOutputChannel.warn(`Failed to force stop ${description}: ${error}`);
-                    cleanup();
-                }
-            }, AppHostDataRepository._processShutdownGracePeriodMs);
-            forceKillTimer.unref();
-        }
-    }
-
-    private _terminateProcessTree(childProcess: ChildProcessWithoutNullStreams, force: boolean): boolean {
-        if (process.platform !== 'win32' || childProcess.pid === undefined) {
-            return childProcess.kill(force ? 'SIGKILL' : undefined);
-        }
-
-        const args = ['/pid', String(childProcess.pid), '/t'];
-        if (force) {
-            args.push('/f');
-        }
-
-        const taskkill = spawnProcess('taskkill.exe', args, {
-            stdio: 'ignore',
-            windowsHide: true,
-        });
-        taskkill.on('error', error => {
-            extensionLogOutputChannel.warn(`Failed to stop process tree for PID ${childProcess.pid}: ${error}`);
-            childProcess.kill();
-        });
-        taskkill.unref();
-
-        return true;
-    }
 }
 
 export function shortenPath(filePath: string): string {

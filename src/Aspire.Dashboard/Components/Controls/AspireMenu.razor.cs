@@ -9,9 +9,11 @@ using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components;
 
-public partial class AspireMenu : FluentComponentBase, IAsyncDisposable
+public partial class AspireMenu : FluentComponentBase
 {
     private FluentMenu? _menu;
+    private IReadOnlyList<MenuButtonItem>? _renderedItems;
+    private bool _refreshMenuAfterRender;
 
     [Parameter]
     public string? Anchor { get; set; }
@@ -32,6 +34,9 @@ public partial class AspireMenu : FluentComponentBase, IAsyncDisposable
     public EventCallback<bool> OpenChanged { get; set; }
 
     [Parameter]
+    public EventCallback OnRenderComplete { get; set; }
+
+    [Parameter]
     public required IReadOnlyList<MenuButtonItem> Items { get; set; }
 
     /// <summary>
@@ -48,20 +53,43 @@ public partial class AspireMenu : FluentComponentBase, IAsyncDisposable
     public required IJSRuntime JS { get; init; }
 
     [Inject]
-    public required IServiceProvider ServiceProvider { get; init; }
+    public required IMenuService MenuService { get; init; }
 
     // Each menu item is approximately 32px tall, plus 16px padding for the menu container.
     private const int EstimatedItemHeight = 32;
     private const int MenuVerticalPadding = 16;
-
     private int CalculatedVerticalThreshold => VerticalThreshold ?? (Items.Count * EstimatedItemHeight + MenuVerticalPadding);
+
+    protected override void OnParametersSet()
+    {
+        if (!ReferenceEquals(_renderedItems, Items))
+        {
+            _renderedItems = Items;
+            _refreshMenuAfterRender = Open;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && OnRenderComplete.HasDelegate)
+        {
+            await OnRenderComplete.InvokeAsync();
+        }
+
+        if (_refreshMenuAfterRender)
+        {
+            _refreshMenuAfterRender = false;
+
+            if (_menu is { Id: { } menuId })
+            {
+                await MenuService.RefreshMenuAsync(menuId, Open);
+            }
+        }
+    }
 
     public async Task CloseAsync()
     {
-        if (_menu is { } menu)
-        {
-            await menu.CloseAsync();
-        }
+        await SetOpenAsync(false);
     }
 
     public async Task OpenAsync(int screenWidth, int screenHeight, int clientX, int clientY)
@@ -123,7 +151,7 @@ public partial class AspireMenu : FluentComponentBase, IAsyncDisposable
 
         // Item callbacks can move focus to a dialog or another control, so restore the
         // menu trigger first to avoid stealing focus back after the callback completes.
-        if (item.OnClick is {} onClick)
+        if (item.OnClick is { } onClick)
         {
             await onClick();
         }
@@ -137,27 +165,11 @@ public partial class AspireMenu : FluentComponentBase, IAsyncDisposable
     private async Task SetOpenAsync(bool open)
     {
         Open = open;
+        StateHasChanged();
 
         if (OpenChanged.HasDelegate)
         {
             await OpenChanged.InvokeAsync(open);
         }
-    }
-
-    public ValueTask DisposeAsync()
-    {
-        if (_menu is { } menu)
-        {
-            // Remove this workaround once FluentMenu unregisters itself: https://github.com/microsoft/aspire/issues/18852
-            if (ServiceProvider.GetService<IMenuService>() is { } menuService)
-            {
-                menuService.Remove(menu);
-                menuService.OnMenuUpdated();
-            }
-
-            _menu = null;
-        }
-
-        return ValueTask.CompletedTask;
     }
 }

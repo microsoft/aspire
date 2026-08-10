@@ -89,12 +89,18 @@ public static class PromptAgentBuilderExtensions
 
                 try
                 {
+                    ctx.CancellationToken.ThrowIfCancellationRequested();
+
                     var projectClient = new AIProjectClient(new Uri(endpoint), new DefaultAzureCredential());
                     var agentRef = new AgentReference(name: name);
                     var responseClient = projectClient.ProjectOpenAIClient.GetProjectResponsesClientForAgent(agentRef);
                     var response = await responseClient.CreateResponseAsync(message, cancellationToken: ctx.CancellationToken).ConfigureAwait(false);
 
                     return CommandResults.Success("Agent response received.", response.Value.GetOutputText(), CommandResultFormat.Markdown, displayImmediately: true);
+                }
+                catch (OperationCanceledException) when (ctx.CancellationToken.IsCancellationRequested)
+                {
+                    return CommandResults.Canceled();
                 }
                 catch (Exception ex)
                 {

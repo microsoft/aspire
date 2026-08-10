@@ -2,16 +2,18 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as vscode from 'vscode';
 import type { ChildProcessWithoutNullStreams } from 'child_process';
-import { spawnCliProcess } from '../debugger/languages/cli';
+import { spawnCliProcess, terminateCliProcess } from '../debugger/languages/cli';
 import { AspireTerminalProvider } from './AspireTerminalProvider';
 import { aspireConfigFileName, getAppHostPathFromConfig, readJsonFile } from './cliTypes';
-import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from './cliCompatibility';
+import { isNoLogoUnsupportedOutput, noLogoOption } from './cliCompatibility';
 import { EnvironmentVariables } from './environment';
 import { extensionLogOutputChannel } from './logging';
 import { getAppHostDiscoveryTimeoutMs } from './settings';
 import { classifyAppHostPath, projectContentsReferencesRunnableAspireAppHost, summarizeAppHostLanguages } from './appHostLanguage';
 import { sendTelemetryEvent } from './telemetry';
 import { appHostDiscoveryFindFilesMaxResults, getAppHostDiscoveryExcludeGlob, isExcludedDiscoveryCandidate, isExcludedDiscoveryUri } from './workspaceFileSearch';
+import { ConfigInfoProvider } from './configInfoProvider';
+import { lsJsonStreamCapability } from '../types/configInfo';
 
 // Mirrors the `aspire ls --format json` candidate shape documented in
 // docs/specs/cli-output-formats.md. Older CLI fallback results are adapted into
@@ -48,44 +50,126 @@ interface AppHostDiscoveryResult {
     candidates: CandidateAppHostDisplayInfo[];
 }
 
+// Best-effort notification for candidates discovered before the final result is available.
+// Buffered discovery does not invoke this callback; the returned promise remains authoritative.
+type IncrementalCandidateCallback = (candidate: CandidateAppHostDisplayInfo) => void;
+
+interface CachedAppHostDiscovery {
+    promise: Promise<CandidateAppHostDisplayInfo[]>;
+    reportedCandidates: CandidateAppHostDisplayInfo[];
+    candidateProgressCallbacks: Set<IncrementalCandidateCallback>;
+    cancellationSource: vscode.CancellationTokenSource;
+    completed: boolean;
+    started: boolean;
+    stale: boolean;
+}
+
+interface CliProcessResult {
+    stdout: string;
+    stderr: string;
+    exitCode: number | null | undefined;
+}
+
 export class AppHostDiscoveryService implements vscode.Disposable {
     private static readonly _candidateChangeDebounceMs = 250;
+    private static readonly _streamingDiscoveryMaxRuntimeMs = 5 * 60 * 1000;
 
     private readonly _onDidChangeCandidates = new vscode.EventEmitter<vscode.WorkspaceFolder>();
-    private readonly _cache = new Map<string, Promise<CandidateAppHostDisplayInfo[]>>();
+    private readonly _cache = new Map<string, CachedAppHostDiscovery>();
+    private readonly _activeDiscoveries = new Set<CachedAppHostDiscovery>();
     private readonly _watchers = new Map<string, vscode.Disposable[]>();
     private readonly _pendingInvalidationTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private readonly _activeCliProcesses = new Set<ChildProcessWithoutNullStreams>();
     private readonly _cancelActiveCliProcesses = new Set<(error: Error) => void>();
+    private readonly _configInfoProvider: ConfigInfoProvider;
     private _disposed = false;
     readonly onDidChangeCandidates = this._onDidChangeCandidates.event;
 
-    constructor(private readonly _terminalProvider: AspireTerminalProvider) {
+    constructor(private readonly _terminalProvider: AspireTerminalProvider, configInfoProvider?: ConfigInfoProvider) {
+        this._configInfoProvider = configInfoProvider ?? new ConfigInfoProvider(_terminalProvider);
     }
 
-    async discover(workspaceFolder: vscode.WorkspaceFolder, forceRefresh = false, cancellationToken?: vscode.CancellationToken): Promise<CandidateAppHostDisplayInfo[]> {
+    async discover(workspaceFolder: vscode.WorkspaceFolder, forceRefresh = false, cancellationToken?: vscode.CancellationToken, onIncrementalCandidate: IncrementalCandidateCallback = () => { }): Promise<CandidateAppHostDisplayInfo[]> {
         this._throwIfDisposed();
         throwIfCancellationRequested(cancellationToken);
 
         const key = path.resolve(workspaceFolder.uri.fsPath);
         if (forceRefresh) {
+            // Existing callers still await the shared promise. Replace the cache entry without
+            // cancelling that operation so those callers can finish on their original snapshot.
             this._cache.delete(key);
         }
 
         this._ensureWatchers(workspaceFolder, key);
 
-        let resultPromise = this._cache.get(key);
-        if (!resultPromise) {
+        let cachedDiscovery = this._cache.get(key);
+        if (cachedDiscovery?.stale) {
+            // Keep existing subscribers on their original snapshot, but put one replacement in the
+            // cache immediately so every new caller joins the same scan after stale work finishes.
+            cachedDiscovery = this._createCachedDiscovery(workspaceFolder, key, false, cachedDiscovery.promise);
+        }
+        if (!cachedDiscovery) {
+            cachedDiscovery = this._createCachedDiscovery(workspaceFolder, key, forceRefresh);
+        }
+
+        const candidateProgressCallback = (candidate: CandidateAppHostDisplayInfo): void => {
+            if (!cancellationToken?.isCancellationRequested) {
+                notifyCandidateProgressCallback(onIncrementalCandidate, candidate);
+            }
+        };
+        if (!cachedDiscovery.completed) {
+            cachedDiscovery.candidateProgressCallbacks.add(candidateProgressCallback);
+        }
+        try {
+            if (!cachedDiscovery.completed) {
+                for (const candidate of cachedDiscovery.reportedCandidates) {
+                    candidateProgressCallback(candidate);
+                }
+            }
+
+            return await withCancellation(cachedDiscovery.promise, cancellationToken);
+        }
+        finally {
+            cachedDiscovery.candidateProgressCallbacks.delete(candidateProgressCallback);
+        }
+    }
+
+    private _createCachedDiscovery(
+        workspaceFolder: vscode.WorkspaceFolder,
+        key: string,
+        forceRefresh: boolean,
+        startAfter?: Promise<CandidateAppHostDisplayInfo[]>): CachedAppHostDiscovery {
+        const cancellationSource = new vscode.CancellationTokenSource();
+        const candidateProgressCallbacks = new Set<IncrementalCandidateCallback>();
+        const reportedCandidates: CandidateAppHostDisplayInfo[] = [];
+        const cachedDiscovery: CachedAppHostDiscovery = {
+            promise: Promise.resolve([]),
+            reportedCandidates,
+            candidateProgressCallbacks,
+            cancellationSource,
+            completed: false,
+            started: false,
+            stale: false,
+        };
+        const reportCandidateProgress = (candidate: CandidateAppHostDisplayInfo) => {
+            if (isExcludedDiscoveryCandidate(workspaceFolder, vscode.Uri.file(candidate.path))) {
+                return;
+            }
+
+            reportedCandidates.push(candidate);
+            for (const callback of candidateProgressCallbacks) {
+                notifyCandidateProgressCallback(callback, candidate);
+            }
+        };
+        const startDiscovery = () => {
+            cachedDiscovery.started = true;
             const startTime = Date.now();
-            // The cached discovery promise is shared across extension features. Keep caller
-            // cancellation outside the cached operation so one cancelled refresh doesn't reject
-            // unrelated callers that are awaiting the same workspace discovery.
-            const discoveryPromise = this._discoverCore(workspaceFolder)
+            return this._discoverCore(workspaceFolder, reportCandidateProgress, cancellationSource.token, forceRefresh)
                 .then(async discovery => {
                     let candidates = discovery.candidates;
                     try {
                         candidates = await this._includeConfiguredAppHostCandidate(workspaceFolder, candidates);
-                        candidates = this._filterExcludedCandidates(workspaceFolder, candidates);
+                        candidates = sortCandidatesByPath(this._filterExcludedCandidates(workspaceFolder, candidates));
                         emitAppHostDiscoveryTelemetry(discovery.source, 'success', candidates, startTime);
                     }
                     catch (error) {
@@ -97,18 +181,32 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                     emitAppHostDiscoveryTelemetry('all', 'error', [], startTime);
                     throw error;
                 });
-            let cachedPromise: Promise<CandidateAppHostDisplayInfo[]>;
-            cachedPromise = discoveryPromise.catch(error => {
-                if (this._cache.get(key) === cachedPromise) {
-                    this._cache.delete(key);
-                }
-                throw error;
-            });
-            resultPromise = cachedPromise;
-            this._cache.set(key, resultPromise);
-        }
+        };
 
-        return await withCancellation(resultPromise, cancellationToken);
+        // The cached discovery promise is shared across extension features. Keep caller
+        // cancellation outside the cached operation so one cancelled refresh doesn't reject
+        // unrelated callers that are awaiting the same workspace discovery.
+        const discoveryPromise = startAfter
+            ? startAfter.then(() => startDiscovery(), () => startDiscovery())
+            : startDiscovery();
+        cachedDiscovery.promise = discoveryPromise.catch(error => {
+            if (this._cache.get(key) === cachedDiscovery) {
+                this._cache.delete(key);
+            }
+            throw error;
+        }).finally(() => {
+            this._activeDiscoveries.delete(cachedDiscovery);
+            cachedDiscovery.completed = true;
+            cachedDiscovery.candidateProgressCallbacks.clear();
+            cachedDiscovery.cancellationSource.dispose();
+            if (cachedDiscovery.stale && this._cache.get(key) === cachedDiscovery) {
+                this._cache.delete(key);
+            }
+        });
+        this._activeDiscoveries.add(cachedDiscovery);
+        this._cache.set(key, cachedDiscovery);
+
+        return cachedDiscovery;
     }
 
     async resolveDebugTarget(filePath: string, workspaceFolder?: vscode.WorkspaceFolder): Promise<string> {
@@ -161,6 +259,10 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         }
         this._watchers.clear();
         this._cache.clear();
+        for (const discovery of this._activeDiscoveries) {
+            discovery.cancellationSource.cancel();
+        }
+        this._activeDiscoveries.clear();
         for (const timer of this._pendingInvalidationTimers.values()) {
             clearTimeout(timer);
         }
@@ -173,67 +275,158 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         this._onDidChangeCandidates.dispose();
     }
 
-    private async _discoverCore(workspaceFolder: vscode.WorkspaceFolder): Promise<AppHostDiscoveryResult> {
+    private async _discoverCore(workspaceFolder: vscode.WorkspaceFolder, reportCandidateProgress: IncrementalCandidateCallback, cancellationToken: vscode.CancellationToken, forceRefresh: boolean): Promise<AppHostDiscoveryResult> {
+        let cliPath: string | undefined;
         try {
-            const appHosts = await this._discoverWithLs(workspaceFolder);
+            cliPath = await this._getAspireCliExecutablePath(cancellationToken);
+            const lsJsonStreamSupported = await this._resolveLsStreamCapability(cliPath, forceRefresh);
+            let appHosts: CandidateAppHostDisplayInfo[];
+            if (lsJsonStreamSupported) {
+                try {
+                    appHosts = await this._discoverWithLsStream(cliPath, workspaceFolder, reportCandidateProgress, cancellationToken);
+                }
+                catch (streamError) {
+                    this._throwIfDisposed();
+                    throwIfCancellationRequested(cancellationToken);
+                    extensionLogOutputChannel.warn(`aspire ls streaming discovery failed, retrying without --stream: ${formatErrorMessage(streamError)}`);
+
+                    try {
+                        appHosts = await this._discoverWithLs(cliPath, workspaceFolder, cancellationToken);
+                    }
+                    catch (bufferedError) {
+                        this._throwIfDisposed();
+                        throwIfCancellationRequested(cancellationToken);
+                        throw new Error(`aspire ls streaming discovery failed: ${formatErrorMessage(streamError)}\naspire ls buffered fallback failed: ${formatErrorMessage(bufferedError)}`);
+                    }
+                }
+            }
+            else {
+                appHosts = await this._discoverWithLs(cliPath, workspaceFolder, cancellationToken);
+            }
+
             extensionLogOutputChannel.info(`Discovered ${appHosts.length} AppHost candidate(s) via aspire ls`);
             return { source: 'ls', candidates: appHosts };
         }
         catch (error) {
             this._throwIfDisposed();
-            extensionLogOutputChannel.warn(`aspire ls discovery failed, falling back to aspire extension get-apphosts: ${formatErrorMessage(error)}`);
-            try {
-                const appHosts = await this._discoverWithLegacyGetAppHosts(workspaceFolder);
-                extensionLogOutputChannel.info(`Discovered ${appHosts.length} AppHost candidate(s) via aspire extension get-apphosts`);
-                return { source: 'legacy-get-apphosts', candidates: appHosts };
-            }
-            catch (fallbackError) {
-                this._throwIfDisposed();
-                let fileFallbackError: unknown;
+            throwIfCancellationRequested(cancellationToken);
+            let fallbackError: unknown;
+            if (cliPath) {
+                extensionLogOutputChannel.warn(`aspire ls discovery failed, falling back to aspire extension get-apphosts: ${formatErrorMessage(error)}`);
                 try {
-                    const appHosts = await discoverProjectAppHostsFromWorkspaceFiles(workspaceFolder);
-                    if (appHosts.length > 0) {
-                        extensionLogOutputChannel.warn(`CLI AppHost discovery failed; using ${appHosts.length} AppHost project candidate(s) found in the workspace.`);
-                        return { source: 'workspace-files', candidates: appHosts };
-                    }
+                    const appHosts = await this._discoverWithLegacyGetAppHosts(cliPath, workspaceFolder, cancellationToken);
+                    extensionLogOutputChannel.info(`Discovered ${appHosts.length} AppHost candidate(s) via aspire extension get-apphosts`);
+                    return { source: 'legacy-get-apphosts', candidates: appHosts };
                 }
                 catch (error) {
-                    fileFallbackError = error;
+                    fallbackError = error;
+                    this._throwIfDisposed();
+                    throwIfCancellationRequested(cancellationToken);
+                }
+            }
+
+            let fileFallbackError: unknown;
+            try {
+                const appHosts = await discoverProjectAppHostsFromWorkspaceFiles(workspaceFolder);
+                throwIfCancellationRequested(cancellationToken);
+                if (appHosts.length > 0) {
+                    extensionLogOutputChannel.warn(`CLI AppHost discovery failed; using ${appHosts.length} AppHost project candidate(s) found in the workspace.`);
+                    return { source: 'workspace-files', candidates: appHosts };
+                }
+            }
+            catch (error) {
+                throwIfCancellationRequested(cancellationToken);
+                fileFallbackError = error;
+            }
+
+            const legacyFallbackMessage = cliPath
+                ? `\naspire extension get-apphosts fallback failed: ${formatErrorMessage(fallbackError)}`
+                : '';
+            const fileFallbackMessage = fileFallbackError
+                ? `\nworkspace file fallback failed: ${formatErrorMessage(fileFallbackError)}`
+                : '';
+            throw new Error(`aspire ls discovery failed: ${formatErrorMessage(error)}${legacyFallbackMessage}${fileFallbackMessage}`);
+        }
+    }
+
+    private async _discoverWithLsStream(cliPath: string, workspaceFolder: vscode.WorkspaceFolder, reportCandidateProgress: IncrementalCandidateCallback, cancellationToken: vscode.CancellationToken): Promise<CandidateAppHostDisplayInfo[]> {
+        this._throwIfDisposed();
+        const args = ['ls', '--format', 'json', '--stream'];
+        const streamedCandidates = await this._runStreamingCliCommand(cliPath, args, workspaceFolder.uri.fsPath, reportCandidateProgress, cancellationToken);
+
+        return streamedCandidates;
+    }
+
+    private async _discoverWithLs(cliPath: string, workspaceFolder: vscode.WorkspaceFolder, cancellationToken: vscode.CancellationToken): Promise<CandidateAppHostDisplayInfo[]> {
+        this._throwIfDisposed();
+
+        const args = ['ls', '--format', 'json'];
+        const result = await this._runBufferedCliCommand(cliPath, args, workspaceFolder.uri.fsPath, cancellationToken);
+
+        return parseCandidateOutput(result.stdout);
+    }
+
+    private async _discoverWithLegacyGetAppHosts(cliPath: string, workspaceFolder: vscode.WorkspaceFolder, cancellationToken: vscode.CancellationToken): Promise<CandidateAppHostDisplayInfo[]> {
+        this._throwIfDisposed();
+
+        const args = ['extension', 'get-apphosts'];
+        const result = await this._runBufferedCliCommand(cliPath, args, workspaceFolder.uri.fsPath, cancellationToken);
+        const parsed = parseLegacyGetAppHostsOutput(result.stdout);
+        return toCandidatesFromLegacySearchResult(parsed);
+    }
+
+    private _getAspireCliExecutablePath(cancellationToken: vscode.CancellationToken): Promise<string> {
+        this._throwIfDisposed();
+        throwIfCancellationRequested(cancellationToken);
+
+        return new Promise<string>((resolve, reject) => {
+            let settled = false;
+            let cancellationDisposable: vscode.Disposable | undefined;
+            let timeout: ReturnType<typeof setTimeout> | undefined;
+            const settle = (complete: () => void) => {
+                if (settled) {
+                    return;
                 }
 
-                const fileFallbackMessage = fileFallbackError
-                    ? `\nworkspace file fallback failed: ${formatErrorMessage(fileFallbackError)}`
-                    : '';
-                throw new Error(`aspire ls discovery failed: ${formatErrorMessage(error)}\naspire extension get-apphosts fallback failed: ${formatErrorMessage(fallbackError)}${fileFallbackMessage}`);
+                settled = true;
+                if (timeout) {
+                    clearTimeout(timeout);
+                }
+                cancellationDisposable?.dispose();
+                complete();
+            };
+
+            const timeoutMs = getAppHostDiscoveryTimeoutMs();
+            timeout = setTimeout(() => {
+                settle(() => reject(new Error(`Aspire CLI path resolution timed out after ${timeoutMs / 1000} seconds.`)));
+            }, timeoutMs);
+            cancellationDisposable = cancellationToken.onCancellationRequested(() => {
+                settle(() => reject(new vscode.CancellationError()));
+            });
+            if (settled) {
+                return;
             }
-        }
+
+            try {
+                this._terminalProvider.getAspireCliExecutablePath().then(
+                    cliPath => settle(() => resolve(cliPath)),
+                    error => settle(() => reject(error instanceof Error ? error : new Error(String(error)))));
+            }
+            catch (error) {
+                settle(() => reject(error instanceof Error ? error : new Error(String(error))));
+            }
+        });
     }
 
-    private async _discoverWithLs(workspaceFolder: vscode.WorkspaceFolder): Promise<CandidateAppHostDisplayInfo[]> {
-        this._throwIfDisposed();
-
-        const cliPath = await this._terminalProvider.getAspireCliExecutablePath();
-        const args = ['ls', '--format', 'json', noLogoOption];
-        if (process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true') {
-            args.push('--cli-wait-for-debugger');
-        }
-
-        const output = await this._runCliForStdout(cliPath, args, workspaceFolder.uri.fsPath);
-        return parseCandidateOutput(output, 'aspire ls');
-    }
-
-    private async _discoverWithLegacyGetAppHosts(workspaceFolder: vscode.WorkspaceFolder): Promise<CandidateAppHostDisplayInfo[]> {
-        this._throwIfDisposed();
-
-        const cliPath = await this._terminalProvider.getAspireCliExecutablePath();
-        const args = ['extension', 'get-apphosts', noLogoOption];
-        if (process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true') {
-            args.push('--cli-wait-for-debugger');
-        }
-
-        const output = await this._runCliForStdout(cliPath, args, workspaceFolder.uri.fsPath);
-        const parsed = parseLegacyGetAppHostsOutput(output);
-        return toCandidatesFromLegacySearchResult(parsed);
+    private async _resolveLsStreamCapability(cliPath: string, forceRefresh: boolean): Promise<boolean> {
+        const configInfo = await this._configInfoProvider.getConfigInfo({
+            suppressErrors: true,
+            forceRefresh,
+            cliPath,
+        });
+        const supported = configInfo?.capabilities?.includes(lsJsonStreamCapability) ?? false;
+        extensionLogOutputChannel.info(`CLI capability '${lsJsonStreamCapability}' ${supported ? 'advertised' : 'not advertised'}; aspire ls --stream ${supported ? 'enabled' : 'disabled'}.`);
+        return supported;
     }
 
     private _ensureWatchers(workspaceFolder: vscode.WorkspaceFolder, key: string): void {
@@ -251,14 +444,23 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                 clearTimeout(existingTimer);
             }
 
-            this._cache.delete(key);
-
             const timer = setTimeout(() => {
                 this._pendingInvalidationTimers.delete(key);
                 if (this._disposed) {
                     return;
                 }
 
+                const cachedDiscovery = this._cache.get(key);
+                if (cachedDiscovery?.completed === false) {
+                    if (cachedDiscovery.started) {
+                        // Let the current shared stream finish. Cancelling here would only turn
+                        // repeated file notifications into a cancel-and-restart loop. A queued
+                        // replacement has not observed workspace state yet, so it remains fresh.
+                        cachedDiscovery.stale = true;
+                    }
+                } else {
+                    this._invalidateCachedDiscovery(key);
+                }
                 this._onDidChangeCandidates.fire(workspaceFolder);
             }, AppHostDiscoveryService._candidateChangeDebounceMs);
             this._pendingInvalidationTimers.set(key, timer);
@@ -291,6 +493,18 @@ export class AppHostDiscoveryService implements vscode.Disposable {
     private _throwIfDisposed(): void {
         if (this._disposed) {
             throw new Error('AppHost discovery service has been disposed.');
+        }
+    }
+
+    private _invalidateCachedDiscovery(key: string): void {
+        const cachedDiscovery = this._cache.get(key);
+        if (!cachedDiscovery) {
+            return;
+        }
+
+        this._cache.delete(key);
+        if (!cachedDiscovery.completed) {
+            cachedDiscovery.cancellationSource.cancel();
         }
     }
 
@@ -336,37 +550,102 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         return filteredCandidates;
     }
 
-    private _runCliForStdout(cliPath: string, args: string[], workingDirectory: string): Promise<string> {
-        return new Promise((resolve, reject) => {
+    private async _runBufferedCliCommand(
+        cliPath: string,
+        args: string[],
+        workingDirectory: string,
+        cancellationToken: vscode.CancellationToken): Promise<CliProcessResult> {
+        const argsWithNoLogo = [...args, noLogoOption];
+        let result = await this._runCliProcess(cliPath, argsWithNoLogo, workingDirectory, undefined, cancellationToken);
+        if (result.exitCode !== 0 && isNoLogoUnsupportedOutput(argsWithNoLogo, result.stdout, result.stderr)) {
+            extensionLogOutputChannel.info(`Installed Aspire CLI does not recognize ${noLogoOption}; retrying AppHost discovery without it.`);
+            result = await this._runCliProcess(cliPath, args, workingDirectory, undefined, cancellationToken);
+        }
+
+        throwIfCliCommandFailed(result);
+        return result;
+    }
+
+    private async _runStreamingCliCommand(
+        cliPath: string,
+        args: string[],
+        workingDirectory: string,
+        reportCandidateProgress: IncrementalCandidateCallback,
+        cancellationToken: vscode.CancellationToken): Promise<CandidateAppHostDisplayInfo[]> {
+        const argsWithNoLogo = [...args, noLogoOption];
+        let candidates: CandidateAppHostDisplayInfo[] = [];
+        const reportedCandidatePaths: string[] = [];
+        const createCandidateHandler = () => createLsStreamCandidateHandler(candidate => {
+            candidates.push(candidate);
+            if (!reportedCandidatePaths.some(reportedPath => isSamePath(reportedPath, candidate.path))) {
+                reportedCandidatePaths.push(candidate.path);
+                notifyCandidateProgressCallback(reportCandidateProgress, candidate);
+            }
+        });
+        let result = await this._runCliProcess(
+            cliPath,
+            argsWithNoLogo,
+            workingDirectory,
+            createCandidateHandler(),
+            cancellationToken);
+
+        if (result.exitCode !== 0 && isNoLogoUnsupportedOutput(argsWithNoLogo, result.stdout, result.stderr)) {
+            extensionLogOutputChannel.info(`Installed Aspire CLI does not recognize ${noLogoOption}; retrying AppHost discovery without it.`);
+            candidates = [];
+            result = await this._runCliProcess(
+                cliPath,
+                args,
+                workingDirectory,
+                createCandidateHandler(),
+                cancellationToken);
+        }
+
+        // Streaming stdout is NDJSON containing absolute AppHost paths. It is useful for parsing,
+        // but should not become a user-visible error when the process exits without stderr.
+        throwIfCliCommandFailed(result, false);
+        return candidates;
+    }
+
+    private _runCliProcess(
+        cliPath: string,
+        args: string[],
+        workingDirectory: string,
+        onLine: ((line: string) => void) | undefined,
+        cancellationToken: vscode.CancellationToken): Promise<CliProcessResult> {
+        return new Promise<CliProcessResult>((resolve, reject) => {
             this._throwIfDisposed();
+            throwIfCancellationRequested(cancellationToken);
+
+            const cliArgs = process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true'
+                ? [...args, '--cli-wait-for-debugger']
+                : args;
 
             let stdout = '';
             let stderr = '';
             let settled = false;
+            let cancellationDisposable: vscode.Disposable | undefined;
             let childProcess: ChildProcessWithoutNullStreams | undefined;
-            let timeout: ReturnType<typeof setTimeout> | undefined;
+            let inactivityTimeout: ReturnType<typeof setTimeout> | undefined;
+            let overallTimeout: ReturnType<typeof setTimeout> | undefined;
             const cancel = (error: Error) => {
-                if (childProcess && !childProcess.killed) {
-                    try {
-                        if (!childProcess.kill()) {
-                            extensionLogOutputChannel.warn(`Failed to stop AppHost discovery command: aspire ${args.join(' ')}`);
-                        }
-                    }
-                    catch (killError) {
-                        extensionLogOutputChannel.warn(`Failed to stop AppHost discovery command: ${killError}`);
-                    }
-                }
-
                 settle(() => reject(error));
+                if (childProcess) {
+                    terminateCliProcess(childProcess, `AppHost discovery command: aspire ${cliArgs.join(' ')}`);
+                }
             };
             const cleanup = () => {
-                if (timeout) {
-                    clearTimeout(timeout);
-                    timeout = undefined;
+                if (inactivityTimeout) {
+                    clearTimeout(inactivityTimeout);
+                    inactivityTimeout = undefined;
+                }
+                if (overallTimeout) {
+                    clearTimeout(overallTimeout);
+                    overallTimeout = undefined;
                 }
                 if (childProcess) {
                     this._activeCliProcesses.delete(childProcess);
                 }
+                cancellationDisposable?.dispose();
                 this._cancelActiveCliProcesses.delete(cancel);
             };
             const settle = (complete: () => void) => {
@@ -379,25 +658,58 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                 complete();
             };
 
+            const timeoutMs = getAppHostDiscoveryTimeoutMs();
+            const startTimeout = () => {
+                if (settled) {
+                    return;
+                }
+
+                if (inactivityTimeout) {
+                    clearTimeout(inactivityTimeout);
+                }
+                inactivityTimeout = setTimeout(() => {
+                    const silence = onLine ? ' without output' : '';
+                    cancel(new Error(`aspire ${cliArgs.join(' ')} timed out after ${timeoutMs / 1000} seconds${silence}.`));
+                }, timeoutMs);
+            };
+            const onActivity = onLine ? startTimeout : undefined;
             this._cancelActiveCliProcesses.add(cancel);
+            cancellationDisposable = cancellationToken.onCancellationRequested(() => {
+                cancel(new vscode.CancellationError());
+            });
             try {
-                childProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
+                childProcess = spawnCliProcess(this._terminalProvider, cliPath, cliArgs, {
+                    createProcessGroup: true,
                     noExtensionVariables: true,
                     workingDirectory,
-                    stdoutCallback: data => { stdout += data; },
-                    stderrCallback: data => { stderr += data; },
+                    stdoutCallback: data => {
+                        onActivity?.();
+                        stdout += data;
+                    },
+                    lineCallback: onLine
+                        ? line => {
+                            // readline can deliver lines that were already queued when a parser failure
+                            // settled this process. Do not publish those lines while fallback is running.
+                            if (settled) {
+                                return;
+                            }
+
+                            try {
+                                onActivity?.();
+                                onLine(line);
+                            }
+                            catch (error) {
+                                cancel(error instanceof Error ? error : new Error(String(error)));
+                            }
+                        }
+                        : undefined,
+                    stderrCallback: data => {
+                        onActivity?.();
+                        stderr += data;
+                    },
                     exitCallback: code => {
                         settle(() => {
-                            if (code === 0) {
-                                resolve(stdout);
-                            }
-                            else if (isNoLogoUnsupportedOutput(args, stdout, stderr)) {
-                                extensionLogOutputChannel.info(`Installed Aspire CLI does not recognize ${noLogoOption}; retrying AppHost discovery without it.`);
-                                this._runCliForStdout(cliPath, removeRootNoLogoOption(args), workingDirectory).then(resolve, reject);
-                            }
-                            else {
-                                reject(new Error(stderr || `exit code ${code ?? 1}`));
-                            }
+                            resolve({ stdout, stderr, exitCode: code });
                         });
                     },
                     errorCallback: error => {
@@ -415,10 +727,14 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             }
 
             this._activeCliProcesses.add(childProcess);
-            const timeoutMs = getAppHostDiscoveryTimeoutMs();
-            timeout = setTimeout(() => {
-                cancel(new Error(`aspire ${args.join(' ')} timed out after ${timeoutMs / 1000} seconds.`));
-            }, timeoutMs);
+            startTimeout();
+            if (onLine) {
+                // Stream activity re-arms the inactivity watchdog, but it must not let a chatty
+                // hung process keep workspace discovery alive forever.
+                overallTimeout = setTimeout(() => {
+                    cancel(new Error(`aspire ${cliArgs.join(' ')} exceeded the maximum streaming runtime of ${AppHostDiscoveryService._streamingDiscoveryMaxRuntimeMs / 1000} seconds.`));
+                }, AppHostDiscoveryService._streamingDiscoveryMaxRuntimeMs);
+            }
         });
     }
 }
@@ -429,7 +745,7 @@ function emitAppHostDiscoveryTelemetry(
     candidates: readonly CandidateAppHostDisplayInfo[],
     startTime: number,
 ): void {
-    sendTelemetryEvent('apphost/discovery/result', {
+    sendTelemetryEvent('aspire/vscode/apphost/discovery/result', {
         outcome,
         source,
         apphost_languages: summarizeAppHostLanguages(candidates),
@@ -438,6 +754,47 @@ function emitAppHostDiscoveryTelemetry(
         candidate_count: candidates.length,
         buildable_candidate_count: candidates.filter(candidate => candidate.status === 'buildable').length,
     });
+}
+
+function createLsStreamCandidateHandler(onCandidate: IncrementalCandidateCallback): (line: string) => void {
+    return line => {
+        const trimmed = line.trim();
+        if (!trimmed) {
+            return;
+        }
+
+        let parsed: unknown;
+        try {
+            // `aspire ls --format json --stream` emits newline-delimited JSON, one candidate per line:
+            //   {"path":"/repo/AppHost/AppHost.csproj","language":"csharp","status":"buildable"}
+            // Treat malformed lines as a failed stream instead of accepting a truncated partial result.
+            parsed = JSON.parse(trimmed);
+        }
+        catch {
+            throw new Error('aspire ls --stream returned malformed JSON.');
+        }
+
+        if (!isLsCandidate(parsed)) {
+            throw new Error('aspire ls --stream returned a candidate with an unexpected shape.');
+        }
+
+        onCandidate(toDisplayCandidate(parsed));
+    };
+}
+
+function notifyCandidateProgressCallback(callback: IncrementalCandidateCallback, candidate: CandidateAppHostDisplayInfo): void {
+    try {
+        callback(candidate);
+    }
+    catch (error) {
+        extensionLogOutputChannel.warn(`AppHost discovery candidate callback failed: ${formatErrorMessage(error)}`);
+    }
+}
+
+function throwIfCliCommandFailed(result: CliProcessResult, includeStdout = true): void {
+    if (result.exitCode !== 0) {
+        throw new Error(result.stderr.trim() || (includeStdout ? result.stdout.trim() : '') || `exit code ${result.exitCode ?? 1}`);
+    }
 }
 
 export function findCandidateForEditorFile(filePath: string, candidates: readonly CandidateAppHostDisplayInfo[]): CandidateAppHostDisplayInfo | undefined {
@@ -591,7 +948,11 @@ function toConfiguredAppHostCandidate(workspaceFolder: vscode.WorkspaceFolder, a
     };
 }
 
-function parseCandidateOutput(output: string, commandName: string): CandidateAppHostDisplayInfo[] {
+function sortCandidatesByPath(candidates: readonly CandidateAppHostDisplayInfo[]): CandidateAppHostDisplayInfo[] {
+    return [...candidates].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+}
+
+function parseCandidateOutput(output: string): CandidateAppHostDisplayInfo[] {
     const trimmed = output.trim();
     if (!trimmed) {
         return [];
@@ -605,7 +966,7 @@ function parseCandidateOutput(output: string, commandName: string): CandidateApp
 
         const unexpectedCandidateCount = parsed.length - appHosts.length;
         if (unexpectedCandidateCount > 0) {
-            extensionLogOutputChannel.warn(`${commandName} returned ${unexpectedCandidateCount} candidate(s) with an unexpected shape; ignoring those entries.`);
+            extensionLogOutputChannel.warn(`AppHost discovery returned ${unexpectedCandidateCount} candidate(s) with an unexpected shape; ignoring those entries.`);
         }
 
         return appHosts;
@@ -622,7 +983,7 @@ function parseCandidateOutput(output: string, commandName: string): CandidateApp
         return toCandidatesFromLegacySearchResult(parsed);
     }
 
-    throw new Error(`${commandName} returned an unexpected output shape.`);
+    throw new Error('AppHost discovery returned an unexpected output shape.');
 }
 
 async function discoverProjectAppHostsFromWorkspaceFiles(workspaceFolder: vscode.WorkspaceFolder): Promise<CandidateAppHostDisplayInfo[]> {
@@ -707,6 +1068,11 @@ function toDisplayCandidate(candidate: CandidateAppHostDisplayInfo | AppHostCand
         status: candidate.status,
     };
 
+    const selected = 'selected' in candidate ? candidate.selected : undefined;
+    if (selected !== undefined) {
+        displayCandidate.selected = selected;
+    }
+
     return displayCandidate;
 }
 
@@ -716,7 +1082,7 @@ function formatErrorMessage(error: unknown): string {
 
 function throwIfCancellationRequested(cancellationToken?: vscode.CancellationToken): void {
     if (cancellationToken?.isCancellationRequested) {
-        throw new Error('AppHost discovery was cancelled.');
+        throw new vscode.CancellationError();
     }
 }
 
@@ -735,7 +1101,7 @@ function withCancellation<T>(promise: Promise<T>, cancellationToken?: vscode.Can
     return new Promise<T>((resolve, reject) => {
         const disposable = cancellationToken.onCancellationRequested(() => {
             disposable.dispose();
-            reject(new Error('AppHost discovery was cancelled.'));
+            reject(new vscode.CancellationError());
         });
 
         promise.then(

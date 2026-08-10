@@ -6,6 +6,7 @@ using Aspire.Hosting.Dcp.Model;
 using k8s;
 using System.Threading.Channels;
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text;
@@ -28,6 +29,7 @@ internal sealed class TestKubernetesService : IKubernetesService
     private readonly Func<CustomResource, string, bool?, Stream> _startStream;
     private readonly bool _ignoreDeletes;
     private int _nextPort = StartOfAutoPortRange;
+    private int _nextResourceVersion;
 
     public TestKubernetesService(
         Func<CustomResource, string, Stream>? startStream = null,
@@ -64,14 +66,7 @@ internal sealed class TestKubernetesService : IKubernetesService
 
     public Task<T> CreateAsync<T>(T obj, CancellationToken cancellationToken = default) where T : CustomResource, IKubernetesStaticMetadata
     {
-        static T Clone(T r)
-        {
-            var serialized = JsonSerializer.Serialize(r);
-            var clone = JsonSerializer.Deserialize<T>(serialized);
-            return clone!;
-        }
-
-        var res = Clone(obj);
+        var res = Copy(obj);
 
         // "Allocate" port for a service.
         if (res is Service svc)
@@ -106,13 +101,18 @@ internal sealed class TestKubernetesService : IKubernetesService
         lock (CreatedResources)
         {
             var modifiedResources = AllocateProxylessContainerServicePorts(res);
+            StampResourceVersion(res);
             CreatedResources.Enqueue(res);
             foreach (var c in _watchChannels)
             {
-                c.Writer.TryWrite((WatchEventType.Added, res));
+                // Deliver a copy. A real DCP watch event carries an object deserialized from the
+                // response body, so it is never affected by later changes to the stored resource.
+                // Handing out the stored instance instead would let a test that mutates a resource
+                // change the content of events that were already queued.
+                c.Writer.TryWrite((WatchEventType.Added, Copy(res)));
                 foreach (var modifiedResource in modifiedResources)
                 {
-                    c.Writer.TryWrite((WatchEventType.Modified, modifiedResource));
+                    c.Writer.TryWrite((WatchEventType.Modified, Copy(modifiedResource)));
                 }
             }
         }
@@ -120,15 +120,88 @@ internal sealed class TestKubernetesService : IKubernetesService
         return Task.FromResult(res);
     }
 
+    /// <summary>
+    /// Delivers a resource to the watchers as a <see cref="WatchEventType.Modified"/> event, recording
+    /// it as a change by assigning a new resource version.
+    /// </summary>
     public void PushResourceModified(CustomResource resource)
+    {
+        lock (CreatedResources)
+        {
+            StampResourceVersion(resource);
+
+            foreach (var c in _watchChannels)
+            {
+                // Deliver a copy so the event content is fixed at the moment of the push, the same
+                // way a real DCP watch event is. Tests routinely mutate a resource and push it again,
+                // and without this the later mutation would also be seen by the earlier event.
+                c.Writer.TryWrite((WatchEventType.Modified, Copy(resource)));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Re-delivers a resource to the watchers without recording a change, so the event carries the
+    /// resource version the resource already has.
+    /// </summary>
+    public void PushResourceUnchanged(CustomResource resource, WatchEventType eventType = WatchEventType.Modified)
     {
         lock (CreatedResources)
         {
             foreach (var c in _watchChannels)
             {
-                c.Writer.TryWrite((WatchEventType.Modified, resource));
+                c.Writer.TryWrite((eventType, Copy(resource)));
             }
         }
+    }
+
+    /// <summary>
+    /// Delivers a resource to the watchers as a <see cref="WatchEventType.Deleted"/> event without
+    /// assigning a new resource version.
+    /// </summary>
+    public void PushResourceDeleted(CustomResource resource)
+    {
+        PushResourceUnchanged(resource, WatchEventType.Deleted);
+    }
+
+    /// <summary>
+    /// Replays every existing resource to the watchers as an <see cref="WatchEventType.Added"/> event,
+    /// each carrying the resource version it already has.
+    /// </summary>
+    /// <remarks>
+    /// A DCP watch is backed by a list-and-watch request, so whenever the watch is re-established
+    /// every object that currently exists is delivered again. Aspire re-establishes its watches
+    /// periodically, which is what made https://github.com/microsoft/aspire/issues/18869 visible.
+    /// </remarks>
+    public void SimulateWatchRestart()
+    {
+        lock (CreatedResources)
+        {
+            foreach (var res in CreatedResources.Where(r => !DeletedResources.Contains(r.Metadata.Name)))
+            {
+                foreach (var c in _watchChannels)
+                {
+                    c.Writer.TryWrite((WatchEventType.Added, Copy(res)));
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Assigns the next resource version to a resource, the way an API server does when it stores a
+    /// change. Real DCP populates this on every object it returns; the value is opaque to clients and
+    /// is only ever compared for equality.
+    /// </summary>
+    private void StampResourceVersion(CustomResource resource)
+    {
+        resource.Metadata.ResourceVersion = Interlocked.Increment(ref _nextResourceVersion).ToString(CultureInfo.InvariantCulture);
+    }
+
+    private static T Copy<T>(T resource) where T : CustomResource
+    {
+        // Serialize against the runtime type so this also works when T is an abstract base type.
+        var type = resource.GetType();
+        return (T)JsonSerializer.Deserialize(JsonSerializer.Serialize(resource, type), type)!;
     }
 
     private List<CustomResource> AllocateProxylessContainerServicePorts(CustomResource resource)
@@ -153,6 +226,10 @@ internal sealed class TestKubernetesService : IKubernetesService
             service.Status ??= new ServiceStatus();
             service.Status.EffectiveAddress = service.Spec.Address ?? "localhost";
             service.Status.EffectivePort = hostPort ?? Interlocked.Increment(ref _nextPort);
+
+            // Made a change to the service, so it needs a new resource version.
+            StampResourceVersion(service);
+
             modifiedResources.Add(service);
         }
 
@@ -196,7 +273,9 @@ internal sealed class TestKubernetesService : IKubernetesService
             _watchChannels.Add(chan);
             foreach (var res in CreatedResources.OfType<T>())
             {
-                chan.Writer.TryWrite((WatchEventType.Added, res));
+                // Deliver a copy, the same way the other fan-out sites do, so the content of this event is
+                // fixed at the moment it is produced instead of tracking later changes to the resource.
+                chan.Writer.TryWrite((WatchEventType.Added, Copy(res)));
             }
         }
 
@@ -255,11 +334,17 @@ internal sealed class TestKubernetesService : IKubernetesService
 
             var result = jsonPatch.Apply<T, T>(res);
 
+            // A patch changes the stored object, so it needs a new resource version. No watch event is
+            // emitted here - tests push one themselves when they need it - but leaving the version behind
+            // would make a later replay of this object look unchanged and be discarded by the watcher.
             if (res is Executable exe && result is Executable eu)
             {
+                var changed = false;
+
                 if (eu.Spec.Start is not null)
                 {
                     exe.Spec.Start = eu.Spec.Start;
+                    changed = true;
                 }
 
                 if (eu.Spec.Stop == true)
@@ -270,14 +355,23 @@ internal sealed class TestKubernetesService : IKubernetesService
                         exe.Status = new ExecutableStatus();
                     }
                     exe.Status.State = ExecutableState.Finished;
+                    changed = true;
+                }
+
+                if (changed)
+                {
+                    StampResourceVersion(exe);
                 }
             }
 
             if (res is Container ctr && result is Container cu)
             {
+                var changed = false;
+
                 if (cu.Spec.Start is not null)
                 {
                     ctr.Spec.Start = cu.Spec.Start;
+                    changed = true;
                 }
 
                 if (cu.Spec.Stop == true)
@@ -288,6 +382,12 @@ internal sealed class TestKubernetesService : IKubernetesService
                         ctr.Status = new ContainerStatus();
                     }
                     ctr.Status.State = ContainerState.Exited;
+                    changed = true;
+                }
+
+                if (changed)
+                {
+                    StampResourceVersion(ctr);
                 }
             }
 

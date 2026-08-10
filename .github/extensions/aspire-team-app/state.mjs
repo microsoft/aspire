@@ -17,6 +17,7 @@ import { isEmuAccountId } from "./accounts.mjs";
 const COPILOT_HOME = process.env.COPILOT_HOME || join(homedir(), ".copilot");
 const ARTIFACT_DIR = join(COPILOT_HOME, "extensions", "aspire-team-app", "artifacts");
 const PREFS_FILE = join(ARTIFACT_DIR, "preferences.json");
+let prefsUpdate = Promise.resolve();
 
 export const DEFAULT_NOTIFICATIONS = {
   reviewRequested: true,
@@ -29,6 +30,7 @@ export const DEFAULT_PREFS = {
   mode: "review",
   release: CURRENT_RELEASE,
   showDrafts: false,
+  autoApplyUpdates: true,
   dismissedNotifications: [],
   notifications: { ...DEFAULT_NOTIFICATIONS },
   // Per-account configuration keyed by account id ("acct:<host>/<login>"):
@@ -57,6 +59,7 @@ function migrate(parsed) {
     ...DEFAULT_PREFS,
     ...parsed,
     showDrafts: !!parsed.showDrafts,
+    autoApplyUpdates: parsed.autoApplyUpdates !== false,
     notifications: { ...DEFAULT_NOTIFICATIONS, ...(parsed.notifications ?? {}) },
     dismissedNotifications: Array.isArray(parsed.dismissedNotifications) ? parsed.dismissedNotifications : [],
     accounts: normalizeAccounts(parsed.accounts),
@@ -89,6 +92,20 @@ export async function savePrefs(prefs) {
   await mkdir(ARTIFACT_DIR, { recursive: true });
   await writeFile(PREFS_FILE, JSON.stringify(prefs, null, 2) + "\n", "utf8");
   return prefs;
+}
+
+// Every canvas instance shares this preference file. Serialize read-modify-write operations so
+// simultaneous toolbar, settings, and account changes cannot overwrite one another with stale copies.
+export function updatePrefs(mutator) {
+  const run = prefsUpdate
+    .catch(() => {})
+    .then(async () => {
+      const prefs = await loadPrefs();
+      await mutator(prefs);
+      return savePrefs(prefs);
+    });
+  prefsUpdate = run;
+  return run;
 }
 
 // ---------------------------------------------------------------------------

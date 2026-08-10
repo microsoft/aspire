@@ -7,6 +7,7 @@ using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using System.Text.Json;
@@ -18,6 +19,12 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class ConfigCommandTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public void ConfigInfo_AdvertisesLsJsonStream()
+    {
+        Assert.Contains(KnownCapabilities.LsJsonStream, KnownCapabilities.GetAdvertisedCapabilities());
+    }
+
     [Fact]
     public void ConfigInfoJson_UsesCamelCasePropertyNames()
     {

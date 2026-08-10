@@ -915,6 +915,7 @@ internal sealed class PublishingPromptInput
 
     /// <summary>
     /// Gets the file type filter for File inputs. Uses the same format as the HTML accept attribute.
+    /// The CLI validates only dot-prefixed extension filters and does not validate MIME type patterns such as "image/*".
     /// </summary>
     public string? FileFilter { get; init; }
 

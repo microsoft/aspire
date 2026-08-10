@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Globalization;
+using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
@@ -11,6 +12,7 @@ using Aspire.Cli.Commands;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -636,6 +638,77 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunCommand_DetachedChild_DoesNotStartCliMetadataPrefetching()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />", TestContext.Current.CancellationToken);
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var processFactory = new TestProcessExecutionFactory();
+
+        var parentServices = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+        });
+        parentServices.Replace(ServiceDescriptor.Singleton<IProcessExecutionFactory>(processFactory));
+
+        using (var parentProvider = parentServices.BuildServiceProvider())
+        {
+            var parentCommand = parentProvider.GetRequiredService<RootCommand>();
+            var parentResult = parentCommand.Parse($"run --detach --apphost {appHostFile.FullName}");
+
+            await parentResult.InvokeAsync().DefaultTimeout();
+        }
+
+        var childEnvironment = Assert.IsAssignableFrom<IDictionary<string, string>>(processFactory.LastEnvironmentVariables);
+        var childArguments = Assert.IsAssignableFrom<IEnumerable<string>>(processFactory.LastArguments);
+        Assert.Contains("run", childArguments);
+        Assert.DoesNotContain("--detach", childArguments);
+        Assert.Equal("true", childEnvironment[KnownConfigNames.CliRunDetached]);
+
+        var cliPrefetchStarted = false;
+        var testNotifier = new TestCliUpdateNotifier
+        {
+            CheckForCliUpdatesAsyncCallback = (_, _) =>
+            {
+                cliPrefetchStarted = true;
+                return Task.CompletedTask;
+            }
+        };
+
+        var childServices = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new NoProjectFileProjectLocator();
+            options.CliUpdateNotifierFactory = _ => testNotifier;
+            options.ConfigurationCallback += config =>
+            {
+                foreach (var (name, value) in childEnvironment)
+                {
+                    config[name] = value;
+                }
+            };
+        });
+        using var childProvider = childServices.BuildServiceProvider();
+
+        var prefetcher = childProvider.GetRequiredService<NuGetPackagePrefetcher>();
+        await prefetcher.StartAsync(CancellationToken.None).DefaultTimeout();
+
+        var childCommand = childProvider.GetRequiredService<RootCommand>();
+        var childResult = childCommand.Parse("run");
+
+        await childResult.InvokeAsync().DefaultTimeout();
+        await prefetcher.ExecuteTask!.DefaultTimeout();
+        await prefetcher.StopAsync(CancellationToken.None).DefaultTimeout();
+
+        Assert.False(cliPrefetchStarted);
+    }
+
+    [Fact]
     public async Task RunCommand_WithoutDetachFlag_ShowsUpdateNotification()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -1255,6 +1328,68 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains(interactionService.DisplayedLines, line => line.Line.Contains("Service 'frontend' needs to specify a port", StringComparison.Ordinal));
         Assert.DoesNotContain(interactionService.DisplayedLines, line => line.Line.Contains("MSB3277", StringComparison.Ordinal));
         Assert.DoesNotContain(interactionService.DisplayedErrors, error => error.Contains("Timed out waiting for AppHost server", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task RunCommand_WhenBackchannelFailsBeforeConnection_ReportsUnknownExitWithoutSentinel()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+
+        var runCanExit = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = async (context, cancellationToken) =>
+            {
+                context.BuildCompletionSource?.TrySetResult(true);
+                context.BackchannelCompletionSource?.TrySetException(
+                    new FailedToConnectBackchannelConnection(
+                        "The AppHost server process exited unexpectedly",
+                        new SocketException((int)SocketError.ConnectionRefused)));
+
+                await runCanExit.Task.WaitAsync(cancellationToken);
+                return CliExitCodes.FailedToDotnetRunAppHost;
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"run --apphost {appHostFile.FullName}");
+
+        try
+        {
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+            var error = Assert.Single(interactionService.DisplayedErrors);
+            var expectedError = string.Format(
+                CultureInfo.CurrentCulture,
+                InteractionServiceStrings.UnexpectedErrorOccurred,
+                "The AppHost server process exited unexpectedly");
+            Assert.Equal(expectedError, error);
+            Assert.DoesNotContain("-1", error, StringComparison.Ordinal);
+        }
+        finally
+        {
+            runCanExit.TrySetResult();
+        }
     }
 
     [Fact]

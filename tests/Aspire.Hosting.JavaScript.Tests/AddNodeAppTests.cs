@@ -593,14 +593,14 @@ public class AddNodeAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void NodeApp_DirectFile_ProducesNodeRuntimeExecutable()
+    public async Task NodeApp_DirectFile_ProducesNodeRuntimeExecutable()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var nodeApp = builder.AddNodeApp("nodeapp", workspace.Path, "app.js");
 
-        var launchConfig = InvokeLaunchConfigurationAnnotator(nodeApp.Resource);
+        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(nodeApp.Resource);
 
         Assert.Equal("node", launchConfig.Type);
         Assert.Equal("node", launchConfig.RuntimeExecutable);
@@ -609,14 +609,14 @@ public class AddNodeAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void ViteApp_DevServer_ProducesPackageManagerRuntimeExecutable()
+    public async Task ViteApp_DevServer_ProducesPackageManagerRuntimeExecutable()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var viteApp = builder.AddViteApp("viteapp", workspace.Path);
 
-        var launchConfig = InvokeLaunchConfigurationAnnotator(viteApp.Resource);
+        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(viteApp.Resource);
 
         // Vite/Next.js/AddJavaScriptApp always debug through the Node adapter via a package-manager dev
         // server. With no package.json present, the runtime executable falls back to "npm".
@@ -626,12 +626,12 @@ public class AddNodeAppTests(ITestOutputHelper outputHelper)
         Assert.Equal(string.Empty, launchConfig.ScriptPath);
     }
 
-    private static JavaScriptLaunchConfiguration InvokeLaunchConfigurationAnnotator(IResource resource)
+    private static async Task<JavaScriptLaunchConfiguration> InvokeLaunchConfigurationAnnotatorAsync(IResource resource)
     {
         Assert.True(resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
 
         var exe = Executable.Create("test", "node");
-        supportsDebugging.LaunchConfigurationAnnotator(exe, ExecutableLaunchMode.Debug);
+        await supportsDebugging.LaunchConfigurationAnnotator(exe, ExecutableLaunchMode.Debug, CancellationToken.None);
 
         Assert.True(exe.TryGetAnnotationAsObjectList<JavaScriptLaunchConfiguration>(
             Executable.LaunchConfigurationsAnnotation,

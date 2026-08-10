@@ -135,39 +135,7 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
 
     private static IEnumerable<string> EnumerateAspireCliPaths()
     {
-        var path = Environment.GetEnvironmentVariable("PATH");
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            yield break;
-        }
-
-        var executableNames = GetAspireExecutableNames();
-        var seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var pathEntry in path.Split(Path.PathSeparator))
-        {
-            var directory = pathEntry.Trim().Trim('"');
-            if (string.IsNullOrWhiteSpace(directory))
-            {
-                continue;
-            }
-
-            foreach (var executableName in executableNames)
-            {
-                var candidate = Path.Combine(directory, executableName);
-                if (seenPaths.Add(candidate) && File.Exists(candidate))
-                {
-                    yield return candidate;
-                }
-            }
-        }
-    }
-
-    private static string[] GetAspireExecutableNames()
-    {
-        return IsWindows()
-            ? ["aspire.exe", "aspire.cmd", "aspire.bat", "aspire"]
-            : ["aspire"];
+        return CommandPathResolver.EnumerateFromPath("aspire");
     }
 
     private static bool TryResolveFromCliPath(string cliPath, out BundleResolution resolution, bool includeDefaultAspireHomeFallback = true)

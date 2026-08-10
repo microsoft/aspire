@@ -21,8 +21,8 @@
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
-    "@typescript-eslint/eslint-plugin": "^8.48.1",
-    "@typescript-eslint/parser": "^8.48.1",
+    "@typescript-eslint/eslint-plugin": "8.48.1",
+    "@typescript-eslint/parser": "8.48.1",
     "@vitejs/plugin-react": "^6.0.0",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
@@ -31,9 +31,12 @@
     "vite": "^8.0.16"
   },
   "overrides": {
-    "postcss": "8.5.10",
+    "postcss": "8.5.23",
     "esbuild": "0.28.1",
     "@babel/core": "7.29.6",
-    "js-yaml": "4.2.0"
+    "js-yaml": "4.3.0",
+    "minimatch@3.1.5": {
+      "brace-expansion": "2.1.3"
+    }
   }
 }

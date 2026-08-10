@@ -1,7 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-namespace Aspire.Hosting.ApplicationModel;
+using System.Diagnostics.CodeAnalysis;
+using Aspire.Hosting.ApplicationModel;
+
+#pragma warning disable ASPIREPROJECTS001 // ProjectLaunchDefaultsAnnotation is experimental.
+
+namespace Aspire.Hosting.Dotnet;
 
 /// <summary>
 /// A resource that represents a specified C# project or file-based app added by path.
@@ -13,23 +18,18 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <c>dotnet run --file &lt;path&gt;</c> for a file-based app (a <c>.cs</c> file).
 /// </para>
 /// </remarks>
-/// <param name="name">The name of the resource in the application model.</param>
-/// <param name="workingDirectory">The working directory for the app, typically the directory containing the project or <c>.cs</c> file.</param>
+[Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 [AspireExport(ExposeProperties = true)]
-public class DotnetProjectResource(string name, string workingDirectory)
-    : ExecutableResource(name, "dotnet", workingDirectory), IResourceWithServiceDiscovery, IProjectLaunchDefaultsResource
+public class DotnetProjectResource : ExecutableResource, IResourceWithServiceDiscovery
 {
-    // The project-defaults wiring lives in Aspire.Hosting core (WithProjectDefaults) and operates against
-    // IProjectLaunchDefaultsResource. These members supply the small amount of per-endpoint state it
-    // needs; they are implemented explicitly so they don't leak into the public/polyglot surface.
-    private readonly Dictionary<EndpointAnnotation, string> _kestrelEndpointAnnotationHosts = new();
-    private EndpointAnnotation? _defaultHttpsEndpoint;
-
-    Dictionary<EndpointAnnotation, string> IProjectLaunchDefaultsResource.KestrelEndpointAnnotationHosts => _kestrelEndpointAnnotationHosts;
-
-    EndpointAnnotation? IProjectLaunchDefaultsResource.DefaultHttpsEndpoint
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DotnetProjectResource"/> class.
+    /// </summary>
+    /// <param name="name">The name of the resource in the application model.</param>
+    /// <param name="workingDirectory">The working directory for the app, typically the directory containing the project or <c>.cs</c> file.</param>
+    public DotnetProjectResource(string name, string workingDirectory) : base(name, "dotnet", workingDirectory)
     {
-        get => _defaultHttpsEndpoint;
-        set => _defaultHttpsEndpoint = value;
+        // Ensure uniform C# project defaults, including the Rebuild command and Kestrel endpoint wiring.
+        Annotations.Add(new ProjectLaunchDefaultsAnnotation());
     }
 }
