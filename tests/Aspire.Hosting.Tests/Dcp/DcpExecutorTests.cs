@@ -273,10 +273,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     {
         var builder = DistributedApplication.CreateBuilder();
 
-#pragma warning disable ASPIREDOTNETTOOL // DotnetToolResource is experimental.
-        var resource = new DotnetToolResource("tool", "package");
-#pragma warning restore ASPIREDOTNETTOOL
-        builder.AddResource(resource)
+        builder.AddDotnetTool("tool", "package")
             .WithArgs("app-arg")
             .WithLaunchToolArgs(
                 static context =>
@@ -311,15 +308,15 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var exe = GetCreatedExecutableForResource(kubernetesService, "tool");
         Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
-        Assert.Equal(["app-arg"], exe.Spec.Args);
+        string[] dotnetToolExecArgs = ["tool", "exec", "package", "--yes", "--"];
+        Assert.Equal([.. dotnetToolExecArgs, "app-arg"], exe.Spec.Args);
         Assert.Null(exe.Spec.FallbackExecutionTypes);
 
         Assert.True(exe.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var displayArgs));
-        string[] launchToolArgs = ["tool", "exec", "package", "--yes", "--"];
-        string[] expectedDisplayArgs = showInCommandLine ? [.. launchToolArgs, "app-arg"] : ["app-arg"];
+        string[] expectedDisplayArgs = showInCommandLine ? [.. dotnetToolExecArgs, "app-arg"] : ["app-arg"];
         Assert.Equal(expectedDisplayArgs, displayArgs.Select(a => a.Argument));
         Assert.All(displayArgs.Take(displayArgs.Count - 1), argument => Assert.Null(argument.EffectiveArgumentIndex));
-        Assert.Equal(0, displayArgs[^1].EffectiveArgumentIndex);
+        Assert.Equal(dotnetToolExecArgs.Length, displayArgs[^1].EffectiveArgumentIndex);
         AssertEffectiveArgumentIndexesMatchSpecArgs(displayArgs, exe.Spec.Args);
     }
 

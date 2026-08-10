@@ -770,11 +770,13 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         else if (er.ModelResource is DotnetToolResource)
         {
             // Dotnet tools compose args as `tool exec <package> ... -- <app args>`. Keep hiding the invocation
-            // through `--`, but let the shared loop below apply launch-tool omission and visibility.
-            var argSeparator = appHostArgList.Select((a, i) => (index: i, value: a.Value))
-                .FirstOrDefault(x => x.value == DotnetToolResourceExtensions.ArgumentSeparator);
+            // through `--`, but let the shared loop below apply launch-tool omission and visibility. A launch-tool
+            // prefix can have its own separator, so search only the ordinary argument segment for this boundary.
+            var argSeparatorIndex = appHostArgList.FindIndex(
+                launchToolArgumentCount,
+                static a => a.Value == DotnetToolResourceExtensions.ArgumentSeparator);
 
-            firstVisibleAppHostArgumentIndex = argSeparator.index + 1;
+            firstVisibleAppHostArgumentIndex = argSeparatorIndex + 1;
         }
 
         // In the situation where args are combined (process execution) the app host args are added after the launch
