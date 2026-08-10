@@ -1080,7 +1080,7 @@ internal sealed class RadiusInfrastructureBuilder
                     $"Resource '{resource.Name}' is emitted as Radius type '{radiusType}', for which Aspire has no " +
                     $"connection schema, so its recipe-generated credentials cannot be projected to consumers. Map the " +
                     $"resource to a type Aspire describes, or set the connection values explicitly with WithEnvironment. " +
-                    $"Diagnostic: ASPIRERADIUS062.");
+                    $"Diagnostic: ASPIRERADIUS071.");
             }
 
             if (resource is not IResourceWithConnectionString withConnectionString ||
@@ -1155,7 +1155,7 @@ internal sealed class RadiusInfrastructureBuilder
                     $"Parameter '{userNameParameter.Name}' is used as both the user name and the password of " +
                     $"'{resource.Name}'. Its Radius recipe generates a separate value for each, and a single parameter " +
                     $"cannot be substituted for both, so consumers would receive the same value for both. Give the user " +
-                    $"name and the password their own parameters. Diagnostic: ASPIRERADIUS061.");
+                    $"name and the password their own parameters. Diagnostic: ASPIRERADIUS070.");
             }
 
             WarnIfUserSuppliedCredentialIsReplaced(resource, userNameParameter, "user name");
@@ -1236,7 +1236,7 @@ internal sealed class RadiusInfrastructureBuilder
                 $"Resource '{resource.Name}' has {referenced.Count} referenced databases " +
                 $"('{string.Join("', '", referenced.Select(d => d.Name))}'), but its Radius recipe provisions a single " +
                 $"database. Reference at most one database per resource, or split them across separate resources. " +
-                $"Diagnostic: ASPIRERADIUS063.");
+                $"Diagnostic: ASPIRERADIUS072.");
         }
 
         if (referenced.Count == 0 && databaseChildren.Count > 1)
@@ -1250,7 +1250,7 @@ internal sealed class RadiusInfrastructureBuilder
                 $"('{string.Join("', '", databaseChildren.Select(d => d.Name))}') and its Radius recipe provisions a " +
                 $"single database, but none of them is referenced through WithReference, so Aspire cannot tell which one " +
                 $"to create. Reference the database consumers connect to with WithReference, or declare one database per " +
-                $"resource. Diagnostic: ASPIRERADIUS063.");
+                $"resource. Diagnostic: ASPIRERADIUS072.");
         }
 
         var databaseChild = referenced.Count == 1 ? referenced[0] : databaseChildren[0];
@@ -1535,7 +1535,7 @@ internal sealed class RadiusInfrastructureBuilder
                 resource,
                 $"Resource '{resource.Name}' is deployed by a Radius recipe in a different environment than '{_environment.Name}', " +
                 $"so its address cannot be resolved here. Deploy the consumer and '{resource.Name}' to the same Radius environment. " +
-                $"Diagnostic: ASPIRERADIUS060.");
+                $"Diagnostic: ASPIRERADIUS069.");
         }
 
         if (RadiusBackingConnections.GetSchema(radiusType) is not { } schema)
@@ -1544,7 +1544,7 @@ internal sealed class RadiusInfrastructureBuilder
                 resource,
                 $"Resource '{resource.Name}' maps to Radius type '{radiusType}', which does not expose an address Aspire can " +
                 $"project. Remove the reference, or map the resource to a Radius type that publishes host/port outputs. " +
-                $"Diagnostic: ASPIRERADIUS062.");
+                $"Diagnostic: ASPIRERADIUS071.");
         }
 
         var scheme = endpointReference.EndpointAnnotation.UriScheme;
@@ -1578,7 +1578,7 @@ internal sealed class RadiusInfrastructureBuilder
                 throw new RadiusBackingResourceEndpointException(
                     resource,
                     $"The endpoint property '{property}' is not supported for Radius backing resource '{resource.Name}'. " +
-                    $"Diagnostic: ASPIRERADIUS062.");
+                    $"Diagnostic: ASPIRERADIUS071.");
         }
 
         static ProjectedValue Host(
@@ -1591,7 +1591,7 @@ internal sealed class RadiusInfrastructureBuilder
                 : throw new RadiusBackingResourceEndpointException(
                     resource,
                     $"Radius type '{radiusType}' used for resource '{resource.Name}' does not publish a host output, " +
-                    $"so consumers cannot be given its address. Diagnostic: ASPIRERADIUS062.");
+                    $"so consumers cannot be given its address. Diagnostic: ASPIRERADIUS071.");
 
         static ProjectedValue Port(
             RadiusResourceTypeConstruct construct,
@@ -1605,7 +1605,7 @@ internal sealed class RadiusInfrastructureBuilder
                 : throw new RadiusBackingResourceEndpointException(
                     resource,
                     $"Radius type '{radiusType}' used for resource '{resource.Name}' does not publish a port output, " +
-                    $"so consumers cannot be given its address. Diagnostic: ASPIRERADIUS062.");
+                    $"so consumers cannot be given its address. Diagnostic: ASPIRERADIUS071.");
     }
 
     private static Dictionary<string, RadiusResourceTypeConstruct> GetConnectionTargets(
@@ -1891,7 +1891,7 @@ internal sealed class RadiusInfrastructureBuilder
                     ? Uri.EscapeDataString(literal)
                     : throw new NotSupportedException(
                         $"The string format '{stringFormat}' is not supported by the Radius publisher. " +
-                        $"Diagnostic: ASPIRERADIUS064."),
+                        $"Diagnostic: ASPIRERADIUS073."),
             }
             : this with { StringFormat = stringFormat };
 
@@ -1908,7 +1908,7 @@ internal sealed class RadiusInfrastructureBuilder
             "uri" => RadiusBackingConnections.UriComponent(expression),
             var unsupported => throw new NotSupportedException(
                 $"The string format '{unsupported}' has no Bicep equivalent, so a value using it cannot be emitted " +
-                $"for Radius. Diagnostic: ASPIRERADIUS064."),
+                $"for Radius. Diagnostic: ASPIRERADIUS073."),
         };
     }
 
@@ -2159,7 +2159,7 @@ internal sealed class RadiusInfrastructureBuilder
                 $"Parameter '{parameter.Name}' is used as the credential of both '{existing.Owner.Name}' and '{owner.Name}', " +
                 $"and at least one of them is provisioned by a Radius recipe that generates its own credential. The shared " +
                 $"parameter would be rewritten to one resource's secret for both. Give each resource its own parameter. " +
-                $"Diagnostic: ASPIRERADIUS061.");
+                $"Diagnostic: ASPIRERADIUS070.");
         }
 
         _recipeCredentialOwners[parameter] = (owner, isProjectionSubstitution);
@@ -2205,7 +2205,7 @@ internal sealed class RadiusInfrastructureBuilder
                         $"Environment variable '{projected.Key}' on container '{projected.ResourceName}' reads connection " +
                         $"information from Radius resource '{target.BicepIdentifier}', but a ConfigureRadiusInfrastructure " +
                         $"callback removed or replaced that resource. Keep the resource, or set '{projected.Key}' explicitly " +
-                        $"in the callback. Diagnostic: ASPIRERADIUS065.");
+                        $"in the callback. Diagnostic: ASPIRERADIUS074.");
                 }
 
                 if (!string.Equals(target.BicepIdentifier, originalIdentifier, StringComparison.Ordinal))
@@ -2249,7 +2249,7 @@ internal sealed class RadiusInfrastructureBuilder
                         $"Recipe parameter '{projected.Key}' on Radius resource '{projected.Owner.BicepIdentifier}' reads " +
                         $"connection information from Radius resource '{target.BicepIdentifier}', but a " +
                         $"ConfigureRadiusInfrastructure callback removed or replaced that resource. Keep the resource, or " +
-                        $"set '{projected.Key}' explicitly in the callback. Diagnostic: ASPIRERADIUS065.");
+                        $"set '{projected.Key}' explicitly in the callback. Diagnostic: ASPIRERADIUS074.");
                 }
 
                 if (!string.Equals(target.BicepIdentifier, originalIdentifier, StringComparison.Ordinal))

@@ -96,7 +96,7 @@ public class BackingResourceContractTests
 
         Assert.Same(cache.Resource, ex.Resource);
         Assert.Contains("provisioned by a Radius recipe", ex.Message, StringComparison.Ordinal);
-        Assert.Contains("ASPIRERADIUS060", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("ASPIRERADIUS069", ex.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
