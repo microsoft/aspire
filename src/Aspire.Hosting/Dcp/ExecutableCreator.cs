@@ -239,6 +239,10 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             exe.Annotate(Executable.LaunchConfigurationsAnnotation, string.Empty);
             await supportsDebuggingAnnotation.LaunchConfigurationAnnotator(exe, mode, cancellationToken).ConfigureAwait(false);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             if (HasIncompleteProcessCommand(er.ModelResource, supportsDebuggingAnnotation, resolvedLaunchToolArgumentCount))
