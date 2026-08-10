@@ -201,12 +201,83 @@ public class BackingResourceValueResolutionTests
     {
         var (bicep, logger) = GenerateBicep(b =>
         {
-            var sql = b.AddSqlServer("sqlserver");
-            b.AddContainer("api", "myapp/api", "latest").WithReference(sql);
+            var pg = b.AddPostgres("pg");
+            b.AddContainer("api", "myapp/api", "latest").WithReference(pg);
         });
 
-        Assert.Contains("sqlserver.properties.host", bicep, StringComparison.Ordinal);
-        Assert.Single(logger.Matching(LogLevel.Warning, "sqlserver", "declares no database"));
+        Assert.Contains("pg.properties.host", bicep, StringComparison.Ordinal);
+        Assert.Single(logger.Matching(LogLevel.Warning, "pg", "declares no database"));
+    }
+
+    /// <summary>
+    /// Annotations are the only reference signal available when the <c>database</c> property is
+    /// chosen, and a <c>WithEnvironment</c> callback that composes a database's value inline records
+    /// none. Picking the first child in that case creates a database the consumer does not use, so
+    /// the publish fails instead.
+    /// </summary>
+    [Fact]
+    public void MultipleUnreferencedDatabases_FailThePublishRatherThanGuessing()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(b =>
+        {
+            var pg = b.AddPostgres("pg");
+            pg.AddDatabase("first");
+            var second = pg.AddDatabase("second");
+
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithEnvironment(context =>
+                {
+                    context.EnvironmentVariables["DB"] = second.Resource.ConnectionStringExpression;
+                });
+        }));
+
+        Assert.Contains("ASPIRERADIUS063", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("none of them is referenced", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Substitutions are keyed by parameter identity, so a parameter given as both the user name and
+    /// the password of a recipe-provisioned resource can only be rewritten to one of the two
+    /// recipe-generated values. It used to be silently rewritten to the user name, handing consumers
+    /// <c>properties.username</c> wherever they asked for the password.
+    /// </summary>
+    [Fact]
+    public void ParameterSharedBetweenUserNameAndPassword_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(b =>
+        {
+            var shared = b.AddParameter("shared", "value", secret: true);
+            var mongo = b.AddMongoDB("mongo", userName: shared, password: shared);
+
+            b.AddContainer("api", "myapp/api", "latest").WithReference(mongo);
+        }));
+
+        Assert.Contains("ASPIRERADIUS061", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("both the user name and the password", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A user-name parameter shared with a resource whose credential is substituted from
+    /// <c>listSecrets()</c> is just as unsafe as a shared password: this resource keeps the
+    /// parameter's own value while every consumer reference is rewritten to the other resource's
+    /// recipe secret. It is only caught if user names are registered as recipe credentials too.
+    /// </summary>
+    [Fact]
+    public void UserNameParameterSharedWithASubstitutedCredential_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(b =>
+        {
+            var shared = b.AddParameter("shared", "value", secret: true);
+            var pg = b.AddPostgres("pg", userName: shared);
+            var cache = b.AddRedis("cache", password: shared);
+
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithReference(pg)
+                .WithReference(cache);
+        }));
+
+        Assert.Contains("ASPIRERADIUS061", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("shared", ex.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
