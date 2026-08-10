@@ -14,14 +14,16 @@ using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Cli.Tests.Agents;
 
 public class AspireSkillsInstallerTests
 {
     private const string AspireSkillDescription = "Aspire CLI commands and workflows for distributed apps";
-
+    private const string CacheLockRetryLogMessage = "Acquiring the Aspire skills cache lock";
     private const string GitHubReleaseAssetBuildType = "https://actions.github.io/buildtypes/workflow/v1";
 
     [Fact]
@@ -50,6 +52,46 @@ public class AspireSkillsInstallerTests
             Assert.Equal(embeddedBundleProvider.Metadata.Sha256, result.Bundle.ArchiveSha256);
             Assert.True(Directory.Exists(cachedBundleDirectory));
             Assert.False(embeddedBundleProvider.CreateBundleCalled);
+        }
+        finally
+        {
+            Directory.Delete(rootDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task InstallAsync_WhenRequiredCacheLockExceedsRetryBudget_ThrowsIOException()
+    {
+        var rootDirectory = CreateTempDirectory();
+
+        try
+        {
+            var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
+            var cacheRoot = Path.Combine(executionContext.CacheDirectory.FullName, "aspire-skills");
+            Directory.CreateDirectory(cacheRoot);
+            var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
+            var features = new TestFeatures().SetFeature(KnownFeatures.AspireSkillsRemoteFetchEnabled, false);
+            var sink = new TestSink();
+            var logger = new TestLogger<AspireSkillsInstaller>(new TestLoggerFactory(sink, enabled: true));
+            var installer = CreateInstaller(
+                executionContext,
+                embeddedBundleProvider: embeddedBundleProvider,
+                features: features,
+                logger: logger);
+
+            var cacheLockPath = Path.Combine(cacheRoot, $".{AspireSkillsInstaller.Version}.lock");
+            await using var cacheLock = new FileStream(
+                cacheLockPath,
+                FileMode.OpenOrCreate,
+                FileAccess.ReadWrite,
+                FileShare.None,
+                bufferSize: 1,
+                FileOptions.Asynchronous);
+
+            await Assert.ThrowsAsync<IOException>(() =>
+                installer.InstallAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10)));
+            Assert.Equal(3, sink.Writes.Count(context =>
+                context.Message?.Contains(CacheLockRetryLogMessage, StringComparison.Ordinal) == true));
         }
         finally
         {
@@ -581,7 +623,76 @@ public class AspireSkillsInstallerTests
     }
 
     [Fact]
-    public async Task InstallAsync_WhenStaleVersionIsInUse_RechecksLastUsedAfterAcquiringLock()
+    public async Task InstallAsync_WhenStaleVersionLockIsReleasedDuringBackoff_RechecksLastUsed()
+    {
+        var rootDirectory = CreateTempDirectory();
+
+        try
+        {
+            var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
+            var cacheRoot = Path.Combine(executionContext.CacheDirectory.FullName, "aspire-skills");
+            Directory.CreateDirectory(cacheRoot);
+            const string staleVersion = "9.9.9";
+            var staleArchiveSha256 = new string('a', 64);
+            var staleCacheDirectory = Path.Combine(cacheRoot, staleVersion, staleArchiveSha256);
+            await CreateCachedBundleAsync(staleCacheDirectory, archiveSha256: staleArchiveSha256);
+            await WriteLastUsedAsync(staleCacheDirectory, DateTimeOffset.UtcNow.AddDays(-1));
+
+            var configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    [AspireSkillsInstaller.MaxCacheAgeKey] = "60"
+                })
+                .Build();
+            var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
+            var features = new TestFeatures().SetFeature(KnownFeatures.AspireSkillsRemoteFetchEnabled, false);
+            var retryObserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var sink = new TestSink();
+            sink.MessageLogged += context =>
+            {
+                if (context.Message?.Contains(CacheLockRetryLogMessage, StringComparison.Ordinal) == true)
+                {
+                    retryObserved.TrySetResult();
+                }
+            };
+            var logger = new TestLogger<AspireSkillsInstaller>(new TestLoggerFactory(sink, enabled: true));
+            var installer = CreateInstaller(
+                executionContext,
+                configuration: configuration,
+                embeddedBundleProvider: embeddedBundleProvider,
+                features: features,
+                logger: logger);
+
+            var staleVersionLockPath = Path.Combine(cacheRoot, $".{staleVersion}.lock");
+            await using var staleVersionLock = new FileStream(
+                staleVersionLockPath,
+                FileMode.OpenOrCreate,
+                FileAccess.ReadWrite,
+                FileShare.None,
+                bufferSize: 1,
+                FileOptions.Asynchronous);
+
+            var installTask = installer.InstallAsync(CancellationToken.None);
+            await retryObserved.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await WriteLastUsedAsync(staleCacheDirectory, DateTimeOffset.UtcNow);
+            await staleVersionLock.DisposeAsync();
+            var result = await installTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
+            Assert.True(Directory.Exists(staleCacheDirectory));
+            Assert.Contains(sink.Writes, context =>
+                context.Message?.Contains(CacheLockRetryLogMessage, StringComparison.Ordinal) == true);
+            Assert.Equal(0, sink.Writes.Count(context =>
+                context.Message?.Contains("Skipping cleanup", StringComparison.Ordinal) == true));
+        }
+        finally
+        {
+            Directory.Delete(rootDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task InstallAsync_WhenStaleVersionLockExceedsRetryBudget_SkipsLockedVersion()
     {
         var rootDirectory = CreateTempDirectory();
 
@@ -597,14 +708,6 @@ public class AspireSkillsInstallerTests
             await WriteLastUsedAsync(staleCacheDirectory, DateTimeOffset.UtcNow.AddDays(-1));
 
             var staleVersionLockPath = Path.Combine(cacheRoot, $".{staleVersion}.lock");
-            await using var staleVersionLock = new FileStream(
-                staleVersionLockPath,
-                FileMode.OpenOrCreate,
-                FileAccess.ReadWrite,
-                FileShare.None,
-                bufferSize: 1,
-                FileOptions.Asynchronous);
-
             var configuration = new ConfigurationBuilder()
                 .AddInMemoryCollection(new Dictionary<string, string?>
                 {
@@ -613,27 +716,37 @@ public class AspireSkillsInstallerTests
                 .Build();
             var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
             var features = new TestFeatures().SetFeature(KnownFeatures.AspireSkillsRemoteFetchEnabled, false);
+            var sink = new TestSink();
+            var logger = new TestLogger<AspireSkillsInstaller>(new TestLoggerFactory(sink, enabled: true));
             var installer = CreateInstaller(
                 executionContext,
                 configuration: configuration,
                 embeddedBundleProvider: embeddedBundleProvider,
-                features: features);
+                features: features,
+                logger: logger);
 
-            var installTask = installer.InstallAsync(CancellationToken.None);
-            await WaitForFileAsync(Path.Combine(
-                GetBundleCacheDirectory(executionContext, embeddedBundleProvider.Metadata!.Sha256!),
-                ".lastused"));
-            await Task.Delay(TimeSpan.FromMilliseconds(200));
+            await using (var staleVersionLock = new FileStream(
+                staleVersionLockPath,
+                FileMode.OpenOrCreate,
+                FileAccess.ReadWrite,
+                FileShare.None,
+                bufferSize: 1,
+                FileOptions.Asynchronous))
+            {
+                var result = await installer.InstallAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
 
-            Assert.False(installTask.IsCompleted);
-            Assert.True(Directory.Exists(staleCacheDirectory));
+                Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
+                Assert.True(Directory.Exists(staleCacheDirectory));
+                Assert.Equal(3, sink.Writes.Count(context =>
+                    context.Message?.Contains(CacheLockRetryLogMessage, StringComparison.Ordinal) == true));
+                Assert.Equal(1, sink.Writes.Count(context =>
+                    context.Message?.Contains("Skipping cleanup", StringComparison.Ordinal) == true));
+            }
 
-            await WriteLastUsedAsync(staleCacheDirectory, DateTimeOffset.UtcNow);
-            await staleVersionLock.DisposeAsync();
-            var result = await installTask.WaitAsync(TimeSpan.FromSeconds(10));
+            var cleanupResult = await installer.InstallAsync(CancellationToken.None);
 
-            Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
-            Assert.True(Directory.Exists(staleCacheDirectory));
+            Assert.Equal(AspireSkillsInstallStatus.Installed, cleanupResult.Status);
+            Assert.False(Directory.Exists(staleCacheDirectory));
         }
         finally
         {
@@ -1587,7 +1700,8 @@ public class AspireSkillsInstallerTests
         TestGitHubArtifactAttestationVerifier? githubArtifactAttestationVerifier = null,
         IConfiguration? configuration = null,
         IEmbeddedAspireSkillsBundleProvider? embeddedBundleProvider = null,
-        IFeatures? features = null)
+        IFeatures? features = null,
+        ILogger<AspireSkillsInstaller>? logger = null)
     {
         return new AspireSkillsInstaller(
             githubArtifactAttestationVerifier ?? new TestGitHubArtifactAttestationVerifier(),
@@ -1602,7 +1716,7 @@ public class AspireSkillsInstallerTests
             // exercise the production default (flag off) pass an empty TestFeatures.
             features ?? new TestFeatures().SetFeature(KnownFeatures.AspireSkillsRemoteFetchEnabled, true),
             TestTelemetryHelper.CreateInitializedTelemetry(),
-            NullLogger<AspireSkillsInstaller>.Instance);
+            logger ?? NullLogger<AspireSkillsInstaller>.Instance);
     }
 
     private static async Task CreateCachedBundleAsync(
@@ -1669,15 +1783,6 @@ public class AspireSkillsInstallerTests
         return File.WriteAllTextAsync(
             Path.Combine(cacheDirectory, ".lastused"),
             lastUsed.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture));
-    }
-
-    private static async Task WaitForFileAsync(string path)
-    {
-        using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        while (!File.Exists(path))
-        {
-            await Task.Delay(TimeSpan.FromMilliseconds(10), cancellationTokenSource.Token);
-        }
     }
 
     private static SkillBundleSupports CreateSupports()

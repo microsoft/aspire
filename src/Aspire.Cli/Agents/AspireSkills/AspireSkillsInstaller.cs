@@ -44,6 +44,9 @@ internal sealed class AspireSkillsInstaller(
     internal const string GitHubAttestationVerifiedFileName = ".github-attestation-verified";
     private const string LastUsedFileName = ".lastused";
 
+    private const int CacheLockMaxAttempts = 4;
+
+    private static readonly TimeSpan s_cacheLockInitialRetryDelay = TimeSpan.FromMilliseconds(100);
     private static readonly TimeSpan s_defaultMaxCacheAge = TimeSpan.FromDays(7);
 
     public Task<AspireSkillsInstallResult> InstallAsync(CancellationToken cancellationToken)
@@ -772,10 +775,13 @@ internal sealed class AspireSkillsInstaller(
         return $"{directory}.lock";
     }
 
-    private static async Task<FileStream> AcquireCacheLockAsync(string cacheRoot, string version, CancellationToken cancellationToken)
+    private async Task<FileStream> AcquireCacheLockAsync(string cacheRoot, string version, CancellationToken cancellationToken)
     {
+        // Cache reads and writes require serialization. Retry briefly for competing CLIs,
+        // but surface persistent I/O failures rather than waiting indefinitely.
         var lockPath = Path.Combine(cacheRoot, $".{GetSafeFileName(version)}.lock");
-        while (true)
+        var retryDelay = s_cacheLockInitialRetryDelay;
+        for (var attempt = 1; ; attempt++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             try
@@ -790,10 +796,17 @@ internal sealed class AspireSkillsInstaller(
                     bufferSize: 1,
                     FileOptions.Asynchronous);
             }
-            catch (IOException)
+            catch (IOException ex) when (attempt < CacheLockMaxAttempts)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken).ConfigureAwait(false);
+                logger.LogDebug(
+                    "Acquiring the Aspire skills cache lock for version {Version} failed with HRESULT {HResult}; retrying in {DelayMilliseconds} ms (retry {RetryCount} of {MaxRetries}).",
+                    version,
+                    ex.HResult,
+                    retryDelay.TotalMilliseconds,
+                    attempt,
+                    CacheLockMaxAttempts - 1);
+                await Task.Delay(retryDelay, cancellationToken).ConfigureAwait(false);
+                retryDelay *= 2;
             }
         }
     }
@@ -885,7 +898,10 @@ internal sealed class AspireSkillsInstaller(
 
             try
             {
-                await using var cacheLock = await AcquireCacheLockAsync(cacheRoot, version, cancellationToken).ConfigureAwait(false);
+                await using var cacheLock = await AcquireCacheLockAsync(
+                    cacheRoot,
+                    version,
+                    cancellationToken).ConfigureAwait(false);
                 if (!Directory.Exists(directory))
                 {
                     continue;
@@ -919,7 +935,12 @@ internal sealed class AspireSkillsInstaller(
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                logger.LogDebug(ex, "Failed to evaluate Aspire skills cache directory {Directory} for cleanup.", directory);
+                // Cleanup is optional. Leave an unavailable cache for a later pass after
+                // lock acquisition or filesystem access exhausts its retry/error handling.
+                logger.LogDebug(
+                    ex,
+                    "Skipping cleanup of Aspire skills cache version {Version} because it could not be evaluated.",
+                    version);
             }
         }
     }
