@@ -163,7 +163,7 @@ public class BackingResourceProjectionTests
         var ex = Assert.Throws<RadiusBackingResourceEndpointException>(() => context.GenerateBicep(model));
         Assert.Equal("cache", ex.Resource.Name);
         Assert.Contains("same Radius environment", ex.Message, StringComparison.Ordinal);
-        Assert.Contains("ASPIRERADIUS060", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("ASPIRERADIUS069", ex.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -185,7 +185,7 @@ public class BackingResourceProjectionTests
         }));
 
         Assert.Contains("single database", ex.Message, StringComparison.Ordinal);
-        Assert.Contains("ASPIRERADIUS063", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("ASPIRERADIUS072", ex.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -207,7 +207,7 @@ public class BackingResourceProjectionTests
         }));
 
         Assert.Contains("its own parameter", ex.Message, StringComparison.Ordinal);
-        Assert.Contains("ASPIRERADIUS061", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("ASPIRERADIUS070", ex.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -261,7 +261,7 @@ public class BackingResourceProjectionTests
 
         var ex = Assert.Throws<InvalidOperationException>(() => context.GenerateBicep(model));
         Assert.Contains("removed or replaced that resource", ex.Message, StringComparison.Ordinal);
-        Assert.Contains("ASPIRERADIUS065", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("ASPIRERADIUS074", ex.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
