@@ -243,6 +243,35 @@ public sealed class ManageDataDialogTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.Empty(repository.GetResources()));
     }
 
+    [Fact]
+    public void RemoveSelected_ConsoleLogs_ClearsPersistenceAndUpdatesFilter()
+    {
+        var resource = ModelTestHelpers.CreateResource(
+            resourceName: "api",
+            displayName: "API service",
+            state: KnownResourceState.Running);
+        var resourcesChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            initialResources: [resource],
+            resourceChannelProvider: () => resourcesChannel);
+        SetupManageDataDialogServices(dashboardClient);
+
+        var cut = RenderComponent<ManageDataDialog>();
+        cut.WaitForAssertion(() => AssertButtonDisabled(cut, "Remove selected", expectedDisabled: false));
+
+        cut.Find("fluent-button[aria-label='Remove selected']").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            var clearedConsoleLogs = Assert.Single(dashboardClient.ClearedConsoleLogs);
+            Assert.Collection(
+                clearedConsoleLogs.ResourceNames,
+                resourceName => Assert.Equal("api", resourceName));
+            Assert.Equal(clearedConsoleLogs.ClearDate, Services.GetRequiredService<ConsoleLogsManager>().GetFilterDate("api"));
+        });
+    }
+
     private void SetupManageDataDialogServices(TestDashboardClient dashboardClient)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);

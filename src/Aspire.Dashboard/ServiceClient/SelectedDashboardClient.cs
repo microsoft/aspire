@@ -42,6 +42,13 @@ internal sealed class SelectedDashboardClient(DashboardClient currentClient, Das
         IsReadOnly
             ? dataSource.ResourceRepository.GetConsoleLogs(resourceName, cancellationToken)
             : currentClient.GetConsoleLogs(resourceName, cancellationToken);
+
+    public Task ClearConsoleLogsAsync(IReadOnlyList<string> resourceNames, DateTime clearDate)
+    {
+        EnsureWritable();
+        return dataSource.ResourceRepository.ClearConsoleLogsAsync(resourceNames, clearDate);
+    }
+
     public IAsyncEnumerable<WatchInteractionsResponseUpdate> SubscribeInteractionsAsync(CancellationToken cancellationToken) =>
         IsReadOnly ? EmptyInteractionsAsync() : currentClient.SubscribeInteractionsAsync(cancellationToken);
 

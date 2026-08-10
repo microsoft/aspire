@@ -1143,6 +1143,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(DashboardConnectionState.Connected, selectedClient.ConnectionState);
         Assert.Equal(0, connectionStateChangedCount);
         await selectedClient.ReconnectAsync();
+        var clearException = await Assert.ThrowsAsync<InvalidOperationException>(() => selectedClient.ClearConsoleLogsAsync(["api"], DateTime.UtcNow));
+        Assert.Equal("Historical dashboard data is read-only.", clearException.Message);
 
         dataSource.SelectRun(runId: null);
 

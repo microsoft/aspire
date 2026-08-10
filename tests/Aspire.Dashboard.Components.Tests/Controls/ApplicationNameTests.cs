@@ -91,5 +91,6 @@ public class ApplicationNameTests : DashboardTestContext
         public Task ApplyChangesAsync(IReadOnlyList<WatchResourcesChange> changes) => Task.CompletedTask;
         public Task MarkConsoleLogsLoadedAsync(string resourceName) => Task.CompletedTask;
         public Task AddConsoleLogsAsync(string resourceName, IReadOnlyList<ConsoleLogLine> logLines) => Task.CompletedTask;
+        public Task ClearConsoleLogsAsync(IReadOnlyList<string> resourceNames, DateTime clearDate) => Task.CompletedTask;
     }
 }

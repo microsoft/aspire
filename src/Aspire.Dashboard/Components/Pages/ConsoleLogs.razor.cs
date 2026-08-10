@@ -1235,6 +1235,12 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private async Task ClearConsoleLogs(ResourceKey? key)
     {
         var now = TimeProvider.GetUtcNow().UtcDateTime;
+        var resourceNames = key is null
+            ? DataSource.ResourceRepository.GetResources().Select(resource => resource.Name).ToList()
+            : [key.Value.ToString()];
+
+        await DataSource.ResourceRepository.ClearConsoleLogsAsync(resourceNames, now);
+
         var newFilters = key is null
             ? ConsoleLogsFilters.CreateClearAll(now)
             : ConsoleLogsManager.Filters.WithResourceCleared(key.Value.ToString(), now);

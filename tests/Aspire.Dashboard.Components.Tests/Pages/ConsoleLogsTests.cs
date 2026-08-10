@@ -657,10 +657,52 @@ public partial class ConsoleLogsTests : DashboardTestContext
         cut.Render();
 
         cut.WaitForState(() => instance._logEntries.EntriesCount == 0);
+        var clearedConsoleLogs = Assert.Single(dashboardClient.ClearedConsoleLogs);
+        Assert.Collection(
+            clearedConsoleLogs.ResourceNames,
+            resourceName => Assert.Equal(testResource.Name, resourceName));
+        Assert.Equal(timeProvider.UtcNow.UtcDateTime, clearedConsoleLogs.ClearDate);
 
         logger.LogInformation("New log results are added to log viewer.");
         consoleLogsChannel.Writer.TryWrite([new ResourceLogLine(2, "2025-03-08T10:16:08Z Hello world", IsErrorMessage: false)]);
         cut.WaitForState(() => instance._logEntries.EntriesCount > 0);
+    }
+
+    [Fact]
+    public async Task ClearLogEntries_SelectedResource_DeletesPersistedLogsAndUpdatesFilter()
+    {
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var selectedResource = ModelTestHelpers.CreateResource(resourceName: "selected-resource", state: KnownResourceState.Running);
+        var otherResource = ModelTestHelpers.CreateResource(resourceName: "other-resource", state: KnownResourceState.Running);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [selectedResource, otherResource]);
+        var timeProvider = new TestTimeProvider
+        {
+            UtcNow = new DateTime(2025, 2, 8, 10, 16, 8, DateTimeKind.Utc)
+        };
+        SetupConsoleLogsServices(dashboardClient, timeProvider: timeProvider);
+
+        var cut = RenderConsoleLogsPage(CreateViewport(isDesktop: true), selectedResource.Name);
+        cut.WaitForState(() => cut.Instance.PageViewModel.SelectedResource.Id?.InstanceId == selectedResource.Name);
+
+        cut.Find(".clear-button").Click();
+        _menuProvider!.WaitForElement("#clear-menu-resource");
+        var clearMenu = cut.FindComponents<AspireMenu>().Single(menu => menu.Instance.Items.Any(item => item.Id == "clear-menu-resource"));
+        var clearResourceMenuItem = clearMenu.Instance.Items.Single(item => item.Id == "clear-menu-resource");
+        Assert.NotNull(clearResourceMenuItem.OnClick);
+        await cut.InvokeAsync(clearResourceMenuItem.OnClick);
+
+        var clearedConsoleLogs = Assert.Single(dashboardClient.ClearedConsoleLogs);
+        Assert.Collection(
+            clearedConsoleLogs.ResourceNames,
+            resourceName => Assert.Equal(selectedResource.Name, resourceName));
+        Assert.Equal(timeProvider.UtcNow.UtcDateTime, clearedConsoleLogs.ClearDate);
+        Assert.Equal(timeProvider.UtcNow.UtcDateTime, Services.GetRequiredService<ConsoleLogsManager>().GetFilterDate(selectedResource.Name));
+        Assert.Null(Services.GetRequiredService<ConsoleLogsManager>().GetFilterDate(otherResource.Name));
     }
 
     [Fact]
@@ -717,6 +759,41 @@ public partial class ConsoleLogsTests : DashboardTestContext
         logger.LogInformation("New log results are added to log viewer.");
         consoleLogsChannel.Writer.TryWrite([new ResourceLogLine(2, "2025-03-08T10:16:08Z Hello world", IsErrorMessage: false)]);
         cut.WaitForState(() => instance._logEntries.EntriesCount > 0);
+    }
+
+    [Fact]
+    public async Task NavigateBack_AfterLogsDeleted_ReplayedLogsBeforeClearDateRemainFiltered()
+    {
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var testResource = ModelTestHelpers.CreateResource(resourceName: "test-resource", state: KnownResourceState.Running);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [testResource]);
+        SetupConsoleLogsServices(dashboardClient);
+
+        var clearDate = new DateTime(2025, 2, 8, 10, 16, 8, DateTimeKind.Utc);
+        await dashboardClient.ClearConsoleLogsAsync([testResource.Name], clearDate);
+        var consoleLogsManager = Services.GetRequiredService<ConsoleLogsManager>();
+        await consoleLogsManager.UpdateFiltersAsync(ConsoleLogsFilters.Default.WithResourceCleared(testResource.Name, clearDate));
+
+        var cut = RenderConsoleLogsPage(CreateViewport(isDesktop: true), testResource.Name);
+        cut.WaitForState(() => cut.Instance.PageViewModel.SelectedResource.Id?.InstanceId == testResource.Name);
+
+        var clearedLog = "2025-02-08T10:16:08Z Cleared log";
+        var newLog = "2025-02-08T10:16:09Z New log";
+        consoleLogsChannel.Writer.TryWrite([
+            new ResourceLogLine(1, clearedLog, IsErrorMessage: false),
+            new ResourceLogLine(2, newLog, IsErrorMessage: false)
+        ]);
+
+        cut.WaitForAssertion(() =>
+        {
+            var logEntry = Assert.Single(cut.Instance._logEntries.GetEntries());
+            Assert.Equal(newLog, logEntry.RawContent);
+        });
     }
 
     [Fact]

@@ -130,6 +130,51 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
     }
 
     [Fact]
+    public async Task ConsoleLogs_ClearSelectedResourcesPersistsAndSuppressesReplay()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        {
+            using var repositoryContext = CreateRepository(workspace.Path);
+            var writer = (IResourceRepositoryWriter)repositoryContext.Repository;
+            await writer.ReplaceResourcesAsync([CreateResource("api", "api"), CreateResource("worker", "worker")]);
+            await writer.AddConsoleLogsAsync("api", [
+                new ConsoleLogLine { LineNumber = 1, Text = "api-first" },
+                new ConsoleLogLine { LineNumber = 2, Text = "api-second" }
+            ]);
+            await writer.AddConsoleLogsAsync("worker", [
+                new ConsoleLogLine { LineNumber = 1, Text = "worker-first" }
+            ]);
+
+            var clearDate = new DateTime(2025, 2, 8, 10, 16, 8, DateTimeKind.Utc);
+            await writer.ClearConsoleLogsAsync(["api"], clearDate);
+            await writer.AddConsoleLogsAsync("api", [
+                new ConsoleLogLine { LineNumber = 1, Text = "api-first-replayed" },
+                new ConsoleLogLine { LineNumber = 3, Text = "2025-02-08T10:16:08Z api-third-before-clear" },
+                new ConsoleLogLine { LineNumber = 4, Text = "2025-02-08T10:16:09Z api-fourth-after-clear" }
+            ]);
+        }
+
+        using var historicalContext = CreateRepository(workspace.Path, readOnly: true);
+        var apiBatches = new List<IReadOnlyList<global::Aspire.Dashboard.Model.ResourceLogLine>>();
+        await foreach (var batch in historicalContext.Repository.GetConsoleLogs("api", CancellationToken.None))
+        {
+            apiBatches.Add(batch);
+        }
+        Assert.Collection(
+            Assert.Single(apiBatches),
+            line => Assert.Equal(new global::Aspire.Dashboard.Model.ResourceLogLine(4, "2025-02-08T10:16:09Z api-fourth-after-clear", false), line));
+
+        var workerBatches = new List<IReadOnlyList<global::Aspire.Dashboard.Model.ResourceLogLine>>();
+        await foreach (var batch in historicalContext.Repository.GetConsoleLogs("worker", CancellationToken.None))
+        {
+            workerBatches.Add(batch);
+        }
+        Assert.Collection(
+            Assert.Single(workerBatches),
+            line => Assert.Equal(new global::Aspire.Dashboard.Model.ResourceLogLine(1, "worker-first", false), line));
+    }
+
+    [Fact]
     public async Task ConsoleLogs_ResetLineNumbersAfterRepositoryRestartArePersisted()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);

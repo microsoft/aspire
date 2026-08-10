@@ -11,4 +11,5 @@ internal interface IResourceRepositoryWriter
     Task ApplyChangesAsync(IReadOnlyList<WatchResourcesChange> changes);
     Task MarkConsoleLogsLoadedAsync(string resourceName);
     Task AddConsoleLogsAsync(string resourceName, IReadOnlyList<ConsoleLogLine> logLines);
+    Task ClearConsoleLogsAsync(IReadOnlyList<string> resourceNames, DateTime clearDate);
 }

@@ -992,6 +992,10 @@ internal sealed class DashboardClient : IDashboardClient
         }
     }
 
+    /// <inheritdoc/>
+    public Task ClearConsoleLogsAsync(IReadOnlyList<string> resourceNames, DateTime clearDate) =>
+        _resourceRepositoryWriter.ClearConsoleLogsAsync(resourceNames, clearDate);
+
     private async Task MarkConsoleLogsLoadedAsync(string resourceName)
     {
         lock (_lock)

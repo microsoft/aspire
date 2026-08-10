@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Aspire.Dashboard.Model;
 using Aspire.DashboardService.Proto.V1;
+using Aspire.Shared.ConsoleLogs;
 using Dapper;
 
 namespace Aspire.Dashboard.ServiceClient;
@@ -315,9 +316,12 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
         using (await _database.WriteLock.LockAsync().ConfigureAwait(false))
         {
             int lastLineNumber;
+            DateTime? clearDate;
             lock (_stateLock)
             {
-                lastLineNumber = _resourceStates.GetValueOrDefault(resourceName)?.LastConsoleLogLineNumber ?? int.MinValue;
+                var state = _resourceStates.GetValueOrDefault(resourceName);
+                lastLineNumber = state?.LastConsoleLogLineNumber ?? int.MinValue;
+                clearDate = state?.ConsoleLogsClearDate;
             }
 
             // A response can overlap a previously persisted response or repeat a line number within the
@@ -327,6 +331,17 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
             foreach (var line in logLines)
             {
                 if (line.LineNumber <= lastLineNumber)
+                {
+                    continue;
+                }
+
+                // AppHost subscriptions replay lines in this raw shape:
+                //   2025-02-08T10:16:08Z Application started.
+                // A resource can emit lines while the Console Logs page is closed, so its line number can
+                // be new even though its timestamp predates a clear operation performed from Manage Data.
+                if (clearDate is not null &&
+                    TimestampParser.TryParseConsoleTimestamp(line.Text, out var timestamp) &&
+                    timestamp.Value.Timestamp.UtcDateTime <= clearDate)
                 {
                     continue;
                 }
@@ -356,10 +371,7 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
             {
                 if (_resourceStates.TryGetValue(resourceName, out var state))
                 {
-                    if (consoleLogsToInsert.Count > 0)
-                    {
-                        state.LastConsoleLogLineNumber = consoleLogsToInsert.Max(line => line.LineNumber);
-                    }
+                    state.LastConsoleLogLineNumber = Math.Max(state.LastConsoleLogLineNumber, logLines.Max(line => line.LineNumber));
                     state.Resource.ConsoleLogsLoaded = true;
                 }
                 channels = (_consoleChannels.GetValueOrDefault(resourceName) ?? []).ToArray();
@@ -369,6 +381,38 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
         foreach (var channel in channels)
         {
             channel.Writer.TryWrite(viewModelLines);
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task ClearConsoleLogsAsync(IReadOnlyList<string> resourceNames, DateTime clearDate)
+    {
+        EnsureWritable();
+        ThrowIfDisposed();
+        if (resourceNames.Count == 0)
+        {
+            return;
+        }
+
+        using (await _database.WriteLock.LockAsync().ConfigureAwait(false))
+        {
+            // Keep the in-memory line-number watermark so an AppHost retry cannot repopulate rows
+            // the user cleared. New lines with higher numbers continue to be persisted normally.
+            using var connection = _database.OpenConnection();
+            connection.Execute(
+                "DELETE FROM console_logs WHERE resource_name IN @ResourceNames;",
+                new { ResourceNames = resourceNames });
+
+            lock (_stateLock)
+            {
+                foreach (var resourceName in resourceNames)
+                {
+                    if (_resourceStates.TryGetValue(resourceName, out var state))
+                    {
+                        state.ConsoleLogsClearDate = clearDate;
+                    }
+                }
+            }
         }
     }
 
@@ -509,5 +553,6 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
     {
         public ResourceViewModel Resource { get; set; } = resource;
         public int LastConsoleLogLineNumber { get; set; } = int.MinValue;
+        public DateTime? ConsoleLogsClearDate { get; set; }
     }
 }

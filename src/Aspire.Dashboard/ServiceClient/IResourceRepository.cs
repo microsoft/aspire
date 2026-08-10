@@ -34,4 +34,12 @@ public interface IResourceRepository
     /// Gets existing console log messages for a resource.
     /// </summary>
     IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> GetConsoleLogs(string resourceName, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Deletes persisted console log messages for the specified resources.
+    /// </summary>
+    /// <param name="resourceNames">The names of the resources whose console logs should be deleted.</param>
+    /// <param name="clearDate">The timestamp through which replayed console logs should remain deleted.</param>
+    /// <returns>A task that represents the asynchronous delete operation.</returns>
+    Task ClearConsoleLogsAsync(IReadOnlyList<string> resourceNames, DateTime clearDate);
 }

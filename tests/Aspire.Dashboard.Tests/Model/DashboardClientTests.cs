@@ -771,6 +771,8 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
             ConsoleLogs.Add((resourceName, logLines));
             return Task.CompletedTask;
         }
+
+        public Task ClearConsoleLogsAsync(IReadOnlyList<string> resourceNames, DateTime clearDate) => Task.CompletedTask;
     }
 
     private sealed class ClientStreamWriter<T> : IClientStreamWriter<T>
