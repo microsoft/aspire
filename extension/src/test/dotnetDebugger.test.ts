@@ -5,9 +5,9 @@ import * as nodePath from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { createProjectDebuggerExtension, projectDebuggerExtension, quoteCommandLineArgument } from '../debugger/languages/dotnet';
-import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, ProjectLaunchConfiguration } from '../dcp/types';
+import { AspireExtendedDebugConfiguration, AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, ProjectLaunchConfiguration } from '../dcp/types';
 import * as io from '../utils/io';
-import { ResourceDebuggerExtension } from '../debugger/debuggerExtensions';
+import { createDebugSessionConfiguration, ResourceDebuggerExtension } from '../debugger/debuggerExtensions';
 import { AppHostParentOutputFilter, AspireDebugSession } from '../debugger/AspireDebugSession';
 
 class TestDotNetService {
@@ -1738,6 +1738,65 @@ suite('Dotnet Debugger Extension Tests', () => {
         assert.strictEqual(debugConfig.serverReadyAction.uriFormat, 'https://localhost:5001');
 
         // cleanup
+        fs.rmSync(tempDir, { recursive: true, force: true });
+    });
+
+    test('preserves serverReadyAction from project debugger settings', async () => {
+        const fs = require('fs');
+        const os = require('os');
+        const path = require('path');
+
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-test-'));
+        const projectDir = path.join(tempDir, 'WebProject');
+        const propertiesDir = path.join(projectDir, 'Properties');
+        fs.mkdirSync(propertiesDir, { recursive: true });
+
+        const projectPath = path.join(projectDir, 'WebProject.csproj');
+        fs.writeFileSync(projectPath, '<Project></Project>');
+        fs.writeFileSync(path.join(propertiesDir, 'launchSettings.json'), JSON.stringify({
+            profiles: {
+                Development: {
+                    commandName: 'Project',
+                    launchBrowser: true,
+                    applicationUrl: 'https://localhost:5001'
+                }
+            }
+        }, null, 2));
+
+        const outputPath = path.join(projectDir, 'bin', 'Debug', 'net7.0', 'WebProject.dll');
+        const { extension } = createDebuggerExtension(outputPath, null, true, true);
+        const launchConfig: ProjectLaunchConfiguration = {
+            type: 'project',
+            project_path: projectPath,
+            launch_profile: 'Development'
+        };
+        const serverReadyAction = {
+            action: 'openIntegratedBrowser',
+            pattern: 'Now listening on:\\s+\\[?(https?://[^\\]\\s]+)'
+        };
+        const debugSessionConfig: AspireExtendedDebugConfiguration = {
+            type: 'aspire',
+            request: 'launch',
+            name: 'Aspire',
+            program: projectPath,
+            debuggers: {
+                project: {
+                    serverReadyAction
+                }
+            }
+        };
+        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+        const debugConfig = await createDebugSessionConfiguration(
+            debugSessionConfig,
+            launchConfig,
+            undefined,
+            [],
+            { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession },
+            extension);
+
+        assert.deepStrictEqual(debugConfig.serverReadyAction, serverReadyAction);
+
         fs.rmSync(tempDir, { recursive: true, force: true });
     });
 

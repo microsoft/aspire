@@ -130,6 +130,7 @@ export interface RunSessionPayload {
 }
 
 export interface DebugLaunchSettings {
+    [key: string]: unknown;
     env?: { [key: string]: string };
     args?: string[];
     launchProfile?: string;
