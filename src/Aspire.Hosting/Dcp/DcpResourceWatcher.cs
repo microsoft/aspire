@@ -69,6 +69,16 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
     }
 
     // Internal for testing.
+    internal bool HasLogStreamPendingDeduplication(string resourceName)
+    {
+        lock (_pendingFollowLogDeduplicationsLock)
+        {
+            return _logStreams.TryGetValue(resourceName, out var logStream) &&
+                logStream.PendingDeduplication is not null;
+        }
+    }
+
+    // Internal for testing.
     internal Func<string?, ValueTask>? BeforeLogBatchDeliveryAsync { get; set; }
 
     public DcpResourceWatcher(
@@ -386,17 +396,18 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
 
     private void ResetResourceLogState(string resourceName)
     {
-        CancelLogStream(resourceName);
+        var logStream = CancelLogStream(resourceName);
 
         lock (_pendingFollowLogDeduplicationsLock)
         {
             _pendingFollowLogDeduplications.Remove(resourceName);
+            logStream?.PendingDeduplication = null;
         }
 
         _allLogsFlushed.TryRemove(resourceName, out _);
     }
 
-    private void CancelLogStream(string resourceName)
+    private LogStreamState? CancelLogStream(string resourceName)
     {
         if (_logStreams.TryGetValue(resourceName, out var logStream))
         {
@@ -405,7 +416,10 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
             // still publishing a batch that ResourceLogSource yielded before cancellation.
             logStream.Cancel();
             _logStreams.TryRemove(new(resourceName, logStream));
+            return logStream;
         }
+
+        return null;
     }
 
     private async Task<bool> FlushCurrentLogsAsync<T>(T resource, ResourceStatus status, CancellationToken cancellationToken)
@@ -795,6 +809,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
             if (logStream.PendingDeduplication is { } pendingDeduplication)
             {
                 RemovePendingFollowLogDeduplication(resourceName, pendingDeduplication);
+                logStream.PendingDeduplication = null;
             }
         }
     }
@@ -809,6 +824,14 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
             ReferenceEquals(currentDeduplication, pendingDeduplication))
         {
             _pendingFollowLogDeduplications.Remove(resourceName);
+        }
+
+        // The dictionary owns the deduplication state. A stream only retains it so late completion
+        // can remove the exact state it observed without affecting a newer terminal flush.
+        if (_logStreams.TryGetValue(resourceName, out var logStream) &&
+            ReferenceEquals(logStream.PendingDeduplication, pendingDeduplication))
+        {
+            logStream.PendingDeduplication = null;
         }
     }
 

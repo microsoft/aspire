@@ -1949,6 +1949,8 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         },
         "Terminal flush should deliver the snapshot log.");
 
+        Assert.True(appExecutor.ResourceWatcher.HasLogStreamPendingDeduplication(container.Metadata.Name));
+
         await followStdErrPipe.Writer.WriteAsync(Encoding.UTF8.GetBytes("same" + Environment.NewLine + "same" + Environment.NewLine));
 
         await AsyncTestHelpers.AssertIsTrueRetryAsync(() =>
@@ -1959,6 +1961,8 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             }
         },
         "Follow stream should skip the overlapping flushed line but preserve a later identical line.");
+
+        Assert.False(appExecutor.ResourceWatcher.HasLogStreamPendingDeduplication(container.Metadata.Name));
     }
 
     [Fact]
