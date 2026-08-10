@@ -1014,7 +1014,7 @@ function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzur
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
@@ -1118,12 +1118,12 @@ function writeAzureFunctionsProject(projectName) {
   const projectDirectory = path.join(workspaceRoot, projectName);
   const propertiesDirectory = path.join(projectDirectory, 'Properties');
   const certificatePath = path.join(projectDirectory, 'https-e2e.pfx');
-  const certificatePassword = 'AspireE2E';
+  const certificatePassword = String.raw`Aspire E2E p@ss'\word`;
   fs.mkdirSync(propertiesDirectory, { recursive: true });
   fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), `<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <AzureFunctionsVersion>v4</AzureFunctionsVersion>
     <OutputType>Exe</OutputType>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -1177,7 +1177,7 @@ public sealed class HttpsFunction
     profiles: {
       [projectName]: {
         commandName: 'Project',
-        commandLineArgs: `--useHttps --cert ${certificatePath} --password ${certificatePassword}`,
+        commandLineArgs: `--useHttps --cert "${certificatePath}" --password "${certificatePassword}"`,
         launchBrowser: false,
       },
     },
@@ -1194,7 +1194,7 @@ function writeWorkerProject(projectName) {
   fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), `<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>

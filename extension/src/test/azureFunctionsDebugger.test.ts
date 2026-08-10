@@ -8,7 +8,7 @@ import { DotNetService } from '../debugger/languages/dotnet';
 import { cleanupRun } from '../debugger/runCleanupRegistry';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
 import { AspireResourceExtendedDebugConfiguration, AzureFunctionsLaunchConfiguration, EnvVar, LaunchOptions } from '../dcp/types';
-import { azureFunctionsCmdDelayedExpansion, azureFunctionsCmdPercentArgument, azureFunctionsUnsupportedTaskShell } from '../loc/strings';
+import { azureFunctionsCmdDelayedExpansion, azureFunctionsCmdPercentArgument, azureFunctionsInvalidProcessId, azureFunctionsUnsupportedTaskShell } from '../loc/strings';
 
 suite('Azure Functions Debugger Extension Tests', () => {
     setup(() => {
@@ -106,6 +106,32 @@ suite('Azure Functions Debugger Extension Tests', () => {
             {}));
     });
 
+    for (const shell of ['dash', 'ash']) {
+        test(`quotes arguments for the configured ${shell} task shell`, async () => {
+            const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');
+            const targetPath = path.join('/workspace', 'FunctionsApp', 'bin', 'Debug', 'net10.0', 'FunctionsApp.dll');
+            const startFuncProcess = sinon.stub().resolves({ success: true, processId: '4242' });
+            const debugConfiguration = createDebugConfiguration(projectPath, ['--password', "a b'c"]);
+
+            sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
+            sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+            stubTaskShell('linux', { path: `/bin/${shell}` });
+            installAzureFunctionsExtensionStub(createAzureFunctionsApi(startFuncProcess));
+
+            await azureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
+                createLaunchConfiguration(projectPath),
+                debugConfiguration.args as string[],
+                [],
+                createLaunchOptions(false),
+                debugConfiguration);
+
+            assert.ok(startFuncProcess.calledOnceWith(
+                path.dirname(targetPath),
+                ['--password', "'a b'\"'\"'c'"],
+                {}));
+        });
+    }
+
     test('quotes a backslash before an apostrophe for a configured fish task shell', async () => {
         const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');
         const targetPath = path.join('/workspace', 'FunctionsApp', 'bin', 'Debug', 'net10.0', 'FunctionsApp.dll');
@@ -137,8 +163,8 @@ suite('Azure Functions Debugger Extension Tests', () => {
         const startFuncProcess = sinon.stub().resolves({ success: true, processId: '4242' });
         const debugConfiguration = createDebugConfiguration(projectPath, ['--password', '%TEMP%']);
 
-        sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
-        sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+        const getDotNetTargetPath = sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
+        const buildDotNetProject = sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
         stubTaskShell('win32', { path: 'C:\\Windows\\System32\\cmd.exe' });
         installAzureFunctionsExtensionStub(createAzureFunctionsApi(startFuncProcess));
 
@@ -150,6 +176,8 @@ suite('Azure Functions Debugger Extension Tests', () => {
                 createLaunchOptions(false),
                 debugConfiguration),
             (error: Error) => error.message === azureFunctionsCmdPercentArgument);
+        assert.ok(buildDotNetProject.notCalled);
+        assert.ok(getDotNetTargetPath.notCalled);
         assert.ok(startFuncProcess.notCalled);
     });
 
@@ -159,8 +187,8 @@ suite('Azure Functions Debugger Extension Tests', () => {
         const startFuncProcess = sinon.stub().resolves({ success: true, processId: '4242' });
         const debugConfiguration = createDebugConfiguration(projectPath, ['--password', '!ASPIRE_PASSWORD!']);
 
-        sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
-        sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+        const getDotNetTargetPath = sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
+        const buildDotNetProject = sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
         stubTaskShell('win32', { path: 'C:\\Windows\\System32\\cmd.exe', args: ['/d', '/v:off', '/c'] });
         installAzureFunctionsExtensionStub(createAzureFunctionsApi(startFuncProcess));
 
@@ -172,6 +200,8 @@ suite('Azure Functions Debugger Extension Tests', () => {
                 createLaunchOptions(false),
                 debugConfiguration),
             (error: Error) => error.message === azureFunctionsCmdDelayedExpansion);
+        assert.ok(buildDotNetProject.notCalled);
+        assert.ok(getDotNetTargetPath.notCalled);
         assert.ok(startFuncProcess.notCalled);
     });
 
@@ -181,8 +211,8 @@ suite('Azure Functions Debugger Extension Tests', () => {
         const startFuncProcess = sinon.stub().resolves({ success: true, processId: '4242' });
         const debugConfiguration = createDebugConfiguration(projectPath, ['--password', ')unsafe']);
 
-        sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
-        sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+        const getDotNetTargetPath = sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
+        const buildDotNetProject = sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
         stubTaskShell('win32', { path: 'C:\\tools\\nu.exe' });
         installAzureFunctionsExtensionStub(createAzureFunctionsApi(startFuncProcess));
 
@@ -194,6 +224,8 @@ suite('Azure Functions Debugger Extension Tests', () => {
                 createLaunchOptions(false),
                 debugConfiguration),
             (error: Error) => error.message === azureFunctionsUnsupportedTaskShell);
+        assert.ok(buildDotNetProject.notCalled);
+        assert.ok(getDotNetTargetPath.notCalled);
         assert.ok(startFuncProcess.notCalled);
     });
 
@@ -303,9 +335,95 @@ suite('Azure Functions Debugger Extension Tests', () => {
         taskEvents.end(taskExecution, 17);
 
         assert.strictEqual(await resourceDebugSession.termination, 17);
-        sinon.assert.calledOnce(taskExecution.terminate as sinon.SinonStub);
+        sinon.assert.notCalled(process.kill as sinon.SinonStub);
+        sinon.assert.notCalled(taskExecution.terminate as sinon.SinonStub);
         sinon.assert.notCalled(previousExecution.terminate as sinon.SinonStub);
         sinon.assert.notCalled(unrelatedExecution.terminate as sinon.SinonStub);
+    });
+
+    test('adopts an already-active func host task when no start event is observed', async () => {
+        const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');
+        const targetPath = path.join('/workspace', 'FunctionsApp', 'bin', 'Debug', 'net10.0', 'FunctionsApp.dll');
+        const taskExecution = createFuncTaskExecution(path.dirname(targetPath));
+        const taskEvents = stubFuncTaskEvents();
+        const startFuncProcess = sinon.stub().resolves({ success: true, processId: '4242' });
+
+        sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
+        sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+        stubActiveTaskExecutions(taskExecution);
+        installAzureFunctionsExtensionStub(createAzureFunctionsApi(startFuncProcess));
+
+        const resourceDebugSession = await azureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
+            createLaunchConfiguration(projectPath),
+            [],
+            [],
+            createLaunchOptions(false),
+            createDebugConfiguration(projectPath));
+
+        assert.ok(resourceDebugSession);
+        taskEvents.end(taskExecution, 19);
+
+        assert.strictEqual(await resourceDebugSession.termination, 19);
+        sinon.assert.notCalled(process.kill as sinon.SinonStub);
+        sinon.assert.notCalled(taskExecution.terminate as sinon.SinonStub);
+    });
+
+    test('reports worker exit when no func host task can be captured', async () => {
+        const clock = sinon.useFakeTimers();
+        const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');
+        const targetPath = path.join('/workspace', 'FunctionsApp', 'bin', 'Debug', 'net10.0', 'FunctionsApp.dll');
+        const processKill = process.kill as sinon.SinonStub;
+        const missingProcessError = Object.assign(new Error('Process not found'), { code: 'ESRCH' });
+
+        processKill.onFirstCall().returns(true);
+        processKill.onSecondCall().throws(missingProcessError);
+        sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
+        sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+        stubFuncTaskEvents();
+        stubActiveTaskExecutions();
+        installAzureFunctionsExtensionStub(createAzureFunctionsApi(sinon.stub().resolves({ success: true, processId: '4242' })));
+
+        const resourceDebugSession = await azureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
+            createLaunchConfiguration(projectPath),
+            [],
+            [],
+            createLaunchOptions(false),
+            createDebugConfiguration(projectPath));
+
+        assert.ok(resourceDebugSession);
+        await clock.tickAsync(1000);
+
+        assert.strictEqual(await resourceDebugSession.termination, 0);
+        assert.deepStrictEqual(processKill.args, [[4242, 0], [4242, 0]]);
+    });
+
+    test('terminates the func host task and worker on explicit stop', async () => {
+        const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');
+        const targetPath = path.join('/workspace', 'FunctionsApp', 'bin', 'Debug', 'net10.0', 'FunctionsApp.dll');
+        const taskExecution = createFuncTaskExecution(path.dirname(targetPath));
+        const taskEvents = stubFuncTaskEvents();
+        const startFuncProcess = sinon.stub().callsFake(async () => {
+            taskEvents.start(taskExecution);
+            return { success: true, processId: '4242' };
+        });
+
+        sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
+        sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+        installAzureFunctionsExtensionStub(createAzureFunctionsApi(startFuncProcess));
+
+        const resourceDebugSession = await azureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
+            createLaunchConfiguration(projectPath),
+            [],
+            [],
+            createLaunchOptions(false),
+            createDebugConfiguration(projectPath));
+
+        assert.ok(resourceDebugSession);
+        await resourceDebugSession.stopSession();
+
+        assert.strictEqual(await resourceDebugSession.termination, -1);
+        sinon.assert.calledOnce(taskExecution.terminate as sinon.SinonStub);
+        sinon.assert.calledOnceWithExactly(process.kill as sinon.SinonStub, 4242);
     });
 
     test('reports a func host exit that occurs before the startup API returns', async () => {
@@ -332,6 +450,8 @@ suite('Azure Functions Debugger Extension Tests', () => {
 
         assert.ok(resourceDebugSession);
         assert.strictEqual(await resourceDebugSession.termination, 23);
+        sinon.assert.notCalled(process.kill as sinon.SinonStub);
+        sinon.assert.notCalled(taskExecution.terminate as sinon.SinonStub);
     });
 
     for (const { platform, expectedExitCode } of [
@@ -423,6 +543,78 @@ suite('Azure Functions Debugger Extension Tests', () => {
                 debugConfiguration),
             /Azure Functions extension failed to start func host: func failed/);
     });
+
+    test('captures an already-active func host task when the startup API reports failure', async () => {
+        const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');
+        const targetPath = path.join('/workspace', 'FunctionsApp', 'bin', 'Debug', 'net10.0', 'FunctionsApp.dll');
+        const taskExecution = createFuncTaskExecution(path.dirname(targetPath));
+        const debugConfiguration = createDebugConfiguration(projectPath);
+
+        sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
+        sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+        stubActiveTaskExecutions(taskExecution);
+        installAzureFunctionsExtensionStub(createAzureFunctionsApi(sinon.stub().resolves({ success: false, processId: '', error: 'func failed' })));
+
+        await assert.rejects(
+            azureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
+                createLaunchConfiguration(projectPath),
+                [],
+                [],
+                createLaunchOptions(false),
+                debugConfiguration),
+            /Azure Functions extension failed to start func host: func failed/);
+
+        cleanupRun(debugConfiguration.runId);
+        sinon.assert.calledOnce(taskExecution.terminate as sinon.SinonStub);
+    });
+
+    test('captures an already-active func host task when the startup API rejects', async () => {
+        const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');
+        const targetPath = path.join('/workspace', 'FunctionsApp', 'bin', 'Debug', 'net10.0', 'FunctionsApp.dll');
+        const taskExecution = createFuncTaskExecution(path.dirname(targetPath));
+        const debugConfiguration = createDebugConfiguration(projectPath);
+
+        sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
+        sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+        stubActiveTaskExecutions(taskExecution);
+        installAzureFunctionsExtensionStub(createAzureFunctionsApi(sinon.stub().rejects(new Error('startup timed out'))));
+
+        await assert.rejects(
+            azureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
+                createLaunchConfiguration(projectPath),
+                [],
+                [],
+                createLaunchOptions(false),
+                debugConfiguration),
+            /startup timed out/);
+
+        cleanupRun(debugConfiguration.runId);
+        sinon.assert.calledOnce(taskExecution.terminate as sinon.SinonStub);
+    });
+
+    for (const processId of ['worker-1', '42worker', '0', '-1', '1.5', '0x10', '1e3', '1.0', ' 42 ', '+42', '']) {
+        test(`rejects invalid Azure Functions worker process ID '${processId}'`, async () => {
+            const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');
+            const targetPath = path.join('/workspace', 'FunctionsApp', 'bin', 'Debug', 'net10.0', 'FunctionsApp.dll');
+            const startFuncProcess = sinon.stub().resolves({ success: true, processId });
+
+            sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
+            sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+            stubActiveTaskExecutions();
+            installAzureFunctionsExtensionStub(createAzureFunctionsApi(startFuncProcess));
+
+            await assert.rejects(
+                azureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
+                    createLaunchConfiguration(projectPath),
+                    [],
+                    [],
+                    createLaunchOptions(false),
+                    createDebugConfiguration(projectPath)),
+                (error: Error) => error.message === azureFunctionsInvalidProcessId(processId));
+
+            sinon.assert.notCalled(process.kill as sinon.SinonStub);
+        });
+    }
 });
 
 function createLaunchConfiguration(projectPath: string): AzureFunctionsLaunchConfiguration {
@@ -501,6 +693,10 @@ function stubFuncTaskEvents(): {
         start: execution => startTaskProcess!({ execution, processId: 4242 }),
         end: (execution, exitCode) => endTaskProcess!({ execution, exitCode }),
     };
+}
+
+function stubActiveTaskExecutions(...executions: vscode.TaskExecution[]): void {
+    sinon.stub(vscode.tasks, 'taskExecutions').value(executions);
 }
 
 function stubTaskShell(platform: NodeJS.Platform, profile: { path: string; args?: string[] }): void {

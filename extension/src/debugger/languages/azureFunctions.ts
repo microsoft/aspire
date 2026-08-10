@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, isAzureFunctionsLaunchConfiguration } from '../../dcp/types';
-import { azureFunctionsCmdDelayedExpansion, azureFunctionsCmdPercentArgument, azureFunctionsUnsupportedTaskShell, invalidLaunchConfiguration } from '../../loc/strings';
+import { azureFunctionsCmdDelayedExpansion, azureFunctionsCmdPercentArgument, azureFunctionsInvalidProcessId, azureFunctionsUnsupportedTaskShell, invalidLaunchConfiguration } from '../../loc/strings';
 import { assertNoTerminalControlCharacters, quoteShellArg } from '../../utils/AspireTerminalProvider';
 import { quoteCmdArgument } from '../../utils/cmdShim';
 import { extensionLogOutputChannel } from '../../utils/logging';
@@ -10,6 +10,7 @@ import { DotNetService } from './dotnet';
 import { cleanupRun, registerRunCleanup } from '../runCleanupRegistry';
 
 const AF_EXTENSION_ID = 'ms-azuretools.vscode-azurefunctions';
+const workerProcessExitPollIntervalMs = 500;
 
 /**
  * Result from the Azure Functions extension's startFuncProcess API.
@@ -70,6 +71,26 @@ function killFuncProcess(runId: string): void {
         }
         workerPidsByRunId.delete(runId);
     }
+}
+
+function watchWorkerProcessExit(pid: number, onExit: () => void): vscode.Disposable {
+    // Signal 0 checks process existence without terminating it.
+    // See https://nodejs.org/api/process.html#processkillpid-signal.
+    const timer = setInterval(() => {
+        try {
+            process.kill(pid, 0);
+        } catch (error) {
+            // EPERM means the process exists but cannot be signaled by this user.
+            if (error instanceof Error && 'code' in error && error.code === 'EPERM') {
+                return;
+            }
+
+            clearInterval(timer);
+            onExit();
+        }
+    }, workerProcessExitPollIntervalMs);
+
+    return new vscode.Disposable(() => clearInterval(timer));
 }
 
 async function getAzureFunctionsApi(): Promise<AzureFunctionsApi> {
@@ -202,7 +223,7 @@ function classifyFuncHostTaskShell(profile: TerminalProfileConfiguration | undef
     }
 
     if (identity.includes('git bash') || identity.includes('wsl') || identity.includes('cygwin') || identity.includes('msys') ||
-        /(?:^|[\\/\s])(ba|z|fi|k)?sh(?:\.exe)?(?:$|\s)/.test(identity)) {
+        /(?:^|[\\/\s])(ba|da|a|z|fi|k)?sh(?:\.exe)?(?:$|\s)/.test(identity)) {
         return 'posix';
     }
 
@@ -236,9 +257,15 @@ export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
             throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
         }
 
+        const quotedArgs = quoteFuncHostArguments(args);
+        let processExitWatcher: vscode.Disposable | undefined;
+
         // Register cleanup for this run up-front so that killFuncProcess is called
         // via the generic cleanupRun path regardless of how the session ends.
-        registerRunCleanup(debugConfiguration.runId, () => killFuncProcess(debugConfiguration.runId));
+        registerRunCleanup(debugConfiguration.runId, () => {
+            processExitWatcher?.dispose();
+            killFuncProcess(debugConfiguration.runId);
+        });
 
         const projectPath = launchConfig.project_path;
         const dotNetService = new DotNetService(launchOptions.debugSession);
@@ -284,6 +311,18 @@ export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
             extensionLogOutputChannel.info(`Captured func host task for runId ${debugConfiguration.runId}: ${execution.task.name}`);
             taskExecutionsByRunId.set(debugConfiguration.runId, execution);
         };
+        const captureActiveFuncExecution = (): void => {
+            if (funcExecution) {
+                return;
+            }
+
+            // startFuncProcess uses executeIfNotActive, so an existing task can be reused without
+            // emitting onDidStartTaskProcess. Capture it even when startup fails so cleanup can stop it.
+            const activeFuncExecution = vscode.tasks.taskExecutions.find(execution => isFuncHostTaskForBuildPath(execution.task, buildOutputPath));
+            if (activeFuncExecution) {
+                captureFuncExecution(activeFuncExecution);
+            }
+        };
         const taskStartSubscription = vscode.tasks.onDidStartTaskProcess(event => {
             if (isFuncHostTaskForBuildPath(event.execution.task, buildOutputPath)) {
                 captureFuncExecution(event.execution);
@@ -312,24 +351,29 @@ export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
 
         let result: StartFuncProcessResult;
         try {
-            result = await api.startFuncProcess(buildOutputPath, quoteFuncHostArguments(args), dcpEnv);
+            result = await api.startFuncProcess(buildOutputPath, quotedArgs, dcpEnv);
         } catch (error) {
+            captureActiveFuncExecution();
             taskEndSubscription?.dispose();
             throw error;
         } finally {
             taskStartSubscription.dispose();
         }
 
+        captureActiveFuncExecution();
         if (!result.success) {
             taskEndSubscription?.dispose();
             throw new Error(`Azure Functions extension failed to start func host: ${result.error ?? 'unknown error'}`);
         }
 
-        const workerPid = result.processId;
-        extensionLogOutputChannel.info(`Azure Functions worker process started (PID: ${workerPid})`);
+        const workerPidNumber = Number(result.processId);
+        if (!/^[0-9]+$/.test(result.processId) || !Number.isSafeInteger(workerPidNumber) || workerPidNumber <= 0) {
+            taskEndSubscription?.dispose();
+            cleanupRun(debugConfiguration.runId);
+            throw new Error(azureFunctionsInvalidProcessId(result.processId));
+        }
 
-        // Track the worker PID for cleanup
-        const workerPidNumber = parseInt(workerPid, 10);
+        extensionLogOutputChannel.info(`Azure Functions worker process started (PID: ${workerPidNumber})`);
         workerPidsByRunId.set(debugConfiguration.runId, workerPidNumber);
 
         if (!launchOptions.debug) {
@@ -339,19 +383,29 @@ export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
                 completeSession = resolve;
             });
             let completed = false;
-            const complete = (exitCode: number): void => {
+            const complete = (exitCode: number, naturalExit = false): void => {
                 if (completed) {
                     return;
                 }
 
                 completed = true;
                 taskEndSubscription?.dispose();
+                processExitWatcher?.dispose();
+                if (naturalExit) {
+                    // The task/worker has already exited. Removing both entries before
+                    // cleanup prevents a recycled worker PID from receiving SIGTERM.
+                    taskExecutionsByRunId.delete(runId);
+                    workerPidsByRunId.delete(runId);
+                }
                 cleanupRun(runId);
                 completeSession(exitCode);
             };
-            completeFuncSession = complete;
+            completeFuncSession = exitCode => complete(exitCode, true);
             if (pendingFuncExitCode !== undefined) {
-                complete(pendingFuncExitCode);
+                complete(pendingFuncExitCode, true);
+            } else if (!funcExecution) {
+                extensionLogOutputChannel.warn(`Did not capture a func host task for runId ${runId}; monitoring worker PID ${workerPidNumber} for termination.`);
+                processExitWatcher = watchWorkerProcessExit(workerPidNumber, () => complete(0, true));
             }
 
             return {
