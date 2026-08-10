@@ -1,0 +1,17 @@
+{
+  "id": "cli-internalmicrosoftdetector-githubtokencandidatetimeout-flaky",
+  "type": "flaky-test",
+  "title": "Flaky: InternalMicrosoftDetectorTests.CheckCopilotCliAsync_UsesOverallGitHubTokenCandidateTimeout fails intermittently on Windows runner",
+  "test_name": "Aspire.Cli.Tests.Telemetry.InternalMicrosoftDetectorTests.CheckCopilotCliAsync_UsesOverallGitHubTokenCandidateTimeout",
+  "error_pattern": "Assert.True() Failure\nExpected: True\nActual:   False\n   at Aspire.Cli.Tests.Telemetry.InternalMicrosoftDetectorTests.CheckCopilotCliAsync_UsesOverallGitHubTokenCandidateTimeout() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Telemetry\\InternalMicrosoftDetectorTests.cs:line 495",
+  "occurrences": [
+    {
+      "run_id": 31417495072,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/31417495072",
+      "job": "Tests / Cli / Cli (windows-latest)",
+      "pr_number": 19193,
+      "observed_at": "2026-08-10T19:30:00Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19201"
+}

@@ -1,0 +1,38 @@
+{
+  "run_id": 31417495072,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/31417495072",
+  "analyzed_at": "2026-08-10T19:30:00Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19193,
+    "title": "Bump js-yaml from 4.3.0 to 4.3.1 in /playground/AspireWithJavaScript/AspireJavaScript.Angular in the npm_and_yarn group across 1 directory",
+    "author": "dependabot[bot]",
+    "state": "closed",
+    "head_branch": "dependabot/npm_and_yarn/playground/AspireWithJavaScript/AspireJavaScript.Angular/npm_and_yarn-60ab56c091",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19193"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Cli / Cli (windows-latest)",
+      "id": 93564139883,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31417495072/job/93564139883",
+      "classification": "flaky-test",
+      "reason": "Single test failure (1 of 4799 tests) in Aspire.Cli.Tests unrelated to the PR's only changed file (a JS package-lock.json in a playground app). The failing test is a timing-sensitive timeout-candidate check that assert True/False, consistent with a CI-load timing race rather than a code defect.",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Telemetry.InternalMicrosoftDetectorTests.CheckCopilotCliAsync_UsesOverallGitHubTokenCandidateTimeout",
+      "job": "Tests / Cli / Cli (windows-latest)",
+      "error": "Assert.True() Failure\nExpected: True\nActual:   False",
+      "stack_trace": "at Aspire.Cli.Tests.Telemetry.InternalMicrosoftDetectorTests.CheckCopilotCliAsync_UsesOverallGitHubTokenCandidateTimeout() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Telemetry\\InternalMicrosoftDetectorTests.cs:line 495\n--- End of stack trace from previous location ---",
+      "classification": "flaky",
+      "reason": "PR only touches a JS playground package-lock.json; this test exercises an overall timeout for GitHub token candidate checks, which is timing-sensitive and susceptible to CI load variance on Windows runners."
+    }
+  ],
+  "causes": ["cli-internalmicrosoftdetector-githubtokencandidatetimeout-flaky"]
+}
