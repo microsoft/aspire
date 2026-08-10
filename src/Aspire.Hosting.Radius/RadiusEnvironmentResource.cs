@@ -230,7 +230,7 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
             $"the recipe's own host/port outputs instead. If you are publishing to Kubernetes, Azure Container Apps, " +
             $"or Azure App Service, a consumer there cannot reach '{resource.Name}' through the Radius environment: " +
             $"deploy '{resource.Name}' to the same compute environment as its consumer, or supply the address " +
-            $"explicitly with WithEnvironment. Diagnostic: ASPIRERADIUS060.");
+            $"explicitly with WithEnvironment. Diagnostic: ASPIRERADIUS069.");
     }
 
     // Mirrors the private helpers on IComputeEnvironmentResource so this override reproduces the
