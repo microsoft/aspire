@@ -127,14 +127,23 @@ internal static class RadiusBackingConnections
         [RadiusResourceTypes.LegacyRabbitMQQueues] =
             new("host", "port", "username", new RadiusCredentialMode.ListSecrets("password")),
 
+        // Applications.Datastores/sqlDatabases names the address property `server`, not `host`
+        // (typespec/Applications.Datastores/sqlDatabases.tsp), and returns `password` from
+        // listSecrets(). `username` is a plain property the recipe writes.
+        [RadiusResourceTypes.LegacySqlDatabases] =
+            new("server", "port", "username", new RadiusCredentialMode.ListSecrets("password")),
+
         // UDTs expose readOnly host/port but no listSecrets(); username/password are required
         // schema properties and the password is redacted on read (x-radius-sensitive), so the only
         // consistent value is the parameter Aspire itself writes onto the resource. The user name is
         // an *input* here, not a readable output, so there is no UserNameProperty.
         [RadiusResourceTypes.PostgreSqlDatabases] =
             new("host", "port", null, new RadiusCredentialMode.RecipeInputProperties()),
-        [RadiusResourceTypes.SqlDatabases] =
-            new("host", "port", null, new RadiusCredentialMode.RecipeInputProperties()),
+
+        // Deliberately absent: Radius.Data/sqlServerDatabases. The contrib manifest exists, but its
+        // Kubernetes recipe is not published (ghcr.io/radius-project/kube-recipes/sqlserverdatabases
+        // returns 403), so ResourceTypeMapper still emits the legacy type above. Adding the row here
+        // without a deployable recipe would only make the unreachable path look supported.
 
         // Dapr types are backing resources by classification but are consumed through the Dapr
         // sidecar's component configuration, not through an address or credential Aspire composes.

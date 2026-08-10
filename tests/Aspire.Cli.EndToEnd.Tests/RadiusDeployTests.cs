@@ -262,8 +262,8 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
         const string PostgresImage = "postgres:16-alpine";
 
         // `rad install kubernetes` registers the built-in Radius.Compute/*, Radius.Core/* and
-        // Applications.* types, but the Radius.Data/* types Aspire emits for PostgreSQL and SQL
-        // Server live in resource-types-contrib and are installed per cluster. Pinned to a commit
+        // Applications.* types, but the Radius.Data/* types Aspire emits for PostgreSQL live in
+        // resource-types-contrib and are installed per cluster. Pinned to a commit
         // rather than main so an upstream schema change cannot silently alter what this asserts.
         const string PostgresTypeManifestUrl =
             "https://raw.githubusercontent.com/radius-project/resource-types-contrib/39f65be914c931acce42bc730ebdedff6fcc7af7/Data/postgreSqlDatabases/postgreSqlDatabases.yaml";

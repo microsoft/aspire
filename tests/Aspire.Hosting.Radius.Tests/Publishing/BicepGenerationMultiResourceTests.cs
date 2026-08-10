@@ -31,7 +31,7 @@ public class BicepGenerationMultiResourceTests
         // Each resource type instance should be present
         // Note: Redis, MongoDB, and RabbitMQ use legacy fallback types per ResourceTypeMapper
         Assert.Contains("Applications.Datastores/redisCaches@2023-10-01-preview", bicep);
-        Assert.Contains("Radius.Data/sqlDatabases@2025-08-01-preview", bicep);
+        Assert.Contains("Applications.Datastores/sqlDatabases@2023-10-01-preview", bicep);
         Assert.Contains("Applications.Datastores/mongoDatabases@2023-10-01-preview", bicep);
         Assert.Contains("Applications.Messaging/rabbitMQQueues@2023-10-01-preview", bicep);
     }

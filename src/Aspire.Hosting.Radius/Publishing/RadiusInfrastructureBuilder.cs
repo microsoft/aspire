@@ -95,7 +95,6 @@ internal sealed class RadiusInfrastructureBuilder
     private static readonly Dictionary<string, string> s_defaultRecipeTemplates = new(StringComparer.Ordinal)
     {
         [RadiusResourceTypes.RedisCaches] = "ghcr.io/radius-project/recipes/local-dev/rediscaches:latest",
-        [RadiusResourceTypes.SqlDatabases] = "ghcr.io/radius-project/recipes/local-dev/sqldatabases:latest",
         // The Radius.* UDT recipes are published under kube-recipes/, not the legacy
         // recipes/local-dev/ prefix that serves the Applications.* portable types. The UDT recipe is
         // the one that reads username/password/database from context.resource.properties, so pairing
@@ -112,6 +111,10 @@ internal sealed class RadiusInfrastructureBuilder
         // Legacy fallback types also get default recipes
         [RadiusResourceTypes.LegacyRedisCaches] = "ghcr.io/radius-project/recipes/local-dev/rediscaches:latest",
         [RadiusResourceTypes.LegacyMongoDatabases] = "ghcr.io/radius-project/recipes/local-dev/mongodatabases:latest",
+        // Paired with LegacySqlDatabases, which is what SqlServerServerResource emits. The
+        // Radius.Data/sqlServerDatabases UDT has no published kube-recipes artifact yet, so there is
+        // no default recipe to register for it.
+        [RadiusResourceTypes.LegacySqlDatabases] = "ghcr.io/radius-project/recipes/local-dev/sqldatabases:latest",
         [RadiusResourceTypes.LegacyRabbitMQQueues] = "ghcr.io/radius-project/recipes/local-dev/rabbitmqqueues:latest",
         [RadiusResourceTypes.LegacyDaprStateStores] = "ghcr.io/radius-project/recipes/local-dev/daprstatestores:latest",
         [RadiusResourceTypes.LegacyDaprPubSubBrokers] = "ghcr.io/radius-project/recipes/local-dev/daprpubsubbrokers:latest",
@@ -1119,7 +1122,9 @@ internal sealed class RadiusInfrastructureBuilder
         RadiusBackingConnections.RadiusConnectionSchema schema,
         string passwordSecret)
     {
-        if (TryGetCredentialParameter(withConnectionString, "password") is { } passwordParameter)
+        var passwordParameter = TryGetCredentialParameter(withConnectionString, "password");
+
+        if (passwordParameter is not null)
         {
             WarnIfUserSuppliedCredentialIsReplaced(resource, passwordParameter, "password");
             RegisterRecipeCredential(passwordParameter, resource, isProjectionSubstitution: true);
@@ -1140,6 +1145,19 @@ internal sealed class RadiusInfrastructureBuilder
         if (schema.UserNameProperty is { } userNameProperty &&
             TryGetCredentialParameter(withConnectionString, "username") is { } userNameParameter)
         {
+            // Substitutions are keyed by parameter identity — that is all a value provider exposes
+            // when an env var is resolved — so one parameter cannot stand for two different
+            // recipe-generated values. Assigning both would silently keep only the later one and
+            // hand consumers `properties.username` where they asked for the password.
+            if (passwordParameter is not null && ReferenceEquals(passwordParameter, userNameParameter))
+            {
+                throw new InvalidOperationException(
+                    $"Parameter '{userNameParameter.Name}' is used as both the user name and the password of " +
+                    $"'{resource.Name}'. Its Radius recipe generates a separate value for each, and a single parameter " +
+                    $"cannot be substituted for both, so consumers would receive the same value for both. Give the user " +
+                    $"name and the password their own parameters. Diagnostic: ASPIRERADIUS061.");
+            }
+
             WarnIfUserSuppliedCredentialIsReplaced(resource, userNameParameter, "user name");
             RegisterRecipeCredential(userNameParameter, resource, isProjectionSubstitution: true);
             _recipeSecretSubstitutions[userNameParameter] =
@@ -1170,6 +1188,17 @@ internal sealed class RadiusInfrastructureBuilder
         {
             RegisterRecipeCredential(recipePassword, resource, isProjectionSubstitution: false);
             construct.SetSchemaProperty("password", GetOrAddEnvParameter(recipePassword));
+        }
+
+        // The user name has to be registered too, even though it is written straight onto the
+        // resource rather than substituted. Sharing it with a resource that *does* use the
+        // listSecrets() substitution is unsafe in exactly the same way as sharing the password: this
+        // resource would keep the parameter's own value while the substitution rewrote every
+        // consumer reference to the other resource's recipe secret. Registering it lets
+        // RegisterRecipeCredential see the collision instead of letting it through.
+        if (TryGetCredentialParameter(withConnectionString, "username") is { } recipeUserName)
+        {
+            RegisterRecipeCredential(recipeUserName, resource, isProjectionSubstitution: false);
         }
 
         await SetTypePropertyAsync(construct, "username", withConnectionString, "username").ConfigureAwait(false);
@@ -1208,6 +1237,20 @@ internal sealed class RadiusInfrastructureBuilder
                 $"('{string.Join("', '", referenced.Select(d => d.Name))}'), but its Radius recipe provisions a single " +
                 $"database. Reference at most one database per resource, or split them across separate resources. " +
                 $"Diagnostic: ASPIRERADIUS063.");
+        }
+
+        if (referenced.Count == 0 && databaseChildren.Count > 1)
+        {
+            // Annotations are the only reference signal available this early, and a WithEnvironment
+            // callback that composes a database's connection string inline records none. So "no
+            // referenced database" does not mean "no consumer": picking the first child here would
+            // create `first` while a consumer connects to `second`. Fail instead of guessing.
+            throw new InvalidOperationException(
+                $"Resource '{resource.Name}' declares {databaseChildren.Count} databases " +
+                $"('{string.Join("', '", databaseChildren.Select(d => d.Name))}') and its Radius recipe provisions a " +
+                $"single database, but none of them is referenced through WithReference, so Aspire cannot tell which one " +
+                $"to create. Reference the database consumers connect to with WithReference, or declare one database per " +
+                $"resource. Diagnostic: ASPIRERADIUS063.");
         }
 
         var databaseChild = referenced.Count == 1 ? referenced[0] : databaseChildren[0];
@@ -1266,9 +1309,11 @@ internal sealed class RadiusInfrastructureBuilder
     /// <remarks>
     /// Reference information is needed at step 4b, before container environment values are resolved,
     /// so it cannot be derived from the resolved values themselves. Annotations are the only signal
-    /// available this early. A reference created through a <c>WithEnvironment</c> callback that
-    /// builds its value inline records no annotation, so such a database is treated as unreferenced;
-    /// that only makes the multi-database check more permissive, never less.
+    /// available this early, and a reference created through a <c>WithEnvironment</c> callback that
+    /// builds its value inline records none. Because of that blind spot, an empty result is treated
+    /// as "unknown" rather than "unused": <see cref="ApplyRecipeInputPropertyCredentialsAsync"/>
+    /// fails when several databases exist and none is annotated, instead of picking one that a
+    /// callback-based consumer may not be using.
     /// </remarks>
     private HashSet<string> GetReferencedResourceNames()
     {
@@ -1428,7 +1473,21 @@ internal sealed class RadiusInfrastructureBuilder
 
         // Only a property that is *exactly* one parameter can be substituted; anything composed
         // with literals is a formatted value whose parameter cannot be swapped wholesale.
-        return expression.ValueProviders is [ParameterResource parameter] ? parameter : null;
+        //
+        // The parameter is often wrapped in one or more pass-through ReferenceExpressions rather
+        // than sitting directly in ValueProviders. PostgresServerResource, for example, exposes
+        // `new("Username", ReferenceExpression.Create($"{UserNameReference}"))` where
+        // `UserNameReference` is itself `ReferenceExpression.Create($"{UserNameParameter}")`, so the
+        // parameter is two levels down. Unwrap those wrappers, but only while the expression adds
+        // nothing of its own — a format other than "{0}" means literal text is being composed in.
+        while (expression.Format == "{0}" && expression.ValueProviders is [ReferenceExpression nested])
+        {
+            expression = nested;
+        }
+
+        return expression.ValueProviders is [ParameterResource parameter] && expression.Format == "{0}"
+            ? parameter
+            : null;
     }
 
     private static ReferenceExpression? FindConnectionProperty(IResourceWithConnectionString resource, string key)
