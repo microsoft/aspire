@@ -2,11 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Configuration;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Model.MetricValues;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Tests;
+using Aspire.Tests.Shared.DashboardModel;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Google.Protobuf;
@@ -114,6 +116,66 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
         Assert.Same(log.ResourceView, span.Source);
         Assert.Same(log.Scope, span.Scope);
         Assert.Same(log.Scope, instrument.Parent);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task InstrumentedPeer_RemainsInstrumented(bool resolvePeerDuringIngestion)
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var resolvePeer = resolvePeerDuringIngestion;
+        var backend = ModelTestHelpers.CreateResource(resourceName: "backend-TestId", displayName: "backend");
+        using var outgoingPeerResolver = new TestOutgoingPeerResolver(onResolve: _ => resolvePeer ? (backend.Name, backend) : (null, null));
+        using (var repositoryContext = await CreateRepositoryAsync(workspace.Path, outgoingPeerResolvers: [outgoingPeerResolver]))
+        {
+            await repositoryContext.Repository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
+            {
+                new ResourceLogs
+                {
+                    Resource = CreateResource(name: "backend", instanceId: "TestId"),
+                    ScopeLogs = { new ScopeLogs { Scope = CreateScope(), LogRecords = { CreateLogRecord() } } }
+                }
+            });
+            await repositoryContext.Repository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+            {
+                new ResourceSpans
+                {
+                    Resource = CreateResource(name: "frontend", instanceId: "TestId"),
+                    ScopeSpans =
+                    {
+                        new ScopeSpans
+                        {
+                            Scope = CreateScope(),
+                            Spans =
+                            {
+                                CreateSpan(
+                                    traceId: "peer-trace",
+                                    spanId: "peer-span",
+                                    startTime: DateTime.UnixEpoch,
+                                    endTime: DateTime.UnixEpoch.AddSeconds(1),
+                                    attributes: [KeyValuePair.Create(OtlpSpan.PeerServiceAttributeKey, "backend")],
+                                    kind: Span.Types.SpanKind.Client)
+                            }
+                        }
+                    }
+                }
+            });
+
+            if (!resolvePeerDuringIngestion)
+            {
+                resolvePeer = true;
+                await outgoingPeerResolver.InvokePeerChanges();
+            }
+        }
+
+        using var reopenedContext = await CreateRepositoryAsync(workspace.Path, readOnly: true);
+        var backendResource = Assert.IsType<OtlpResource>(
+            reopenedContext.Repository.GetResource(new ResourceKey("backend", "TestId")));
+        Assert.False(backendResource.UninstrumentedPeer);
+
+        var span = Assert.Single(reopenedContext.Repository.GetTrace(GetHexId("peer-trace"))!.Spans);
+        Assert.Same(backendResource, span.UninstrumentedPeer);
     }
 
     [Fact]
@@ -887,14 +949,16 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
     private static async Task<SqliteRepositoryTestContext<SqliteTelemetryRepository>> CreateRepositoryAsync(
         string workspacePath,
         bool readOnly = false,
-        int? maxTraceCount = null)
+        int? maxTraceCount = null,
+        IEnumerable<IOutgoingPeerResolver>? outgoingPeerResolvers = null)
     {
         var options = new DashboardOptions();
         options.TelemetryLimits.MaxTraceCount = maxTraceCount ?? options.TelemetryLimits.MaxTraceCount;
         var context = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(
             GetDatabasePath(workspacePath),
             readOnly,
-            dashboardOptions: Options.Create(options));
+            dashboardOptions: Options.Create(options),
+            outgoingPeerResolvers: outgoingPeerResolvers);
         return context;
     }
 

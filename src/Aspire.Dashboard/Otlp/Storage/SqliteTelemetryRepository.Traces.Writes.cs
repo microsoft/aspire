@@ -564,7 +564,12 @@ public sealed partial class SqliteTelemetryRepository
                 {
                     var cachedPeerResource = GetOrAddCachedResource(connection, transaction, peerKey, uninstrumentedPeer: true);
                     pendingSpan.PeerResourceId = cachedPeerResource.ResourceId;
-                    peerResourceIds.Add(cachedPeerResource.ResourceId);
+                    // A peer key can identify a real resource that reports its own telemetry. The cache refuses to
+                    // downgrade that resource, so only persist the peer flag when it remains synthetic.
+                    if (cachedPeerResource.Resource.UninstrumentedPeer)
+                    {
+                        peerResourceIds.Add(cachedPeerResource.ResourceId);
+                    }
                     peer = cachedPeerResource.Resource;
                 }
             }
@@ -1046,6 +1051,7 @@ public sealed partial class SqliteTelemetryRepository
                 """, buffered: false);
             var spanUpdates = new List<PeerSpanUpdateRecord>(MaxSpanDetailBatchSize);
             var traceResourceDeltas = new List<TraceResourceDelta>(MaxSpanDetailBatchSize * 2);
+            var uninstrumentedPeerResourceIds = new HashSet<long>();
             var latestReceivedTimestampTicks = new Dictionary<string, long>(StringComparer.Ordinal);
             var spanAttributes = new List<KeyValuePair<string, string>>();
             PeerRecalculationRowRecord? currentSpan = null;
@@ -1072,15 +1078,13 @@ public sealed partial class SqliteTelemetryRepository
             }
             FlushSpanUpdates();
 
-            writeConnection.Execute("""
-                UPDATE telemetry_resources
-                SET uninstrumented_peer = 1
-                WHERE resource_id IN (
-                    SELECT uninstrumented_peer_resource_id
-                    FROM telemetry_spans
-                    WHERE uninstrumented_peer_resource_id IS NOT NULL
-                );
-                """, transaction: transaction);
+            if (uninstrumentedPeerResourceIds.Count > 0)
+            {
+                writeConnection.Execute(
+                    "UPDATE telemetry_resources SET uninstrumented_peer = 1 WHERE resource_id IN @ResourceIds;",
+                    new { ResourceIds = uninstrumentedPeerResourceIds.ToArray() },
+                    transaction);
+            }
             var lastUpdatedTimestampTicks = Math.Max(
                 _timeProvider.GetUtcNow().Ticks,
                 latestReceivedTimestampTicks.Values.DefaultIfEmpty(0).Max());
@@ -1107,6 +1111,11 @@ public sealed partial class SqliteTelemetryRepository
                     {
                         var cachedPeerResource = GetOrAddCachedResource(writeConnection, transaction, peerKey, uninstrumentedPeer: true);
                         peerResourceId = cachedPeerResource.ResourceId;
+                        // Preserve the classification of real resources that are also destinations of outgoing spans.
+                        if (cachedPeerResource.Resource.UninstrumentedPeer)
+                        {
+                            uninstrumentedPeerResourceIds.Add(cachedPeerResource.ResourceId);
+                        }
                     }
                 }
 
