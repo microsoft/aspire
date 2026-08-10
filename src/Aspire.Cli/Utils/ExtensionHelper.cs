@@ -43,6 +43,13 @@ internal static class KnownCapabilities
     // pass it and parse (localized) error output when an older CLI rejects it.
     public const string DescribeIncludeDisabledCommands = "describe-include-disabled-commands.v1";
 
+    // Required before delegating a TypeScript AppHost launch to the extension. The CLI now runs
+    // "node <compiledFile>" from node_modules/.tmp/aspire-apphost instead of transpiling apphost.mts
+    // in place. The plain "node" capability is always advertised (js-debug never changed), so an old
+    // extension would misinterpret the compiled-output args as launching apphost.mts itself. Keep in
+    // sync with `nodeCompiledAppHostCapability` in extension/src/capabilities.ts.
+    public const string NodeCompiledAppHost = "node-compiled-apphost.v1";
+
     /// <summary>
     /// Gets the set of capabilities this CLI advertises to extensions.
     /// </summary>

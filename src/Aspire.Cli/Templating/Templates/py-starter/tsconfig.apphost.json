@@ -8,7 +8,9 @@
     "skipLibCheck": true,
     "outDir": "./node_modules/.tmp/aspire-apphost",
     "rootDir": ".",
-    "strict": true
+    "strict": true,
+    "sourceMap": true,
+    "inlineSources": true
   },
   "include": [
     "apphost.mts",

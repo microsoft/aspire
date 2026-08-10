@@ -77,10 +77,10 @@ internal static class TypeScriptAppHostToolchainTestHelpers
     {
         return NormalizeToolchain(toolchain) switch
         {
-            "bun" => $"bun run tsc --incremental --tsBuildInfoFile ./node_modules/.tmp/aspire-apphost.tsbuildinfo --outDir ./node_modules/.tmp/aspire-apphost --rootDir . --noEmit false -p {tsConfigFileName}",
-            "yarn" => $"yarn run tsc --incremental --tsBuildInfoFile ./node_modules/.tmp/aspire-apphost.tsbuildinfo --outDir ./node_modules/.tmp/aspire-apphost --rootDir . --noEmit false -p {tsConfigFileName}",
-            "pnpm" => $"pnpm exec tsc --incremental --tsBuildInfoFile ./node_modules/.tmp/aspire-apphost.tsbuildinfo --outDir ./node_modules/.tmp/aspire-apphost --rootDir . --noEmit false -p {tsConfigFileName}",
-            "npm" => $"npx --no-install tsc --incremental --tsBuildInfoFile ./node_modules/.tmp/aspire-apphost.tsbuildinfo --outDir ./node_modules/.tmp/aspire-apphost --rootDir . --noEmit false -p {tsConfigFileName}",
+            "bun" => $"bun run tsc --incremental --tsBuildInfoFile ./node_modules/.tmp/aspire-apphost.tsbuildinfo --outDir ./node_modules/.tmp/aspire-apphost --rootDir . --noEmit false --noEmitOnError --rewriteRelativeImportExtensions -p {tsConfigFileName}",
+            "yarn" => $"yarn run tsc --incremental --tsBuildInfoFile ./node_modules/.tmp/aspire-apphost.tsbuildinfo --outDir ./node_modules/.tmp/aspire-apphost --rootDir . --noEmit false --noEmitOnError --rewriteRelativeImportExtensions -p {tsConfigFileName}",
+            "pnpm" => $"pnpm exec tsc --incremental --tsBuildInfoFile ./node_modules/.tmp/aspire-apphost.tsbuildinfo --outDir ./node_modules/.tmp/aspire-apphost --rootDir . --noEmit false --noEmitOnError --rewriteRelativeImportExtensions -p {tsConfigFileName}",
+            "npm" => $"npx --no-install tsc --incremental --tsBuildInfoFile ./node_modules/.tmp/aspire-apphost.tsbuildinfo --outDir ./node_modules/.tmp/aspire-apphost --rootDir . --noEmit false --noEmitOnError -p {tsConfigFileName} --rewriteRelativeImportExtensions",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, "Unsupported TypeScript AppHost toolchain.")
         };
     }

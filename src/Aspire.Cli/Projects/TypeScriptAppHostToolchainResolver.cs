@@ -32,7 +32,16 @@ internal static class TypeScriptAppHostToolchainResolver
     private const string MinimumSupportedYarnVersion = "4.18.0";
     private const string NativeTypeScriptPackageName = "@typescript/native";
     private const string TypeScriptPackageName = "typescript";
+    // Matches TypeScriptLanguageSupport.CreatePackageJson's "npm:typescript@^7.0.2" scaffold pin.
+    private const string MinimumNativeTypeScriptVersion = "7.0.2";
     private const string TypeScript6AliasPrefix = "npm:@typescript/typescript6@";
+    // Emitting here (rather than next to the source) is what makes execution a plain `node`/`bun` run of
+    // compiled JavaScript instead of a `tsx`/tsgo in-place transpile, which is most of this feature's
+    // startup win. The tradeoff: the AppHost's `import.meta.url` now resolves under node_modules instead
+    // of next to apphost.mts, so `new URL('./some-asset', import.meta.url)` no longer finds files stored
+    // beside the AppHost source. There's no way to keep both the separate, disposable build output and
+    // the original in-place import.meta.url semantics, so AppHosts that resolve sibling assets this way
+    // need to use a path rooted elsewhere (e.g. process.cwd()) instead.
     private const string BuildOutputDirectory = "./node_modules/.tmp/aspire-apphost";
     // Disposable incremental compiler state used to speed up subsequent builds.
     private const string BuildTsBuildInfoFileName = "./node_modules/.tmp/aspire-apphost.tsbuildinfo";
@@ -158,14 +167,10 @@ internal static class TypeScriptAppHostToolchainResolver
         };
     }
 
-    public static RuntimeSpec ApplyToRuntimeSpec(RuntimeSpec baseRuntimeSpec, TypeScriptAppHostToolchain toolchain)
+    public static RuntimeSpec ApplyToRuntimeSpec(RuntimeSpec baseRuntimeSpec, TypeScriptAppHostToolchain toolchain, DirectoryInfo appHostDirectory)
     {
-        if (toolchain == TypeScriptAppHostToolchain.Npm)
-        {
-            return baseRuntimeSpec;
-        }
-
         var tsConfigFileName = GetTsConfigFileName(baseRuntimeSpec);
+        var usesNativeTypeScriptCompiler = UsesNativeTypeScriptCompiler(appHostDirectory);
 
         return new RuntimeSpec
         {
@@ -175,13 +180,46 @@ internal static class TypeScriptAppHostToolchainResolver
             DetectionPatterns = baseRuntimeSpec.DetectionPatterns,
             Initialize = baseRuntimeSpec.Initialize,
             InstallDependencies = CreateInstallCommand(toolchain),
-            PreExecute = CreatePreExecuteCommands(toolchain, tsConfigFileName),
-            Execute = CreateExecuteCommand(toolchain),
-            WatchExecute = CreateWatchCommand(toolchain, tsConfigFileName),
+            PreExecute = [CreateBuildCommand(toolchain, tsConfigFileName, usesNativeTypeScriptCompiler)],
+            Execute = CreateExecuteCommand(toolchain, tsConfigFileName, usesNativeTypeScriptCompiler),
+            WatchExecute = CreateWatchCommand(toolchain, tsConfigFileName, usesNativeTypeScriptCompiler),
             PublishExecute = baseRuntimeSpec.PublishExecute,
-            ExtensionLaunchCapability = baseRuntimeSpec.ExtensionLaunchCapability,
+            ExtensionLaunchCapability = usesNativeTypeScriptCompiler
+                ? baseRuntimeSpec.ExtensionLaunchCapability
+                : KnownCapabilities.Node,
             MigrationFiles = baseRuntimeSpec.MigrationFiles
         };
+    }
+
+    private static bool UsesNativeTypeScriptCompiler(DirectoryInfo appHostDirectory)
+    {
+        var packageJsonPath = Path.Combine(appHostDirectory.FullName, PackageJsonFileName);
+        if (!File.Exists(packageJsonPath))
+        {
+            return false;
+        }
+
+        try
+        {
+            var packageJson = JsonNode.Parse(File.ReadAllText(packageJsonPath), documentOptions: ConfigurationHelper.ParseOptions) as JsonObject;
+            var dependencyValue = packageJson is null ? null : GetDependencyVersion(packageJson, NativeTypeScriptPackageName);
+            return dependencyValue is not null && IsNativeTypeScriptAlias(dependencyValue);
+        }
+        catch (Exception ex) when (ex is JsonException or IOException
+            or UnauthorizedAccessException or SecurityException
+            or NotSupportedException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsNativeTypeScriptAlias(string dependencyValue)
+    {
+        return NpmVersionHelper.TryParseNpmAlias(dependencyValue, out var packageName, out var packageVersion)
+            && packageName.Equals(TypeScriptPackageName, StringComparison.OrdinalIgnoreCase)
+            && NpmVersionHelper.TryParseNpmVersion(packageVersion, out var declaredVersion)
+            && NpmVersionHelper.TryParseNpmVersion(MinimumNativeTypeScriptVersion, out var minimumVersion)
+            && Semver.SemVersion.ComparePrecedence(declaredVersion, minimumVersion) >= 0;
     }
 
     private static CommandSpec CreateInstallCommand(TypeScriptAppHostToolchain toolchain)
@@ -201,98 +239,81 @@ internal static class TypeScriptAppHostToolchainResolver
         };
     }
 
-    private static CommandSpec[] CreatePreExecuteCommands(TypeScriptAppHostToolchain toolchain, string tsConfigFileName)
+    private static CommandSpec CreateExecuteCommand(
+        TypeScriptAppHostToolchain toolchain,
+        string tsConfigFileName,
+        bool usesNativeTypeScriptCompiler)
     {
-        return
+        if (!usesNativeTypeScriptCompiler)
+        {
+            return toolchain switch
+            {
+                TypeScriptAppHostToolchain.Npm => new CommandSpec { Command = "npx", Args = ["--no-install", "tsx", "--tsconfig", tsConfigFileName, "{appHostFile}"] },
+                TypeScriptAppHostToolchain.Bun => new CommandSpec { Command = "bun", Args = ["run", "{appHostFile}"] },
+                TypeScriptAppHostToolchain.Yarn => new CommandSpec { Command = "yarn", Args = ["run", "tsx", "--tsconfig", tsConfigFileName, "{appHostFile}"] },
+                TypeScriptAppHostToolchain.Pnpm => new CommandSpec { Command = "pnpm", Args = ["exec", "tsx", "--tsconfig", tsConfigFileName, "{appHostFile}"] },
+                _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
+            };
+        }
+
+        return toolchain == TypeScriptAppHostToolchain.Bun
+            ? new CommandSpec { Command = "bun", Args = ["run", "{compiledAppHostFile}"] }
+            : new CommandSpec { Command = "node", Args = ["{compiledAppHostFile}"] };
+    }
+
+    private static CommandSpec CreateWatchCommand(
+        TypeScriptAppHostToolchain toolchain,
+        string tsConfigFileName,
+        bool usesNativeTypeScriptCompiler)
+    {
+        var nodemonArgs = toolchain switch
+        {
+            TypeScriptAppHostToolchain.Npm => new List<string> { "--no-install", "nodemon" },
+            TypeScriptAppHostToolchain.Bun => new List<string> { "run", "nodemon" },
+            TypeScriptAppHostToolchain.Yarn or TypeScriptAppHostToolchain.Pnpm => new List<string> { "exec", "nodemon" },
+            _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
+        };
+        nodemonArgs.AddRange(
         [
-            CreateBuildCommand(toolchain, tsConfigFileName)
-        ];
-    }
+            "--signal", "SIGTERM",
+            "--watch", ".",
+            "--ext", "ts,mts",
+            "--ignore", "node_modules/",
+            "--ignore", ".aspire/modules/",
+            "--exec", $"{CreateBuildCommandString(toolchain, tsConfigFileName, usesNativeTypeScriptCompiler)} && {CreateRunCommandString(toolchain, tsConfigFileName, usesNativeTypeScriptCompiler)}"
+        ]);
 
-    private static CommandSpec CreateExecuteCommand(TypeScriptAppHostToolchain toolchain)
-    {
-        return toolchain switch
+        return new CommandSpec
         {
-            TypeScriptAppHostToolchain.Bun => new CommandSpec
-            {
-                Command = "bun",
-                Args = ["run", "{compiledAppHostFile}"]
-            },
-            TypeScriptAppHostToolchain.Yarn or TypeScriptAppHostToolchain.Pnpm => new CommandSpec
-            {
-                Command = "node",
-                Args = ["{compiledAppHostFile}"]
-            },
-            _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
+            Command = toolchain == TypeScriptAppHostToolchain.Npm ? "npx" : GetCommandName(toolchain),
+            Args = [.. nodemonArgs]
         };
     }
 
-    private static CommandSpec CreateWatchCommand(TypeScriptAppHostToolchain toolchain, string tsConfigFileName)
-    {
-        var buildCommand = CreateBuildCommandString(toolchain, tsConfigFileName);
-        var execCommand = $"{buildCommand} && {CreateCompiledRunCommandString(toolchain)}";
-
-        return toolchain switch
-        {
-            TypeScriptAppHostToolchain.Bun => new CommandSpec
-            {
-                Command = "bun",
-                Args =
-                [
-                    "run",
-                    "nodemon",
-                    "--signal", "SIGTERM",
-                    "--watch", ".",
-                    "--ext", "ts,mts",
-                    "--ignore", "node_modules/",
-                    "--ignore", ".aspire/modules/",
-                    "--exec", execCommand
-                ]
-            },
-            TypeScriptAppHostToolchain.Yarn => new CommandSpec
-            {
-                Command = "yarn",
-                Args =
-                [
-                    "exec",
-                    "nodemon",
-                    "--signal", "SIGTERM",
-                    "--watch", ".",
-                    "--ext", "ts,mts",
-                    "--ignore", "node_modules/",
-                    "--ignore", ".aspire/modules/",
-                    "--exec", execCommand
-                ]
-            },
-            TypeScriptAppHostToolchain.Pnpm => new CommandSpec
-            {
-                Command = "pnpm",
-                Args =
-                [
-                    "exec",
-                    "nodemon",
-                    "--signal", "SIGTERM",
-                    "--watch", ".",
-                    "--ext", "ts,mts",
-                    "--ignore", "node_modules/",
-                    "--ignore", ".aspire/modules/",
-                    "--exec", execCommand
-                ]
-            },
-            _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
-        };
-    }
-
-    private static CommandSpec CreateBuildCommand(TypeScriptAppHostToolchain toolchain, string tsConfigFileName)
+    private static CommandSpec CreateBuildCommand(
+        TypeScriptAppHostToolchain toolchain,
+        string tsConfigFileName,
+        bool usesNativeTypeScriptCompiler)
     {
         return new CommandSpec
         {
             Command = toolchain == TypeScriptAppHostToolchain.Npm ? "npx" : GetCommandName(toolchain),
-            Args = CreateBuildCommandArgs(toolchain, tsConfigFileName)
+            Args = CreateBuildCommandArgs(toolchain, tsConfigFileName, usesNativeTypeScriptCompiler)
         };
     }
 
-    private static string[] CreateBuildCommandArgs(TypeScriptAppHostToolchain toolchain, string tsConfigFileName)
+    // The scaffolded package.json (see TypeScriptLanguageSupport.CreatePackageJson) installs TypeScript 7
+    // under the "@typescript/native" alias and the TypeScript 6-compatible shim under the plain "typescript"
+    // name. Only @typescript/native's package.json declares a "tsc" bin; @typescript/typescript6 deliberately
+    // exposes "tsc6" instead, so the bare "tsc" below always resolves to the native TypeScript 7 compiler —
+    // there is no bin collision to disambiguate. This holds across npm, Yarn (node-modules and PnP linkers),
+    // pnpm, and Bun. A literal path such as "node_modules/@typescript/native/bin/tsc" is intentionally NOT
+    // used here because Yarn's PnP linker (the default for Yarn 4) has no node_modules/.bin tree at all;
+    // each toolchain's own "run"/"exec"/npx resolution is required to work under PnP.
+    private static string[] CreateBuildCommandArgs(
+        TypeScriptAppHostToolchain toolchain,
+        string tsConfigFileName,
+        bool usesNativeTypeScriptCompiler)
     {
         var commandArgs = toolchain switch
         {
@@ -302,29 +323,72 @@ internal static class TypeScriptAppHostToolchainResolver
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
         };
 
+        if (!usesNativeTypeScriptCompiler)
+        {
+            commandArgs.AddRange(["--noEmit", "-p", tsConfigFileName]);
+            return [.. commandArgs];
+        }
+
         commandArgs.AddRange(
         [
             "--incremental",
             "--tsBuildInfoFile", BuildTsBuildInfoFileName,
+            // --outDir/--rootDir are forced here (overriding whatever the user's tsconfig.apphost.json
+            // declares) because GuestRuntime.GetCompiledAppHostFilePath computes the emitted file's path
+            // from the same CompiledAppHostOutputDirectory constant without reading the tsconfig. The
+            // scaffolded tsconfig.apphost.json sets outDir/rootDir to these exact values only so the
+            // "aspire:build"/"aspire:dev" package.json scripts - which invoke tsc without these CLI
+            // overrides - emit to the same place.
             "--outDir", BuildOutputDirectory,
             "--rootDir", ".",
+            // Command-line compiler options always win over tsconfig.json, so this unconditionally forces
+            // emit. --noEmitOnError keeps a failed typecheck from leaving a stale-but-runnable compiled
+            // AppHost behind. --rewriteRelativeImportExtensions avoids TS5096 for tsconfigs that set
+            // "allowImportingTsExtensions" (which otherwise requires "noEmit"); it's a no-op otherwise,
+            // and is only reached once ApplyToRuntimeSpec has confirmed @typescript/native (TypeScript
+            // >= 7.0.2) is in use, so it's always understood. See
+            // https://www.typescriptlang.org/tsconfig/#rewriteRelativeImportExtensions.
             "--noEmit", "false",
+            "--noEmitOnError",
+            "--rewriteRelativeImportExtensions",
+            "--sourceMap",
+            "--inlineSources",
             "-p", tsConfigFileName
         ]);
 
         return [.. commandArgs];
     }
 
-    private static string CreateBuildCommandString(TypeScriptAppHostToolchain toolchain, string tsConfigFileName)
+    private static string CreateBuildCommandString(
+        TypeScriptAppHostToolchain toolchain,
+        string tsConfigFileName,
+        bool usesNativeTypeScriptCompiler)
     {
-        var command = CreateBuildCommand(toolchain, tsConfigFileName);
+        var command = CreateBuildCommand(toolchain, tsConfigFileName, usesNativeTypeScriptCompiler);
         return $"{command.Command} {string.Join(" ", command.Args)}";
     }
 
-    private static string CreateCompiledRunCommandString(TypeScriptAppHostToolchain toolchain) =>
-        toolchain == TypeScriptAppHostToolchain.Bun
-            ? "bun run \"{compiledAppHostFile}\""
-            : "node \"{compiledAppHostFile}\"";
+    private static string CreateRunCommandString(
+        TypeScriptAppHostToolchain toolchain,
+        string tsConfigFileName,
+        bool usesNativeTypeScriptCompiler)
+    {
+        if (usesNativeTypeScriptCompiler)
+        {
+            return toolchain == TypeScriptAppHostToolchain.Bun
+                ? "bun run \"{compiledAppHostFile}\""
+                : "node \"{compiledAppHostFile}\"";
+        }
+
+        return toolchain switch
+        {
+            TypeScriptAppHostToolchain.Npm => $"npx --no-install tsx --tsconfig {tsConfigFileName} \"{{appHostFile}}\"",
+            TypeScriptAppHostToolchain.Bun => "bun run \"{appHostFile}\"",
+            TypeScriptAppHostToolchain.Yarn => $"yarn run tsx --tsconfig {tsConfigFileName} \"{{appHostFile}}\"",
+            TypeScriptAppHostToolchain.Pnpm => $"pnpm exec tsx --tsconfig {tsConfigFileName} \"{{appHostFile}}\"",
+            _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
+        };
+    }
 
     private static string GetTsConfigFileName(RuntimeSpec runtimeSpec)
     {

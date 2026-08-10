@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
+import { getSupportedCapabilities, nodeCompiledAppHostCapability } from '../capabilities';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
 import { nodeDebuggerExtension } from '../debugger/languages/node';
 import { launchMethodDirect, launchMethodPackageManager } from '../debugger/languages/javascriptRuntime';
@@ -8,6 +9,15 @@ import { AspireResourceExtendedDebugConfiguration, NodeLaunchConfiguration } fro
 
 suite('Node Debugger Tests', () => {
     const fakeAspireDebugSession = {} as AspireDebugSession;
+
+    test('advertises the compiled TypeScript AppHost capability', () => {
+        // isNodeInstalled() is unconditionally true (js-debug is built into VS Code), so this
+        // capability - which gates whether the CLI trusts this extension to debug a compiled
+        // TypeScript AppHost via program_path - is always advertised alongside plain 'node' support.
+        const capabilities = getSupportedCapabilities();
+        assert.ok(capabilities.includes('node'));
+        assert.ok(capabilities.includes(nodeCompiledAppHostCapability));
+    });
 
     test('configures js-debug to capture process stdout and stderr', async () => {
         const launchConfig: NodeLaunchConfiguration = {
@@ -75,6 +85,24 @@ suite('Node Debugger Tests', () => {
         assert.strictEqual(debugConfig.runtimeArgs, undefined);
         assert.strictEqual(debugConfig.program, '/workspace/app/server.js');
         assert.deepStrictEqual(debugConfig.args, []);
+    });
+
+    test('re-includes the compiled TypeScript AppHost output directory in source-map resolution', async () => {
+        const launchConfig: NodeLaunchConfiguration = {
+            type: 'node',
+            runtime_executable: 'node',
+            script_path: '/workspace/app/apphost.mts',
+            working_directory: '/workspace/app',
+            program_path: '/workspace/app/node_modules/.tmp/aspire-apphost/apphost.mjs'
+        };
+        const debugConfig = createDebugConfig();
+
+        await nodeDebuggerExtension.createDebugSessionConfigurationCallback!(launchConfig, [], [], { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession }, debugConfig);
+
+        // node_modules is excluded by default to avoid stepping into vendored dependency code, but
+        // the disposable aspire-apphost build output must be re-included (as a later, more specific
+        // pattern) or breakpoints set in apphost.mts will never bind to the compiled .mjs it runs.
+        assert.deepStrictEqual(debugConfig.resolveSourceMapLocations, ['**', '!**/node_modules/**', '**/node_modules/.tmp/aspire-apphost/**']);
     });
 });
 

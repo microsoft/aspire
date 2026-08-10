@@ -16,8 +16,10 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Hosting.Utils;
+using Aspire.TypeSystem;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console;
 
@@ -1000,6 +1002,115 @@ public class GuestAppHostProjectTests : IDisposable
     }
 
     [Fact]
+    public async Task SelectGuestLauncherAsync_WhenExtensionSupportsCapability_DelegatesToExtensionLauncher()
+    {
+        const string capability = KnownCapabilities.NodeCompiledAppHost;
+        var extensionBackchannel = new TestExtensionBackchannel
+        {
+            HasCapabilityAsyncCallback = (requested, _) => Task.FromResult(requested == capability)
+        };
+        var displayedErrors = new List<string>();
+        var extensionInteractionService = CreateExtensionInteractionService(extensionBackchannel, displayedErrors);
+        var project = CreateGuestAppHostProject(interactionService: extensionInteractionService);
+        var guestRuntime = CreateGuestRuntime(capability);
+        var context = new AppHostProjectContext
+        {
+            AppHostFile = new FileInfo(Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.mts")),
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            Debug = true,
+        };
+
+        var (launcher, errorExitCode) = await project.SelectGuestLauncherAsync(guestRuntime, context.AppHostFile, context, CancellationToken.None);
+
+        Assert.Null(errorExitCode);
+        Assert.IsType<ExtensionGuestLauncher>(launcher);
+        Assert.Empty(displayedErrors);
+    }
+
+    [Fact]
+    public async Task SelectGuestLauncherAsync_WhenExtensionLacksCapabilityAndDebugging_FailsInsteadOfSilentlyRunningWithoutADebugger()
+    {
+        const string capability = KnownCapabilities.NodeCompiledAppHost;
+        // Simulates an older, independently-installed extension: it connects fine (baseline
+        // capability) but predates the one this launch requires, so HasCapabilityAsync returns
+        // false for it specifically.
+        var extensionBackchannel = new TestExtensionBackchannel
+        {
+            HasCapabilityAsyncCallback = (_, _) => Task.FromResult(false)
+        };
+        var displayedErrors = new List<string>();
+        var extensionInteractionService = CreateExtensionInteractionService(extensionBackchannel, displayedErrors);
+        var project = CreateGuestAppHostProject(interactionService: extensionInteractionService);
+        var guestRuntime = CreateGuestRuntime(capability);
+        var context = new AppHostProjectContext
+        {
+            AppHostFile = new FileInfo(Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.mts")),
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            Debug = true,
+        };
+
+        var (launcher, errorExitCode) = await project.SelectGuestLauncherAsync(guestRuntime, context.AppHostFile, context, CancellationToken.None);
+
+        // Must not silently fall back to the default (non-debugged) launcher when debugging was
+        // requested - that would run the AppHost with no debugger ever attached while looking like
+        // F5 succeeded (dashboard opens, output streams). Fail fast with an actionable message instead.
+        Assert.Null(launcher);
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, errorExitCode);
+        var error = Assert.Single(displayedErrors);
+        Assert.Contains(capability, error);
+    }
+
+    [Fact]
+    public async Task SelectGuestLauncherAsync_WhenExtensionLacksCapabilityAndNotDebugging_FallsBackToDefaultLauncher()
+    {
+        const string capability = KnownCapabilities.NodeCompiledAppHost;
+        var extensionBackchannel = new TestExtensionBackchannel
+        {
+            HasCapabilityAsyncCallback = (_, _) => Task.FromResult(false)
+        };
+        var displayedErrors = new List<string>();
+        var extensionInteractionService = CreateExtensionInteractionService(extensionBackchannel, displayedErrors);
+        var project = CreateGuestAppHostProject(interactionService: extensionInteractionService);
+        var guestRuntime = CreateGuestRuntime(capability);
+        var context = new AppHostProjectContext
+        {
+            AppHostFile = new FileInfo(Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.mts")),
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            Debug = false, // "Run Without Debugging" never attaches a debugger anyway.
+        };
+
+        var (launcher, errorExitCode) = await project.SelectGuestLauncherAsync(guestRuntime, context.AppHostFile, context, CancellationToken.None);
+
+        Assert.Null(errorExitCode);
+        Assert.IsType<ProcessGuestLauncher>(launcher);
+        Assert.Empty(displayedErrors);
+    }
+
+    private static TestExtensionInteractionService CreateExtensionInteractionService(TestExtensionBackchannel extensionBackchannel, List<string> displayedErrors)
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IExtensionBackchannel>(extensionBackchannel);
+        return new TestExtensionInteractionService(services.BuildServiceProvider())
+        {
+            DisplayErrorCallback = displayedErrors.Add
+        };
+    }
+
+    private static GuestRuntime CreateGuestRuntime(string extensionLaunchCapability)
+    {
+        var spec = new RuntimeSpec
+        {
+            Language = "typescript/nodejs",
+            DisplayName = "TypeScript (Node.js)",
+            CodeGenLanguage = "TypeScript",
+            DetectionPatterns = ["apphost.ts"],
+            Execute = new CommandSpec { Command = "node", Args = ["{compiledAppHostFile}"] },
+            ExtensionLaunchCapability = extensionLaunchCapability,
+        };
+        return new GuestRuntime(spec, NullLogger<GuestRuntime>.Instance, PathLookupHelper.FindFullPathFromPath, new TestEnvironment(), new ProfilingTelemetry(new ConfigurationBuilder().Build()));
+    }
+
+    [Fact]
     public void IsUsingProjectReferencesReturnsFalseWhenIdentityIsOverridden()
     {
         // When ASPIRE_CLI_* identity overrides (or the install sidecar) are active the CLI is
@@ -1233,7 +1344,7 @@ public class GuestAppHostProjectTests : IDisposable
     }
 
     private GuestAppHostProject CreateGuestAppHostProject(
-        TestInteractionService? interactionService = null,
+        IInteractionService? interactionService = null,
         string identityChannel = "local",
         TestAppHostBackchannel? backchannel = null,
         TestAppHostServerProjectFactory? appHostServerProjectFactory = null,

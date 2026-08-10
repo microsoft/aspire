@@ -48,6 +48,10 @@ export const nodeDebuggerExtension: ResourceDebuggerExtension = {
             delete debugConfiguration.program;
         }
 
-        debugConfiguration.resolveSourceMapLocations = ['**', '!**/node_modules/**'];
+        // node_modules is excluded by default (avoids stepping into vendored deps), but the compiled
+        // TypeScript AppHost lives there too, so re-include it (later patterns win) or breakpoints in
+        // apphost.mts never bind. Keep the path in sync with BuildOutputDirectory in
+        // TypeScriptAppHostToolchainResolver.cs.
+        debugConfiguration.resolveSourceMapLocations = ['**', '!**/node_modules/**', '**/node_modules/.tmp/aspire-apphost/**'];
     }
 };

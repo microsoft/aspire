@@ -147,8 +147,13 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         var scripts = EnsureObject(packageJson, "scripts");
         scripts["aspire:lint"] = "eslint apphost.mts";
         scripts["aspire:start"] = "aspire run";
-        scripts["aspire:build"] = $"tsc -p {AppHostTsConfigFileName}";
-        scripts["aspire:dev"] = $"tsc --watch -p {AppHostTsConfigFileName}";
+        // Manual builds share the same emit-on-error and TS5096 exposure as the CLI's own compile step
+        // (see TypeScriptAppHostToolchainResolver.CreateBuildCommandArgs): --noEmitOnError keeps a failed
+        // `npm run build` from leaving stale output for a later `aspire run --no-build` to execute.
+        // --rewriteRelativeImportExtensions supports tsconfig files that allow .ts imports, while the
+        // source-map flags ensure breakpoints bind even when an existing tsconfig isn't migrated.
+        scripts["aspire:build"] = $"tsc --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p {AppHostTsConfigFileName}";
+        scripts["aspire:dev"] = $"tsc --watch --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p {AppHostTsConfigFileName}";
 
         if (!hasExistingPackageJson)
         {
@@ -168,6 +173,15 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         // TypeScript 7 does not expose the legacy programmatic API yet. Keep TypeScript 6 under
         // the standard package name for typescript-eslint while @typescript/native supplies tsc.
         // See https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/
+        //
+        // This does NOT create a "tsc" bin collision with @typescript/native: @typescript/typescript6's
+        // own package.json declares its executable as "tsc6", not "tsc" (verified via `npm view
+        // @typescript/typescript6 bin`), so it never contends for the node_modules/.bin/tsc entry that
+        // TypeScriptAppHostToolchainResolver invokes. Only @typescript/native exposes a bin literally
+        // named "tsc", so that bare command is unambiguous across npm, Yarn (both linkers), pnpm, and Bun.
+        // A downstream consequence customers should be aware of: code that does
+        // `require("typescript")`/`import ... from "typescript"` inside the AppHost project resolves to
+        // the TypeScript 6-compatible API from @typescript/typescript6, not TypeScript 7's API.
         EnsureDependency(packageJson, "devDependencies", "typescript", "npm:@typescript/typescript6@^6.0.2");
         EnsureDependency(packageJson, "devDependencies", "typescript-eslint", "^8.65.0");
 
@@ -256,7 +270,10 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
             DisplayName = LanguageDisplayName,
             CodeGenLanguage = CodeGenTarget,
             DetectionPatterns = s_detectionPatterns,
-            ExtensionLaunchCapability = "node",
+            // Requires the extension to understand launching the compiled AppHost output while keeping
+            // apphost.mts as the debug session's displayed identity. Keep in sync with
+            // `KnownCapabilities.NodeCompiledAppHost` in src/Aspire.Cli/Utils/ExtensionHelper.cs.
+            ExtensionLaunchCapability = "node-compiled-apphost.v1",
             InstallDependencies = new CommandSpec
             {
                 Command = "npm",
@@ -275,7 +292,15 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
                         "--tsBuildInfoFile", AppHostBuildTsBuildInfoFileName,
                         "--outDir", AppHostBuildOutputDirectory,
                         "--rootDir", ".",
+                        // Command-line compiler options always win over tsconfig.json, so this
+                        // unconditionally forces emit. --noEmitOnError keeps a failed typecheck from
+                        // leaving a stale-but-runnable compiled AppHost behind. The remaining flags
+                        // support .ts imports and debugging even when an existing tsconfig isn't migrated.
                         "--noEmit", "false",
+                        "--noEmitOnError",
+                        "--rewriteRelativeImportExtensions",
+                        "--sourceMap",
+                        "--inlineSources",
                         "-p", AppHostTsConfigFileName
                     ]
                 }
@@ -296,7 +321,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
                     "--ext", "ts,mts",
                     "--ignore", "node_modules/",
                     "--ignore", ".aspire/modules/",
-                    "--exec", $"npx --no-install tsc --incremental --tsBuildInfoFile {AppHostBuildTsBuildInfoFileName} --outDir {AppHostBuildOutputDirectory} --rootDir . --noEmit false -p {AppHostTsConfigFileName} && node \"{{compiledAppHostFile}}\""
+                    "--exec", $"npx --no-install tsc --incremental --tsBuildInfoFile {AppHostBuildTsBuildInfoFileName} --outDir {AppHostBuildOutputDirectory} --rootDir . --noEmit false --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p {AppHostTsConfigFileName} && node \"{{compiledAppHostFile}}\""
                 ]
             },
             MigrationFiles = new Dictionary<string, string>

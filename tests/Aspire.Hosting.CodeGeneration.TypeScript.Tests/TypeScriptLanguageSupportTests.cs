@@ -36,8 +36,8 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
         Assert.True(packageJson["private"]?.GetValue<bool>());
         Assert.Equal("module", packageJson["type"]?.GetValue<string>());
         Assert.Equal("aspire run", scripts["aspire:start"]?.GetValue<string>());
-        Assert.Equal("tsc -p tsconfig.apphost.json", scripts["aspire:build"]?.GetValue<string>());
-        Assert.Equal("tsc --watch -p tsconfig.apphost.json", scripts["aspire:dev"]?.GetValue<string>());
+        Assert.Equal("tsc --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p tsconfig.apphost.json", scripts["aspire:build"]?.GetValue<string>());
+        Assert.Equal("tsc --watch --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p tsconfig.apphost.json", scripts["aspire:dev"]?.GetValue<string>());
         Assert.Equal("eslint apphost.mts", scripts["aspire:lint"]?.GetValue<string>());
         Assert.Equal("npm run aspire:lint", scripts["lint"]?.GetValue<string>());
         Assert.Equal("npm run aspire:lint", scripts["predev"]?.GetValue<string>());
@@ -109,8 +109,8 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
 
         // Scaffold should only contain Aspire-desired scripts
         Assert.Equal("aspire run", scripts["aspire:start"]?.GetValue<string>());
-        Assert.Equal("tsc -p tsconfig.apphost.json", scripts["aspire:build"]?.GetValue<string>());
-        Assert.Equal("tsc --watch -p tsconfig.apphost.json", scripts["aspire:dev"]?.GetValue<string>());
+        Assert.Equal("tsc --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p tsconfig.apphost.json", scripts["aspire:build"]?.GetValue<string>());
+        Assert.Equal("tsc --watch --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p tsconfig.apphost.json", scripts["aspire:dev"]?.GetValue<string>());
         Assert.Equal("eslint apphost.mts", scripts["aspire:lint"]?.GetValue<string>());
         Assert.False(scripts.ContainsKey("dev"));
         Assert.False(scripts.ContainsKey("build"));
@@ -266,13 +266,17 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
                 "--outDir", "./node_modules/.tmp/aspire-apphost",
                 "--rootDir", ".",
                 "--noEmit", "false",
+                "--noEmitOnError",
+                "--rewriteRelativeImportExtensions",
+                "--sourceMap",
+                "--inlineSources",
                 "-p", "tsconfig.apphost.json"
             },
             preExecute.Args);
         Assert.Equal("node", runtimeSpec.Execute.Command);
         Assert.Equal(["{compiledAppHostFile}"], runtimeSpec.Execute.Args);
         Assert.Contains(
-            "npx --no-install tsc --incremental --tsBuildInfoFile ./node_modules/.tmp/aspire-apphost.tsbuildinfo --outDir ./node_modules/.tmp/aspire-apphost --rootDir . --noEmit false -p tsconfig.apphost.json && node \"{compiledAppHostFile}\"",
+            "npx --no-install tsc --incremental --tsBuildInfoFile ./node_modules/.tmp/aspire-apphost.tsbuildinfo --outDir ./node_modules/.tmp/aspire-apphost --rootDir . --noEmit false --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p tsconfig.apphost.json && node \"{compiledAppHostFile}\"",
             watchExecute.Args);
     }
 

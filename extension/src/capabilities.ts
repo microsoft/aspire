@@ -16,6 +16,7 @@ export type Capability =
     | 'go' // Support for running Go projects
     | 'golang.go' // Older AppHost versions used this extension identifier instead of go
     | 'node' // Support for running Node.js projects
+    | typeof nodeCompiledAppHostCapability // Support launching a compiled TypeScript AppHost via node with program_path
     | 'bun' // Support for running Bun projects
     | 'oven.bun-vscode' // Bun debug adapter extension identifier
     | 'browser' // Support for browser debugging (built-in to VS Code via js-debug)
@@ -24,6 +25,14 @@ export type Capability =
     | 'azure-functions'; // Support for running Azure Functions projects
 
 export type Capabilities = Capability[];
+
+/**
+ * Advertised so the CLI knows this extension can launch a compiled TypeScript AppHost output
+ * directly with `node` while keeping `apphost.mts` as the debug session's displayed identity (see
+ * `debugger/languages/node.ts`). Keep in sync with `KnownCapabilities.NodeCompiledAppHost` in
+ * src/Aspire.Cli/Utils/ExtensionHelper.cs.
+ */
+export const nodeCompiledAppHostCapability = 'node-compiled-apphost.v1';
 
 function isExtensionInstalled(extensionId: string): boolean {
     const extension = vscode.extensions.getExtension(extensionId);
@@ -94,6 +103,7 @@ export function getSupportedCapabilities(): Capabilities {
 
     if (isNodeInstalled()) {
         capabilities.push("node");
+        capabilities.push(nodeCompiledAppHostCapability);
         capabilities.push("browser");
     }
 

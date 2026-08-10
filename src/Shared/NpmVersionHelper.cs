@@ -24,7 +24,8 @@ internal static class NpmVersionHelper
     /// <summary>
     /// Determines whether an existing dependency reference should be replaced by the desired reference.
     /// An npm alias changes the package identity, so it replaces a registry version or an alias targeting another
-    /// package regardless of the versions' relative precedence. Custom references such as workspaces are preserved.
+    /// package regardless of the versions' relative precedence. Non-registry references (workspace, file, link,
+    /// git, GitHub/GitLab/Bitbucket shorthand, and tarball/URL specs) are preserved.
     /// </summary>
     internal static bool ShouldReplace(string existingVersion, string desiredVersion)
     {
@@ -35,22 +36,32 @@ internal static class NpmVersionHelper
 
         if (!TryParseNpmAlias(existingVersion, out var existingPackageName, out var existingPackageVersion))
         {
-            // Local references intentionally keep the dependency wired to the workspace or file.
-            // Other values are registry specs (including tags, wildcards, and union ranges), so
-            // replace them when the scaffold needs a different package identity under the same name.
-            return !IsLocalNpmReference(existingVersion);
+            // Non-registry references (workspace/file/link, git and GitHub/GitLab/Bitbucket refs,
+            // tarball/URL specs) intentionally keep the dependency wired to whatever the user pinned.
+            // Only registry specs (including tags, wildcards, and union ranges) are replaced when the
+            // scaffold needs a different package identity under the same name.
+            return !IsNonRegistryNpmReference(existingVersion);
         }
 
         return !existingPackageName.Equals(desiredPackageName, StringComparison.OrdinalIgnoreCase)
             || ShouldUpgrade(existingPackageVersion, desiredPackageVersion);
     }
 
-    private static bool IsLocalNpmReference(string value)
+    /// <summary>
+    /// Determines whether a dependency value is anything other than a plain registry version range or tag.
+    /// Registry specs (<c>^1.2.3</c>, <c>~1.2.3</c>, <c>&gt;=1.0.0</c>, <c>1.x</c>, <c>*</c>, union ranges,
+    /// dist-tags like <c>latest</c>) never contain <c>:</c> or <c>/</c>. Every other npm-supported form does:
+    /// <c>workspace:</c>, <c>file:</c>, and <c>link:</c> references; git URLs (<c>git:</c>, <c>git+ssh:</c>,
+    /// <c>git+https:</c>, ...); host shorthands (<c>github:</c>, <c>gitlab:</c>, <c>bitbucket:</c>,
+    /// <c>gist:</c>); tarball/URL specs (<c>http:</c>, <c>https:</c>); and the bare GitHub shorthand
+    /// (<c>owner/repo</c>, optionally with a <c>#ref</c>). See
+    /// https://docs.npmjs.com/cli/v10/configuring-npm/package-json#dependencies for the full spec grammar.
+    /// </summary>
+    private static bool IsNonRegistryNpmReference(string value)
     {
         var normalizedValue = value.Trim();
-        return normalizedValue.StartsWith("workspace:", StringComparison.OrdinalIgnoreCase)
-            || normalizedValue.StartsWith("file:", StringComparison.OrdinalIgnoreCase)
-            || normalizedValue.StartsWith("link:", StringComparison.OrdinalIgnoreCase);
+        return normalizedValue.Contains(':', StringComparison.Ordinal)
+            || normalizedValue.Contains('/', StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -107,7 +118,12 @@ internal static class NpmVersionHelper
         return false;
     }
 
-    private static bool TryParseNpmAlias(string value, out string packageName, out string packageVersion)
+    /// <summary>
+    /// Attempts to parse an npm alias spec (<c>npm:package@version</c>) into its target package name
+    /// and version/range. Returns <c>false</c> for anything else (plain registry ranges, workspace/file/git
+    /// references, etc.).
+    /// </summary>
+    internal static bool TryParseNpmAlias(string value, out string packageName, out string packageVersion)
     {
         const string NpmAliasPrefix = "npm:";
 
