@@ -161,10 +161,10 @@ internal static class FoundryLocalService
                     : new[] { "service", "stop" };
                 await RunFoundryCommandAsync(arguments, onOutput: null, stopCancellation.Token).ConfigureAwait(false);
             }
-            catch (Exception e) when (process is not null && (e is OperationCanceledException or InvalidOperationException or Win32Exception))
+            catch (Exception e) when (e is OperationCanceledException or InvalidOperationException or Win32Exception)
             {
-                // Stopping the external Foundry service is best-effort. The tracked foreground
-                // process is still killed and disposed below even if the CLI stop command fails.
+                // Stopping the external Foundry service is best-effort. The tracked legacy process
+                // is still killed below, and modern CLI failures must not fail AppHost shutdown.
             }
 
             if (process is not null)
@@ -173,8 +173,7 @@ internal static class FoundryLocalService
                 process.Dispose();
             }
 
-            // Clear ownership only after the daemon has stopped. If a modern stop command fails,
-            // preserve the state so host disposal or another stop request can retry cleanup.
+            // Clear local ownership after the best-effort stop attempt.
             s_serviceProcess = null;
             Endpoint = null;
             s_shouldStopService = false;

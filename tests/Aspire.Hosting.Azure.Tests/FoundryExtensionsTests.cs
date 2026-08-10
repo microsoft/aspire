@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Net;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.AppContainers;
 using Aspire.Hosting.Foundry;
@@ -190,6 +191,81 @@ public class FoundryExtensionsTests
         Assert.Equal(
             ["Phi-4-mini-instruct-generic-gpu:5", "qwen3-4b-generic-cpu:3"],
             modelIds);
+    }
+
+    [Theory]
+    [InlineData("phi-4", true)]
+    [InlineData("qwen3", false)]
+    public async Task FoundryLocalService_IsModelLoadedAsync_ChecksLoadedModelsEndpoint(string modelId, bool expected)
+    {
+        var handler = new CallbackHttpMessageHandler((_, request) =>
+        {
+            Assert.Equal(HttpMethod.Get, request.Method);
+            Assert.Equal(new Uri("http://windows-host:5273/models/loaded"), request.RequestUri);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""["Phi-4"]""")
+            };
+        });
+        using var httpClient = new HttpClient(handler);
+
+        var result = await FoundryLocalService.IsModelLoadedAsync(
+            new Uri("http://windows-host:5273/"),
+            modelId,
+            httpClient,
+            CancellationToken.None);
+
+        Assert.Equal(expected, result);
+        Assert.Equal(1, handler.CallCount);
+    }
+
+    [Fact]
+    public async Task FoundryLocalService_IsModelLoadedAsync_FallsBackToLegacyEndpointAfterNotFound()
+    {
+        var handler = new CallbackHttpMessageHandler((attempt, request) =>
+        {
+            var expectedUri = attempt switch
+            {
+                1 => new Uri("http://windows-host:5273/models/loaded"),
+                2 => new Uri("http://windows-host:5273/openai/loadedmodels"),
+                _ => throw new InvalidOperationException($"Unexpected request attempt {attempt}.")
+            };
+            Assert.Equal(expectedUri, request.RequestUri);
+
+            return attempt == 1
+                ? new HttpResponseMessage(HttpStatusCode.NotFound)
+                : new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("""["Phi-4"]""")
+                };
+        });
+        using var httpClient = new HttpClient(handler);
+
+        var result = await FoundryLocalService.IsModelLoadedAsync(
+            new Uri("http://windows-host:5273/"),
+            "Phi-4",
+            httpClient,
+            CancellationToken.None);
+
+        Assert.True(result);
+        Assert.Equal(2, handler.CallCount);
+    }
+
+    [Fact]
+    public async Task FoundryLocalService_IsModelLoadedAsync_ReturnsFalseForUnsuccessfulResponse()
+    {
+        var handler = new CallbackHttpMessageHandler((_, _) =>
+            new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        using var httpClient = new HttpClient(handler);
+
+        var result = await FoundryLocalService.IsModelLoadedAsync(
+            new Uri("http://windows-host:5273/"),
+            "Phi-4",
+            httpClient,
+            CancellationToken.None);
+
+        Assert.False(result);
+        Assert.Equal(1, handler.CallCount);
     }
 
     [Fact]
@@ -602,4 +678,17 @@ public class FoundryExtensionsTests
         public string ProjectPath => "project";
     }
 
+    private sealed class CallbackHttpMessageHandler(
+        Func<int, HttpRequestMessage, HttpResponseMessage> callback) : HttpMessageHandler
+    {
+        public int CallCount { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            CallCount++;
+            return Task.FromResult(callback(CallCount, request));
+        }
+    }
 }

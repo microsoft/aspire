@@ -158,20 +158,20 @@ public static class FoundryExtensions
     }
 
     /// <summary>
-    /// Adds a Foundry Local resource to the distributed application builder.
+    /// Configures a Microsoft Foundry resource to use an Aspire-managed Foundry Local service.
     /// </summary>
     /// <param name="builder">The distributed application builder.</param>
-    /// <returns>A resource builder for the Foundry Local resource.</returns>
+    /// <returns>The configured Microsoft Foundry resource builder.</returns>
     [AspireExportIgnore(Reason = "Binary compatibility overload. Polyglot app hosts use the overload with the optional endpoint.")]
     public static IResourceBuilder<FoundryResource> RunAsFoundryLocal(this IResourceBuilder<FoundryResource> builder)
         => builder.RunAsFoundryLocal(endpoint: null);
 
     /// <summary>
-    /// Adds a Foundry Local resource to the distributed application builder.
+    /// Configures a Microsoft Foundry resource to use an Aspire-managed or existing Foundry Local service.
     /// </summary>
     /// <param name="builder">The distributed application builder.</param>
     /// <param name="endpoint">The endpoint of an existing Foundry Local service, or <see langword="null"/> for an Aspire-managed service.</param>
-    /// <returns>A resource builder for the Foundry Local resource.</returns>
+    /// <returns>The configured Microsoft Foundry resource builder.</returns>
     /// <remarks>
     /// When <paramref name="endpoint"/> is provided, Aspire connects to that existing
     /// Foundry Local service without starting, stopping, downloading, or loading anything on its host.

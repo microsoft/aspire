@@ -64,6 +64,8 @@ var chat = builder.AddFoundry("foundry")
 
 To connect from WSL2 or Linux to an existing Foundry Local service on another host, provide its reachable endpoint. Aspire observes this service but does not start, stop, download, or load anything on the remote host, so the model must already be loaded there:
 
+**C#**
+
 ```csharp
 var foundry = builder.AddFoundry("foundry")
                      .RunAsFoundryLocal("http://windows-host:5273");
@@ -73,6 +75,19 @@ var chat = foundry.AddDeployment("chat", FoundryModel.Local.Phi4Mini)
                   {
                       deployment.LocalModelId = "Phi-4-mini-instruct-generic-gpu:5";
                   });
+```
+
+**TypeScript**
+
+```typescript
+const foundry = await builder.addFoundry('foundry')
+    .runAsFoundryLocal({ endpoint: 'http://windows-host:5273' });
+
+const chat = await foundry
+    .addDeployment('chat', 'Phi-3.5-mini-instruct', { modelVersion: '1', format: 'Microsoft' })
+    .withProperties(async (deployment) => {
+        await deployment.localModelId.set('Phi-3.5-mini-instruct-generic-gpu:1');
+    });
 ```
 
 The endpoint must be reachable from the AppHost and every consuming resource. Set `LocalModelId` to the identifier reported by the remote service when the deployment's model name is an alias.
