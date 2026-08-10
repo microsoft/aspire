@@ -71,7 +71,7 @@ public class FoundryExtensionsTests
     [Fact]
     public async Task RunAsFoundryLocal_SetsIsEmulator()
     {
-        var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
 
         using var builder = TestDistributedApplicationBuilder.Create();
         var resourceBuilder = builder.AddFoundry("myAIFoundry");
@@ -84,16 +84,21 @@ public class FoundryExtensionsTests
         var localResource = Assert.Single(builder.Resources.OfType<FoundryResource>());
         Assert.True(localResource.IsEmulator);
 
-        using var app = builder.Build();
+        await using var app = builder.Build();
 
         await app.StartAsync(cts.Token);
 
         var rns = app.Services.GetRequiredService<ResourceNotificationService>();
+        Assert.Contains(app.Services.GetServices<global::Microsoft.Extensions.Hosting.IHostedService>(), service => service is FoundryLocalLifecycleService);
 
         // Wait until it's not in Starting state anymore (started or failed whether the Foundry Local service is setup or not)
         await rns.WaitForResourceAsync(resource.Name, [KnownResourceStates.FailedToStart, KnownResourceStates.Running], cts.Token);
 
         Assert.Equal(FoundryLocalService.ApiKey, localResource.ApiKey);
+
+        await app.StopAsync(cts.Token);
+
+        Assert.False(FoundryLocalService.IsServiceRunning);
     }
 
     [Fact]
@@ -120,6 +125,99 @@ public class FoundryExtensionsTests
 
         Assert.True(FoundryLocalService.TryParseModelId(output, out var modelId));
         Assert.Equal("Phi-3.5-mini-instruct-generic-gpu:1", modelId);
+    }
+
+    [Theory]
+    [InlineData("""
+        Commands:
+          service  Commands to start and stop the Foundry Local service
+        """, "service")]
+    [InlineData("""
+        Commands:
+          server   Start, stop, restart, inspect, and troubleshoot the local Foundry daemon
+        """, "server")]
+    public void FoundryLocalService_DetermineDaemonVerb_DetectsInstalledCli(string helpOutput, string expectedVerb)
+    {
+        Assert.Equal(expectedVerb, FoundryLocalService.DetermineDaemonVerb(helpOutput));
+    }
+
+    [Fact]
+    public void FoundryLocalService_DetermineDaemonVerb_RejectsUnsupportedCli()
+    {
+        var exception = Assert.Throws<InvalidOperationException>(() => FoundryLocalService.DetermineDaemonVerb("Commands: model, chat"));
+
+        Assert.Equal(
+            "The installed Foundry CLI does not expose a 'server' or 'service' command. Update Foundry Local and ensure the 'foundry' command on PATH is the expected installation.",
+            exception.Message);
+    }
+
+    [Theory]
+    [InlineData(
+        """{"running":true,"webUrls":["http://127.0.0.1:55829"],"port":55829}""",
+        "http://127.0.0.1:55829/")]
+    [InlineData(
+        "success: Server ready (http://127.0.0.1:55829)",
+        "http://127.0.0.1:55829/")]
+    public void FoundryLocalService_TryParseServerEndpoint_ParsesCurrentCliOutput(string output, string expectedEndpoint)
+    {
+        Assert.True(FoundryLocalService.TryParseServerEndpoint(output, out var endpoint));
+        Assert.Equal(new Uri(expectedEndpoint), endpoint);
+    }
+
+    [Theory]
+    [InlineData(
+        """{"model":{"id":"Phi-4-mini-instruct-generic-gpu:5","cached":true}}""",
+        "Phi-4-mini-instruct-generic-gpu:5",
+        true)]
+    [InlineData(
+        """{"model":{"id":"Phi-4-mini-instruct-generic-gpu:5","cached":false}}""",
+        "Phi-4-mini-instruct-generic-gpu:5",
+        false)]
+    public void FoundryLocalService_TryParseModelInfo_ParsesCurrentCliOutput(string output, string expectedModelId, bool expectedCached)
+    {
+        Assert.True(FoundryLocalService.TryParseModelInfo(output, out var modelId, out var cached));
+        Assert.Equal(expectedModelId, modelId);
+        Assert.Equal(expectedCached, cached);
+    }
+
+    [Fact]
+    public void FoundryLocalService_TryParseModelIds_ParsesLoadedModels()
+    {
+        Assert.True(FoundryLocalService.TryParseModelIds(
+            """["Phi-4-mini-instruct-generic-gpu:5","qwen3-4b-generic-cpu:3"]""",
+            out var modelIds));
+
+        Assert.Equal(
+            ["Phi-4-mini-instruct-generic-gpu:5", "qwen3-4b-generic-cpu:3"],
+            modelIds);
+    }
+
+    [Fact]
+    public void RunAsFoundryLocal_WithExistingEndpoint_DoesNotManageService()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var foundry = builder.AddFoundry("myAIFoundry")
+            .RunAsFoundryLocal("http://windows-host:5273");
+
+        Assert.True(foundry.Resource.IsEmulator);
+        Assert.False(foundry.Resource.ManageLocalService);
+        Assert.Equal(new Uri("http://windows-host:5273/"), foundry.Resource.EmulatorServiceUri);
+        Assert.Equal("Endpoint=http://windows-host:5273/;Key=unused", foundry.Resource.ConnectionStringExpression.ValueExpression);
+    }
+
+    [Theory]
+    [InlineData("not-a-url")]
+    [InlineData("ftp://windows-host:5273")]
+    public void RunAsFoundryLocal_WithInvalidExistingEndpoint_Throws(string endpoint)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var foundry = builder.AddFoundry("myAIFoundry");
+
+        var exception = Assert.Throws<ArgumentException>(() =>
+            foundry.RunAsFoundryLocal(endpoint));
+
+        Assert.Equal("endpoint", exception.ParamName);
+        Assert.StartsWith("The Foundry Local endpoint must be an absolute HTTP or HTTPS URL.", exception.Message);
     }
 
     [Fact]
@@ -165,7 +263,7 @@ public class FoundryExtensionsTests
         var deployment = foundry.AddDeployment("deployment1", "gpt-4", "1.0", "OpenAI");
         foundry.RunAsFoundryLocal();
 
-        deployment.Resource.ModelId = "custom-model-id";
+        deployment.Resource.LocalModelId = "custom-model-id";
 
         Assert.Equal("{myAIFoundry.connectionString};Model=custom-model-id", deployment.Resource.ConnectionStringExpression.ValueExpression);
     }
