@@ -9,21 +9,14 @@ namespace Infrastructure.Tests;
 /// <summary>
 /// Guards the <c>gh</c> argument list built for GitHub API calls.
 /// </summary>
-/// <remarks>
-/// The fixture-directory seam used by the other CreateFailingTestIssue tests returns canned content before
-/// any process arguments are constructed, so those tests cannot observe this. These tests replace the
-/// invoker itself, which is the only place the flag is visible.
-///
-/// All tests live in one class so they share a collection and never run concurrently against the static
-/// <see cref="GitHubCli.GhInvokerOverride"/>.
-/// </remarks>
 public class GitHubCliArgumentTests
 {
     [Fact]
-    public async Task JobLogDownloadAllowsTerminalEscapeSequences()
+    public void JobLogDownloadAllowsTerminalEscapeSequences()
     {
-        var arguments = await CaptureArgumentsAsync(
-            () => GitHubActionsApi.DownloadJobLogAsync("microsoft/aspire", 12345, CancellationToken.None));
+        var arguments = GitHubCli.BuildApiArguments(
+            "repos/microsoft/aspire/actions/jobs/12345/logs",
+            allowEscapeSequences: true);
 
         // CLI end-to-end job logs embed the raw terminal recording, so `gh` refuses to write them to a
         // non-TTY stdout without this flag and fails the whole call.
@@ -33,43 +26,16 @@ public class GitHubCliArgumentTests
     }
 
     [Fact]
-    public async Task OrdinaryApiCallsDoNotAllowTerminalEscapeSequences()
+    public void OrdinaryApiCallsDoNotAllowTerminalEscapeSequences()
     {
-        var arguments = await CaptureArgumentsAsync(
-            () => GitHubCli.GetStringAsync("repos/microsoft/aspire/actions/runs/1", CancellationToken.None));
+        var arguments = GitHubCli.BuildApiArguments(
+            "repos/microsoft/aspire/actions/runs/1",
+            allowEscapeSequences: false);
 
         // A JSON payload carrying terminal control characters is worth failing on, so the flag stays off
         // everywhere except the logs endpoint.
         Assert.Equal(
             ["api", "-H", "Accept: application/vnd.github+json", "repos/microsoft/aspire/actions/runs/1"],
             arguments);
-    }
-
-    private static async Task<IReadOnlyList<string>> CaptureArgumentsAsync(Func<Task<string>> call)
-    {
-        IReadOnlyList<string> captured = [];
-
-        // The fixture seam runs ahead of argument construction, so it has to be off for this to observe
-        // anything. Other tests in this assembly set it per-process for the tool subprocess, not here.
-        var previousFixtureDirectory = Environment.GetEnvironmentVariable("ASPIRE_FAILING_TEST_ISSUE_FIXTURE_DIR");
-        Environment.SetEnvironmentVariable("ASPIRE_FAILING_TEST_ISSUE_FIXTURE_DIR", null);
-
-        GitHubCli.GhInvokerOverride = (arguments, _) =>
-        {
-            captured = arguments;
-            return Task.FromResult("{}");
-        };
-
-        try
-        {
-            await call();
-        }
-        finally
-        {
-            GitHubCli.GhInvokerOverride = null;
-            Environment.SetEnvironmentVariable("ASPIRE_FAILING_TEST_ISSUE_FIXTURE_DIR", previousFixtureDirectory);
-        }
-
-        return captured;
     }
 }
