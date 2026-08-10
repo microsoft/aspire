@@ -33,15 +33,16 @@ public class ResourceTypeMapperTests
     }
 
     [Fact]
-    public void SqlServerResource_MapsToRadiusDataSqlDatabases()
+    public void SqlServerResource_MapsToLegacyFallback_LogsLegacyMapping()
     {
         var password = new ParameterResource("password", _ => "p@ss", secret: true);
         var resource = new SqlServerServerResource("sqldb", password);
 
         var (type, apiVersion) = _mapper.MapResource(resource);
 
-        Assert.Equal(RadiusResourceTypes.SqlDatabases, type);
-        Assert.Equal(RadiusResourceTypes.RadiusApiVersion, apiVersion);
+        Assert.Equal(RadiusResourceTypes.LegacySqlDatabases, type);
+        Assert.Equal(RadiusResourceTypes.LegacyApiVersion, apiVersion);
+        Assert.Contains("legacy", _logger.LastMessage, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -117,10 +118,10 @@ public class ResourceTypeMapperTests
     }
 
     [Fact]
-    public void SqlServerResource_NoLegacyFallback_NoWarning()
+    public void PostgresResource_NoLegacyFallback_NoWarning()
     {
         var password = new ParameterResource("password", _ => "p@ss", secret: true);
-        var resource = new SqlServerServerResource("sqldb", password);
+        var resource = new PostgresServerResource("pgdb", null, password);
 
         _mapper.MapResource(resource);
 

@@ -35,7 +35,16 @@ internal static class RadiusResourceTypes
     // --- Radius.Data ---
 
     public const string RedisCaches = "Radius.Data/redisCaches";
-    public const string SqlDatabases = "Radius.Data/sqlDatabases";
+
+    /// <summary>
+    /// The SQL Server UDT registered by <c>resource-types-contrib</c>. Note the name: there is no
+    /// <c>Radius.Data/sqlDatabases</c> UDT — that spelling belongs to the legacy
+    /// <see cref="LegacySqlDatabases"/> portable type, and emitting it as a <c>Radius.*</c> type
+    /// fails type resolution at deploy time.
+    /// See <see href="https://github.com/radius-project/resource-types-contrib/blob/main/Data/sqlServerDatabases/sqlServerDatabases.yaml"/>.
+    /// </summary>
+    public const string SqlServerDatabases = "Radius.Data/sqlServerDatabases";
+
     public const string PostgreSqlDatabases = "Radius.Data/postgreSqlDatabases";
     public const string MongoDatabases = "Radius.Data/mongoDatabases";
 
@@ -67,6 +76,8 @@ internal static class RadiusResourceTypes
     public const string LegacyRedisCaches = "Applications.Datastores/redisCaches";
 
     public const string LegacyMongoDatabases = "Applications.Datastores/mongoDatabases";
+
+    public const string LegacySqlDatabases = "Applications.Datastores/sqlDatabases";
 
     public const string LegacyRabbitMQQueues = "Applications.Messaging/rabbitMQQueues";
 

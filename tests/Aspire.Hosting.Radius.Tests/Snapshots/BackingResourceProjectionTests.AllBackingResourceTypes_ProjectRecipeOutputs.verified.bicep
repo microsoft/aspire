@@ -3,9 +3,6 @@
 @secure()
 param pg_password string
 
-@secure()
-param sqlserver_password string
-
 resource recipepack 'Radius.Core/recipePacks@2025-08-01-preview' = {
   name: 'default'
   properties: {
@@ -13,10 +10,6 @@ resource recipepack 'Radius.Core/recipePacks@2025-08-01-preview' = {
       'Radius.Data/postgreSqlDatabases': {
         recipeKind: 'bicep'
         recipeLocation: 'ghcr.io/radius-project/kube-recipes/postgresqldatabases:latest'
-      }
-      'Radius.Data/sqlDatabases': {
-        recipeKind: 'bicep'
-        recipeLocation: 'ghcr.io/radius-project/recipes/local-dev/sqldatabases:latest'
       }
       'Radius.Compute/containers': {
         recipeKind: 'bicep'
@@ -73,6 +66,12 @@ resource myenv_legacy 'Applications.Core/environments@2023-10-01-preview' = {
           templatePath: 'ghcr.io/radius-project/recipes/local-dev/rabbitmqqueues:latest'
         }
       }
+      'Applications.Datastores/sqlDatabases': {
+        default: {
+          templateKind: 'bicep'
+          templatePath: 'ghcr.io/radius-project/recipes/local-dev/sqldatabases:latest'
+        }
+      }
     }
   }
 }
@@ -119,13 +118,11 @@ resource rabbit 'Applications.Messaging/rabbitMQQueues@2023-10-01-preview' = {
   }
 }
 
-resource sqlserver 'Radius.Data/sqlDatabases@2025-08-01-preview' = {
+resource sqlserver 'Applications.Datastores/sqlDatabases@2023-10-01-preview' = {
   name: 'sqlserver'
   properties: {
-    application: app.id
-    environment: myenv.id
-    username: 'sa'
-    password: sqlserver_password
+    application: app_legacy.id
+    environment: myenv_legacy.id
   }
 }
 
@@ -218,10 +215,10 @@ resource api 'Radius.Compute/containers@2025-08-01-preview' = {
             value: 'amqp://guest:${uriComponent(rabbit.listSecrets().password)}@${rabbit.properties.host}:${rabbit.properties.port}'
           }
           ConnectionStrings__sqlserver: {
-            value: 'Server=${sqlserver.properties.host},${sqlserver.properties.port};User ID=sa;Password=${sqlserver_password};TrustServerCertificate=true'
+            value: 'Server=${sqlserver.properties.server},${sqlserver.properties.port};User ID=sa;Password=${sqlserver.listSecrets().password};TrustServerCertificate=true'
           }
           SQLSERVER_HOST: {
-            value: sqlserver.properties.host
+            value: sqlserver.properties.server
           }
           SQLSERVER_PORT: {
             value: string(sqlserver.properties.port)
@@ -230,13 +227,13 @@ resource api 'Radius.Compute/containers@2025-08-01-preview' = {
             value: 'sa'
           }
           SQLSERVER_PASSWORD: {
-            value: sqlserver_password
+            value: sqlserver.listSecrets().password
           }
           SQLSERVER_URI: {
-            value: 'mssql://sa:${uriComponent(sqlserver_password)}@${sqlserver.properties.host}:${sqlserver.properties.port}'
+            value: 'mssql://sa:${uriComponent(sqlserver.listSecrets().password)}@${sqlserver.properties.server}:${sqlserver.properties.port}'
           }
           SQLSERVER_JDBCCONNECTIONSTRING: {
-            value: 'jdbc:sqlserver://${sqlserver.properties.host}:${sqlserver.properties.port};trustServerCertificate=true'
+            value: 'jdbc:sqlserver://${sqlserver.properties.server}:${sqlserver.properties.port};trustServerCertificate=true'
           }
         }
         ports: {
