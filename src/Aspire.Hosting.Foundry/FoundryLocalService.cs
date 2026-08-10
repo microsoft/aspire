@@ -23,6 +23,7 @@ internal static class FoundryLocalService
     private static readonly Regex s_progressRegex = new(@"(?<progress>\d+(?:\.\d+)?)\s*%", RegexOptions.Compiled);
     private static Process? s_serviceProcess;
     private static string? s_daemonVerb;
+    private static bool s_shouldStopService;
 
     public static bool IsServiceRunning => Endpoint is not null;
 
@@ -143,11 +144,8 @@ internal static class FoundryLocalService
         {
             var process = s_serviceProcess;
             var daemonVerb = s_daemonVerb;
-            var wasRunning = Endpoint is not null;
-            s_serviceProcess = null;
-            Endpoint = null;
 
-            if (!wasRunning && process is null)
+            if (!s_shouldStopService && Endpoint is null && process is null)
             {
                 return;
             }
@@ -174,6 +172,12 @@ internal static class FoundryLocalService
                 KillProcess(process);
                 process.Dispose();
             }
+
+            // Clear ownership only after the daemon has stopped. If a modern stop command fails,
+            // preserve the state so host disposal or another stop request can retry cleanup.
+            s_serviceProcess = null;
+            Endpoint = null;
+            s_shouldStopService = false;
         }
         finally
         {
@@ -185,23 +189,60 @@ internal static class FoundryLocalService
     {
         var endpointSource = new TaskCompletionSource<Uri>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        await RunFoundryCommandAsync(
-            ["server", "start", "--output", "json"],
-            line => logger.LogInformation("{Output}", line),
-            cancellationToken,
-            stopReadingAfterProcessExit: true,
-            outputCompletionPredicate: line =>
-            {
-                if (!TryParseServerEndpoint(line, out var endpoint))
+        try
+        {
+            await RunFoundryCommandAsync(
+                ["server", "start", "--output", "json"],
+                line =>
                 {
-                    return false;
+                    // The daemon writes this before the CLI parent reports its endpoint:
+                    //   foundrylocald 0.10.1 starting (log-level=info)
+                    // Retain cleanup ownership if endpoint parsing subsequently fails.
+                    if (line.Contains("foundrylocald", StringComparison.OrdinalIgnoreCase) &&
+                        line.Contains("starting", StringComparison.OrdinalIgnoreCase))
+                    {
+                        s_shouldStopService = true;
+                    }
+
+                    logger.LogInformation("{Output}", line);
+                },
+                cancellationToken,
+                stopReadingAfterProcessExit: true,
+                outputCompletionPredicate: line =>
+                {
+                    if (!TryParseServerEndpoint(line, out var endpoint))
+                    {
+                        return false;
+                    }
+
+                    s_shouldStopService = true;
+                    endpointSource.TrySetResult(endpoint);
+                    return true;
+                }).ConfigureAwait(false);
+
+            Endpoint = await endpointSource.Task.ConfigureAwait(false);
+        }
+        catch
+        {
+            if (s_shouldStopService)
+            {
+                using var stopCancellation = new CancellationTokenSource(s_serviceStopTimeout);
+                try
+                {
+                    await RunFoundryCommandAsync(
+                        ["server", "stop", "--output", "json"],
+                        onOutput: null,
+                        stopCancellation.Token).ConfigureAwait(false);
+                    s_shouldStopService = false;
                 }
+                catch (Exception cleanupException) when (cleanupException is OperationCanceledException or InvalidOperationException or Win32Exception)
+                {
+                    logger.LogWarning(cleanupException, "Foundry CLI server cleanup failed after startup did not complete. Cleanup will be retried when the AppHost stops.");
+                }
+            }
 
-                endpointSource.TrySetResult(endpoint);
-                return true;
-            }).ConfigureAwait(false);
-
-        Endpoint = await endpointSource.Task.ConfigureAwait(false);
+            throw;
+        }
     }
 
     private static async Task StartLegacyCliServiceAsync(ILogger logger, CancellationToken cancellationToken)
