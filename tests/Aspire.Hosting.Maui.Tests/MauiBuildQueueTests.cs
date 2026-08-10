@@ -671,6 +671,34 @@ public class MauiBuildQueueTests
     }
 
     [Fact]
+    public async Task BeforeResourceStarted_UsesPlatformLaunchReleasePolicy()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+        env.Android.Annotations.Add(new MauiBuildInfoAnnotation(
+            "/fake/project.csproj",
+            "/fake",
+            "net10.0-android",
+            releaseBuildLockOnResourceRunning: false));
+        env.MacCatalyst.Annotations.Add(new MauiBuildInfoAnnotation(
+            "/fake/project.csproj",
+            "/fake",
+            "net10.0-maccatalyst",
+            releaseBuildLockOnResourceRunning: true));
+        env.Subscriber.CompleteBuildImmediately(env.Android);
+        env.Subscriber.CompleteBuildImmediately(env.MacCatalyst);
+
+        await env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Android, env.Services),
+            CancellationToken.None);
+        await env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.MacCatalyst, env.Services),
+            CancellationToken.None);
+
+        Assert.False(env.Subscriber.GetReleaseOnRunning(env.Android));
+        Assert.True(env.Subscriber.GetReleaseOnRunning(env.MacCatalyst));
+    }
+
+    [Fact]
     public async Task ReleaseSemaphoreAfterLaunchAsync_AndroidWaitsForTerminalState()
     {
         await using var env = await BuildQueueTestEnvironment.CreateAsync();
@@ -922,6 +950,7 @@ public class MauiBuildQueueTests
         private readonly ConcurrentDictionary<string, TaskCompletionSource> _buildCompletions = new();
         private readonly ConcurrentDictionary<string, TaskCompletionSource> _buildStarted = new();
         private readonly ConcurrentDictionary<string, Exception> _buildFailures = new();
+        private readonly ConcurrentDictionary<string, bool> _releaseOnRunningValues = new();
 
         /// <summary>When true, delegates to the real <see cref="MauiBuildQueueEventSubscriber.RunBuildAsync"/>.</summary>
         public bool UseRealBuild { get; set; }
@@ -942,6 +971,11 @@ public class MauiBuildQueueTests
         public void CompleteBuildImmediately(IResource resource)
         {
             GetOrCreateCompletion(resource.Name).TrySetResult();
+        }
+
+        public bool GetReleaseOnRunning(IResource resource)
+        {
+            return _releaseOnRunningValues[resource.Name];
         }
 
         /// <summary>Pre-registers a resource whose build should fail with an exception.</summary>
@@ -995,6 +1029,7 @@ public class MauiBuildQueueTests
         /// </summary>
         internal override Task ReleaseSemaphoreAfterLaunchAsync(IResource resource, SemaphoreSlim semaphore, string? stateAtCallTime, bool releaseOnRunning, ILogger logger, CancellationToken cancellationToken)
         {
+            _releaseOnRunningValues[resource.Name] = releaseOnRunning;
             semaphore.Release();
             return Task.CompletedTask;
         }
