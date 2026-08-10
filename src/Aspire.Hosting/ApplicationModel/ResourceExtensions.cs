@@ -800,8 +800,11 @@ public static class ResourceExtensions
 
         foreach (var endpoint in endpoints)
         {
+            var publicPort = EndpointAnnotation.NormalizePort(endpoint.Port);
+            var configuredTargetPort = EndpointAnnotation.NormalizePort(endpoint.TargetPort);
+
             // Compute target port based on resource type and endpoint configuration
-            ResolvedPort targetPort = (resource, endpoint.UriScheme, endpoint.TargetPort, endpoint.Port) switch
+            ResolvedPort targetPort = (resource, endpoint.UriScheme, configuredTargetPort, publicPort) switch
             {
                 // The port was explicitly specified so use it
                 (_, _, int target, _) => ResolvedPort.Explicit(target),
@@ -824,7 +827,7 @@ public static class ResourceExtensions
             }
 
             // Compute exposed port (host port)
-            ResolvedPort exposedPort = (endpoint.UriScheme, endpoint.Port, targetPort.Value) switch
+            ResolvedPort exposedPort = (endpoint.UriScheme, publicPort, targetPort.Value) switch
             {
                 // Port set explicitly, use it
                 (_, int port, _) => ResolvedPort.Explicit(port),

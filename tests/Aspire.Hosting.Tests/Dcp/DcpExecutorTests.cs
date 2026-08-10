@@ -1248,6 +1248,12 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             (
                 er => er.WithEndpoint(name: "PortAndTargetPortSetDifferently", port: desiredPortOne, targetPort: desiredPortTwo, env: "PORT_AND_TARGET_PORT_SET_DIFFERENTLY", isProxied: false),
                 "has a value of Port property that is different from the value of TargetPort property"
+            ),
+
+            // Invalid configuration: Port requests dynamic allocation while TargetPort is fixed.
+            (
+                er => er.WithEndpoint(name: "ZeroPortAndTargetPortSetDifferently", port: 0, targetPort: desiredPortOne, env: "ZERO_PORT_AND_TARGET_PORT_SET_DIFFERENTLY", isProxied: false),
+                "has a value of Port property that is different from the value of TargetPort property"
             )
         ];
 
@@ -3309,6 +3315,12 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             // Invalid configuration: TargetPort is empty (and Port too) (proxy-less).
             (
                 cr => cr.WithEndpoint(name: "NoPortNoTargetPortProxyless", env: "NO_PORT_NO_TARGET_PORT_PROXYLESS", isProxied: false),
+                "must specify the TargetPort"
+            ),
+
+            // Invalid configuration: Port requests dynamic allocation, but no container target port is available.
+            (
+                cr => cr.WithEndpoint(name: "ZeroPortNoTargetPortProxyless", port: 0, env: "ZERO_PORT_NO_TARGET_PORT_PROXYLESS", isProxied: false),
                 "must specify the TargetPort"
             ),
         ];
