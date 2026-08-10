@@ -266,14 +266,13 @@ public class AspireSkillsBundleTests
     }
 
     [Fact]
-    public async Task LoadAsync_ThrowsWhenSkillNamesDifferOnlyByCase()
+    public async Task LoadAsync_ThrowsWhenSkillNamesAreDuplicated()
     {
         var bundleDirectory = CreateTempDirectory();
 
         try
         {
             await WriteSkillAsync(bundleDirectory, CommonAgentApplicators.AspireSkillName, CreateSkillFileContent());
-            await WriteSkillAsync(bundleDirectory, "Aspire", CreateSkillFileContent("Aspire"));
 
             var manifest = new SkillBundleManifest
             {
@@ -282,7 +281,7 @@ public class AspireSkillsBundleTests
                 Skills =
                 [
                     CreateManifestSkill(bundleDirectory, CommonAgentApplicators.AspireSkillName, AspireSkillDescription),
-                    CreateManifestSkill(bundleDirectory, "Aspire", AspireSkillDescription)
+                    CreateManifestSkill(bundleDirectory, CommonAgentApplicators.AspireSkillName, AspireSkillDescription)
                 ]
             };
 
@@ -299,7 +298,66 @@ public class AspireSkillsBundleTests
     }
 
     [Fact]
-    public async Task LoadAsync_ThrowsWhenSkillNameIsNotASafeDirectoryName()
+    public async Task LoadAsync_ThrowsWhenSkillFileDoesNotDeclareFrontmatterName()
+    {
+        var bundleDirectory = CreateTempDirectory();
+
+        try
+        {
+            await CreateBundleAsync(bundleDirectory, new Dictionary<string, string>
+            {
+                ["SKILL.md"] = """
+                    ---
+                    description: "Aspire CLI commands and workflows for distributed apps"
+                    ---
+
+                    # Aspire
+                    """
+            });
+
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => LoadBundleAsync(s_bundleProvider, bundleDirectory));
+
+            Assert.Contains("must define a frontmatter name", exception.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(bundleDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task LoadAsync_ThrowsWhenSkillFileFrontmatterNameDoesNotMatchManifest()
+    {
+        var bundleDirectory = CreateTempDirectory();
+
+        try
+        {
+            await CreateBundleAsync(bundleDirectory, new Dictionary<string, string>
+            {
+                ["SKILL.md"] = CreateSkillFileContent(name: CommonAgentApplicators.AspireifySkillName)
+            });
+
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => LoadBundleAsync(s_bundleProvider, bundleDirectory));
+
+            Assert.Contains("must match its manifest and directory name", exception.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(bundleDirectory, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("Aspire")]
+    [InlineData("aspire_skill")]
+    [InlineData("-aspire")]
+    [InlineData("aspire-")]
+    [InlineData("aspire--skill")]
+    [InlineData("..")]
+    [InlineData("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]
+    public async Task LoadAsync_ThrowsWhenSkillNameViolatesAgentSkillsSpecification(string skillName)
     {
         var bundleDirectory = CreateTempDirectory();
 
@@ -313,7 +371,7 @@ public class AspireSkillsBundleTests
                 [
                     new SkillBundleSkill
                     {
-                        Name = "..",
+                        Name = skillName,
                         Description = AspireSkillDescription,
                         Files =
                         [
@@ -331,7 +389,7 @@ public class AspireSkillsBundleTests
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
                 () => LoadBundleAsync(s_bundleProvider, bundleDirectory));
 
-            Assert.Contains("must contain only ASCII letters", exception.Message);
+            Assert.Contains("must be 1-64 characters", exception.Message, StringComparison.Ordinal);
         }
         finally
         {

@@ -40,6 +40,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
     private const string ManifestFileName = "skill-manifest.json";
     private const string SkillsDirectoryName = "skills";
     private const string SkillFileName = "SKILL.md";
+    private const int MaxSkillNameLength = 64;
     private const int MaxSkillDescriptionLength = 1024;
 
     private readonly string _currentCliVersion;
@@ -266,12 +267,19 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
 
     private static void ValidateSkillName(string skillName)
     {
-        if (skillName.Any(static character => !char.IsAsciiLetterOrDigit(character) && character is not '-' and not '_'))
+        // Agent hosts use this grammar to discover skills consistently.
+        // See https://agentskills.io/specification.
+        if (skillName.Length > MaxSkillNameLength ||
+            skillName[0] == '-' ||
+            skillName[^1] == '-' ||
+            skillName.Contains("--", StringComparison.Ordinal) ||
+            skillName.Any(static character => !char.IsAsciiLetterLower(character) && !char.IsAsciiDigit(character) && character is not '-'))
         {
             throw new InvalidOperationException(string.Format(
                 CultureInfo.InvariantCulture,
-                "Aspire skills bundle skill name '{0}' must contain only ASCII letters, digits, hyphens, and underscores.",
-                skillName));
+                "Aspire skills bundle skill name '{0}' must be 1-{1} characters, use only lowercase ASCII letters, digits, and hyphens, and must not start or end with a hyphen or contain consecutive hyphens.",
+                skillName,
+                MaxSkillNameLength));
         }
     }
 
@@ -313,6 +321,21 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
 
     private static void ValidateSkillFileFrontmatter(string skillName, string content)
     {
+        var frontmatterName = GetFrontmatterValue(content, "name");
+        if (string.IsNullOrWhiteSpace(frontmatterName))
+        {
+            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle skill '{0}' must define a frontmatter name in SKILL.md.", skillName));
+        }
+
+        if (!string.Equals(frontmatterName, skillName, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(string.Format(
+                CultureInfo.InvariantCulture,
+                "Aspire skills bundle skill '{0}' SKILL.md frontmatter name '{1}' must match its manifest and directory name.",
+                skillName,
+                frontmatterName));
+        }
+
         var description = GetFrontmatterValue(content, "description");
         if (string.IsNullOrWhiteSpace(description))
         {
@@ -349,8 +372,8 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         //   name: aspire
         //   description: "Use when working with an Aspire distributed application"
         //   ---
-        // The agent hosts read this field directly and reject descriptions longer
-        // than 1024 characters, so validate the bundled SKILL.md before caching it.
+        // Agent hosts read these fields directly, so validate the bundled SKILL.md
+        // before caching content that they would reject or ignore.
         var frontmatter = normalizedContent[4..frontmatterEndIndex];
         var keyPrefix = $"{key}:";
         foreach (var line in frontmatter.Split('\n'))
