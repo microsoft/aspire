@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Package version stabilization bump ahead of release; no user-facing change",
+  "mergedAt": "2026-08-10T18:02:41Z",
+  "number": 19169,
+  "runDate": "2026-08-10T18:18:08Z",
+  "status": "excluded",
+  "title": "Stabilizing packages ahead of 13.5 release"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Automated frontend dependency security remediation (js-yaml, nanoid); not documentation of a product feature",
+  "mergedAt": "2026-08-10T17:34:08Z",
+  "number": 1455,
+  "runDate": "2026-08-10T18:18:08Z",
+  "status": "excluded",
+  "title": "[auto-sec] src/frontend: js-yaml + nanoid HIGH alerts (GHSA-5p4m-2wfm-xmqj, GHSA-2v37-7h3g-55p8)"
+}

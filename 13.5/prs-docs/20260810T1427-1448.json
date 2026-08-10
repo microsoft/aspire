@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs site infrastructure change (banner auto-expiry); not related to a documented Aspire product feature",
+  "mergedAt": "2026-08-10T14:27:09Z",
+  "number": 1448,
+  "runDate": "2026-08-10T18:18:08Z",
+  "status": "excluded",
+  "title": "Add declarative auto-expiry to docs announcement banner"
+}

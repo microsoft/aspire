@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Automated frontend dependency security remediation (postcss, brace-expansion, mermaid); not documentation of a product feature",
+  "mergedAt": "2026-08-10T12:57:29Z",
+  "number": 1431,
+  "runDate": "2026-08-10T18:18:08Z",
+  "status": "excluded",
+  "title": "[auto-sec] frontend deps: postcss>=8.5.23, brace-expansion>=5.0.9, mermaid 11.16.1"
+}

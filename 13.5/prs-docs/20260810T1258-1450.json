@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents renamed Kubernetes persistent volume parameterized method names from PR #18979, which was folded into the existing Kubernetes persistent volume first-class support entry",
+  "mergedAt": "2026-08-10T12:58:30Z",
+  "number": 1450,
+  "runDate": "2026-08-10T18:18:08Z",
+  "status": "included",
+  "title": "[docs] Update Kubernetes persistent volume parameterized method names"
+}

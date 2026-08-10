@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Updates AppHost eventing docs to prefer typed helper methods (OnBeforeStart, etc.) over Eventing.Subscribe<T>; no matching changelog entry found for a corresponding product PR introducing these helpers",
+  "mergedAt": "2026-08-10T13:58:40Z",
+  "number": 1168,
+  "runDate": "2026-08-10T18:18:08Z",
+  "status": "excluded",
+  "title": "Update AppHost eventing docs to use typed helper APIs"
+}
