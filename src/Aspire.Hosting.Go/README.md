@@ -90,28 +90,52 @@ application is replaced by a headless Delve server:
 
 ```csharp
 builder.AddGoApp("api", "../go-api")
-    .WithDelveServer(port: 2345)
+    .WithDelveServer()
     .WithHttpEndpoint(port: 8080);
 ```
 
 This launches:
 ```sh
-dlv --headless=true --listen=127.0.0.1:2345 --api-version=2 --accept-multiclient debug .
+dlv --headless=true --listen=127.0.0.1:2345 --api-version=2 debug .
 ```
 
-`WithDelveServer` passes `--accept-multiclient` by default so the Delve server remains available
-after a debugger detaches. Set `acceptMulticlient: false` if you need Delve to exit when the first
-debugger disconnects. To customize Delve server flags, use named arguments:
+The default accepts one debugger client. To keep the server available after a debugger disconnects
+or allow multiple debugger clients, opt in with `AcceptMultiClient`. Configure additional Delve
+server flags with `DelveServerOptions`:
 
 ```csharp
 builder.AddGoApp("api", "../go-api")
-    .WithDelveServer(
-        continueOnStart: true,
-        log: true,
-        logOutput: "rpc,dap,debugger");
+    .WithDelveServer(new DelveServerOptions
+    {
+        AcceptMultiClient = true,
+        ContinueOnStart = true,
+        Log = true,
+        LogOutput = "rpc,dap,debugger"
+    });
 ```
 
-Set `continueOnStart: true` when you want the Go application to run immediately under Delve and
+For a TypeScript AppHost, pass the same options as an object:
+
+```typescript
+const api = await builder.addGoApp("api", "../go-api");
+await api.withDelveServer({
+    acceptMultiClient: true,
+    continueOnStart: true,
+    log: true,
+    logOutput: "rpc,dap,debugger",
+});
+```
+
+| Option | Default | Delve behavior |
+|---|---|---|
+| `Port` | `2345` | Sets the loopback listener port. |
+| `AcceptMultiClient` | `false` | Passes `--accept-multiclient` when enabled. |
+| `OnlySameUser` | `null` | Passes `--only-same-user=true` or `--only-same-user=false` when set. |
+| `ContinueOnStart` | `false` | Passes `--continue` when enabled. |
+| `Log` | `false` | Passes `--log` when enabled. |
+| `LogOutput` | `null` | Passes `--log-output=<components>` when logging is enabled and components are specified. |
+
+Set `ContinueOnStart` to `true` when you want the Go application to run immediately under Delve and
 attach a debugger later.
 
 If an IDE fails to attach, enable Delve logging first and inspect the resource logs. Some IDE and
@@ -121,13 +145,15 @@ can disable that check:
 
 ```csharp
 builder.AddGoApp("api", "../go-api")
-    .WithDelveServer(
-        onlySameUser: false,
-        log: true,
-        logOutput: "rpc,dap,debugger");
+    .WithDelveServer(new DelveServerOptions
+    {
+        OnlySameUser = false,
+        Log = true,
+        LogOutput = "rpc,dap,debugger"
+    });
 ```
 
-`onlySameUser: false` maps to `--only-same-user=false`. Use it only when needed; the Delve listener
+`OnlySameUser = false` maps to `--only-same-user=false`. Use it only when needed; the Delve listener
 remains bound to `127.0.0.1`.
 
 **GoLand** — create a **Go Remote** run/debug configuration (**Edit | Run Configurations**):

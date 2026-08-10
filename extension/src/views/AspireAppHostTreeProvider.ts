@@ -1004,6 +1004,10 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     }
 
     getChildren(element?: TreeElement): TreeElement[] {
+        if (!element && this._repository.isLoading) {
+            return [];
+        }
+
         if (this._repository.viewMode === 'workspace') {
             return this._getWorkspaceChildren(element);
         }

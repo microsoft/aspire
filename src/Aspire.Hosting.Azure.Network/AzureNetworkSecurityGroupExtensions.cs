@@ -52,7 +52,8 @@ public static class AzureNetworkSecurityGroupExtensions
             return builder.CreateResourceBuilder(resource);
         }
 
-        return builder.AddResource(resource);
+        return builder.AddResource(resource)
+            .WithIconName("ShieldLock");
     }
 
     /// <summary>

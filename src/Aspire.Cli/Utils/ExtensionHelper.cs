@@ -50,8 +50,12 @@ internal static class KnownCapabilities
     // sync with `nodeCompiledAppHostCapability` in extension/src/capabilities.ts.
     public const string NodeCompiledAppHost = "node-compiled-apphost.v1";
 
+    // Advertised so tooling can detect that `aspire ls --format json --stream` is supported
+    // before opting into newline-delimited JSON candidate discovery.
+    public const string LsJsonStream = "ls-json-stream.v1";
+
     /// <summary>
     /// Gets the set of capabilities this CLI advertises to extensions.
     /// </summary>
-    public static string[] GetAdvertisedCapabilities() => [DevKit, Project, BuildDotnetUsingCli, Baseline, SecretPrompts, FilePickers, Pipelines, DescribeIncludeDisabledCommands];
+    public static string[] GetAdvertisedCapabilities() => [DevKit, Project, BuildDotnetUsingCli, Baseline, SecretPrompts, FilePickers, Pipelines, DescribeIncludeDisabledCommands, LsJsonStream];
 }

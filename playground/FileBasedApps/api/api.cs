@@ -1,6 +1,7 @@
 #!/usr/bin/env dotnet
 
 #:sdk Microsoft.NET.Sdk.Web
+#:property CentralPackageTransitivePinningEnabled=false
 #:package Microsoft.AspNetCore.OpenApi
 #:project ../../Playground.ServiceDefaults
 

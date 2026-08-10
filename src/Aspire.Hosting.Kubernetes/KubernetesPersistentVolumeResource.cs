@@ -61,6 +61,7 @@ namespace Aspire.Hosting.Kubernetes;
 /// </code>
 /// </example>
 [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport]
 public sealed class KubernetesPersistentVolumeResource(
     string name,
     KubernetesEnvironmentResource environment) : Resource(name), IResourceWithParent<KubernetesEnvironmentResource>

@@ -18,11 +18,6 @@
     background: var(--neutral-fill-stealth-active);
 }
 
-.icon-checkbox:focus-visible {
-    outline: 2px solid var(--accent-fill-rest);
-    outline-offset: 2px;
-}
-
 .icon-checkbox[aria-disabled="true"] {
     cursor: not-allowed;
     opacity: var(--disabled-opacity);

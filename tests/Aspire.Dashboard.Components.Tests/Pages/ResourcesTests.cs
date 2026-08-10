@@ -294,6 +294,25 @@ public partial class ResourcesTests : DashboardTestContext
         });
     }
 
+    [Fact]
+    public void DesktopFilterControls_AreLabeledGroup()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: [], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        var filterGroup = cut.Find(".resource-tabs-toolbar");
+        var loc = Services.GetRequiredService<IStringLocalizer<Dashboard.Resources.ControlsStrings>>();
+
+        Assert.Equal("group", filterGroup.GetAttribute("role"));
+        Assert.Equal(loc[nameof(Dashboard.Resources.ControlsStrings.PageToolbarLandmark)].Value, filterGroup.GetAttribute("aria-label"));
+    }
+
     [Theory]
     [InlineData(false, true, "vertical")]
     [InlineData(true, true, "vertical")]

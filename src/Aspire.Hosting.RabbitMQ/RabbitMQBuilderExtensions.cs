@@ -76,6 +76,7 @@ public static class RabbitMQBuilderExtensions
         var rabbitmq = builder.AddResource(rabbitMq)
                               .WithImage(RabbitMQContainerImageTags.Image, RabbitMQContainerImageTags.Tag)
                               .WithImageRegistry(RabbitMQContainerImageTags.Registry)
+                              .WithIconName("MailMultiple")
                               .WithEndpoint(port: port, targetPort: 5672, name: RabbitMQServerResource.PrimaryEndpointName)
                               .WithEnvironment(context =>
                               {

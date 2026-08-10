@@ -585,7 +585,7 @@ public class ExistingAzureResourceTests
             output id string = 'subscription'
             """)
             .WithParameter("value", "unused");
-        resource.Resource.Scope = AzureBicepResourceScope.ForSubscription(existingSubscriptionId.Resource);
+        resource.Resource.Scope = AzureBicepResourceScope.CreateForSubscription(existingSubscriptionId.Resource);
 
         var (manifest, bicep) = await AzureManifestUtils.GetManifestWithBicep(resource.Resource, skipPreparer: true);
 
@@ -604,7 +604,7 @@ public class ExistingAzureResourceTests
 
             output id string = 'tenant'
             """);
-        resource.Resource.Scope = AzureBicepResourceScope.ForTenant();
+        resource.Resource.Scope = AzureBicepResourceScope.CreateForTenant();
 
         var (manifest, bicep) = await AzureManifestUtils.GetManifestWithBicep(resource.Resource, skipPreparer: true);
 

@@ -73,7 +73,7 @@ public partial class PlotlyChart : ChartBase
         if (!tickUpdate)
         {
             // The chart mostly shows numbers but some localization is needed for displaying time ticks.
-            var is24Hour = DateTimeFormatInfo.CurrentInfo.LongTimePattern.StartsWith("H", StringComparison.Ordinal);
+            var is24Hour = BrowserTimeProvider.Is24HourFormat(TimeProvider.ResolvedTimeFormat);
             // Plotly uses d3-time-format https://d3js.org/d3-time-format
             var time = is24Hour ? "%H:%M:%S" : "%-I:%M:%S %p";
             var userLocale = new PlotlyUserLocale

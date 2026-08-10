@@ -29,8 +29,6 @@ namespace Aspire.Hosting.Azure;
 [AspireExport(ExposeProperties = true)]
 public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithConnectionString, IAzurePrivateEndpointTarget, IAzurePrivateEndpointTargetNotification, IAzureNspAssociationTarget
 {
-    private const string AciSubnetDelegationServiceId = "Microsoft.ContainerInstance/containerGroups";
-
     private readonly Dictionary<string, AzureSqlDatabaseResource> _databases = new Dictionary<string, AzureSqlDatabaseResource>(StringComparers.ResourceName);
     private readonly bool _createdWithInnerResource;
 
@@ -718,10 +716,12 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
             sql.Annotations.Add(new AdminDeploymentScriptSubnetAnnotation(aciSubnet.Resource));
         }
 
-        // always delegate the subnet to ACI
-        aciSubnetResource.Annotations.Add(new AzureSubnetServiceDelegationAnnotation(
-            AciSubnetDelegationServiceId,
-            AciSubnetDelegationServiceId));
+        // Always delegate the subnet to ACI. WithServiceDelegation removes existing delegation
+        // annotations before appending ACI's required delegation, so an explicit subnet retains a
+        // single effective delegation. ACI must replace a caller's previous delegation for the admin
+        // deployment script to run in that subnet.
+        builder.CreateResourceBuilder(aciSubnetResource)
+            .WithServiceDelegation(AzureSubnetServiceDelegations.ContainerInstances);
     }
 
     private sealed class FakeBuilder<T>(T resource, IDistributedApplicationBuilder applicationBuilder) : IResourceBuilder<T> where T : IResource
@@ -730,6 +730,15 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
         public T Resource => resource;
         public IResourceBuilder<T> WithAnnotation<TAnnotation>(TAnnotation annotation, ResourceAnnotationMutationBehavior behavior = ResourceAnnotationMutationBehavior.Append) where TAnnotation : IResourceAnnotation
         {
+            // Mirror DistributedApplicationResourceBuilder<T>.WithAnnotation's Replace handling so
+            // publish-time configuration behaves identically when routed through this builder
+            // instead of the real app-model builder.
+            if (behavior == ResourceAnnotationMutationBehavior.Replace
+                && Resource.Annotations.OfType<TAnnotation>().SingleOrDefault() is { } existingAnnotation)
+            {
+                Resource.Annotations.Remove(existingAnnotation);
+            }
+
             Resource.Annotations.Add(annotation);
             return this;
         }

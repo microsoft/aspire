@@ -10,7 +10,7 @@ import { cleanupRun } from '../debugger/runCleanupRegistry';
 import type { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration } from '../dcp/types';
 import { createStateSnapshot, getSensitiveDashboardUrl, isSamePath } from '../extensionState';
 import { AppHostLaunchRequestedEvent, AppHostLaunchService } from '../services/AppHostLaunchService';
-import type { AspireDebugConsoleOutputEvent, AspireExtensionE2ECommandInvocation, AspireExtensionE2EControlCommand, AspireExtensionE2EControlPayload, AspireExtensionE2EControlStatus, AspireExtensionE2EDebugConsoleOutput, AspireExtensionE2EDebugLaunch, AspireExtensionE2EStoppingPathEvent, AspireExtensionE2ETerminalCommand, AspireExtensionStateSnapshot } from '../types/extensionApi';
+import type { AspireDebugConsoleOutputEvent, AspireExtensionE2ECommandInvocation, AspireExtensionE2EControlCommand, AspireExtensionE2EControlPayload, AspireExtensionE2EControlStatus, AspireExtensionE2EDebugConsoleOutput, AspireExtensionE2EDebugLaunch, AspireExtensionE2EStoppingPathEvent, AspireExtensionE2ETaskProcessEvent, AspireExtensionE2ETerminalCommand, AspireExtensionStateSnapshot } from '../types/extensionApi';
 import { AspireTerminalCommandEvent, AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { dashboardDefaultChangedNotificationKey } from '../utils/dashboardNotificationState';
 import { extensionLogOutputChannel } from '../utils/logging';
@@ -40,6 +40,7 @@ export function createE2eStateFileBridge(
   const debugLaunches: AspireExtensionE2EDebugLaunch[] = [];
   const debugConsoleOutputs: AspireExtensionE2EDebugConsoleOutput[] = [];
   const stoppingPathEvents: AspireExtensionE2EStoppingPathEvent[] = [];
+  const taskProcessEvents: AspireExtensionE2ETaskProcessEvent[] = [];
   const clipboardSnapshot: E2eClipboardSnapshot = { hasSnapshot: false };
   const clipboardExpectation: E2eClipboardExpectation = {};
   let commandInvocationSequence = 0;
@@ -47,7 +48,10 @@ export function createE2eStateFileBridge(
   let debugLaunchSequence = 0;
   let debugConsoleOutputSequence = 0;
   let stoppingPathSequence = 0;
+  let taskProcessSequence = 0;
+  let taskExecutionSequence = 0;
   let previousStoppingPaths: readonly string[] | undefined;
+  const taskExecutionIds = new WeakMap<vscode.TaskExecution, number>();
   let controlStatus: AspireExtensionE2EControlStatus | undefined;
   let lastControlRevision = -1;
   const writeStateFile = () => {
@@ -63,6 +67,7 @@ export function createE2eStateFileBridge(
       debugLaunches,
       debugConsoleOutputs,
       stoppingPathEvents,
+      taskProcessEvents,
       control: controlStatus,
     });
   };
@@ -125,6 +130,35 @@ export function createE2eStateFileBridge(
     if (debugLaunches.length > 100) {
       debugLaunches.shift();
     }
+    writeStateFile();
+  });
+  const taskStartSubscription = vscode.tasks.onDidStartTaskProcess(event => {
+    const executionId = ++taskExecutionSequence;
+    taskExecutionIds.set(event.execution, executionId);
+    taskProcessEvents.push({
+      sequence: ++taskProcessSequence,
+      executionId,
+      state: 'started',
+      taskName: event.execution.task.name,
+      taskSource: event.execution.task.source,
+      taskDefinitionType: event.execution.task.definition.type,
+      processId: event.processId,
+    });
+    trimTaskProcessEvents(taskProcessEvents);
+    writeStateFile();
+  });
+  const taskEndSubscription = vscode.tasks.onDidEndTaskProcess(event => {
+    const executionId = taskExecutionIds.get(event.execution) ?? ++taskExecutionSequence;
+    taskProcessEvents.push({
+      sequence: ++taskProcessSequence,
+      executionId,
+      state: 'ended',
+      taskName: event.execution.task.name,
+      taskSource: event.execution.task.source,
+      taskDefinitionType: event.execution.task.definition.type,
+      exitCode: event.exitCode,
+    });
+    trimTaskProcessEvents(taskProcessEvents);
     writeStateFile();
   });
 
@@ -203,7 +237,13 @@ export function createE2eStateFileBridge(
     }
   });
 
-  return vscode.Disposable.from(stateSubscription, commandSubscription, terminalCommandSubscription, debugLaunchSubscription, debugConsoleOutputSubscription, controlSubscription);
+  return vscode.Disposable.from(stateSubscription, commandSubscription, terminalCommandSubscription, debugLaunchSubscription, debugConsoleOutputSubscription, taskStartSubscription, taskEndSubscription, controlSubscription);
+}
+
+function trimTaskProcessEvents(events: AspireExtensionE2ETaskProcessEvent[]): void {
+  if (events.length > 100) {
+    events.splice(0, events.length - 100);
+  }
 }
 
 function writeJsonFileAtomic(filePath: string, value: unknown): void {

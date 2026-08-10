@@ -74,10 +74,13 @@ checkout:
   # `git -C <mirror> rev-parse --verify refs/heads/<branch>^{commit}`, which fails
   # with `fatal: Needed a single revision` because the branch only exists in the
   # workspace (microsoft/aspire#18319, run 27765082872). The manifest already
-  # maps `microsoft/aspire.dev -> path=""` (the workspace) here, so a mirror is
-  # not needed for the handler to rediscover the target repo. The safe-outputs
-  # job keeps its own separate `_repos/aspire.dev` checkout for bundle apply.
+  # maps `microsoft/aspire.dev -> path="."` (the workspace) here, so a mirror is
+  # not needed for the handler to rediscover the target repo. The compiler-generated
+  # safe-outputs job checks out the target repo at its workspace root for bundle apply.
   - repository: microsoft/aspire.dev
+    # gh-aw v0.85+ otherwise places cross-repository checkouts in a directory
+    # named after the repository, but this workflow authors docs at workspace root.
+    path: .
     github-app:
       app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
       private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
@@ -126,34 +129,39 @@ safe-outputs:
     private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
     owner: "microsoft"
     repositories: ["aspire.dev", "aspire"]
+  # Work around https://github.com/github/gh-aw/issues/50906 in gh-aw v0.85.4.
+  # Threat detection runs on a fresh runner, and its custom steps run before the
+  # generated Copilot installer. Run the same verified installer here so the
+  # following step can stage a cached CLI where the generated AWF command expects
+  # it. Remove these steps after upgrading to a compiler containing
+  # https://github.com/github/gh-aw/pull/50908.
+  threat-detection:
+    steps:
+      - name: Install GitHub Copilot CLI for threat detection staging
+        run: bash "${RUNNER_TEMP}/gh-aw/actions/install_copilot_cli.sh"
+        env:
+          GH_HOST: github.com
+          GH_AW_COMPILED_VERSION: v0.85.4
+      - name: Stage GitHub Copilot CLI for threat detection
+        run: |
+          COPILOT_BIN="$(command -v copilot || true)"
+          if [[ -z "${COPILOT_BIN}" || ! -x "${COPILOT_BIN}" ]]; then
+            echo "::error::The GitHub Copilot CLI installer did not provide an executable."
+            exit 1
+          fi
+
+          if [[ "${COPILOT_BIN}" != "/usr/local/bin/copilot" ]]; then
+            sudo cp "${COPILOT_BIN}" /usr/local/bin/copilot
+            sudo chmod 755 /usr/local/bin/copilot
+          fi
+          /usr/local/bin/copilot --version
+  # gh-aw generates the target-repository checkout required by create-pull-request.
+  # An additional actions/checkout step would trigger https://github.com/github/gh-aw/issues/50905
+  # in v0.85.4 and downgrade the app token from contents: write to contents: read.
   steps:
-    - name: Mirror target repo checkout
-      if: contains(needs.agent.outputs.output_types, 'create_pull_request')
-      uses: actions/checkout@v6.0.2
-      with:
-        repository: microsoft/aspire.dev
-        # Seed the mirrored workspace at aspire.dev main. The safe-outputs
-        # handler will fetch and use the agent-provided `base` override when
-        # creating the PR, restricted by `allowed-base-branches` below.
-        ref: main
-        token: ${{ steps.safe-outputs-app-token.outputs.token }}
-        persist-credentials: false
-        path: _repos/aspire.dev
-        fetch-depth: 1
-    - name: Configure mirrored target repo Git credentials
-      if: contains(needs.agent.outputs.output_types, 'create_pull_request')
-      working-directory: _repos/aspire.dev
-      env:
-        REPO_NAME: "microsoft/aspire.dev"
-        SERVER_URL: ${{ github.server_url }}
-        GIT_TOKEN: ${{ steps.safe-outputs-app-token.outputs.token }}
-      run: |
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
-        git config --global user.name "github-actions[bot]"
-        git config --global am.keepcr true
-        SERVER_URL_STRIPPED="${SERVER_URL#https://}"
-        git remote set-url origin "https://x-access-token:${GIT_TOKEN}@${SERVER_URL_STRIPPED}/${REPO_NAME}.git"
-        echo "Mirrored checkout configured with standard GitHub Actions identity"
+    - name: Set safe-output patch base fallback
+      id: resolve-target
+      run: echo "branch=main" >> "${GITHUB_OUTPUT}"
   create-pull-request:
     title-prefix: "[docs] "
     labels: [docs-from-code]
@@ -162,10 +170,10 @@ safe-outputs:
     # that decision can't live in static frontmatter. The `notify-source-pr`
     # safe-output job below requests the SME on the drafted PR after creation.
     draft: true
-    # Default to aspire.dev main, but allow the agent to override the PR base
-    # per run using the milestone/linked-issue/source-base reasoning in the
-    # prompt body. Restrict overrides to main and release/*.
-    base-branch: main
+    # Generate the agent-time patch against the aspire.dev branch selected below.
+    # The separate safe-outputs job emits main from the fallback step with the same
+    # ID, then honors the agent's allowlisted per-call base override when applying.
+    base-branch: ${{ steps.resolve-target.outputs.branch || 'main' }}
     allowed-base-branches:
       - main
       - release/*
@@ -435,6 +443,22 @@ safe-outputs:
 # agent starts and writes the result to .pr-docs-check/target.json. The
 # agent reads that file verbatim and never re-derives the branch.
 pre-agent-steps:
+  # gh-aw v0.85.4 can select a cached Copilot CLI but still hard-codes
+  # /usr/local/bin/copilot in the AWF command. Stage the selected binary there
+  # until the compiler includes https://github.com/github/gh-aw/pull/50908.
+  - name: Stage GitHub Copilot CLI for agent execution
+    run: |
+      COPILOT_BIN="$(command -v copilot || true)"
+      if [[ -z "${COPILOT_BIN}" || ! -x "${COPILOT_BIN}" ]]; then
+        echo "::error::The GitHub Copilot CLI installer did not provide an executable."
+        exit 1
+      fi
+
+      if [[ "${COPILOT_BIN}" != "/usr/local/bin/copilot" ]]; then
+        sudo cp "${COPILOT_BIN}" /usr/local/bin/copilot
+        sudo chmod 755 /usr/local/bin/copilot
+      fi
+      /usr/local/bin/copilot --version
   # Mint a short-lived installation token from the aspire-bot GitHub App so
   # the resolver below can read PR/issue metadata from microsoft/aspire AND
   # list branches on microsoft/aspire.dev. The default GITHUB_TOKEN is scoped
@@ -458,6 +482,7 @@ pre-agent-steps:
         aspire
         aspire.dev
   - name: Resolve target aspire.dev branch
+    id: resolve-target
     env:
       GH_TOKEN: ${{ steps.resolve-target-app-token.outputs.token }}
       # event.pull_request.number is set on `pull_request: closed` triggers;
@@ -750,6 +775,7 @@ pre-agent-steps:
       rm -f "${RELEASE_BRANCHES_FILE}" "${PR_JSON}"
 
       echo "Effective     : ${EFFECTIVE} (resolution=${RESOLUTION})"
+      echo "branch=${EFFECTIVE}" >> "${GITHUB_OUTPUT}"
 
       # --- 7. Emit target.json ---------------------------------------------
       jq -n \

@@ -27,7 +27,7 @@ public class AzureContainerAppEnvironmentResource :
 #pragma warning restore CS0618 // Type or member is obsolete
 {
     /// <inheritdoc />
-    string IAzureDelegatedSubnetResource.DelegatedSubnetServiceName => "Microsoft.App/environments";
+    string IAzureDelegatedSubnetResource.DelegatedSubnetServiceName => AzureSubnetServiceDelegations.ContainerAppEnvironments;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureContainerAppEnvironmentResource"/> class.

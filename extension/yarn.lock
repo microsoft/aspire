@@ -1025,15 +1025,15 @@
     supports-color "^10.2.2"
     yargs "^17.7.2"
 
-"@vscode/test-electron@2.4.1":
-  version "2.4.1"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/@vscode/test-electron/-/test-electron-2.4.1.tgz"
-  integrity sha1-XCdgZAv2ku+9qhi6/NNftRloiUE=
+"@vscode/test-electron@3.1.0":
+  version "3.1.0"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/@vscode/test-electron/-/test-electron-3.1.0.tgz#46b93d118dcd3b3c89caae296a13f9a7f5eb63c5"
+  integrity sha1-Rrk9EY3NOzyJyq4pahP5p/XrY8U=
   dependencies:
     http-proxy-agent "^7.0.2"
     https-proxy-agent "^7.0.5"
     jszip "^3.10.1"
-    ora "^7.0.1"
+    ora "^8.1.0"
     semver "^7.6.2"
 
 "@vscode/vsce-sign-alpine-arm64@2.0.6":
@@ -1873,7 +1873,7 @@ chalk@^4.0.0, chalk@^4.1.0, chalk@^4.1.2:
     ansi-styles "^4.1.0"
     supports-color "^7.1.0"
 
-chalk@^5.0.0, chalk@^5.3.0, chalk@^5.4.1:
+chalk@^5.3.0, chalk@^5.4.1:
   version "5.6.2"
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/chalk/-/chalk-5.6.2.tgz"
   integrity sha1-sSOLbiPqM3r3HH+KKV21rwwViuo=
@@ -1939,16 +1939,16 @@ chrome-trace-event@^1.0.2:
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/chrome-trace-event/-/chrome-trace-event-1.0.4.tgz"
   integrity sha1-Bb/9f/koRlCTMUcIyTvfqb0fD1s=
 
-cli-cursor@^4.0.0:
-  version "4.0.0"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/cli-cursor/-/cli-cursor-4.0.0.tgz"
-  integrity sha1-POz+NzS/T+Aqg2HL3A9v4oxqV+o=
+cli-cursor@^5.0.0:
+  version "5.0.0"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/cli-cursor/-/cli-cursor-5.0.0.tgz#24a4831ecf5a6b01ddeb32fb71a4b2088b0dce38"
+  integrity sha1-JKSDHs9aawHd6zL7caSyCIsNzjg=
   dependencies:
-    restore-cursor "^4.0.0"
+    restore-cursor "^5.0.0"
 
-cli-spinners@^2.9.0:
+cli-spinners@^2.9.2:
   version "2.9.2"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/cli-spinners/-/cli-spinners-2.9.2.tgz"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/cli-spinners/-/cli-spinners-2.9.2.tgz#1773a8f4b9c4d6ac31563df53b3fc1d79462fe41"
   integrity sha1-F3Oo9LnE1qwxVj31Oz/B15Ri/kE=
 
 clipboard-image@^0.1.0:
@@ -2431,9 +2431,9 @@ electron-to-chromium@^1.5.328:
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/electron-to-chromium/-/electron-to-chromium-1.5.331.tgz"
   integrity sha1-Pk6EUELVF8aLPAC+X8MyBPE7IFg=
 
-emoji-regex@^10.2.1:
+emoji-regex@^10.3.0:
   version "10.6.0"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/emoji-regex/-/emoji-regex-10.6.0.tgz"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/emoji-regex/-/emoji-regex-10.6.0.tgz#bf3d6e8f7f8fd22a65d9703475bc0147357a6b0d"
   integrity sha1-vz1uj3+P0ipl2XA0dbwBRzV6aw0=
 
 emoji-regex@^8.0.0:
@@ -2869,10 +2869,10 @@ fast-levenshtein@^3.0.0:
   dependencies:
     fastest-levenshtein "^1.0.7"
 
-fast-uri@3.1.4, fast-uri@^3.0.1:
-  version "3.1.4"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/fast-uri/-/fast-uri-3.1.4.tgz#3b3daf9ce68f41f956df0b505132c0cfce9ec7af"
-  integrity sha1-Oz2vnOaPQflW3wtQUTLAz86ex68=
+fast-uri@3.1.5, fast-uri@^3.0.1:
+  version "3.1.5"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/fast-uri/-/fast-uri-3.1.5.tgz#610f37419a030270430cecd68d74e3d4d96725d0"
+  integrity sha1-YQ83QZoDAnBDDOzWjXTj1NlnJdA=
 
 fastest-levenshtein@^1.0.12, fastest-levenshtein@^1.0.7:
   version "1.0.16"
@@ -3109,6 +3109,11 @@ get-caller-file@^2.0.5:
   version "2.0.5"
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/get-caller-file/-/get-caller-file-2.0.5.tgz"
   integrity sha1-T5RBKoLbMvNuOwuXQfipf+sDH34=
+
+get-east-asian-width@^1.0.0:
+  version "1.6.0"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/get-east-asian-width/-/get-east-asian-width-1.6.0.tgz#216900f91df11a8b2c198c3e1d93d6c035a776b9"
+  integrity sha1-IWkA+R3xGossGYw+HZPWwDWndrk=
 
 get-intrinsic@^1.2.4, get-intrinsic@^1.2.5, get-intrinsic@^1.2.6, get-intrinsic@^1.3.0:
   version "1.3.0"
@@ -3814,7 +3819,7 @@ is-unicode-supported@^0.1.0:
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/is-unicode-supported/-/is-unicode-supported-0.1.0.tgz"
   integrity sha1-PybHaoCVk7Ur+i7LVxDtJ3m1Iqc=
 
-is-unicode-supported@^1.1.0, is-unicode-supported@^1.3.0:
+is-unicode-supported@^1.3.0:
   version "1.3.0"
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/is-unicode-supported/-/is-unicode-supported-1.3.0.tgz"
   integrity sha1-2CSYS2FsKSouGYIH1KYJmDhC9xQ=
@@ -4213,13 +4218,13 @@ log-symbols@^4.1.0:
     chalk "^4.1.0"
     is-unicode-supported "^0.1.0"
 
-log-symbols@^5.1.0:
-  version "5.1.0"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/log-symbols/-/log-symbols-5.1.0.tgz"
-  integrity sha1-og47ml9T+sauuOK7IsB88sjxbZM=
+log-symbols@^6.0.0:
+  version "6.0.0"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/log-symbols/-/log-symbols-6.0.0.tgz#bb95e5f05322651cac30c0feb6404f9f2a8a9439"
+  integrity sha1-u5Xl8FMiZRysMMD+tkBPnyqKlDk=
   dependencies:
-    chalk "^5.0.0"
-    is-unicode-supported "^1.1.0"
+    chalk "^5.3.0"
+    is-unicode-supported "^1.3.0"
 
 lowercase-keys@^3.0.0:
   version "3.0.0"
@@ -4371,6 +4376,11 @@ mimic-fn@^2.1.0:
   version "2.1.0"
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/mimic-fn/-/mimic-fn-2.1.0.tgz"
   integrity sha1-ftLCzMyvhNP/y3pptXcR/CCDQBs=
+
+mimic-function@^5.0.0:
+  version "5.0.1"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/mimic-function/-/mimic-function-5.0.1.tgz#acbe2b3349f99b9deaca7fb70e48b83e94e67076"
+  integrity sha1-rL4rM0n5m53qyn+3Dki4PpTmcHY=
 
 mimic-response@^3.1.0:
   version "3.1.0"
@@ -4728,12 +4738,19 @@ once@^1.3.0, once@^1.3.1, once@^1.3.2, once@^1.4.0:
   dependencies:
     wrappy "1"
 
-onetime@^5.1.0, onetime@^5.1.2:
+onetime@^5.1.2:
   version "5.1.2"
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/onetime/-/onetime-5.1.2.tgz#d0e96ebb56b07476df1dd9c4806e5237985ca45e"
   integrity sha1-0Oluu1awdHbfHdnEgG5SN5hcpF4=
   dependencies:
     mimic-fn "^2.1.0"
+
+onetime@^7.0.0:
+  version "7.0.0"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/onetime/-/onetime-7.0.0.tgz#9f16c92d8c9ef5120e3acd9dd9957cceecc1ab60"
+  integrity sha1-nxbJLYye9RIOOs2d2ZV8zuzBq2A=
+  dependencies:
+    mimic-function "^5.0.0"
 
 open@^10.1.0:
   version "10.2.0"
@@ -4757,19 +4774,19 @@ optionator@^0.9.3:
     type-check "^0.4.0"
     word-wrap "^1.2.5"
 
-ora@^7.0.1:
-  version "7.0.1"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/ora/-/ora-7.0.1.tgz"
-  integrity sha1-zdUw7Nhl/jnkUaDnaXhlZpyxGTA=
+ora@^8.1.0:
+  version "8.2.0"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/ora/-/ora-8.2.0.tgz#8fbbb7151afe33b540dd153f171ffa8bd38e9861"
+  integrity sha1-j7u3FRr+M7VA3RU/Fx/6i9OOmGE=
   dependencies:
     chalk "^5.3.0"
-    cli-cursor "^4.0.0"
-    cli-spinners "^2.9.0"
+    cli-cursor "^5.0.0"
+    cli-spinners "^2.9.2"
     is-interactive "^2.0.0"
-    is-unicode-supported "^1.3.0"
-    log-symbols "^5.1.0"
-    stdin-discarder "^0.1.0"
-    string-width "^6.1.0"
+    is-unicode-supported "^2.0.0"
+    log-symbols "^6.0.0"
+    stdin-discarder "^0.2.2"
+    string-width "^7.2.0"
     strip-ansi "^7.1.0"
 
 ordered-read-streams@^1.0.0:
@@ -5368,13 +5385,13 @@ responselike@^4.0.2:
   dependencies:
     lowercase-keys "^3.0.0"
 
-restore-cursor@^4.0.0:
-  version "4.0.0"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/restore-cursor/-/restore-cursor-4.0.0.tgz"
-  integrity sha1-UZVgpDGJdQlt725gnUQQDtqkzLk=
+restore-cursor@^5.0.0:
+  version "5.1.0"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/restore-cursor/-/restore-cursor-5.1.0.tgz#0766d95699efacb14150993f55baf0953ea1ebe7"
+  integrity sha1-B2bZVpnvrLFBUJk/VbrwlT6h6+c=
   dependencies:
-    onetime "^5.1.0"
-    signal-exit "^3.0.2"
+    onetime "^7.0.0"
+    signal-exit "^4.1.0"
 
 reusify@^1.0.4:
   version "1.1.0"
@@ -5609,7 +5626,7 @@ side-channel@^1.1.0:
     side-channel-map "^1.0.1"
     side-channel-weakmap "^1.0.2"
 
-signal-exit@^3.0.2, signal-exit@^3.0.3:
+signal-exit@^3.0.3:
   version "3.0.7"
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/signal-exit/-/signal-exit-3.0.7.tgz#a9a1767f8af84155114eaabd73f99273c8f59ad9"
   integrity sha1-qaF2f4r4QVURTqq9c/mSc8j1mtk=
@@ -5725,12 +5742,10 @@ statuses@^2.0.1, statuses@^2.0.2, statuses@~2.0.2:
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/statuses/-/statuses-2.0.2.tgz"
   integrity sha1-j3XuzvdlteHPzcCA2llAntQk44I=
 
-stdin-discarder@^0.1.0:
-  version "0.1.0"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/stdin-discarder/-/stdin-discarder-0.1.0.tgz"
-  integrity sha1-IrPkADk6jijr9T+ZWPOIBiLv3iE=
-  dependencies:
-    bl "^5.0.0"
+stdin-discarder@^0.2.2:
+  version "0.2.2"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/stdin-discarder/-/stdin-discarder-0.2.2.tgz#390037f44c4ae1a1ae535c5fe38dc3aba8d997be"
+  integrity sha1-OQA39ExK4aGuU1xf443Dq6jZl74=
 
 stream-composer@^1.0.2:
   version "1.0.2"
@@ -5792,14 +5807,14 @@ string-width@^5.0.1, string-width@^5.1.2:
     emoji-regex "^9.2.2"
     strip-ansi "^7.0.1"
 
-string-width@^6.1.0:
-  version "6.1.0"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/string-width/-/string-width-6.1.0.tgz"
-  integrity sha1-lkiNbtI/mtXYLRNSKvnkxMP9dRg=
+string-width@^7.2.0:
+  version "7.2.0"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/string-width/-/string-width-7.2.0.tgz#b5bb8e2165ce275d4d43476dd2700ad9091db6dc"
+  integrity sha1-tbuOIWXOJ11NQ0dt0nAK2Qkdttw=
   dependencies:
-    eastasianwidth "^0.2.0"
-    emoji-regex "^10.2.1"
-    strip-ansi "^7.0.1"
+    emoji-regex "^10.3.0"
+    get-east-asian-width "^1.0.0"
+    strip-ansi "^7.1.0"
 
 string_decoder@^1.1.1, string_decoder@~1.1.1:
   version "1.1.1"

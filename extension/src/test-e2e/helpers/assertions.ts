@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as http from 'http';
 import * as https from 'https';
 import * as path from 'path';
-import type { AspireAppHostState as AppHostState, AspireDebugSessionState, AspireExtensionE2EControlStatus as ExtensionE2EControlStatus, AspireExtensionE2EStateFile as ExtensionE2EStateFile, AspireExtensionStateSnapshot as ExtensionStateSnapshot, AspireResourceState as ResourceState } from '../../types/extensionApi';
+import type { AspireAppHostState as AppHostState, AspireDebugSessionState, AspireExtensionE2EControlStatus as ExtensionE2EControlStatus, AspireExtensionE2EStateFile as ExtensionE2EStateFile, AspireExtensionE2ETaskProcessEvent as TaskProcessEvent, AspireExtensionStateSnapshot as ExtensionStateSnapshot, AspireResourceState as ResourceState } from '../../types/extensionApi';
 import { getControlFilePath, getPrimaryAppHostProjectPath, getStateFilePath, getWorkspaceRoot } from './paths';
 
 type CommandInvocation = ExtensionE2EStateFile['commandInvocations'][number];
@@ -103,6 +103,28 @@ export async function waitForHttpText(url: string, expectedText: string, timeout
 
 export async function waitForNoDebugSessions(timeoutMs = 90000): Promise<ExtensionE2EStateFile> {
     return await waitForExtensionState(file => file.state.debugSessions.length === 0, 'debug sessions to stop', timeoutMs);
+}
+
+export async function waitForTaskProcessEvent(
+    predicate: (event: TaskProcessEvent) => boolean,
+    description: string,
+    timeoutMs = 60000,
+    afterSequence = 0,
+): Promise<TaskProcessEvent> {
+    const file = await waitForExtensionState(
+        stateFile => stateFile.taskProcessEvents.some(event => event.sequence > afterSequence && predicate(event)),
+        description,
+        timeoutMs);
+    const event = file.taskProcessEvents.find(candidate => candidate.sequence > afterSequence && predicate(candidate));
+    if (!event) {
+        throw new Error(`Task process event '${description}' was not found even though the state predicate matched.`);
+    }
+
+    return event;
+}
+
+export function getTaskProcessEventCount(): number {
+    return Math.max(0, ...readStateFile().taskProcessEvents.map(event => event.sequence));
 }
 
 export async function waitForCommandOutcome(command: string, outcome: CommandInvocation['outcome'], timeoutMs = 60000, afterInvocationSequence = 0): Promise<CommandInvocation> {

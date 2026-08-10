@@ -639,7 +639,23 @@ window.downloadStreamAsFile = async function (fileName, contentStreamReference) 
 
         const rect = container.getBoundingClientRect();
         const overflow = container.scrollHeight - container.clientHeight;
-        let active = rect.width > 0 && rect.height > 0 && overflow > OVERFLOW_THRESHOLD_PX;
+        const PAD = 12;
+        const scrollbarWidth = container.offsetWidth - container.clientWidth;
+        const visibleLeft = Math.max(rect.left, 0);
+        const visibleRight = Math.min(rect.right - scrollbarWidth, window.innerWidth);
+        const visibleTop = Math.max(rect.top, 0);
+        const visibleBottom = Math.min(rect.bottom, window.innerHeight);
+        const visibleWidth = Math.max(0, visibleRight - visibleLeft);
+        const visibleHeight = Math.max(0, visibleBottom - visibleTop);
+        const buttonStyle = getComputedStyle(entry.bottomBtn);
+        const buttonWidth = Number.parseFloat(buttonStyle.width);
+        const buttonHeight = Number.parseFloat(buttonStyle.height);
+        let active =
+            rect.width > 0 &&
+            rect.height > 0 &&
+            visibleWidth >= buttonWidth &&
+            visibleHeight >= buttonHeight + PAD * 2 &&
+            overflow > OVERFLOW_THRESHOLD_PX;
 
         // When a modal dialog is open, only show buttons for containers inside it; otherwise the
         // page's own buttons would float on top of the dialog surface.
@@ -655,15 +671,11 @@ window.downloadStreamAsFile = async function (fileName, contentStreamReference) 
 
         // Center the control horizontally over the region and anchor it near the visible bottom edge.
         // Clamp its span to the viewport and exclude the scrollbar from the horizontal center.
-        const PAD = 12;
-        const scrollbarWidth = container.offsetWidth - container.clientWidth;
-        const visibleTop = Math.max(rect.top, 0);
-        const visibleBottom = Math.min(rect.bottom, window.innerHeight);
         root.style.right = "auto";
         root.style.bottom = "auto";
-        root.style.left = (rect.left + (rect.width - scrollbarWidth) / 2) + "px";
+        root.style.left = (visibleLeft + visibleWidth / 2) + "px";
         root.style.top = (visibleTop + PAD) + "px";
-        root.style.height = Math.max(0, (visibleBottom - visibleTop) - PAD * 2) + "px";
+        root.style.height = (visibleHeight - PAD * 2) + "px";
 
         const atBottom = overflow - container.scrollTop <= EDGE_THRESHOLD_PX;
         entry.bottomBtn.classList.toggle("is-visible", !atBottom);
