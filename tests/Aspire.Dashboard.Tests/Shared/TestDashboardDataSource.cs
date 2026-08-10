@@ -62,4 +62,12 @@ internal sealed class TestDashboardRunStore(
     }
 
     public IDisposable? TryAcquireRunLease(DashboardRunDescriptor run) => tryAcquireRunLease?.Invoke(run);
+
+    public void PublishRun()
+    {
+    }
+
+    public void PruneExpiredRuns()
+    {
+    }
 }

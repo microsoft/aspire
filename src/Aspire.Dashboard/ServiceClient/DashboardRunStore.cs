@@ -53,6 +53,16 @@ public interface IDashboardRunStore
     /// <param name="run">The dashboard run to lease.</param>
     /// <returns>A lease for the dashboard run, or <see langword="null"/> when the run is no longer available.</returns>
     IDisposable? TryAcquireRunLease(DashboardRunDescriptor run);
+
+    /// <summary>
+    /// Publishes the current dashboard run so it can be discovered by future dashboard processes.
+    /// </summary>
+    void PublishRun();
+
+    /// <summary>
+    /// Deletes dashboard runs beyond the retention limit.
+    /// </summary>
+    void PruneExpiredRuns();
 }
 
 internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
@@ -272,7 +282,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         run.IsPinned = isPinned;
     }
 
-    internal void PublishRun()
+    public void PublishRun()
     {
         if (_metadataPath is null || _metadataPublished)
         {
@@ -287,12 +297,11 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     /// Deletes run directories beyond the retention limit.
     /// </summary>
     /// <remarks>
-    /// Kept separate from <see cref="PublishRun"/> so it can run after the host has started. Pruning walks every
-    /// run directory, takes a cross-process lock on each, and recursively deletes it, so on a slow or contended
-    /// file system it can take a long time. Publishing must happen during startup because other processes read
-    /// the metadata, but pruning is housekeeping and must not hold up the dashboard accepting requests.
+    /// Kept separate from <see cref="PublishRun"/> because pruning walks every run directory, takes a cross-process
+    /// lock on each, and recursively deletes it. On a slow or contended file system it can take a long time, so
+    /// pruning is background housekeeping and must not hold up the dashboard accepting requests.
     /// </remarks>
-    internal void PruneExpiredRuns()
+    public void PruneExpiredRuns()
     {
         if (!_metadataPublished || _runsDirectory is null || !Directory.Exists(_runsDirectory))
         {
@@ -385,6 +394,12 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             else if (_temporaryDirectory is not null && Directory.Exists(_temporaryDirectory))
             {
                 Directory.Delete(_temporaryDirectory, recursive: true);
+            }
+            else if (PersistenceMode == DashboardPersistenceMode.Run && Directory.Exists(RunDirectory))
+            {
+                // Run metadata is published only after the host starts listening. If startup fails first, remove
+                // the initialized database so the attempted run never appears as empty historical data.
+                _deleteRunDirectory(RunDirectory);
             }
         }
         finally

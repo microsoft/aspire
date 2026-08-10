@@ -139,18 +139,16 @@ public sealed class DashboardDataSourcePool : IDisposable
     internal async Task InitializeAsync(CancellationToken cancellationToken)
     {
         await Current.Database.InitializeSchemaAsync(cancellationToken).ConfigureAwait(false);
-        if (_runStore is DashboardRunStore runStore)
-        {
-            runStore.PublishRun();
-        }
+    }
+
+    internal void PublishRun()
+    {
+        _runStore.PublishRun();
     }
 
     internal void PruneExpiredRuns()
     {
-        if (_runStore is DashboardRunStore runStore)
-        {
-            runStore.PruneExpiredRuns();
-        }
+        _runStore.PruneExpiredRuns();
     }
 
     private void Release(Entry entry)
@@ -279,40 +277,4 @@ public sealed class DashboardDataSourcePool : IDisposable
             }
         }
     }
-}
-
-internal sealed class DashboardDataSourceInitializer(
-    DashboardDataSourcePool dataSourcePool,
-    IHostApplicationLifetime applicationLifetime,
-    ILogger<DashboardDataSourceInitializer> logger) : IHostedService, IDisposable
-{
-    private CancellationTokenRegistration _startedRegistration;
-
-    public async Task StartAsync(CancellationToken cancellationToken)
-    {
-        await dataSourcePool.InitializeAsync(cancellationToken).ConfigureAwait(false);
-
-        // Pruning old runs is file system housekeeping that can be slow on contended or networked storage, so it
-        // runs after the host is listening rather than adding its latency to startup.
-        _startedRegistration = applicationLifetime.ApplicationStarted.Register(static state =>
-        {
-            var (pool, log) = ((DashboardDataSourcePool, ILogger))state!;
-            _ = Task.Run(() =>
-            {
-                try
-                {
-                    pool.PruneExpiredRuns();
-                }
-                catch (Exception ex)
-                {
-                    // Nothing awaits this, so an unhandled exception would crash the process.
-                    log.LogWarning(ex, "Failed to prune expired dashboard runs.");
-                }
-            });
-        }, (dataSourcePool, (ILogger)logger));
-    }
-
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-
-    public void Dispose() => _startedRegistration.Dispose();
 }

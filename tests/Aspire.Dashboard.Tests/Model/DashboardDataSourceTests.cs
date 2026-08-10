@@ -103,17 +103,26 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task RunMetadata_IsPublishedAfterSchemaInitialization()
+    public async Task RunMetadata_IsPublishedAfterApplicationStarted()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var options = CreateOptions(workspace);
         using var runStore = CreateRunStore(options);
         var metadataPath = Path.Combine(runStore.RunDirectory, "run.json");
+        using var lifetime = new TestHostApplicationLifetime();
 
         Assert.False(File.Exists(metadataPath));
 
         using var dataSourcePool = new DashboardDataSourcePool(runStore, CreateRepositoryFactory(options));
-        await dataSourcePool.InitializeAsync(CancellationToken.None);
+        using var initializer = new DashboardDataSourceInitializer(
+            dataSourcePool,
+            lifetime,
+            NullLogger<DashboardDataSourceInitializer>.Instance);
+        await initializer.StartAsync(CancellationToken.None);
+
+        Assert.False(File.Exists(metadataPath));
+
+        lifetime.NotifyStarted();
 
         using var metadata = JsonDocument.Parse(File.ReadAllText(metadataPath));
 
@@ -233,7 +242,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [InlineData(DashboardPersistenceMode.None)]
     [InlineData(DashboardPersistenceMode.Run)]
     [InlineData(DashboardPersistenceMode.Resume)]
-    public async Task ServiceProviderDisposal_ReleasesDatabaseAndDeletesTemporaryRunDirectory(DashboardPersistenceMode persistenceMode)
+    public async Task ServiceProviderDisposal_ReleasesDatabaseAndDeletesUnpublishedDirectory(DashboardPersistenceMode persistenceMode)
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var options = CreateOptions(workspace, $"Dispose-{Guid.NewGuid():N}", persistenceMode);
@@ -261,9 +270,9 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
                 runDirectory = runStore.RunDirectory;
             }
 
-            // None mode owns and deletes its temporary directory. Persistent modes retain theirs, so delete
-            // them here; on Windows this also verifies that the SQLite pool no longer holds the database open.
-            Assert.Equal(persistenceMode != DashboardPersistenceMode.None, Directory.Exists(runDirectory));
+            // None mode owns its temporary directory, and an unpublished Run directory represents a failed startup.
+            // Resume mode retains its storage. Deleting it here also verifies that SQLite released the database.
+            Assert.Equal(persistenceMode == DashboardPersistenceMode.Resume, Directory.Exists(runDirectory));
 
             if (Directory.Exists(runDirectory))
             {
@@ -912,10 +921,11 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
             using var command = connection.CreateCommand();
             command.CommandText = "CREATE TABLE unrelated (value INTEGER NOT NULL);";
             command.ExecuteNonQuery();
+            malformedRunStore.PublishRun();
         }
 
         using var currentRunStore = CreateRunStore(options);
-        var currentRun = Assert.Single(currentRunStore.GetRuns());
+        var currentRun = Assert.Single(currentRunStore.GetRuns(), run => run.IsCurrent);
         var malformedRun = currentRun with
         {
             RunId = malformedRunId,

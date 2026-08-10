@@ -1067,8 +1067,14 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        const string applicationName = "Failed startup";
+        var runsDirectory = Path.Combine(
+            DashboardRunStore.GetApplicationDirectory(workspace.Path, applicationName),
+            "runs");
 
-        await using var app = new DashboardWebApplication(preConfigureBuilder: builder =>
+        int exitCode;
+        await using (var app = new DashboardWebApplication(preConfigureBuilder: builder =>
         {
             RemoveEnvironmentVariableSources(builder);
             builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
@@ -1078,12 +1084,19 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
                 [DashboardConfigNames.DashboardOtlpHttpUrlName.ConfigKey] = "http://127.0.0.1:0",
                 [DashboardConfigNames.DashboardOtlpAuthModeName.ConfigKey] = nameof(OtlpAuthMode.Unsecured),
                 [DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = nameof(FrontendAuthMode.Unsecured),
+                [DashboardConfigNames.DashboardApplicationName.ConfigKey] = applicationName,
+                [DashboardConfigNames.DashboardDataDirectoryName.ConfigKey] = workspace.Path,
+                [DashboardConfigNames.DashboardPersistenceModeName.ConfigKey] = nameof(DashboardPersistenceMode.Run),
             });
-        });
+        }))
+        {
+            exitCode = app.Run();
 
-        var exitCode = app.Run();
+            Assert.Empty(Directory.GetFiles(runsDirectory, "run.json", SearchOption.AllDirectories));
+        }
 
         Assert.Equal(DashboardWebApplication.ExitCodeAddressInUse, exitCode);
+        Assert.Empty(Directory.GetDirectories(runsDirectory));
     }
 
     [Fact]
