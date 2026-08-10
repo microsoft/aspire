@@ -231,7 +231,7 @@ public class BackingResourceValueResolutionTests
                 });
         }));
 
-        Assert.Contains("ASPIRERADIUS063", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("ASPIRERADIUS072", ex.Message, StringComparison.Ordinal);
         Assert.Contains("none of them is referenced", ex.Message, StringComparison.Ordinal);
     }
 
@@ -252,7 +252,7 @@ public class BackingResourceValueResolutionTests
             b.AddContainer("api", "myapp/api", "latest").WithReference(mongo);
         }));
 
-        Assert.Contains("ASPIRERADIUS061", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("ASPIRERADIUS070", ex.Message, StringComparison.Ordinal);
         Assert.Contains("both the user name and the password", ex.Message, StringComparison.Ordinal);
     }
 
@@ -276,7 +276,7 @@ public class BackingResourceValueResolutionTests
                 .WithReference(cache);
         }));
 
-        Assert.Contains("ASPIRERADIUS061", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("ASPIRERADIUS070", ex.Message, StringComparison.Ordinal);
         Assert.Contains("shared", ex.Message, StringComparison.Ordinal);
     }
 
