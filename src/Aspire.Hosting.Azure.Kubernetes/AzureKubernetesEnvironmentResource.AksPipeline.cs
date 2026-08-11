@@ -569,14 +569,24 @@ public partial class AzureKubernetesEnvironmentResource
     /// Gets the subscription and resource group this resource explicitly targets, if any.
     /// </summary>
     /// <remarks>
-    /// <see cref="ExistingAzureResourceAnnotation"/> is what <c>AsExistingInResourceGroup</c> and
-    /// friends attach, and it is the same annotation the provisioner turns into the deployment
-    /// scope. Values are returned unresolved because they may be a literal string, a
+    /// Mirrors the precedence in <c>BicepUtilities.GetExistingResourceScope</c>: an explicitly
+    /// assigned <see cref="AzureBicepResource.Scope"/> (which <c>ConfigureInfrastructure</c> can set)
+    /// wins over the <see cref="ExistingAzureResourceAnnotation"/> that <c>AsExistingInResourceGroup</c>
+    /// and friends attach. The credential fetch has to agree with whatever the provisioner deployed
+    /// against. Values are returned unresolved because they may be a literal string, a
     /// <see cref="ParameterResource"/>, or a <see cref="BicepOutputReference"/>.
     /// </remarks>
     private (object? Subscription, object? ResourceGroup) GetExplicitScopeValues()
     {
-        // A tenant-scoped resource pins neither value, so fall through to the deployment state.
+        if (Scope is not null)
+        {
+            // A tenant-scoped resource pins neither value. HasResourceGroup must be checked first
+            // because the ResourceGroup getter throws for subscription- and tenant-scoped resources.
+            return Scope.IsTenantScope
+                ? (null, null)
+                : (Scope.Subscription, Scope.HasResourceGroup ? Scope.ResourceGroup : null);
+        }
+
         if (this.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existing) && !existing.IsTenantScope)
         {
             return (existing.Subscription, existing.ResourceGroup);
@@ -625,15 +635,21 @@ public partial class AzureKubernetesEnvironmentResource
     /// <see cref="ParameterResource"/> or a <see cref="BicepOutputReference"/>.
     /// </summary>
     /// <remarks>
-    /// Mirrors how <c>BicepUtilities</c> materializes scope values when emitting the deployment
-    /// scope, so the credential fetch resolves the same way the provisioner does.
+    /// Matches <c>BicepProvisioner.ResolveScopeValueAsync</c>, including its refusal to accept a
+    /// null result from a provider. Falling back to the app's own subscription in that case would
+    /// be worse than failing: provisioning would have thrown, while the credential fetch would
+    /// quietly target the wrong scope and could adopt a same-named cluster there. Empty is rejected
+    /// for the same reason, since it would be dropped by the string.IsNullOrEmpty checks downstream.
     /// </remarks>
     internal static async Task<string?> ResolveScopeValueAsync(object? value, CancellationToken cancellationToken)
         => value switch
         {
             null => null,
             string s => s,
-            IValueProvider provider => await provider.GetValueAsync(cancellationToken).ConfigureAwait(false),
+            IValueProvider provider =>
+                await provider.GetValueAsync(cancellationToken).ConfigureAwait(false) is { Length: > 0 } resolved
+                    ? resolved
+                    : throw new InvalidOperationException("The Azure resource scope value cannot be null or empty."),
             _ => throw new NotSupportedException(
                 $"The Azure scope value type {value.GetType()} is not supported.")
         };
