@@ -229,6 +229,62 @@ public class DevTunnelResourceBuilderExtensionsTests
     }
 
     [Fact]
+    public async Task DevTunnelHealthCheck_WithAutoSelectedRegion_UsesReturnedTunnelIdForAccessOperations()
+    {
+        var client = new TestDevTunnelClient
+        {
+            TunnelStatus = new("mytunnel.eun1", HostConnections: 1, ClientConnections: 0, Description: "", Labels: [])
+            {
+                Ports = [
+                    new(5001, "https")
+                    {
+                        PortUri = new("https://mytunnel-5001.eun1.devtunnels.ms")
+                    }
+                ]
+            }
+        };
+
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Services.AddSingleton<IDevTunnelClient>(client);
+
+        var target = builder.AddProject<ProjectA>("target")
+            .WithHttpEndpoint(port: 5000, targetPort: 5001, name: "http");
+        var tunnel = builder.AddDevTunnel("tunnel", "mytunnel")
+            .WithReference(target);
+
+        using var app = builder.Build();
+        var healthCheck = new DevTunnelHealthCheck(
+            client,
+            app.Services.GetRequiredService<LoggedOutNotificationManager>(),
+            tunnel.Resource,
+            app.Services.GetRequiredService<ILogger<DevTunnelHealthCheck>>());
+
+        var result = await healthCheck.CheckHealthAsync(new HealthCheckContext()).DefaultTimeout();
+
+        Assert.Equal(HealthStatus.Healthy, result.Status);
+        Assert.Collection(
+            client.Calls,
+            call =>
+            {
+                Assert.Equal(nameof(IDevTunnelClient.GetTunnelAsync), call.Method);
+                Assert.Equal("mytunnel", call.TunnelId);
+                Assert.Null(call.PortNumber);
+            },
+            call =>
+            {
+                Assert.Equal(nameof(IDevTunnelClient.GetAccessAsync), call.Method);
+                Assert.Equal("mytunnel.eun1", call.TunnelId);
+                Assert.Null(call.PortNumber);
+            },
+            call =>
+            {
+                Assert.Equal(nameof(IDevTunnelClient.GetAccessAsync), call.Method);
+                Assert.Equal("mytunnel.eun1", call.TunnelId);
+                Assert.Equal(5001, call.PortNumber);
+            });
+    }
+
+    [Fact]
     public async Task DevTunnelHealthCheck_WithRegion_UsesResolvedTunnelIdForTunnelAndAccessOperations()
     {
         var client = new TestDevTunnelClient
