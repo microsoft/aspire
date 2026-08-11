@@ -92,6 +92,14 @@ public sealed class PrDocsCheckWorkflowTests(ITestOutputHelper testOutput)
             Assert.True(lookupIndex > urlValidationIndex, "The drafted PR URL must be validated before the GitHub lookup.");
             Assert.Contains("--jq '.base.ref // \"\"'", validationJob, StringComparison.Ordinal);
             Assert.Contains("--created-pr-base", validationJob, StringComparison.Ordinal);
+
+            var validationStep = GetSection(
+                validationJob,
+                "^      - name: Require a conclusive documentation outcome",
+                "\\z");
+            AssertShellVariablesAreBound(
+                validationStep,
+                ["CREATED_PR_BASE", "CREATED_PR_URL", "EXPECTED_SOURCE_PR_NUMBER"]);
         }
     }
 
@@ -161,5 +169,37 @@ public sealed class PrDocsCheckWorkflowTests(ITestOutputHelper testOutput)
             RegexOptions.CultureInvariant);
         Assert.True(match.Success, $"Could not find workflow section starting with '{startPattern}'.");
         return match.Value;
+    }
+
+    private static void AssertShellVariablesAreBound(string step, string[] expectedVariables)
+    {
+        var run = Regex.Match(
+            step,
+            "(?ms)^        run: (?<value>.*?)(?=^        [a-z-]+:|\\z)",
+            RegexOptions.CultureInvariant);
+        var env = Regex.Match(
+            step,
+            "(?ms)^        env:\\r?\\n(?<value>.*?)(?=^        [a-z-]+:|\\z)",
+            RegexOptions.CultureInvariant);
+        Assert.True(run.Success, "Could not find the validation step's run command.");
+        Assert.True(env.Success, "Could not find the validation step's environment.");
+
+        var referencedVariables = Regex.Matches(
+                run.Groups["value"].Value,
+                "\\$\\{(?<name>[A-Z_][A-Z0-9_]*)\\}",
+                RegexOptions.CultureInvariant)
+            .Select(match => match.Groups["name"].Value)
+            .Distinct(StringComparer.Ordinal)
+            .Order()
+            .ToArray();
+        var boundVariables = Regex.Matches(
+                env.Groups["value"].Value,
+                "(?m)^          (?<name>[A-Z_][A-Z0-9_]*):",
+                RegexOptions.CultureInvariant)
+            .Select(match => match.Groups["name"].Value)
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.Equal(expectedVariables, referencedVariables);
+        Assert.All(referencedVariables, variable => Assert.Contains(variable, boundVariables));
     }
 }

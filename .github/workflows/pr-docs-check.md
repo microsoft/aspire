@@ -159,13 +159,14 @@ jobs:
           echo "base=${ACTUAL_BASE}" >> "${GITHUB_OUTPUT}"
       - name: Require a conclusive documentation outcome
         env:
+          CREATED_PR_BASE: ${{ steps.drafted-pr-base.outputs.base }}
           CREATED_PR_URL: ${{ needs.safe_outputs.outputs.created_pr_url }}
           EXPECTED_SOURCE_PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
         run: >-
           python .github/workflows/pr-docs-check/validate_outcome.py
           --agent-output /tmp/gh-aw/agent_output.json
           --created-pr-url "${CREATED_PR_URL}"
-          --created-pr-base "${{ steps.drafted-pr-base.outputs.base }}"
+          --created-pr-base "${CREATED_PR_BASE}"
           --expected-source-pr-number "${EXPECTED_SOURCE_PR_NUMBER}"
 
 safe-outputs:
