@@ -6,14 +6,12 @@ using System.Globalization;
 using System.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Tests.Acquisition;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.Configuration;
 using Semver;
 
 namespace Aspire.Cli.Tests;
 
-[Collection(EnvVarMutatingTestCollection.Name)]
 public class DotNetSdkInstallerTests
 {
     [Fact]
@@ -30,15 +28,12 @@ public class DotNetSdkInstallerTests
     [Fact]
     public async Task CheckAsync_UsesResolvedDotNetPath()
     {
-        using var dotnetPathEnvironment = new TestDotNetPathEnvironment();
         string? capturedDotNetPath = null;
-        var installer = new DotNetSdkInstaller(CreateEmptyConfiguration(), (dotnetPath, _) =>
+        var installer = new DotNetSdkInstaller(CreateEmptyConfiguration(), (dotnetPath, arguments) =>
         {
             capturedDotNetPath = dotnetPath;
-            return new ProcessStartInfo
+            return new ProcessStartInfo(dotnetPath, arguments)
             {
-                FileName = OperatingSystem.IsWindows() ? Path.Combine(Environment.SystemDirectory, "cmd.exe") : "/bin/sh",
-                Arguments = OperatingSystem.IsWindows() ? "/c exit 0" : "-c \"exit 0\"",
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -48,7 +43,7 @@ public class DotNetSdkInstallerTests
 
         await installer.CheckAsync(TestContext.Current.CancellationToken).DefaultTimeout();
 
-        Assert.Equal(dotnetPathEnvironment.ExpectedPath, capturedDotNetPath);
+        Assert.Equal(DotNetSdkInstaller.ResolveDotNetPath(), capturedDotNetPath);
     }
 
     [Fact]

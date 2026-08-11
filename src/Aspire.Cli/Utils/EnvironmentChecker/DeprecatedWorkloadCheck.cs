@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using Aspire.Cli.DotNet;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Utils.EnvironmentChecker;
@@ -34,7 +35,7 @@ internal sealed class DeprecatedWorkloadCheck(ILogger<DeprecatedWorkloadCheck> l
         {
             var processInfo = new ProcessStartInfo
             {
-                FileName = PathLookupHelper.ResolveExecutablePath(OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet"),
+                FileName = DotNetSdkInstaller.ResolveDotNetPath(),
                 Arguments = "workload list",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
