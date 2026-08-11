@@ -3,9 +3,11 @@
 
 #pragma warning disable ASPIREAZURE003
 #pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREPIPELINES002
 #pragma warning disable ASPIREPIPELINES003
 
 using System.Runtime.CompilerServices;
+using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Kubernetes;
 using Aspire.Hosting.Kubernetes;
@@ -14,6 +16,7 @@ using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Tests;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Azure.Tests;
 
@@ -190,5 +193,137 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         Assert.Contains(logs, msg => msg.Contains("helm-deploy-aks"));
         Assert.Contains(logs, msg => msg.Contains("aks-get-credentials-aks"));
         Assert.DoesNotContain(logs, msg => msg.Contains("aks-k8s"));
+    }
+
+    [Fact]
+    public async Task AzureDeploymentContextUsesCurrentDeploymentState()
+    {
+        const string subscriptionId = "00000000-0000-0000-0000-000000000001";
+        const string resourceGroup = "deployment-rg";
+        var deploymentStateManager = new InMemoryDeploymentStateManager();
+        deploymentStateManager.SetSection("Azure", new JsonObject
+        {
+            ["SubscriptionId"] = subscriptionId,
+            ["ResourceGroup"] = resourceGroup
+        });
+
+        using var services = new ServiceCollection()
+            .AddSingleton<IDeploymentStateManager>(deploymentStateManager)
+            .BuildServiceProvider();
+
+        var deploymentContext = await AzureKubernetesEnvironmentResource.GetAzureDeploymentContextAsync(
+            services,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(subscriptionId, deploymentContext.SubscriptionId);
+        Assert.Equal(resourceGroup, deploymentContext.ResourceGroup);
+    }
+
+    [Fact]
+    public async Task AzureDeploymentContextRequiresSubscription()
+    {
+        var deploymentStateManager = new InMemoryDeploymentStateManager();
+        deploymentStateManager.SetSection("Azure", new JsonObject
+        {
+            ["ResourceGroup"] = "deployment-rg"
+        });
+
+        using var services = new ServiceCollection()
+            .AddSingleton<IDeploymentStateManager>(deploymentStateManager)
+            .BuildServiceProvider();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => AzureKubernetesEnvironmentResource.GetAzureDeploymentContextAsync(
+                services,
+                TestContext.Current.CancellationToken));
+
+        Assert.Equal(
+            "Could not resolve the Azure subscription selected for deployment. Ensure Azure provisioning has completed, or set the Azure:SubscriptionId configuration value.",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task GetResourceGroupUsesDeploymentStateWithoutQueryingAzure()
+    {
+        var invocations = new List<string>();
+
+        var resourceGroup = await AzureKubernetesEnvironmentResource.GetResourceGroupAsync(
+            "/usr/bin/az",
+            "deployment-aks",
+            "00000000-0000-0000-0000-000000000001",
+            "deployment-rg",
+            NullLogger.Instance,
+            (path, arguments) =>
+            {
+                invocations.Add(arguments);
+                return Task.FromResult(new AzureKubernetesEnvironmentResource.AzCommandResult(0, "unexpected-rg", ""));
+            });
+
+        Assert.Equal("deployment-rg", resourceGroup);
+        Assert.Empty(invocations);
+    }
+
+    [Fact]
+    public async Task GetResourceGroupQueryIsScopedToDeploymentSubscription()
+    {
+        const string subscriptionId = "00000000-0000-0000-0000-000000000001";
+        var invocations = new List<string>();
+
+        var resourceGroup = await AzureKubernetesEnvironmentResource.GetResourceGroupAsync(
+            "/usr/bin/az",
+            "deployment-aks",
+            subscriptionId,
+            savedResourceGroup: null,
+            NullLogger.Instance,
+            (path, arguments) =>
+            {
+                invocations.Add(arguments);
+                return Task.FromResult(new AzureKubernetesEnvironmentResource.AzCommandResult(0, "queried-rg\n", ""));
+            });
+
+        Assert.Equal("queried-rg", resourceGroup);
+        Assert.Equal(
+            [$"resource list --resource-type Microsoft.ContainerService/managedClusters --name \"deployment-aks\" --query [0].resourceGroup -o tsv --subscription \"{subscriptionId}\""],
+            invocations);
+    }
+
+    [Fact]
+    public async Task FetchKubeConfigIsScopedToDeploymentSubscription()
+    {
+        const string subscriptionId = "00000000-0000-0000-0000-000000000001";
+        var invocations = new List<string>();
+
+        var kubeConfig = await AzureKubernetesEnvironmentResource.FetchKubeConfigAsync(
+            "/usr/bin/az",
+            subscriptionId,
+            "deployment-rg",
+            "deployment-aks",
+            (path, arguments) =>
+            {
+                invocations.Add(arguments);
+                return Task.FromResult(new AzureKubernetesEnvironmentResource.AzCommandResult(0, "kubeconfig-content", ""));
+            });
+
+        Assert.Equal("kubeconfig-content", kubeConfig);
+        Assert.Equal(
+            [$"aks get-credentials --resource-group \"deployment-rg\" --name \"deployment-aks\" --file - --subscription \"{subscriptionId}\""],
+            invocations);
+    }
+
+    [Fact]
+    public async Task FetchKubeConfigThrowsWhenAzureCliFails()
+    {
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => AzureKubernetesEnvironmentResource.FetchKubeConfigAsync(
+                "/usr/bin/az",
+                "00000000-0000-0000-0000-000000000001",
+                "deployment-rg",
+                "deployment-aks",
+                (path, arguments) => Task.FromResult(
+                    new AzureKubernetesEnvironmentResource.AzCommandResult(1, "", "subscription not found"))));
+
+        Assert.Equal(
+            "az aks get-credentials failed (exit code 1): subscription not found",
+            exception.Message);
     }
 }
