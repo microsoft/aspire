@@ -595,8 +595,184 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         Assert.Equal(("sub-from-parameter", "rg-from-parameter"), scope);
     }
 
-    private static ServiceProvider CreateServicesWithAzureState(string subscriptionId, string? resourceGroup)
+    [Fact]
+    public async Task DeploymentScopeThrowsWhenScopeProviderResolvesNull()
     {
+        var services = CreateServicesWithAzureState("sub-global", "rg-global");
+
+        // Provisioning rejects a null scope value outright. Silently substituting the app's own
+        // subscription here would diverge from that and could adopt a same-named cluster elsewhere.
+        var unavailableSubscription = new ParameterResource("sub", _ => null!);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => AzureKubernetesEnvironmentResource.ResolveDeploymentScopeAsync(
+                unavailableSubscription,
+                scopedResourceGroup: null,
+                services,
+                TestContext.Current.CancellationToken));
+
+        Assert.Equal("The Azure resource scope value cannot be null or empty.", exception.Message);
+    }
+
+    [Fact]
+    public async Task DeploymentScopeThrowsWhenScopeProviderResolvesEmpty()
+    {
+        var services = CreateServicesWithAzureState("sub-global", "rg-global");
+
+        // An empty value is dropped by the string.IsNullOrEmpty checks downstream, silently
+        // reintroducing the global-scope fallback, so it has to be rejected just like null.
+        var emptyResourceGroup = new ParameterResource("rg", _ => "");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => AzureKubernetesEnvironmentResource.ResolveDeploymentScopeAsync(
+                scopedSubscription: null,
+                emptyResourceGroup,
+                services,
+                TestContext.Current.CancellationToken));
+
+        Assert.Equal("The Azure resource scope value cannot be null or empty.", exception.Message);
+    }
+
+    [Fact]
+    public async Task GetCredentialsStepPrefersExplicitScopeOverExistingResourceAnnotation()
+    {
+        const string scopeSubscriptionId = "00000000-0000-0000-0000-000000000003";
+        const string scopeResourceGroup = "scope-assigned-rg";
+        const string clusterName = "scoped-aks";
+
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish);
+
+        var deploymentStateManager = new InMemoryDeploymentStateManager();
+        deploymentStateManager.SetSection("Azure", new JsonObject
+        {
+            ["SubscriptionId"] = "00000000-0000-0000-0000-000000000001",
+            ["ResourceGroup"] = "app-rg"
+        });
+        builder.Services.AddSingleton<IDeploymentStateManager>(deploymentStateManager);
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks")
+            .AsExistingInResourceGroup(clusterName, "annotation-rg", "00000000-0000-0000-0000-000000000002");
+
+        // ConfigureInfrastructure can assign Scope directly, and the provisioner gives it precedence
+        // over the annotation, so the credential fetch has to follow the same precedence.
+        aks.Resource.Scope = new AzureBicepResourceScope(scopeResourceGroup, scopeSubscriptionId);
+        aks.Resource.Outputs["name"] = clusterName;
+
+        var invocations = new List<string>();
+        aks.Resource.AzCliPathResolverForTesting = () => "/usr/bin/az";
+        aks.Resource.AzCommandRunnerForTesting = (path, arguments, logger) =>
+        {
+            invocations.Add(arguments);
+            return Task.FromResult(new AzureKubernetesEnvironmentResource.AzCommandResult(0, "kubeconfig-content", ""));
+        };
+
+        await using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var pipelineContext = new PipelineContext(
+            model,
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            TestContext.Current.CancellationToken);
+
+        var steps = new List<PipelineStep>();
+        foreach (var annotation in aks.Resource.Annotations.OfType<PipelineStepAnnotation>())
+        {
+            steps.AddRange(await annotation.CreateStepsAsync(new PipelineStepFactoryContext
+            {
+                PipelineContext = pipelineContext,
+                Resource = aks.Resource
+            }));
+        }
+
+        var getCredentialsStep = Assert.Single(steps, step => step.Name == "aks-get-credentials-aks");
+
+        aks.Resource.ProvisioningTaskCompletionSource?.TrySetResult();
+
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
+        await getCredentialsStep.Action(new PipelineStepContext
+        {
+            PipelineContext = pipelineContext,
+            ReportingStep = reportingStep
+        });
+
+        Assert.Equal(
+            [$"aks get-credentials --resource-group \"{scopeResourceGroup}\" --name \"{clusterName}\" --file - --subscription \"{scopeSubscriptionId}\""],
+            invocations);
+    }
+
+    [Fact]
+    public async Task GetCredentialsStepFallsBackToDeploymentStateForSubscriptionScopedResources()
+    {
+        const string subscriptionId = "00000000-0000-0000-0000-000000000001";
+        const string clusterName = "subscription-scoped-aks";
+
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish);
+
+        var deploymentStateManager = new InMemoryDeploymentStateManager();
+        deploymentStateManager.SetSection("Azure", new JsonObject
+        {
+            ["SubscriptionId"] = subscriptionId,
+            ["ResourceGroup"] = "app-rg"
+        });
+        builder.Services.AddSingleton<IDeploymentStateManager>(deploymentStateManager);
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+
+        // A subscription-scoped Scope pins no resource group, and reading AzureBicepResourceScope.ResourceGroup
+        // in that state throws, so the step must fall back rather than fail.
+        aks.Resource.Scope = AzureBicepResourceScope.CreateForSubscription(subscriptionId);
+        aks.Resource.Outputs["name"] = clusterName;
+
+        var invocations = new List<string>();
+        aks.Resource.AzCliPathResolverForTesting = () => "/usr/bin/az";
+        aks.Resource.AzCommandRunnerForTesting = (path, arguments, logger) =>
+        {
+            invocations.Add(arguments);
+            return Task.FromResult(new AzureKubernetesEnvironmentResource.AzCommandResult(0, "kubeconfig-content", ""));
+        };
+
+        await using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var pipelineContext = new PipelineContext(
+            model,
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            TestContext.Current.CancellationToken);
+
+        var steps = new List<PipelineStep>();
+        foreach (var annotation in aks.Resource.Annotations.OfType<PipelineStepAnnotation>())
+        {
+            steps.AddRange(await annotation.CreateStepsAsync(new PipelineStepFactoryContext
+            {
+                PipelineContext = pipelineContext,
+                Resource = aks.Resource
+            }));
+        }
+
+        var getCredentialsStep = Assert.Single(steps, step => step.Name == "aks-get-credentials-aks");
+
+        aks.Resource.ProvisioningTaskCompletionSource?.TrySetResult();
+
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
+        await getCredentialsStep.Action(new PipelineStepContext
+        {
+            PipelineContext = pipelineContext,
+            ReportingStep = reportingStep
+        });
+
+        // The scope subscription matches deployment state, so the saved resource group still applies.
+        Assert.Equal(
+            [$"aks get-credentials --resource-group \"app-rg\" --name \"{clusterName}\" --file - --subscription \"{subscriptionId}\""],
+            invocations);
+    }
+
+    private static ServiceProvider CreateServicesWithAzureState(string subscriptionId, string? resourceGroup)    {
         var deploymentStateManager = new InMemoryDeploymentStateManager();
         var azureState = new JsonObject { ["SubscriptionId"] = subscriptionId };
 
