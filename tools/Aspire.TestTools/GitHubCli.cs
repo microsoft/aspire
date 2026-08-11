@@ -45,7 +45,7 @@ public static class GitHubCli
         return RunGhAsync(BuildApiArguments(endpoint, allowEscapeSequences), cancellationToken);
     }
 
-    internal static IReadOnlyList<string> BuildApiArguments(string endpoint, bool allowEscapeSequences)
+    private static IReadOnlyList<string> BuildApiArguments(string endpoint, bool allowEscapeSequences)
     {
         List<string> arguments = ["api", "-H", "Accept: application/vnd.github+json"];
         if (allowEscapeSequences)
@@ -229,8 +229,19 @@ public static class GitHubCli
 
     private static readonly TimeSpan s_defaultProcessTimeout = TimeSpan.FromMinutes(5);
 
+    /// <summary>
+    /// Test seam that replaces the string-returning <c>gh</c> invocation so tests can observe the argument
+    /// list that would be passed to the process. Production code never sets this.
+    /// </summary>
+    internal static Func<IReadOnlyList<string>, CancellationToken, Task<string>>? GhInvokerOverride { get; set; }
+
     private static async Task<string> RunGhAsync(IReadOnlyList<string> arguments, CancellationToken cancellationToken)
     {
+        if (GhInvokerOverride is { } invoker)
+        {
+            return await invoker(arguments, cancellationToken).ConfigureAwait(false);
+        }
+
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(s_defaultProcessTimeout);
 
