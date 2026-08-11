@@ -277,15 +277,15 @@ internal sealed class ProjectLocator(
         return await FindAppHostProjectFilesAsync(new DirectoryInfo(searchDirectory), AppHostDiscoveryScope.AllFiles, cancellationToken);
     }
 
-    private async Task<(List<AppHostProjectCandidate> BuildableAppHost, List<AppHostProjectCandidate> UnbuildableSuspectedAppHostProjects, bool HasUnsupportedProjects)> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, bool stopAfterMultipleBuildableAppHosts, bool displayProgress, AppHostDiscoveryScope scope, int? maxDepth, ChannelWriter<AppHostProjectCandidate>? candidateWriter = null, Action<int>? onDirectoryEnumerated = null, CancellationToken cancellationToken = default)
+    private async Task<(List<AppHostProjectCandidate> BuildableAppHost, List<AppHostProjectCandidate> UnbuildableSuspectedAppHostProjects, List<FileInfo> UnsupportedProjects)> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, bool stopAfterMultipleBuildableAppHosts, bool displayProgress, AppHostDiscoveryScope scope, int? maxDepth, ChannelWriter<AppHostProjectCandidate>? candidateWriter = null, Action<int>? onDirectoryEnumerated = null, CancellationToken cancellationToken = default)
     {
         using var activity = telemetry.StartDiagnosticActivity();
 
-        async Task<(List<AppHostProjectCandidate> BuildableAppHost, List<AppHostProjectCandidate> UnbuildableSuspectedAppHostProjects, bool HasUnsupportedProjects)> FindAppHostsAsync()
+        async Task<(List<AppHostProjectCandidate> BuildableAppHost, List<AppHostProjectCandidate> UnbuildableSuspectedAppHostProjects, List<FileInfo> UnsupportedProjects)> FindAppHostsAsync()
         {
             var appHostProjects = new List<AppHostProjectCandidate>();
             var unbuildableSuspectedAppHostProjects = new List<AppHostProjectCandidate>();
-            var hasUnsupportedProjects = false;
+            var unsupportedProjects = new List<FileInfo>();
             var lockObject = new object();
             logger.LogDebug("Searching for project files in {SearchDirectory}", searchDirectory.FullName);
 
@@ -407,7 +407,7 @@ internal sealed class ProjectLocator(
                         logger.LogDebug("Skipping unsupported project {CandidateFile}", candidateFile.FullName);
                         lock (lockObject)
                         {
-                            hasUnsupportedProjects = true;
+                            unsupportedProjects.Add(candidateFile);
                         }
                     }
                     else if (validationResult.IsPossiblyUnbuildable)
@@ -436,13 +436,19 @@ internal sealed class ProjectLocator(
                 logger.LogDebug("Stopping AppHost discovery early after finding multiple valid AppHost projects.");
             }
 
-            await AddSettingsAppHostCandidateAsync().ConfigureAwait(false);
+            // Explicit-directory callers asked to inspect only the named subtree. Importing an
+            // AppHost from a parent aspire.config.json violates that boundary and can affect both
+            // selection and shallow probes such as `aspire doctor`.
+            if (scope is not AppHostDiscoveryScope.ExplicitDirectory)
+            {
+                await AddSettingsAppHostCandidateAsync().ConfigureAwait(false);
+            }
 
             // This sort is done here to make results deterministic since we get all the app
             // host information in parallel and the order may vary.
             appHostProjects.Sort((x, y) => string.Compare(x.AppHostFile.FullName, y.AppHostFile.FullName, StringComparison.Ordinal));
 
-            return (appHostProjects, unbuildableSuspectedAppHostProjects, hasUnsupportedProjects);
+            return (appHostProjects, unbuildableSuspectedAppHostProjects, unsupportedProjects);
 
             async Task AddSettingsAppHostCandidateAsync()
             {
@@ -499,7 +505,7 @@ internal sealed class ProjectLocator(
                     }
 
                     logger.LogDebug("Skipping configured AppHost project {SettingsAppHost} because no project handler was found.", settingsAppHost.FullName);
-                    hasUnsupportedProjects = true;
+                    unsupportedProjects.Add(settingsAppHost);
                     return;
                 }
 
@@ -535,7 +541,7 @@ internal sealed class ProjectLocator(
                     }
 
                     logger.LogDebug("Skipping unsupported configured AppHost project {SettingsAppHost}", settingsAppHost.FullName);
-                    hasUnsupportedProjects = true;
+                    unsupportedProjects.Add(settingsAppHost);
                 }
             }
         }
@@ -593,13 +599,12 @@ internal sealed class ProjectLocator(
     /// Determines whether <paramref name="file"/> lives beneath <paramref name="directory"/>.
     /// </summary>
     /// <remarks>
-    /// Case sensitivity matches the discovery walk's settings-candidate de-duplication: Windows and
-    /// default macOS APFS volumes are case-insensitive.
-    /// See https://github.com/microsoft/aspire/issues/17635.
+    /// Windows paths are compared case-insensitively. Other platforms use case-sensitive comparison
+    /// because macOS can use case-sensitive APFS volumes.
     /// </remarks>
-    private bool IsUnderDirectory(FileInfo file, DirectoryInfo directory)
+    internal static bool IsUnderDirectory(FileInfo file, DirectoryInfo directory, IEnvironment environment)
     {
-        var pathComparison = environment.IsWindows() || environment.IsMacOS()
+        var pathComparison = environment.IsWindows()
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal;
 
@@ -892,7 +897,12 @@ internal sealed class ProjectLocator(
                     scope: AppHostDiscoveryScope.ExplicitDirectory,
                     maxDepth: null,
                     cancellationToken: cancellationToken);
-                var appHostProjects = searchResults.BuildableAppHost.Select(c => c.AppHostFile).ToList();
+                // Keep the requested directory as the selection boundary even if additional
+                // explicit-discovery candidate sources are introduced later.
+                var appHostProjects = searchResults.BuildableAppHost
+                    .Where(c => IsUnderDirectory(c.AppHostFile, directory, environment))
+                    .Select(c => c.AppHostFile)
+                    .ToList();
 
                 if (displayProgress)
                 {
@@ -901,14 +911,8 @@ internal sealed class ProjectLocator(
 
                 if (appHostProjects.Count == 0)
                 {
-                    // FindAppHostProjectFilesAsync also folds in the AppHost configured in
-                    // aspire.config.json (AddSettingsAppHostCandidateAsync searches parent
-                    // directories), so the unbuildable set can contain a project that does not live
-                    // under the directory the user named. Auto-selecting a project that is both
-                    // outside the requested directory and never validated would be a guess, so only
-                    // consider candidates actually found beneath it.
                     var unbuildableInDirectory = searchResults.UnbuildableSuspectedAppHostProjects
-                        .Where(c => IsUnderDirectory(c.AppHostFile, directory))
+                        .Where(c => IsUnderDirectory(c.AppHostFile, directory, environment))
                         .ToList();
 
                     // The user pointed at this directory, and it holds exactly one candidate that only
@@ -937,7 +941,7 @@ internal sealed class ProjectLocator(
                         throw new ProjectLocatorException(ErrorStrings.AppHostsMayNotBeBuildable, ProjectLocatorFailureReason.AppHostsMayNotBeBuildable);
                     }
 
-                    if (searchResults.HasUnsupportedProjects)
+                    if (searchResults.UnsupportedProjects.Any(file => IsUnderDirectory(file, directory, environment)))
                     {
                         throw new ProjectLocatorException(ErrorStrings.NoProjectFileFound, ProjectLocatorFailureReason.UnsupportedProjects);
                     }
@@ -1088,7 +1092,7 @@ internal sealed class ProjectLocator(
             {
                 selectedAppHost = settingsAppHost;
             }
-            else if (results.HasUnsupportedProjects)
+            else if (results.UnsupportedProjects.Count > 0)
             {
                 throw new ProjectLocatorException(ErrorStrings.NoProjectFileFound, ProjectLocatorFailureReason.UnsupportedProjects);
             }

@@ -1853,8 +1853,7 @@ builder.Build().Run();");
     [Fact]
     public async Task UseOrFindAppHostProjectFileDoesNotSelectUnbuildableConfiguredAppHostOutsideExplicitDirectory()
     {
-        // The discovery walk folds the AppHost configured in a parent directory into its results, so an
-        // explicitly-named directory could otherwise "find" a project that is not under it at all.
+        // Explicit-directory discovery must not import an AppHost configured in a parent directory.
         // Auto-selecting a project that the user did not point at and that was never validated would be
         // a guess, so this stays the pre-existing empty-directory failure.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -1892,6 +1891,100 @@ builder.Build().Run();");
 
         Assert.Equal(ErrorStrings.ProjectFileDoesntExist, ex.Message);
         Assert.Equal(ProjectLocatorFailureReason.ProjectFileDoesntExist, ex.FailureReason);
+    }
+
+    [Fact]
+    public async Task UseOrFindAppHostProjectFileIgnoresBuildableConfiguredAppHostOutsideExplicitDirectory()
+    {
+        // A parent config candidate must not enter explicit-directory discovery and take precedence
+        // over the broken project that the user actually selected.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var healthyDirectory = workspace.WorkspaceRoot.CreateSubdirectory("HealthyAppHost");
+        var healthyAppHost = new FileInfo(Path.Combine(healthyDirectory.FullName, "HealthyAppHost.csproj"));
+        await File.WriteAllTextAsync(healthyAppHost.FullName, "<Project Sdk=\"Aspire.AppHost.Sdk\"></Project>");
+
+        var servicesDirectory = workspace.WorkspaceRoot.CreateSubdirectory("Services");
+        var brokenDirectory = servicesDirectory.CreateSubdirectory("BrokenAppHost");
+        var brokenAppHost = new FileInfo(Path.Combine(brokenDirectory.FullName, "BrokenAppHost.csproj"));
+        await File.WriteAllTextAsync(brokenAppHost.FullName, "<Project Sdk=\"Aspire.AppHost.Sdk\"></Project>");
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, JsonSerializer.Serialize(new
+        {
+            appHost = new
+            {
+                path = Path.GetRelativePath(workspace.WorkspaceRoot.FullName, healthyAppHost.FullName).Replace(Path.DirectorySeparatorChar, '/')
+            }
+        }));
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostCallback = file => file.FullName == healthyAppHost.FullName
+                ? new AppHostValidationResult(IsValid: true)
+                : new AppHostValidationResult(IsValid: false, IsPossiblyUnbuildable: true)
+        };
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
+
+        var result = await projectLocator.UseOrFindAppHostProjectFileAsync(
+            new FileInfo(servicesDirectory.FullName),
+            MultipleAppHostProjectsFoundBehavior.Throw,
+            createSettingsFile: false,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(brokenAppHost.FullName, result.SelectedProjectFile?.FullName);
+    }
+
+    [Fact]
+    public async Task UseOrFindAppHostProjectFileIgnoresUnsupportedConfiguredAppHostOutsideExplicitDirectory()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var unsupportedDirectory = workspace.WorkspaceRoot.CreateSubdirectory("UnsupportedAppHost");
+        var unsupportedAppHost = new FileInfo(Path.Combine(unsupportedDirectory.FullName, "UnsupportedAppHost.csproj"));
+        await File.WriteAllTextAsync(unsupportedAppHost.FullName, "<Project Sdk=\"Aspire.AppHost.Sdk\"></Project>");
+
+        var emptyDirectory = workspace.WorkspaceRoot.CreateSubdirectory("Services");
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, JsonSerializer.Serialize(new
+        {
+            appHost = new
+            {
+                path = Path.GetRelativePath(workspace.WorkspaceRoot.FullName, unsupportedAppHost.FullName).Replace(Path.DirectorySeparatorChar, '/')
+            }
+        }));
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostCallback = _ => new AppHostValidationResult(IsValid: false, IsUnsupported: true)
+        };
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
+
+        var ex = await Assert.ThrowsAsync<ProjectLocatorException>(async () =>
+        {
+            await projectLocator.UseOrFindAppHostProjectFileAsync(
+                new FileInfo(emptyDirectory.FullName),
+                MultipleAppHostProjectsFoundBehavior.Throw,
+                createSettingsFile: false,
+                CancellationToken.None).DefaultTimeout();
+        });
+
+        Assert.Equal(ErrorStrings.ProjectFileDoesntExist, ex.Message);
+        Assert.Equal(ProjectLocatorFailureReason.ProjectFileDoesntExist, ex.FailureReason);
+    }
+
+    [Fact]
+    public void IsUnderDirectoryTreatsMacOSPathsAsCaseSensitive()
+    {
+        var directory = new DirectoryInfo(Path.Combine(Path.GetPathRoot(Environment.CurrentDirectory)!, "repo", "Apps"));
+        var file = new FileInfo(Path.Combine(Path.GetPathRoot(Environment.CurrentDirectory)!, "repo", "apps", "AppHost.csproj"));
+
+        var result = ProjectLocator.IsUnderDirectory(file, directory, TestEnvironment.CreateMacOS());
+
+        Assert.False(result);
     }
 
     [Fact]
@@ -2787,6 +2880,41 @@ builder.Build().Run();");
 
         Assert.Single(found);
         Assert.Equal(realAppHost.FullName, found[0].AppHostFile.FullName);
+    }
+
+    [Fact]
+    public async Task FindAppHostProjectFilesAsync_ExplicitDirectoryScope_DoesNotIncludeParentConfiguredAppHost()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var configuredDirectory = workspace.WorkspaceRoot.CreateSubdirectory("ConfiguredAppHost");
+        var configuredAppHost = new FileInfo(Path.Combine(configuredDirectory.FullName, "ConfiguredAppHost.csproj"));
+        await File.WriteAllTextAsync(configuredAppHost.FullName, "<Project Sdk=\"Aspire.AppHost.Sdk\"></Project>");
+
+        var workingDirectory = workspace.WorkspaceRoot.CreateSubdirectory("WorkingDirectory");
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, JsonSerializer.Serialize(new
+        {
+            appHost = new
+            {
+                path = Path.GetRelativePath(workspace.WorkspaceRoot.FullName, configuredAppHost.FullName).Replace(Path.DirectorySeparatorChar, '/')
+            }
+        }));
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostCallback = _ => new AppHostValidationResult(IsValid: true)
+        };
+        var executionContext = CreateExecutionContext(workingDirectory);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
+
+        var found = await projectLocator.FindAppHostProjectFilesAsync(
+            workingDirectory,
+            AppHostDiscoveryScope.ExplicitDirectory,
+            maxDepth: 0,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Empty(found);
     }
 
     [Fact]
