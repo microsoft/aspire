@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIREEXTENSION001
 #pragma warning disable ASPIRECERTIFICATES001
-#pragma warning disable ASPIREDOTNETTOOL
 
 using System.Diagnostics;
 using System.Globalization;
@@ -420,7 +419,8 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                     // when the active launch configuration or a non-empty launch-tool prefix replaces it.
                     if (executableAnnotation is null &&
                         (projectMetadata.IsFileBasedApp ||
-                         supportsDebuggingAnnotation.LaunchConfigurationType is not KnownLaunchConfigurationTypes.Project))
+                         (supportsDebuggingAnnotation.LaunchConfigurationType is not KnownLaunchConfigurationTypes.Project &&
+                          project.HasLaunchToolArgsOwnedBy(supportsDebuggingAnnotation))))
                     {
                         AddDefaultProjectProcessArgs(projectArgs, projectMetadata);
                     }
@@ -776,7 +776,6 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
         var launchArgs = new List<LaunchArgument>();
         var nextExecutableArgumentIndex = executableArgumentStartIndex;
-        var firstVisibleAppHostArgumentIndex = 0;
         List<string>? projectLaunchProfileArgs = null;
         var includeProfileArgsInSpec = false;
 
@@ -818,53 +817,6 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 }
             }
         }
-        else if (er.ModelResource is DotnetToolResource dotnetToolResource)
-        {
-            // AddDotnetTool contributes `tool exec <package> ... --` through the ordinary argument segment because
-            // its separate EF command executor replays those callbacks directly. A resolved launch-tool prefix
-            // replaces that built-in invocation for DCP execution; otherwise keep hiding it from the dashboard.
-            var toolConfiguration = dotnetToolResource.ToolConfiguration;
-            var builtInInvocationStartIndex = -1;
-            if (toolConfiguration is not null)
-            {
-                for (var i = launchToolArgumentCount; i <= appHostArgList.Count - 5; i++)
-                {
-                    if (appHostArgList[i].Value == "tool" &&
-                        appHostArgList[i + 1].Value == "exec" &&
-                        appHostArgList[i + 2].Value == toolConfiguration.PackageId)
-                    {
-                        builtInInvocationStartIndex = i;
-                        break;
-                    }
-                }
-            }
-
-            var builtInInvocationEndIndex = -1;
-            if (builtInInvocationStartIndex >= 0)
-            {
-                for (var i = builtInInvocationStartIndex + 4; i < appHostArgList.Count; i++)
-                {
-                    if (appHostArgList[i].Value == DotnetToolResourceExtensions.ArgumentSeparator &&
-                        appHostArgList[i - 1].Value == "--yes")
-                    {
-                        builtInInvocationEndIndex = i;
-                        break;
-                    }
-                }
-            }
-
-            if (launchToolArgumentCount > 0 && builtInInvocationEndIndex >= 0)
-            {
-                appHostArgList.RemoveRange(
-                    builtInInvocationStartIndex,
-                    builtInInvocationEndIndex - builtInInvocationStartIndex + 1);
-            }
-            else if (builtInInvocationEndIndex >= 0)
-            {
-                firstVisibleAppHostArgumentIndex = builtInInvocationEndIndex + 1;
-            }
-        }
-
         // Project launch-profile arguments are application arguments. When a custom launch-tool declaration replaces
         // the implicit `dotnet run` scaffold, keep its prefix first and insert profile arguments before ordinary
         // app-host arguments. Without such a declaration, preserve the existing profile-before-app-host ordering.
@@ -900,9 +852,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 a.Value,
                 a.IsSensitive,
                 executable: i >= omittedLaunchToolArgumentCount,
-                display: isLaunchToolArg
-                    ? showLaunchToolArgsInCommandLine
-                    : i >= firstVisibleAppHostArgumentIndex));
+                display: showLaunchToolArgsInCommandLine || !isLaunchToolArg));
         }
 
         return launchArgs;
