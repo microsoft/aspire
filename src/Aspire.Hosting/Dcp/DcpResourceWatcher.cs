@@ -611,16 +611,21 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         var logStream = new LogStreamState(resource.Metadata.Uid);
         var cancellationToken = logStream.CancellationToken;
 
-        // Register before starting the worker so an immediately completing stream can remove itself.
-        if (!_logStreams.TryAdd(resourceName, logStream))
-        {
-            logStream.Dispose();
-            return;
-        }
-
         try
         {
-            ObservePendingFollowLogDeduplication(resourceName, logStream);
+            // Registration and pending-state observation must be atomic with cleanup. Otherwise a
+            // canceled stream can remove the pending state after this stream registers but before it
+            // adopts that state, allowing replayed terminal-flush lines through.
+            lock (_pendingFollowLogDeduplicationsLock)
+            {
+                if (!_logStreams.TryAdd(resourceName, logStream))
+                {
+                    logStream.Dispose();
+                    return;
+                }
+
+                ObservePendingFollowLogDeduplication(resourceName, logStream);
+            }
 
             _ = Task.Run(async () =>
             {
@@ -744,13 +749,12 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
 
     private void ObservePendingFollowLogDeduplication(string resourceName, LogStreamState logStream)
     {
-        lock (_pendingFollowLogDeduplicationsLock)
+        Debug.Assert(Monitor.IsEntered(_pendingFollowLogDeduplicationsLock));
+
+        if (_pendingFollowLogDeduplications.TryGetValue(resourceName, out var pendingDeduplication) &&
+            HasSameResourceIdentity(pendingDeduplication.ResourceUid, logStream.ResourceUid))
         {
-            if (_pendingFollowLogDeduplications.TryGetValue(resourceName, out var pendingDeduplication) &&
-                HasSameResourceIdentity(pendingDeduplication.ResourceUid, logStream.ResourceUid))
-            {
-                logStream.PendingDeduplication = pendingDeduplication;
-            }
+            logStream.PendingDeduplication = pendingDeduplication;
         }
     }
 
@@ -808,7 +812,19 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         {
             if (logStream.PendingDeduplication is { } pendingDeduplication)
             {
-                RemovePendingFollowLogDeduplication(resourceName, pendingDeduplication);
+                // A new same-UID stream can adopt the same pending object after cancellation removes
+                // this stream from _logStreams but before this cleanup runs. In that case ownership has
+                // transferred, so the canceled stream must detach without removing the shared state.
+                var handedOffToCurrentStream =
+                    _logStreams.TryGetValue(resourceName, out var currentLogStream) &&
+                    !ReferenceEquals(currentLogStream, logStream) &&
+                    ReferenceEquals(currentLogStream.PendingDeduplication, pendingDeduplication);
+
+                if (!handedOffToCurrentStream)
+                {
+                    RemovePendingFollowLogDeduplication(resourceName, pendingDeduplication);
+                }
+
                 logStream.PendingDeduplication = null;
             }
         }
@@ -826,8 +842,8 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
             _pendingFollowLogDeduplications.Remove(resourceName);
         }
 
-        // The dictionary owns the deduplication state. A stream only retains it so late completion
-        // can remove the exact state it observed without affecting a newer terminal flush.
+        // The dictionary owns the deduplication state. The current stream retains the same reference
+        // so exact-object removal can clear both places without affecting a newer terminal flush.
         if (_logStreams.TryGetValue(resourceName, out var logStream) &&
             ReferenceEquals(logStream.PendingDeduplication, pendingDeduplication))
         {
