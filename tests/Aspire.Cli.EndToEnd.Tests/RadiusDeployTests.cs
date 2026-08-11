@@ -362,10 +362,13 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
             var appBicep = File.ReadAllText(appBicepPath);
             Assert.Contains("Radius.Data/postgreSqlDatabases", appBicep);
 
-            // username/password/database are `required` schema properties on the resource, read by
-            // the recipe as context.resource.properties.<name>. Emitting them anywhere else (for
-            // example under properties.recipe.parameters) fails schema validation before the recipe
-            // runs, which is precisely what the deploy below would catch.
+            // username/password are `required` schema properties on the resource, read by the
+            // recipe as context.resource.properties.<name>. `database` is optional and defaults to
+            // `postgres_db` when omitted, but this AppHost references a specific database via
+            // AddDatabase(...), so it is still emitted here. Emitting the required properties
+            // anywhere else (for example under properties.recipe.parameters) fails schema
+            // validation before the recipe runs, which is precisely what the deploy below would
+            // catch.
             Assert.Contains("username: 'postgres'", appBicep);
             Assert.Contains("database: 'appdb'", appBicep);
 

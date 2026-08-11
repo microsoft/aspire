@@ -86,6 +86,10 @@ internal sealed class RadiusInfrastructureBuilder
     // splatted *_PASSWORD) correct without duplicating any connection-string format here.
     private readonly Dictionary<ParameterResource, ProjectedValue> _recipeSecretSubstitutions = [];
     private readonly Dictionary<ParameterResource, (IResource Owner, bool IsProjectionSubstitution)> _recipeCredentialOwners = [];
+
+    // Tracks (resource, parameter) pairs that have already produced an unrelated-use warning, so a
+    // parameter referenced by the same resource in multiple env vars only warns once.
+    private readonly HashSet<(IResource Resource, ParameterResource Parameter)> _warnedUnrelatedSubstitutions = [];
     private readonly List<ProjectedEnvValue> _projectedEnvValues = [];
     private readonly List<ProjectedTypeProperty> _projectedTypeProperties = [];
 
@@ -1106,8 +1110,6 @@ internal sealed class RadiusInfrastructureBuilder
                     break;
             }
         }
-
-        WarnOnUnrelatedUsesOfSubstitutedParameters();
     }
 
     /// <summary>
@@ -1184,7 +1186,9 @@ internal sealed class RadiusInfrastructureBuilder
         RadiusResourceTypeConstruct construct,
         HashSet<string> referencedResourceNames)
     {
-        if (TryGetCredentialParameter(withConnectionString, "password") is { } recipePassword)
+        var recipePassword = TryGetCredentialParameter(withConnectionString, "password");
+
+        if (recipePassword is not null)
         {
             RegisterRecipeCredential(recipePassword, resource, isProjectionSubstitution: false);
             construct.SetSchemaProperty("password", GetOrAddEnvParameter(recipePassword));
@@ -1198,6 +1202,19 @@ internal sealed class RadiusInfrastructureBuilder
         // RegisterRecipeCredential see the collision instead of letting it through.
         if (TryGetCredentialParameter(withConnectionString, "username") is { } recipeUserName)
         {
+            // Both roles are written straight onto the resource here (neither is a listSecrets()
+            // substitution), so RegisterRecipeCredential's same-owner check alone would not catch
+            // one parameter used for both: it only rejects sharing across *different* owners. A
+            // single value published for both properties is never correct, exactly as for the
+            // listSecrets() types above, so reject it the same way.
+            if (recipePassword is not null && ReferenceEquals(recipePassword, recipeUserName))
+            {
+                throw new InvalidOperationException(
+                    $"Parameter '{recipeUserName.Name}' is used as both the user name and the password of " +
+                    $"'{resource.Name}'. Give the user name and the password their own parameters. " +
+                    $"Diagnostic: ASPIRERADIUS070.");
+            }
+
             RegisterRecipeCredential(recipeUserName, resource, isProjectionSubstitution: false);
         }
 
@@ -1371,48 +1388,83 @@ internal sealed class RadiusInfrastructureBuilder
     /// <remarks>
     /// The substitution rewrites the parameter <em>everywhere it appears</em>, so an unrelated
     /// <c>WithEnvironment("ADMIN_PASSWORD", sharedParameter)</c> silently receives another
-    /// resource's recipe secret rather than the parameter's own value. Sharing between two backing
-    /// resources is rejected outright by <see cref="RegisterRecipeCredential"/>; this covers the
-    /// looser case, where the intent is genuinely ambiguous, so it warns instead of failing.
+    /// resource's recipe secret rather than the parameter's own value. This is checked here, where
+    /// the substitution is actually applied during environment resolution, rather than by scanning
+    /// <see cref="ResourceRelationshipAnnotation"/>s beforehand: a relationship-based pre-scan can't
+    /// see a parameter that only shows up inside an <c>EnvironmentCallbackAnnotation</c> lambda
+    /// (e.g. <c>.WithEnvironment(ctx => ctx.EnvironmentVariables["ADMIN_PASSWORD"] = shared)</c>),
+    /// which records no relationship at all. Sharing between two backing resources is rejected
+    /// outright by <see cref="RegisterRecipeCredential"/>; this covers the looser case, where the
+    /// intent is genuinely ambiguous, so it warns instead of failing.
     /// </remarks>
-    private void WarnOnUnrelatedUsesOfSubstitutedParameters()
+    private void WarnIfUnrelatedUseOfSubstitutedParameter(ParameterResource parameter, IResource resource)
     {
-        if (_recipeSecretSubstitutions.Count == 0)
+        if (!_recipeCredentialOwners.TryGetValue(parameter, out var owner) ||
+            ReferenceEquals(owner.Owner, resource) ||
+            !_warnedUnrelatedSubstitutions.Add((resource, parameter)))
         {
             return;
         }
 
-        foreach (var resource in _model.Resources)
+        _logger.LogWarning(
+            "Resource '{ResourceName}' references parameter '{ParameterName}', which is also the credential of " +
+            "'{OwnerName}'. That resource is provisioned by a Radius recipe which generates its own credential, " +
+            "so the referencing resource receives the recipe's value rather than the parameter's. Use a separate " +
+            "parameter if that is not intended. Diagnostic: ASPIRERADIUS070.",
+            resource.Name,
+            parameter.Name,
+            owner.Owner.Name);
+    }
+
+    /// <summary>
+    /// Returns the resource whose own connection value <paramref name="rawValue"/> is, or
+    /// <paramref name="resource"/> when the value is the consuming resource's own.
+    /// </summary>
+    /// <remarks>
+    /// <c>WithReference(cache)</c> splats the referenced resource's connection properties straight
+    /// into the consumer's environment (<c>CACHE_PASSWORD</c>, <c>CACHE_URI</c>, ...) as plain
+    /// <see cref="ReferenceExpression"/>s, with nothing in the value identifying where they came
+    /// from — unlike the connection string itself, which arrives wrapped in a
+    /// <see cref="ConnectionStringReference"/>. Those values legitimately contain the backing
+    /// resource's credential parameter and must not be reported as unrelated uses, so they are
+    /// matched back to their owner here.
+    /// <para>
+    /// The match is structural rather than by reference: <c>GetConnectionProperties()</c> builds a
+    /// fresh <see cref="ReferenceExpression"/> — and fresh endpoint providers inside it — on every
+    /// call, so nothing about the instance is stable. The manifest expression is, and two values
+    /// that render to the same manifest expression are the same value by construction. Matching on
+    /// the value rather than on the environment-variable name keeps this correct for an aliased
+    /// reference name and for a resource that suppresses part of the injection via
+    /// <c>ReferenceEnvironmentInjectionFlags</c>.
+    /// </para>
+    /// </remarks>
+    private IResource ResolveEnvValueProvenance(object? rawValue, IResource resource)
+    {
+        if (_recipeSecretSubstitutions.Count == 0 || rawValue is not ReferenceExpression expression)
         {
-            if (!_recipeCredentialOwners.Values.All(o => !ReferenceEquals(o.Owner, resource)))
+            return resource;
+        }
+
+        var valueExpression = expression.ValueExpression;
+
+        foreach (var (credentialOwner, _) in _recipeCredentialOwners.Values)
+        {
+            if (ReferenceEquals(credentialOwner, resource) ||
+                credentialOwner is not IResourceWithConnectionString withConnectionString)
             {
                 continue;
             }
 
-            foreach (var relationship in resource.Annotations.OfType<ResourceRelationshipAnnotation>())
+            foreach (var (_, connectionProperty) in withConnectionString.GetConnectionProperties())
             {
-                // Both dictionaries are keyed by parameter identity, and a relationship annotation
-                // holds the same ParameterResource instance the AppHost passed to the backing
-                // resource, so no name-based lookup is needed — and none is wanted, since two
-                // parameters could in principle share a name.
-                if (relationship.Resource is not ParameterResource parameter ||
-                    !_recipeSecretSubstitutions.ContainsKey(parameter) ||
-                    !_recipeCredentialOwners.TryGetValue(parameter, out var owner) ||
-                    ReferenceEquals(owner.Owner, resource))
+                if (string.Equals(connectionProperty.ValueExpression, valueExpression, StringComparison.Ordinal))
                 {
-                    continue;
+                    return credentialOwner;
                 }
-
-                _logger.LogWarning(
-                    "Resource '{ResourceName}' references parameter '{ParameterName}', which is also the credential of " +
-                    "'{OwnerName}'. That resource is provisioned by a Radius recipe which generates its own credential, " +
-                    "so the referencing resource receives the recipe's value rather than the parameter's. Use a separate " +
-                    "parameter if that is not intended.",
-                    resource.Name,
-                    parameter.Name,
-                    owner.Owner.Name);
             }
         }
+
+        return resource;
     }
 
     /// <summary>
@@ -1453,7 +1505,7 @@ internal sealed class RadiusInfrastructureBuilder
         }
 
         var parts = new List<EnvPart>();
-        await ResolveEnvPartsAsync(expression, resource, parts, allowRecipeSubstitutions: false).ConfigureAwait(false);
+        await ResolveEnvPartsAsync(expression, resource, parts, resource, allowRecipeSubstitutions: false).ConfigureAwait(false);
 
         return parts.Count == 0 ? null : (new BicepValue<object>(BuildEnvBicepValue(parts).Compile()), parts);
     }
@@ -1775,7 +1827,7 @@ internal sealed class RadiusInfrastructureBuilder
 
             try
             {
-                await ResolveEnvPartsAsync(rawValue, resource, parts).ConfigureAwait(false);
+                await ResolveEnvPartsAsync(rawValue, resource, parts, ResolveEnvValueProvenance(rawValue, resource)).ConfigureAwait(false);
             }
             catch (RadiusUnresolvableValueException ex)
             {
@@ -1943,7 +1995,14 @@ internal sealed class RadiusInfrastructureBuilder
     /// <c>param</c> references, and composite reference expressions are spliced together so a
     /// mixed literal/secret value is preserved precisely.
     /// </summary>
-    private async Task ResolveEnvPartsAsync(object? value, IResource owner, List<EnvPart> parts, bool allowRecipeSubstitutions = true)
+    /// <remarks>
+    /// <paramref name="referencedResource"/> is the resource whose own value is currently being
+    /// expanded, which is <paramref name="owner"/> until the recursion descends into a referenced
+    /// resource's connection string. It only exists to tell a credential parameter reached through
+    /// its owner's connection string (expected) from one the owner named directly (ambiguous) — see
+    /// <see cref="WarnIfUnrelatedUseOfSubstitutedParameter"/>.
+    /// </remarks>
+    private async Task ResolveEnvPartsAsync(object? value, IResource owner, List<EnvPart> parts, IResource referencedResource, bool allowRecipeSubstitutions = true)
     {
         switch (value)
         {
@@ -1956,10 +2015,10 @@ internal sealed class RadiusInfrastructureBuilder
                 parts.Add(EnvPart.FromLiteral(b ? "true" : "false"));
                 return;
             case ParameterResource param:
-                parts.Add(ResolveParameterPart(param, allowRecipeSubstitutions));
+                parts.Add(ResolveParameterPart(param, referencedResource, allowRecipeSubstitutions));
                 return;
             case IResourceBuilder<ParameterResource> paramBuilder:
-                parts.Add(ResolveParameterPart(paramBuilder.Resource, allowRecipeSubstitutions));
+                parts.Add(ResolveParameterPart(paramBuilder.Resource, referencedResource, allowRecipeSubstitutions));
                 return;
             case EndpointReference endpointReference:
                 ThrowIfEndpointMissing(endpointReference, owner);
@@ -1979,13 +2038,17 @@ internal sealed class RadiusInfrastructureBuilder
                 }
                 return;
             case ConnectionStringReference connectionStringReference:
-                await ResolveEnvPartsAsync(connectionStringReference.Resource.ConnectionStringExpression, owner, parts, allowRecipeSubstitutions).ConfigureAwait(false);
+                // The credential parameters inside a backing resource's own connection string are
+                // exactly the ones the substitution is meant to rewrite, so the referenced resource
+                // becomes the context here — otherwise every consumer of `.WithReference(cache)`
+                // would be reported as an unrelated use of the cache's own password.
+                await ResolveEnvPartsAsync(connectionStringReference.Resource.ConnectionStringExpression, owner, parts, connectionStringReference.Resource, allowRecipeSubstitutions).ConfigureAwait(false);
                 return;
             case IResourceWithConnectionString resourceWithConnectionString:
-                await ResolveEnvPartsAsync(resourceWithConnectionString.ConnectionStringExpression, owner, parts, allowRecipeSubstitutions).ConfigureAwait(false);
+                await ResolveEnvPartsAsync(resourceWithConnectionString.ConnectionStringExpression, owner, parts, resourceWithConnectionString, allowRecipeSubstitutions).ConfigureAwait(false);
                 return;
             case ReferenceExpression referenceExpression:
-                await ResolveReferenceExpressionPartsAsync(referenceExpression, owner, parts, allowRecipeSubstitutions).ConfigureAwait(false);
+                await ResolveReferenceExpressionPartsAsync(referenceExpression, owner, parts, referencedResource, allowRecipeSubstitutions).ConfigureAwait(false);
                 return;
             case IFormattable formattable:
                 parts.Add(EnvPart.FromLiteral(formattable.ToString(null, CultureInfo.InvariantCulture)));
@@ -2061,7 +2124,7 @@ internal sealed class RadiusInfrastructureBuilder
     /// its literal <see cref="ReferenceExpression.Format"/> chunks with the recursively-resolved
     /// parts of each value provider (matching the <c>{0}</c>, <c>{1}</c>, ... placeholders).
     /// </summary>
-    private async Task ResolveReferenceExpressionPartsAsync(ReferenceExpression expression, IResource owner, List<EnvPart> parts, bool allowRecipeSubstitutions = true)
+    private async Task ResolveReferenceExpressionPartsAsync(ReferenceExpression expression, IResource owner, List<EnvPart> parts, IResource referencedResource, bool allowRecipeSubstitutions = true)
     {
         // No providers: the format string is already the literal value (after un-escaping braces).
         if (expression.ValueProviders.Count == 0)
@@ -2075,7 +2138,7 @@ internal sealed class RadiusInfrastructureBuilder
         for (var i = 0; i < expression.ValueProviders.Count; i++)
         {
             var inner = new List<EnvPart>();
-            await ResolveEnvPartsAsync(expression.ValueProviders[i], owner, inner, allowRecipeSubstitutions).ConfigureAwait(false);
+            await ResolveEnvPartsAsync(expression.ValueProviders[i], owner, inner, referencedResource, allowRecipeSubstitutions).ConfigureAwait(false);
 
             // Apply the placeholder's string format (today only "uri") to every part the provider
             // produced. Without this the emitted value contains the raw credential: Aspire's own
@@ -2274,10 +2337,16 @@ internal sealed class RadiusInfrastructureBuilder
     // Aspire parameter is replaced by the recipe's own secret accessor wherever it is referenced.
     // Everything composed from it (connection string, URI, splatted *_PASSWORD) then carries the
     // deployed value. Parameters that are not a recipe credential keep the normal `param` routing.
-    private EnvPart ResolveParameterPart(ParameterResource parameter, bool allowRecipeSubstitutions) =>
-        allowRecipeSubstitutions && _recipeSecretSubstitutions.TryGetValue(parameter, out var secretProjection)
-            ? EnvPart.FromProjection(secretProjection)
-            : EnvPart.FromParameter(GetOrAddEnvParameter(parameter));
+    private EnvPart ResolveParameterPart(ParameterResource parameter, IResource owner, bool allowRecipeSubstitutions)
+    {
+        if (allowRecipeSubstitutions && _recipeSecretSubstitutions.TryGetValue(parameter, out var secretProjection))
+        {
+            WarnIfUnrelatedUseOfSubstitutedParameter(parameter, owner);
+            return EnvPart.FromProjection(secretProjection);
+        }
+
+        return EnvPart.FromParameter(GetOrAddEnvParameter(parameter));
+    }
 
     // Allocates (or reuses) the Bicep parameter that carries this Aspire parameter's value. The
     // parameter is declared `@secure()` when the source is a secret so its value is neither printed
@@ -2361,6 +2430,12 @@ internal sealed class RadiusInfrastructureBuilder
                 { Parameter: { } parameter, StringFormat: not null } part =>
                     part.ApplyStringFormat(new IdentifierExpression(parameter.BicepIdentifier)),
                 { Parameter: { } parameter } => parameter,
+                // A formatted numeric projection (e.g. a `:uri`-formatted port) has to be converted
+                // to a string before the format is applied: `uriComponent()` requires a string
+                // argument, and Bicep type-checks that eagerly rather than coercing it implicitly
+                // the way string interpolation does for an unformatted numeric projection.
+                { Projection: { IsNumeric: true } projection, StringFormat: not null } part =>
+                    part.ApplyStringFormat(RadiusBackingConnections.ToStringExpression(projection.Build())),
                 { Projection: { } projection } part => part.ApplyStringFormat(projection.Build()),
                 var part => part.Literal!,
             };
