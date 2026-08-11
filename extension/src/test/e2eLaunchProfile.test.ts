@@ -245,6 +245,8 @@ suite('E2E launch profile', () => {
         assert.ok(functionsInstallIndex > resourceGroupsInstallIndex);
         assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX')"));
         assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX')"));
+        assert.ok(runner.includes("const executable = isWindows ? (process.env.ComSpec || 'cmd.exe') : displayName;"));
+        assert.ok(runner.includes("const args = isWindows ? ['/d', '/s', '/c', 'func.cmd --version'] : ['--version'];"));
         assert.ok(runner.includes("const certificatePassword = String.raw`Aspire E2E p@ss'\\word`;"));
         assert.ok(runner.includes('commandLineArgs: `--useHttps --cert "${certificatePath}" --password "${certificatePassword}"`'));
     });

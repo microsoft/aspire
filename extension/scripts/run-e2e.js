@@ -851,8 +851,13 @@ function resolveRequiredVsixPath(environmentVariable) {
 }
 
 function validateAzureFunctionsCoreTools() {
-  const executable = process.platform === 'win32' ? 'func.cmd' : 'func';
-  const result = spawnSync(executable, ['--version'], {
+  // Node cannot launch .cmd files directly on Windows, so invoke the trusted, constant
+  // Core Tools command through ComSpec instead.
+  // https://nodejs.org/api/child_process.html#spawning-bat-and-cmd-files-on-windows
+  const displayName = isWindows ? 'func.cmd' : 'func';
+  const executable = isWindows ? (process.env.ComSpec || 'cmd.exe') : displayName;
+  const args = isWindows ? ['/d', '/s', '/c', 'func.cmd --version'] : ['--version'];
+  const result = spawnSync(executable, args, {
     cwd: extensionRoot,
     env: getAspireCliEnvironment(),
     shell: false,
@@ -861,7 +866,7 @@ function validateAzureFunctionsCoreTools() {
   });
 
   if (result.error) {
-    throw new Error(`Unable to execute Azure Functions Core Tools (${executable}): ${result.error.message}`);
+    throw new Error(`Unable to execute Azure Functions Core Tools (${displayName}): ${result.error.message}`);
   }
 
   if (result.status !== 0) {
