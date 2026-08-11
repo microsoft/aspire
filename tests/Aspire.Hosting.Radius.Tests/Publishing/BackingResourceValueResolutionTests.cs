@@ -460,6 +460,35 @@ public class BackingResourceValueResolutionTests
     }
 
     /// <summary>
+    /// A conditional <c>ReferenceExpression</c> deliberately carries an empty <c>Format</c> and
+    /// exposes the union of both branches' value providers, so the ordinary splice would resolve
+    /// both branches and then emit nothing at all. The branch has to be selected first, as
+    /// <c>ReferenceExpression.GetValueAsync</c> and <c>ExpressionResolver</c> both do.
+    /// </summary>
+    [Fact]
+    public void ConditionalExpression_EmitsOnlyTheSelectedBranch()
+    {
+        var (bicep, _) = GenerateBicep(b =>
+        {
+            var mode = b.AddParameter("mode", "primary");
+            var cache = b.AddRedis("cache");
+
+            var conditional = ReferenceExpression.CreateConditional(
+                mode.Resource,
+                "primary",
+                ReferenceExpression.Create($"primary-{cache.GetEndpoint("tcp").Property(EndpointProperty.Host)}"),
+                ReferenceExpression.Create($"secondary-fallback"));
+
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithReference(cache)
+                .WithEnvironment("MODE_URL", conditional);
+        });
+
+        Assert.Contains("'primary-${cache.properties.host}'", bicep, StringComparison.Ordinal);
+        Assert.DoesNotContain("secondary-fallback", bicep, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// A value provider whose resolution fails and which claims no deployment-substituted semantics.
     /// </summary>
     private sealed class ThrowingValueProvider(Exception exception) : IValueProvider
