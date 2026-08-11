@@ -153,6 +153,7 @@ public class ResourceOutgoingPeerResolverTests
     {
         var resources = new Dictionary<string, ResourceViewModel>
         {
+            ["unrelated"] = CreateResource("unrelated", "localhost", 50267),
             ["catalogdb"] = CreateResourceWithConnectionString("catalogdb", "Host=localhost;Port=50267;Username=postgres;Password=password;Database=catalogdb", resourceType: "PostgresDatabaseResource", relationships: [new("postgres", "Parent")]),
             ["postgres-evxqcrgg"] = CreateResourceWithConnectionString("postgres-evxqcrgg", "Host=localhost;Port=50267;Username=postgres;Password=password", resourceType: KnownResourceTypes.Container, displayName: "postgres")
         };
@@ -168,6 +169,31 @@ public class ResourceOutgoingPeerResolverTests
 
         Assert.True(TryResolvePeerName(resources, attributes.ToArray(), out var value));
         Assert.Equal("postgres", value);
+    }
+
+    [Theory]
+    [InlineData("unknown")]
+    [InlineData(null)]
+    public void DatabaseAttributeDoesNotMatchAndNoContainerResource_MatchesFirstDatabaseResource(string? databaseName)
+    {
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            ["unrelated"] = CreateResource("unrelated", "localhost", 50267),
+            ["jobsdb"] = CreateResourceWithConnectionString("jobsdb", "Host=localhost;Port=50267;Username=postgres;Password=password;Database=jobsdb", resourceType: "PostgresDatabaseResource", relationships: [new("postgres", "Parent")]),
+            ["catalogdb"] = CreateResourceWithConnectionString("catalogdb", "Host=localhost;Port=50267;Username=postgres;Password=password;Database=catalogdb", resourceType: "PostgresDatabaseResource", relationships: [new("postgres", "Parent")])
+        };
+        var attributes = new List<KeyValuePair<string, string>>
+        {
+            KeyValuePair.Create("server.address", "localhost"),
+            KeyValuePair.Create("server.port", "50267")
+        };
+        if (databaseName is not null)
+        {
+            attributes.Add(KeyValuePair.Create("db.namespace", databaseName));
+        }
+
+        Assert.True(TryResolvePeerName(resources, attributes.ToArray(), out var value));
+        Assert.Equal("jobsdb", value);
     }
 
     [Fact]

@@ -193,13 +193,13 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
     /// <summary>
     /// Checks if a transformed peer address matches any of the resource addresses using their cached addresses.
     /// Applies the same transformations to resource addresses for consistent matching.
-    /// Prefers a resource whose database matches the telemetry, then a database server resource, then the first address match.
+    /// Prefers a resource whose database matches the telemetry, then a database server resource, then the first resource with a different database, and finally the first address match.
     /// </summary>
     private static bool TryMatchAgainstResources(string peerAddress, string? databaseName, IDictionary<string, ResourceViewModel> resources, [NotNullWhen(true)] out string? name, [NotNullWhen(true)] out ResourceViewModel? resourceMatch)
     {
-        ResourceViewModel? firstMatch = null;
-        ResourceViewModel? serverMatch = null;
-        var hasDatabaseResourceMatch = false;
+        ResourceViewModel? firstAddressMatch = null;
+        ResourceViewModel? firstServerMatch = null;
+        ResourceViewModel? firstDatabaseMatch = null;
 
         foreach (var (_, resource) in resources)
         {
@@ -207,11 +207,11 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
             {
                 if (DoesAddressMatch(resourceAddress, peerAddress))
                 {
-                    firstMatch ??= resource;
+                    firstAddressMatch ??= resource;
 
                     if (resource.CachedDatabaseName is { } resourceDatabaseName)
                     {
-                        hasDatabaseResourceMatch = true;
+                        firstDatabaseMatch ??= resource;
 
                         if (databaseName is not null && string.Equals(resourceDatabaseName, databaseName, StringComparison.OrdinalIgnoreCase))
                         {
@@ -222,7 +222,7 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
                     }
                     else if (resource.Properties.ContainsKey(KnownProperties.Resource.ConnectionString))
                     {
-                        serverMatch ??= resource;
+                        firstServerMatch ??= resource;
                     }
 
                     break;
@@ -230,7 +230,7 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
             }
         }
 
-        resourceMatch = hasDatabaseResourceMatch ? serverMatch ?? firstMatch : firstMatch;
+        resourceMatch = firstServerMatch ?? firstDatabaseMatch ?? firstAddressMatch;
         name = resourceMatch is not null ? ResourceViewModel.GetResourceName(resourceMatch, resources) : null;
         return resourceMatch is not null;
     }
