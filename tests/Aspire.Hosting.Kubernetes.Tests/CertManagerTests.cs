@@ -4,7 +4,9 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Hosting.Kubernetes.Tests;
 
@@ -193,6 +195,47 @@ public class CertManagerTests
         Assert.Contains("gatewayHTTPRoute:", yaml);
         Assert.DoesNotContain("parentRefs:", yaml);
         Assert.DoesNotContain("name: public", yaml);
+    }
+
+    [Fact]
+    public async Task BuildClusterIssuerManifest_RouteLessGateway_WarnsThatChallengesCannotBeSatisfied()
+    {
+        // Without a parentRef the manifest is still valid YAML and cert-manager accepts it, so the
+        // warning is the only thing that tells the user why their Certificates never leave
+        // 'Pending'. Assert it explicitly so it cannot be dropped without a test failing.
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var issuer = k8s.AddCertManager("cert-manager")
+            .AddIssuer("le-prod")
+            .WithLetsEncryptProduction("ops@contoso.com")
+            .WithHttp01Solver();
+
+        k8s.AddGateway("public")
+            .WithGatewayClass("nginx")
+            .WithTls(issuer);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var certManagerResource = model.Resources.OfType<CertManagerResource>().Single();
+        var issuerResource = certManagerResource.Issuers.Single();
+
+        var testSink = new TestSink();
+        using var loggerProvider = new TestLoggerProvider(testSink);
+
+        await CertManagerExtensions.BuildClusterIssuerManifestAsync(
+            model,
+            certManagerResource,
+            issuerResource,
+            loggerProvider.CreateLogger("test"),
+            TestContext.Current.CancellationToken);
+
+        var warning = Assert.Single(testSink.Writes, w => w.LogLevel == LogLevel.Warning);
+
+        Assert.Equal(
+            "ClusterIssuer 'le-prod' has an HTTP-01 solver but no Gateway in environment 'env' is both annotated with " +
+            "cert-manager.io/cluster-issuer=le-prod and configured with at least one route. cert-manager will not be able to " +
+            "satisfy ACME challenges until at least one routed Gateway adopts this issuer (e.g. via WithRoute(...) and WithTls(issuer)).",
+            warning.Message);
     }
 
     [Fact]
