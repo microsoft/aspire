@@ -305,7 +305,11 @@ public class ConsoleInteractionServiceTests
         var interactionService = CreateInteractionService(console, CreateExecutionContext(consoleLogLevel: consoleLogLevel));
 
         var asyncStatusValue = await interactionService.ShowStatusAsync("Working...", () => Task.FromResult(GetInStatus(interactionService))).DefaultTimeout();
-        var dynamicStatusValue = await interactionService.ShowDynamicStatusAsync("Working...", _ => Task.FromResult(GetInStatus(interactionService))).DefaultTimeout();
+        var dynamicStatusValue = await interactionService.ShowDynamicStatusAsync("Working...", updateStatus =>
+        {
+            updateStatus("Still working...");
+            return Task.FromResult(GetInStatus(interactionService));
+        }).DefaultTimeout();
         var synchronousStatusValue = -1;
         interactionService.ShowStatus("Working...", () => synchronousStatusValue = GetInStatus(interactionService));
 
