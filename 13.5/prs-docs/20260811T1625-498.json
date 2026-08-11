@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "No matching changelog entry found; general fundamentals documentation not tied to a specific milestone PR",
+  "mergedAt": "2026-08-11T16:25:26Z",
+  "number": 498,
+  "runDate": "2026-08-11T18:17:45Z",
+  "status": "excluded",
+  "title": "Document environment variable naming conventions for resources"
+}
