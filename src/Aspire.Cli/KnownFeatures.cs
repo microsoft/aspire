@@ -31,6 +31,7 @@ internal static class KnownFeatures
     public static string NuGetSignatureVerificationEnabled => "nugetSignatureVerificationEnabled";
     public static string AspireSkillsRemoteFetchEnabled => "aspireSkillsRemoteFetchEnabled";
     public static string TerminalCommandsEnabled => "terminalCommandsEnabled";
+    public static string PolyglotIntegrationFilterEnabled => "polyglotIntegrationFilterEnabled";
 
     private static readonly Dictionary<string, FeatureMetadata> s_featureMetadata = new()
     {
@@ -92,6 +93,11 @@ internal static class KnownFeatures
         [TerminalCommandsEnabled] = new(
             TerminalCommandsEnabled,
             "(Experimental) Enable the 'aspire terminal' command group ('aspire terminal ps', 'aspire terminal attach'). Used in conjunction with the experimental WithTerminal() API (ASPIRETERMINAL001). Hidden by default while the API surface is in preview.",
+            DefaultValue: false),
+
+        [PolyglotIntegrationFilterEnabled] = new(
+            PolyglotIntegrationFilterEnabled,
+            "(Experimental) Restrict 'aspire add', 'aspire integration list', and 'aspire integration search' in non-C# AppHosts to integrations carrying the 'polyglot' NuGet tag. Disabled by default because the tag cannot be resolved from package sources that ignore 'tags:' query scoping (notably Azure DevOps Artifacts feeds), which makes the filter hide every integration. Enable it only when every configured source honours tag search, such as a pinned local package source.",
             DefaultValue: false)
     };
 
