@@ -1,0 +1,29 @@
+{
+  "run_id": 31481900781,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/31481900781",
+  "analyzed_at": "2026-08-11T10:54:21Z",
+  "verdict": "transient-infra",
+  "pr": {
+    "number": 19222,
+    "title": "Gate polyglot integration filtering behind an off-by-default feature flag",
+    "author": "mitchdenny",
+    "state": "closed",
+    "head_branch": "mitchdenny-issue-19161-aspire-add-integration-search-over-filte-744aab",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19222"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting-1 / Hosting-1 (windows-latest)",
+      "id": 93749059599,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31481900781/job/93749059599",
+      "classification": "transient-infra",
+      "reason": "All 27 tests in Aspire.Hosting.Tests passed successfully, but the post-test cleanup/upload steps (Check for hang dump files, Upload logs and test results, Copy CLI E2E recordings, Upload CLI E2E recordings, Generate test results summary) each failed with 'Process completed with exit code -1073741502' (0xC0000142 STATUS_DLL_INIT_FAILED). This is a known Windows runner process initialization failure unrelated to the PR's CLI-only code changes.",
+      "failed_steps": ["Check for hang dump files", "Upload logs, and test results", "Copy CLI E2E recordings for upload", "Upload CLI E2E recordings", "Generate test results summary", "Post Checkout code"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["windows-process-init-failure-0xc0000142"]
+}
