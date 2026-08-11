@@ -36,6 +36,7 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         {
             Interaction = interaction,
             Message = string.Empty,
+            DashboardClient = new TestDashboardClient(),
             OnSubmitCallback = (_, _) => Task.CompletedTask
         };
 
@@ -71,8 +72,6 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
 
     private IRenderedFragment SetUpDialog(out IDialogService dialogService)
     {
-        Services.AddSingleton<IDashboardClient>(new TestDashboardClient());
-
         FluentUISetupHelpers.SetupDialogInfrastructure(this);
         FluentUISetupHelpers.SetupFluentInputLabel(this);
         FluentUISetupHelpers.SetupFluentTextField(this);
@@ -106,6 +105,7 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         {
             Interaction = interaction,
             Message = string.Empty,
+            DashboardClient = new TestDashboardClient(),
             OnSubmitCallback = (_, _) => Task.CompletedTask
         };
     }

@@ -19,8 +19,9 @@
     <!-- Don't generate web.config or include IIS hosting -->
     <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
 
-    <!-- Self-contained single-file publish settings (applied only during publish via Bundle.proj) -->
+    <!-- CreateLayout copies only the managed executable, so native dependencies must be embedded in the single file. -->
     <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
 
     <!-- Locate the SDK's trustedroots directory for NuGet signature verification certificates -->
     <_SdkTrustedRootsDir>$([System.IO.Path]::Combine($([System.IO.Path]::GetDirectoryName($(BundledRuntimeIdentifierGraphFile))), 'trustedroots'))</_SdkTrustedRootsDir>
@@ -74,6 +75,11 @@
       <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="$([System.String]::Copy('%(RelativePath)').EndsWith('.runtimeconfig.json'))" />
       <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="$([System.String]::Copy('%(RelativePath)').EndsWith('.staticwebassets.endpoints.json'))" />
     </ItemGroup>
+  </Target>
+
+  <Target Name="ValidateSingleFilePublishConfiguration" BeforeTargets="PrepareForPublish">
+    <Error Condition="'$(PublishSingleFile)' == 'true' and '$(IncludeNativeLibrariesForSelfExtract)' != 'true'"
+           Text="Aspire.Managed single-file publishing must embed native libraries because CreateLayout copies only the managed executable." />
   </Target>
 
 </Project>

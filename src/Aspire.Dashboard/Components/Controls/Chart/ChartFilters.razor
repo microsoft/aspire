@@ -25,15 +25,15 @@
             </FluentDataGrid>
         </div>
     }
-    @if (Instrument.Summary.Type == OtlpInstrumentType.Histogram)
+    @if (InstrumentType == OtlpInstrumentType.Histogram)
     {
         <div class="metrics-filters-section">
             <h5>@Loc[nameof(ControlsStrings.ChartContainerOptionsHeader)]</h5>
             <div>
                 <FluentSwitch Class="table-switch"
                               Label="@Loc[nameof(ControlsStrings.ChartContainerShowCountLabel)]"
-                              @bind-Value="@ShowCounts"
-                              @bind-Value:after="ShowCountChanged"/>
+                              Value="@ShowCount"
+                              ValueChanged="@OnShowCountChangedAsync"/>
             </div>
         </div>
     }

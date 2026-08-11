@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
@@ -22,10 +23,12 @@ public class TestDashboardClient : IDashboardClient
     private readonly IList<ResourceViewModel>? _initialResources;
 
     public bool IsEnabled { get; }
+    public bool IsReadOnly { get; }
     public Task WhenConnected { get; }
     public string ApplicationName { get; } = "TestApp";
     public string? MinRequiredVersion => null;
     public DashboardConnectionState ConnectionState => DashboardConnectionState.Connected;
+    public ConcurrentQueue<(IReadOnlyList<string> ResourceNames, DateTime ClearDate)> ClearedConsoleLogs { get; } = new();
 #pragma warning disable CS0067 // Event is never used - required by interface
     public event Action<DashboardConnectionState>? ConnectionStateChanged;
 #pragma warning restore CS0067
@@ -41,9 +44,11 @@ public class TestDashboardClient : IDashboardClient
         Func<string, string, CommandViewModel, ExecuteResourceCommandOptions, CancellationToken, Task<ResourceCommandResponseViewModel>>? executeResourceCommand = null,
         Channel<WatchInteractionsRequestUpdate>? sendInteractionUpdateChannel = null,
         IList<ResourceViewModel>? initialResources = null,
-        Task? whenConnected = null)
+        Task? whenConnected = null,
+        bool isReadOnly = false)
     {
         IsEnabled = isEnabled ?? false;
+        IsReadOnly = isReadOnly;
         ApplicationName = applicationName ?? "TestApp";
         WhenConnected = whenConnected ?? Task.CompletedTask;
         _consoleLogsChannelProvider = consoleLogsChannelProvider;
@@ -108,6 +113,12 @@ public class TestDashboardClient : IDashboardClient
         {
             yield return item;
         }
+    }
+
+    public Task ClearConsoleLogsAsync(IReadOnlyList<string> resourceNames, DateTime clearDate)
+    {
+        ClearedConsoleLogs.Enqueue((resourceNames, clearDate));
+        return Task.CompletedTask;
     }
 
     public Task<ResourceViewModelSubscription> SubscribeResourcesAsync(CancellationToken cancellationToken)

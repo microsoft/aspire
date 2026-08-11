@@ -147,25 +147,8 @@ public class MarkdownProcessorTests
 
         // Assert
         Assert.Contains("language-csharp", html);
+        Assert.Contains("aria-label=\"Localized:GridValueCopyToClipboard\"", html);
         Assert.Contains("</code>", html);
-    }
-
-    [Fact]
-    public void ToHtml_FencedCodeBlock_CopyButtonHasLocalizedAccessibleName()
-    {
-        var processor = CreateMarkdownProcessor();
-
-        var markdown =
-            """
-            ```csharp
-            Console.WriteLine("Hello");
-            ```
-            """;
-
-        var html = processor.ToHtml(markdown, inCompleteDocument: true);
-
-        var copyButton = Regex.Match(html, """<button[^>]* (?<accessibleName>aria-label="[^"]+")[^>]*>""");
-        Assert.Equal("aria-label=\"Localized:GridValueCopyToClipboard\"", copyButton.Groups["accessibleName"].Value);
     }
 
     [Fact]

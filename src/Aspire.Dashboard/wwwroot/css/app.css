@@ -2022,6 +2022,10 @@ fluent-tooltip[anchor="dialog_close"] > div {
     text-overflow: ellipsis;
 }
 
+.aspire-menu-container fluent-menu-item.indent-1[role="menuitemradio"]:has(> span[slot="end"]) {
+    grid-template-columns: minmax(32px, auto) auto 1fr minmax(32px, auto);
+}
+
 .aspire-menu-container.mobile-nav-menu fluent-menu-item {
     scroll-margin-block: var(--mobile-nav-menu-focus-padding);
 }
