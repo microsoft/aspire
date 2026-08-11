@@ -170,6 +170,32 @@ public class ResourceOutgoingPeerResolverTests
     }
 
     [Fact]
+    public void DatabaseAttributeMatchesMongoDbUriResourceOverContainerResource()
+    {
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            ["mongodb"] = CreateResourceWithConnectionString("mongodb", "mongodb://localhost:27017", resourceType: KnownResourceTypes.Container),
+            ["catalogdb"] = CreateResourceWithConnectionString("catalogdb", "mongodb://localhost:27017/catalogdb", resourceType: "MongoDBDatabaseResource", relationships: [new("mongodb", "Parent")])
+        };
+
+        Assert.True(TryResolvePeerName(resources, [KeyValuePair.Create("server.address", "localhost"), KeyValuePair.Create("server.port", "27017"), KeyValuePair.Create("db.namespace", "catalogdb")], out var value));
+        Assert.Equal("catalogdb", value);
+    }
+
+    [Fact]
+    public void DatabaseAttributeDoesNotMatchMongoDbUriResource_MatchesContainerResource()
+    {
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            ["catalogdb"] = CreateResourceWithConnectionString("catalogdb", "mongodb://localhost:27017/catalogdb", resourceType: "MongoDBDatabaseResource", relationships: [new("mongodb", "Parent")]),
+            ["mongodb"] = CreateResourceWithConnectionString("mongodb", "mongodb://localhost:27017", resourceType: KnownResourceTypes.Container)
+        };
+
+        Assert.True(TryResolvePeerName(resources, [KeyValuePair.Create("server.address", "localhost"), KeyValuePair.Create("server.port", "27017"), KeyValuePair.Create("db.namespace", "unknown")], out var value));
+        Assert.Equal("mongodb", value);
+    }
+
+    [Fact]
     public async Task OnPeerChanges_DataUpdates_EventRaised()
     {
         // Arrange

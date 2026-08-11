@@ -50,6 +50,8 @@ internal static partial class ConnectionStringParser
 
     private static readonly string[] s_databaseAliases = ["database", "initial catalog", "database name", "databasename"];
 
+    private static readonly string[] s_databaseUriSchemes = ["mongodb", "mongodb+srv", "mssql", "mysql", "postgres", "postgresql"];
+
     private static readonly string[] s_knownProtocols = ["tcp", "udp", "ssl", "tls", "http", "https", "ftp", "ssh"];
 
     /// <summary>
@@ -125,7 +127,7 @@ internal static partial class ConnectionStringParser
     }
 
     /// <summary>
-    /// Attempts to extract a database name from a key-value connection string.
+    /// Attempts to extract a database name from a URI or key-value connection string.
     /// </summary>
     /// <param name="connectionString">The connection string to parse. Examples: "Host=localhost;Database=catalogdb" and "Server=localhost;Initial Catalog=Catalog".</param>
     /// <param name="databaseName">When this method returns <c>true</c>, contains the database name; otherwise, <c>null</c>.</param>
@@ -137,6 +139,11 @@ internal static partial class ConnectionStringParser
         if (string.IsNullOrWhiteSpace(connectionString))
         {
             return false;
+        }
+
+        if (TryParseDatabaseNameAsUri(connectionString, out databaseName))
+        {
+            return true;
         }
 
         try
@@ -168,6 +175,35 @@ internal static partial class ConnectionStringParser
         }
 
         return false;
+    }
+
+    private static bool TryParseDatabaseNameAsUri(string connectionString, [NotNullWhen(true)] out string? databaseName)
+    {
+        const string jdbcPrefix = "jdbc:";
+
+        databaseName = null;
+
+        // Database URI paths use these shapes:
+        //   mongodb://user:password@localhost:27017/catalogdb
+        //   jdbc:postgresql://localhost:5432/catalogdb
+        // Restrict parsing to database schemes so paths in endpoint URLs aren't treated as database names.
+        var uriValue = connectionString.StartsWith(jdbcPrefix, StringComparison.OrdinalIgnoreCase)
+            ? connectionString[jdbcPrefix.Length..]
+            : connectionString;
+        if (!Uri.TryCreate(uriValue, UriKind.Absolute, out var uri) ||
+            !s_databaseUriSchemes.Contains(uri.Scheme, StringComparer.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var escapedDatabaseName = uri.AbsolutePath.Trim('/');
+        if (escapedDatabaseName.Length == 0 || escapedDatabaseName.Contains('/'))
+        {
+            return false;
+        }
+
+        databaseName = Uri.UnescapeDataString(escapedDatabaseName);
+        return databaseName.Length > 0;
     }
 
     /// <summary>
