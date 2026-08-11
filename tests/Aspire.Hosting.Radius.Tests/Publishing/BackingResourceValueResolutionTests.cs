@@ -336,6 +336,78 @@ public class BackingResourceValueResolutionTests
     }
 
     /// <summary>
+    /// The same ambiguity, expressed through a <c>WithEnvironment</c> callback. This form records no
+    /// <c>ResourceRelationshipAnnotation</c> at all, so the detection has to run where the
+    /// substitution is actually applied rather than over the annotation graph.
+    /// </summary>
+    [Fact]
+    public void SubstitutedParameterUsedInsideAnEnvironmentCallback_IsReported()
+    {
+        var (_, logger) = GenerateBicep(b =>
+        {
+            var shared = b.AddParameter("shared", "hunter2", secret: true);
+            var cache = b.AddRedis("cache", password: shared);
+
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithReference(cache)
+                .WithEnvironment(context =>
+                {
+                    context.EnvironmentVariables["ADMIN_PASSWORD"] = shared;
+                });
+        });
+
+        var warnings = logger.Matching(LogLevel.Warning, "references parameter 'shared'", "credential of 'cache'");
+        Assert.Single(warnings);
+
+        // The README documents this warning under ASPIRERADIUS070, so the message has to name the
+        // code — otherwise the reader cannot map it back to the diagnostics table.
+        Assert.Contains("ASPIRERADIUS070", warnings[0], StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A consumer that only takes the backing resource's connection string reaches the very same
+    /// substituted parameter, but through the owner's own connection string — which is exactly what
+    /// the substitution is for. Pinned so the detection cannot regress into warning on every
+    /// <c>WithReference</c>.
+    /// </summary>
+    [Fact]
+    public void ConsumerOfTheOwningResource_IsNotReportedAsAnUnrelatedUse()
+    {
+        var (_, logger) = GenerateBicep(b =>
+        {
+            var password = b.AddParameter("cachepassword", "hunter2", secret: true);
+            var cache = b.AddRedis("cache", password: password);
+
+            b.AddContainer("api", "myapp/api", "latest").WithReference(cache);
+        });
+
+        Assert.Empty(logger.Matching(LogLevel.Warning, "references parameter"));
+    }
+
+    /// <summary>
+    /// The <c>RecipeInputProperties</c> types write both credentials straight onto the resource, so
+    /// neither registration is a projection substitution and
+    /// <c>RegisterRecipeCredential</c>'s cross-owner check never fires. One parameter published as
+    /// both the user name and the password is still never what the AppHost meant, and the README
+    /// documents the restriction without qualifying it by type, so it has to fail here too.
+    /// </summary>
+    [Fact]
+    public void ParameterSharedBetweenUserNameAndPasswordOfARecipeInputResource_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(b =>
+        {
+            var shared = b.AddParameter("shared", "value", secret: true);
+            var pg = b.AddPostgres("pg", userName: shared, password: shared);
+            pg.AddDatabase("pgdb");
+
+            b.AddContainer("api", "myapp/api", "latest").WithReference(pg);
+        }));
+
+        Assert.Contains("ASPIRERADIUS070", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("both the user name and the password", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Values a <c>ReferenceExpression</c> declared with the <c>uri</c> format must be
     /// percent-encoded in the emitted Bicep. Aspire escapes them with <c>Uri.EscapeDataString</c>
     /// when it resolves such a value itself, but the publisher emits an expression whose value is
@@ -363,6 +435,28 @@ public class BackingResourceValueResolutionTests
 
         // Non-URI values are untouched: escaping a connection-string password would corrupt it.
         Assert.Contains("value: cache.listSecrets().password", bicep, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Radius types the port output as an int, and Bicep's <c>uriComponent()</c> type-checks its
+    /// argument eagerly rather than coercing it the way string interpolation does. A
+    /// <c>uri</c>-formatted port inside a composite expression therefore has to be wrapped in
+    /// <c>string(...)</c> first, exactly as the lone-projection path already does.
+    /// </summary>
+    [Fact]
+    public void UriFormattedNumericProjection_IsConvertedToAStringFirst()
+    {
+        var (bicep, _) = GenerateBicep(b =>
+        {
+            var cache = b.AddRedis("cache");
+            var port = cache.GetEndpoint("tcp").Property(EndpointProperty.Port);
+
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithReference(cache)
+                .WithEnvironment("PORT_URL", ReferenceExpression.Create($"tcp://cache:{port:uri}/"));
+        });
+
+        Assert.Contains("uriComponent(string(cache.properties.port))", bicep, StringComparison.Ordinal);
     }
 
     /// <summary>
