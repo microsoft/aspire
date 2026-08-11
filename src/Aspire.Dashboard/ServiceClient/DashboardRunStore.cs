@@ -79,7 +79,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     private readonly string? _runsDirectory;
     private readonly string? _metadataPath;
     private readonly string? _temporaryDirectory;
-    private readonly FileStream? _runLock;
+    private readonly FileLock? _runLock;
     private DashboardRunMetadata _metadata;
     private readonly ILogger<DashboardRunStore> _logger;
     private readonly TimeProvider _timeProvider;
@@ -480,21 +480,13 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         }
     }
 
-    private static FileStream OpenRunLock(string runDirectory)
+    private static FileLock OpenRunLock(string runDirectory)
     {
-        // An exclusive FileStream is the best cross-platform option for locking across processes because .NET named
-        // semaphores are only supported on Windows. Keep the lock beside the run directory so pruning can hold it
-        // while recursively deleting the directory on Windows.
-        return new FileStream(
-            GetRunLockPath(runDirectory),
-            FileMode.OpenOrCreate,
-            FileAccess.ReadWrite,
-            FileShare.None,
-            bufferSize: 1,
-            FileOptions.DeleteOnClose);
+        // Keep the lock beside the run directory so pruning can hold it while recursively deleting the directory on Windows.
+        return FileLock.Acquire(GetRunLockPath(runDirectory));
     }
 
-    private static FileStream OpenRequiredRunLock(string runDirectory, string errorMessage)
+    private static FileLock OpenRequiredRunLock(string runDirectory, string errorMessage)
     {
         try
         {
@@ -506,25 +498,23 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         }
     }
 
-    private static FileStream? TryOpenRunLock(string runDirectory)
+    private static FileLock? TryOpenRunLock(string runDirectory)
     {
-        try
-        {
-            var runLock = OpenRunLock(runDirectory);
-            // The lock file is adjacent to the run directory, so OpenOrCreate can recreate it after pruning has already
-            // deleted the directory. Check after acquiring the lock to avoid racing with a cooperating pruner.
-            if (!Directory.Exists(runDirectory))
-            {
-                runLock.Dispose();
-                return null;
-            }
-
-            return runLock;
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        var runLock = FileLock.TryAcquire(GetRunLockPath(runDirectory));
+        if (runLock is null)
         {
             return null;
         }
+
+        // The lock file is adjacent to the run directory, so OpenOrCreate can recreate it after pruning has already
+        // deleted the directory. Check after acquiring the lock to avoid racing with a cooperating pruner.
+        if (!Directory.Exists(runDirectory))
+        {
+            runLock.Dispose();
+            return null;
+        }
+
+        return runLock;
     }
 
     internal static string GetRunLockPath(string runDirectory) => $"{runDirectory}.lock";
@@ -594,9 +584,9 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         return $"{prefix}-{hash}";
     }
 
-    private sealed class RunLease(DashboardRunStore owner, DashboardRunDescriptor run, FileStream runLock) : IDisposable
+    private sealed class RunLease(DashboardRunStore owner, DashboardRunDescriptor run, FileLock runLock) : IDisposable
     {
-        private FileStream? _runLock = runLock;
+        private FileLock? _runLock = runLock;
 
         public void Dispose()
         {
