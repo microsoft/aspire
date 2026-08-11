@@ -592,7 +592,7 @@ suite('Azure Functions Debugger Extension Tests', () => {
         sinon.assert.calledOnce(taskExecution.terminate as sinon.SinonStub);
     });
 
-    for (const processId of ['worker-1', '42worker', '0', '-1', '1.5', '0x10', '1e3', '1.0', ' 42 ', '+42', '']) {
+    for (const processId of ['worker-1', '42worker', '0', '-1', '1.5', '0x10', '1e3', '1.0', ' 42 ', '+42', '2147483648', '']) {
         test(`rejects invalid Azure Functions worker process ID '${processId}'`, async () => {
             const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');
             const targetPath = path.join('/workspace', 'FunctionsApp', 'bin', 'Debug', 'net10.0', 'FunctionsApp.dll');

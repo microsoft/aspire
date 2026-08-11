@@ -11,6 +11,9 @@ import { cleanupRun, registerRunCleanup } from '../runCleanupRegistry';
 
 const AF_EXTENSION_ID = 'ms-azuretools.vscode-azurefunctions';
 const workerProcessExitPollIntervalMs = 500;
+// Node validates process IDs by signed 32-bit coercion before dispatching to the OS.
+// Keep debugger attach and process cleanup within that same supported range.
+const maxWorkerProcessId = 0x7fffffff;
 
 /**
  * Result from the Azure Functions extension's startFuncProcess API.
@@ -367,7 +370,7 @@ export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
         }
 
         const workerPidNumber = Number(result.processId);
-        if (!/^[0-9]+$/.test(result.processId) || !Number.isSafeInteger(workerPidNumber) || workerPidNumber <= 0) {
+        if (!/^[0-9]+$/.test(result.processId) || workerPidNumber <= 0 || workerPidNumber > maxWorkerProcessId) {
             taskEndSubscription?.dispose();
             cleanupRun(debugConfiguration.runId);
             throw new Error(azureFunctionsInvalidProcessId(result.processId));
