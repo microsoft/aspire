@@ -65,6 +65,7 @@ If discovery finds no AppHost candidates, the stream emits no lines. The stream 
   "appHostPath": "/path/to/MyApp.AppHost/MyApp.AppHost.csproj",
   "appHostPid": 12345,
   "cliPid": 12340,
+  "runId": "incident-42",
   "dashboardUrl": "https://localhost:17010/login?t=token",
   "logFile": "/path/to/MyApp.AppHost/.aspire/logs/apphost.log"
 }
@@ -75,6 +76,7 @@ If discovery finds no AppHost candidates, the stream emits no lines. The stream 
 | `appHostPath` | Full path to the AppHost project file. |
 | `appHostPid` | Process ID for the launched AppHost process. |
 | `cliPid` | Process ID for the CLI child process that owns the detached AppHost run. |
+| `runId` | Dashboard run ID, when run persistence is enabled. |
 | `dashboardUrl` | Dashboard URL with login token, when available. |
 | `logFile` | Path to the detached AppHost log file. |
 
@@ -195,6 +197,8 @@ If discovery finds no AppHost candidates, the stream emits no lines. The stream 
 
 `timestamp` is present when `--timestamps` is specified and the log line has a timestamp.
 
+Use `--run-id <id>` to read a snapshot from a retained Dashboard run. For example, `aspire logs api --run-id incident-42 --format json` reads console logs after that AppHost has stopped. `--follow` cannot be combined with `--run-id` because historical runs are immutable.
+
 `aspire logs --format json --follow` emits NDJSON. Each line is one log entry:
 
 ```json
@@ -210,6 +214,8 @@ If discovery finds no AppHost candidates, the stream emits no lines. The stream 
 | `isError` | `true` when the line came from stderr. |
 
 ## OpenTelemetry
+
+The `logs`, `spans`, and `traces` OpenTelemetry commands accept `--run-id <id>` to query a retained Dashboard run. Omitting it selects the current run. Unknown run IDs fail with a run-not-found error. The `logs` and `spans` commands reject `--follow --run-id`.
 
 ### `aspire otel logs`
 

@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Utils;
 using Aspire.Tests;
@@ -1482,6 +1483,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         using var app = builder.Build();
         await app.ExecuteBeforeStartHooksAsync(default).DefaultTimeout();
+        app.Services.GetRequiredService<DashboardRunIdentity>().RunId = "incident-42";
         activities.Clear();
 
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -1507,6 +1509,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.True(result.DashboardHealthy);
         Assert.Equal("http://localhost:18888", result.BaseUrlWithLoginToken);
         Assert.Null(result.CodespacesUrlWithLoginToken);
+        Assert.Equal("incident-42", result.RunId);
 
         var dashboardActivityNames = activities.Select(activity => activity.OperationName).ToArray();
         Assert.Contains(ProfilingTelemetry.Activities.JsonRpcServerCall, dashboardActivityNames);
@@ -1521,6 +1524,9 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         var connectionInfoActivity = Assert.Single(activities, activity => activity.OperationName == ProfilingTelemetry.Activities.DashboardGetConnectionInfo);
         Assert.Equal(true, connectionInfoActivity.GetTagItem(ProfilingTelemetry.Tags.DashboardHealthy));
         Assert.Equal(ProfilingTelemetry.Values.DashboardUrlSourceResource, connectionInfoActivity.GetTagItem(ProfilingTelemetry.Tags.DashboardUrlSource));
+
+        var info = await target.GetDashboardInfoAsync().DefaultTimeout();
+        Assert.Equal("incident-42", info.RunId);
     }
 
     [Fact]

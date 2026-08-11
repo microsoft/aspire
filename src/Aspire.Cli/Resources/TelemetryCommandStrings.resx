@@ -156,6 +156,15 @@
   <data name="SearchOptionDescription" xml:space="preserve">
     <value>Search and filter telemetry fields such as log messages, attribute values, names, source, and IDs. Supports full-text search and field filters. See https://aka.ms/aspire/cli-search for more details</value>
   </data>
+  <data name="RunIdOptionDescription" xml:space="preserve">
+    <value>Query telemetry from the specified Dashboard run</value>
+  </data>
+  <data name="HistoricalFollowNotSupported" xml:space="preserve">
+    <value>--follow cannot be used with --run-id because historical runs are immutable.</value>
+  </data>
+  <data name="HistoricalRunNotFound" xml:space="preserve">
+    <value>Dashboard run '{0}' was not found.</value>
+  </data>
   <data name="LimitMustBePositive" xml:space="preserve">
     <value>The --limit value must be a positive number.</value>
   </data>

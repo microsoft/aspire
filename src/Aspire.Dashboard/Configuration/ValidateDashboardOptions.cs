@@ -35,6 +35,18 @@ public sealed class ValidateDashboardOptions : IValidateOptions<DashboardOptions
             errorMessages.Add($"Unexpected dashboard persistence mode: {options.Data.PersistenceMode}");
         }
 
+        if (options.Data.RunId is { } runId)
+        {
+            if (!DashboardRunId.TryValidate(runId, out var runIdError))
+            {
+                errorMessages.Add($"Dashboard run ID '{runId}' is invalid: {runIdError}.");
+            }
+            else if (options.Data.PersistenceMode != DashboardPersistenceMode.Run)
+            {
+                errorMessages.Add($"Dashboard run ID '{runId}' requires persistence mode '{DashboardPersistenceMode.Run}'.");
+            }
+        }
+
         if (!options.Frontend.TryParseOptions(out var frontendParseErrorMessage))
         {
             errorMessages.Add(frontendParseErrorMessage);

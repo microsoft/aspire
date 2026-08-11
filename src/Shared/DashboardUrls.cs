@@ -202,8 +202,9 @@ internal static class DashboardUrls
     /// <param name="limit">Optional maximum number of results to return.</param>
     /// <param name="follow">Optional flag to enable streaming mode.</param>
     /// <param name="search">Optional full-text search string to filter results.</param>
+    /// <param name="runId">Optional dashboard run identifier.</param>
     /// <returns>The full API URL.</returns>
-    public static string TelemetryLogsApiUrl(string baseUrl, List<string>? resources = null, string? traceId = null, string? severity = null, int? limit = null, bool? follow = null, string? search = null)
+    public static string TelemetryLogsApiUrl(string baseUrl, List<string>? resources = null, string? traceId = null, string? severity = null, int? limit = null, bool? follow = null, string? search = null, string? runId = null)
     {
         var url = $"/{TelemetryApiBasePath}/logs";
         url = AddResourceParams(url, resources);
@@ -227,6 +228,10 @@ internal static class DashboardUrls
         {
             url = AddQueryString(url, "search", search);
         }
+        if (runId is not null)
+        {
+            url = AddQueryString(url, "runId", runId);
+        }
         return CombineUrl(baseUrl, url);
     }
 
@@ -240,8 +245,9 @@ internal static class DashboardUrls
     /// <param name="limit">Optional maximum number of results to return.</param>
     /// <param name="follow">Optional flag to enable streaming mode.</param>
     /// <param name="search">Optional full-text search string to filter results.</param>
+    /// <param name="runId">Optional dashboard run identifier.</param>
     /// <returns>The full API URL.</returns>
-    public static string TelemetrySpansApiUrl(string baseUrl, List<string>? resources = null, string? traceId = null, bool? hasError = null, int? limit = null, bool? follow = null, string? search = null)
+    public static string TelemetrySpansApiUrl(string baseUrl, List<string>? resources = null, string? traceId = null, bool? hasError = null, int? limit = null, bool? follow = null, string? search = null, string? runId = null)
     {
         var url = $"/{TelemetryApiBasePath}/spans";
         url = AddResourceParams(url, resources);
@@ -265,6 +271,10 @@ internal static class DashboardUrls
         {
             url = AddQueryString(url, "search", search);
         }
+        if (runId is not null)
+        {
+            url = AddQueryString(url, "runId", runId);
+        }
         return CombineUrl(baseUrl, url);
     }
 
@@ -276,8 +286,9 @@ internal static class DashboardUrls
     /// <param name="hasError">Optional filter for error status.</param>
     /// <param name="limit">Optional maximum number of results to return.</param>
     /// <param name="search">Optional full-text search string to filter results.</param>
+    /// <param name="runId">Optional dashboard run identifier.</param>
     /// <returns>The full API URL.</returns>
-    public static string TelemetryTracesApiUrl(string baseUrl, List<string>? resources = null, bool? hasError = null, int? limit = null, string? search = null)
+    public static string TelemetryTracesApiUrl(string baseUrl, List<string>? resources = null, bool? hasError = null, int? limit = null, string? search = null, string? runId = null)
     {
         var url = $"/{TelemetryApiBasePath}/traces";
         url = AddResourceParams(url, resources);
@@ -293,6 +304,10 @@ internal static class DashboardUrls
         {
             url = AddQueryString(url, "search", search);
         }
+        if (runId is not null)
+        {
+            url = AddQueryString(url, "runId", runId);
+        }
         return CombineUrl(baseUrl, url);
     }
 
@@ -301,10 +316,15 @@ internal static class DashboardUrls
     /// </summary>
     /// <param name="baseUrl">The dashboard base URL.</param>
     /// <param name="traceId">The trace ID.</param>
+    /// <param name="runId">Optional dashboard run identifier.</param>
     /// <returns>The full API URL.</returns>
-    public static string TelemetryTraceDetailApiUrl(string baseUrl, string traceId)
+    public static string TelemetryTraceDetailApiUrl(string baseUrl, string traceId, string? runId = null)
     {
         var path = $"/{TelemetryApiBasePath}/traces/{Uri.EscapeDataString(traceId)}";
+        if (runId is not null)
+        {
+            path = AddQueryString(path, "runId", runId);
+        }
         return CombineUrl(baseUrl, path);
     }
 
@@ -312,10 +332,47 @@ internal static class DashboardUrls
     /// Builds the URL for the telemetry resources API endpoint.
     /// </summary>
     /// <param name="baseUrl">The dashboard base URL.</param>
+    /// <param name="runId">Optional dashboard run identifier.</param>
     /// <returns>The full API URL.</returns>
-    public static string TelemetryResourcesApiUrl(string baseUrl)
+    public static string TelemetryResourcesApiUrl(string baseUrl, string? runId = null)
     {
         var path = $"/{TelemetryApiBasePath}/resources";
+        if (runId is not null)
+        {
+            path = AddQueryString(path, "runId", runId);
+        }
+        return CombineUrl(baseUrl, path);
+    }
+
+    public static string TelemetryConsoleLogsApiUrl(
+        string baseUrl,
+        string? resource = null,
+        int? limit = null,
+        string? search = null,
+        bool includeHidden = false,
+        string? runId = null)
+    {
+        var path = $"/{TelemetryApiBasePath}/console-logs";
+        if (resource is not null)
+        {
+            path = AddQueryString(path, "resource", resource);
+        }
+        if (limit is not null)
+        {
+            path = AddQueryString(path, "limit", limit.Value.ToString(CultureInfo.InvariantCulture));
+        }
+        if (search is not null)
+        {
+            path = AddQueryString(path, "search", search);
+        }
+        if (includeHidden)
+        {
+            path = AddQueryString(path, "includeHidden", "true");
+        }
+        if (runId is not null)
+        {
+            path = AddQueryString(path, "runId", runId);
+        }
         return CombineUrl(baseUrl, path);
     }
 

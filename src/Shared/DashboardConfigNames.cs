@@ -19,6 +19,7 @@ internal static class DashboardConfigNames
     public static readonly ConfigName DashboardApplicationName = new("Dashboard:ApplicationName", "ASPIRE_DASHBOARD_APPLICATION_NAME");
     public static readonly ConfigName DashboardDataDirectoryName = new("Dashboard:Data:Directory", "ASPIRE_DASHBOARD_DATA_DIRECTORY");
     public static readonly ConfigName DashboardPersistenceModeName = new("Dashboard:Data:PersistenceMode", "ASPIRE_DASHBOARD_PERSISTENCE_MODE");
+    public static readonly ConfigName DashboardRunIdName = new("Dashboard:Data:RunId", "ASPIRE_DASHBOARD_RUN_ID");
 
     public static readonly ConfigName DashboardOtlpAuthModeName = new("Dashboard:Otlp:AuthMode", "DASHBOARD__OTLP__AUTHMODE");
     public static readonly ConfigName DashboardOtlpPrimaryApiKeyName = new("Dashboard:Otlp:PrimaryApiKey", "DASHBOARD__OTLP__PRIMARYAPIKEY");
@@ -62,6 +63,73 @@ internal static class DashboardConfigNames
         public static readonly ConfigName DashboardFileConfigDirectoryName = new(KnownConfigNames.Legacy.DashboardFileConfigDirectory);
         public static readonly ConfigName ResourceServiceUrlName = new(KnownConfigNames.Legacy.ResourceServiceEndpointUrl);
         public static readonly ConfigName DashboardOtlpSuppressUnsecuredTelemetryMessageName = new("Dashboard:Otlp:SuppressUnsecuredTelemetryMessage", "DASHBOARD__OTLP__SUPPRESSUNSECUREDTELEMETRYMESSAGE");
+    }
+}
+
+internal static class DashboardRunId
+{
+    public const int MaxLength = 64;
+
+    public static string Create(DateTimeOffset startedAt) => $"{startedAt:yyyyMMddTHHmmssfffZ}";
+
+    public static bool IsValid(string? value) => TryValidate(value, out _);
+
+    public static bool TryValidate(string? value, out string? errorMessage)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            errorMessage = "it must contain at least one character";
+            return false;
+        }
+
+        if (value.Length > MaxLength)
+        {
+            errorMessage = $"it must not exceed {MaxLength} characters";
+            return false;
+        }
+
+        if (!IsAsciiLetterOrDigit(value[0]) || !IsAsciiLetterOrDigit(value[^1]))
+        {
+            errorMessage = "it must start and end with an ASCII letter or number";
+            return false;
+        }
+
+        foreach (var character in value)
+        {
+            if (!IsAsciiLetterOrDigit(character) && character is not '-' and not '_' and not '.')
+            {
+                errorMessage = "it may contain only ASCII letters, numbers, periods, underscores, and hyphens";
+                return false;
+            }
+        }
+
+        var baseName = value.Split('.')[0];
+        if (IsWindowsReservedName(baseName))
+        {
+            errorMessage = $"'{baseName}' is a reserved file name";
+            return false;
+        }
+
+        errorMessage = null;
+        return true;
+    }
+
+    private static bool IsAsciiLetterOrDigit(char value) =>
+        value is (>= 'a' and <= 'z') or (>= 'A' and <= 'Z') or (>= '0' and <= '9');
+
+    private static bool IsWindowsReservedName(string value)
+    {
+        if (value.Equals("CON", StringComparison.OrdinalIgnoreCase) ||
+            value.Equals("PRN", StringComparison.OrdinalIgnoreCase) ||
+            value.Equals("AUX", StringComparison.OrdinalIgnoreCase) ||
+            value.Equals("NUL", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return value.Length == 4 &&
+            (value.StartsWith("COM", StringComparison.OrdinalIgnoreCase) || value.StartsWith("LPT", StringComparison.OrdinalIgnoreCase)) &&
+            value[3] is >= '1' and <= '9';
     }
 }
 

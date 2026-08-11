@@ -36,6 +36,14 @@ public sealed class PostConfigureDashboardOptions : IPostConfigureOptions<Dashbo
             options.Data.Directory = dataDirectory;
         }
 
+        if (_configuration.GetString(
+            DashboardConfigNames.DashboardRunIdName.ConfigKey,
+            DashboardConfigNames.DashboardRunIdName.EnvVarName,
+            fallbackOnEmpty: true) is { } runId)
+        {
+            options.Data.RunId = runId;
+        }
+
         if (_configuration[DashboardConfigNames.DashboardPersistenceModeName.EnvVarName] is { Length: > 0 } persistenceMode)
         {
             if (Enum.TryParse<DashboardPersistenceMode>(persistenceMode, ignoreCase: true, out var parsedPersistenceMode) &&

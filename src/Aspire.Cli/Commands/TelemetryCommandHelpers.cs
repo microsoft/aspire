@@ -102,6 +102,11 @@ internal static class TelemetryCommandHelpers
         Description = TelemetryCommandStrings.SearchOptionDescription
     };
 
+    internal static Option<string?> CreateRunIdOption() => new("--run-id")
+    {
+        Description = TelemetryCommandStrings.RunIdOptionDescription
+    };
+
     /// <summary>
     /// Dashboard URL option for connecting directly to a standalone dashboard.
     /// </summary>
@@ -344,14 +349,25 @@ internal static class TelemetryCommandHelpers
         bool dashboardOnly,
         IHttpClientFactory httpClientFactory,
         ILogger logger,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? runId = null)
     {
+        if (runId is not null && ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            return new TelemetryErrorInfo(FormatHistoricalRunNotFound(runId));
+        }
+
         if (dashboardOnly)
         {
             return await GetDashboardApiErrorAsync(ex, baseUrl, httpClientFactory, logger, cancellationToken);
         }
 
         return new TelemetryErrorInfo(string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.FailedToFetchTelemetry, ex.Message));
+    }
+
+    public static string FormatHistoricalRunNotFound(string runId)
+    {
+        return string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.HistoricalRunNotFound, runId);
     }
 
     /// <summary>
@@ -502,9 +518,9 @@ internal static class TelemetryCommandHelpers
         return false;
     }
 
-    public static async Task<ResourceInfoJson[]> GetAllResourcesAsync(HttpClient client, string baseUrl, CancellationToken cancellationToken)
+    public static async Task<ResourceInfoJson[]> GetAllResourcesAsync(HttpClient client, string baseUrl, CancellationToken cancellationToken, string? runId = null)
     {
-        var url = DashboardUrls.TelemetryResourcesApiUrl(baseUrl);
+        var url = DashboardUrls.TelemetryResourcesApiUrl(baseUrl, runId);
         var response = await client.GetAsync(url, cancellationToken).ConfigureAwait(false);
         EnsureTelemetryApiResponse(response);
 

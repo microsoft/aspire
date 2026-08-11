@@ -727,6 +727,37 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task LogOutput_RunPersistence_LogsRunId()
+    {
+        var dataDirectory = Directory.CreateTempSubdirectory("aspire-dashboard-startup-");
+        try
+        {
+            var testSink = new TestSink();
+            await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(
+                testOutputHelper,
+                additionalConfiguration: config =>
+                {
+                    config[DashboardConfigNames.DashboardDataDirectoryName.ConfigKey] = dataDirectory.FullName;
+                    config[DashboardConfigNames.DashboardApplicationName.ConfigKey] = "StartupTests";
+                    config[DashboardConfigNames.DashboardPersistenceModeName.ConfigKey] = DashboardPersistenceMode.Run.ToString();
+                    config[DashboardConfigNames.DashboardRunIdName.ConfigKey] = "incident-42";
+                },
+                testSink: testSink);
+
+            await app.StartAsync().DefaultTimeout();
+
+            var write = Assert.Single(testSink.Writes, write =>
+                string.Equals(write.LoggerName, typeof(DashboardWebApplication).FullName, StringComparison.Ordinal) &&
+                Equals(LogTestHelpers.GetValue(write, "{OriginalFormat}"), "Dashboard run ID: {RunId}"));
+            Assert.Equal("incident-42", LogTestHelpers.GetValue(write, "RunId"));
+        }
+        finally
+        {
+            dataDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task LogOutput_NoOtlpEndpoints_NoOtlpLogs()
     {
         // Arrange

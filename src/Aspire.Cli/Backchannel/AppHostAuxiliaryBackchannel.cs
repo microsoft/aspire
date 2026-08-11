@@ -576,6 +576,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
             return new GetDashboardInfoResponse
             {
+                RunId = urlsState?.RunId,
                 ApiBaseUrl = null, // Not available in v1
                 ApiToken = null,   // Not available in v1
                 DashboardUrls = urls.ToArray(),

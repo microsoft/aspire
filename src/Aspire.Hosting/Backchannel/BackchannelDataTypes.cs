@@ -201,6 +201,11 @@ internal sealed class GetDashboardInfoRequest : BackchannelRequest
 internal sealed class GetDashboardInfoResponse
 {
     /// <summary>
+    /// Gets the current persisted Dashboard run identifier, if available.
+    /// </summary>
+    public string? RunId { get; init; }
+
+    /// <summary>
     /// Gets the base URL of the Dashboard API (without login token).
     /// Use this for API calls like /api/telemetry/*.
     /// </summary>
@@ -718,6 +723,11 @@ internal sealed class RpcResourceState
 internal sealed class DashboardUrlsState
 {
     public bool DashboardHealthy { get; init; } = true;
+
+    /// <summary>
+    /// Gets the current persisted Dashboard run identifier, if available.
+    /// </summary>
+    public string? RunId { get; init; }
 
     /// <summary>
     /// Gets the dashboard URL.

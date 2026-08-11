@@ -136,6 +136,17 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
         LogRunSwitch(previousRun, selectedRun);
     }
 
+    internal bool TrySelectRun(string? runId)
+    {
+        if (runId is not null && _runStore.GetRunById(runId) is null)
+        {
+            return false;
+        }
+
+        SelectRun(runId);
+        return runId is null || string.Equals(SelectedRun.RunId, runId, StringComparison.Ordinal);
+    }
+
     public void Dispose()
     {
         DisposeHistoricalDataSource();

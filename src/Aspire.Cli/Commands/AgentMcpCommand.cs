@@ -103,6 +103,7 @@ internal sealed class AgentMcpCommand : BaseCommand
             _dashboardOnlyMode = true;
             var staticProvider = new StaticDashboardInfoProvider(dashboardUrl, apiKey);
 
+            _knownTools[KnownMcpTools.ListConsoleLogs] = new ListConsoleLogsTool(staticProvider, null, _httpClientFactory, _loggerFactory.CreateLogger<ListConsoleLogsTool>());
             _knownTools[KnownMcpTools.ListStructuredLogs] = new ListStructuredLogsTool(staticProvider, null, _httpClientFactory, _loggerFactory.CreateLogger<ListStructuredLogsTool>());
             _knownTools[KnownMcpTools.ListTraces] = new ListTracesTool(staticProvider, null, _httpClientFactory, _loggerFactory.CreateLogger<ListTracesTool>());
             _knownTools[KnownMcpTools.ListTraceStructuredLogs] = new ListTraceStructuredLogsTool(staticProvider, null, _httpClientFactory, _loggerFactory.CreateLogger<ListTraceStructuredLogsTool>());
@@ -112,7 +113,7 @@ internal sealed class AgentMcpCommand : BaseCommand
             var dashboardInfoProvider = new BackchannelDashboardInfoProvider(_auxiliaryBackchannelMonitor, _logger);
 
             _knownTools[KnownMcpTools.ListResources] = new ListResourcesTool(_auxiliaryBackchannelMonitor, _loggerFactory.CreateLogger<ListResourcesTool>());
-            _knownTools[KnownMcpTools.ListConsoleLogs] = new ListConsoleLogsTool(_auxiliaryBackchannelMonitor, _loggerFactory.CreateLogger<ListConsoleLogsTool>());
+            _knownTools[KnownMcpTools.ListConsoleLogs] = new ListConsoleLogsTool(dashboardInfoProvider, _auxiliaryBackchannelMonitor, _httpClientFactory, _loggerFactory.CreateLogger<ListConsoleLogsTool>());
             _knownTools[KnownMcpTools.ExecuteResourceCommand] = new ExecuteResourceCommandTool(_auxiliaryBackchannelMonitor, _loggerFactory.CreateLogger<ExecuteResourceCommandTool>());
             _knownTools[KnownMcpTools.ListStructuredLogs] = new ListStructuredLogsTool(dashboardInfoProvider, _auxiliaryBackchannelMonitor, _httpClientFactory, _loggerFactory.CreateLogger<ListStructuredLogsTool>());
             _knownTools[KnownMcpTools.ListTraces] = new ListTracesTool(dashboardInfoProvider, _auxiliaryBackchannelMonitor, _httpClientFactory, _loggerFactory.CreateLogger<ListTracesTool>());

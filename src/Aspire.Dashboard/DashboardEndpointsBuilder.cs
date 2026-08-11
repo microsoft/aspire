@@ -134,10 +134,43 @@ public static class DashboardEndpointsBuilder
         }).AllowAnonymous();
 
         // GET /api/telemetry/resources - List resources that have telemetry data
-        group.MapGet("/resources", (TelemetryApiService service) =>
+        group.MapGet("/resources", (TelemetryApiService service, [FromQuery] string? runId) =>
         {
+            if (ValidateRunSelection(service, runId, follow: false) is { } selectionError)
+            {
+                return selectionError;
+            }
+
             var resources = service.GetResources();
             return Results.Json(resources, OtlpJsonSerializerContext.Default.ResourceInfoJsonArray);
+        });
+
+        group.MapGet("/console-logs", async (
+            TelemetryApiService service,
+            [FromQuery] string? resource,
+            [FromQuery] bool? includeHidden,
+            [FromQuery] int? limit,
+            [FromQuery] string? search,
+            [FromQuery] string? runId,
+            CancellationToken cancellationToken) =>
+        {
+            if (ValidateRunSelection(service, runId, follow: false) is { } selectionError)
+            {
+                return selectionError;
+            }
+
+            var response = await service.GetConsoleLogsAsync(resource, includeHidden == true, limit, search, cancellationToken).ConfigureAwait(false);
+            if (response is null)
+            {
+                return Results.NotFound(new ProblemDetails
+                {
+                    Title = "Resource not found",
+                    Detail = $"No resource with name '{resource}' was found.",
+                    Status = StatusCodes.Status404NotFound
+                });
+            }
+
+            return Results.Json(response, OtlpJsonSerializerContext.Default.ConsoleLogsApiResponse);
         });
 
         // GET /api/telemetry/spans - List spans in OTLP JSON format (with optional streaming via ?follow=true)
@@ -151,8 +184,14 @@ public static class DashboardEndpointsBuilder
             [FromQuery] int? limit,
             [FromQuery] bool? follow,
             [FromQuery] string? search,
+            [FromQuery] string? runId,
             CancellationToken cancellationToken) =>
         {
+            if (ValidateRunSelection(service, runId, follow == true) is { } selectionError)
+            {
+                return selectionError;
+            }
+
             if (follow == true)
             {
                 await StreamNdjsonAsync(httpContext, service.FollowSpansAsync(resource, traceId, hasError, search, cancellationToken), cancellationToken).ConfigureAwait(false);
@@ -183,8 +222,14 @@ public static class DashboardEndpointsBuilder
             [FromQuery] int? limit,
             [FromQuery] bool? follow,
             [FromQuery] string? search,
+            [FromQuery] string? runId,
             CancellationToken cancellationToken) =>
         {
+            if (ValidateRunSelection(service, runId, follow == true) is { } selectionError)
+            {
+                return selectionError;
+            }
+
             if (follow == true)
             {
                 await StreamNdjsonAsync(httpContext, service.FollowLogsAsync(resource, traceId, severity, search, cancellationToken), cancellationToken).ConfigureAwait(false);
@@ -212,8 +257,14 @@ public static class DashboardEndpointsBuilder
             [FromQuery] bool? hasError,
             [FromQuery] int? limit,
             [FromQuery] string? search,
+            [FromQuery] string? runId,
             CancellationToken cancellationToken) =>
         {
+            if (ValidateRunSelection(service, runId, follow: false) is { } selectionError)
+            {
+                return selectionError;
+            }
+
             var response = await service.GetTracesAsync(resource, hasError, limit, cancellationToken, search).ConfigureAwait(false);
             if (response is null)
             {
@@ -230,8 +281,14 @@ public static class DashboardEndpointsBuilder
         // GET /api/telemetry/traces/{traceId} - Get a specific trace with all spans in OTLP format
         group.MapGet("/traces/{traceId}", (
             TelemetryApiService service,
-            string traceId) =>
+            string traceId,
+            [FromQuery] string? runId) =>
         {
+            if (ValidateRunSelection(service, runId, follow: false) is { } selectionError)
+            {
+                return selectionError;
+            }
+
             var response = service.GetTrace(traceId);
             if (response is null)
             {
@@ -244,6 +301,31 @@ public static class DashboardEndpointsBuilder
             }
             return Results.Json(response, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
         });
+    }
+
+    private static IResult? ValidateRunSelection(TelemetryApiService service, string? runId, bool follow)
+    {
+        if (!service.TrySelectRun(runId))
+        {
+            return Results.NotFound(new ProblemDetails
+            {
+                Title = "Run not found",
+                Detail = $"No dashboard run with ID '{runId}' was found.",
+                Status = StatusCodes.Status404NotFound
+            });
+        }
+
+        if (follow && service.IsHistoricalRun)
+        {
+            return Results.BadRequest(new ProblemDetails
+            {
+                Title = "Historical follow is not supported",
+                Detail = "Historical dashboard runs are immutable and cannot be followed.",
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+
+        return null;
     }
 
     private static async Task StreamNdjsonAsync(HttpContext httpContext, IAsyncEnumerable<string> items, CancellationToken cancellationToken)

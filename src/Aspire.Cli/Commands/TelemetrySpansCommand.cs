@@ -38,6 +38,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
     private static readonly Option<string?> s_dashboardUrlOption = TelemetryCommandHelpers.CreateDashboardUrlOption();
     private static readonly Option<string?> s_apiKeyOption = TelemetryCommandHelpers.CreateApiKeyOption();
     private static readonly Option<string?> s_searchOption = TelemetryCommandHelpers.CreateSearchOption();
+    private static readonly Option<string?> s_runIdOption = TelemetryCommandHelpers.CreateRunIdOption();
 
     public TelemetrySpansCommand(
         AppHostConnectionResolver connectionResolver,
@@ -64,6 +65,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
         Options.Add(s_dashboardUrlOption);
         Options.Add(s_apiKeyOption);
         Options.Add(s_searchOption);
+        Options.Add(s_runIdOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -80,11 +82,17 @@ internal sealed class TelemetrySpansCommand : BaseCommand
         var dashboardUrl = parseResult.GetValue(s_dashboardUrlOption);
         var apiKey = parseResult.GetValue(s_apiKeyOption);
         var search = parseResult.GetValue(s_searchOption);
+        var runId = parseResult.GetValue(s_runIdOption);
 
         // Validate --limit value
         if (limit.HasValue && limit.Value < 1)
         {
             return CommandResult.Failure(CliExitCodes.InvalidCommand, TelemetryCommandStrings.LimitMustBePositive);
+        }
+
+        if (follow && runId is not null)
+        {
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, TelemetryCommandStrings.HistoricalFollowNotSupported);
         }
 
         var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
@@ -95,7 +103,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
             return CommandResult.FromExitCode(dashboardApi.ExitCode);
         }
 
-        return CommandResult.FromExitCode(await FetchSpansAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, resourceName, traceId, hasError, limit, follow, format, dashboardOnly: dashboardUrl is not null, dashboardApi.DashboardUrl!, search, cancellationToken));
+        return CommandResult.FromExitCode(await FetchSpansAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, resourceName, traceId, hasError, limit, follow, format, dashboardOnly: dashboardUrl is not null, dashboardApi.DashboardUrl!, search, runId, cancellationToken));
     }
 
     private async Task<int> FetchSpansAsync(
@@ -110,6 +118,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
         bool dashboardOnly,
         string dashboardUrl,
         string? search,
+        string? runId,
         CancellationToken cancellationToken)
     {
         try
@@ -117,7 +126,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
             using var client = TelemetryCommandHelpers.CreateApiClient(_httpClientFactory, apiToken);
 
             // Resolve resource name to specific instances (handles replicas)
-            var resources = await TelemetryCommandHelpers.GetAllResourcesAsync(client, baseUrl, cancellationToken).ConfigureAwait(false);
+            var resources = await TelemetryCommandHelpers.GetAllResourcesAsync(client, baseUrl, cancellationToken, runId).ConfigureAwait(false);
             var allOtlpResources = TelemetryCommandHelpers.ToOtlpResources(resources);
 
             // Pre-resolve colors so assignment is deterministic regardless of data order
@@ -133,7 +142,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
             // Build URL with query parameters
             int? effectiveLimit = (limit.HasValue && !follow) ? limit.Value : null;
 
-            var url = DashboardUrls.TelemetrySpansApiUrl(baseUrl, resolvedResources, traceId: traceId, hasError: hasError, limit: effectiveLimit, follow: follow ? true : null, search: search);
+            var url = DashboardUrls.TelemetrySpansApiUrl(baseUrl, resolvedResources, traceId: traceId, hasError: hasError, limit: effectiveLimit, follow: follow ? true : null, search: search, runId: runId);
 
             _logger.LogDebug("Fetching spans from {Url}", url);
 
@@ -149,7 +158,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
         catch (HttpRequestException ex)
         {
             _logger.LogError(ex, "Failed to fetch spans from Dashboard API");
-            var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, baseUrl, dashboardOnly, _httpClientFactory, _logger, cancellationToken);
+            var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, baseUrl, dashboardOnly, _httpClientFactory, _logger, cancellationToken, runId);
             TelemetryCommandHelpers.DisplayTelemetryError(InteractionService, errorInfo);
             return CliExitCodes.DashboardFailure;
         }

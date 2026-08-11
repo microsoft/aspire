@@ -218,6 +218,20 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         AddConfiguredUserSecrets(_innerBuilder.Configuration, AppHostAssembly, configuredUserSecretsId, _innerBuilder.Environment.IsDevelopment());
 
         _innerBuilder.Services.AddSingleton(TimeProvider.System);
+        var configuredDashboardRunId = _innerBuilder.Configuration[DashboardConfigNames.DashboardRunIdName.EnvVarName];
+        if (!string.IsNullOrEmpty(configuredDashboardRunId) && !DashboardRunId.TryValidate(configuredDashboardRunId, out var runIdError))
+        {
+            throw new DistributedApplicationException($"Dashboard run ID '{configuredDashboardRunId}' is invalid: {runIdError}.");
+        }
+        if (!string.IsNullOrEmpty(configuredDashboardRunId) && !options.DashboardEnabled)
+        {
+            throw new DistributedApplicationException($"Dashboard run ID '{configuredDashboardRunId}' cannot be used because the dashboard is disabled.");
+        }
+        _innerBuilder.Services.AddSingleton(new DashboardRunIdentity
+        {
+            RunId = configuredDashboardRunId,
+            IsUserSpecified = configuredDashboardRunId is not null
+        });
 
         _innerBuilder.Services.AddSingleton<BackchannelLoggerProvider>();
         _innerBuilder.Services.AddSingleton<ILoggerProvider>(sp => sp.GetRequiredService<BackchannelLoggerProvider>());

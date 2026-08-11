@@ -158,6 +158,24 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DashboardFailedToStart", resourceCulture);
             }
         }
+
+        public static string DashboardFailedToStartWithRunId {
+            get {
+                return ResourceManager.GetString("DashboardFailedToStartWithRunId", resourceCulture);
+            }
+        }
+
+        public static string DashboardRunId {
+            get {
+                return ResourceManager.GetString("DashboardRunId", resourceCulture);
+            }
+        }
+
+        public static string InvalidRunId {
+            get {
+                return ResourceManager.GetString("InvalidRunId", resourceCulture);
+            }
+        }
         
         public static string AppHost {
             get {
@@ -228,6 +246,12 @@ namespace Aspire.Cli.Resources {
         public static string StartingAppHostInBackground {
             get {
                 return ResourceManager.GetString("StartingAppHostInBackground", resourceCulture);
+            }
+        }
+
+        public static string RunIdOptionDescription {
+            get {
+                return ResourceManager.GetString("RunIdOptionDescription", resourceCulture);
             }
         }
         

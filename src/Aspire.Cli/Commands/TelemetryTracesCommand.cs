@@ -38,6 +38,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
     private static readonly Option<string?> s_dashboardUrlOption = TelemetryCommandHelpers.CreateDashboardUrlOption();
     private static readonly Option<string?> s_apiKeyOption = TelemetryCommandHelpers.CreateApiKeyOption();
     private static readonly Option<string?> s_searchOption = TelemetryCommandHelpers.CreateSearchOption();
+    private static readonly Option<string?> s_runIdOption = TelemetryCommandHelpers.CreateRunIdOption();
 
     public TelemetryTracesCommand(
         AppHostConnectionResolver connectionResolver,
@@ -63,6 +64,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         Options.Add(s_dashboardUrlOption);
         Options.Add(s_apiKeyOption);
         Options.Add(s_searchOption);
+        Options.Add(s_runIdOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -78,6 +80,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         var dashboardUrl = parseResult.GetValue(s_dashboardUrlOption);
         var apiKey = parseResult.GetValue(s_apiKeyOption);
         var search = parseResult.GetValue(s_searchOption);
+        var runId = parseResult.GetValue(s_runIdOption);
 
         // Validate --limit value
         if (limit.HasValue && limit.Value < 1)
@@ -97,17 +100,17 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         {
             if (!string.IsNullOrEmpty(traceId))
             {
-                return CommandResult.FromExitCode(await FetchSingleTraceAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, traceId, format, dashboardApi.DashboardUrl!, cancellationToken));
+                return CommandResult.FromExitCode(await FetchSingleTraceAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, traceId, format, dashboardApi.DashboardUrl!, runId, cancellationToken));
             }
             else
             {
-                return CommandResult.FromExitCode(await FetchTracesAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, resourceName, hasError, limit, format, dashboardApi.DashboardUrl!, search, cancellationToken));
+                return CommandResult.FromExitCode(await FetchTracesAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, resourceName, hasError, limit, format, dashboardApi.DashboardUrl!, search, runId, cancellationToken));
             }
         }
         catch (HttpRequestException ex)
         {
             _logger.LogError(ex, "Failed to fetch traces from Dashboard API");
-            var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, dashboardApi.BaseUrl!, dashboardUrl is not null, _httpClientFactory, _logger, cancellationToken);
+            var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, dashboardApi.BaseUrl!, dashboardUrl is not null, _httpClientFactory, _logger, cancellationToken, runId);
             TelemetryCommandHelpers.DisplayTelemetryError(InteractionService, errorInfo);
             return CommandResult.Failure(CliExitCodes.DashboardFailure);
         }
@@ -119,18 +122,19 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         string traceId,
         OutputFormat format,
         string dashboardUrl,
+        string? runId,
         CancellationToken cancellationToken)
     {
         using var client = TelemetryCommandHelpers.CreateApiClient(_httpClientFactory, apiToken);
 
         // Fetch resources for name resolution
-        var resources = await TelemetryCommandHelpers.GetAllResourcesAsync(client, baseUrl, cancellationToken).ConfigureAwait(false);
+        var resources = await TelemetryCommandHelpers.GetAllResourcesAsync(client, baseUrl, cancellationToken, runId).ConfigureAwait(false);
         var allOtlpResources = TelemetryCommandHelpers.ToOtlpResources(resources);
 
         // Pre-resolve colors so assignment is deterministic regardless of data order
         TelemetryCommandHelpers.ResolveResourceColors(_resourceColorMap, allOtlpResources);
 
-        var url = DashboardUrls.TelemetryTraceDetailApiUrl(baseUrl, traceId);
+        var url = DashboardUrls.TelemetryTraceDetailApiUrl(baseUrl, traceId, runId);
 
         _logger.LogDebug("Fetching trace {TraceId} from {Url}", traceId, url);
 
@@ -180,12 +184,13 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         OutputFormat format,
         string dashboardUrl,
         string? search,
+        string? runId,
         CancellationToken cancellationToken)
     {
         using var client = TelemetryCommandHelpers.CreateApiClient(_httpClientFactory, apiToken);
 
         // Resolve resource name to specific instances (handles replicas)
-        var resources = await TelemetryCommandHelpers.GetAllResourcesAsync(client, baseUrl, cancellationToken).ConfigureAwait(false);
+        var resources = await TelemetryCommandHelpers.GetAllResourcesAsync(client, baseUrl, cancellationToken, runId).ConfigureAwait(false);
 
         // If a resource was specified but not found, return error
         if (!TelemetryCommandHelpers.TryResolveResourceNames(resource, resources, out var resolvedResources))
@@ -199,7 +204,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         // Pre-resolve colors so assignment is deterministic regardless of data order
         TelemetryCommandHelpers.ResolveResourceColors(_resourceColorMap, allOtlpResources);
 
-        var url = DashboardUrls.TelemetryTracesApiUrl(baseUrl, resolvedResources, hasError: hasError, limit: limit, search: search);
+        var url = DashboardUrls.TelemetryTracesApiUrl(baseUrl, resolvedResources, hasError: hasError, limit: limit, search: search, runId: runId);
 
         _logger.LogDebug("Fetching traces from {Url}", url);
 

@@ -184,6 +184,12 @@
   <data name="DashboardFailedToStart" xml:space="preserve">
     <value>Aspire Dashboard failed to start or is disabled.</value>
   </data>
+  <data name="DashboardFailedToStartWithRunId" xml:space="preserve">
+    <value>Aspire Dashboard failed to create the requested run. The run ID may already exist; choose a different run ID and try again.</value>
+  </data>
+  <data name="DashboardRunId" xml:space="preserve">
+    <value>Dashboard run ID</value>
+  </data>
   <data name="AppHost" xml:space="preserve">
     <value>AppHost</value>
   </data>
@@ -254,6 +260,12 @@
   </data>
   <data name="IsolatedArgumentDescription" xml:space="preserve">
     <value>Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously</value>
+  </data>
+  <data name="RunIdOptionDescription" xml:space="preserve">
+    <value>Assign a unique ID to the persisted dashboard run</value>
+  </data>
+  <data name="InvalidRunId" xml:space="preserve">
+    <value>Run ID '{0}' is invalid: {1}.</value>
   </data>
   <data name="CopyingUserSecrets" xml:space="preserve">
     <value>Copying user secrets for isolated mode...</value>

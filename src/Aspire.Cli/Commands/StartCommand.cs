@@ -46,6 +46,14 @@ internal sealed class StartCommand : BaseCommand
         var passedAppHostProjectFile = parseResult.GetValue(AppHostLauncher.s_appHostOption);
         var format = parseResult.GetValue(AppHostLauncher.s_formatOption);
         var isolated = parseResult.GetValue(AppHostLauncher.s_isolatedOption);
+        var runId = parseResult.GetValue(AppHostLauncher.s_runIdOption);
+
+        if (runId is not null && !DashboardRunId.TryValidate(runId, out var runIdError))
+        {
+            return CommandResult.Failure(
+                CliExitCodes.InvalidCommand,
+            string.Format(CultureInfo.CurrentCulture, RunCommandStrings.InvalidRunId, runId, runIdError));
+        }
 
         var noBuild = parseResult.GetValue(s_noBuildOption);
         // The detached start path is always user-initiated. When invoked from the
@@ -80,6 +88,12 @@ internal sealed class StartCommand : BaseCommand
             if (noBuild)
             {
                 debugSessionArgs.Add("--no-build");
+            }
+
+            if (runId is not null)
+            {
+                debugSessionArgs.Add(AppHostLauncher.s_runIdOption.Name);
+                debugSessionArgs.Add(runId);
             }
 
             debugSessionArgs.AddRange(globalArgs);
@@ -124,6 +138,12 @@ internal sealed class StartCommand : BaseCommand
         if (noBuild)
         {
             additionalArgs.Add("--no-build");
+        }
+
+        if (runId is not null)
+        {
+            additionalArgs.Add(AppHostLauncher.s_runIdOption.Name);
+            additionalArgs.Add(runId);
         }
 
         if (!AppHostStartupTimeout.TryGetTimeoutSeconds(_configuration, InteractionService, out var timeoutSeconds))

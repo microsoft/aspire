@@ -1,8 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Net.Http.Json;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Commands;
+using Aspire.Dashboard.Utils;
+using Aspire.Otlp.Serialization;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
@@ -14,8 +18,30 @@ namespace Aspire.Cli.Mcp.Tools;
 /// MCP tool for listing console logs for a resource.
 /// Gets log data directly from the AppHost backchannel instead of forwarding to the dashboard.
 /// </summary>
-internal sealed class ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliaryBackchannelMonitor, ILogger<ListConsoleLogsTool> logger) : CliMcpTool
+internal sealed class ListConsoleLogsTool : CliMcpTool
 {
+    private readonly IDashboardInfoProvider? _dashboardInfoProvider;
+    private readonly IAuxiliaryBackchannelMonitor? _auxiliaryBackchannelMonitor;
+    private readonly IHttpClientFactory? _httpClientFactory;
+    private readonly ILogger<ListConsoleLogsTool> _logger;
+
+    public ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliaryBackchannelMonitor, ILogger<ListConsoleLogsTool> logger)
+        : this(null, auxiliaryBackchannelMonitor, null, logger)
+    {
+    }
+
+    public ListConsoleLogsTool(
+        IDashboardInfoProvider? dashboardInfoProvider,
+        IAuxiliaryBackchannelMonitor? auxiliaryBackchannelMonitor,
+        IHttpClientFactory? httpClientFactory,
+        ILogger<ListConsoleLogsTool> logger)
+    {
+        _dashboardInfoProvider = dashboardInfoProvider;
+        _auxiliaryBackchannelMonitor = auxiliaryBackchannelMonitor;
+        _httpClientFactory = httpClientFactory;
+        _logger = logger;
+    }
+
     public override string Name => KnownMcpTools.ListConsoleLogs;
 
     public override string Description => "List console logs for a resource. The console logs includes standard output from resources and resource commands. Known resource commands are 'start', 'stop' and 'restart' which are used to start and stop resources. Don't print the full console logs in the response to the user. Console logs should be examined when determining why a resource isn't running.";
@@ -33,6 +59,10 @@ internal sealed class ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliary
                 "search": {
                   "type": "string",
                   "description": "Full-text search to filter log content."
+                                },
+                                "runId": {
+                                    "type": "string",
+                                    "description": "Dashboard run ID. Omit to query live logs from the current AppHost."
                 }
               },
               "required": ["resourceName"]
@@ -63,31 +93,67 @@ internal sealed class ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliary
         {
             search = searchElement.GetString();
         }
-
-        var connection = await AppHostConnectionHelper.GetSelectedConnectionAsync(auxiliaryBackchannelMonitor, logger, cancellationToken).ConfigureAwait(false);
-        if (connection is null)
-        {
-            logger.LogWarning("No Aspire AppHost is currently running");
-            throw new McpProtocolException(McpErrorMessages.NoAppHostRunning, McpErrorCode.InternalError);
-        }
-
-        // Check if the resource is excluded from MCP before fetching logs.
-        // This is the only check needed because the resource name is required for this tool.
-        var excludedResult = await McpToolHelpers.CheckResourceExcludedAsync(connection, resourceName, cancellationToken).ConfigureAwait(false);
-        if (excludedResult is not null)
-        {
-            return excludedResult;
-        }
+        var runId = McpToolHelpers.GetOptionalStringArgument(arguments, "runId");
 
         try
         {
             var logParser = new LogParser(ConsoleColor.Black);
             var logEntries = new LogEntries(maximumEntryCount: SharedAIHelpers.ConsoleLogsLimit) { BaseLineNumber = 1 };
+            int totalLogsCount;
 
-            // Collect logs from the backchannel
-            await foreach (var logLine in connection.GetResourceLogsAsync(resourceName, follow: false, cancellationToken).ConfigureAwait(false))
+            if (runId is null && _auxiliaryBackchannelMonitor is not null)
             {
-                logEntries.InsertSorted(logParser.CreateLogEntry(logLine.Content, logLine.IsError, resourceName));
+                var connection = await AppHostConnectionHelper.GetSelectedConnectionAsync(_auxiliaryBackchannelMonitor, _logger, cancellationToken).ConfigureAwait(false);
+                if (connection is null)
+                {
+                    _logger.LogWarning("No Aspire AppHost is currently running");
+                    throw new McpProtocolException(McpErrorMessages.NoAppHostRunning, McpErrorCode.InternalError);
+                }
+
+                var excludedResult = await McpToolHelpers.CheckResourceExcludedAsync(connection, resourceName, cancellationToken).ConfigureAwait(false);
+                if (excludedResult is not null)
+                {
+                    return excludedResult;
+                }
+
+                await foreach (var logLine in connection.GetResourceLogsAsync(resourceName, follow: false, cancellationToken).ConfigureAwait(false))
+                {
+                    logEntries.InsertSorted(logParser.CreateLogEntry(logLine.Content, logLine.IsError, resourceName));
+                }
+
+                var liveEntries = logEntries.GetEntries();
+                totalLogsCount = liveEntries.Count == 0 ? 0 : liveEntries.Last().LineNumber;
+            }
+            else
+            {
+                if (_dashboardInfoProvider is null || _httpClientFactory is null)
+                {
+                    throw new McpProtocolException("Historical console logs require a Dashboard connection.", McpErrorCode.InternalError);
+                }
+
+                var (apiToken, apiBaseUrl, _) = await _dashboardInfoProvider.GetDashboardInfoAsync(cancellationToken).ConfigureAwait(false);
+                using var client = TelemetryCommandHelpers.CreateApiClient(_httpClientFactory, apiToken);
+                var url = DashboardUrls.TelemetryConsoleLogsApiUrl(
+                    apiBaseUrl,
+                    resourceName,
+                    SharedAIHelpers.ConsoleLogsLimit,
+                    search,
+                    includeHidden: false,
+                    runId);
+
+                _logger.LogDebug("Fetching console logs from {Url}", url);
+                var response = await client.GetAsync(url, cancellationToken).ConfigureAwait(false);
+                TelemetryCommandHelpers.EnsureTelemetryApiResponse(response);
+                var apiResponse = await response.Content.ReadFromJsonAsync(
+                    OtlpJsonSerializerContext.Default.ConsoleLogsApiResponse,
+                    cancellationToken).ConfigureAwait(false);
+
+                foreach (var logLine in apiResponse?.Logs ?? [])
+                {
+                    logEntries.InsertSorted(logParser.CreateLogEntry(logLine.Content, logLine.IsError, logLine.ResourceName));
+                }
+
+                totalLogsCount = apiResponse?.TotalCount ?? 0;
             }
 
             var entries = logEntries.GetEntries().ToList();
@@ -113,9 +179,10 @@ internal sealed class ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliary
 
             // When search is applied, total reflects matching entries. Otherwise, use the
             // last line number which represents the total lines collected by the LogEntries buffer.
-            var totalLogsCount = string.IsNullOrEmpty(search)
-                ? (entries.Count == 0 ? 0 : entries.Last().LineNumber)
-                : entries.Count;
+            if (runId is null && !string.IsNullOrEmpty(search))
+            {
+                totalLogsCount = entries.Count;
+            }
 
             var (trimmedItems, limitMessage) = SharedAIHelpers.GetLimitFromEndWithSummary(
                 entries,
@@ -144,7 +211,12 @@ internal sealed class ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliary
         }
         catch (Exception ex) when (ex is not McpProtocolException)
         {
-            logger.LogError(ex, "Error retrieving console logs for resource '{ResourceName}'", resourceName);
+            _logger.LogError(ex, "Error retrieving console logs for resource '{ResourceName}'", resourceName);
+            if (runId is not null && ex is HttpRequestException { StatusCode: System.Net.HttpStatusCode.NotFound })
+            {
+                throw new McpProtocolException(TelemetryCommandHelpers.FormatHistoricalRunNotFound(runId), McpErrorCode.InternalError);
+            }
+
             return new CallToolResult
             {
                 Content = [new TextContentBlock { Text = $"Error retrieving console logs for resource '{resourceName}': {ex.Message}" }]

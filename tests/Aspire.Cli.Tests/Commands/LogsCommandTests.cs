@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Net;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.Cli.Backchannel;
@@ -9,7 +11,9 @@ using Aspire.Cli.Commands;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Otlp.Serialization;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -153,6 +157,82 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         // Help should succeed (validation passed)
         Assert.Equal(CliExitCodes.Success, exitCode);
+    }
+
+    [Fact]
+    public async Task LogsCommand_FollowWithRunId_ReturnsError()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs redis --follow --run-id incident-42");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+    }
+
+    [Fact]
+    public async Task LogsCommand_WithRunId_FetchesHistoricalConsoleLogs()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var apiResponse = new ConsoleLogsApiResponse
+        {
+            Logs =
+            [
+                new ConsoleLogLineJson
+                {
+                    ResourceName = "redis",
+                    LineNumber = 42,
+                    Content = "2025-01-15T10:30:00Z Ready from incident run",
+                    IsError = false
+                }
+            ],
+            TotalCount = 1
+        };
+        var responseJson = JsonSerializer.Serialize(apiResponse, OtlpJsonSerializerContext.Default.ConsoleLogsApiResponse);
+        string? requestedUrl = null;
+        using var handler = new MockHttpMessageHandler(request =>
+        {
+            requestedUrl = request.RequestUri!.ToString();
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(responseJson, Encoding.UTF8, "application/json")
+            };
+        });
+        using var provider = CreateLogsTestServices(
+            workspace,
+            outputWriter,
+            configureConnection: connection => connection.DashboardInfoResponse = new GetDashboardInfoResponse
+            {
+                ApiBaseUrl = "http://localhost:18888",
+                ApiToken = "test-token",
+                DashboardUrls = ["http://localhost:18888/login?t=test"],
+                IsHealthy = true
+            },
+            httpClientFactory: new MockHttpClientFactory(handler));
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs redis --run-id incident-42 --tail 2 --search Ready --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(requestedUrl);
+        Assert.Contains("/api/telemetry/console-logs", requestedUrl, StringComparison.Ordinal);
+        Assert.Contains("resource=redis", requestedUrl, StringComparison.Ordinal);
+        Assert.Contains("limit=2", requestedUrl, StringComparison.Ordinal);
+        Assert.Contains("search=Ready", requestedUrl, StringComparison.Ordinal);
+        Assert.Contains("runId=incident-42", requestedUrl, StringComparison.Ordinal);
+
+        var jsonOutput = Assert.Single(outputWriter.Logs, log => log.Contains("\"logs\"", StringComparison.Ordinal));
+        var logsOutput = JsonSerializer.Deserialize(jsonOutput, LogsCommandJsonContext.Snapshot.LogsOutput);
+        var log = Assert.Single(Assert.IsType<LogsOutput>(logsOutput).Logs);
+        Assert.Equal("redis", log.ResourceName);
+        Assert.Equal("Ready from incident run", log.Content);
     }
 
     [Fact]
@@ -1537,7 +1617,8 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         bool disableAnsi = false,
         IEnumerable<ResourceLogLine>? logLines = null,
         Action<TestAppHostAuxiliaryBackchannel>? configureConnection = null,
-        StringWriter? errorTextWriter = null)
+        StringWriter? errorTextWriter = null,
+        IHttpClientFactory? httpClientFactory = null)
     {
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var connection = new TestAppHostAuxiliaryBackchannel
@@ -1615,6 +1696,11 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
                 options.ConfigurationCallback += configureOptions;
             }
         });
+
+        if (httpClientFactory is not null)
+        {
+            services.Replace(ServiceDescriptor.Singleton(httpClientFactory));
+        }
 
         return services.BuildServiceProvider();
     }

@@ -77,6 +77,16 @@
         <target state="needs-review-translation">Aspire 仪表板启动失败。</target>
         <note />
       </trans-unit>
+      <trans-unit id="DashboardFailedToStartWithRunId">
+        <source>Aspire Dashboard failed to create the requested run. The run ID may already exist; choose a different run ID and try again.</source>
+        <target state="new">Aspire Dashboard failed to create the requested run. The run ID may already exist; choose a different run ID and try again.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunId">
+        <source>Dashboard run ID</source>
+        <target state="new">Dashboard run ID</target>
+        <note />
+      </trans-unit>
       <trans-unit id="Description">
         <source>Run an Aspire AppHost interactively for development</source>
         <target state="needs-review-translation">在开发模式下运行 Aspire 应用主机。</target>
@@ -116,6 +126,11 @@
         <source>The {0} environment variable must be a positive number of seconds.</source>
         <target state="new">The {0} environment variable must be a positive number of seconds.</target>
         <note>Do not localize the {0} placeholder. It is an environment variable name.</note>
+      </trans-unit>
+      <trans-unit id="InvalidRunId">
+        <source>Run ID '{0}' is invalid: {1}.</source>
+        <target state="new">Run ID '{0}' is invalid: {1}.</target>
+        <note />
       </trans-unit>
       <trans-unit id="IsCompatibleAppHostIsNull">
         <source>IsCompatibleAppHost is null</source>
@@ -181,6 +196,11 @@
         <source>Resource</source>
         <target state="translated">资源</target>
         <note>A column header (noun)</note>
+      </trans-unit>
+      <trans-unit id="RunIdOptionDescription">
+        <source>Assign a unique ID to the persisted dashboard run</source>
+        <target state="new">Assign a unique ID to the persisted dashboard run</target>
+        <note />
       </trans-unit>
       <trans-unit id="RunningInstanceStopped">
         <source>Running instance stopped successfully.</source>

@@ -50,6 +50,31 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, exitCode);
     }
 
+    [Theory]
+    [InlineData("../incident")]
+    [InlineData("incident/42")]
+    [InlineData("incident 42")]
+    [InlineData("incidént")]
+    [InlineData("CON")]
+    public async Task RunCommand_RejectsInvalidRunId(string runId)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(["run", "--run-id", runId]);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Contains(runId, Assert.Single(interactionService.DisplayedErrors), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task RunCommand_RejectsInvalidStartupTimeoutEnvironmentVariable()
     {
@@ -1974,17 +1999,22 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             dashboardUrl: "http://localhost:1234",
             codespacesUrl: null,
             logFilePath,
-            isExtensionHost: false);
+            isExtensionHost: false,
+            runId: "incident-42");
 
         var outputString = output.ToString();
         var fileUri = new Uri(Path.GetFullPath(logFilePath)).AbsoluteUri;
 
         Assert.Contains("Logs", outputString);
+        Assert.Contains("Dashboard run ID", outputString);
+        Assert.Contains("incident-42", outputString);
         TerminalLinkAssert.ContainsLink(outputString, fileUri, logFilePath);
     }
 
-    [Fact]
-    public async Task RunCommand_WhenDashboardFailsToStart_ContinuesWithWarning()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("incident-42")]
+    public async Task RunCommand_WhenDashboardFailsToStart_HandlesNamedRunAsFailure(string? runId)
     {
 
         var backchannelFactory = (IServiceProvider sp) =>
@@ -2042,25 +2072,36 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("run");
+        var result = command.Parse(runId is null ? "run" : $"run --run-id {runId}");
 
         using var cts = new CancellationTokenSource();
         var pendingRun = result.InvokeAsync(cancellationToken: cts.Token);
 
-        // Simulate CTRL-C - the command should continue past the unhealthy dashboard
-        cts.Cancel();
+        if (runId is null)
+        {
+            // A normal run continues past the unhealthy dashboard until the user stops it.
+            cts.Cancel();
+        }
 
         var exitCode = await pendingRun.DefaultTimeout(TestConstants.LongTimeoutDuration);
 
-        // The command should handle cancellation gracefully
-        Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Single(testInteractionService.DisplayedCancellations);
-
-        // Verify a warning was displayed (not an error)
-        var m = Assert.Single(testInteractionService.DisplayedMessages);
-        Assert.Equal(KnownEmojis.Warning, m.Emoji);
-        Assert.Equal(RunCommandStrings.DashboardFailedToStart, m.Message);
-        Assert.Empty(testInteractionService.DisplayedErrors);
+        if (runId is null)
+        {
+            Assert.Equal(CliExitCodes.Success, exitCode);
+            Assert.Single(testInteractionService.DisplayedCancellations);
+            var message = Assert.Single(testInteractionService.DisplayedMessages);
+            Assert.Equal(KnownEmojis.Warning, message.Emoji);
+            Assert.Equal(RunCommandStrings.DashboardFailedToStart, message.Message);
+            Assert.Empty(testInteractionService.DisplayedErrors);
+        }
+        else
+        {
+            Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+            Assert.Equal(RunCommandStrings.DashboardFailedToStartWithRunId, Assert.Single(testInteractionService.DisplayedErrors));
+            Assert.All(
+                testInteractionService.DisplayedMessages,
+                message => Assert.NotEqual(RunCommandStrings.DashboardFailedToStart, message.Message));
+        }
     }
 
     [Fact]

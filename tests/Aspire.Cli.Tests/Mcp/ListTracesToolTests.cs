@@ -527,4 +527,31 @@ public class ListTracesToolTests
         Assert.True(search.TryGetProperty("type", out var type));
         Assert.Equal("string", type.GetString());
     }
+
+    [Fact]
+    public async Task ListTracesTool_WithRunId_PassesRunIdToAllRequests()
+    {
+        var requestedUrls = new List<string>();
+        using var handler = new MockHttpMessageHandler(request =>
+        {
+            requestedUrls.Add(request.RequestUri!.ToString());
+            var json = request.RequestUri.AbsolutePath.EndsWith("/resources", StringComparison.Ordinal)
+                ? "[]"
+                : "{\"data\":{\"resourceSpans\":[]},\"totalCount\":0,\"returnedCount\":0}";
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+        var tool = CreateTool(CreateMonitorWithDashboard(), new MockHttpClientFactory(handler));
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["runId"] = JsonDocument.Parse("\"incident-42\"").RootElement
+        };
+
+        await tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(2, requestedUrls.Count);
+        Assert.All(requestedUrls, url => Assert.Contains("runId=incident-42", url, StringComparison.Ordinal));
+    }
 }

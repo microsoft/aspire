@@ -67,6 +67,12 @@ The API can be enabled/disabled and configured via `Dashboard:Api` settings:
 
 ### Endpoints
 
+#### Resources
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/telemetry/resources` | List resources with telemetry data |
+
 #### Spans
 
 | Method | Endpoint | Description |
@@ -78,6 +84,12 @@ The API can be enabled/disabled and configured via `Dashboard:Api` settings:
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/telemetry/logs` | List structured logs |
+
+#### Console Logs
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/telemetry/console-logs` | List persisted console-log lines as a snapshot |
 
 #### Traces
 
@@ -105,7 +117,16 @@ X-API-Key: <api-key>
 | Status | Description |
 |--------|-------------|
 | 401 Unauthorized | Missing or invalid API key (when `AuthMode=ApiKey`) |
-| 404 Not Found | Unknown resource specified in `?resource=` filter, or trace not found |
+| 400 Bad Request | `follow=true` was combined with an explicit historical `runId` |
+| 404 Not Found | Unknown run or resource specified, or trace not found |
+
+---
+
+### Historical runs
+
+All read endpoints accept an optional `runId` query parameter. Omitting it selects the current run. Supplying a retained run ID selects that immutable historical snapshot for the request. Unknown or expired IDs return an RFC 7807 `404 Run not found` response; they never fall back to current data.
+
+Streaming is available only for the current run. Requests that combine `follow=true` with `runId` return `400 Bad Request`.
 
 ---
 
@@ -122,6 +143,7 @@ List spans with optional filtering.
 | `hasError` | bool | No | - | Filter by error status (`true` = only errors, `false` = exclude errors) |
 | `limit` | int | No | 200 | Maximum spans to return |
 | `follow` | bool | No | false | Enable streaming mode |
+| `runId` | string | No | Current | Select a retained Dashboard run |
 
 **Response:** `200 OK`
 
@@ -196,6 +218,7 @@ List structured logs with optional filtering.
 | `severity` | string | No | - | Minimum severity level (includes this level and higher) |
 | `limit` | int | No | 200 | Maximum logs to return |
 | `follow` | bool | No | false | Enable streaming mode |
+| `runId` | string | No | Current | Select a retained Dashboard run |
 
 **Severity Values:** `Trace`, `Debug`, `Information`, `Warning`, `Error`, `Critical`
 
@@ -247,6 +270,34 @@ Same as spans — uses NDJSON format with one log entry per line. Note: `limit` 
 
 ---
 
+### `GET /api/telemetry/console-logs`
+
+List persisted stdout and stderr lines. This endpoint is snapshot-only and remains available after the AppHost has stopped.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `resource` | string | No | - | Filter by resource name or display name |
+| `includeHidden` | bool | No | false | Include hidden resources |
+| `limit` | int | No | - | Return the newest matching lines |
+| `search` | string | No | - | Match all free-text fragments against content and resource name |
+| `runId` | string | No | Current | Select a retained Dashboard run |
+
+```json
+{
+  "logs": [
+    {
+      "resourceName": "api",
+      "lineNumber": 42,
+      "content": "2026-05-17T16:00:00.000Z Request failed",
+      "isError": true
+    }
+  ],
+  "totalCount": 1
+}
+```
+
+---
+
 ### `GET /api/telemetry/traces`
 
 List traces in OTLP JSON format (snapshot only, no streaming).
@@ -258,6 +309,7 @@ List traces in OTLP JSON format (snapshot only, no streaming).
 | `resource` | string | No | - | Filter to traces involving this resource |
 | `hasError` | bool | No | - | Filter by error status (`true` = only errors, `false` = exclude errors) |
 | `limit` | int | No | 100 | Maximum traces to return |
+| `runId` | string | No | Current | Select a retained Dashboard run |
 
 **Response:** `200 OK`
 
@@ -299,6 +351,8 @@ Returns traces as OTLP JSON (same format as spans endpoint, but grouped by trace
 ### `GET /api/telemetry/traces/{traceId}`
 
 Get a specific trace with all spans in OTLP format.
+
+The endpoint accepts optional `runId` to select a retained Dashboard run.
 
 **Response:** `200 OK`
 
