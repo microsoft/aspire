@@ -26,6 +26,27 @@ public class DotNetSdkInstallerTests
     }
 
     [Fact]
+    public async Task CheckAsync_UsesResolvedDotNetPath()
+    {
+        string? capturedDotNetPath = null;
+        var installer = new DotNetSdkInstaller(CreateEmptyConfiguration(), (dotnetPath, arguments) =>
+        {
+            capturedDotNetPath = dotnetPath;
+            return new ProcessStartInfo(dotnetPath, arguments)
+            {
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+        });
+
+        await installer.CheckAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.Equal(PathLookupHelper.ResolveExecutablePath("dotnet"), capturedDotNetPath);
+    }
+
+    [Fact]
     public async Task CheckAsync_WhenCanceled_KillsDotNetProcessTree()
     {
         var tempDirectory = Directory.CreateTempSubdirectory();
@@ -38,7 +59,7 @@ public class DotNetSdkInstallerTests
         try
         {
             var startInfo = await CreateBlockingDotNetShimAsync(tempDirectory, parentPidFile, childPidFile);
-            var installer = new DotNetSdkInstaller(CreateEmptyConfiguration(), _ => startInfo);
+            var installer = new DotNetSdkInstaller(CreateEmptyConfiguration(), (_, _) => startInfo);
             var checkTask = installer.CheckAsync(cancellationTokenSource.Token);
 
             parentPid = await ProcessTestHelpers.WaitForProcessIdAsync(parentPidFile, TestContext.Current.CancellationToken)
