@@ -142,7 +142,11 @@ class CheckoutTargetTests(unittest.TestCase):
         )
         self.assertEqual(
             _git(workspace, "rev-parse", "HEAD").stdout.strip(),
-            _git(workspace, "rev-parse", "origin/release/13.5").stdout.strip(),
+            _git(
+                workspace,
+                "rev-parse",
+                "refs/remotes/gh-aw-target/release/13.5",
+            ).stdout.strip(),
         )
         self.assertEqual(
             _git(workspace, "rev-parse", "--is-shallow-repository").stdout.strip(),
@@ -194,25 +198,34 @@ class CheckoutTargetTests(unittest.TestCase):
             "2",
         )
 
-    def test_uses_existing_target_without_fetching(self) -> None:
+    def test_ignores_colliding_origin_ref_from_source_repository(self) -> None:
         workspace = self._clone("existing")
+        source_commit = _git(workspace, "rev-parse", "origin/main").stdout.strip()
+        target_commit = _git(
+            self.seed,
+            "rev-parse",
+            "release/13.5",
+        ).stdout.strip()
         _git(
             workspace,
-            "checkout",
-            "-b",
-            "release/13.5",
-            "--track",
-            "origin/release/13.5",
+            "update-ref",
+            "refs/remotes/origin/release/13.5",
+            source_commit,
         )
 
-        self._prepare(
-            workspace,
-            repository_url=(self.root / "missing-repository.git").as_uri(),
-        )
+        self._prepare(workspace)
 
         self.assertEqual(
-            _git(workspace, "branch", "--show-current").stdout.strip(),
-            "docs/pr-123-456-1",
+            _git(workspace, "rev-parse", "HEAD").stdout.strip(),
+            target_commit,
+        )
+        self.assertEqual(
+            _git(
+                workspace,
+                "rev-parse",
+                "refs/remotes/gh-aw-target/release/13.5",
+            ).stdout.strip(),
+            target_commit,
         )
 
     def test_missing_target_reports_clear_error(self) -> None:

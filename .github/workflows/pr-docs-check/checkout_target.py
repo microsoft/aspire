@@ -64,9 +64,10 @@ def _ensure_remote_ref(
     effective_target: str,
     repository_url: str,
 ) -> str:
-    remote_ref = f"refs/remotes/origin/{effective_target}"
-    if _verify_remote_ref(workspace, remote_ref):
-        return remote_ref
+    # The generated PR checkout can populate origin/* from the Aspire source
+    # repository. Fetch the aspire.dev target into an isolated namespace so a
+    # source branch with the same name cannot be mistaken for the docs target.
+    remote_ref = f"refs/remotes/gh-aw-target/{effective_target}"
 
     depth_arguments: list[str] = []
     if _git_output(workspace, "rev-parse", "--is-shallow-repository") == "true":
