@@ -119,6 +119,8 @@ internal sealed class DotNetSdkInstaller(IConfiguration configuration) : IDotNet
         }
     }
 
+    // Use the explicit Windows executable name so lookup still finds dotnet.exe when PATHEXT omits .EXE
+    // and does not select an extensionless PATH entry that Process.Start cannot execute on Windows.
     internal static string ResolveDotNetPath() =>
         PathLookupHelper.ResolveExecutablePath(OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
 
