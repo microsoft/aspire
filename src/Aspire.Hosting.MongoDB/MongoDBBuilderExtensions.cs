@@ -293,6 +293,7 @@ public static class MongoDBBuilderExtensions
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="NotSupportedException">Thrown if called while publishing.</exception>
+    /// <exception cref="InvalidOperationException">Thrown if a replica set has already been configured for the resource.</exception>
     [AspireExport]
     public static IResourceBuilder<MongoDBServerResource> WithReplicaSet(this IResourceBuilder<MongoDBServerResource> builder, string replicaSetName = "rs0")
     {
@@ -328,8 +329,6 @@ public static class MongoDBBuilderExtensions
                 MinLength = 32,
                 Special = false,
             });
-
-        builder.Resource.KeyFileContentParameter = keyFileParameter;
 
         return builder
             .WithArgs("--replSet", replicaSetName, "--keyFile", "/tmp/mongodb-keyfile", "--bind_ip_all")

@@ -322,12 +322,10 @@ public class AddMongoDBTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(keyfile1.Contents, keyfile2.Contents);
         Assert.NotNull(keyfile1.Contents);
         Assert.True(keyfile1.Contents!.Length >= 32);
-        Assert.NotNull(mongo.Resource.KeyFileContentParameter);
-        Assert.Equal($"{mongo.Resource.Name}-keyfile-content", mongo.Resource.KeyFileContentParameter!.Name);
     }
 
     [Fact]
-    public async Task WithReplicaSetServerConnectionStringIncludesDirectConnectionWithAuth()
+    public void WithReplicaSetServerConnectionStringIncludesDirectConnectionWithAuth()
     {
         var appBuilder = DistributedApplication.CreateBuilder();
         appBuilder
@@ -359,7 +357,7 @@ public class AddMongoDBTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task WithReplicaSetDatabaseConnectionStringIncludesDirectConnection()
+    public void WithReplicaSetDatabaseConnectionStringIncludesDirectConnection()
     {
         var appBuilder = DistributedApplication.CreateBuilder();
         appBuilder
